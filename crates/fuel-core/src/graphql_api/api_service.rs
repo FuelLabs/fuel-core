@@ -100,6 +100,7 @@ use super::{
     block_height_subscription,
     ports::{
         worker,
+        DatabaseDaCompressedBlocks,
         OnChainDatabaseAt,
     },
 };
@@ -115,6 +116,8 @@ pub type P2pService = Box<dyn P2pPort>;
 pub type GasPriceProvider = Box<dyn GasPriceEstimate>;
 
 pub type ChainInfoProvider = Box<dyn ChainStateProviderTrait>;
+
+pub type DaCompressionProvider = Box<dyn DatabaseDaCompressedBlocks>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -245,6 +248,7 @@ pub fn new_service<OnChain, OffChain>(
     chain_state_info_provider: ChainInfoProvider,
     memory_pool: SharedMemoryPool,
     block_height_subscriber: block_height_subscription::Subscriber,
+    da_compression_provider: DaCompressionProvider,
 ) -> anyhow::Result<Service>
 where
     OnChain: HistoricalView<Height = BlockHeight> + 'static,
@@ -303,6 +307,7 @@ where
         .data(gas_price_provider)
         .data(chain_state_info_provider)
         .data(memory_pool)
+        .data(da_compression_provider)
         .data(block_height_subscriber.clone())
         .extension(ValidationExtension::new(
             max_queries_resolver_recursive_depth,

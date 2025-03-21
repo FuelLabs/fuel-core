@@ -430,10 +430,6 @@ impl ReadView {
         self.off_chain.block_height(block_id)
     }
 
-    pub fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
-        self.off_chain.da_compressed_block(height)
-    }
-
     pub fn tx_status(&self, tx_id: &TxId) -> StorageResult<TransactionExecutionStatus> {
         self.off_chain.tx_status(tx_id)
     }

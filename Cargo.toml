@@ -72,6 +72,7 @@ fuel-core-keygen-bin = { version = "0.42.0", path = "./bin/keygen" }
 fuel-core-chain-config = { version = "0.42.0", path = "./crates/chain-config", default-features = false }
 fuel-core-client = { version = "0.42.0", path = "./crates/client" }
 fuel-core-compression = { version = "0.42.0", path = "./crates/compression" }
+fuel-core-compression-service = { version = "0.42.0", path = "./crates/services/compression" }
 fuel-core-database = { version = "0.42.0", path = "./crates/database" }
 fuel-core-metrics = { version = "0.42.0", path = "./crates/metrics" }
 fuel-core-services = { version = "0.42.0", path = "./crates/services" }
