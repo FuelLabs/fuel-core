@@ -27,7 +27,6 @@ dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
-fuel-core-compression = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-types = { workspace = true, features = ["std"] }
@@ -84,7 +83,6 @@ production = [
 ]
 parallel-executor = ["fuel-core/parallel-executor"]
 fault-proving = [
-  "fuel-core-compression/fault-proving",
   "fuel-core-storage/fault-proving",
   "fuel-core-types/fault-proving",
   "fuel-core-chain-config/fault-proving",

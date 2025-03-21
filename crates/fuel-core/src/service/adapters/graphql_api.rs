@@ -1,4 +1,5 @@
 use super::{
+    compression_adapters::CompressionServiceAdapter,
     BlockImporterAdapter,
     BlockProducerAdapter,
     ChainStateInfoProvider,
@@ -7,7 +8,11 @@ use super::{
     TxStatusManagerAdapter,
 };
 use crate::{
-    database::OnChainIterableKeyValueView,
+    database::{
+        database_description::compression::CompressionDatabase,
+        Database,
+        OnChainIterableKeyValueView,
+    },
     fuel_core_graphql_api::ports::{
         worker::{
             self,
@@ -21,6 +26,7 @@ use crate::{
         TxPoolPort,
     },
     graphql_api::ports::{
+        DatabaseDaCompressedBlocks,
         MemoryPool,
         TxStatusManager,
     },
@@ -34,8 +40,15 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use fuel_core_compression_service::storage::CompressedBlocks;
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    blueprint::BlueprintInspect,
+    kv_store::KeyValueInspect,
+    not_found,
+    structured_storage::TableWithBlueprint,
+    Result as StorageResult,
+};
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_txpool::TxPoolStats;
 use fuel_core_types::{
@@ -254,5 +267,22 @@ impl MemoryPool for SharedMemoryPool {
 
     async fn get_memory(&self) -> Self::Memory {
         self.memory_pool.take_raw().await
+    }
+}
+
+impl DatabaseDaCompressedBlocks for CompressionServiceAdapter {
+    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>> {
+        use fuel_core_storage::codec::Encode;
+
+        let encoded_height =
+            <<CompressedBlocks as TableWithBlueprint>::Blueprint as BlueprintInspect<
+                CompressedBlocks,
+                Database<CompressionDatabase>, /* in the future it would be nice to use a dummy impl, but it's not worth the effort rn */
+            >>::KeyCodec::encode(height);
+        let column = <CompressedBlocks as TableWithBlueprint>::column();
+        self.storage()
+            .get(&encoded_height, column)?
+            .ok_or_else(|| not_found!(CompressedBlocks))
+            .map(|block| block.to_vec())
     }
 }
