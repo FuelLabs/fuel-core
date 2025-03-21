@@ -38,7 +38,10 @@ use fuel_core_types::{
             WitnessLimit,
         },
         input::{
-            coin::CoinSigned,
+            coin::{
+                CoinSigned,
+                DataCoinSigned,
+            },
             message::{
                 MessageCoinSigned,
                 MessageDataSigned,
@@ -222,6 +225,11 @@ where
                     witness_index,
                     ..
                 })
+                | Input::DataCoinSigned(DataCoinSigned {
+                    owner,
+                    witness_index,
+                    ..
+                })
                 | Input::MessageCoinSigned(MessageCoinSigned {
                     recipient: owner,
                     witness_index,
@@ -239,6 +247,7 @@ where
                 }
 
                 Input::CoinPredicate(_)
+                | Input::DataCoinPredicate(_)
                 | Input::MessageCoinPredicate(_)
                 | Input::MessageDataPredicate(_) => {
                     has_predicates = true;

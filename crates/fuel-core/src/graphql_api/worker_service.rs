@@ -407,6 +407,7 @@ where
     for output in outputs {
         match output {
             Output::Coin { to, .. }
+            | Output::DataCoin { to, .. }
             | Output::Change { to, .. }
             | Output::Variable { to, .. } => {
                 owners.push(to);
