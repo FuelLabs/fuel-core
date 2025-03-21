@@ -245,13 +245,13 @@ impl From<PreconfirmationStatus> for TransactionStatus {
 /// The status of the transaction possible during the preconfirmation phase.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransactionStatusPreconfirmationOnly {
-    /// Transaction was successfully executed by block producer
-    PreConfirmationSuccess(Arc<statuses::PreConfirmationSuccess>),
-    /// Transaction was squeezed out
-    PreConfirmationSqueezedOut(Arc<statuses::PreConfirmationSqueezedOut>),
-    /// Transaction was included in a block by block producer, but the execution has failed
-    PreConfirmationFailure(Arc<statuses::PreConfirmationFailure>),
+pub enum PreConfirmationStatus {
+    /// Transaction was successfully executed by block producer.
+    Success(Arc<statuses::PreConfirmationSuccess>),
+    /// Transaction was squeezed out by the block producer.
+    SqueezedOut(Arc<statuses::PreConfirmationSqueezedOut>),
+    /// Transaction was included in a block by block producer, but the execution has failed.
+    Failure(Arc<statuses::PreConfirmationFailure>),
 }
 
 /// The status of the transaction during its lifecycle.

@@ -23,7 +23,6 @@ use fuel_core_types::{
     fuel_crypto::Message,
     fuel_tx::{
         Address,
-        Bytes32,
         Bytes64,
         Input,
         TxId,
@@ -43,8 +42,8 @@ use fuel_core_types::{
         },
         transaction_status::{
             statuses,
+            PreConfirmationStatus,
             TransactionStatus,
-            TransactionStatusPreconfirmationOnly,
         },
     },
     tai64::Tai64,
@@ -68,26 +67,23 @@ enum ReadRequest {
     },
 }
 
-enum WriteRequest {
-    UpdateStatus {
+enum UpdateRequest {
+    Status {
         tx_id: TxId,
         status: TransactionStatus,
     },
-    UpdateStatuses {
+    Statuses {
         statuses: Vec<(TxId, statuses::SqueezedOut)>,
     },
-    UpdatePreconfirmations {
+    Preconfirmations {
         preconfirmations: Vec<Preconfirmation>,
-    },
-    NotifySkipped {
-        tx_ids_and_reason: Vec<(Bytes32, String)>,
     },
 }
 
 pub struct SharedData {
     read_requests_sender: mpsc::Sender<ReadRequest>,
-    write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
-    tx_status_receiver: broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)>,
+    write_requests_sender: mpsc::UnboundedSender<UpdateRequest>,
+    tx_status_receiver: broadcast::Receiver<(TxId, PreConfirmationStatus)>,
 }
 
 impl Clone for SharedData {
@@ -119,33 +115,25 @@ impl SharedData {
     }
 
     pub fn update_status(&self, tx_id: TxId, status: TransactionStatus) {
-        let request = WriteRequest::UpdateStatus { tx_id, status };
+        let request = UpdateRequest::Status { tx_id, status };
         let _ = self.write_requests_sender.send(request);
     }
 
     pub fn update_statuses(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>) {
-        let request = WriteRequest::UpdateStatuses { statuses };
+        let request = UpdateRequest::Statuses { statuses };
         let _ = self.write_requests_sender.send(request);
     }
 
     pub fn update_preconfirmations(&self, preconfirmations: Vec<Preconfirmation>) {
-        let request = WriteRequest::UpdatePreconfirmations { preconfirmations };
+        let request = UpdateRequest::Preconfirmations { preconfirmations };
         if let Err(e) = self.write_requests_sender.send(request) {
             tracing::error!("Failed to send preconfirmations: {:?}", e);
         }
     }
 
-    pub fn notify_skipped(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
-        let request = WriteRequest::NotifySkipped { tx_ids_and_reason };
-        if let Err(e) = self.write_requests_sender.send(request) {
-            tracing::error!("Failed to send skipped txs: {:?}", e);
-        }
-    }
-
     pub fn preconfirmations_update_listener(
         &self,
-    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)>
-    {
+    ) -> broadcast::Receiver<(TxId, PreConfirmationStatus)> {
         self.tx_status_receiver.resubscribe()
     }
 }
@@ -154,7 +142,7 @@ pub struct Task<Pubkey> {
     manager: TxStatusManager,
     subscriptions: Subscriptions,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
-    write_requests_receiver: mpsc::UnboundedReceiver<WriteRequest>,
+    write_requests_receiver: mpsc::UnboundedReceiver<UpdateRequest>,
     shared_data: SharedData,
     signature_verification: SignatureVerification<Pubkey>,
 }
@@ -242,16 +230,14 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
 impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
     fn handle_verified_preconfirmation(
         &mut self,
-        sealed: Sealed<Preconfirmations, Bytes64>,
+        preconfirmations: Vec<Preconfirmation>,
     ) {
-        tracing::debug!("Preconfirmation signature verified");
-        let Sealed { entity, .. } = sealed;
-        entity.preconfirmations.into_iter().for_each(
-            |Preconfirmation { tx_id, status }| {
+        preconfirmations
+            .into_iter()
+            .for_each(|Preconfirmation { tx_id, status }| {
                 let status: TransactionStatus = status.into();
                 self.manager.status_update(tx_id, status);
-            },
-        );
+            });
     }
 
     fn new_preconfirmations_from_p2p(
@@ -274,7 +260,9 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                     .signature_verification
                     .check_preconfirmation_signature(&sealed)
                 {
-                    self.handle_verified_preconfirmation(sealed);
+                    tracing::debug!("Preconfirmation signature verified");
+                    let Sealed { entity, .. } = sealed;
+                    self.handle_verified_preconfirmation(entity.preconfirmations);
                 } else {
                     // There is a chance that this is a signature for whom the delegate key hasn't
                     // arrived yet, in which case the pre-confirmation will be lost
@@ -330,25 +318,18 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
 
             request = self.write_requests_receiver.recv() => {
                 match request {
-                    Some(WriteRequest::UpdateStatus { tx_id, status }) => {
+                    Some(UpdateRequest::Status { tx_id, status }) => {
                         self.manager.status_update(tx_id, status);
                         TaskNextAction::Continue
                     }
-                    Some(WriteRequest::UpdateStatuses { statuses }) => {
+                    Some(UpdateRequest::Statuses { statuses }) => {
                         for (tx_id, status) in statuses {
                             self.manager.status_update(tx_id, status.into());
                         }
                         TaskNextAction::Continue
                     }
-                    Some(WriteRequest::UpdatePreconfirmations { preconfirmations }) => {
-                        for preconfirmation in preconfirmations {
-                            self.manager.status_update(preconfirmation.tx_id, preconfirmation.status.into());
-                        }
-                        TaskNextAction::Continue
-                    }
-                    Some(WriteRequest::NotifySkipped { tx_ids_and_reason }) => {
-                        // TODO[RC]: This part not tested by TxStatusManager service tests yet.
-                        self.manager.notify_skipped_txs(tx_ids_and_reason);
+                    Some(UpdateRequest::Preconfirmations { preconfirmations }) => {
+                        self.handle_verified_preconfirmation(preconfirmations);
                         TaskNextAction::Continue
                     }
                     None => {
@@ -510,7 +491,7 @@ mod tests {
         SharedData,
         SignatureVerification,
         Task,
-        WriteRequest,
+        UpdateRequest,
     };
     use fuel_core_types::ed25519_dalek::{
         Signer,
@@ -525,7 +506,7 @@ mod tests {
 
     struct Handles {
         pub pre_confirmation_updates: mpsc::Sender<GossipData<P2PPreConfirmationMessage>>,
-        pub write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
+        pub write_requests_sender: mpsc::UnboundedSender<UpdateRequest>,
         pub read_requests_sender: mpsc::Sender<ReadRequest>,
         pub tx_status_change: TxStatusChange,
         pub update_sender: UpdateSender,
@@ -780,11 +761,11 @@ mod tests {
 
     async fn send_status_updates(
         updates: &[(Bytes32, TransactionStatus)],
-        sender: &mpsc::UnboundedSender<WriteRequest>,
+        sender: &mpsc::UnboundedSender<UpdateRequest>,
     ) {
         updates.iter().for_each(|(tx_id, status)| {
             sender
-                .send(WriteRequest::UpdateStatus {
+                .send(UpdateRequest::Status {
                     tx_id: *tx_id,
                     status: status.clone(),
                 })
@@ -800,10 +781,10 @@ mod tests {
         id.into()
     }
 
-    async fn force_pruning(sender: &mpsc::UnboundedSender<WriteRequest>) {
+    async fn force_pruning(sender: &mpsc::UnboundedSender<UpdateRequest>) {
         let id = pruning_tx_id();
         sender
-            .send(WriteRequest::UpdateStatus {
+            .send(UpdateRequest::Status {
                 tx_id: id,
                 status: status::transaction::failure(),
             })
@@ -1104,7 +1085,7 @@ mod tests {
         status_updates.iter().for_each(|(tx_id, status)| {
             handles
                 .write_requests_sender
-                .send(WriteRequest::UpdateStatus {
+                .send(UpdateRequest::Status {
                     tx_id: *tx_id,
                     status: status.clone(),
                 })

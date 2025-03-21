@@ -56,8 +56,8 @@ use fuel_core_types::{
         },
         transaction_status::{
             statuses,
+            PreConfirmationStatus,
             TransactionStatus,
-            TransactionStatusPreconfirmationOnly,
         },
     },
 };
@@ -262,7 +262,7 @@ impl TxStatusManager for PreconfirmationSender {
 
     fn preconfirmations_update_listener(
         &self,
-    ) -> broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)> {
+    ) -> broadcast::Receiver<(TxId, PreConfirmationStatus)> {
         self.tx_status_manager_adapter
             .preconfirmations_update_listener()
     }

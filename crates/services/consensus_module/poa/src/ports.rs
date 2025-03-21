@@ -32,11 +32,6 @@ pub trait TransactionPool: Send + Sync {
     fn new_txs_watcher(&self) -> tokio::sync::watch::Receiver<()>;
 }
 
-#[cfg_attr(test, mockall::automock)]
-pub trait TxStatusManager: Send + Sync {
-    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
-}
-
 /// The source of transactions for the block.
 pub enum TransactionsSource {
     /// The source of transactions for the block is the `TxPool`.

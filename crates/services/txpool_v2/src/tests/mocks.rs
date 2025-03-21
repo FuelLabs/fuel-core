@@ -60,8 +60,8 @@ use fuel_core_types::{
         },
         transaction_status::{
             statuses,
+            PreConfirmationStatus,
             TransactionStatus,
-            TransactionStatusPreconfirmationOnly,
         },
     },
 };
@@ -93,15 +93,14 @@ pub struct Data {
 #[derive(Clone)]
 pub struct MockTxStatusManager {
     tx: Sender<(TxId, TransactionStatus)>,
-    tx_preconfirmations_update_sender:
-        broadcast::Sender<(TxId, TransactionStatusPreconfirmationOnly)>,
+    tx_preconfirmations_update_sender: broadcast::Sender<(TxId, PreConfirmationStatus)>,
 }
 
 impl MockTxStatusManager {
     pub fn new(
         tx_preconfirmations_update_sender: broadcast::Sender<(
             TxId,
-            TransactionStatusPreconfirmationOnly,
+            PreConfirmationStatus,
         )>,
         tx: Sender<(TxId, TransactionStatus)>,
     ) -> Self {
@@ -125,8 +124,11 @@ impl ports::TxStatusManager for MockTxStatusManager {
     }
 
     fn preconfirmations_update_listener(
-            &self,
-    ) -> tokio::sync::broadcast::Receiver<(TxId, fuel_core_types::services::transaction_status::TransactionStatusPreconfirmationOnly)>{
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(
+        TxId,
+        fuel_core_types::services::transaction_status::PreConfirmationStatus,
+    )> {
         self.tx_preconfirmations_update_sender.subscribe()
     }
 }

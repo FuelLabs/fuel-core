@@ -30,8 +30,8 @@ use fuel_core_types::{
             PeerId,
         },
         transaction_status::{
+            PreConfirmationStatus,
             TransactionStatus,
-            TransactionStatusPreconfirmationOnly,
         },
     },
 };
@@ -47,7 +47,7 @@ pub trait TxStatusManager: Send + Sync + 'static {
 
     fn preconfirmations_update_listener(
         &self,
-    ) -> broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)>;
+    ) -> broadcast::Receiver<(TxId, PreConfirmationStatus)>;
 
     fn squeezed_out_txs(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>);
 }

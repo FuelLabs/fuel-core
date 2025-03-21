@@ -1,3 +1,4 @@
+use fuel_core_services::TaskNextAction;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::{
@@ -10,7 +11,7 @@ use fuel_core_types::{
         p2p::GossipsubMessageInfo,
         transaction_status::{
             statuses,
-            TransactionStatusPreconfirmationOnly,
+            PreConfirmationStatus,
         },
         txpool::ArcPoolTx,
     },
@@ -127,7 +128,13 @@ impl PoolWorkerInterface {
                         tokio::time::interval(pending_pool_tx_ttl);
                     pending_pool_expiration_check
                         .set_missed_tick_behavior(MissedTickBehavior::Skip);
-                    while !worker.run(&mut pending_pool_expiration_check).await {}
+                    loop {
+                        let result = worker.run(&mut pending_pool_expiration_check).await;
+
+                        if matches!(result, TaskNextAction::Stop) {
+                            break;
+                        }
+                    }
                 });
             }
         });
@@ -257,8 +264,7 @@ pub(super) struct PoolWorker<View, TxStatusManager> {
     request_read_receiver: Receiver<PoolReadRequest>,
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     request_insert_receiver: Receiver<PoolInsertRequest>,
-    preconfirmations_update_listener:
-        broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)>,
+    preconfirmations_update_listener: broadcast::Receiver<(TxId, PreConfirmationStatus)>,
     pool: TxPool<TxStatusManager>,
     pending_pool: PendingPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
@@ -270,7 +276,10 @@ where
     View: TxPoolPersistentStorage,
     TxStatusManager: TxStatusManagerTrait,
 {
-    pub async fn run(&mut self, pending_pool_expiration_check: &mut Interval) -> bool {
+    pub async fn run(
+        &mut self,
+        pending_pool_expiration_check: &mut Interval,
+    ) -> TaskNextAction {
         let mut update_buffer = vec![];
         let mut read_buffer = vec![];
         let mut insert_buffer = vec![];
@@ -279,9 +288,9 @@ where
             management_req = self.thread_management_receiver.recv() => {
                 match management_req {
                     Some(req) => match req {
-                        ThreadManagementRequest::Stop => return true,
+                        ThreadManagementRequest::Stop => return TaskNextAction::Stop,
                     },
-                    None => return true,
+                    None => return TaskNextAction::Stop,
                 }
             }
             extract = self.extract_block_transactions_receiver.recv() => {
@@ -289,15 +298,22 @@ where
                     Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, transactions }) => {
                         self.extract_block_transactions(constraints, transactions);
                     }
-                    None => return true,
+                    None => return TaskNextAction::Stop,
                 }
+            }
+            res = self.preconfirmations_update_listener.recv() => {
+                let (tx_id, status) = match res {
+                    Ok(res) => res,
+                    Err(_) => return TaskNextAction::Stop,
+                };
+                self.process_preconfirmed_transaction(tx_id, status);
             }
             _ = self.request_remove_receiver.recv_many(&mut update_buffer, MAX_PENDING_REMOVE_POOL_REQUESTS) => {
                 if update_buffer.is_empty() {
-                    return true;
+                    return TaskNextAction::Stop;
                 }
-                for remove in update_buffer {
-                    match remove {
+                for update in update_buffer {
+                    match update {
                         PoolUpdateRequest::ProcessBlock { block_result } => {
                             self.process_block(block_result);
                         }
@@ -309,7 +325,7 @@ where
             }
             _ = self.request_read_receiver.recv_many(&mut read_buffer, MAX_PENDING_READ_POOL_REQUESTS) => {
                 if read_buffer.is_empty() {
-                    return true;
+                    return TaskNextAction::Stop;
                 }
                 for read in read_buffer {
                     match read {
@@ -330,7 +346,7 @@ where
             }
             _ = self.request_insert_receiver.recv_many(&mut insert_buffer, MAX_PENDING_INSERT_POOL_REQUESTS) => {
                 if insert_buffer.is_empty() {
-                    return true;
+                    return TaskNextAction::Stop;
                 }
                 for insert in insert_buffer {
                     let PoolInsertRequest::Insert {
@@ -341,18 +357,11 @@ where
                     self.insert(tx, source);
                 }
             }
-            res = self.preconfirmations_update_listener.recv() => {
-                let (tx_id, status) = match res {
-                    Ok(res) => res,
-                    Err(_) => return true,
-                };
-                self.process_preconfirmed_transaction(tx_id, status);
-            }
             _ = pending_pool_expiration_check.tick() => {
                 self.pending_pool.expire_transactions(self.notification_sender.clone());
             }
         }
-        false
+        TaskNextAction::Continue
     }
 
     fn insert(&mut self, tx: ArcPoolTx, source: InsertionSource) {
@@ -493,15 +502,7 @@ where
     }
 
     fn remove_skipped_transaction(&mut self, id: TxId, reason: String) {
-        self.pool.remove_skipped_transaction(
-            id,
-            statuses::SqueezedOut {
-                reason: Error::SkippedTransaction(format!(
-                    "Parent transaction with id: {id}, was removed because of: {reason}"
-                ))
-                .to_string(),
-            },
-        );
+        self.pool.remove_skipped_transaction(id, reason);
     }
 
     fn remove_expired_transactions(&mut self, tx_ids: Vec<TxId>) {
@@ -516,24 +517,24 @@ where
     fn process_preconfirmed_transaction(
         &mut self,
         tx_id: TxId,
-        status: TransactionStatusPreconfirmationOnly,
+        status: PreConfirmationStatus,
     ) {
         let outputs = match &status {
-            TransactionStatusPreconfirmationOnly::PreConfirmationSuccess(status) => {
+            PreConfirmationStatus::Success(status) => {
                 if let Some(outputs) = &status.outputs {
                     outputs
                 } else {
                     return;
                 }
             }
-            TransactionStatusPreconfirmationOnly::PreConfirmationFailure(status) => {
+            PreConfirmationStatus::Failure(status) => {
                 if let Some(outputs) = &status.outputs {
                     outputs
                 } else {
                     return;
                 }
             }
-            TransactionStatusPreconfirmationOnly::PreConfirmationSqueezedOut(status) => {
+            PreConfirmationStatus::SqueezedOut(status) => {
                 self.remove_skipped_transaction(tx_id, status.reason.clone());
                 return;
             }

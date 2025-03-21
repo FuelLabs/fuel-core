@@ -586,11 +586,13 @@ where
     }
 
     /// Remove transaction and its dependents.
-    pub fn remove_transactions_and_dependents(
+    pub fn remove_transactions_and_dependents<I>(
         &mut self,
-        tx_ids: Vec<TxId>,
+        tx_ids: I,
         tx_status: statuses::SqueezedOut,
-    ) {
+    ) where
+        I: IntoIterator<Item = TxId>,
+    {
         let mut removed_transactions = vec![];
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
@@ -611,26 +613,44 @@ where
         self.update_stats();
     }
 
-    pub fn remove_skipped_transaction(
-        &mut self,
-        tx_id: TxId,
-        tx_status: statuses::SqueezedOut,
-    ) {
+    pub fn remove_skipped_transaction(&mut self, tx_id: TxId, reason: String) {
+        // If pre confirmation comes from the block producer node via p2p,
+        // transaction still may be inside of the TxPool.
+        // In that case first remove it and all its dependants.
+        if self.tx_id_to_storage_id.contains_key(&tx_id) {
+            let tx_status = statuses::SqueezedOut {
+                reason: Error::SkippedTransaction(format!(
+                    "Parent transaction with id: {tx_id}, was removed because of: {reason}"
+                ))
+                .to_string(),
+            };
+            self.remove_transactions_and_dependents(iter::once(tx_id), tx_status);
+        }
+
         self.extracted_outputs.new_skipped_transaction(&tx_id);
         // TODO: need to also get contract user if the squeezed out was the contract creator.
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
-        for dependent in coin_dependents {
-            let removed = self
-                .storage
-                .remove_transaction_and_dependents_subtree(dependent);
-            self.update_components_and_caches_on_removal(removed.iter());
-            // It's not needed to inform the status manager about the skipped transaction herself
-            // because he give the information but we need to inform him about the dependents
-            // that will be deleted
-            for removed in removed {
-                let tx_id = removed.transaction.id();
-                self.tx_status_manager
-                    .status_update(tx_id, tx_status.clone().into());
+        if !coin_dependents.is_empty() {
+            let tx_status = statuses::SqueezedOut {
+                reason: Error::SkippedTransaction(format!(
+                    "Parent transaction with id: {tx_id}, was removed because of: {reason}"
+                ))
+                .to_string(),
+            };
+
+            for dependent in coin_dependents {
+                let removed = self
+                    .storage
+                    .remove_transaction_and_dependents_subtree(dependent);
+                self.update_components_and_caches_on_removal(removed.iter());
+                // It's not needed to inform the status manager about the skipped transaction herself
+                // because he give the information but we need to inform him about the dependents
+                // that will be deleted
+                for removed in removed {
+                    let tx_id = removed.transaction.id();
+                    self.tx_status_manager
+                        .status_update(tx_id, tx_status.clone().into());
+                }
             }
         }
 

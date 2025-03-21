@@ -245,7 +245,7 @@ impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
     async fn send(&self, _: Vec<Preconfirmation>) {}
 }
 
-fn convert_tx_execution_result_to_preconfirmation(
+pub fn convert_tx_execution_result_to_preconfirmation(
     tx: &Transaction,
     tx_id: TxId,
     tx_exec_result: &TransactionExecutionResult,
