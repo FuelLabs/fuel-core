@@ -6,7 +6,6 @@ use crate::{
         PoolNotification,
         PoolReadRequest,
         PoolWorkerInterface,
-        PreconfirmedStatus,
     },
 };
 use fuel_core_services::TaskNextAction;
@@ -64,7 +63,6 @@ use fuel_core_txpool::{
 use fuel_core_types::{
     fuel_tx::{
         Transaction,
-        TxId,
         UniqueIdentifier,
     },
     fuel_types::{
@@ -263,15 +261,6 @@ where
                 }
             }
 
-            new_status_update = self.subscriptions.all_tx_status_updates.recv() => {
-                if let Ok((tx_id, tx_status)) = new_status_update {
-                    self.process_tx_update(tx_id, tx_status);
-                    TaskNextAction::Continue
-                } else {
-                    TaskNextAction::Stop
-                }
-            }
-
             tx_from_p2p = self.subscriptions.new_tx.next() => {
                 if let Some(GossipData { data, message_id, peer_id }) = tx_from_p2p {
                     if let Some(tx) = data {
@@ -440,45 +429,6 @@ where
                     self.tx_status_manager.status_update(tx_id, tx_status);
                 }
             }
-        }
-    }
-
-    fn process_tx_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
-        match tx_status {
-            TransactionStatus::PreConfirmationSqueezedOut(s) => {
-                if let Err(e) = self
-                    .pool_worker
-                    .remove_skipped_transaction(tx_id, s.reason.clone())
-                {
-                    tracing::error!("Failed to remove the skipped transactions: {}", e);
-                }
-            }
-            TransactionStatus::PreConfirmationSuccess(s) => {
-                if s.outputs.is_none() {
-                    return
-                }
-                if let Err(e) = self
-                    .pool_worker
-                    .preconfirmed_transaction(tx_id, PreconfirmedStatus::Success(s))
-                {
-                    tracing::error!("Failed to remove the skipped transactions: {}", e);
-                }
-            }
-            TransactionStatus::PreConfirmationFailure(s) => {
-                if s.outputs.is_none() {
-                    return
-                }
-                if let Err(e) = self
-                    .pool_worker
-                    .preconfirmed_transaction(tx_id, PreconfirmedStatus::Failure(s))
-                {
-                    tracing::error!("Failed to remove the skipped transactions: {}", e);
-                }
-            }
-            TransactionStatus::Success(_)
-            | TransactionStatus::Failure(_)
-            | TransactionStatus::Submitted(_)
-            | TransactionStatus::SqueezedOut(_) => {}
         }
     }
 
@@ -794,7 +744,6 @@ where
         new_tx: tx_from_p2p_stream,
         imported_blocks: block_importer.block_events(),
         write_pool: write_pool_requests_receiver,
-        all_tx_status_updates: tx_status_manager.get_status_update_listener(),
     };
 
     let storage_provider = Arc::new(ps_provider);

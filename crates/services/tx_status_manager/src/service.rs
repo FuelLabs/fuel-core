@@ -44,6 +44,7 @@ use fuel_core_types::{
         transaction_status::{
             statuses,
             TransactionStatus,
+            TransactionStatusPreconfirmationOnly,
         },
     },
     tai64::Tai64,
@@ -51,6 +52,7 @@ use fuel_core_types::{
 use futures::StreamExt;
 use std::collections::HashMap;
 use tokio::sync::{
+    broadcast,
     mpsc,
     oneshot,
 };
@@ -85,7 +87,7 @@ enum WriteRequest {
 pub struct SharedData {
     read_requests_sender: mpsc::Sender<ReadRequest>,
     write_requests_sender: mpsc::UnboundedSender<WriteRequest>,
-    tx_status_receiver: tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)>,
+    tx_status_receiver: broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)>,
 }
 
 impl Clone for SharedData {
@@ -140,9 +142,10 @@ impl SharedData {
         }
     }
 
-    pub fn subscribe_all_updates(
+    pub fn preconfirmations_update_listener(
         &self,
-    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)> {
+    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)>
+    {
         self.tx_status_receiver.resubscribe()
     }
 }

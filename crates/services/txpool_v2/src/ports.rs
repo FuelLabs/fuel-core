@@ -29,9 +29,13 @@ use fuel_core_types::{
             NetworkData,
             PeerId,
         },
-        transaction_status::TransactionStatus,
+        transaction_status::{
+            TransactionStatus,
+            TransactionStatusPreconfirmationOnly,
+        },
     },
 };
+use tokio::sync::broadcast;
 
 use crate::GasPrice;
 
@@ -41,9 +45,9 @@ use fuel_core_types::services::transaction_status::statuses;
 pub trait TxStatusManager: Send + Sync + 'static {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus);
 
-    fn get_status_update_listener(
+    fn preconfirmations_update_listener(
         &self,
-    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)>;
+    ) -> broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)>;
 
     fn squeezed_out_txs(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>);
 }

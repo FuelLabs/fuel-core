@@ -1,7 +1,6 @@
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::{
-        Output,
         Transaction,
         TxId,
     },
@@ -9,7 +8,10 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         p2p::GossipsubMessageInfo,
-        transaction_status::statuses,
+        transaction_status::{
+            statuses,
+            TransactionStatusPreconfirmationOnly,
+        },
         txpool::ArcPoolTx,
     },
 };
@@ -20,6 +22,7 @@ use std::{
 };
 use tokio::{
     sync::{
+        broadcast,
         mpsc::{
             self,
             Receiver,
@@ -111,6 +114,9 @@ impl PoolWorkerInterface {
                     extract_block_transactions_receiver,
                     request_insert_receiver,
                     notification_sender,
+                    preconfirmations_update_listener: tx_pool
+                        .tx_status_manager
+                        .preconfirmations_update_listener(),
                     pending_pool: PendingPool::new(tx_pool.config.pending_pool_tx_ttl),
                     pool: tx_pool,
                     view_provider,
@@ -153,33 +159,6 @@ impl PoolWorkerInterface {
                     "Failed to send remove and coin dependents request: {}",
                     e
                 )
-            })
-    }
-
-    pub fn remove_skipped_transaction(
-        &self,
-        id: TxId,
-        reason: String,
-    ) -> anyhow::Result<()> {
-        self.request_update_sender
-            .try_send(PoolUpdateRequest::SkippedTransaction { id, reason })
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to send remove skipped transactions request: {}",
-                    e
-                )
-            })
-    }
-
-    pub fn preconfirmed_transaction(
-        &self,
-        tx_id: TxId,
-        status: PreconfirmedStatus,
-    ) -> anyhow::Result<()> {
-        self.request_update_sender
-            .try_send(PoolUpdateRequest::PreconfirmedTransaction { tx_id, status })
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to send preconfirmed transaction request: {}", e)
             })
     }
 
@@ -227,39 +206,9 @@ pub(super) enum PoolExtractBlockTransactions {
     },
 }
 
-pub(super) enum PreconfirmedStatus {
-    Success(Arc<statuses::PreConfirmationSuccess>),
-    Failure(Arc<statuses::PreConfirmationFailure>),
-}
-
-impl PreconfirmedStatus {
-    pub fn outputs(&self) -> Option<impl Iterator<Item = &'_ Output>> {
-        match self {
-            PreconfirmedStatus::Success(success) => {
-                success.outputs.as_ref().map(|outputs| outputs.iter())
-            }
-            PreconfirmedStatus::Failure(failure) => {
-                failure.outputs.as_ref().map(|outputs| outputs.iter())
-            }
-        }
-    }
-}
-
 pub(super) enum PoolUpdateRequest {
-    ProcessBlock {
-        block_result: SharedImportResult,
-    },
-    SkippedTransaction {
-        id: TxId,
-        reason: String,
-    },
-    ExpiredTransactions {
-        expired_txs: Vec<TxId>,
-    },
-    PreconfirmedTransaction {
-        tx_id: TxId,
-        status: PreconfirmedStatus,
-    },
+    ProcessBlock { block_result: SharedImportResult },
+    ExpiredTransactions { expired_txs: Vec<TxId> },
 }
 pub(super) enum PoolReadRequest {
     NonExistingTxs {
@@ -308,6 +257,8 @@ pub(super) struct PoolWorker<View, TxStatusManager> {
     request_read_receiver: Receiver<PoolReadRequest>,
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
     request_insert_receiver: Receiver<PoolInsertRequest>,
+    preconfirmations_update_listener:
+        broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)>,
     pool: TxPool<TxStatusManager>,
     pending_pool: PendingPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
@@ -350,14 +301,8 @@ where
                         PoolUpdateRequest::ProcessBlock { block_result } => {
                             self.process_block(block_result);
                         }
-                        PoolUpdateRequest::SkippedTransaction { id, reason } => {
-                            self.remove_skipped_transaction(id, reason);
-                        }
                         PoolUpdateRequest::ExpiredTransactions { expired_txs } => {
                             self.remove_expired_transactions(expired_txs);
-                        }
-                        PoolUpdateRequest::PreconfirmedTransaction { tx_id, status } => {
-                            self.process_preconfirmed_transaction(tx_id, status);
                         }
                     }
                 }
@@ -395,6 +340,13 @@ where
 
                     self.insert(tx, source);
                 }
+            }
+            res = self.preconfirmations_update_listener.recv() => {
+                let (tx_id, status) = match res {
+                    Ok(res) => res,
+                    Err(_) => return true,
+                };
+                self.process_preconfirmed_transaction(tx_id, status);
             }
             _ = pending_pool_expiration_check.tick() => {
                 self.pending_pool.expire_transactions(self.notification_sender.clone());
@@ -558,20 +510,34 @@ where
     fn process_preconfirmed_transaction(
         &mut self,
         tx_id: TxId,
-        status: PreconfirmedStatus,
+        status: TransactionStatusPreconfirmationOnly,
     ) {
-        let Some(outputs) = status.outputs() else {
-            return;
+        let outputs = match &status {
+            TransactionStatusPreconfirmationOnly::PreConfirmationSuccess(status) => {
+                if let Some(outputs) = &status.outputs {
+                    outputs
+                } else {
+                    return;
+                }
+            }
+            TransactionStatusPreconfirmationOnly::PreConfirmationFailure(status) => {
+                if let Some(outputs) = &status.outputs {
+                    outputs
+                } else {
+                    return;
+                }
+            }
+            TransactionStatusPreconfirmationOnly::PreConfirmationSqueezedOut(status) => {
+                self.remove_skipped_transaction(tx_id, status.reason.clone());
+                return;
+            }
         };
         // All of this can be useful in case that we didn't know about the transaction
-        let resolved = self.pending_pool.new_known_tx(outputs, tx_id);
-        let Some(outputs) = status.outputs() else {
-            return;
-        };
+        let resolved = self.pending_pool.new_known_tx(outputs.iter(), tx_id);
         // First insert the outputs in the pool to be able to insert the resolved transactions
         self.pool
             .extracted_outputs
-            .new_extracted_outputs(outputs, tx_id);
+            .new_extracted_outputs(outputs.iter(), tx_id);
         for (tx, source) in resolved {
             self.insert(tx, source);
         }

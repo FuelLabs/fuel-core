@@ -57,10 +57,12 @@ use fuel_core_types::{
         transaction_status::{
             statuses,
             TransactionStatus,
+            TransactionStatusPreconfirmationOnly,
         },
     },
 };
 use std::sync::Arc;
+use tokio::sync::broadcast;
 
 impl BlockImporter for BlockImporterAdapter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
@@ -258,10 +260,11 @@ impl TxStatusManager for PreconfirmationSender {
             .update_status(tx_id, tx_status);
     }
 
-    fn get_status_update_listener(
+    fn preconfirmations_update_listener(
         &self,
-    ) -> tokio::sync::broadcast::Receiver<(TxId, TransactionStatus)> {
-        self.tx_status_manager_adapter.subscribe_all_updates()
+    ) -> broadcast::Receiver<(TxId, TransactionStatusPreconfirmationOnly)> {
+        self.tx_status_manager_adapter
+            .preconfirmations_update_listener()
     }
 
     fn squeezed_out_txs(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>) {

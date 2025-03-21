@@ -7,14 +7,20 @@ use std::{
     },
     time::Duration,
 };
-use tokio::time::Instant;
+use tokio::{
+    sync::broadcast,
+    time::Instant,
+};
 
 use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         TxId,
     },
-    services::transaction_status::TransactionStatus,
+    services::transaction_status::{
+        TransactionStatus,
+        TransactionStatusPreconfirmationOnly,
+    },
 };
 
 use crate::{
@@ -78,16 +84,17 @@ pub(super) struct TxStatusManager {
     data: Data,
     tx_status_change: TxStatusChange,
     // Used to inform other parts of the system about the status of a transaction
-    tx_status_change_sender: tokio::sync::broadcast::Sender<(TxId, TransactionStatus)>,
+    preconfirmations_update_sender:
+        broadcast::Sender<(TxId, TransactionStatusPreconfirmationOnly)>,
     ttl: Duration,
     metrics: bool,
 }
 
 impl TxStatusManager {
     pub fn new(
-        tx_status_change_sender: tokio::sync::broadcast::Sender<(
+        preconfirmations_update_sender: broadcast::Sender<(
             TxId,
-            TransactionStatus,
+            TransactionStatusPreconfirmationOnly,
         )>,
         tx_status_change: TxStatusChange,
         ttl: Duration,
@@ -95,7 +102,7 @@ impl TxStatusManager {
     ) -> Self {
         Self {
             data: Data::empty(),
-            tx_status_change_sender,
+            preconfirmations_update_sender,
             tx_status_change,
             ttl,
             metrics,
@@ -173,8 +180,46 @@ impl TxStatusManager {
             .update_sender
             .send(TxUpdate::new(tx_id, tx_status.clone().into()));
 
-        if let Err(e) = self.tx_status_change_sender.send((tx_id, tx_status)) {
-            tracing::error!(%e, "failed to send tx status update");
+        match tx_status {
+            TransactionStatus::PreConfirmationSuccess(s) => {
+                if self
+                    .preconfirmations_update_sender
+                    .send((
+                        tx_id,
+                        TransactionStatusPreconfirmationOnly::PreConfirmationSuccess(s),
+                    ))
+                    .is_err()
+                {
+                    tracing::warn!("Failed to send preconfirmation update");
+                }
+            }
+            TransactionStatus::PreConfirmationFailure(s) => {
+                if self
+                    .preconfirmations_update_sender
+                    .send((
+                        tx_id,
+                        TransactionStatusPreconfirmationOnly::PreConfirmationFailure(s),
+                    ))
+                    .is_err()
+                {
+                    tracing::warn!("Failed to send preconfirmation update");
+                }
+            }
+            TransactionStatus::PreConfirmationSqueezedOut(s) => {
+                if self
+                    .preconfirmations_update_sender
+                    .send((
+                        tx_id,
+                        TransactionStatusPreconfirmationOnly::PreConfirmationSqueezedOut(
+                            s,
+                        ),
+                    ))
+                    .is_err()
+                {
+                    tracing::warn!("Failed to send preconfirmation update");
+                }
+            }
+            _ => {}
         }
 
         if self.metrics {
