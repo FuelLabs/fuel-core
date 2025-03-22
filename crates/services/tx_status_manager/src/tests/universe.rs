@@ -52,8 +52,11 @@ impl TestTxStatusManagerUniverse {
 
     pub fn build_tx_status_manager(&mut self) {
         let tx_status_sender = TxStatusChange::new(1000, Duration::from_secs(360));
+        let (tx_all_status_sender, _tx_all_status_receiver) =
+            tokio::sync::broadcast::channel(1000);
 
         let tx_status_manager = Arc::new(Mutex::new(TxStatusManager::new(
+            tx_all_status_sender,
             tx_status_sender,
             TX_STATUS_MANAGER_TTL,
             false,

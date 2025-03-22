@@ -4,7 +4,6 @@ use crate::{
     config::Config,
     storage_access_recorder::StorageAccessRecorder,
 };
-
 use fuel_core_executor::{
     executor::{
         ExecutionInstance,
@@ -30,8 +29,6 @@ use fuel_core_storage::{
         Modifiable,
     },
 };
-#[cfg(feature = "wasm-executor")]
-use fuel_core_types::fuel_types::Bytes32;
 use fuel_core_types::{
     blockchain::{
         block::Block,
@@ -72,6 +69,17 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::block::PartialFuelBlock;
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::services::executor::UncommittedResult;
+
+#[cfg(feature = "wasm-executor")]
+use fuel_core_executor::executor::convert_tx_execution_result_to_preconfirmation;
+#[cfg(feature = "wasm-executor")]
+use fuel_core_types::{
+    fuel_types::Bytes32,
+    services::preconfirmation::{
+        Preconfirmation,
+        PreconfirmationStatus,
+    },
+};
 #[cfg(feature = "wasm-executor")]
 use fuel_core_wasm_executor::utils::{
     convert_from_v0_execution_result,
@@ -630,15 +638,30 @@ where
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
                     if let Some(blocks_module) = maybe_blocks_module {
-                        self.wasm_produce_inner(&blocks_module, block, options, mode)
+                        self.wasm_produce_inner(
+                            &blocks_module,
+                            block,
+                            options,
+                            mode,
+                            preconfirmation_sender,
+                        )
+                        .await
                     } else {
-                        self.wasm_produce_inner(module, block, options, mode)
+                        self.wasm_produce_inner(
+                            module,
+                            block,
+                            options,
+                            mode,
+                            preconfirmation_sender,
+                        )
+                        .await
                     }
                 }
             }
         } else {
             let module = self.get_module(block_version)?;
-            self.wasm_produce_inner(&module, block, options, mode)
+            self.wasm_produce_inner(&module, block, options, mode, preconfirmation_sender)
+                .await
         }
     }
 
@@ -728,12 +751,13 @@ where
     }
 
     #[cfg(feature = "wasm-executor")]
-    fn wasm_produce_inner<TxSource>(
+    async fn wasm_produce_inner<TxSource>(
         &self,
         module: &wasmtime::Module,
         component: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
+        preconfirmation_sender: impl PreconfirmationSenderPort,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -785,7 +809,7 @@ where
 
         let output = instance.run(module)?;
 
-        match output {
+        let result = match output {
             ReturnType::ExecutionV0(result) => {
                 convert_from_v0_execution_result(result)
             },
@@ -798,7 +822,43 @@ where
                         .to_string(),
                 ))
             }
-        }
+        }?;
+
+        let execution_result = result.result();
+        let iter = execution_result.tx_status.iter();
+        let iter = iter.zip(execution_result.block.transactions());
+        let mut preconfirmations = iter
+            .enumerate()
+            .map(|(i, (status, tx))| {
+                let tx_index = u16::try_from(i).unwrap_or(u16::MAX);
+                let preconfirmation_status =
+                    convert_tx_execution_result_to_preconfirmation(
+                        tx,
+                        status.id,
+                        &status.result,
+                        *execution_result.block.header().height(),
+                        tx_index,
+                    );
+                preconfirmation_status
+            })
+            .collect::<Vec<_>>();
+
+        let squeezed_out =
+            execution_result
+                .skipped_transactions
+                .iter()
+                .map(|(tx_id, error)| Preconfirmation {
+                    tx_id: *tx_id,
+                    status: PreconfirmationStatus::SqueezedOut {
+                        reason: error.to_string(),
+                    },
+                });
+
+        preconfirmations.extend(squeezed_out);
+
+        let _ = preconfirmation_sender.send(preconfirmations).await;
+
+        Ok(result)
     }
 
     #[cfg(feature = "wasm-executor")]

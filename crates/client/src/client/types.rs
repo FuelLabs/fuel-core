@@ -41,14 +41,17 @@ pub use message::{
 };
 pub use node_info::NodeInfo;
 
-use crate::client::schema::{
-    relayed_tx::RelayedTransactionStatus as SchemaRelayedTransactionStatus,
-    tx::{
-        OpaqueTransactionWithStatus,
-        StatusWithTransaction as SchemaStatusWithTx,
-        TransactionStatus as SchemaTxStatus,
+use crate::client::{
+    schema,
+    schema::{
+        relayed_tx::RelayedTransactionStatus as SchemaRelayedTransactionStatus,
+        tx::{
+            OpaqueTransactionWithStatus,
+            StatusWithTransaction as SchemaStatusWithTx,
+            TransactionStatus as SchemaTxStatus,
+        },
+        ConversionError,
     },
-    ConversionError,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -57,6 +60,7 @@ use fuel_core_types::{
         Transaction,
         TxId,
         TxPointer,
+        UtxoId,
     },
     fuel_types::{
         canonical::Deserialize,
@@ -124,7 +128,7 @@ pub enum TransactionStatus {
         total_gas: u64,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
-        resolved_outputs: Option<Vec<Output>>,
+        resolved_outputs: Option<Vec<ResolvedOutput>>,
     },
     SqueezedOut {
         reason: String,
@@ -144,7 +148,7 @@ pub enum TransactionStatus {
         total_gas: u64,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
-        resolved_outputs: Option<Vec<Output>>,
+        resolved_outputs: Option<Vec<ResolvedOutput>>,
         reason: String,
     },
 }
@@ -281,7 +285,7 @@ pub enum StatusWithTransaction {
         transaction_id: TxId,
         transaction: Option<Transaction>,
         receipts: Option<Vec<Receipt>>,
-        resolved_outputs: Option<Vec<Output>>,
+        resolved_outputs: Option<Vec<ResolvedOutput>>,
     },
     SqueezedOut {
         reason: String,
@@ -301,7 +305,7 @@ pub enum StatusWithTransaction {
         transaction_id: TxId,
         transaction: Option<Transaction>,
         receipts: Option<Vec<Receipt>>,
-        resolved_outputs: Option<Vec<Output>>,
+        resolved_outputs: Option<Vec<ResolvedOutput>>,
         reason: String,
     },
 }
@@ -487,4 +491,21 @@ impl TryFrom<TransactionType> for Transaction {
 pub struct StorageSlot {
     pub key: primitives::Bytes32,
     pub value: primitives::Bytes,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ResolvedOutput {
+    pub utxo_id: UtxoId,
+    pub output: Output,
+}
+
+impl TryFrom<schema::tx::ResolvedOutput> for ResolvedOutput {
+    type Error = ConversionError;
+
+    fn try_from(value: schema::tx::ResolvedOutput) -> Result<Self, Self::Error> {
+        Ok(Self {
+            utxo_id: value.utxo_id.into(),
+            output: value.output.try_into()?,
+        })
+    }
 }

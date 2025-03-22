@@ -15,6 +15,7 @@ use crate::client::{
         Tai64Timestamp,
         TransactionId,
         TxPointer,
+        UtxoId,
         U16,
         U32,
         U64,
@@ -250,13 +251,20 @@ pub struct SuccessStatusWithTransaction {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct ResolvedOutput {
+    pub utxo_id: UtxoId,
+    pub output: Output,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct PreconfirmationSuccessStatus {
     pub tx_pointer: TxPointer,
     pub transaction_id: TransactionId,
     pub total_fee: U64,
     pub total_gas: U64,
     pub receipts: Option<Vec<Receipt>>,
-    pub resolved_outputs: Option<Vec<Output>>,
+    pub resolved_outputs: Option<Vec<ResolvedOutput>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -271,7 +279,7 @@ pub struct PreconfirmationSuccessStatusWithTransaction {
     pub total_gas: U64,
     pub transaction: Option<OpaqueTransaction>,
     pub receipts: Option<Vec<Receipt>>,
-    pub resolved_outputs: Option<Vec<Output>>,
+    pub resolved_outputs: Option<Vec<ResolvedOutput>>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -307,7 +315,7 @@ pub struct PreconfirmationFailureStatus {
     pub total_fee: U64,
     pub total_gas: U64,
     pub receipts: Option<Vec<Receipt>>,
-    pub resolved_outputs: Option<Vec<Output>>,
+    pub resolved_outputs: Option<Vec<ResolvedOutput>>,
     pub reason: String,
 }
 
@@ -323,7 +331,7 @@ pub struct PreconfirmationFailureStatusWithTransaction {
     pub total_gas: U64,
     pub transaction: Option<OpaqueTransaction>,
     pub receipts: Option<Vec<Receipt>>,
-    pub resolved_outputs: Option<Vec<Output>>,
+    pub resolved_outputs: Option<Vec<ResolvedOutput>>,
     pub reason: String,
 }
 

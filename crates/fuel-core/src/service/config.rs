@@ -38,7 +38,10 @@ use crate::{
     graphql_api::ServiceConfig as GraphQLConfig,
 };
 
-use fuel_core_types::fuel_types::AssetId;
+use fuel_core_types::fuel_types::{
+    AssetId,
+    ChainId,
+};
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
 
@@ -245,6 +248,13 @@ impl Config {
             .chain_config()
             .consensus_parameters
             .base_asset_id()
+    }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.snapshot_reader
+            .chain_config()
+            .consensus_parameters
+            .chain_id()
     }
 }
 

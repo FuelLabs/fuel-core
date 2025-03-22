@@ -245,7 +245,7 @@ impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
     async fn send(&self, _: Vec<Preconfirmation>) {}
 }
 
-fn convert_tx_execution_result_to_preconfirmation(
+pub fn convert_tx_execution_result_to_preconfirmation(
     tx: &Transaction,
     tx_id: TxId,
     tx_exec_result: &TransactionExecutionResult,
@@ -256,9 +256,12 @@ fn convert_tx_execution_result_to_preconfirmation(
     let dynamic_outputs = tx
         .outputs()
         .iter()
-        .filter_map(|output| {
+        .enumerate()
+        .filter_map(|(i, output)| {
             if output.is_change() || output.is_variable() && output.amount() != Some(0) {
-                Some(*output)
+                let output_index = u16::try_from(i).ok()?;
+                let utxo_id = UtxoId::new(tx_id, output_index);
+                Some((utxo_id, *output))
             } else {
                 None
             }

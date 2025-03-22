@@ -6,7 +6,6 @@
 #![deny(warnings)]
 
 pub mod config;
-mod error;
 mod manager;
 pub mod ports;
 pub mod service;

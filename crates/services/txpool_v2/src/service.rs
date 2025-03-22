@@ -31,10 +31,7 @@ use fuel_core_services::{
 use fuel_core_txpool::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
-    error::{
-        Error,
-        RemovedReason,
-    },
+    error::Error,
     pool::Pool,
     ports::{
         AtomicView,
@@ -324,10 +321,7 @@ where
         for height in range_to_remove {
             let expired_txs = self.pruner.height_expiration_txs.remove(&height);
             if let Some(expired_txs) = expired_txs {
-                let result = self.pool_worker.remove_tx_and_coin_dependents((
-                    expired_txs,
-                    Error::Removed(RemovedReason::Ttl),
-                ));
+                let result = self.pool_worker.remove_expired_transactions(expired_txs);
 
                 if let Err(err) = result {
                     tracing::error!("{err}");
@@ -678,10 +672,7 @@ where
             }
         }
 
-        let result = self.pool_worker.remove_tx_and_coin_dependents((
-            txs_to_remove,
-            Error::Removed(RemovedReason::Ttl),
-        ));
+        let result = self.pool_worker.remove_expired_transactions(txs_to_remove);
 
         if let Err(err) = result {
             tracing::error!("{err}");
@@ -811,7 +802,6 @@ where
         PoolWorkerInterface::new(txpool, storage_provider, &service_channel_limits);
 
     let shared_state = SharedState {
-        request_remove_sender: pool_worker.request_remove_sender.clone(),
         request_read_sender: pool_worker.request_read_sender.clone(),
         write_pool_requests_sender,
         select_transactions_requests_sender: pool_worker

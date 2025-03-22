@@ -6,7 +6,6 @@ use crate::{
         P2PAdapter,
         PoAAdapter,
         TxPoolAdapter,
-        TxStatusManagerAdapter,
     },
 };
 use anyhow::anyhow;
@@ -17,7 +16,6 @@ use fuel_core_poa::{
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
-        TxStatusManager,
     },
     service::{
         Mode,
@@ -28,7 +26,6 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
-    fuel_tx::Bytes32,
     fuel_types::BlockHeight,
     services::{
         block_importer::{
@@ -87,17 +84,6 @@ impl ConsensusModulePort for PoAAdapter {
 impl TransactionPool for TxPoolAdapter {
     fn new_txs_watcher(&self) -> watch::Receiver<()> {
         self.service.get_new_executable_txs_notifier()
-    }
-
-    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<Bytes32>) {
-        self.service.notify_skipped_txs(tx_ids_and_reasons)
-    }
-}
-
-impl TxStatusManager for TxStatusManagerAdapter {
-    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>) {
-        self.tx_status_manager_shared_data
-            .notify_skipped(tx_ids_and_reasons)
     }
 }
 

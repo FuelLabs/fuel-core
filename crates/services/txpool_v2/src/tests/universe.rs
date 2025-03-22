@@ -136,14 +136,15 @@ pub struct TestPoolUniverse {
 impl Default for TestPoolUniverse {
     fn default() -> Self {
         let (tx, rx) = mpsc::channel(100);
-
+        let (tx_all_status_sender, _tx_all_status_receiver) =
+            tokio::sync::broadcast::channel(1000);
         Self {
             mock_db: MockDb::default(),
             rng: StdRng::seed_from_u64(0),
             config: Default::default(),
             pool: None,
             stats_receiver: None,
-            mock_tx_status_manager: MockTxStatusManager::new(tx),
+            mock_tx_status_manager: MockTxStatusManager::new(tx_all_status_sender, tx),
             tx_status_manager_receiver: rx,
         }
     }
@@ -176,6 +177,7 @@ impl TestPoolUniverse {
     pub fn build_pool(&mut self) {
         let (tx_new_executable_txs, _) = tokio::sync::watch::channel(());
         let (status_sender, status_receiver) = mpsc::channel(1_000_000);
+        let (all_service_txs_sender, _) = tokio::sync::broadcast::channel(1000);
         let (tx, rx) = tokio::sync::watch::channel(TxPoolStats::default());
         let pool = Arc::new(RwLock::new(Pool::new(
             GraphStorage::new(GraphConfig {
@@ -186,7 +188,10 @@ impl TestPoolUniverse {
             self.config.clone(),
             tx,
             tx_new_executable_txs,
-            Arc::new(MockTxStatusManager::new(status_sender)),
+            Arc::new(MockTxStatusManager::new(
+                all_service_txs_sender,
+                status_sender,
+            )),
         )));
         self.stats_receiver = Some(rx);
         self.tx_status_manager_receiver = status_receiver;

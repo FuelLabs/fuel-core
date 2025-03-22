@@ -102,7 +102,7 @@ async fn preconfirmation__received_after_successful_execution() {
         let outputs = resolved_outputs.unwrap();
         assert_eq!(outputs.len(), 1);
         assert_eq!(
-            outputs[0],
+            outputs[0].output,
             Output::Change {
                 to: address,
                 amount,
@@ -195,7 +195,7 @@ async fn preconfirmation__received_after_failed_execution() {
         let outputs = resolved_outputs.unwrap();
         assert_eq!(outputs.len(), 1);
         assert_eq!(
-            outputs[0],
+            outputs[0].output,
             Output::Change {
                 to: address,
                 amount,
