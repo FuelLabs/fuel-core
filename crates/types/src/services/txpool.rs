@@ -21,6 +21,7 @@ use crate::{
         TxId,
         Upgrade,
         Upload,
+        UtxoId,
     },
     fuel_vm::checked_transaction::Checked,
 };
@@ -275,6 +276,25 @@ impl PoolTransaction {
             PoolTransaction::Blob(tx, _) => tx.transaction().outputs(),
         }
     }
+
+    pub fn utxo_ids_with_outputs(&self) -> impl Iterator<Item = (UtxoId, &Output)> {
+        utxo_ids_with_outputs(self.outputs().iter(), self.id())
+    }
+}
+
+/// Helper function to create an iterator of utxo ids with outputs.
+pub fn utxo_ids_with_outputs<'a, I>(
+    outputs: I,
+    tx_id: TxId,
+) -> impl Iterator<Item = (UtxoId, &'a Output)>
+where
+    I: Iterator<Item = &'a Output>,
+{
+    outputs.enumerate().filter_map(move |(index, output)| {
+        let output_index = u16::try_from(index).ok()?;
+        let utxo_id = UtxoId::new(tx_id, output_index);
+        Some((utxo_id, output))
+    })
 }
 
 impl From<PoolTransaction> for CheckedTransaction {

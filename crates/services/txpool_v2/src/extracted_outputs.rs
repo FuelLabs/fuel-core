@@ -44,13 +44,12 @@ impl Default for ExtractedOutputs {
 impl ExtractedOutputs {
     pub fn new_extracted_outputs<'a>(
         &mut self,
-        outputs: impl Iterator<Item = &'a Output>,
-        tx_id: TxId,
+        outputs: impl Iterator<Item = &'a (UtxoId, Output)>,
     ) {
-        for (idx, output) in outputs.enumerate() {
+        for (utxo_id, output) in outputs {
             match output {
                 Output::ContractCreated { contract_id, .. } => {
-                    self.contract_created.insert(*contract_id, tx_id);
+                    self.contract_created.insert(*contract_id, *utxo_id.tx_id());
                 }
                 Output::Coin {
                     to,
@@ -67,12 +66,10 @@ impl ExtractedOutputs {
                     asset_id,
                     to,
                 } => {
-                    let idx =
-                        u16::try_from(idx).expect("Outputs count is less than u16::MAX");
                     self.coins_created
-                        .entry(tx_id)
+                        .entry(*utxo_id.tx_id())
                         .or_default()
-                        .insert(idx, (*to, *amount, *asset_id));
+                        .insert(utxo_id.output_index(), (*to, *amount, *asset_id));
                 }
                 Output::Contract { .. } => {
                     continue;

@@ -398,13 +398,12 @@ where
         self.tx_id_to_storage_id.keys()
     }
 
-    /// Process the result of a block :
+    /// Process committed transactions:
     /// - Remove transaction but keep its dependents and the dependents become executables.
     /// - Notify about possible new executable transactions.
-    pub fn process_block(&mut self, tx_ids: impl Iterator<Item = TxId>) {
+    pub fn process_committed_transactions(&mut self, tx_ids: impl Iterator<Item = TxId>) {
         let mut transactions_to_promote = vec![];
         for tx_id in tx_ids {
-            self.extracted_outputs.new_executed_transaction(&tx_id);
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
                     self.storage.get_direct_dependents(storage_id).collect();
@@ -416,6 +415,8 @@ where
                     );
                     continue
                 };
+                self.extracted_outputs
+                    .new_extracted_transaction(&transaction.transaction);
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
 
                 for dependent in dependents {

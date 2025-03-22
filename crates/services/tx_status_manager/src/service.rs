@@ -375,7 +375,7 @@ where
 {
     let tx_status_from_p2p_stream = p2p.gossiped_tx_statuses();
     let (tx_status_sender, tx_status_receiver) =
-        tokio::sync::broadcast::channel(config.max_tx_update_subscriptions);
+        broadcast::channel(config.max_tx_update_subscriptions);
     let subscriptions = Subscriptions {
         new_tx_status: tx_status_from_p2p_stream,
     };
@@ -563,7 +563,7 @@ mod tests {
                     total_gas: Default::default(),
                     total_fee: Default::default(),
                     receipts: Some(vec![]),
-                    outputs: Some(vec![]),
+                    resolved_outputs: Some(vec![]),
                 };
                 TransactionStatus::PreConfirmationSuccess(Arc::new(inner))
             }
@@ -588,7 +588,7 @@ mod tests {
                     total_gas: Default::default(),
                     total_fee: Default::default(),
                     receipts: Some(vec![]),
-                    outputs: Some(vec![]),
+                    resolved_outputs: Some(vec![]),
                     reason: "None".to_string(),
                 };
                 TransactionStatus::PreConfirmationFailure(Arc::new(inner))

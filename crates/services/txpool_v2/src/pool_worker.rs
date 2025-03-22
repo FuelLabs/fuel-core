@@ -17,6 +17,7 @@ use fuel_core_types::{
     },
 };
 use std::{
+    iter,
     ops::Deref,
     sync::Arc,
     time::SystemTime,
@@ -419,7 +420,7 @@ where
                     tracing::error!("Failed to send inserted notification: {}", e);
                 }
                 let resolved_txs =
-                    self.pending_pool.new_known_tx(tx.outputs().iter(), tx.id());
+                    self.pending_pool.new_known_tx(tx.utxo_ids_with_outputs());
 
                 for (tx, source) in resolved_txs {
                     if let Err(e) = self
@@ -486,8 +487,17 @@ where
     }
 
     fn process_block(&mut self, block_result: SharedImportResult) {
-        self.pool
-            .process_block(block_result.tx_status.iter().map(|tx_status| tx_status.id));
+        self.pool.process_committed_transactions(
+            block_result.tx_status.iter().map(|tx_status| tx_status.id),
+        );
+
+        // Clear cached outputs
+        block_result.tx_status.iter().for_each(|tx_status| {
+            self.pool
+                .extracted_outputs
+                .new_executed_transaction(&tx_status.id);
+        });
+
         let resolved_txs = self.pending_pool.new_known_txs(
             block_result
                 .sealed_block
@@ -521,14 +531,16 @@ where
     ) {
         let outputs = match &status {
             PreConfirmationStatus::Success(status) => {
-                if let Some(outputs) = &status.outputs {
+                self.pool.process_committed_transactions(iter::once(tx_id));
+                if let Some(outputs) = &status.resolved_outputs {
                     outputs
                 } else {
                     return;
                 }
             }
             PreConfirmationStatus::Failure(status) => {
-                if let Some(outputs) = &status.outputs {
+                self.pool.process_committed_transactions(iter::once(tx_id));
+                if let Some(outputs) = &status.resolved_outputs {
                     outputs
                 } else {
                     return;
@@ -540,11 +552,13 @@ where
             }
         };
         // All of this can be useful in case that we didn't know about the transaction
-        let resolved = self.pending_pool.new_known_tx(outputs.iter(), tx_id);
+        let resolved = self
+            .pending_pool
+            .new_known_tx(outputs.iter().map(|(utxo_id, output)| (*utxo_id, output)));
         // First insert the outputs in the pool to be able to insert the resolved transactions
         self.pool
             .extracted_outputs
-            .new_extracted_outputs(outputs.iter(), tx_id);
+            .new_extracted_outputs(outputs.iter());
         for (tx, source) in resolved {
             self.insert(tx, source);
         }
