@@ -112,7 +112,8 @@ pub trait DryRunner: Send + Sync {
         block: Components<Vec<Transaction>>,
         forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
-    ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>>;
+        record_storage_read_replay: bool,
+    ) -> ExecutorResult<(Vec<(Transaction, TransactionExecutionStatus)>, Vec<StorageReadReplayEvent>)>;
 }
 
 pub trait StorageReadReplayRecorder: Send + Sync {

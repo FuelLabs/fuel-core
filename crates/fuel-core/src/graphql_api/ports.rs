@@ -274,7 +274,8 @@ pub trait BlockProducerPort: Send + Sync {
         time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
-    ) -> anyhow::Result<Vec<(Transaction, TransactionExecutionStatus)>>;
+        record_storage_reads: bool,
+    ) -> anyhow::Result<(Vec<(Transaction, TransactionExecutionStatus)>, Vec<StorageReadReplayEvent>)>;
 
     async fn storage_read_replay(
         &self,
