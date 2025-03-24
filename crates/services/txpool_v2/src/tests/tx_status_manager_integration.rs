@@ -46,7 +46,6 @@ async fn insert_transaction__failed_tx_verification_triggers_squeezed_out() {
     // Then
     universe
         .await_expected_tx_statuses(ids, |status| {
-            dbg!(&status);
             matches!(status, TransactionStatus::SqueezedOut(_))
         })
         .await
