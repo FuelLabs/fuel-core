@@ -66,10 +66,12 @@ pub type fuel_core_tx_status_manager::ports::P2PPreConfirmationMessage = fuel_co
 pub mod fuel_core_tx_status_manager::service
 pub struct fuel_core_tx_status_manager::service::SharedData
 impl fuel_core_tx_status_manager::service::SharedData
-pub async fn fuel_core_tx_status_manager::service::SharedData::get_status(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<core::option::Option<fuel_core_types::services::txpool::TransactionStatus>>
+pub async fn fuel_core_tx_status_manager::service::SharedData::get_status(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<core::option::Option<fuel_core_types::services::transaction_status::TransactionStatus>>
 pub fn fuel_core_tx_status_manager::service::SharedData::notify_skipped(&self, tx_ids_and_reason: alloc::vec::Vec<(fuel_types::array_types::Bytes32, alloc::string::String)>)
 pub async fn fuel_core_tx_status_manager::service::SharedData::subscribe(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<fuel_core_tx_status_manager::TxStatusStream>
-pub fn fuel_core_tx_status_manager::service::SharedData::update_status(&self, tx_id: fuel_tx::transaction::TxId, status: fuel_core_types::services::txpool::TransactionStatus)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_preconfirmations(&self, preconfirmations: alloc::vec::Vec<fuel_core_types::services::preconfirmation::Preconfirmation>)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_status(&self, tx_id: fuel_tx::transaction::TxId, status: fuel_core_types::services::transaction_status::TransactionStatus)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_statuses(&self, statuses: alloc::vec::Vec<(fuel_tx::transaction::TxId, fuel_core_types::services::transaction_status::statuses::SqueezedOut)>)
 impl core::clone::Clone for fuel_core_tx_status_manager::service::SharedData
 pub fn fuel_core_tx_status_manager::service::SharedData::clone(&self) -> fuel_core_tx_status_manager::service::SharedData
 impl core::marker::Freeze for fuel_core_tx_status_manager::service::SharedData
@@ -165,10 +167,10 @@ pub trait fuel_core_tx_status_manager::service::ProtocolPublicKey: core::marker:
 pub fn fuel_core_tx_status_manager::service::ProtocolPublicKey::latest_address(&self) -> fuel_types::array_types::Address
 pub fn fuel_core_tx_status_manager::service::new_service<P2P, Pubkey>(p2p: P2P, config: fuel_core_tx_status_manager::config::Config, protocol_pubkey: Pubkey) -> fuel_core_services::service::ServiceRunner<fuel_core_tx_status_manager::service::Task<Pubkey>> where P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions<GossipedStatuses = fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData>, Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey
 pub mod fuel_core_tx_status_manager::utils
-pub fn fuel_core_tx_status_manager::utils::from_executor_to_status(block: &fuel_core_types::blockchain::block::Block, result: fuel_core_types::services::executor::TransactionExecutionResult) -> fuel_core_types::services::txpool::TransactionExecutionStatus
+pub fn fuel_core_tx_status_manager::utils::from_executor_to_status(block: &fuel_core_types::blockchain::block::Block, result: fuel_core_types::services::executor::TransactionExecutionResult) -> fuel_core_types::services::transaction_status::TransactionExecutionStatus
 pub enum fuel_core_tx_status_manager::TxStatusMessage
 pub fuel_core_tx_status_manager::TxStatusMessage::FailedStatus
-pub fuel_core_tx_status_manager::TxStatusMessage::Status(fuel_core_types::services::txpool::TransactionStatus)
+pub fuel_core_tx_status_manager::TxStatusMessage::Status(fuel_core_types::services::transaction_status::TransactionStatus)
 impl fuel_core_tx_status_manager::TxStatusMessage
 pub fn fuel_core_tx_status_manager::TxStatusMessage::is_final(&self) -> bool
 impl core::clone::Clone for fuel_core_tx_status_manager::TxStatusMessage
@@ -176,13 +178,13 @@ pub fn fuel_core_tx_status_manager::TxStatusMessage::clone(&self) -> fuel_core_t
 impl core::cmp::Eq for fuel_core_tx_status_manager::TxStatusMessage
 impl core::cmp::PartialEq for fuel_core_tx_status_manager::TxStatusMessage
 pub fn fuel_core_tx_status_manager::TxStatusMessage::eq(&self, other: &fuel_core_tx_status_manager::TxStatusMessage) -> bool
-impl core::convert::From<fuel_core_types::services::txpool::TransactionStatus> for fuel_core_tx_status_manager::TxStatusMessage
-pub fn fuel_core_tx_status_manager::TxStatusMessage::from(status: fuel_core_types::services::txpool::TransactionStatus) -> Self
+impl core::convert::From<fuel_core_types::services::transaction_status::TransactionStatus> for fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::from(status: fuel_core_types::services::transaction_status::TransactionStatus) -> Self
 impl core::fmt::Debug for fuel_core_tx_status_manager::TxStatusMessage
 pub fn fuel_core_tx_status_manager::TxStatusMessage::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for fuel_core_tx_status_manager::TxStatusMessage
-impl<E> core::convert::From<core::result::Result<fuel_core_types::services::txpool::TransactionStatus, E>> for fuel_core_tx_status_manager::TxStatusMessage
-pub fn fuel_core_tx_status_manager::TxStatusMessage::from(result: core::result::Result<fuel_core_types::services::txpool::TransactionStatus, E>) -> Self
+impl<E> core::convert::From<core::result::Result<fuel_core_types::services::transaction_status::TransactionStatus, E>> for fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::from(result: core::result::Result<fuel_core_types::services::transaction_status::TransactionStatus, E>) -> Self
 impl core::marker::Freeze for fuel_core_tx_status_manager::TxStatusMessage
 impl core::marker::Send for fuel_core_tx_status_manager::TxStatusMessage
 impl core::marker::Sync for fuel_core_tx_status_manager::TxStatusMessage
@@ -233,10 +235,12 @@ impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::TxStatusM
 pub fn fuel_core_tx_status_manager::TxStatusMessage::vzip(self) -> V
 pub struct fuel_core_tx_status_manager::SharedData
 impl fuel_core_tx_status_manager::service::SharedData
-pub async fn fuel_core_tx_status_manager::service::SharedData::get_status(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<core::option::Option<fuel_core_types::services::txpool::TransactionStatus>>
+pub async fn fuel_core_tx_status_manager::service::SharedData::get_status(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<core::option::Option<fuel_core_types::services::transaction_status::TransactionStatus>>
 pub fn fuel_core_tx_status_manager::service::SharedData::notify_skipped(&self, tx_ids_and_reason: alloc::vec::Vec<(fuel_types::array_types::Bytes32, alloc::string::String)>)
 pub async fn fuel_core_tx_status_manager::service::SharedData::subscribe(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<fuel_core_tx_status_manager::TxStatusStream>
-pub fn fuel_core_tx_status_manager::service::SharedData::update_status(&self, tx_id: fuel_tx::transaction::TxId, status: fuel_core_types::services::txpool::TransactionStatus)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_preconfirmations(&self, preconfirmations: alloc::vec::Vec<fuel_core_types::services::preconfirmation::Preconfirmation>)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_status(&self, tx_id: fuel_tx::transaction::TxId, status: fuel_core_types::services::transaction_status::TransactionStatus)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_statuses(&self, statuses: alloc::vec::Vec<(fuel_tx::transaction::TxId, fuel_core_types::services::transaction_status::statuses::SqueezedOut)>)
 impl core::clone::Clone for fuel_core_tx_status_manager::service::SharedData
 pub fn fuel_core_tx_status_manager::service::SharedData::clone(&self) -> fuel_core_tx_status_manager::service::SharedData
 impl core::marker::Freeze for fuel_core_tx_status_manager::service::SharedData
@@ -328,6 +332,6 @@ pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Output = T
 impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::Task<Pubkey>
 impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::Task<Pubkey> where V: ppv_lite86::types::MultiLane<T>
 pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::vzip(self) -> V
-pub fn fuel_core_tx_status_manager::from_executor_to_status(block: &fuel_core_types::blockchain::block::Block, result: fuel_core_types::services::executor::TransactionExecutionResult) -> fuel_core_types::services::txpool::TransactionExecutionStatus
+pub fn fuel_core_tx_status_manager::from_executor_to_status(block: &fuel_core_types::blockchain::block::Block, result: fuel_core_types::services::executor::TransactionExecutionResult) -> fuel_core_types::services::transaction_status::TransactionExecutionStatus
 pub fn fuel_core_tx_status_manager::new_service<P2P, Pubkey>(p2p: P2P, config: fuel_core_tx_status_manager::config::Config, protocol_pubkey: Pubkey) -> fuel_core_services::service::ServiceRunner<fuel_core_tx_status_manager::service::Task<Pubkey>> where P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions<GossipedStatuses = fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData>, Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey
 pub type fuel_core_tx_status_manager::TxStatusStream = core::pin::Pin<alloc::boxed::Box<(dyn futures_core::stream::Stream<Item = fuel_core_tx_status_manager::TxStatusMessage> + core::marker::Send + core::marker::Sync)>>
