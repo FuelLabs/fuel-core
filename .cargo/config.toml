@@ -2,6 +2,7 @@
 xtask = "run --package xtask --"
 avail = "run --bin fuel-core-avail -p fuel-core-bin --no-default-features --features avail"
 avail-release = "run --bin fuel-core-avail -p fuel-core-bin --no-default-features --features avail --release"
+avail-release-build = "build --bin fuel-core-avail -p fuel-core-bin --no-default-features --features avail --release"
 
 [registries.crates-io]
 protocol = "sparse"
