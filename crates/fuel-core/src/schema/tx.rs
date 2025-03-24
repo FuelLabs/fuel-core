@@ -97,7 +97,10 @@ use std::{
     sync::Arc,
 };
 use types::{
-    DryRunStorageReads, DryRunTransactionExecutionStatus, StorageReadReplayEvent, Transaction
+    DryRunStorageReads,
+    DryRunTransactionExecutionStatus,
+    StorageReadReplayEvent,
+    Transaction,
 };
 
 mod assemble_tx;
@@ -176,7 +179,10 @@ impl TxQuery {
             .map(|event| event.into())
             .collect();
 
-        Ok( DryRunStorageReads { tx_statuses, storage_reads })
+        Ok(DryRunStorageReads {
+            tx_statuses,
+            storage_reads,
+        })
     }
 }
 
@@ -472,8 +478,16 @@ impl TxQuery {
         };
 
         let (assembled_tx, status) = block_producer
-            .dry_run_txs(vec![assembled_tx], None, None, Some(false), Some(gas_price), false)
-            .await?.0
+            .dry_run_txs(
+                vec![assembled_tx],
+                None,
+                None,
+                Some(false),
+                Some(gas_price),
+                false,
+            )
+            .await?
+            .0
             .into_iter()
             .next()
             .ok_or_else(|| {
@@ -538,8 +552,10 @@ impl TxQuery {
         // Requires `--historical-execution` flag to be enabled.
         block_height: Option<U32>,
     ) -> async_graphql::Result<Vec<DryRunTransactionExecutionStatus>> {
-        Ok(self.dry_run_inner(ctx, txs, utxo_validation, gas_price, block_height, false)
-        .await?.tx_statuses)
+        Ok(self
+            .dry_run_inner(ctx, txs, utxo_validation, gas_price, block_height, false)
+            .await?
+            .tx_statuses)
     }
 
     /// Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
@@ -560,8 +576,9 @@ impl TxQuery {
         // Requires `--historical-execution` flag to be enabled.
         block_height: Option<U32>,
     ) -> async_graphql::Result<DryRunStorageReads> {
-        Ok(self.dry_run_inner(ctx, txs, utxo_validation, gas_price, block_height, true)
-        .await?)
+        Ok(self
+            .dry_run_inner(ctx, txs, utxo_validation, gas_price, block_height, true)
+            .await?)
     }
 
     /// Get execution trace for an already-executed block.

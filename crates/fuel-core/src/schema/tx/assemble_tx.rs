@@ -138,7 +138,8 @@ impl<'a> AssembleArguments<'a> {
     ) -> anyhow::Result<(Transaction, TransactionExecutionStatus)> {
         self.block_producer
             .dry_run_txs(vec![script.into()], None, None, Some(false), Some(0), false)
-            .await?.0
+            .await?
+            .0
             .into_iter()
             .next()
             .ok_or_else(|| anyhow::anyhow!("No result for the dry run"))

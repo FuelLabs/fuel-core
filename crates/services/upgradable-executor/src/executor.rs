@@ -98,7 +98,10 @@ enum BlockHeightSelection {
 
 enum ProduceBlockMode {
     Produce,
-    DryRun { height: BlockHeightSelection, record_storage_reads: bool },
+    DryRun {
+        height: BlockHeightSelection,
+        record_storage_reads: bool,
+    },
 }
 impl ProduceBlockMode {
     fn is_dry_run(&self) -> bool {
@@ -108,7 +111,10 @@ impl ProduceBlockMode {
     fn record_storage_reads(&self) -> bool {
         match self {
             Self::Produce => false,
-            Self::DryRun { record_storage_reads, .. } => *record_storage_reads,
+            Self::DryRun {
+                record_storage_reads,
+                ..
+            } => *record_storage_reads,
         }
     }
 }
@@ -380,8 +386,9 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        Ok(self.produce_inner_sync(block, options, ProduceBlockMode::Produce)?
-        .map_result(|(r, _)| r))
+        Ok(self
+            .produce_inner_sync(block, options, ProduceBlockMode::Produce)?
+            .map_result(|(r, _)| r))
     }
 
     /// Produces the block and returns the result of the execution without committing the changes.
@@ -395,14 +402,16 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        Ok(self.produce_inner(
-            components,
-            options,
-            ProduceBlockMode::Produce,
-            new_tx_waiter,
-            preconfirmation_sender,
-        )
-        .await?.map_result(|(r, _)| r))
+        Ok(self
+            .produce_inner(
+                components,
+                options,
+                ProduceBlockMode::Produce,
+                new_tx_waiter,
+                preconfirmation_sender,
+            )
+            .await?
+            .map_result(|(r, _)| r))
     }
 
     /// Executes the block and returns the result of the execution without committing
@@ -413,7 +422,10 @@ where
         forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
         record_storage_reads: bool,
-    ) -> ExecutorResult<(Vec<(Transaction, TransactionExecutionStatus)>, Vec<StorageReadReplayEvent>)> {
+    ) -> ExecutorResult<(
+        Vec<(Transaction, TransactionExecutionStatus)>,
+        Vec<StorageReadReplayEvent>,
+    )> {
         if at_height.is_some() && !self.config.allow_historical_execution {
             return Err(ExecutorError::Other(
                 "The historical execution is not allowed".to_string(),
@@ -438,12 +450,15 @@ where
             gas_price: component.gas_price,
         };
 
-        let (ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            ..
-        }, storage_reads) = self
+        let (
+            ExecutionResult {
+                block,
+                skipped_transactions,
+                tx_status,
+                ..
+            },
+            storage_reads,
+        ) = self
             .produce_inner_sync(
                 component,
                 options,
@@ -453,7 +468,7 @@ where
                         None => BlockHeightSelection::Latest,
                     },
                     record_storage_reads,
-                }
+                },
             )?
             .into_result();
 
@@ -599,7 +614,9 @@ where
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
-    ) -> ExecutorResult<Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>>
+    ) -> ExecutorResult<
+        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
+    >
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -626,7 +643,9 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>>
+    ) -> ExecutorResult<
+        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
+    >
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -667,7 +686,9 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>>
+    ) -> ExecutorResult<
+        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
+    >
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -751,7 +772,9 @@ where
         component: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
-    ) -> ExecutorResult<Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>>
+    ) -> ExecutorResult<
+        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
+    >
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -886,7 +909,9 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>>
+    ) -> ExecutorResult<
+        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
+    >
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -923,7 +948,7 @@ where
                         new_tx_waiter,
                         preconfirmation_sender,
                     )
-                    .await                
+                    .await
             }
         } else {
             let database = self.storage_view_provider.latest_view()?;
