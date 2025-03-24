@@ -1,4 +1,4 @@
-#[cfg(not(any(feature = "p2p", feature = "relayer")))]
+#[cfg(not(feature = "relayer"))]
 #[cfg(feature = "avail")]
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {
@@ -8,11 +8,13 @@ async fn main() -> anyhow::Result<()> {
 
     use std::{
         env::current_dir,
+        num::NonZero,
         str::FromStr,
     };
 
     use fuel_core::{
         fuel_core_graphql_api::DEFAULT_QUERY_COSTS,
+        p2p::config::MAX_RESPONSE_SIZE,
         service::DbType,
     };
     use fuel_core_bin::cli::run::{
@@ -23,12 +25,13 @@ async fn main() -> anyhow::Result<()> {
             Interval,
             Open,
         },
+        p2p::KeypairArg,
     };
 
     let ip = "127.0.0.1";
     let port = 4000;
 
-    // fuel_core_bin::cli::init_logging();
+    fuel_core_bin::cli::init_logging();
 
     #[allow(deprecated)]
     let cmd = run::Command {
@@ -78,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
         tx_pool: run::tx_pool::TxPoolArgs {
             tx_pool_ttl: humantime::Duration::from_str("30s")?, // could be tuned
             tx_ttl_check_interval: humantime::Duration::from_str("10s")?, /* could be tuned */
-            tx_max_number: 200_000, // could be tuned
+            tx_max_number: 2_000_000, // could be tuned
             tx_max_total_gas: 1_000_000_000_000_000,
             tx_max_total_bytes: 1_000_000_000_000_000,
             tx_max_chain_count: 32,
@@ -88,21 +91,79 @@ async fn main() -> anyhow::Result<()> {
             tx_blacklist_contracts: vec![],
             tx_number_threads_to_verify_transactions: 8, // could be tuned
             tx_size_of_verification_queue: 200_000,      // could be tuned
-            tx_number_threads_p2p_sync: 0,
-            tx_size_of_p2p_sync_queue: 0,
+            tx_number_threads_p2p_sync: 10,
+            tx_size_of_p2p_sync_queue: 30,
             tx_max_pending_write_requests: 2_000_000, // could be tuned
             tx_max_pending_read_requests: 2_000_000,  // could be tuned
-            tx_pending_pool_ttl: humantime::Duration::from_str("30s")?, // could be tuned
+            tx_pending_pool_ttl: humantime::Duration::from_str("2s")?, // could be tuned
             tx_pending_pool_size_percentage: 50,      // could be tuned
         },
         tx_status_manager: run::tx_status_manager::TxStatusManagerArgs {
             tx_number_active_subscriptions: 1_000_000, // could be tuned
             status_cache_ttl: humantime::Duration::from_str("30s")?, // could be tuned
         },
+        p2p_args: run::p2p::P2PArgs {
+            enable_p2p: true,
+            keypair: Some(
+                KeypairArg::try_from_string(
+                    "c6ddac5bce7b205c88472070cda497a3f88c9807e3c4e0b31f8e49768d988129",
+                )
+                .unwrap(),
+            ),
+            address: None,
+            public_address: None,
+            peering_port: 30333,
+            max_block_size: 1_000_000_000,
+            max_headers_per_request: 0,
+            max_txs_per_request: 0,
+            bootstrap_nodes: vec![],
+            reserved_nodes: vec![],
+            reserved_nodes_only_mode: false,
+            enable_mdns: true,
+            max_peers_connected: 10,
+            max_discovery_peers_connected: 10,
+            max_outgoing_connections: 10,
+            max_connections_per_peer: Some(100_000),
+            random_walk: None,
+            allow_private_addresses: true,
+            connection_idle_timeout: humantime::Duration::from_str("30s")?,
+            info_interval: humantime::Duration::from_str("30s")?,
+            identify_interval: humantime::Duration::from_str("1s")?,
+            max_mesh_size: 10,
+            min_mesh_size: 4,
+            ideal_mesh_size: 6,
+            history_length: 10,
+            history_gossip: 10,
+            gossip_heartbeat_interval: humantime::Duration::from_str("10s")?,
+            max_transmit_size: u32::from(MAX_RESPONSE_SIZE) as usize,
+            request_timeout: humantime::Duration::from_str("10s")?,
+            max_concurrent_streams: 100,
+            connection_keep_alive: humantime::Duration::from_str("30s")?,
+            heartbeat_send_duration: humantime::Duration::from_str("2s")?,
+            heartbeat_idle_duration: humantime::Duration::from_str("400ms")?,
+            heartbeat_max_failures: NonZero::new(100)
+                .ok_or_else(|| anyhow::anyhow!("Invalid value"))?,
+            heartbeat_check_interval: humantime::Duration::from_str("100s")?,
+            heartbeat_max_avg_interval: humantime::Duration::from_str("100s")?,
+            heartbeat_max_time_since_last: humantime::Duration::from_str("100s")?,
+            database_read_threads: 4,
+            tx_pool_threads: 10,
+            subscribe_to_pre_confirmations: false,
+        },
+        sync_args: run::p2p::SyncArgs {
+            block_stream_buffer_size: 1_000_000,
+            header_batch_size: 10,
+        },
+        pre_confirmation_signature_service_args:
+            run::preconfirmation_signature_service::PreconfirmationArgs {
+                key_rotation_interval: humantime::Duration::from_str("1d")?,
+                key_expiration_interval: humantime::Duration::from_str("1d")?,
+                echo_delegation_interval: humantime::Duration::from_str("1d")?,
+            },
         graphql: run::graphql::GraphQLArgs {
             ip: ip.parse()?,
             port,
-            graphql_number_of_threads: 10, // could be tuned
+            graphql_number_of_threads: 0, // could be tuned
             database_batch_size: 2_000,
             graphql_max_depth: 16,
             graphql_max_complexity: 800_000,
@@ -193,7 +254,7 @@ async fn main() -> anyhow::Result<()> {
                     break
                 }
 
-                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {
                     let block_res = client.blocks(fuel_core_client::client::pagination::PaginationRequest {
                         cursor: None,
                         results: 10,
@@ -229,8 +290,8 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[cfg(any(feature = "p2p", feature = "relayer"))]
+#[cfg(feature = "relayer")]
 #[cfg(not(feature = "avail"))]
 fn main() {
-    panic!("The feature `p2p`, `relayer` & `rocksdb` are not supported in this binary. Only feature `avail` is supported. Run with `cargo run --bin fuel-core-avail -p fuel-core-bin --no-default-features --features avail`");
+    panic!("The feature `relayer` not supported in this binary. Only feature `avail` is supported. Run with `cargo avail`");
 }

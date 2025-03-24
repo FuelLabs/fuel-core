@@ -208,7 +208,7 @@ pub struct P2PArgs {
 
     /// Subscribe to pre-confirmation gossip topic
     #[clap(long = "subscribe-to-pre-confirmations", env)]
-    subscribe_to_pre_confirmations: bool,
+    pub subscribe_to_pre_confirmations: bool,
 }
 
 #[derive(Debug, Clone, Args)]

@@ -104,7 +104,7 @@ use fuel_core::service::config::GasPriceConfig;
 use std::num::NonZeroUsize;
 
 #[cfg(feature = "p2p")]
-mod p2p;
+pub mod p2p;
 
 #[cfg(feature = "shared-sequencer")]
 mod shared_sequencer;

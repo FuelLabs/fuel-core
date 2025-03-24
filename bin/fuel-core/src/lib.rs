@@ -3,6 +3,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+// pub mod avail;
 pub mod cli;
 pub use fuel_core::service::FuelService;
 
