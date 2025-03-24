@@ -32,4 +32,7 @@ pub enum CompressionError {
     /// Failed to handle new block
     #[error("failed to handle new block: `{0}`")]
     FailedToHandleNewBlock(String),
+    /// Failed to get the sync status of the storages
+    #[error("failed to get sync status")]
+    FailedToGetSyncStatus,
 }

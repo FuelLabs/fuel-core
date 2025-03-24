@@ -31,7 +31,7 @@ use tokio::time::Instant;
 pub trait TransactionPool: Send + Sync {
     fn new_txs_watcher(&self) -> tokio::sync::watch::Receiver<()>;
 
-    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<(Bytes32, String)>);
+    fn notify_skipped_txs(&self, tx_ids_and_reasons: Vec<Bytes32>);
 }
 
 #[cfg_attr(test, mockall::automock)]

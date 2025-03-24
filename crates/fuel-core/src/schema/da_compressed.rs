@@ -1,12 +1,10 @@
-use super::{
-    scalars::HexString,
-    ReadViewProvider,
-};
+use super::scalars::HexString;
 use crate::{
     fuel_core_graphql_api::{
         query_costs,
         IntoApiResult,
     },
+    graphql_api::api_service::DaCompressionProvider,
     schema::scalars::U32,
 };
 use async_graphql::{
@@ -42,8 +40,8 @@ impl DaCompressedBlockQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "Height of the block")] height: U32,
     ) -> async_graphql::Result<Option<DaCompressedBlock>> {
-        let query = ctx.read_view()?;
-        query
+        let da_compression_provider = ctx.data_unchecked::<DaCompressionProvider>();
+        da_compression_provider
             .da_compressed_block(&height.0.into())
             .into_api_result()
     }

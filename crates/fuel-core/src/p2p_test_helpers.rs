@@ -364,7 +364,6 @@ pub async fn make_nodes(
         );
 
         let mut test_txs = Vec::with_capacity(0);
-        node_config.block_production = Trigger::Instant;
 
         if let Some((
             ProducerSetup {
@@ -396,6 +395,7 @@ pub async fn make_nodes(
             }
 
             node_config.utxo_validation = utxo_validation;
+            node_config.txpool.utxo_validation = utxo_validation;
             update_signing_key(&mut node_config, Input::owner(&secret.public_key()));
 
             node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
@@ -422,6 +422,7 @@ pub async fn make_nodes(
             overrides,
         );
         node_config.block_production = Trigger::Never;
+        node_config.consensus_signer = SignMode::Unavailable;
 
         if let Some(ValidatorSetup {
             pub_key,

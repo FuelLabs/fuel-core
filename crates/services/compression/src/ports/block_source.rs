@@ -9,6 +9,8 @@ pub struct BlockWithMetadata {
     events: Vec<fuel_core_types::services::executor::Event>,
 }
 
+pub(crate) type BlockHeight = u32;
+
 impl BlockWithMetadata {
     /// Create a new block with metadata
     pub fn new(
@@ -18,7 +20,7 @@ impl BlockWithMetadata {
         Self { block, events }
     }
 
-    pub(crate) fn height(&self) -> u32 {
+    pub(crate) fn height(&self) -> BlockHeight {
         (*self.block.header().height()).into()
     }
 

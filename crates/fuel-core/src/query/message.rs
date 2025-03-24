@@ -31,7 +31,7 @@ use fuel_core_types::{
         MessageId,
         Nonce,
     },
-    services::txpool::TransactionExecutionStatus,
+    services::transaction_status::TransactionExecutionStatus,
 };
 use futures::{
     Stream,
@@ -354,7 +354,7 @@ mod tests {
             BlockHeight,
             Nonce,
         },
-        services::txpool::TransactionExecutionStatus,
+        services::transaction_status::TransactionExecutionStatus,
         tai64::Tai64,
     };
 

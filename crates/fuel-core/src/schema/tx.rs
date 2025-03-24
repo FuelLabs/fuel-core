@@ -84,7 +84,7 @@ use fuel_core_types::{
         CheckPredicateParams,
         EstimatePredicates,
     },
-    services::txpool,
+    services::transaction_status,
 };
 use futures::{
     Stream,
@@ -712,7 +712,7 @@ async fn submit_and_await_status<'a>(
                 Err(anyhow::anyhow!("Failed to get transaction status").into())
             }
         })
-        .take(2))
+        .take(3))
 }
 
 struct StatusChangeState<'a> {
@@ -724,7 +724,7 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
-    ) -> StorageResult<Option<txpool::TransactionStatus>> {
+    ) -> StorageResult<Option<transaction_status::TransactionStatus>> {
         match self.query.tx_status(&id) {
             Ok(status) => Ok(Some(status.into())),
             Err(StorageError::NotFound(_, _)) => {

@@ -116,7 +116,12 @@ pub type SignedPreconfirmationByDelegate<S> = Sealed<Preconfirmations, S>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreConfirmationMessage<DP, DS, S> {
     /// Notification of key delegation
-    Delegate(SignedByBlockProducerDelegation<DP, S>),
+    Delegate {
+        /// The sealed key delegation.
+        seal: SignedByBlockProducerDelegation<DP, S>,
+        /// The nonce of the p2p message to make it unique.
+        nonce: u64,
+    },
     /// Notification of pre-confirmations
     Preconfirmations(SignedPreconfirmationByDelegate<DS>),
 }
@@ -289,22 +294,57 @@ impl Serialize for NetworkableTransactionPool {
     where
         S: serde::Serializer,
     {
+        use crate::fuel_tx::{
+            Blob,
+            Create,
+            Script,
+            Upgrade,
+            Upload,
+        };
+
+        #[cfg(all(debug_assertions, feature = "test-helpers"))]
+        // When a new variant is added to `Transaction`, the `TransactionRef`
+        // must also be updated to match the new variant.
+        // This match statement will trigger a compilation error if a new variant is added.
+        // Don't add a `_` wildcard to this match statement, instead handle new variant.
+        {
+            match Transaction::default_test_tx() {
+                Transaction::Script(_) => {}
+                Transaction::Create(_) => {}
+                Transaction::Mint(_) => {}
+                Transaction::Upgrade(_) => {}
+                Transaction::Upload(_) => {}
+                Transaction::Blob(_) => {}
+            }
+        }
+
+        #[derive(serde::Serialize)]
+        enum TransactionRef<'a> {
+            Script(&'a Script),
+            Create(&'a Create),
+            #[allow(dead_code)]
+            Mint,
+            Upgrade(&'a Upgrade),
+            Upload(&'a Upload),
+            Blob(&'a Blob),
+        }
+
         match self {
             NetworkableTransactionPool::PoolTransaction(tx) => match (*tx).as_ref() {
-                PoolTransaction::Script(script, _) => {
-                    script.transaction().serialize(serializer)
+                PoolTransaction::Script(tx, _) => {
+                    TransactionRef::Script(tx.transaction()).serialize(serializer)
                 }
-                PoolTransaction::Create(create, _) => {
-                    create.transaction().serialize(serializer)
+                PoolTransaction::Create(tx, _) => {
+                    TransactionRef::Create(tx.transaction()).serialize(serializer)
                 }
-                PoolTransaction::Blob(blob, _) => {
-                    blob.transaction().serialize(serializer)
+                PoolTransaction::Blob(tx, _) => {
+                    TransactionRef::Blob(tx.transaction()).serialize(serializer)
                 }
-                PoolTransaction::Upgrade(upgrade, _) => {
-                    upgrade.transaction().serialize(serializer)
+                PoolTransaction::Upgrade(tx, _) => {
+                    TransactionRef::Upgrade(tx.transaction()).serialize(serializer)
                 }
-                PoolTransaction::Upload(upload, _) => {
-                    upload.transaction().serialize(serializer)
+                PoolTransaction::Upload(tx, _) => {
+                    TransactionRef::Upload(tx.transaction()).serialize(serializer)
                 }
             },
             NetworkableTransactionPool::Transaction(tx) => tx.serialize(serializer),
@@ -333,5 +373,27 @@ impl TryFrom<NetworkableTransactionPool> for Transaction {
             NetworkableTransactionPool::Transaction(tx) => Ok(tx),
             _ => Err("Cannot convert to transaction"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        fuel_tx::Transaction,
+        services::p2p::NetworkableTransactionPool,
+    };
+
+    #[test]
+    fn ser_der() {
+        // Given
+        let transaction = Transaction::default_test_tx();
+        let expected = NetworkableTransactionPool::Transaction(transaction.clone());
+        let bytes = postcard::to_allocvec(&expected).unwrap();
+
+        // When
+        let actual: NetworkableTransactionPool = postcard::from_bytes(&bytes).unwrap();
+
+        // Then
+        assert_eq!(actual, expected);
     }
 }
