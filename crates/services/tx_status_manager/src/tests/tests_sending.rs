@@ -6,7 +6,7 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::Bytes32,
-    services::txpool::TransactionStatus,
+    services::transaction_status::TransactionStatus,
 };
 use parking_lot::lock_api::Mutex;
 use test_strategy::proptest;

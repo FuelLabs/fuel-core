@@ -27,8 +27,8 @@ dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
 fuel-core = { workspace = true, features = ["wasm-executor"] }
 fuel-core-chain-config = { workspace = true }
-fuel-core-compression = { workspace = true }
 fuel-core-metrics = { workspace = true }
+fuel-core-poa = { workspace = true, optional = true }
 fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-types = { workspace = true, features = ["std"] }
 hex = { workspace = true }
@@ -63,7 +63,7 @@ test-case = { workspace = true }
 default = ["env", "relayer", "rocksdb"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
 env = ["dep:dotenvy"]
-p2p = ["fuel-core/p2p", "const_format"]
+p2p = ["fuel-core/p2p", "const_format", "dep:fuel-core-poa"]
 shared-sequencer = [
   "dep:fuel-core-shared-sequencer",
   "fuel-core/shared-sequencer",
@@ -84,7 +84,6 @@ production = [
 ]
 parallel-executor = ["fuel-core/parallel-executor"]
 fault-proving = [
-  "fuel-core-compression/fault-proving",
   "fuel-core-storage/fault-proving",
   "fuel-core-types/fault-proving",
   "fuel-core-chain-config/fault-proving",

@@ -3,6 +3,7 @@ mod collisions;
 use std::{
     collections::HashMap,
     iter,
+    sync::Arc,
     time::{
         Instant,
         SystemTime,
@@ -16,10 +17,14 @@ use fuel_core_types::{
         field::BlobId,
         TxId,
     },
-    services::txpool::{
-        ArcPoolTx,
-        PoolTransaction,
+    services::{
+        transaction_status::TransactionStatus,
+        txpool::{
+            ArcPoolTx,
+            PoolTransaction,
+        },
     },
+    tai64::Tai64,
 };
 use num_rational::Ratio;
 
@@ -36,7 +41,10 @@ use crate::{
         InsertionErrorType,
     },
     extracted_outputs::ExtractedOutputs,
-    ports::TxPoolPersistentStorage,
+    ports::{
+        TxPoolPersistentStorage,
+        TxStatusManager as TxStatusManagerTrait,
+    },
     selection_algorithms::{
         Constraints,
         SelectionAlgorithm,
@@ -48,6 +56,8 @@ use crate::{
     },
 };
 
+use crate::error::RemovedReason;
+use fuel_core_types::services::transaction_status::statuses;
 #[cfg(test)]
 use std::collections::HashSet;
 
@@ -60,7 +70,7 @@ pub struct TxPoolStats {
 
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
-pub struct Pool<S, SI, CM, SA> {
+pub struct Pool<S, SI, CM, SA, TxStatusManager> {
     /// Configuration of the pool.
     pub(crate) config: Config,
     /// The storage of the pool.
@@ -81,9 +91,11 @@ pub struct Pool<S, SI, CM, SA> {
     pub(crate) pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
     /// New executable transactions notifier.
     pub(crate) new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
+    /// Transaction status manager.
+    pub(crate) tx_status_manager: Arc<TxStatusManager>,
 }
 
-impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
+impl<S, SI, CM, SA, TxStatusManager> Pool<S, SI, CM, SA, TxStatusManager> {
     /// Create a new pool.
     pub fn new(
         storage: S,
@@ -92,6 +104,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
         config: Config,
         pool_stats_sender: tokio::sync::watch::Sender<TxPoolStats>,
         new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
+        tx_status_manager: Arc<TxStatusManager>,
     ) -> Self {
         Pool {
             storage,
@@ -104,6 +117,7 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
             current_bytes_size: 0,
             pool_stats_sender,
             new_executable_txs_notifier,
+            tx_status_manager,
         }
     }
 
@@ -113,21 +127,21 @@ impl<S, SI, CM, SA> Pool<S, SI, CM, SA> {
     }
 }
 
-impl<S: Storage, CM, SA> Pool<S, S::StorageIndex, CM, SA>
+impl<S: Storage, CM, SA, TxStatusManager>
+    Pool<S, S::StorageIndex, CM, SA, TxStatusManager>
 where
     S: Storage,
     CM: CollisionManager<StorageIndex = S::StorageIndex>,
     SA: SelectionAlgorithm<Storage = S, StorageIndex = S::StorageIndex>,
+    TxStatusManager: TxStatusManagerTrait,
 {
     /// Insert transactions into the pool.
     /// Returns a list of results for each transaction.
-    /// Each result is a list of transactions that were removed from the pool
-    /// because of the insertion of the new transaction.
     pub fn insert(
         &mut self,
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<ArcPoolTx>, InsertionErrorType> {
+    ) -> Result<(), InsertionErrorType> {
         let insertion_result = self.insert_inner(tx, persistent_storage);
         self.register_transaction_counts();
         insertion_result
@@ -135,9 +149,9 @@ where
 
     fn insert_inner(
         &mut self,
-        tx: std::sync::Arc<PoolTransaction>,
+        tx: Arc<PoolTransaction>,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<Vec<std::sync::Arc<PoolTransaction>>, InsertionErrorType> {
+    ) -> Result<(), InsertionErrorType> {
         let CanStoreTransaction {
             checked_transaction,
             transactions_to_remove,
@@ -186,6 +200,17 @@ where
             Storage::get(&self.storage, &storage_id).expect("Transaction is set above");
         self.collision_manager.on_stored_transaction(storage_id, tx);
 
+        let duration = i64::try_from(
+            creation_instant
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .expect("Time can't be less than UNIX EPOCH")
+                .as_secs(),
+        )
+        .expect("Duration is less than i64::MAX");
+        self.tx_status_manager.status_update(
+            tx_id,
+            TransactionStatus::submitted(Tai64::from_unix(duration)),
+        );
         // No dependencies directly in the graph and the sorted transactions
         if !has_dependencies {
             self.selection_algorithm
@@ -193,12 +218,23 @@ where
             self.new_executable_txs_notifier.send_replace(());
         }
 
+        let status = statuses::SqueezedOut {
+            reason: Error::Removed(RemovedReason::LessWorth(tx_id)).to_string(),
+        };
+
         let removed_transactions = removed_transactions
             .into_iter()
-            .map(|data| data.transaction)
+            .map(|data| {
+                let removed_tx_id = data.transaction.id();
+
+                (removed_tx_id, status.clone())
+            })
             .collect::<Vec<_>>();
+        self.tx_status_manager
+            .squeezed_out_txs(removed_transactions);
+
         self.update_stats();
-        Ok(removed_transactions)
+        Ok(())
     }
 
     fn update_stats(&self) {
@@ -551,7 +587,8 @@ where
     pub fn remove_transaction_and_dependents(
         &mut self,
         tx_ids: Vec<TxId>,
-    ) -> Vec<ArcPoolTx> {
+        tx_status: statuses::SqueezedOut,
+    ) {
         let mut removed_transactions = vec![];
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
@@ -559,31 +596,30 @@ where
                     .storage
                     .remove_transaction_and_dependents_subtree(storage_id);
                 self.update_components_and_caches_on_removal(removed.iter());
-                removed_transactions
-                    .extend(removed.into_iter().map(|data| data.transaction));
+                removed_transactions.extend(removed.into_iter().map(|data| {
+                    let tx_id = data.transaction.id();
+
+                    (tx_id, tx_status.clone())
+                }));
             }
         }
 
+        self.tx_status_manager
+            .squeezed_out_txs(removed_transactions);
         self.update_stats();
-
-        removed_transactions
     }
 
-    pub fn remove_skipped_transaction(&mut self, tx_id: TxId) -> Vec<ArcPoolTx> {
+    pub fn remove_skipped_transaction(&mut self, tx_id: TxId) {
         self.extracted_outputs.new_skipped_transaction(&tx_id);
-        let mut txs_removed = vec![];
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
         for dependent in coin_dependents {
             let removed = self
                 .storage
                 .remove_transaction_and_dependents_subtree(dependent);
             self.update_components_and_caches_on_removal(removed.iter());
-            txs_removed.extend(removed.into_iter().map(|data| data.transaction));
         }
 
         self.update_stats();
-
-        txs_removed
     }
 
     fn check_blob_does_not_exist(

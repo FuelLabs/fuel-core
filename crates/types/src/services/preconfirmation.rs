@@ -13,6 +13,7 @@ use alloc::{
     string::String,
     vec::Vec,
 };
+
 /// A collection of pre-confirmations that have been signed by a delegate
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

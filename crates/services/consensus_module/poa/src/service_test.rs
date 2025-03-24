@@ -369,7 +369,6 @@ async fn remove_skipped_transactions() {
     txpool
         .expect_notify_skipped_txs()
         .returning(move |skipped_ids| {
-            let skipped_ids: Vec<_> = skipped_ids.into_iter().map(|(id, _)| id).collect();
             // Transform transactions into ids.
             let skipped_transactions: Vec<_> = skipped_transactions
                 .iter()

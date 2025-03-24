@@ -17,7 +17,7 @@ use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     services::{
-        preconfirmation::PreconfirmationStatus,
+        preconfirmation::Preconfirmation,
         relayer::Event,
     },
 };
@@ -103,22 +103,36 @@ impl NewTxWaiterPort for NewTxWaiter {
 }
 
 impl PreconfirmationSenderPort for PreconfirmationSender {
-    async fn send(&self, preconfirmations: Vec<PreconfirmationStatus>) {
+    async fn send(&self, preconfirmations: Vec<Preconfirmation>) {
+        // TODO: Avoid cloning of the `preconfirmations`
+        self.tx_status_manager_adapter
+            .tx_status_manager_shared_data
+            .update_preconfirmations(preconfirmations.clone());
+
         // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.
         // We don't consider this an error.
-        let _ = self.sender.send(preconfirmations).await;
+        let _ = self.sender_signature_service.send(preconfirmations).await;
     }
 
-    fn try_send(
-        &self,
-        preconfirmations: Vec<PreconfirmationStatus>,
-    ) -> Vec<PreconfirmationStatus> {
-        match self.sender.try_send(preconfirmations) {
-            Ok(()) => vec![],
+    fn try_send(&self, preconfirmations: Vec<Preconfirmation>) -> Vec<Preconfirmation> {
+        match self.sender_signature_service.try_reserve() {
+            Ok(permit) => {
+                // TODO: Avoid cloning of the `preconfirmations`
+                self.tx_status_manager_adapter
+                    .tx_status_manager_shared_data
+                    .update_preconfirmations(preconfirmations.clone());
+                permit.send(preconfirmations);
+                vec![]
+            }
             // If the receiver is closed, it means no one is listening to the preconfirmations and so we can drop them.
             // We don't consider this an error.
-            Err(TrySendError::Closed(_)) => vec![],
-            Err(TrySendError::Full(preconfirmations)) => preconfirmations,
+            Err(TrySendError::Closed(_)) => {
+                self.tx_status_manager_adapter
+                    .tx_status_manager_shared_data
+                    .update_preconfirmations(preconfirmations);
+                vec![]
+            }
+            Err(TrySendError::Full(_)) => preconfirmations,
         }
     }
 }

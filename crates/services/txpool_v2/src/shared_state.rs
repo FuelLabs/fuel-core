@@ -147,15 +147,7 @@ impl SharedState {
 
     /// Notify the txpool that some transactions were skipped during block production.
     /// This is used to update the status of the skipped transactions internally and in subscriptions
-    pub fn notify_skipped_txs(&self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
-        let dependents_ids = tx_ids_and_reason
-            .into_iter()
-            .map(|(tx_id, reason)| {
-                let error = Error::SkippedTransaction(reason);
-                (tx_id, error)
-            })
-            .collect();
-
+    pub fn notify_skipped_txs(&self, dependents_ids: Vec<Bytes32>) {
         if let Err(e) = self
             .request_remove_sender
             .try_send(PoolRemoveRequest::SkippedTransactions { dependents_ids })

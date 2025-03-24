@@ -53,7 +53,11 @@ use fuel_core_types::{
         contract::ContractUtxoInfo,
         RelayedTransaction,
     },
-    fuel_asm::Word,
+    fuel_asm::{
+        op,
+        PanicInstruction,
+        Word,
+    },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         field::{
@@ -88,6 +92,7 @@ use fuel_core_types::{
         Input,
         Mint,
         Output,
+        PanicReason,
         Receipt,
         Transaction,
         TxId,
@@ -116,8 +121,10 @@ use fuel_core_types::{
             ExecutableTransaction,
             InterpreterParams,
             MemoryInstance,
+            NotSupportedEcal,
         },
         state::StateTransition,
+        verification,
         Interpreter,
         ProgramState,
     },
@@ -136,7 +143,10 @@ use fuel_core_types::{
             UncommittedValidationResult,
             ValidationResult,
         },
-        preconfirmation::PreconfirmationStatus,
+        preconfirmation::{
+            Preconfirmation,
+            PreconfirmationStatus,
+        },
         relayer::Event,
     },
 };
@@ -158,17 +168,6 @@ use alloc::{
     string::ToString,
     vec,
     vec::Vec,
-};
-use fuel_core_types::{
-    fuel_asm::{
-        op,
-        PanicInstruction,
-    },
-    fuel_tx::PanicReason,
-    fuel_vm::{
-        interpreter::NotSupportedEcal,
-        verification,
-    },
 };
 
 /// The maximum amount of transactions that can be included in a block,
@@ -239,19 +238,20 @@ impl NewTxWaiterPort for TimeoutOnlyTxWaiter {
 pub struct TransparentPreconfirmationSender;
 
 impl PreconfirmationSenderPort for TransparentPreconfirmationSender {
-    fn try_send(&self, _: Vec<PreconfirmationStatus>) -> Vec<PreconfirmationStatus> {
+    fn try_send(&self, _: Vec<Preconfirmation>) -> Vec<Preconfirmation> {
         vec![]
     }
 
-    async fn send(&self, _: Vec<PreconfirmationStatus>) {}
+    async fn send(&self, _: Vec<Preconfirmation>) {}
 }
 
 fn convert_tx_execution_result_to_preconfirmation(
     tx: &Transaction,
+    tx_id: TxId,
     tx_exec_result: &TransactionExecutionResult,
     block_height: BlockHeight,
     tx_index: u16,
-) -> PreconfirmationStatus {
+) -> Preconfirmation {
     let tx_pointer = TxPointer::new(block_height, tx_index);
     let dynamic_outputs = tx
         .outputs()
@@ -265,7 +265,7 @@ fn convert_tx_execution_result_to_preconfirmation(
         })
         .collect();
 
-    match tx_exec_result {
+    let status = match tx_exec_result {
         TransactionExecutionResult::Success {
             receipts,
             total_gas,
@@ -290,7 +290,8 @@ fn convert_tx_execution_result_to_preconfirmation(
             receipts: receipts.clone(),
             outputs: dynamic_outputs,
         },
-    }
+    };
+    Preconfirmation { tx_id, status }
 }
 
 /// Data that is generated after executing all transactions.
@@ -808,6 +809,7 @@ where
                         let preconfirmation_status =
                             convert_tx_execution_result_to_preconfirmation(
                                 tx,
+                                tx_id,
                                 &latest_executed_tx.result,
                                 *block.header.height(),
                                 data.tx_count,
@@ -815,8 +817,11 @@ where
                         status.push(preconfirmation_status);
                     }
                     Err(err) => {
-                        status.push(PreconfirmationStatus::SqueezedOut {
-                            reason: err.to_string(),
+                        status.push(Preconfirmation {
+                            tx_id,
+                            status: PreconfirmationStatus::SqueezedOut {
+                                reason: err.to_string(),
+                            },
                         });
                         data.skipped_transactions.push((tx_id, err));
                     }

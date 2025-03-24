@@ -61,6 +61,15 @@ pub enum Error {
     },
 }
 
+impl Error {
+    pub fn is_duplicate_tx(&self) -> bool {
+        matches!(
+            self,
+            Error::InputValidation(InputValidationError::DuplicateTxId(_))
+        )
+    }
+}
+
 #[derive(Clone, Debug, derive_more::Display)]
 pub enum RemovedReason {
     #[display(

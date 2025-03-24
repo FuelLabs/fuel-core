@@ -29,16 +29,19 @@ use fuel_core_types::{
             NetworkData,
             PeerId,
         },
-        txpool::TransactionStatus,
+        transaction_status::TransactionStatus,
     },
 };
 
 use crate::GasPrice;
 
 pub use fuel_core_storage::transactional::AtomicView;
+use fuel_core_types::services::transaction_status::statuses;
 
 pub trait TxStatusManager: Send + Sync + 'static {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus);
+
+    fn squeezed_out_txs(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>);
 }
 
 pub trait BlockImporter {

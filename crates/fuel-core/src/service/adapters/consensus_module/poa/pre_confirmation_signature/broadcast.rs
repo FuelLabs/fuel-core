@@ -1,8 +1,6 @@
 use crate::service::adapters::{
-    consensus_module::poa::pre_confirmation_signature::{
-        key_generator::Ed25519Key,
-        parent_signature::FuelParentSigner,
-    },
+    consensus_module::poa::pre_confirmation_signature::key_generator::Ed25519Key,
+    FuelBlockSigner,
     P2PAdapter,
 };
 use fuel_core_poa::pre_confirmation_signature_service::{
@@ -26,35 +24,29 @@ use fuel_core_types::{
             SignedByBlockProducerDelegation,
             SignedPreconfirmationByDelegate,
         },
-        preconfirmation::{
-            Preconfirmation,
-            Preconfirmations,
-        },
+        preconfirmation::Preconfirmations,
     },
-    tai64::Tai64,
 };
 use std::sync::Arc;
 
 impl Broadcast for P2PAdapter {
-    type ParentKey = FuelParentSigner;
+    type ParentKey = FuelBlockSigner;
     type DelegateKey = Ed25519Key;
-    type Preconfirmations = Vec<Preconfirmation>;
+    type Preconfirmations = Preconfirmations;
 
     async fn broadcast_preconfirmations(
         &mut self,
         preconfirmations: Self::Preconfirmations,
         signature: <Self::DelegateKey as SigningKey>::Signature,
-        expiration: Tai64,
     ) -> PreConfServiceResult<()> {
         if let Some(p2p) = &self.service {
-            let entity = Preconfirmations {
-                expiration,
-                preconfirmations,
-            };
             let signature_bytes = signature.to_bytes();
             let signature = Bytes64::new(signature_bytes);
             let preconfirmations = Arc::new(PreConfirmationMessage::Preconfirmations(
-                SignedPreconfirmationByDelegate { entity, signature },
+                SignedPreconfirmationByDelegate {
+                    entity: preconfirmations,
+                    signature,
+                },
             ));
             p2p.broadcast_preconfirmations(preconfirmations)
                 .map_err(|e| PreConfServiceError::Broadcast(format!("{e:?}")))?;
@@ -66,14 +58,15 @@ impl Broadcast for P2PAdapter {
     async fn broadcast_delegate_key(
         &mut self,
         delegate: DelegatePreConfirmationKey<PublicKey<Self>>,
+        nonce: u64,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> PreConfServiceResult<()> {
         if let Some(p2p) = &self.service {
-            let sealed = SignedByBlockProducerDelegation {
+            let seal = SignedByBlockProducerDelegation {
                 entity: delegate,
                 signature,
             };
-            let delegate_key = Arc::new(PreConfirmationMessage::Delegate(sealed));
+            let delegate_key = Arc::new(PreConfirmationMessage::Delegate { seal, nonce });
             p2p.broadcast_preconfirmations(delegate_key)
                 .map_err(|e| PreConfServiceError::Broadcast(format!("{e:?}")))?;
         }
@@ -102,8 +95,12 @@ mod tests {
         ed25519_dalek::VerifyingKey,
         services::{
             p2p::ProtocolSignature,
-            preconfirmation::PreconfirmationStatus,
+            preconfirmation::{
+                Preconfirmation,
+                PreconfirmationStatus,
+            },
         },
+        tai64::Tai64,
     };
 
     #[tokio::test]
@@ -114,22 +111,24 @@ mod tests {
         let peer_report_config = PeerReportConfig::default();
         let service = Some(shared_state);
         let mut adapter = P2PAdapter::new(service, peer_report_config);
-        let preconfirmations = vec![Preconfirmation {
-            tx_id: Default::default(),
-            status: PreconfirmationStatus::Failure {
-                tx_pointer: Default::default(),
-                total_gas: 0,
-                total_fee: 0,
-                receipts: vec![],
-                outputs: vec![],
-            },
-        }];
+        let preconfirmations = Preconfirmations {
+            preconfirmations: vec![Preconfirmation {
+                tx_id: Default::default(),
+                status: PreconfirmationStatus::Failure {
+                    tx_pointer: Default::default(),
+                    total_gas: 0,
+                    total_fee: 0,
+                    receipts: vec![],
+                    outputs: vec![],
+                },
+            }],
+            expiration: Tai64::UNIX_EPOCH,
+        };
         let signature = ed25519::Signature::from_bytes(&[5u8; 64]);
-        let expiration = Tai64::UNIX_EPOCH;
 
         // when
         adapter
-            .broadcast_preconfirmations(preconfirmations.clone(), signature, expiration)
+            .broadcast_preconfirmations(preconfirmations.clone(), signature)
             .await
             .unwrap();
 
@@ -140,9 +139,9 @@ mod tests {
             TaskRequest::BroadcastPreConfirmations(inner)
             if pre_conf_matches_expected_values(
                 &inner,
-                &preconfirmations,
+                &preconfirmations.preconfirmations,
                 &Bytes64::new(signature.to_bytes()),
-                &expiration,
+                preconfirmations.expiration,
             )
         ));
     }
@@ -151,15 +150,12 @@ mod tests {
         inner: &Arc<P2PPreConfirmationMessage>,
         preconfirmations: &[Preconfirmation],
         signature: &Bytes64,
-        expiration: &Tai64,
+        expiration: Tai64,
     ) -> bool {
-        let entity = Preconfirmations {
-            expiration: *expiration,
-            preconfirmations: preconfirmations.to_vec(),
-        };
         match &**inner {
             PreConfirmationMessage::Preconfirmations(signed_preconfirmation) => {
-                signed_preconfirmation.entity == entity
+                signed_preconfirmation.entity.preconfirmations == preconfirmations
+                    && signed_preconfirmation.entity.expiration == expiration
                     && signed_preconfirmation.signature == *signature
             }
             _ => false,
@@ -183,7 +179,7 @@ mod tests {
 
         // when
         adapter
-            .broadcast_delegate_key(delegate.clone(), signature)
+            .broadcast_delegate_key(delegate.clone(), 0, signature)
             .await
             .unwrap();
 
@@ -212,7 +208,10 @@ mod tests {
             expiration,
         };
         match &**inner {
-            PreConfirmationMessage::Delegate(signed_by_block_producer_delegation) => {
+            PreConfirmationMessage::Delegate {
+                seal: signed_by_block_producer_delegation,
+                ..
+            } => {
                 signed_by_block_producer_delegation.entity == entity
                     && signed_by_block_producer_delegation.signature == *signature
             }

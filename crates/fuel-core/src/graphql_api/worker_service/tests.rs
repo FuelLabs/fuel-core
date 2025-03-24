@@ -10,7 +10,7 @@ use fuel_core_storage::StorageAsRef;
 use fuel_core_types::{
     fuel_tx::Bytes32,
     fuel_types::BlockHeight,
-    services::txpool::TransactionStatus,
+    services::transaction_status::TransactionStatus,
 };
 use std::sync::Arc;
 
@@ -81,7 +81,6 @@ fn worker_task_with_block_importer_and_db<D: ports::worker::OffChainDatabase>(
         block_importer,
         database,
         chain_id,
-        da_compression_config: DaCompressionConfig::Disabled,
         continue_on_error: false,
         balances_indexation_enabled: true,
         coins_to_spend_indexation_enabled: true,

@@ -70,7 +70,7 @@ use fuel_core_types::{
         },
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        txpool::{
+        transaction_status::{
             self,
             TransactionStatus,
         },
@@ -87,12 +87,10 @@ pub struct CoinsToSpendIndexIter<'a> {
 pub trait OffChainDatabase: Send + Sync {
     fn block_height(&self, block_id: &BlockId) -> StorageResult<BlockHeight>;
 
-    fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
-
     fn tx_status(
         &self,
         tx_id: &TxId,
-    ) -> StorageResult<txpool::TransactionExecutionStatus>;
+    ) -> StorageResult<transaction_status::TransactionExecutionStatus>;
 
     fn balance(
         &self,
@@ -197,11 +195,9 @@ pub trait DatabaseBlocks {
 }
 
 /// Trait that specifies all the getters required for DA compressed blocks.
-pub trait DatabaseDaCompressedBlocks {
+pub trait DatabaseDaCompressedBlocks: Send + Sync {
     /// Get a DA compressed block by its height.
     fn da_compressed_block(&self, height: &BlockHeight) -> StorageResult<Vec<u8>>;
-
-    fn latest_height(&self) -> StorageResult<BlockHeight>;
 }
 
 /// Trait that specifies all the getters required for messages.
@@ -344,7 +340,6 @@ pub mod worker {
                 MessageBalances,
             },
             coins::CoinsToSpendIndex,
-            da_compression::*,
             old::{
                 OldFuelBlockConsensus,
                 OldFuelBlocks,
@@ -368,7 +363,7 @@ pub mod worker {
         fuel_types::BlockHeight,
         services::{
             block_importer::SharedImportResult,
-            txpool::{
+            transaction_status::{
                 self,
                 TransactionStatus,
             },
@@ -423,17 +418,7 @@ pub mod worker {
         + StorageMutate<CoinBalances, Error = StorageError>
         + StorageMutate<MessageBalances, Error = StorageError>
         + StorageMutate<CoinsToSpendIndex, Error = StorageError>
-        + StorageMutate<DaCompressedBlocks, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryAddress, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryAssetId, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryContractId, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryScriptCode, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryPredicateCode, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryIndex, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryTimestamps, Error = StorageError>
-        + StorageMutate<DaCompressionTemporalRegistryEvictorCache, Error = StorageError>
         + StorageMutate<AssetsInfo, Error = StorageError>
-        + MaybeTemporalRegistryV2Bounds
     {
         fn record_tx_id_owner(
             &mut self,
@@ -446,8 +431,8 @@ pub mod worker {
         fn update_tx_status(
             &mut self,
             id: &Bytes32,
-            status: txpool::TransactionExecutionStatus,
-        ) -> StorageResult<Option<txpool::TransactionExecutionStatus>>;
+            status: transaction_status::TransactionExecutionStatus,
+        ) -> StorageResult<Option<transaction_status::TransactionExecutionStatus>>;
 
         /// Update metadata about the total number of transactions on the chain.
         /// Returns the total count after the update.
@@ -459,75 +444,6 @@ pub mod worker {
         /// Commits the underlying changes into the database.
         fn commit(self) -> StorageResult<()>;
     }
-
-    #[cfg(feature = "fault-proving")]
-    pub mod v2_off_chain_database_tx {
-        use super::*;
-        use v2::{
-            address::DaCompressionTemporalRegistryAddressV2,
-            asset_id::DaCompressionTemporalRegistryAssetIdV2,
-            contract_id::DaCompressionTemporalRegistryContractIdV2,
-            evictor_cache::DaCompressionTemporalRegistryEvictorCacheV2,
-            predicate_code::DaCompressionTemporalRegistryPredicateCodeV2,
-            registry_index::DaCompressionTemporalRegistryIndexV2,
-            script_code::DaCompressionTemporalRegistryScriptCodeV2,
-            timestamps::DaCompressionTemporalRegistryTimestampsV2,
-        };
-
-        pub trait TemporalRegistryV2Bounds: StorageMutate<DaCompressionTemporalRegistryAddressV2, Error = StorageError>
-            + StorageMutate<DaCompressionTemporalRegistryAssetIdV2, Error = StorageError>
-            + StorageMutate<DaCompressionTemporalRegistryContractIdV2, Error = StorageError>
-            + StorageMutate<DaCompressionTemporalRegistryScriptCodeV2, Error = StorageError>
-            + StorageMutate<
-                DaCompressionTemporalRegistryPredicateCodeV2,
-                Error = StorageError,
-            > + StorageMutate<DaCompressionTemporalRegistryIndexV2, Error = StorageError>
-            + StorageMutate<DaCompressionTemporalRegistryTimestampsV2, Error = StorageError>
-            + StorageMutate<
-                DaCompressionTemporalRegistryEvictorCacheV2,
-                Error = StorageError,
-            >
-        {
-        }
-
-        impl<T> TemporalRegistryV2Bounds for T where
-            T: StorageMutate<
-                    DaCompressionTemporalRegistryAddressV2,
-                    Error = StorageError,
-                > + StorageMutate<
-                    DaCompressionTemporalRegistryAssetIdV2,
-                    Error = StorageError,
-                > + StorageMutate<
-                    DaCompressionTemporalRegistryContractIdV2,
-                    Error = StorageError,
-                > + StorageMutate<
-                    DaCompressionTemporalRegistryScriptCodeV2,
-                    Error = StorageError,
-                > + StorageMutate<
-                    DaCompressionTemporalRegistryPredicateCodeV2,
-                    Error = StorageError,
-                > + StorageMutate<DaCompressionTemporalRegistryIndexV2, Error = StorageError>
-                + StorageMutate<
-                    DaCompressionTemporalRegistryTimestampsV2,
-                    Error = StorageError,
-                > + StorageMutate<
-                    DaCompressionTemporalRegistryEvictorCacheV2,
-                    Error = StorageError,
-                >
-        {
-        }
-    }
-
-    #[cfg(not(feature = "fault-proving"))]
-    pub mod not_fault_proving {
-        pub trait MaybeTemporalRegistryV2Bounds {}
-        impl<T> MaybeTemporalRegistryV2Bounds for T {}
-    }
-
-    #[cfg(not(feature = "fault-proving"))]
-    pub use not_fault_proving::MaybeTemporalRegistryV2Bounds;
-    #[cfg(feature = "fault-proving")]
-    pub use v2_off_chain_database_tx::TemporalRegistryV2Bounds as MaybeTemporalRegistryV2Bounds;
 
     pub trait BlockImporter: Send + Sync {
         /// Returns a stream of imported block.
