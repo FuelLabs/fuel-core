@@ -2,9 +2,9 @@ use crate::{
     config::CompressionConfig,
     ports::{
         block_source::{
+            block_helpers,
             BlockSource,
             BlockWithMetadata,
-            BlockWithMetadataExt,
         },
         compression_storage::{
             CompressionStorage,
@@ -84,19 +84,21 @@ where
             compression_storage: CompressionStorageWrapper {
                 storage_tx: &mut storage_tx,
             },
-            block_events: block_with_metadata.events(),
+            block_events: block_helpers::events(block_with_metadata),
         };
         let compressed_block = compress(
             self.config.into(),
             compression_context,
-            block_with_metadata.block(),
+            block_helpers::block(block_with_metadata),
         )
         .now_or_never()
         .expect("The current implementation should resolve all futures instantly")
         .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
 
-        storage_tx
-            .write_compressed_block(block_with_metadata.height(), &compressed_block)?;
+        storage_tx.write_compressed_block(
+            block_helpers::height(block_with_metadata),
+            &compressed_block,
+        )?;
 
         storage_tx
             .commit()
@@ -118,7 +120,7 @@ where
         // set the status to synced
         self.sync_notifier
             .send(crate::sync_state::SyncState::Synced(
-                *block_with_metadata.height(),
+                *block_helpers::height(block_with_metadata),
             ))
             .ok();
         Ok(())
@@ -201,7 +203,7 @@ where
                         fuel_core_services::TaskNextAction::Stop
                     }
                     Some(block_with_metadata) => {
-                        tracing::debug!("Got new block: {:?}", &block_with_metadata.height());
+                        tracing::debug!("Got new block: {:?}", block_helpers::height(&block_with_metadata));
                         if let Err(e) = self.handle_new_block(&block_with_metadata) {
                             tracing::error!("Error handling new block: {:?}", e);
                             return fuel_core_services::TaskNextAction::ErrorContinue(anyhow::anyhow!(e));
