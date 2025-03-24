@@ -65,11 +65,9 @@ impl ImportResultProvider {
                     .get_sealed_block_by_height(&genesis_height)?
                     .ok_or(not_found!("SealedBlock"))?;
 
-                Ok(Arc::new(ImportResult::new_from_local(
-                    sealed_block,
-                    vec![],
-                    vec![],
-                ).wrap()))
+                Ok(Arc::new(
+                    ImportResult::new_from_local(sealed_block, vec![], vec![]).wrap(),
+                ))
             }
         }
     }
