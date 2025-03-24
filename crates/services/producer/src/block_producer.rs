@@ -343,7 +343,8 @@ where
         time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
-    ) -> anyhow::Result<Vec<(Transaction, TransactionExecutionStatus)>> {
+        record_storage_reads: bool,
+    ) -> anyhow::Result<(Vec<(Transaction, TransactionExecutionStatus)>, Vec<StorageReadReplayEvent>)> {
         let view = self.view_provider.latest_view()?;
         let latest_height = view.latest_height().unwrap_or_default();
 
@@ -382,9 +383,9 @@ where
         let executor = self.executor.clone();
 
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let txs = tokio_rayon::spawn_fifo(
-            move || -> anyhow::Result<Vec<(Transaction, TransactionExecutionStatus)>> {
-                Ok(executor.dry_run(component, utxo_validation, height)?)
+        let (txs, storage_reads) = tokio_rayon::spawn_fifo(
+            move || {
+                executor.dry_run(component, utxo_validation, height, record_storage_reads)
             },
         )
         .await?;
@@ -394,7 +395,7 @@ where
         }) {
             Err(anyhow!("Expected at least one set of receipts"))
         } else {
-            Ok(txs)
+            Ok((txs, storage_reads))
         }
     }
 }
