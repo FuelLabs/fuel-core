@@ -107,7 +107,7 @@ fn block_to_import_result(block: Block) -> SharedImportResult {
         events: vec![],
         source: Default::default(),
     };
-    Arc::new(result)
+    Arc::new(result.wrap())
 }
 
 #[tokio::test]

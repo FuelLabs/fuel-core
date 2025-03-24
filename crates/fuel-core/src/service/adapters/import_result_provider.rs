@@ -51,7 +51,7 @@ impl ImportResultProvider {
                     .into_result();
                 let result =
                     ImportResult::new_from_local(sealed_block, tx_status, events);
-                Ok(Arc::new(result))
+                Ok(Arc::new(result.wrap()))
             }
             BlockAt::Genesis => {
                 let genesis_height = self
@@ -69,7 +69,7 @@ impl ImportResultProvider {
                     sealed_block,
                     vec![],
                     vec![],
-                )))
+                ).wrap()))
             }
         }
     }

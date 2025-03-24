@@ -304,7 +304,7 @@ async fn prune_expired_transactions() {
             expiration_block,
             vec![],
             vec![],
-        )))
+        ).wrap()))
         .await
         .unwrap();
 
@@ -400,7 +400,7 @@ async fn prune_expired_does_not_trigger_twice() {
             expiration_block,
             vec![],
             vec![],
-        )))
+        ).wrap()))
         .await
         .unwrap();
 

@@ -65,7 +65,7 @@ fn block_importer_for_event(event: Event) -> BoxStream<SharedImportResult> {
         tx_status: vec![],
         events: vec![event],
         source: Default::default(),
-    });
+    }.wrap());
     let blocks: Vec<SharedImportResult> = vec![block];
     tokio_stream::iter(blocks).into_boxed()
 }

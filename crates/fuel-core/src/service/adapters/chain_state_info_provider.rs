@@ -367,7 +367,7 @@ mod tests {
             sealed_block,
             Default::default(),
             Default::default(),
-        ))
+        ).wrap())
     }
 
     #[tokio::test]
@@ -441,7 +441,7 @@ mod tests {
             sealed_block,
             Default::default(),
             Default::default(),
-        ))
+        ).wrap())
     }
 
     #[tokio::test]
