@@ -1,0 +1,338 @@
+---
+source: crates/services/tx_status_manager/src/tests/public_api.rs
+assertion_line: 14
+expression: public_api
+---
+pub mod fuel_core_tx_status_manager
+pub mod fuel_core_tx_status_manager::config
+pub struct fuel_core_tx_status_manager::config::Config
+pub fuel_core_tx_status_manager::config::Config::max_tx_update_subscriptions: usize
+pub fuel_core_tx_status_manager::config::Config::metrics: bool
+pub fuel_core_tx_status_manager::config::Config::status_cache_ttl: core::time::Duration
+pub fuel_core_tx_status_manager::config::Config::subscription_ttl: core::time::Duration
+impl core::clone::Clone for fuel_core_tx_status_manager::config::Config
+pub fn fuel_core_tx_status_manager::config::Config::clone(&self) -> fuel_core_tx_status_manager::config::Config
+impl core::fmt::Debug for fuel_core_tx_status_manager::config::Config
+pub fn fuel_core_tx_status_manager::config::Config::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for fuel_core_tx_status_manager::config::Config
+impl core::marker::Send for fuel_core_tx_status_manager::config::Config
+impl core::marker::Sync for fuel_core_tx_status_manager::config::Config
+impl core::marker::Unpin for fuel_core_tx_status_manager::config::Config
+impl core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::config::Config
+impl core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::config::Config
+impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::config::Config where U: core::convert::From<T>
+pub fn fuel_core_tx_status_manager::config::Config::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::config::Config where U: core::convert::Into<T>
+pub type fuel_core_tx_status_manager::config::Config::Error = core::convert::Infallible
+pub fn fuel_core_tx_status_manager::config::Config::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::config::Config where U: core::convert::TryFrom<T>
+pub type fuel_core_tx_status_manager::config::Config::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn fuel_core_tx_status_manager::config::Config::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for fuel_core_tx_status_manager::config::Config where T: core::clone::Clone
+pub type fuel_core_tx_status_manager::config::Config::Owned = T
+pub fn fuel_core_tx_status_manager::config::Config::clone_into(&self, target: &mut T)
+pub fn fuel_core_tx_status_manager::config::Config::to_owned(&self) -> T
+impl<T> core::any::Any for fuel_core_tx_status_manager::config::Config where T: 'static + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::config::Config::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::config::Config where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::config::Config::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::config::Config where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::config::Config::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for fuel_core_tx_status_manager::config::Config where T: core::clone::Clone
+pub unsafe fn fuel_core_tx_status_manager::config::Config::clone_to_uninit(&self, dst: *mut u8)
+impl<T> core::convert::From<T> for fuel_core_tx_status_manager::config::Config
+pub fn fuel_core_tx_status_manager::config::Config::from(t: T) -> T
+impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::config::Config
+impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::config::Config
+impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::config::Config
+impl<T> fuel_vm::interpreter::diff::AnyDebug for fuel_core_tx_status_manager::config::Config where T: core::any::Any + core::fmt::Debug
+pub fn fuel_core_tx_status_manager::config::Config::as_any_ref(&self) -> &(dyn core::any::Any + 'static)
+impl<T> tap::conv::Conv for fuel_core_tx_status_manager::config::Config
+impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::config::Config
+impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::config::Config where T: ?core::marker::Sized
+impl<T> tap::tap::Tap for fuel_core_tx_status_manager::config::Config
+impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::config::Config
+impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::config::Config
+impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::config::Config
+pub type fuel_core_tx_status_manager::config::Config::Output = T
+impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::config::Config
+impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::config::Config where V: ppv_lite86::types::MultiLane<T>
+pub fn fuel_core_tx_status_manager::config::Config::vzip(self) -> V
+pub mod fuel_core_tx_status_manager::ports
+pub trait fuel_core_tx_status_manager::ports::P2PSubscriptions
+pub type fuel_core_tx_status_manager::ports::P2PSubscriptions::GossipedStatuses: fuel_core_types::services::p2p::NetworkData<fuel_core_tx_status_manager::ports::P2PPreConfirmationMessage>
+pub fn fuel_core_tx_status_manager::ports::P2PSubscriptions::gossiped_tx_statuses(&self) -> fuel_core_services::stream::BoxStream<Self::GossipedStatuses>
+pub type fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData = fuel_core_types::services::p2p::GossipData<fuel_core_tx_status_manager::ports::P2PPreConfirmationMessage>
+pub type fuel_core_tx_status_manager::ports::P2PPreConfirmationMessage = fuel_core_types::services::p2p::PreConfirmationMessage<fuel_core_types::services::p2p::DelegatePublicKey, fuel_types::array_types::Bytes64, fuel_core_types::services::p2p::ProtocolSignature>
+pub mod fuel_core_tx_status_manager::service
+pub struct fuel_core_tx_status_manager::service::SharedData
+impl fuel_core_tx_status_manager::service::SharedData
+pub async fn fuel_core_tx_status_manager::service::SharedData::get_status(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<core::option::Option<fuel_core_types::services::transaction_status::TransactionStatus>>
+pub fn fuel_core_tx_status_manager::service::SharedData::notify_skipped(&self, tx_ids_and_reason: alloc::vec::Vec<(fuel_types::array_types::Bytes32, alloc::string::String)>)
+pub async fn fuel_core_tx_status_manager::service::SharedData::subscribe(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<fuel_core_tx_status_manager::TxStatusStream>
+pub fn fuel_core_tx_status_manager::service::SharedData::update_preconfirmations(&self, preconfirmations: alloc::vec::Vec<fuel_core_types::services::preconfirmation::Preconfirmation>)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_status(&self, tx_id: fuel_tx::transaction::TxId, status: fuel_core_types::services::transaction_status::TransactionStatus)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_statuses(&self, statuses: alloc::vec::Vec<(fuel_tx::transaction::TxId, fuel_core_types::services::transaction_status::statuses::SqueezedOut)>)
+impl core::clone::Clone for fuel_core_tx_status_manager::service::SharedData
+pub fn fuel_core_tx_status_manager::service::SharedData::clone(&self) -> fuel_core_tx_status_manager::service::SharedData
+impl core::marker::Freeze for fuel_core_tx_status_manager::service::SharedData
+impl core::marker::Send for fuel_core_tx_status_manager::service::SharedData
+impl core::marker::Sync for fuel_core_tx_status_manager::service::SharedData
+impl core::marker::Unpin for fuel_core_tx_status_manager::service::SharedData
+impl core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::service::SharedData
+impl core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::service::SharedData
+impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::service::SharedData where U: core::convert::From<T>
+pub fn fuel_core_tx_status_manager::service::SharedData::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::service::SharedData where U: core::convert::Into<T>
+pub type fuel_core_tx_status_manager::service::SharedData::Error = core::convert::Infallible
+pub fn fuel_core_tx_status_manager::service::SharedData::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::service::SharedData where U: core::convert::TryFrom<T>
+pub type fuel_core_tx_status_manager::service::SharedData::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn fuel_core_tx_status_manager::service::SharedData::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for fuel_core_tx_status_manager::service::SharedData where T: core::clone::Clone
+pub type fuel_core_tx_status_manager::service::SharedData::Owned = T
+pub fn fuel_core_tx_status_manager::service::SharedData::clone_into(&self, target: &mut T)
+pub fn fuel_core_tx_status_manager::service::SharedData::to_owned(&self) -> T
+impl<T> core::any::Any for fuel_core_tx_status_manager::service::SharedData where T: 'static + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::SharedData::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::service::SharedData where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::SharedData::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::service::SharedData where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::SharedData::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for fuel_core_tx_status_manager::service::SharedData where T: core::clone::Clone
+pub unsafe fn fuel_core_tx_status_manager::service::SharedData::clone_to_uninit(&self, dst: *mut u8)
+impl<T> core::convert::From<T> for fuel_core_tx_status_manager::service::SharedData
+pub fn fuel_core_tx_status_manager::service::SharedData::from(t: T) -> T
+impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::service::SharedData
+impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::service::SharedData
+impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::service::SharedData
+impl<T> tap::conv::Conv for fuel_core_tx_status_manager::service::SharedData
+impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::service::SharedData
+impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::service::SharedData where T: ?core::marker::Sized
+impl<T> tap::tap::Tap for fuel_core_tx_status_manager::service::SharedData
+impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::service::SharedData
+impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::service::SharedData
+impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::service::SharedData
+pub type fuel_core_tx_status_manager::service::SharedData::Output = T
+impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::SharedData
+impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::SharedData where V: ppv_lite86::types::MultiLane<T>
+pub fn fuel_core_tx_status_manager::service::SharedData::vzip(self) -> V
+pub struct fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey> fuel_core_services::service::RunnableService for fuel_core_tx_status_manager::service::Task<Pubkey>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::SharedData = fuel_core_tx_status_manager::service::SharedData
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Task = fuel_core_tx_status_manager::service::Task<Pubkey>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::TaskParams = ()
+pub const fuel_core_tx_status_manager::service::Task<Pubkey>::NAME: &'static str
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::into_task<'life0, 'async_trait>(self, _: &'life0 fuel_core_services::state::StateWatcher, __arg2: Self::TaskParams) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = anyhow::Result<Self::Task>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::shared_data(&self) -> Self::SharedData
+impl<Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey> fuel_core_services::service::RunnableTask for fuel_core_tx_status_manager::service::Task<Pubkey>
+pub async fn fuel_core_tx_status_manager::service::Task<Pubkey>::run(&mut self, watcher: &mut fuel_core_services::state::StateWatcher) -> fuel_core_services::service::TaskNextAction
+pub async fn fuel_core_tx_status_manager::service::Task<Pubkey>::shutdown(self) -> anyhow::Result<()>
+impl<Pubkey> core::marker::Freeze for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Freeze
+impl<Pubkey> core::marker::Send for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Send
+impl<Pubkey> core::marker::Sync for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Sync
+impl<Pubkey> core::marker::Unpin for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Unpin
+impl<Pubkey> !core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<Pubkey> !core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::From<T>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::Into<T>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Error = core::convert::Infallible
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::TryFrom<T>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for fuel_core_tx_status_manager::service::Task<Pubkey> where T: 'static + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for fuel_core_tx_status_manager::service::Task<Pubkey>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::from(t: T) -> T
+impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tap::conv::Conv for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
+impl<T> tap::tap::Tap for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::service::Task<Pubkey>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Output = T
+impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::Task<Pubkey> where V: ppv_lite86::types::MultiLane<T>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::vzip(self) -> V
+pub trait fuel_core_tx_status_manager::service::ProtocolPublicKey: core::marker::Send
+pub fn fuel_core_tx_status_manager::service::ProtocolPublicKey::latest_address(&self) -> fuel_types::array_types::Address
+pub fn fuel_core_tx_status_manager::service::new_service<P2P, Pubkey>(p2p: P2P, config: fuel_core_tx_status_manager::config::Config, protocol_pubkey: Pubkey) -> fuel_core_services::service::ServiceRunner<fuel_core_tx_status_manager::service::Task<Pubkey>> where P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions<GossipedStatuses = fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData>, Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey
+pub mod fuel_core_tx_status_manager::utils
+pub fn fuel_core_tx_status_manager::utils::from_executor_to_status(block: &fuel_core_types::blockchain::block::Block, result: fuel_core_types::services::executor::TransactionExecutionResult) -> fuel_core_types::services::transaction_status::TransactionExecutionStatus
+pub enum fuel_core_tx_status_manager::TxStatusMessage
+pub fuel_core_tx_status_manager::TxStatusMessage::FailedStatus
+pub fuel_core_tx_status_manager::TxStatusMessage::Status(fuel_core_types::services::transaction_status::TransactionStatus)
+impl fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::is_final(&self) -> bool
+impl core::clone::Clone for fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::clone(&self) -> fuel_core_tx_status_manager::TxStatusMessage
+impl core::cmp::Eq for fuel_core_tx_status_manager::TxStatusMessage
+impl core::cmp::PartialEq for fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::eq(&self, other: &fuel_core_tx_status_manager::TxStatusMessage) -> bool
+impl core::convert::From<fuel_core_types::services::transaction_status::TransactionStatus> for fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::from(status: fuel_core_types::services::transaction_status::TransactionStatus) -> Self
+impl core::fmt::Debug for fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for fuel_core_tx_status_manager::TxStatusMessage
+impl<E> core::convert::From<core::result::Result<fuel_core_types::services::transaction_status::TransactionStatus, E>> for fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::from(result: core::result::Result<fuel_core_types::services::transaction_status::TransactionStatus, E>) -> Self
+impl core::marker::Freeze for fuel_core_tx_status_manager::TxStatusMessage
+impl core::marker::Send for fuel_core_tx_status_manager::TxStatusMessage
+impl core::marker::Sync for fuel_core_tx_status_manager::TxStatusMessage
+impl core::marker::Unpin for fuel_core_tx_status_manager::TxStatusMessage
+impl core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::TxStatusMessage
+impl core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::TxStatusMessage
+impl<Q, K> hashbrown::Equivalent<K> for fuel_core_tx_status_manager::TxStatusMessage where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+impl<Q, K> hashbrown::Equivalent<K> for fuel_core_tx_status_manager::TxStatusMessage where Q: core::cmp::Eq + ?core::marker::Sized, K: core::borrow::Borrow<Q> + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::TxStatusMessage::equivalent(&self, key: &K) -> bool
+pub fn fuel_core_tx_status_manager::TxStatusMessage::equivalent(&self, key: &K) -> bool
+impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::TxStatusMessage where U: core::convert::From<T>
+pub fn fuel_core_tx_status_manager::TxStatusMessage::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::TxStatusMessage where U: core::convert::Into<T>
+pub type fuel_core_tx_status_manager::TxStatusMessage::Error = core::convert::Infallible
+pub fn fuel_core_tx_status_manager::TxStatusMessage::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::TxStatusMessage where U: core::convert::TryFrom<T>
+pub type fuel_core_tx_status_manager::TxStatusMessage::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn fuel_core_tx_status_manager::TxStatusMessage::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for fuel_core_tx_status_manager::TxStatusMessage where T: core::clone::Clone
+pub type fuel_core_tx_status_manager::TxStatusMessage::Owned = T
+pub fn fuel_core_tx_status_manager::TxStatusMessage::clone_into(&self, target: &mut T)
+pub fn fuel_core_tx_status_manager::TxStatusMessage::to_owned(&self) -> T
+impl<T> core::any::Any for fuel_core_tx_status_manager::TxStatusMessage where T: 'static + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::TxStatusMessage::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::TxStatusMessage where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::TxStatusMessage::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::TxStatusMessage where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::TxStatusMessage::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for fuel_core_tx_status_manager::TxStatusMessage where T: core::clone::Clone
+pub unsafe fn fuel_core_tx_status_manager::TxStatusMessage::clone_to_uninit(&self, dst: *mut u8)
+impl<T> core::convert::From<T> for fuel_core_tx_status_manager::TxStatusMessage
+pub fn fuel_core_tx_status_manager::TxStatusMessage::from(t: T) -> T
+impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::TxStatusMessage
+impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::TxStatusMessage
+impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::TxStatusMessage
+impl<T> fuel_vm::interpreter::diff::AnyDebug for fuel_core_tx_status_manager::TxStatusMessage where T: core::any::Any + core::fmt::Debug
+pub fn fuel_core_tx_status_manager::TxStatusMessage::as_any_ref(&self) -> &(dyn core::any::Any + 'static)
+impl<T> tap::conv::Conv for fuel_core_tx_status_manager::TxStatusMessage
+impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::TxStatusMessage
+impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::TxStatusMessage where T: ?core::marker::Sized
+impl<T> tap::tap::Tap for fuel_core_tx_status_manager::TxStatusMessage
+impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::TxStatusMessage
+impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::TxStatusMessage
+impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::TxStatusMessage
+pub type fuel_core_tx_status_manager::TxStatusMessage::Output = T
+impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::TxStatusMessage
+impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::TxStatusMessage where V: ppv_lite86::types::MultiLane<T>
+pub fn fuel_core_tx_status_manager::TxStatusMessage::vzip(self) -> V
+pub struct fuel_core_tx_status_manager::SharedData
+impl fuel_core_tx_status_manager::service::SharedData
+pub async fn fuel_core_tx_status_manager::service::SharedData::get_status(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<core::option::Option<fuel_core_types::services::transaction_status::TransactionStatus>>
+pub fn fuel_core_tx_status_manager::service::SharedData::notify_skipped(&self, tx_ids_and_reason: alloc::vec::Vec<(fuel_types::array_types::Bytes32, alloc::string::String)>)
+pub async fn fuel_core_tx_status_manager::service::SharedData::subscribe(&self, tx_id: fuel_tx::transaction::TxId) -> anyhow::Result<fuel_core_tx_status_manager::TxStatusStream>
+pub fn fuel_core_tx_status_manager::service::SharedData::update_preconfirmations(&self, preconfirmations: alloc::vec::Vec<fuel_core_types::services::preconfirmation::Preconfirmation>)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_status(&self, tx_id: fuel_tx::transaction::TxId, status: fuel_core_types::services::transaction_status::TransactionStatus)
+pub fn fuel_core_tx_status_manager::service::SharedData::update_statuses(&self, statuses: alloc::vec::Vec<(fuel_tx::transaction::TxId, fuel_core_types::services::transaction_status::statuses::SqueezedOut)>)
+impl core::clone::Clone for fuel_core_tx_status_manager::service::SharedData
+pub fn fuel_core_tx_status_manager::service::SharedData::clone(&self) -> fuel_core_tx_status_manager::service::SharedData
+impl core::marker::Freeze for fuel_core_tx_status_manager::service::SharedData
+impl core::marker::Send for fuel_core_tx_status_manager::service::SharedData
+impl core::marker::Sync for fuel_core_tx_status_manager::service::SharedData
+impl core::marker::Unpin for fuel_core_tx_status_manager::service::SharedData
+impl core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::service::SharedData
+impl core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::service::SharedData
+impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::service::SharedData where U: core::convert::From<T>
+pub fn fuel_core_tx_status_manager::service::SharedData::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::service::SharedData where U: core::convert::Into<T>
+pub type fuel_core_tx_status_manager::service::SharedData::Error = core::convert::Infallible
+pub fn fuel_core_tx_status_manager::service::SharedData::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::service::SharedData where U: core::convert::TryFrom<T>
+pub type fuel_core_tx_status_manager::service::SharedData::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn fuel_core_tx_status_manager::service::SharedData::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> alloc::borrow::ToOwned for fuel_core_tx_status_manager::service::SharedData where T: core::clone::Clone
+pub type fuel_core_tx_status_manager::service::SharedData::Owned = T
+pub fn fuel_core_tx_status_manager::service::SharedData::clone_into(&self, target: &mut T)
+pub fn fuel_core_tx_status_manager::service::SharedData::to_owned(&self) -> T
+impl<T> core::any::Any for fuel_core_tx_status_manager::service::SharedData where T: 'static + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::SharedData::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::service::SharedData where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::SharedData::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::service::SharedData where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::SharedData::borrow_mut(&mut self) -> &mut T
+impl<T> core::clone::CloneToUninit for fuel_core_tx_status_manager::service::SharedData where T: core::clone::Clone
+pub unsafe fn fuel_core_tx_status_manager::service::SharedData::clone_to_uninit(&self, dst: *mut u8)
+impl<T> core::convert::From<T> for fuel_core_tx_status_manager::service::SharedData
+pub fn fuel_core_tx_status_manager::service::SharedData::from(t: T) -> T
+impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::service::SharedData
+impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::service::SharedData
+impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::service::SharedData
+impl<T> tap::conv::Conv for fuel_core_tx_status_manager::service::SharedData
+impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::service::SharedData
+impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::service::SharedData where T: ?core::marker::Sized
+impl<T> tap::tap::Tap for fuel_core_tx_status_manager::service::SharedData
+impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::service::SharedData
+impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::service::SharedData
+impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::service::SharedData
+pub type fuel_core_tx_status_manager::service::SharedData::Output = T
+impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::SharedData
+impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::SharedData where V: ppv_lite86::types::MultiLane<T>
+pub fn fuel_core_tx_status_manager::service::SharedData::vzip(self) -> V
+pub struct fuel_core_tx_status_manager::Task<Pubkey>
+impl<Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey> fuel_core_services::service::RunnableService for fuel_core_tx_status_manager::service::Task<Pubkey>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::SharedData = fuel_core_tx_status_manager::service::SharedData
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Task = fuel_core_tx_status_manager::service::Task<Pubkey>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::TaskParams = ()
+pub const fuel_core_tx_status_manager::service::Task<Pubkey>::NAME: &'static str
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::into_task<'life0, 'async_trait>(self, _: &'life0 fuel_core_services::state::StateWatcher, __arg2: Self::TaskParams) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = anyhow::Result<Self::Task>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::shared_data(&self) -> Self::SharedData
+impl<Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey> fuel_core_services::service::RunnableTask for fuel_core_tx_status_manager::service::Task<Pubkey>
+pub async fn fuel_core_tx_status_manager::service::Task<Pubkey>::run(&mut self, watcher: &mut fuel_core_services::state::StateWatcher) -> fuel_core_services::service::TaskNextAction
+pub async fn fuel_core_tx_status_manager::service::Task<Pubkey>::shutdown(self) -> anyhow::Result<()>
+impl<Pubkey> core::marker::Freeze for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Freeze
+impl<Pubkey> core::marker::Send for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Send
+impl<Pubkey> core::marker::Sync for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Sync
+impl<Pubkey> core::marker::Unpin for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Unpin
+impl<Pubkey> !core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<Pubkey> !core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::From<T>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::Into<T>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Error = core::convert::Infallible
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::TryFrom<T>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for fuel_core_tx_status_manager::service::Task<Pubkey> where T: 'static + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for fuel_core_tx_status_manager::service::Task<Pubkey>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::from(t: T) -> T
+impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tap::conv::Conv for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
+impl<T> tap::tap::Tap for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::service::Task<Pubkey>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Output = T
+impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::Task<Pubkey>
+impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::Task<Pubkey> where V: ppv_lite86::types::MultiLane<T>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::vzip(self) -> V
+pub fn fuel_core_tx_status_manager::from_executor_to_status(block: &fuel_core_types::blockchain::block::Block, result: fuel_core_types::services::executor::TransactionExecutionResult) -> fuel_core_types::services::transaction_status::TransactionExecutionStatus
+pub fn fuel_core_tx_status_manager::new_service<P2P, Pubkey>(p2p: P2P, config: fuel_core_tx_status_manager::config::Config, protocol_pubkey: Pubkey) -> fuel_core_services::service::ServiceRunner<fuel_core_tx_status_manager::service::Task<Pubkey>> where P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions<GossipedStatuses = fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData>, Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey
+pub type fuel_core_tx_status_manager::TxStatusStream = core::pin::Pin<alloc::boxed::Box<(dyn futures_core::stream::Stream<Item = fuel_core_tx_status_manager::TxStatusMessage> + core::marker::Send + core::marker::Sync)>>
