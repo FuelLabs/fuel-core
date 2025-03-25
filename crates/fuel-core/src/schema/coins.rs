@@ -288,6 +288,12 @@ impl CoinQuery {
         #[graphql(desc = "The excluded coins from the selection.")] excluded_ids: Option<
             ExcludeInput,
         >,
+        #[graphql(
+            desc = "If true, returns available coins instead of failing when the requested \
+             amount is unavailable.",
+            default = false
+        )]
+        allow_partial: bool,
     ) -> async_graphql::Result<Vec<Vec<CoinType>>> {
         let params = ctx
             .data_unchecked::<ChainInfoProvider>()
@@ -327,7 +333,14 @@ impl CoinQuery {
 
         let read_view = ctx.read_view()?;
         let result = read_view
-            .coins_to_spend(owner, &query_per_asset, &exclude, &params, max_input)
+            .coins_to_spend(
+                owner,
+                &query_per_asset,
+                &exclude,
+                allow_partial,
+                &params,
+                max_input,
+            )
             .await?;
 
         Ok(result)
@@ -340,6 +353,7 @@ impl ReadView {
         owner: fuel_tx::Address,
         query_per_asset: &[SpendQueryElementInput],
         excluded: &Exclude,
+        allow_partial: bool,
         params: &ConsensusParameters,
         max_input: u16,
     ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
@@ -347,8 +361,15 @@ impl ReadView {
             .indexation_flags
             .contains(&IndexationKind::CoinsToSpend);
         if indexation_available {
-            coins_to_spend_with_cache(owner, query_per_asset, excluded, max_input, self)
-                .await
+            coins_to_spend_with_cache(
+                owner,
+                query_per_asset,
+                excluded,
+                max_input,
+                allow_partial,
+                self,
+            )
+            .await
         } else {
             let base_asset_id = params.base_asset_id();
             coins_to_spend_without_cache(
@@ -357,6 +378,7 @@ impl ReadView {
                 excluded,
                 max_input,
                 base_asset_id,
+                allow_partial,
                 self,
             )
             .await
@@ -370,6 +392,7 @@ async fn coins_to_spend_without_cache(
     exclude: &Exclude,
     max_input: u16,
     base_asset_id: &fuel_tx::AssetId,
+    allow_partial: bool,
     db: &ReadView,
 ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let query_per_asset = query_per_asset
@@ -388,6 +411,7 @@ async fn coins_to_spend_without_cache(
         &query_per_asset,
         Cow::Borrowed(exclude),
         *base_asset_id,
+        allow_partial,
     )?;
 
     let all_coins = random_improve(db, &spend_query)
@@ -414,6 +438,7 @@ async fn coins_to_spend_with_cache(
     query_per_asset: &[SpendQueryElementInput],
     excluded: &Exclude,
     max_input: u16,
+    allow_partial: bool,
     db: &ReadView,
 ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let mut all_coins = Vec::with_capacity(query_per_asset.len());
@@ -433,6 +458,7 @@ async fn coins_to_spend_with_cache(
             max,
             &asset_id,
             excluded,
+            allow_partial,
             db.batch_size,
         )
         .await?;

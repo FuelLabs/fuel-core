@@ -226,6 +226,7 @@ pub struct AssetQuery<'a> {
     pub owner: &'a Address,
     pub asset: &'a AssetSpendTarget,
     pub exclude: Option<&'a Exclude>,
+    pub allow_partial: bool,
     pub database: &'a ReadView,
     query: AssetsQuery<'a>,
 }
@@ -236,6 +237,7 @@ impl<'a> AssetQuery<'a> {
         asset: &'a AssetSpendTarget,
         base_asset_id: &'a AssetId,
         exclude: Option<&'a Exclude>,
+        allow_partial: bool,
         database: &'a ReadView,
     ) -> Self {
         let mut allowed = HashSet::new();
@@ -244,6 +246,7 @@ impl<'a> AssetQuery<'a> {
             owner,
             asset,
             exclude,
+            allow_partial,
             database,
             query: AssetsQuery::new(
                 owner,

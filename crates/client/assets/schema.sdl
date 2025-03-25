@@ -1099,7 +1099,11 @@ type Query {
 		"""
 		The excluded coins from the selection.
 		"""
-		excludedIds: ExcludeInput
+		excludedIds: ExcludeInput,
+		"""
+		If true, returns available coins instead of failing when the requested amount is unavailable.
+		"""
+		allowPartial: Boolean! = false
 	): [[CoinType!]!]!
 	daCompressedBlock(
 		"""

@@ -77,6 +77,7 @@ pub struct SpendQuery<'a> {
     owner: Address,
     query_per_asset: Vec<AssetSpendTarget>,
     exclude: Cow<'a, Exclude>,
+    allow_partial: bool,
     base_asset_id: AssetId,
 }
 
@@ -88,12 +89,14 @@ impl<'s> SpendQuery<'s> {
         query_per_asset: &[AssetSpendTarget],
         exclude: Cow<'s, Exclude>,
         base_asset_id: AssetId,
+        allow_partial: bool,
     ) -> Result<Self, CoinsQueryError> {
         Ok(Self {
             owner,
             query_per_asset: query_per_asset.to_vec(),
             exclude,
             base_asset_id,
+            allow_partial,
         })
     }
 
@@ -112,6 +115,7 @@ impl<'s> SpendQuery<'s> {
                     asset,
                     &self.base_asset_id,
                     Some(self.exclude.as_ref()),
+                    self.allow_partial,
                     db,
                 )
             })
@@ -138,6 +142,7 @@ pub async fn largest_first(
     let target = query.asset.target;
     let max = query.asset.max;
     let asset_id = query.asset.id;
+    let allow_partial = query.allow_partial;
     let mut inputs: Vec<CoinType> = query.coins().try_collect().await?;
     inputs.sort_by_key(|coin| Reverse(coin.amount()));
 
@@ -150,13 +155,16 @@ pub async fn largest_first(
             break
         }
 
-        // Error if we can't fit more coins
         if coins.len() >= max as usize {
-            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-                asset_id,
-                collected_amount,
-                max,
-            })
+            if allow_partial {
+                return Ok(coins)
+            } else {
+                return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                    asset_id,
+                    collected_amount,
+                    max,
+                })
+            }
         }
 
         // Add to list
@@ -165,11 +173,15 @@ pub async fn largest_first(
     }
 
     if collected_amount < target {
-        return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-            asset_id,
-            collected_amount,
-            max,
-        })
+        if allow_partial {
+            return Ok(coins);
+        } else {
+            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                asset_id,
+                collected_amount,
+                max,
+            })
+        }
     }
 
     Ok(coins)
@@ -243,6 +255,7 @@ pub async fn select_coins_to_spend(
     max: u16,
     asset_id: &AssetId,
     exclude: &Exclude,
+    allow_partial: bool,
     batch_size: usize,
 ) -> Result<Vec<CoinsToSpendIndexKey>, CoinsQueryError> {
     // We aim to reduce dust creation by targeting twice the required amount for selection,
@@ -278,11 +291,15 @@ pub async fn select_coins_to_spend(
         big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
     if selected_big_coins_total < total {
-        return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-            asset_id: *asset_id,
-            collected_amount: selected_big_coins_total,
-            max,
-        });
+        if allow_partial {
+            return Ok(selected_big_coins)
+        } else {
+            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                asset_id: *asset_id,
+                collected_amount: selected_big_coins_total,
+                max,
+            })
+        }
     }
 
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
@@ -543,6 +560,7 @@ mod tests {
             spend_query: &[AssetSpendTarget],
             owner: &Address,
             base_asset_id: &AssetId,
+            allow_partial: bool,
             db: &ServiceDatabase,
         ) -> Result<Vec<Vec<(AssetId, Word)>>, CoinsQueryError> {
             let mut results = vec![];
@@ -553,6 +571,7 @@ mod tests {
                     asset,
                     base_asset_id,
                     None,
+                    allow_partial,
                     &db.test_view(),
                 ))
                 .await
@@ -575,6 +594,7 @@ mod tests {
             db: TestDatabase,
         ) {
             let asset_id = asset_ids[0];
+            let allow_partial = false;
 
             // Query some targets, including higher than the owner's balance
             for target in 0..20 {
@@ -582,6 +602,7 @@ mod tests {
                     &[AssetSpendTarget::new(asset_id, target, u16::MAX)],
                     &owner,
                     base_asset_id,
+                    allow_partial,
                     &db.service_database(),
                 )
                 .await;
@@ -643,6 +664,7 @@ mod tests {
                 &[AssetSpendTarget::new(asset_id, 6, 1)],
                 &owner,
                 base_asset_id,
+                allow_partial,
                 &db.service_database(),
             )
             .await;
@@ -679,6 +701,7 @@ mod tests {
             base_asset_id: &AssetId,
             db: TestDatabase,
         ) {
+            let allow_partial = false;
             let coins = query(
                 &[
                     AssetSpendTarget::new(asset_ids[0], 3, u16::MAX),
@@ -686,6 +709,7 @@ mod tests {
                 ],
                 &owner,
                 base_asset_id,
+                allow_partial,
                 &db.service_database(),
             )
             .await;
@@ -721,6 +745,7 @@ mod tests {
             owner: Address,
             asset_ids: &[AssetId],
             base_asset_id: AssetId,
+            allow_partial: bool,
             db: &ServiceDatabase,
         ) -> Result<Vec<(AssetId, u64)>, CoinsQueryError> {
             let coins = random_improve(
@@ -730,6 +755,7 @@ mod tests {
                     &query_per_asset,
                     Cow::Owned(Exclude::default()),
                     base_asset_id,
+                    allow_partial,
                 )?,
             )
             .await;
@@ -760,6 +786,7 @@ mod tests {
             db: TestDatabase,
         ) {
             let asset_id = asset_ids[0];
+            let allow_partial = false;
 
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
@@ -768,6 +795,7 @@ mod tests {
                     owner,
                     asset_ids,
                     base_asset_id,
+                    allow_partial,
                     &db.service_database(),
                 )
                 .await;
@@ -822,6 +850,7 @@ mod tests {
                 owner,
                 asset_ids,
                 base_asset_id,
+                allow_partial,
                 &db.service_database(),
             )
             .await;
@@ -858,6 +887,8 @@ mod tests {
             base_asset_id: AssetId,
             db: TestDatabase,
         ) {
+            let allow_partial = false;
+
             // Query multiple asset IDs
             let coins = query(
                 vec![
@@ -875,6 +906,7 @@ mod tests {
                 owner,
                 asset_ids,
                 base_asset_id,
+                allow_partial,
                 &db.service_database(),
             )
             .await;
@@ -926,12 +958,14 @@ mod tests {
             asset_ids: &[AssetId],
             query_per_asset: Vec<AssetSpendTarget>,
             excluded_ids: Vec<CoinId>,
+            allow_partial: bool,
         ) -> Result<Vec<(AssetId, u64)>, CoinsQueryError> {
             let spend_query = SpendQuery::new(
                 owner,
                 &query_per_asset,
                 Cow::Owned(Exclude::new(excluded_ids)),
                 base_asset_id,
+                allow_partial,
             )?;
             let coins = random_improve(&db.test_view(), &spend_query).await;
 
@@ -961,6 +995,7 @@ mod tests {
             excluded_ids: Vec<CoinId>,
         ) {
             let asset_id = asset_ids[0];
+            let allow_partial = false;
 
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
@@ -971,6 +1006,7 @@ mod tests {
                     asset_ids,
                     vec![AssetSpendTarget::new(asset_id, amount, u16::MAX)],
                     excluded_ids.clone(),
+                    allow_partial,
                 )
                 .await;
 
@@ -1219,6 +1255,7 @@ mod tests {
             // Given
             const MAX: u16 = u16::MAX;
             const TOTAL: u128 = 101;
+            let allow_partial = false;
 
             let test_coins = [100, 100, 4, 3, 2];
             let big_coins_iter = setup_test_coins(test_coins)
@@ -1246,6 +1283,7 @@ mod tests {
                 MAX,
                 &AssetId::default(),
                 &exclude,
+                allow_partial,
                 BATCH_SIZE,
             )
             .await
@@ -1287,6 +1325,7 @@ mod tests {
             // Given
             const MAX: u16 = u16::MAX;
             const TOTAL: u128 = 10;
+            let allow_partial = false;
 
             let coins = setup_test_coins([10, 10, 9, 8, 7]);
             let (coins, _): (Vec<_>, Vec<_>) = coins
@@ -1308,6 +1347,7 @@ mod tests {
                 MAX,
                 &AssetId::default(),
                 &exclude,
+                allow_partial,
                 BATCH_SIZE,
             )
             .await
@@ -1323,6 +1363,7 @@ mod tests {
             // Given
             const MAX: u16 = u16::MAX;
             const TOTAL: u128 = 101;
+            let allow_partial = false;
 
             let coins = setup_test_coins([10, 9, 8, 7]);
             let (mut coins, _): (Vec<_>, Vec<_>) = coins
@@ -1355,6 +1396,7 @@ mod tests {
                 MAX,
                 &AssetId::default(),
                 &exclude,
+                allow_partial,
                 BATCH_SIZE,
             )
             .await;
@@ -1369,6 +1411,7 @@ mod tests {
             // Given
             const MAX: u16 = 0;
             const TOTAL: u128 = 101;
+            let allow_partial = false;
 
             let exclude = Exclude::default();
 
@@ -1383,6 +1426,7 @@ mod tests {
                 MAX,
                 &AssetId::default(),
                 &exclude,
+                allow_partial,
                 BATCH_SIZE,
             )
             .await;
@@ -1396,6 +1440,7 @@ mod tests {
             // Given
             const MAX: u16 = 101;
             const TOTAL: u128 = 0;
+            let allow_partial = false;
 
             let exclude = Exclude::default();
 
@@ -1410,6 +1455,7 @@ mod tests {
                 MAX,
                 &AssetId::default(),
                 &exclude,
+                allow_partial,
                 BATCH_SIZE,
             )
             .await;
@@ -1419,10 +1465,12 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_not_enough_coins() {
+        async fn selection_algorithm_when_max_limit_reached_should_return_coins_selected_so_far(
+        ) {
             // Given
             const MAX: u16 = 3;
             const TOTAL: u128 = 2137;
+            let allow_partial = false;
 
             let coins = setup_test_coins([10, 9, 8, 7]);
             let (coins, _): (Vec<_>, Vec<_>) = coins
@@ -1445,6 +1493,7 @@ mod tests {
                 MAX,
                 &asset_id,
                 &exclude,
+                allow_partial,
                 BATCH_SIZE,
             )
             .await;
@@ -1462,6 +1511,7 @@ mod tests {
         db_amount: Vec<Word>,
         target_amount: u128,
         max_coins: u16,
+        allow_partial: bool,
     }
 
     pub enum CoinType {
@@ -1478,6 +1528,7 @@ mod tests {
             db_amount,
             target_amount,
             max_coins,
+            allow_partial,
         } = case;
         let owner = Address::default();
         let asset_ids = [base_asset_id];
@@ -1504,6 +1555,7 @@ mod tests {
                 }],
                 Cow::Owned(Exclude::default()),
                 base_asset_id,
+                allow_partial,
             )?,
         )
         .await?;
@@ -1513,11 +1565,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn insufficient_coins_returns_error() {
+    async fn insufficient_coins_returns_coins_collected_so_far() {
         let test_case = TestCase {
             db_amount: vec![0],
             target_amount: u128::MAX,
             max_coins: u16::MAX,
+            allow_partial: false,
         };
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
         let base_asset_id = rng.gen();
@@ -1562,6 +1615,7 @@ mod tests {
             db_amount: vec![u64::MAX, u64::MAX],
             target_amount: u64::MAX as u128,
             max_coins: u16::MAX,
+            allow_partial: false,
         }
         => Ok(1)
         ; "Enough coins in the DB to reach target(u64::MAX) by 1 coin"
@@ -1571,6 +1625,7 @@ mod tests {
             db_amount: vec![2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, u64::MAX - 1],
             target_amount: u64::MAX as u128,
             max_coins: 2,
+            allow_partial: false,
         }
         => Ok(2)
         ; "Enough coins in the DB to reach target(u64::MAX) by 2 coins"
@@ -1594,6 +1649,7 @@ mod tests {
             db_amount: vec![u64::MAX, u64::MAX],
             target_amount: u128::MAX,
             max_coins: 0,
+            allow_partial: false,
         };
 
         let base_asset_id = rng.gen();

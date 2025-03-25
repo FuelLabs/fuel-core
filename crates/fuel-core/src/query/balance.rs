@@ -50,6 +50,7 @@ impl ReadView {
                 &AssetSpendTarget::new(asset_id, u128::MAX, u16::MAX),
                 &base_asset_id,
                 None,
+                false,
                 self,
             )
             .coins()
