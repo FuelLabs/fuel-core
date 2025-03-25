@@ -84,7 +84,7 @@ where
             compression_storage: CompressionStorageWrapper {
                 storage_tx: &mut storage_tx,
             },
-            block_events: &block_with_metadata.events(),
+            block_events: block_with_metadata.events(),
         };
         let compressed_block = compress(
             self.config.into(),

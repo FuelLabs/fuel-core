@@ -17,7 +17,7 @@ impl BlockWithMetadataExt for BlockWithMetadata {
     }
 
     fn height(&self) -> &BlockHeight {
-        <Self as BlockWithMetadataExt>::block(&self)
+        <Self as BlockWithMetadataExt>::block(self)
             .header()
             .height()
     }
