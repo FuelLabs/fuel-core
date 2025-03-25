@@ -19,7 +19,7 @@ impl DatabaseDescription for CompressionDatabase {
     }
 
     fn metadata_column() -> Self::Column {
-        Self::Column::MerkleMetadataColumn
+        Self::Column::Metadata
     }
 
     fn prefix(_column: &Self::Column) -> Option<usize> {
