@@ -360,7 +360,7 @@ impl MockImporter {
                 let block = blocks.pop();
                 if let Some(sealed_block) = block {
                     let result: SharedImportResult = Arc::new(
-                        ImportResult::new_from_local(sealed_block, vec![], vec![]),
+                        ImportResult::new_from_local(sealed_block, vec![], vec![]).wrap(),
                     );
 
                     Some((result, blocks))
