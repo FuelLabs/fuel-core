@@ -29,6 +29,19 @@ pub type UncommittedResult<DatabaseTransaction> =
 /// The alias for the `ImportResult` that can be shared between threads.
 pub type SharedImportResult = Arc<dyn Deref<Target = ImportResult> + Send + Sync>;
 
+/// Thin wrapper over `ImportResult` that implements `Deref` and
+/// thus can be used in the SharedImportResult.
+#[derive(Debug)]
+pub struct WrappedImportResult(ImportResult);
+
+impl Deref for WrappedImportResult {
+    type Target = ImportResult;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// The result of the block import.
 #[derive(Debug)]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
@@ -43,11 +56,10 @@ pub struct ImportResult {
     pub source: Source,
 }
 
-impl Deref for ImportResult {
-    type Target = Self;
-
-    fn deref(&self) -> &Self::Target {
-        self
+impl ImportResult {
+    /// Wrap this result into a `WrappedImportResult`.
+    pub fn wrap(self) -> WrappedImportResult {
+        WrappedImportResult(self)
     }
 }
 
