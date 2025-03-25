@@ -17,9 +17,7 @@ impl BlockWithMetadataExt for BlockWithMetadata {
     }
 
     fn height(&self) -> &BlockHeight {
-        <Self as BlockWithMetadataExt>::block(self)
-            .header()
-            .height()
+        self.block().header().height()
     }
 
     fn block(&self) -> &fuel_core_types::blockchain::block::Block {
