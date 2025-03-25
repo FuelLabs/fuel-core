@@ -1469,7 +1469,7 @@ mod tests {
                 // Then
                 let actual_coins = result
                     .into_iter()
-                    .map(|key| key.amount() as u8)
+                    .map(|key| u8::try_from(key.amount()).unwrap())
                     .collect::<Vec<_>>();
                 assert_eq!(test_coins, actual_coins.as_slice());
             }
