@@ -3,35 +3,34 @@ pub(crate) use fuel_core_types::services::block_importer::SharedImportResult as 
 
 pub(crate) type BlockHeight = u32;
 
-// we can't define a newtype that wraps over SharedImportResult because its `dyn Deref`
-pub(crate) mod block_helpers {
-    use super::*;
-
-    /// Get events from BlockWithMetadata
-    pub(crate) fn events(
-        block_with_metadata: &BlockWithMetadata,
-    ) -> &[fuel_core_types::services::executor::Event] {
-        block_with_metadata.events.as_ref()
-    }
-
-    /// Get sealed block from BlockWithMetadata
-    pub(crate) fn block(
-        block_with_metadata: &BlockWithMetadata,
-    ) -> &fuel_core_types::blockchain::block::Block {
-        &block_with_metadata.sealed_block.entity
-    }
-
-    /// Get block height from BlockWithMetadata
-    pub(crate) fn height(block_with_metadata: &BlockWithMetadata) -> &BlockHeight {
-        block(block_with_metadata).header().height()
-    }
-
-    /// Get the default BlockWithMetadata
+pub(crate) trait BlockWithMetadataExt {
+    fn height(&self) -> &BlockHeight;
+    fn events(&self) -> &[fuel_core_types::services::executor::Event];
+    fn block(&self) -> &fuel_core_types::blockchain::block::Block;
     #[cfg(test)]
-    pub fn default() -> BlockWithMetadata {
-        std::sync::Arc::new(
-            fuel_core_types::services::block_importer::ImportResult::default(),
-        )
+    fn default() -> Self;
+}
+
+impl BlockWithMetadataExt for BlockWithMetadata {
+    fn events(&self) -> &[fuel_core_types::services::executor::Event] {
+        self.events.as_ref()
+    }
+
+    fn height(&self) -> &BlockHeight {
+        <Self as BlockWithMetadataExt>::block(&self)
+            .header()
+            .height()
+    }
+
+    fn block(&self) -> &fuel_core_types::blockchain::block::Block {
+        &self.sealed_block.entity
+    }
+
+    #[cfg(test)]
+    fn default() -> Self {
+        use fuel_core_types::services::block_importer::ImportResult;
+
+        std::sync::Arc::new(ImportResult::default().wrap())
     }
 }
 
