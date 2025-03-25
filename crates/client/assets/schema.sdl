@@ -900,7 +900,7 @@ type PreconfirmationFailureStatus {
 	transactionId: TransactionId!
 	transaction: Transaction
 	receipts: [Receipt!]
-	resolvedOutputs: [Output!]
+	resolvedOutputs: [ResolvedOutput!]
 }
 
 type PreconfirmationSuccessStatus {
@@ -910,7 +910,7 @@ type PreconfirmationSuccessStatus {
 	transactionId: TransactionId!
 	transaction: Transaction
 	receipts: [Receipt!]
-	resolvedOutputs: [Output!]
+	resolvedOutputs: [ResolvedOutput!]
 }
 
 input Predicate {
@@ -1224,6 +1224,11 @@ input RequiredBalance {
 	amount: U64!
 	account: Account!
 	changePolicy: ChangePolicy!
+}
+
+type ResolvedOutput {
+	utxoId: UtxoId!
+	output: Output!
 }
 
 enum ReturnType {
