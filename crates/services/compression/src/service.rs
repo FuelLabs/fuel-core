@@ -1,7 +1,11 @@
 use crate::{
     config::CompressionConfig,
     ports::{
-        block_source::BlockSource,
+        block_source::{
+            BlockSource,
+            BlockWithMetadata,
+            BlockWithMetadataExt,
+        },
         compression_storage::{
             CompressionStorage,
             WriteCompressedBlock,
@@ -71,7 +75,7 @@ where
 {
     fn compress_block(
         &mut self,
-        block_with_metadata: &crate::ports::block_source::BlockWithMetadata,
+        block_with_metadata: &BlockWithMetadata,
     ) -> crate::Result<()> {
         let mut storage_tx = self.storage.write_transaction();
 
@@ -92,7 +96,7 @@ where
         .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
 
         storage_tx
-            .write_compressed_block(&block_with_metadata.height(), &compressed_block)?;
+            .write_compressed_block(block_with_metadata.height(), &compressed_block)?;
 
         storage_tx
             .commit()
@@ -103,26 +107,20 @@ where
 
     fn handle_new_block(
         &mut self,
-        block_with_metadata: &crate::ports::block_source::BlockWithMetadata,
+        block_with_metadata: &BlockWithMetadata,
     ) -> crate::Result<()> {
         // set the status to not synced
-        if let Err(err) = self
-            .sync_notifier
+        self.sync_notifier
             .send(crate::sync_state::SyncState::NotSynced)
-        {
-            tracing::error!("Failed to set sync status to not synced: {:?}", err);
-        }
+            .ok();
         // compress the block
         self.compress_block(block_with_metadata)?;
         // set the status to synced
-        if let Err(err) = self
-            .sync_notifier
+        self.sync_notifier
             .send(crate::sync_state::SyncState::Synced(
-                block_with_metadata.height(),
+                *block_with_metadata.height(),
             ))
-        {
-            tracing::error!("Failed to set sync status to synced: {:?}", err);
-        }
+            .ok();
         Ok(())
     }
 }
@@ -203,7 +201,7 @@ where
                         fuel_core_services::TaskNextAction::Stop
                     }
                     Some(block_with_metadata) => {
-                        tracing::debug!("Got new block: {:?}", block_with_metadata.height());
+                        tracing::debug!("Got new block: {:?}", &block_with_metadata.height());
                         if let Err(e) = self.handle_new_block(&block_with_metadata) {
                             tracing::error!("Error handling new block: {:?}", e);
                             return fuel_core_services::TaskNextAction::ErrorContinue(anyhow::anyhow!(e));
@@ -245,7 +243,10 @@ where
 mod tests {
     use super::*;
     use crate::{
-        ports::block_source::BlockWithMetadata,
+        ports::block_source::{
+            BlockWithMetadata,
+            BlockWithMetadataExt,
+        },
         storage,
     };
     use fuel_core_services::{
