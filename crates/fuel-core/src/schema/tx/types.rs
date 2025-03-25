@@ -263,7 +263,7 @@ impl PreconfirmationSuccessStatus {
             .status
             .resolved_outputs
             .as_ref()
-            .map(|outputs| outputs.iter().cloned().map(Into::into).collect());
+            .map(|outputs| outputs.iter().map(|&x| x.into()).collect());
         Ok(outputs)
     }
 }
@@ -381,7 +381,7 @@ impl PreconfirmationFailureStatus {
             .status
             .resolved_outputs
             .as_ref()
-            .map(|outputs| outputs.iter().cloned().map(Into::into).collect());
+            .map(|outputs| outputs.iter().map(|&x| x.into()).collect());
         Ok(outputs)
     }
 }

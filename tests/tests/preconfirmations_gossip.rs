@@ -625,6 +625,7 @@ async fn preconfirmation__sentry_allows_usage_of_dynamic_outputs() {
     };
     let resolved_outputs = resolved_outputs.unwrap();
 
+    // Given
     // Crafting a dependent transaction that relies on 3 outputs from the previous transaction.
     let mut builder = TransactionBuilder::script(vec![], vec![]);
     builder.max_fee_limit(10_000);
@@ -670,7 +671,6 @@ async fn preconfirmation__sentry_allows_usage_of_dynamic_outputs() {
         tx_pointer,
     );
 
-    // Given
     let transaction_that_rely_on_variable_inputs = builder.finalize_as_transaction();
 
     // When

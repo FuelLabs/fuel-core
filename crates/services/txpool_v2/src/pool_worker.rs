@@ -491,7 +491,6 @@ where
             block_result.tx_status.iter().map(|tx_status| tx_status.id),
         );
 
-        // Clear cached outputs
         block_result.tx_status.iter().for_each(|tx_status| {
             self.pool
                 .extracted_outputs

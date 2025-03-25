@@ -228,10 +228,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
 }
 
 impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
-    fn handle_verified_preconfirmation(
-        &mut self,
-        preconfirmations: Vec<Preconfirmation>,
-    ) {
+    fn handle_preconfirmations(&mut self, preconfirmations: Vec<Preconfirmation>) {
         preconfirmations
             .into_iter()
             .for_each(|Preconfirmation { tx_id, status }| {
@@ -262,7 +259,7 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                 {
                     tracing::debug!("Preconfirmation signature verified");
                     let Sealed { entity, .. } = sealed;
-                    self.handle_verified_preconfirmation(entity.preconfirmations);
+                    self.handle_preconfirmations(entity.preconfirmations);
                 } else {
                     // There is a chance that this is a signature for whom the delegate key hasn't
                     // arrived yet, in which case the pre-confirmation will be lost
@@ -329,7 +326,7 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
                         TaskNextAction::Continue
                     }
                     Some(UpdateRequest::Preconfirmations { preconfirmations }) => {
-                        self.handle_verified_preconfirmation(preconfirmations);
+                        self.handle_preconfirmations(preconfirmations);
                         TaskNextAction::Continue
                     }
                     None => {

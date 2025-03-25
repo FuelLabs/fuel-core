@@ -629,7 +629,7 @@ where
         }
 
         self.extracted_outputs.new_skipped_transaction(&tx_id);
-        // TODO: need to also get contract user if the squeezed out was the contract creator.
+
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
         if !coin_dependents.is_empty() {
             let tx_status = statuses::SqueezedOut {
@@ -647,11 +647,15 @@ where
                 // It's not needed to inform the status manager about the skipped transaction herself
                 // because he give the information but we need to inform him about the dependents
                 // that will be deleted
-                for removed in removed {
-                    let tx_id = removed.transaction.id();
-                    self.tx_status_manager
-                        .status_update(tx_id, tx_status.clone().into());
-                }
+                let iter = removed
+                    .into_iter()
+                    .map(|data| {
+                        let tx_id = data.transaction.id();
+
+                        (tx_id, tx_status.clone())
+                    })
+                    .collect();
+                self.tx_status_manager.squeezed_out_txs(iter);
             }
         }
 
