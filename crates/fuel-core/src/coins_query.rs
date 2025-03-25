@@ -436,6 +436,7 @@ impl From<anyhow::Error> for CoinsQueryError {
 }
 
 #[allow(clippy::arithmetic_side_effects)]
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -733,6 +734,63 @@ mod tests {
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
             multiple_assets_helper(owner, &asset_ids, &base_asset_id, db).await;
         }
+
+        mod allow_partial {
+            use crate::{
+                coins_query::tests::{
+                    largest_first::query,
+                    setup_coins,
+                },
+                query::asset_query::AssetSpendTarget,
+            };
+
+            #[tokio::test]
+            async fn largest_first__error_when_not_enough_coins_and_allow_partial_false()
+            {
+                // Given
+                let (owner, asset_ids, base_asset_id, db) = setup_coins();
+                let asset_id = asset_ids[0];
+                let target = 20_000_000;
+                let allow_partial = false;
+
+                // When
+                let coins = query(
+                    &[AssetSpendTarget::new(asset_id, target, u16::MAX)],
+                    &owner,
+                    &base_asset_id,
+                    allow_partial,
+                    &db.service_database(),
+                )
+                .await;
+
+                // Then
+                assert!(coins.is_err());
+            }
+
+            #[tokio::test]
+            async fn largest_first__ok_when_not_enough_coins_and_allow_partial_true() {
+                // Given
+                let (owner, asset_ids, base_asset_id, db) = setup_coins();
+                let asset_id = asset_ids[0];
+                let target = 20_000_000;
+                let allow_partial = true;
+
+                // When
+                let coins = query(
+                    &[AssetSpendTarget::new(asset_id, target, u16::MAX)],
+                    &owner,
+                    &base_asset_id,
+                    allow_partial,
+                    &db.service_database(),
+                )
+                .await
+                .expect("should return coins");
+
+                // Then
+                let coins: Vec<_> = coins[0].iter().map(|(_, amount)| *amount).collect();
+                assert_eq!(coins, vec![5, 4, 3, 2, 1]);
+            }
+        }
     }
 
     mod random_improve {
@@ -942,6 +1000,65 @@ mod tests {
             // Setup coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
             multiple_assets_assert(owner, &asset_ids, base_asset_id, db).await;
+        }
+
+        mod allow_partial {
+            use crate::{
+                coins_query::tests::{
+                    random_improve::query,
+                    setup_coins,
+                },
+                query::asset_query::AssetSpendTarget,
+            };
+
+            #[tokio::test]
+            async fn random_improve__error_when_not_enough_coins_and_allow_partial_false()
+            {
+                // Given
+                let (owner, asset_ids, base_asset_id, db) = setup_coins();
+                let asset_id = asset_ids[0];
+                let target = 20_000_000;
+                let allow_partial = false;
+
+                // When
+                let coins = query(
+                    vec![AssetSpendTarget::new(asset_id, target, u16::MAX)],
+                    owner,
+                    &asset_ids,
+                    base_asset_id,
+                    allow_partial,
+                    &db.service_database(),
+                )
+                .await;
+
+                // Then
+                assert!(coins.is_err());
+            }
+
+            #[tokio::test]
+            async fn random_improve__ok_when_not_enough_coins_and_allow_partial_true() {
+                // Given
+                let (owner, asset_ids, base_asset_id, db) = setup_coins();
+                let asset_id = asset_ids[0];
+                let target = 20_000_000;
+                let allow_partial = true;
+
+                // When
+                let coins = query(
+                    vec![AssetSpendTarget::new(asset_id, target, u16::MAX)],
+                    owner,
+                    &asset_ids,
+                    base_asset_id,
+                    allow_partial,
+                    &db.service_database(),
+                )
+                .await
+                .expect("should return coins");
+
+                // Then
+                let coins: Vec<_> = coins.iter().map(|(_, amount)| *amount).collect();
+                assert_eq!(coins, vec![5, 4, 3, 2, 1]);
+            }
         }
     }
 
@@ -1248,6 +1365,114 @@ mod tests {
             // Then
             assert_eq!(result.0, 1 + 2 + 3 + 4); // Keep selecting until total is greater than 7.
             assert_eq!(result.1.len(), 4);
+        }
+
+        mod allow_partial {
+            use fuel_core_storage::iter::IntoBoxedIter;
+            use fuel_core_types::fuel_tx::AssetId;
+
+            use crate::{
+                coins_query::{
+                    select_coins_to_spend,
+                    tests::indexed_coins_to_spend::{
+                        setup_test_coins,
+                        BATCH_SIZE,
+                    },
+                },
+                graphql_api::ports::CoinsToSpendIndexIter,
+                query::asset_query::Exclude,
+            };
+
+            #[tokio::test]
+            async fn select_coins_to_spend__error_when_not_enough_coins_and_allow_partial_false(
+            ) {
+                // Given
+                const MAX: u16 = u16::MAX;
+                const TOTAL: u128 = 20_000_000;
+                let allow_partial = false;
+
+                let test_coins = [100, 100, 4, 3, 2];
+                let big_coins_iter = setup_test_coins(test_coins)
+                    .into_iter()
+                    .map(|spec| spec.index_entry)
+                    .into_boxed();
+
+                let dust_coins_iter = setup_test_coins(test_coins)
+                    .into_iter()
+                    .rev()
+                    .map(|spec| spec.index_entry)
+                    .into_boxed();
+
+                let coins_to_spend_iter = CoinsToSpendIndexIter {
+                    big_coins_iter,
+                    dust_coins_iter,
+                };
+
+                let exclude = Exclude::default();
+
+                // When
+                let result = select_coins_to_spend(
+                    coins_to_spend_iter,
+                    TOTAL,
+                    MAX,
+                    &AssetId::default(),
+                    &exclude,
+                    allow_partial,
+                    BATCH_SIZE,
+                )
+                .await;
+
+                // Then
+                assert!(result.is_err());
+            }
+
+            #[tokio::test]
+            async fn select_coins_to_spend__ok_when_not_enough_coins_and_allow_partial_true(
+            ) {
+                // Given
+                const MAX: u16 = u16::MAX;
+                const TOTAL: u128 = 20_000_000;
+                let allow_partial = true;
+
+                let test_coins = [100, 100, 4, 3, 2];
+                let big_coins_iter = setup_test_coins(test_coins)
+                    .into_iter()
+                    .map(|spec| spec.index_entry)
+                    .into_boxed();
+
+                let dust_coins_iter = setup_test_coins(test_coins)
+                    .into_iter()
+                    .rev()
+                    .map(|spec| spec.index_entry)
+                    .into_boxed();
+
+                let coins_to_spend_iter = CoinsToSpendIndexIter {
+                    big_coins_iter,
+                    dust_coins_iter,
+                };
+
+                let exclude = Exclude::default();
+
+                // When
+                let result = select_coins_to_spend(
+                    coins_to_spend_iter,
+                    TOTAL,
+                    MAX,
+                    &AssetId::default(),
+                    &exclude,
+                    allow_partial,
+                    BATCH_SIZE,
+                )
+                .await
+                .expect("should select coins");
+
+                // Then
+                let actual_coins = result
+                    .into_iter()
+                    .map(|key| key.amount() as u8)
+                    .collect::<Vec<_>>();
+                assert_eq!(test_coins, actual_coins.as_slice());
+            }
         }
 
         #[tokio::test]
