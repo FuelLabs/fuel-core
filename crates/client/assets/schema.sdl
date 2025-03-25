@@ -332,6 +332,11 @@ type DryRunFailureStatus {
 	totalFee: U64!
 }
 
+type DryRunStorageReads {
+	txStatuses: [DryRunTransactionExecutionStatus!]!
+	storageReads: [StorageReadReplayEvent!]!
+}
+
 type DryRunSuccessStatus {
 	programState: ProgramState
 	receipts: [Receipt!]!
@@ -1054,6 +1059,11 @@ type Query {
 	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
 	"""
 	dryRun(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): [DryRunTransactionExecutionStatus!]!
+	"""
+	Execute a dry-run of multiple transactions using a fork of current state, no changes are committed.
+	Also records accesses, so the execution can be replicated locally.
+	"""
+	dryRunRecordStorageReads(txs: [HexString!]!, utxoValidation: Boolean, gasPrice: U64, blockHeight: U32): DryRunStorageReads!
 	"""
 	Get execution trace for an already-executed block.
 	"""
