@@ -825,14 +825,6 @@ mod tests {
         };
         use fuel_core_storage::transactional::WriteTransaction;
 
-        // this invariant doesn't hold anymore
-        // because we have removed columns from the storage
-        #[ignore]
-        #[test]
-        fn column_keys_not_exceed_count_test() {
-            column_keys_not_exceed_count::<OffChain>();
-        }
-
         #[test]
         fn database_advances_with_a_new_block() {
             // Given
