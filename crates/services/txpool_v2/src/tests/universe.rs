@@ -261,6 +261,19 @@ impl TestPoolUniverse {
         tx_builder.finalize().into()
     }
 
+    pub fn build_mint_transaction(&mut self) -> Transaction {
+        let tx_builder = TransactionBuilder::mint(
+            0u32.into(),
+            0,
+            Default::default(),
+            Default::default(),
+            1,
+            AssetId::BASE,
+            Default::default(),
+        );
+        tx_builder.finalize().into()
+    }
+
     // Returns the added transaction and the list of transactions that were removed from the pool
     pub fn verify_and_insert(&mut self, tx: Transaction) -> Result<ArcPoolTx, Error> {
         if let Some(pool) = &self.pool {
