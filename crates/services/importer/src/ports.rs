@@ -114,10 +114,7 @@ impl<S> Transactional for S
 where
     S: KeyValueInspect<Column = Column>,
 {
-    type Transaction<'a>
-        = StorageTransaction<&'a S>
-    where
-        Self: 'a;
+    type Transaction<'a> = StorageTransaction<&'a S> where Self: 'a;
 
     fn storage_transaction(&self, changes: Changes) -> Self::Transaction<'_> {
         self.read_transaction()

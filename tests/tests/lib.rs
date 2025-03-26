@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![deny(unused_must_use)]
 #![deny(warnings)]
+#![allow(clippy::len_zero)]
 
 #[cfg(not(feature = "only-p2p"))]
 mod assemble_tx;
