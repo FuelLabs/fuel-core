@@ -105,6 +105,9 @@ impl<'a> AssembleArguments<'a> {
             return Ok(Vec::new());
         }
 
+        // TODO[RC]: Support partial flag in the AssembleTx transaction
+        let allow_partial = false;
+
         let query_per_asset = SpendQueryElementInput {
             asset_id: asset_id.into(),
             amount: (amount as u128).into(),
@@ -117,6 +120,7 @@ impl<'a> AssembleArguments<'a> {
                 owner,
                 &[query_per_asset],
                 &self.exclude,
+                allow_partial,
                 &self.consensus_parameters,
                 remaining_input_slots,
             )
