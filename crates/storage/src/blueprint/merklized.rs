@@ -547,6 +547,24 @@ macro_rules! basic_merklelized_storage_tests {
                     prev_root = root;
                 }
             }
+
+            #[test]
+            fn can_generate_and_validate_proofs() {
+                let mut storage = InMemoryStorage::default();
+                let mut storage_transaction = storage.write_transaction();
+
+                let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
+                let key = $random_key(&mut rng);
+                let value = $value_insert;
+                storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
+                    .unwrap();
+
+                let root = storage_transaction.storage_as_mut::<$table>().root(&key)
+                    .expect("Should get the root");
+                let empty_root = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
+                assert_ne!(root, empty_root);
+            }
+
         }}
     };
     ($table:ident, $key:expr, $value_insert:expr, $value_return:expr) => {

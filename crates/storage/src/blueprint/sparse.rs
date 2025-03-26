@@ -715,6 +715,44 @@ macro_rules! root_storage_tests {
 
                 assert!(metadata.is_none());
             }
+
+            #[test]
+            fn can_generate_and_validate_proofs() {
+                let mut storage = InMemoryStorage::default();
+                let mut storage_transaction = storage.write_transaction();
+
+                let rng = &mut StdRng::seed_from_u64(1234);
+                let key = $generate_key(&$current_key, rng);
+                let state = $generate_value(rng);
+
+                // Write the first contract state
+                storage_transaction
+                    .storage_as_mut::<$table>()
+                    .insert(&key, &state)
+                    .unwrap();
+
+                // Read the first Merkle root
+                let root_1 = storage_transaction
+                    .storage_as_mut::<$table>()
+                    .root(&$current_key)
+                    .unwrap();
+
+                // Write the second contract state
+                let key = $generate_key(&$current_key, rng);
+                let state = $generate_value(rng);
+                storage_transaction
+                    .storage_as_mut::<$table>()
+                    .insert(&key, &state)
+                    .unwrap();
+
+                // Read the second Merkle root
+                let root_2 = storage_transaction
+                    .storage_as_mut::<$table>()
+                    .root(&$current_key)
+                    .unwrap();
+
+                assert_ne!(root_1, root_2);
+            }
         }}
     };
 }
