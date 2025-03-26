@@ -12,20 +12,11 @@ use fuel_core_compression_service::{
         configuration,
     },
 };
-use fuel_core_services::stream::IntoBoxStream;
+use fuel_core_types::services::block_importer::SharedImportResult;
 
 impl block_source::BlockSource for BlockImporterAdapter {
-    fn subscribe(
-        &self,
-    ) -> fuel_core_services::stream::BoxStream<block_source::BlockWithMetadata> {
-        use futures::StreamExt;
+    fn subscribe(&self) -> fuel_core_services::stream::BoxStream<SharedImportResult> {
         self.events_shared_result()
-            .map(|result| {
-                let sealed_block = result.sealed_block.clone();
-                let events = result.events.clone();
-                block_source::BlockWithMetadata::new(sealed_block.entity, events)
-            })
-            .into_boxed()
     }
 }
 
