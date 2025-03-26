@@ -547,6 +547,44 @@ macro_rules! basic_merklelized_storage_tests {
                     prev_root = root;
                 }
             }
+
+            #[test]
+            fn can_generate_and_validate_proofs() {
+                use crate::tables::merkle::FuelBlockMerkleMetadata;
+                use crate::tables::merkle::FuelBlockMerkleData;
+                use crate::structured_storage::blocks::BlockEncoder;
+                use crate::codec::Encode;
+                use fuel_core_types::fuel_merkle::binary;
+
+                let mut storage = InMemoryStorage::default();
+                let mut storage_transaction = storage.write_transaction();
+
+                let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
+                let key = $random_key(&mut rng);
+                let value = $value_insert;
+
+                let encoded_value = BlockEncoder::encode(&value);
+                
+                storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
+                    .unwrap();
+
+                let root = storage_transaction.storage_as_mut::<$table>().root(&key)
+                    .expect("Should get the root");
+
+                let _merkle_metadata = storage_transaction.storage::<crate::tables::merkle::FuelBlockMerkleMetadata>()
+                    .get(&DenseMetadataKey::Primary(0.into())).expect("expected metadata");
+
+                let tree: binary::MerkleTree<FuelBlockMerkleData, _> =
+                    binary::MerkleTree::load(&storage_transaction, 1).expect("could not load merkle tree");
+
+                let (returned_root, returned_proof_set) = tree.prove(0).expect("failed to produce proof");
+
+                let proof_is_valid = binary::verify(&returned_root, &encoded_value, &returned_proof_set, 0, 1);
+                assert!(proof_is_valid);
+
+                assert_eq!(returned_root, root);      
+            }
+
         }}
     };
     ($table:ident, $key:expr, $value_insert:expr, $value_return:expr) => {
