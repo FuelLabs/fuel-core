@@ -29,6 +29,9 @@ pub enum CompressionError {
     /// Failed to compress block
     #[error("failed to compress block: `{0}`")]
     FailedToCompressBlock(anyhow::Error),
+    /// Failed to compute registry root
+    #[error("failed to compute registry root: `{0}`")]
+    FailedToComputeRegistryRoot(StorageError),
     /// Failed to handle new block
     #[error("failed to handle new block: `{0}`")]
     FailedToHandleNewBlock(String),
