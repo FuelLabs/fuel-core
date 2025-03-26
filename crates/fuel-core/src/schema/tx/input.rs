@@ -1,3 +1,10 @@
+use async_graphql::{
+    Object,
+    Union,
+};
+
+use fuel_core_types::fuel_tx;
+
 use crate::schema::scalars::{
     Address,
     AssetId,
@@ -10,15 +17,11 @@ use crate::schema::scalars::{
     U16,
     U64,
 };
-use async_graphql::{
-    Object,
-    Union,
-};
-use fuel_core_types::fuel_tx;
 
 #[derive(Union)]
 pub enum Input {
     Coin(InputCoin),
+    DataCoin(InputDataCoin),
     Contract(InputContract),
     Message(InputMessage),
 }
@@ -71,6 +74,62 @@ impl InputCoin {
 
     async fn predicate_data(&self) -> HexString {
         self.predicate_data.clone()
+    }
+}
+
+pub struct InputDataCoin {
+    utxo_id: UtxoId,
+    owner: Address,
+    amount: U64,
+    asset_id: AssetId,
+    tx_pointer: TxPointer,
+    witness_index: u16,
+    predicate_gas_used: U64,
+    predicate: HexString,
+    predicate_data: HexString,
+    data: HexString,
+}
+
+#[Object]
+impl InputDataCoin {
+    async fn utxo_id(&self) -> UtxoId {
+        self.utxo_id
+    }
+
+    async fn owner(&self) -> Address {
+        self.owner
+    }
+
+    async fn amount(&self) -> U64 {
+        self.amount
+    }
+
+    async fn asset_id(&self) -> AssetId {
+        self.asset_id
+    }
+
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+
+    async fn witness_index(&self) -> U16 {
+        self.witness_index.into()
+    }
+
+    async fn predicate_gas_used(&self) -> U64 {
+        self.predicate_gas_used
+    }
+
+    async fn predicate(&self) -> HexString {
+        self.predicate.clone()
+    }
+
+    async fn predicate_data(&self) -> HexString {
+        self.predicate_data.clone()
+    }
+
+    async fn data(&self) -> HexString {
+        self.data.clone()
     }
 }
 
@@ -178,6 +237,26 @@ impl From<&fuel_tx::Input> for Input {
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
             }),
+            fuel_tx::Input::DataCoinSigned(fuel_tx::input::coin::DataCoinSigned {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+                witness_index,
+                ..
+            }) => Input::DataCoin(InputDataCoin {
+                utxo_id: UtxoId(*utxo_id),
+                owner: Address(*owner),
+                amount: (*amount).into(),
+                asset_id: AssetId(*asset_id),
+                tx_pointer: TxPointer(*tx_pointer),
+                witness_index: *witness_index,
+                predicate_gas_used: 0.into(),
+                predicate: HexString(Default::default()),
+                predicate_data: HexString(Default::default()),
+                data: HexString(Default::default()),
+            }),
             fuel_tx::Input::CoinPredicate(fuel_tx::input::coin::CoinPredicate {
                 utxo_id,
                 owner,
@@ -198,6 +277,30 @@ impl From<&fuel_tx::Input> for Input {
                 predicate_gas_used: (*predicate_gas_used).into(),
                 predicate: HexString(predicate.to_vec()),
                 predicate_data: HexString(predicate_data.clone()),
+            }),
+            fuel_tx::Input::DataCoinPredicate(
+                fuel_tx::input::coin::DataCoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    tx_pointer,
+                    predicate,
+                    predicate_data,
+                    predicate_gas_used,
+                    ..
+                },
+            ) => Input::DataCoin(InputDataCoin {
+                utxo_id: UtxoId(*utxo_id),
+                owner: Address(*owner),
+                amount: (*amount).into(),
+                asset_id: AssetId(*asset_id),
+                tx_pointer: TxPointer(*tx_pointer),
+                witness_index: Default::default(),
+                predicate_gas_used: (*predicate_gas_used).into(),
+                predicate: HexString(predicate.to_vec()),
+                predicate_data: HexString(predicate_data.clone()),
+                data: HexString(Default::default()),
             }),
             fuel_tx::Input::Contract(contract) => Input::Contract(contract.into()),
             fuel_tx::Input::MessageCoinSigned(

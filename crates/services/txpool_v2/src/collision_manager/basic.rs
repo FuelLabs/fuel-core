@@ -7,6 +7,14 @@ use std::{
     hash::Hash,
 };
 
+use crate::{
+    error::{
+        CollisionReason,
+        Error,
+        InputValidationError,
+    },
+    storage::StorageData,
+};
 use fuel_core_types::{
     fuel_tx::{
         field::BlobId as _,
@@ -14,6 +22,8 @@ use fuel_core_types::{
             coin::{
                 CoinPredicate,
                 CoinSigned,
+                DataCoinPredicate,
+                DataCoinSigned,
             },
             message::{
                 MessageCoinPredicate,
@@ -31,15 +41,6 @@ use fuel_core_types::{
     },
     fuel_types::Nonce,
     services::txpool::PoolTransaction,
-};
-
-use crate::{
-    error::{
-        CollisionReason,
-        Error,
-        InputValidationError,
-    },
-    storage::StorageData,
 };
 
 use super::{
@@ -98,6 +99,10 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
                 match input {
                     Input::CoinSigned(CoinSigned { utxo_id, .. })
                     | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                        coins_spenders.insert(*utxo_id, tx.id());
+                    }
+                    Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
+                    | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
                         coins_spenders.insert(*utxo_id, tx.id());
                     }
                     Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
@@ -219,7 +224,10 @@ where
                         entry.push(CollisionReason::ContractCreation(*contract_id));
                     }
                 }
-                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                Output::Coin { .. }
+                | Output::DataCoin { .. }
+                | Output::Change { .. }
+                | Output::Variable { .. } => {
                     let utxo_id = UtxoId::new(
                         transaction.id(),
                         u16::try_from(i)
@@ -251,7 +259,9 @@ where
         for input in store_entry.transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
                     // insert coin
                     self.coins_spenders.insert(*utxo_id, storage_id);
                 }
@@ -268,6 +278,7 @@ where
         for output in store_entry.transaction.outputs().iter() {
             match output {
                 Output::Coin { .. }
+                | Output::DataCoin { .. }
                 | Output::Change { .. }
                 | Output::Variable { .. }
                 | Output::Contract(_) => {}
@@ -304,6 +315,7 @@ where
         for output in transaction.outputs().iter() {
             match output {
                 Output::Coin { .. }
+                | Output::DataCoin { .. }
                 | Output::Change { .. }
                 | Output::Variable { .. }
                 | Output::Contract(_) => {}

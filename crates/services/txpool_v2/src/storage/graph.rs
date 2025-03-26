@@ -7,12 +7,27 @@ use std::{
     time::SystemTime,
 };
 
+use crate::{
+    error::{
+        DependencyError,
+        Error,
+        InputValidationError,
+        InputValidationErrorType,
+    },
+    extracted_outputs::ExtractedOutputs,
+    pending_pool::MissingInput,
+    ports::TxPoolPersistentStorage,
+    selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
+    storage::checked_collision::CheckedTransaction,
+};
 use fuel_core_types::{
     fuel_tx::{
         input::{
             coin::{
                 CoinPredicate,
                 CoinSigned,
+                DataCoinPredicate,
+                DataCoinSigned,
             },
             contract::Contract,
             message::{
@@ -36,20 +51,6 @@ use fuel_core_types::{
 use petgraph::{
     graph::NodeIndex,
     prelude::StableDiGraph,
-};
-
-use crate::{
-    error::{
-        DependencyError,
-        Error,
-        InputValidationError,
-        InputValidationErrorType,
-    },
-    extracted_outputs::ExtractedOutputs,
-    pending_pool::MissingInput,
-    ports::TxPoolPersistentStorage,
-    selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
-    storage::checked_collision::CheckedTransaction,
 };
 
 use super::{
@@ -231,6 +232,29 @@ impl GraphStorage {
                         ));
                     }
                 }
+                Output::DataCoin {
+                    to,
+                    amount,
+                    asset_id,
+                    data_hash: _data_hash,
+                } => {
+                    if to != i_owner {
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongOwner,
+                        ));
+                    }
+                    if amount != i_amount {
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongAmount,
+                        ));
+                    }
+                    if asset_id != i_asset_id {
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongAssetId,
+                        ));
+                    }
+                    todo!("Data hash matches data")
+                }
                 Output::Contract(_) => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedIoContractOutput,
@@ -337,7 +361,9 @@ impl GraphStorage {
         for input in transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
                     if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         direct_dependencies.insert(*node_id);
 
@@ -412,6 +438,11 @@ impl GraphStorage {
             for (i, output) in expected_tx.outputs().iter().enumerate() {
                 match output {
                     Output::Coin { .. } => {
+                        let utxo_id =
+                            UtxoId::new(expected_tx.id(), i.try_into().unwrap());
+                        coins_creators.insert(utxo_id, expected_tx.id());
+                    }
+                    Output::DataCoin { .. } => {
                         let utxo_id =
                             UtxoId::new(expected_tx.id(), i.try_into().unwrap());
                         coins_creators.insert(utxo_id, expected_tx.id());
@@ -632,7 +663,21 @@ impl Storage for GraphStorage {
                     asset_id,
                     ..
                 })
+                | Input::DataCoinSigned(DataCoinSigned {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
                 | Input::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::DataCoinPredicate(DataCoinPredicate {
                     utxo_id,
                     owner,
                     amount,
