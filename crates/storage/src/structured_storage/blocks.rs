@@ -1,14 +1,13 @@
 //! The module contains implementations and tests for the `FuelBlocks` table.
 
 use crate::{
-    blueprint::merklized::Merklized,
+    blueprint::merklized::MerklizedTableWithBlueprint,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
         Encode,
     },
     column::Column,
-    structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
             FuelBlockMerkleData,
@@ -44,15 +43,13 @@ impl Encode<Block> for BlockEncoder {
     }
 }
 
-impl TableWithBlueprint for FuelBlocks {
-    type Blueprint = Merklized<
-        Primitive<4>,
-        Postcard,
-        FuelBlockMerkleMetadata,
-        FuelBlockMerkleData,
-        BlockEncoder,
-    >;
-    type Column = Column;
+impl MerklizedTableWithBlueprint for FuelBlocks {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Postcard;
+    type Metadata = FuelBlockMerkleMetadata;
+    type Nodes = FuelBlockMerkleData;
+    type ValueEncoder = BlockEncoder;
+    type MerkleizedColumn = Column;
 
     fn column() -> Column {
         Column::FuelBlocks
@@ -60,8 +57,10 @@ impl TableWithBlueprint for FuelBlocks {
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
     use crate::{
+        blueprint::merklized::basic_tests::BasicMerkleizedStorageTests,
         structured_storage::{
             test::InMemoryStorage,
             TableWithBlueprint,
@@ -73,7 +72,10 @@ mod tests {
     };
     use fuel_core_types::{
         blockchain::{
-            block::PartialFuelBlock,
+            block::{
+                CompressedBlock,
+                PartialFuelBlock,
+            },
             header::{
                 ConsensusHeader,
                 PartialBlockHeader,
@@ -82,7 +84,78 @@ mod tests {
         },
         fuel_types::ChainId,
     };
-    use fuel_vm_private::crypto::ephemeral_merkle_root;
+    use fuel_vm_private::{
+        crypto::ephemeral_merkle_root,
+        fuel_types::BlockHeight,
+    };
+    use rand::{
+        Rng,
+        RngCore,
+    };
+
+    impl BasicMerkleizedStorageTests for FuelBlocks {
+        fn key() -> Box<Self::Key> {
+            Box::new(BlockHeight::new(0))
+        }
+
+        fn random_key(rng: &mut impl RngCore) -> Box<Self::Key> {
+            Box::new(rng.gen())
+        }
+
+        fn value() -> Box<Self::Value> {
+            Box::new(CompressedBlock::default())
+        }
+    }
+
+    #[test]
+    fn merkleized_storage__test_get() {
+        FuelBlocks::test_get();
+    }
+
+    #[test]
+    fn merkleized_storage__test_insert() {
+        FuelBlocks::test_insert();
+    }
+
+    #[test]
+    fn merkleized_storage__test_remove_returns_error() {
+        FuelBlocks::test_remove_returns_error()
+    }
+
+    #[test]
+    fn merkleized_storage__test_exists() {
+        FuelBlocks::test_exists();
+    }
+
+    #[test]
+    fn merkleized_storage__test_batch_mutate_works() {
+        FuelBlocks::test_batch_mutate_works();
+    }
+
+    #[test]
+    fn merkleized_storage__test_batch_remove_fails() {
+        FuelBlocks::test_batch_remove_fails();
+    }
+
+    #[test]
+    fn merkleized_storage__test_root_returns_error_empty_metadata() {
+        FuelBlocks::test_root_returns_error_empty_metadata()
+    }
+
+    #[test]
+    fn merkleized_storage__test_update_produces_non_zero_root() {
+        FuelBlocks::test_update_produces_non_zero_root()
+    }
+
+    #[test]
+    fn merkleized_storage__test_has_different_root_after_each_update() {
+        FuelBlocks::test_has_different_root_after_each_update()
+    }
+
+    #[test]
+    fn merkleized_storage__test_can_generate_and_validate_proofs() {
+        FuelBlocks::test_can_generate_and_validate_proofs()
+    }
 
     crate::basic_merklelized_storage_tests!(
         FuelBlocks,
