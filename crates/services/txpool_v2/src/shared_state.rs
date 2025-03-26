@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use fuel_core_types::{
     fuel_tx::{
-        Bytes32,
         Transaction,
         TxId,
     },
@@ -23,7 +22,6 @@ use crate::{
     pool_worker::{
         self,
         PoolReadRequest,
-        PoolRemoveRequest,
     },
     service::{
         TxInfo,
@@ -34,7 +32,6 @@ use crate::{
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub(crate) request_remove_sender: mpsc::Sender<PoolRemoveRequest>,
     pub(crate) write_pool_requests_sender: mpsc::Sender<WritePoolRequest>,
     pub(crate) select_transactions_requests_sender:
         mpsc::Sender<pool_worker::PoolExtractBlockTransactions>,
@@ -143,17 +140,6 @@ impl SharedState {
     /// Get a notifier that is notified when new executable transactions are added to the pool.
     pub fn get_new_executable_txs_notifier(&self) -> watch::Receiver<()> {
         self.new_executable_txs_notifier.subscribe()
-    }
-
-    /// Notify the txpool that some transactions were skipped during block production.
-    /// This is used to update the status of the skipped transactions internally and in subscriptions
-    pub fn notify_skipped_txs(&self, dependents_ids: Vec<Bytes32>) {
-        if let Err(e) = self
-            .request_remove_sender
-            .try_send(PoolRemoveRequest::SkippedTransactions { dependents_ids })
-        {
-            tracing::error!("Failed to send remove coin dependents request: {}", e);
-        }
     }
 
     pub fn latest_stats(&self) -> TxPoolStats {

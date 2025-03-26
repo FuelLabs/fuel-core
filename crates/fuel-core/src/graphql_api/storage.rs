@@ -96,13 +96,13 @@ pub enum Column {
     /// See [`SpentMessages`](messages::SpentMessages)
     SpentMessages = 13,
     /// Coin balances per account and asset.
-    CoinBalances = 14,
+    CoinBalances = 23,
     /// Message balances per account.
-    MessageBalances = 15,
+    MessageBalances = 24,
     /// See [`AssetsInfo`](assets::AssetsInfo)
-    AssetsInfo = 16,
+    AssetsInfo = 25,
     /// Index of the coins that are available to spend.
-    CoinsToSpend = 17,
+    CoinsToSpend = 26,
 }
 
 impl Column {

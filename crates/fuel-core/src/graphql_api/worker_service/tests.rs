@@ -60,12 +60,15 @@ async fn run__relayed_transaction_events_are_added_to_storage() {
 }
 
 fn block_importer_for_event(event: Event) -> BoxStream<SharedImportResult> {
-    let block = Arc::new(ImportResult {
-        sealed_block: Default::default(),
-        tx_status: vec![],
-        events: vec![event],
-        source: Default::default(),
-    });
+    let block = Arc::new(
+        ImportResult {
+            sealed_block: Default::default(),
+            tx_status: vec![],
+            events: vec![event],
+            source: Default::default(),
+        }
+        .wrap(),
+    );
     let blocks: Vec<SharedImportResult> = vec![block];
     tokio_stream::iter(blocks).into_boxed()
 }

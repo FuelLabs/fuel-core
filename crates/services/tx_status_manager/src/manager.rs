@@ -7,18 +7,20 @@ use std::{
     },
     time::Duration,
 };
-use tokio::time::Instant;
+use tokio::{
+    sync::broadcast,
+    time::Instant,
+};
 
 use fuel_core_types::{
-    fuel_tx::{
-        Bytes32,
-        TxId,
+    fuel_tx::TxId,
+    services::transaction_status::{
+        PreConfirmationStatus,
+        TransactionStatus,
     },
-    services::transaction_status::TransactionStatus,
 };
 
 use crate::{
-    error::Error,
     tx_status_stream::{
         TxStatusStream,
         TxUpdate,
@@ -30,6 +32,7 @@ use crate::{
 };
 
 use fuel_core_metrics::tx_status_manager_metrics::metrics_manager;
+use fuel_core_types::fuel_types::Bytes32;
 
 pub struct Data {
     pruning_queue: VecDeque<(Instant, TxId)>,
@@ -77,14 +80,22 @@ impl Data {
 pub(super) struct TxStatusManager {
     data: Data,
     tx_status_change: TxStatusChange,
+    // Used to inform other parts of the system about the status of a transaction
+    preconfirmations_update_sender: broadcast::Sender<(TxId, PreConfirmationStatus)>,
     ttl: Duration,
     metrics: bool,
 }
 
 impl TxStatusManager {
-    pub fn new(tx_status_change: TxStatusChange, ttl: Duration, metrics: bool) -> Self {
+    pub fn new(
+        preconfirmations_update_sender: broadcast::Sender<(TxId, PreConfirmationStatus)>,
+        tx_status_change: TxStatusChange,
+        ttl: Duration,
+        metrics: bool,
+    ) -> Self {
         Self {
             data: Data::empty(),
+            preconfirmations_update_sender,
             tx_status_change,
             ttl,
             metrics,
@@ -160,7 +171,38 @@ impl TxStatusManager {
 
         self.tx_status_change
             .update_sender
-            .send(TxUpdate::new(tx_id, tx_status.into()));
+            .send(TxUpdate::new(tx_id, tx_status.clone().into()));
+
+        match tx_status {
+            TransactionStatus::PreConfirmationSuccess(s) => {
+                if self
+                    .preconfirmations_update_sender
+                    .send((tx_id, PreConfirmationStatus::Success(s)))
+                    .is_err()
+                {
+                    tracing::warn!("Failed to send preconfirmation update");
+                }
+            }
+            TransactionStatus::PreConfirmationFailure(s) => {
+                if self
+                    .preconfirmations_update_sender
+                    .send((tx_id, PreConfirmationStatus::Failure(s)))
+                    .is_err()
+                {
+                    tracing::warn!("Failed to send preconfirmation update");
+                }
+            }
+            TransactionStatus::PreConfirmationSqueezedOut(s) => {
+                if self
+                    .preconfirmations_update_sender
+                    .send((tx_id, PreConfirmationStatus::SqueezedOut(s)))
+                    .is_err()
+                {
+                    tracing::warn!("Failed to send preconfirmation update");
+                }
+            }
+            _ => {}
+        }
 
         if self.metrics {
             metrics_manager()
@@ -197,13 +239,6 @@ impl TxStatusManager {
             .update_sender
             .try_subscribe::<MpscChannel>(tx_id)
             .ok_or(anyhow!("Maximum number of subscriptions reached"))
-    }
-
-    pub fn notify_skipped_txs(&mut self, tx_ids_and_reason: Vec<(Bytes32, String)>) {
-        tx_ids_and_reason.into_iter().for_each(|(tx_id, reason)| {
-            let error = Error::SkippedTransaction(reason);
-            self.status_update(tx_id, TransactionStatus::squeezed_out(error.to_string()));
-        });
     }
 }
 

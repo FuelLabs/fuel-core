@@ -18,7 +18,10 @@ use fuel_core_types::{
         TxId,
     },
     services::{
-        transaction_status::TransactionStatus,
+        transaction_status::{
+            statuses,
+            TransactionStatus,
+        },
         txpool::{
             ArcPoolTx,
             PoolTransaction,
@@ -57,7 +60,6 @@ use crate::{
 };
 
 use crate::error::RemovedReason;
-use fuel_core_types::services::transaction_status::statuses;
 #[cfg(test)]
 use std::collections::HashSet;
 
@@ -396,13 +398,12 @@ where
         self.tx_id_to_storage_id.keys()
     }
 
-    /// Process the result of a block :
+    /// Process committed transactions:
     /// - Remove transaction but keep its dependents and the dependents become executables.
     /// - Notify about possible new executable transactions.
-    pub fn process_block(&mut self, tx_ids: impl Iterator<Item = TxId>) {
+    pub fn process_committed_transactions(&mut self, tx_ids: impl Iterator<Item = TxId>) {
         let mut transactions_to_promote = vec![];
         for tx_id in tx_ids {
-            self.extracted_outputs.new_executed_transaction(&tx_id);
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
                     self.storage.get_direct_dependents(storage_id).collect();
@@ -414,6 +415,8 @@ where
                     );
                     continue
                 };
+                self.extracted_outputs
+                    .new_extracted_transaction(&transaction.transaction);
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
 
                 for dependent in dependents {
@@ -584,11 +587,13 @@ where
     }
 
     /// Remove transaction and its dependents.
-    pub fn remove_transaction_and_dependents(
+    pub fn remove_transactions_and_dependents<I>(
         &mut self,
-        tx_ids: Vec<TxId>,
+        tx_ids: I,
         tx_status: statuses::SqueezedOut,
-    ) {
+    ) where
+        I: IntoIterator<Item = TxId>,
+    {
         let mut removed_transactions = vec![];
         for tx_id in tx_ids {
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
@@ -609,14 +614,49 @@ where
         self.update_stats();
     }
 
-    pub fn remove_skipped_transaction(&mut self, tx_id: TxId) {
+    pub fn remove_skipped_transaction(&mut self, tx_id: TxId, reason: String) {
+        // If pre confirmation comes from the block producer node via p2p,
+        // transaction still may be inside of the TxPool.
+        // In that case first remove it and all its dependants.
+        if self.tx_id_to_storage_id.contains_key(&tx_id) {
+            let tx_status = statuses::SqueezedOut {
+                reason: Error::SkippedTransaction(format!(
+                    "Parent transaction with id: {tx_id}, was removed because of: {reason}"
+                ))
+                .to_string(),
+            };
+            self.remove_transactions_and_dependents(iter::once(tx_id), tx_status);
+        }
+
         self.extracted_outputs.new_skipped_transaction(&tx_id);
+
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
-        for dependent in coin_dependents {
-            let removed = self
-                .storage
-                .remove_transaction_and_dependents_subtree(dependent);
-            self.update_components_and_caches_on_removal(removed.iter());
+        if !coin_dependents.is_empty() {
+            let tx_status = statuses::SqueezedOut {
+                reason: Error::SkippedTransaction(format!(
+                    "Parent transaction with id: {tx_id}, was removed because of: {reason}"
+                ))
+                .to_string(),
+            };
+
+            for dependent in coin_dependents {
+                let removed = self
+                    .storage
+                    .remove_transaction_and_dependents_subtree(dependent);
+                self.update_components_and_caches_on_removal(removed.iter());
+                // It's not needed to inform the status manager about the skipped transaction herself
+                // because he give the information but we need to inform him about the dependents
+                // that will be deleted
+                let iter = removed
+                    .into_iter()
+                    .map(|data| {
+                        let tx_id = data.transaction.id();
+
+                        (tx_id, tx_status.clone())
+                    })
+                    .collect();
+                self.tx_status_manager.squeezed_out_txs(iter);
+            }
         }
 
         self.update_stats();

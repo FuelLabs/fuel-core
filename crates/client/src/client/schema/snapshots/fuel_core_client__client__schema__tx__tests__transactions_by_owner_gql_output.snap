@@ -89,30 +89,33 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
               subId
             }
             resolvedOutputs {
-              __typename
-              ... on CoinOutput {
-                to
-                amount
-                assetId
-              }
-              ... on ContractOutput {
-                inputIndex
-                balanceRoot
-                stateRoot
-              }
-              ... on ChangeOutput {
-                to
-                amount
-                assetId
-              }
-              ... on VariableOutput {
-                to
-                amount
-                assetId
-              }
-              ... on ContractCreated {
-                contract
-                stateRoot
+              utxoId
+              output {
+                __typename
+                ... on CoinOutput {
+                  to
+                  amount
+                  assetId
+                }
+                ... on ContractOutput {
+                  inputIndex
+                  balanceRoot
+                  stateRoot
+                }
+                ... on ChangeOutput {
+                  to
+                  amount
+                  assetId
+                }
+                ... on VariableOutput {
+                  to
+                  amount
+                  assetId
+                }
+                ... on ContractCreated {
+                  contract
+                  stateRoot
+                }
               }
             }
           }
@@ -196,30 +199,33 @@ query TransactionsByOwnerQuery($owner: Address!, $after: String, $before: String
               subId
             }
             resolvedOutputs {
-              __typename
-              ... on CoinOutput {
-                to
-                amount
-                assetId
-              }
-              ... on ContractOutput {
-                inputIndex
-                balanceRoot
-                stateRoot
-              }
-              ... on ChangeOutput {
-                to
-                amount
-                assetId
-              }
-              ... on VariableOutput {
-                to
-                amount
-                assetId
-              }
-              ... on ContractCreated {
-                contract
-                stateRoot
+              utxoId
+              output {
+                __typename
+                ... on CoinOutput {
+                  to
+                  amount
+                  assetId
+                }
+                ... on ContractOutput {
+                  inputIndex
+                  balanceRoot
+                  stateRoot
+                }
+                ... on ChangeOutput {
+                  to
+                  amount
+                  assetId
+                }
+                ... on VariableOutput {
+                  to
+                  amount
+                  assetId
+                }
+                ... on ContractCreated {
+                  contract
+                  stateRoot
+                }
               }
             }
             reason
