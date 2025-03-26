@@ -444,10 +444,7 @@ mod tests {
                 Preconfirmation,
                 Preconfirmations,
             },
-            transaction_status::{
-                statuses::SqueezedOut,
-                TransactionStatus,
-            },
+            transaction_status::TransactionStatus,
         },
         tai64::Tai64,
     };
@@ -1108,83 +1105,6 @@ mod tests {
                 |s| matches!(s, &TransactionStatus::Success(_)),
             ],
             stream,
-        )
-        .await;
-
-        service.stop_and_await().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn run__notifies_about_skipped_txs() {
-        let (task, handles) = new_task_with_handles(TTL);
-        let service = ServiceRunner::new(task);
-        service.start_and_await().await.unwrap();
-
-        // Given
-        let tx1_id = [1u8; 32].into();
-        let tx2_id = [2u8; 32].into();
-        let tx_ids_and_reason =
-            vec![(tx1_id, "reason_1".into()), (tx2_id, "reason_2".into())];
-        let stream_tx1 =
-            subscribe_to_status_change(tx1_id, &handles.read_requests_sender).await;
-        let stream_tx2 =
-            subscribe_to_status_change(tx2_id, &handles.read_requests_sender).await;
-
-        // When
-        handles
-            .write_requests_sender
-            .send(WriteRequest::NotifySkipped { tx_ids_and_reason })
-            .unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // Then
-        assert_status_change_notifications(
-            &[|s| matches!(s, TransactionStatus::SqueezedOut(reason) if **reason == SqueezedOut {
-                reason: "Transaction has been skipped during block insertion: reason_1"
-                    .to_string(),
-            })],
-            stream_tx1,
-        )
-        .await;
-        assert_status_change_notifications(
-            &[|s| matches!(s, TransactionStatus::SqueezedOut(reason) if **reason == SqueezedOut {
-                reason: "Transaction has been skipped during block insertion: reason_2"
-                    .to_string(),
-            })],
-            stream_tx2,
-        )
-        .await;
-
-        service.stop_and_await().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn run__notifies_about_skipped_txs__single_notification_per_tx_id() {
-        let (task, handles) = new_task_with_handles(TTL);
-        let service = ServiceRunner::new(task);
-        service.start_and_await().await.unwrap();
-
-        // Given
-        let tx1_id = [1u8; 32].into();
-        let tx_ids_and_reason =
-            vec![(tx1_id, "reason_1".into()), (tx1_id, "reason_2".into())];
-        let stream_tx1 =
-            subscribe_to_status_change(tx1_id, &handles.read_requests_sender).await;
-
-        // When
-        handles
-            .write_requests_sender
-            .send(WriteRequest::NotifySkipped { tx_ids_and_reason })
-            .unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // Then
-        assert_status_change_notifications(
-            &[|s| matches!(s, TransactionStatus::SqueezedOut(reason) if **reason == SqueezedOut {
-                reason: "Transaction has been skipped during block insertion: reason_1"
-                    .to_string(),
-            })],
-            stream_tx1,
         )
         .await;
 
