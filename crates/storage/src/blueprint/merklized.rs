@@ -305,6 +305,70 @@ where
     }
 }
 
+#[cfg(feature = "test-helpers")]
+pub mod basic_tests {
+    use fuel_vm_private::{fuel_merkle::binary::Primitive, fuel_storage::{Mappable, StorageAsMut}};
+
+    use crate::{
+        blueprint::merklized::Merklized, codec::{
+            Decode,
+            Encode,
+        }, structured_storage::{
+            test::InMemoryStorage,
+            TableWithBlueprint,
+        }, tables::merkle::{DenseMerkleMetadata, DenseMetadataKey}, transactional::WriteTransaction
+    };
+
+    #[allow(dead_code)]
+    pub trait BasicMerkleizedStorageTests<
+        M,
+        KeyCodec,
+        ValueCodec,
+        Metadata,
+        Nodes,
+        ValueEncoder,
+    >:
+        TableWithBlueprint<
+        Blueprint = Merklized<KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder>,
+    >
+    where
+        M: Mappable,
+        KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
+        ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
+        ValueEncoder: Encode<M::Value>,
+        Metadata: Mappable<
+            Key = DenseMetadataKey<M::OwnedKey>,
+            OwnedKey = DenseMetadataKey<M::OwnedKey>,
+            Value = DenseMerkleMetadata,
+            OwnedValue = DenseMerkleMetadata,
+        >,
+        Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
+    {
+        fn key() -> M::Key;
+
+        fn value() -> M::Value;
+
+        fn test_insert() {
+            let mut storage = InMemoryStorage::default();
+            let mut storage_transaction = storage.write_transaction();
+
+            storage_transaction
+                .storage_as_mut::<Self>()
+                .insert(&Self::key(), &Self::value())
+                .unwrap();
+
+            let returned = storage_transaction
+                .storage_as_mut::<Self>()
+                .get(&Self::key())
+                .unwrap()
+                .unwrap()
+                .into_owned();
+
+            assert_eq!(returned, Self::value());
+        }
+    }
+}
+
 /// The macro that generates basic storage tests for the table with the merklelized structure.
 /// It uses the [`InMemoryStorage`](crate::structured_storage::test::InMemoryStorage).
 #[cfg(feature = "test-helpers")]
@@ -564,7 +628,7 @@ macro_rules! basic_merklelized_storage_tests {
                 let value = $value_insert;
 
                 let encoded_value = BlockEncoder::encode(&value);
-                
+
                 storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
                     .unwrap();
 
@@ -582,7 +646,7 @@ macro_rules! basic_merklelized_storage_tests {
                 let proof_is_valid = binary::verify(&returned_root, &encoded_value, &returned_proof_set, 0, 1);
                 assert!(proof_is_valid);
 
-                assert_eq!(returned_root, root);      
+                assert_eq!(returned_root, root);
             }
 
         }}
