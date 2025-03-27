@@ -310,7 +310,7 @@ where
 #[allow(warnings)]
 pub mod basic_tests {
     use crate::{
-        blueprint::{BlueprintInspect, BlueprintMutate}, structured_storage::StructuredStorage, transactional::InMemoryTransaction, Error as StorageError
+        blueprint::{BlueprintInspect, BlueprintMutate}, structured_storage::StructuredStorage, transactional::{InMemoryTransaction, StorageTransaction}, Error as StorageError
     };
     use fuel_vm_private::{
         fuel_merkle::binary::Primitive,
@@ -364,14 +364,12 @@ pub mod basic_tests {
         Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
         Nodes: TableWithBlueprint<Column = Self::Column>,
         // Ugh
-        for<'a, 'b> Metadata::Blueprint: BlueprintInspect<Metadata, StructuredStorage<&'a mut StructuredStorage<InMemoryTransaction<&'b mut InMemoryStorage<Self::Column>>>>>,
-        for<'a> Metadata::Blueprint: BlueprintInspect<Metadata, StructuredStorage<InMemoryTransaction<&'a mut InMemoryStorage<Self::Column>>>>,
-        for<'a, 'b> Nodes::Blueprint: BlueprintInspect<Nodes, StructuredStorage<&'a mut StructuredStorage<InMemoryTransaction<&'b mut InMemoryStorage<Self::Column>>>>>,
-        for<'a> Nodes::Blueprint: BlueprintInspect<Nodes, StructuredStorage<InMemoryTransaction<&'a mut InMemoryStorage<Self::Column>>>>,
-        for<'a, 'b> Metadata::Blueprint: BlueprintMutate<Metadata, StructuredStorage<&'a mut StructuredStorage<InMemoryTransaction<&'b mut InMemoryStorage<Self::Column>>>>>,
-        for<'a> Metadata::Blueprint: BlueprintMutate<Metadata, StructuredStorage<InMemoryTransaction<&'a mut InMemoryStorage<Self::Column>>>>,
-        for<'a, 'b> Nodes::Blueprint: BlueprintMutate<Nodes, StructuredStorage<&'a mut StructuredStorage<InMemoryTransaction<&'b mut InMemoryStorage<Self::Column>>>>>,
-        for<'a> Nodes::Blueprint: BlueprintMutate<Nodes, StructuredStorage<InMemoryTransaction<&'a mut InMemoryStorage<Self::Column>>>>,
+
+        for<'a, 'b> Metadata::Blueprint: BlueprintMutate<Metadata, StructuredStorage<&'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>>>,
+        for<'a> Metadata::Blueprint: BlueprintMutate<Metadata, StorageTransaction<&'a mut InMemoryStorage<Self::Column>>>,
+
+        for<'a, 'b> Nodes::Blueprint: BlueprintMutate<Nodes, StructuredStorage<&'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>>>,
+        for<'a> Nodes::Blueprint: BlueprintMutate<Nodes, StorageTransaction<&'a mut InMemoryStorage<Self::Column>>>,
     {
         /// TODO
         fn key() -> Box<Self::Key>;
