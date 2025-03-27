@@ -348,37 +348,6 @@ pub mod basic_tests {
         transactional::WriteTransaction,
     };
 
-    /// TODO
-    pub trait MerkleTableWithBlueprints<Key, Value, Column>:
-        Mappable<Key = Key, OwnedKey = Key, Value = Value, OwnedValue = Value>
-        + TableWithBlueprint<Column = Column>
-    where
-        for<'a, 'b> Self::Blueprint: BlueprintMutate<
-            Self,
-            StructuredStorage<
-                &'a mut StorageTransaction<&'b mut InMemoryStorage<Column>>,
-            >,
-        >,
-        for<'a> Self::Blueprint:
-            BlueprintMutate<Self, StorageTransaction<&'a mut InMemoryStorage<Column>>>,
-    {
-    }
-
-    impl<Key, Value, Column, T> MerkleTableWithBlueprints<Key, Value, Column> for T
-    where
-        T: Mappable<Key = Key, OwnedKey = Key, Value = Value, OwnedValue = Value>
-            + TableWithBlueprint<Column = Column>,
-        for<'a, 'b> T::Blueprint: BlueprintMutate<
-            T,
-            StructuredStorage<
-                &'a mut StorageTransaction<&'b mut InMemoryStorage<Column>>,
-            >,
-        >,
-        for<'a> T::Blueprint:
-            BlueprintMutate<T, StorageTransaction<&'a mut InMemoryStorage<Column>>>,
-    {
-    }
-
     #[allow(dead_code)]
     /// TODO
     pub trait BasicMerkleizedStorageTests<
@@ -405,13 +374,6 @@ pub mod basic_tests {
         Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
         Nodes: TableWithBlueprint<Column = Self::Column>,
 
-        Metadata: MerkleTableWithBlueprints<
-            DenseMetadataKey<Self::OwnedKey>,
-            DenseMerkleMetadata,
-            Self::Column,
-        >,
-
-        // Ugh
         for<'a, 'b> Metadata::Blueprint: BlueprintMutate<
             Metadata,
             StructuredStorage<
