@@ -307,10 +307,10 @@ where
 
 #[cfg(feature = "test-helpers")]
 /// TODO
+#[allow(warnings)]
 pub mod basic_tests {
     use crate::{
-        structured_storage::StructuredStorage,
-        Error as StorageError,
+        blueprint::{BlueprintInspect, BlueprintMutate}, structured_storage::StructuredStorage, transactional::InMemoryTransaction, Error as StorageError
     };
     use fuel_vm_private::{
         fuel_merkle::binary::Primitive,
@@ -360,11 +360,18 @@ pub mod basic_tests {
             Value = DenseMerkleMetadata,
             OwnedValue = DenseMerkleMetadata,
         >,
+        Metadata: TableWithBlueprint<Column = Self::Column>,
         Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
-        Self: StorageMutate<Metadata, Error = StorageError>
-            + StorageMutate<Nodes, Error = StorageError>,
-        for<'a> StructuredStorage<&'a mut Self>: StorageMutate<Metadata, Error = StorageError>
-            + StorageMutate<Nodes, Error = StorageError>,
+        Nodes: TableWithBlueprint<Column = Self::Column>,
+        // Ugh
+        for<'a, 'b> Metadata::Blueprint: BlueprintInspect<Metadata, StructuredStorage<&'a mut StructuredStorage<InMemoryTransaction<&'b mut InMemoryStorage<Self::Column>>>>>,
+        for<'a> Metadata::Blueprint: BlueprintInspect<Metadata, StructuredStorage<InMemoryTransaction<&'a mut InMemoryStorage<Self::Column>>>>,
+        for<'a, 'b> Nodes::Blueprint: BlueprintInspect<Nodes, StructuredStorage<&'a mut StructuredStorage<InMemoryTransaction<&'b mut InMemoryStorage<Self::Column>>>>>,
+        for<'a> Nodes::Blueprint: BlueprintInspect<Nodes, StructuredStorage<InMemoryTransaction<&'a mut InMemoryStorage<Self::Column>>>>,
+        for<'a, 'b> Metadata::Blueprint: BlueprintMutate<Metadata, StructuredStorage<&'a mut StructuredStorage<InMemoryTransaction<&'b mut InMemoryStorage<Self::Column>>>>>,
+        for<'a> Metadata::Blueprint: BlueprintMutate<Metadata, StructuredStorage<InMemoryTransaction<&'a mut InMemoryStorage<Self::Column>>>>,
+        for<'a, 'b> Nodes::Blueprint: BlueprintMutate<Nodes, StructuredStorage<&'a mut StructuredStorage<InMemoryTransaction<&'b mut InMemoryStorage<Self::Column>>>>>,
+        for<'a> Nodes::Blueprint: BlueprintMutate<Nodes, StructuredStorage<InMemoryTransaction<&'a mut InMemoryStorage<Self::Column>>>>,
     {
         /// TODO
         fn key() -> Box<Self::Key>;
@@ -377,10 +384,10 @@ pub mod basic_tests {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
-            //storage_transaction
-            //    .storage_as_mut::<Self>()
-            //    .insert(&Self::key(), &Self::value())
-            //    .unwrap();
+            storage_transaction
+                .storage_as_mut::<Self>()
+                .insert(&Self::key(), &Self::value())
+                .unwrap();
 
             let _returned = storage_transaction
                 .storage_as_mut::<Self>()
@@ -389,7 +396,7 @@ pub mod basic_tests {
                 .unwrap()
                 .into_owned();
 
-            //assert_eq!(returned, Self::value().to_owned().into());
+            // assert_eq!(returned, Self::value().to_owned().into());
         }
     }
 }
