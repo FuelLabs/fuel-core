@@ -1,6 +1,4 @@
-use crate::storage::{
-    self,
-};
+use crate::storage;
 use fuel_core_storage::{
     kv_store::KeyValueInspect,
     merkle::column::MerkleizedColumn,
