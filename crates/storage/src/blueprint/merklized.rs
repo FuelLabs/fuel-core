@@ -433,7 +433,9 @@ pub mod basic_tests {
                 .insert(&Self::key(), &Self::value())
                 .unwrap();
 
-            let result = storage_transaction.storage_as_mut::<Self>().remove(&Self::key());
+            let result = storage_transaction
+                .storage_as_mut::<Self>()
+                .remove(&Self::key());
 
             assert!(result.is_err());
         }
