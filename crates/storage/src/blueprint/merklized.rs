@@ -373,6 +373,7 @@ pub mod basic_tests {
         Metadata: TableWithBlueprint<Column = Self::Column>,
         Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
         Nodes: TableWithBlueprint<Column = Self::Column>,
+        Self::OwnedValue: PartialEq + core::fmt::Debug,
 
         for<'a, 'b> Metadata::Blueprint: BlueprintMutate<
             Metadata,
@@ -412,14 +413,29 @@ pub mod basic_tests {
                 .insert(&Self::key(), &Self::value())
                 .unwrap();
 
-            let _returned = storage_transaction
+            let returned = storage_transaction
                 .storage_as_mut::<Self>()
                 .get(&Self::key())
                 .unwrap()
                 .unwrap()
                 .into_owned();
 
-            // assert_eq!(returned, Self::value().to_owned().into());
+            assert_eq!(returned, Self::value().to_owned().into());
+        }
+
+        /// TODO
+        fn test_remove_returns_error() {
+            let mut storage = InMemoryStorage::default();
+            let mut storage_transaction = storage.write_transaction();
+
+            storage_transaction
+                .storage_as_mut::<Self>()
+                .insert(&Self::key(), &Self::value())
+                .unwrap();
+
+            let result = storage_transaction.storage_as_mut::<Self>().remove(&Self::key());
+
+            assert!(result.is_err());
         }
     }
 }
