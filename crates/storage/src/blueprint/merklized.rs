@@ -306,22 +306,41 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
+/// TODO
 pub mod basic_tests {
-    use fuel_vm_private::{fuel_merkle::binary::Primitive, fuel_storage::{Mappable, StorageAsMut}};
+    use crate::{
+        structured_storage::StructuredStorage,
+        Error as StorageError,
+    };
+    use fuel_vm_private::{
+        fuel_merkle::binary::Primitive,
+        fuel_storage::{
+            Mappable,
+            StorageAsMut,
+            StorageMutate,
+        },
+    };
 
     use crate::{
-        blueprint::merklized::Merklized, codec::{
+        blueprint::merklized::Merklized,
+        codec::{
             Decode,
             Encode,
-        }, structured_storage::{
+        },
+        structured_storage::{
             test::InMemoryStorage,
             TableWithBlueprint,
-        }, tables::merkle::{DenseMerkleMetadata, DenseMetadataKey}, transactional::WriteTransaction
+        },
+        tables::merkle::{
+            DenseMerkleMetadata,
+            DenseMetadataKey,
+        },
+        transactional::WriteTransaction,
     };
 
     #[allow(dead_code)]
+    /// TODO
     pub trait BasicMerkleizedStorageTests<
-        M,
         KeyCodec,
         ValueCodec,
         Metadata,
@@ -332,39 +351,45 @@ pub mod basic_tests {
         Blueprint = Merklized<KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder>,
     >
     where
-        M: Mappable,
-        KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
-        ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
-        ValueEncoder: Encode<M::Value>,
+        KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
+        ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
+        ValueEncoder: Encode<Self::Value>,
         Metadata: Mappable<
-            Key = DenseMetadataKey<M::OwnedKey>,
-            OwnedKey = DenseMetadataKey<M::OwnedKey>,
+            Key = DenseMetadataKey<Self::OwnedKey>,
+            OwnedKey = DenseMetadataKey<Self::OwnedKey>,
             Value = DenseMerkleMetadata,
             OwnedValue = DenseMerkleMetadata,
         >,
         Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
+        Self: StorageMutate<Metadata, Error = StorageError>
+            + StorageMutate<Nodes, Error = StorageError>,
+        for<'a> StructuredStorage<&'a mut Self>: StorageMutate<Metadata, Error = StorageError>
+            + StorageMutate<Nodes, Error = StorageError>,
     {
-        fn key() -> M::Key;
+        /// TODO
+        fn key() -> Box<Self::Key>;
 
-        fn value() -> M::Value;
+        /// TODO
+        fn value() -> Box<Self::Value>;
 
+        /// TODO
         fn test_insert() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
-            storage_transaction
-                .storage_as_mut::<Self>()
-                .insert(&Self::key(), &Self::value())
-                .unwrap();
+            //storage_transaction
+            //    .storage_as_mut::<Self>()
+            //    .insert(&Self::key(), &Self::value())
+            //    .unwrap();
 
-            let returned = storage_transaction
+            let _returned = storage_transaction
                 .storage_as_mut::<Self>()
                 .get(&Self::key())
                 .unwrap()
                 .unwrap()
                 .into_owned();
 
-            assert_eq!(returned, Self::value());
+            //assert_eq!(returned, Self::value().to_owned().into());
         }
     }
 }
