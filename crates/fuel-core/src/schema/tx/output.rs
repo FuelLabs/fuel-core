@@ -54,7 +54,7 @@ pub struct DataCoinOutput {
     to: fuel_types::Address,
     amount: Word,
     asset_id: fuel_types::AssetId,
-    data_hash: fuel_types::Bytes32,
+    data: Vec<u8>,
 }
 
 #[Object]
@@ -71,8 +71,8 @@ impl DataCoinOutput {
         self.asset_id.into()
     }
 
-    async fn data(&self) -> Bytes32 {
-        self.data_hash.into()
+    async fn data(&self) -> &Vec<u8> {
+        &self.data
     }
 }
 pub struct ChangeOutput(CoinOutput);
@@ -162,12 +162,12 @@ impl From<&fuel_tx::Output> for Output {
                 to,
                 amount,
                 asset_id,
-                data_hash,
+                data,
             } => Output::DataCoin(DataCoinOutput {
                 to: *to,
                 amount: *amount,
                 asset_id: *asset_id,
-                data_hash: *data_hash,
+                data: data.to_vec(),
             }),
             fuel_tx::Output::Contract(contract) => Output::Contract(contract.into()),
             fuel_tx::Output::Change {
