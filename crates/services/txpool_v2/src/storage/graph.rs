@@ -232,11 +232,58 @@ impl GraphStorage {
                         ));
                     }
                 }
+                Output::DataCoin { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoDataCoinOutput,
+                    ))
+                }
+                Output::Contract(_) => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoContractOutput,
+                    ))
+                }
+                Output::Change { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
+                    ))
+                }
+                Output::Variable { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
+                    ))
+                }
+                Output::ContractCreated { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoContractOutput,
+                    ))
+                }
+            }
+        } else if let Input::DataCoinSigned(DataCoinSigned {
+            owner,
+            amount,
+            asset_id,
+            data,
+            ..
+        })
+        | Input::DataCoinPredicate(DataCoinPredicate {
+            owner,
+            amount,
+            asset_id,
+            data,
+            ..
+        }) = input
+        {
+            let i_owner = owner;
+            let i_amount = amount;
+            let i_asset_id = asset_id;
+            let i_data = data;
+
+            match output {
                 Output::DataCoin {
                     to,
                     amount,
                     asset_id,
-                    data_hash: _data_hash,
+                    data,
                 } => {
                     if to != i_owner {
                         return Err(Error::InputValidation(
@@ -253,7 +300,16 @@ impl GraphStorage {
                             InputValidationError::NotInsertedIoWrongAssetId,
                         ));
                     }
-                    todo!("Data hash matches data")
+                    if data != i_data {
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoDataCoinOutput,
+                        ));
+                    }
+                }
+                Output::Coin { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoCoinOutput,
+                    ))
                 }
                 Output::Contract(_) => {
                     return Err(Error::InputValidation(
@@ -277,6 +333,7 @@ impl GraphStorage {
                 }
             };
         }
+
         Ok(())
     }
 

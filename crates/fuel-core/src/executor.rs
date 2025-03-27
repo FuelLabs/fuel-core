@@ -2965,6 +2965,15 @@ mod tests {
         assert!(result.is_ok(), "{result:?}")
     }
 
+    fn predicate_where_predicate_data_matches_input_data_coin() -> Vec<u8> {
+        vec![].into_iter().collect()
+    }
+
+    #[test]
+    fn validate__predicate_can_find_data_coin_data() {
+        todo!()
+    }
+
     #[test]
     fn verifying_during_production_consensus_parameters_version_works() {
         let mut rng = StdRng::seed_from_u64(2322u64);

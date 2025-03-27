@@ -262,7 +262,7 @@ fn convert_tx_execution_result_to_preconfirmation(
         .iter()
         .filter_map(|output| {
             if output.is_change() || output.is_variable() && output.amount() != Some(0) {
-                Some(*output)
+                Some(output.clone())
             } else {
                 None
             }
@@ -2277,7 +2277,7 @@ where
                     amount,
                     asset_id,
                     to,
-                    data_hash,
+                    data,
                 } => Self::insert_data_coin(
                     block_height,
                     execution_data,
@@ -2285,7 +2285,7 @@ where
                     amount,
                     asset_id,
                     to,
-                    data_hash,
+                    data,
                     db,
                 )?,
                 Output::Contract(contract) => {
@@ -2386,7 +2386,7 @@ where
         amount: &Word,
         asset_id: &AssetId,
         to: &Address,
-        _data_hash: &Bytes32,
+        _data: &[u8],
         db: &mut TxStorageTransaction<T>,
     ) -> ExecutorResult<()>
     where
