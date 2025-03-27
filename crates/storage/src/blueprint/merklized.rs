@@ -310,7 +310,17 @@ where
 #[allow(warnings)]
 pub mod basic_tests {
     use crate::{
-        blueprint::{BlueprintInspect, BlueprintMutate}, structured_storage::StructuredStorage, transactional::{InMemoryTransaction, StorageTransaction}, Error as StorageError
+        blueprint::{
+            BlueprintInspect,
+            BlueprintMutate,
+        },
+        kv_store::KeyValueInspect,
+        structured_storage::StructuredStorage,
+        transactional::{
+            InMemoryTransaction,
+            StorageTransaction,
+        },
+        Error as StorageError,
     };
     use fuel_vm_private::{
         fuel_merkle::binary::Primitive,
@@ -338,6 +348,37 @@ pub mod basic_tests {
         transactional::WriteTransaction,
     };
 
+    /// TODO
+    pub trait MerkleTableWithBlueprints<Key, Value, Column>:
+        Mappable<Key = Key, OwnedKey = Key, Value = Value, OwnedValue = Value>
+        + TableWithBlueprint<Column = Column>
+    where
+        for<'a, 'b> Self::Blueprint: BlueprintMutate<
+            Self,
+            StructuredStorage<
+                &'a mut StorageTransaction<&'b mut InMemoryStorage<Column>>,
+            >,
+        >,
+        for<'a> Self::Blueprint:
+            BlueprintMutate<Self, StorageTransaction<&'a mut InMemoryStorage<Column>>>,
+    {
+    }
+
+    impl<Key, Value, Column, T> MerkleTableWithBlueprints<Key, Value, Column> for T
+    where
+        T: Mappable<Key = Key, OwnedKey = Key, Value = Value, OwnedValue = Value>
+            + TableWithBlueprint<Column = Column>,
+        for<'a, 'b> T::Blueprint: BlueprintMutate<
+            T,
+            StructuredStorage<
+                &'a mut StorageTransaction<&'b mut InMemoryStorage<Column>>,
+            >,
+        >,
+        for<'a> T::Blueprint:
+            BlueprintMutate<T, StorageTransaction<&'a mut InMemoryStorage<Column>>>,
+    {
+    }
+
     #[allow(dead_code)]
     /// TODO
     pub trait BasicMerkleizedStorageTests<
@@ -363,13 +404,35 @@ pub mod basic_tests {
         Metadata: TableWithBlueprint<Column = Self::Column>,
         Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
         Nodes: TableWithBlueprint<Column = Self::Column>,
+
+        Metadata: MerkleTableWithBlueprints<
+            DenseMetadataKey<Self::OwnedKey>,
+            DenseMerkleMetadata,
+            Self::Column,
+        >,
+
         // Ugh
+        for<'a, 'b> Metadata::Blueprint: BlueprintMutate<
+            Metadata,
+            StructuredStorage<
+                &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>,
+            >,
+        >,
+        for<'a> Metadata::Blueprint: BlueprintMutate<
+            Metadata,
+            StorageTransaction<&'a mut InMemoryStorage<Self::Column>>,
+        >,
 
-        for<'a, 'b> Metadata::Blueprint: BlueprintMutate<Metadata, StructuredStorage<&'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>>>,
-        for<'a> Metadata::Blueprint: BlueprintMutate<Metadata, StorageTransaction<&'a mut InMemoryStorage<Self::Column>>>,
-
-        for<'a, 'b> Nodes::Blueprint: BlueprintMutate<Nodes, StructuredStorage<&'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>>>,
-        for<'a> Nodes::Blueprint: BlueprintMutate<Nodes, StorageTransaction<&'a mut InMemoryStorage<Self::Column>>>,
+        for<'a, 'b> Nodes::Blueprint: BlueprintMutate<
+            Nodes,
+            StructuredStorage<
+                &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>,
+            >,
+        >,
+        for<'a> Nodes::Blueprint: BlueprintMutate<
+            Nodes,
+            StorageTransaction<&'a mut InMemoryStorage<Self::Column>>,
+        >,
     {
         /// TODO
         fn key() -> Box<Self::Key>;
