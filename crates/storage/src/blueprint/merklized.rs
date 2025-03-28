@@ -12,15 +12,19 @@ use crate::{
     codec::{
         Decode,
         Encode,
-        Encoder as EncoderTrait,
+        Encoder,
     },
     kv_store::{
         BatchOperations,
         KeyValueInspect,
         KeyValueMutate,
+        StorageColumn,
     },
     not_found,
-    structured_storage::StructuredStorage,
+    structured_storage::{
+        StructuredStorage,
+        TableWithBlueprint,
+    },
     tables::merkle::{
         DenseMerkleMetadata,
         DenseMerkleMetadataV1,
@@ -39,6 +43,51 @@ use fuel_core_types::fuel_merkle::binary::Primitive;
 #[cfg(feature = "alloc")]
 use alloc::borrow::ToOwned;
 
+/// A trait for tables that use the merklized blueprint.
+/// Implementing this trait automatically provides a `TableWithBlueprint` implementation
+/// that uses the `Merklized` blueprint.
+pub trait MerklizedTableWithBlueprint: Mappable + Sized {
+    /// The column type used by the merklized table
+    type MerkleizedColumn: StorageColumn;
+    
+    /// The key codec type for encoding/decoding keys
+    type KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>;
+    
+    /// The value codec type for encoding/decoding values
+    type ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>;
+    
+    /// The metadata table type for storing merkle metadata
+    type Metadata: Mappable + TableWithBlueprint<Column = Self::MerkleizedColumn>;
+    
+    /// The nodes table type for storing merkle nodes
+    type Nodes: Mappable + TableWithBlueprint<Column = Self::MerkleizedColumn>;
+    
+    /// The value encoder type for encoding values for merkle proofs
+    type ValueEncoder: Encode<Self::Value>;
+
+    /// The column occupied by the table.
+    fn column() -> Self::MerkleizedColumn;
+}
+
+/// Automatically implement TableWithBlueprint for any type that implements MerklizedTableWithBlueprint
+impl<T> TableWithBlueprint for T 
+where 
+    T: MerklizedTableWithBlueprint,
+{
+    type Blueprint = Merklized<
+        T::KeyCodec,
+        T::ValueCodec,
+        T::Metadata,
+        T::Nodes,
+        T::ValueEncoder,
+    >;
+    type Column = T::MerkleizedColumn;
+
+    fn column() -> Self::Column {
+        T::column()
+    }
+}
+
 /// The `Merklized` blueprint builds the storage as a [`Plain`](super::plain::Plain)
 /// blueprint and maintains the binary merkle tree by the `Metadata` table.
 ///
@@ -48,9 +97,20 @@ use alloc::borrow::ToOwned;
 /// The `Metadata` table stores the metadata of the binary merkle tree(like a root of the tree and leaves count).
 ///
 /// The `ValueEncoder` is used to encode the value for merklelization.
-pub struct Merklized<KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder> {
-    _marker:
-        core::marker::PhantomData<(KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder)>,
+pub struct Merklized<
+    KeyCodec,
+    ValueCodec,
+    Metadata,
+    Nodes,
+    ValueEncoder,
+> {
+    _marker: core::marker::PhantomData<(
+        KeyCodec,
+        ValueCodec,
+        Metadata,
+        Nodes,
+        ValueEncoder,
+    )>,
 }
 
 impl<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>

@@ -1,14 +1,13 @@
 //! The module contains implementations and tests for the `FuelBlocks` table.
 
 use crate::{
-    blueprint::merklized::Merklized,
+    blueprint::merklized::MerklizedTableWithBlueprint,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
         Encode,
     },
     column::Column,
-    structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
             FuelBlockMerkleData,
@@ -44,15 +43,13 @@ impl Encode<Block> for BlockEncoder {
     }
 }
 
-impl TableWithBlueprint for FuelBlocks {
-    type Blueprint = Merklized<
-        Primitive<4>,
-        Postcard,
-        FuelBlockMerkleMetadata,
-        FuelBlockMerkleData,
-        BlockEncoder,
-    >;
-    type Column = Column;
+impl MerklizedTableWithBlueprint for FuelBlocks {
+    type KeyCodec = Primitive<4>;
+    type ValueCodec = Postcard;
+    type Metadata = FuelBlockMerkleMetadata;
+    type Nodes = FuelBlockMerkleData;
+    type ValueEncoder = BlockEncoder;
+    type MerkleizedColumn = Column;
 
     fn column() -> Column {
         Column::FuelBlocks
