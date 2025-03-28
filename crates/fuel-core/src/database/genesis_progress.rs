@@ -30,7 +30,10 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
 };
-use fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator;
+use fuel_core_types::{
+    entities::coins::coin::UncompressedCoin,
+    fuel_merkle::binary::root_calculator::MerkleRootCalculator,
+};
 
 pub struct GenesisMetadata<Description>(core::marker::PhantomData<Description>);
 
@@ -109,7 +112,12 @@ impl GenesisDatabase {
         let mut root_calculator = MerkleRootCalculator::new();
         for coin in coins {
             let (utxo_id, coin) = coin?;
-            root_calculator.push(coin.uncompress(utxo_id).root()?.as_slice());
+            // root_calculator.push(coin.uncompress_coin(utxo_id).root()?.as_slice());
+            let root = match coin.uncompress(utxo_id) {
+                UncompressedCoin::Coin(coin) => coin.root()?.as_slice(),
+                UncompressedCoin::DataCoin(data_coin) => data_coin.root()?.as_slice(),
+            };
+            root_calculator.push(root);
         }
 
         Ok(root_calculator.root())

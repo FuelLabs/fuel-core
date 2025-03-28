@@ -169,9 +169,12 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use fuel_core_types::fuel_tx::input::coin::{
-    DataCoinPredicate,
-    DataCoinSigned,
+use fuel_core_types::{
+    entities::coins::coin::UncompressedCoin,
+    fuel_tx::input::coin::{
+        DataCoinPredicate,
+        DataCoinSigned,
+    },
 };
 
 /// The maximum amount of transactions that can be included in a block,
@@ -2048,9 +2051,18 @@ where
                             )
                         })?;
 
-                    execution_data
-                        .events
-                        .push(ExecutorEvent::CoinConsumed(coin.uncompress(*utxo_id)));
+                    match coin.uncompress(*utxo_id) {
+                        UncompressedCoin::Coin(coin) => {
+                            execution_data
+                                .events
+                                .push(ExecutorEvent::CoinConsumed(coin));
+                        }
+                        UncompressedCoin::DataCoin(data_coin) => {
+                            execution_data
+                                .events
+                                .push(ExecutorEvent::DataCoinConsumed(data_coin));
+                        }
+                    }
                 }
                 Input::MessageDataSigned(_) | Input::MessageDataPredicate(_)
                     if reverted =>
@@ -2370,9 +2382,19 @@ where
             if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
-            execution_data
-                .events
-                .push(ExecutorEvent::CoinCreated(coin.uncompress(utxo_id)));
+            // execution_data
+            //     .events
+            //     .push(ExecutorEvent::CoinCreated(coin.uncompress_coin(utxo_id)));
+            match coin.uncompress(utxo_id) {
+                UncompressedCoin::Coin(coin) => {
+                    execution_data.events.push(ExecutorEvent::CoinCreated(coin));
+                }
+                UncompressedCoin::DataCoin(data_coin) => {
+                    execution_data
+                        .events
+                        .push(ExecutorEvent::DataCoinCreated(data_coin));
+                }
+            }
         }
 
         Ok(())
@@ -2407,9 +2429,19 @@ where
             if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
-            execution_data
-                .events
-                .push(ExecutorEvent::CoinCreated(coin.uncompress(utxo_id)));
+            // execution_data
+            //     .events
+            //     .push(ExecutorEvent::CoinCreated(coin.uncompress_coin(utxo_id)));
+            match coin.uncompress(utxo_id) {
+                UncompressedCoin::Coin(coin) => {
+                    execution_data.events.push(ExecutorEvent::CoinCreated(coin));
+                }
+                UncompressedCoin::DataCoin(data_coin) => {
+                    execution_data
+                        .events
+                        .push(ExecutorEvent::DataCoinCreated(data_coin));
+                }
+            }
         }
 
         Ok(())

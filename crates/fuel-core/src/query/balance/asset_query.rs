@@ -139,7 +139,7 @@ impl<'a> AssetsQuery<'a> {
             .try_flatten()
             .filter(move |result| {
                 if let Ok(CoinType::Coin(coin)) = result {
-                    allowed_asset(&allowed_assets, &coin.asset_id)
+                    allowed_asset(&allowed_assets, coin.asset_id())
                 } else {
                     true
                 }

@@ -36,6 +36,7 @@ use crate::{
     services::Uncommitted,
 };
 
+use crate::entities::coins::coin::DataCoin;
 #[cfg(feature = "alloc")]
 use alloc::{
     string::String,
@@ -137,8 +138,12 @@ pub enum Event {
     MessageConsumed(Message),
     /// Created a new spendable coin, produced by the transaction.
     CoinCreated(Coin),
+    /// Created a new spendable data coin, produced by the transaction.
+    DataCoinCreated(DataCoin),
     /// The coin was consumed by the transaction.
     CoinConsumed(Coin),
+    /// The data coin was consumed by the transaction.
+    DataCoinConsumed(DataCoin),
     /// Failed transaction inclusion
     ForcedTransactionFailed {
         /// The hash of the relayed transaction

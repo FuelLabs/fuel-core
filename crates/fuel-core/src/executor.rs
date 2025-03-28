@@ -95,6 +95,7 @@ mod tests {
                 coin::{
                     CoinPredicate,
                     CoinSigned,
+                    DataCoinPredicate,
                 },
                 contract,
                 Input,
@@ -2965,13 +2966,125 @@ mod tests {
         assert!(result.is_ok(), "{result:?}")
     }
 
-    // fn predicate_where_predicate_data_matches_input_data_coin() -> Vec<u8> {
-    //     Vec::new()
-    // }
+    fn predicate_checking_predicate_data_matches_input_data_coin() -> Vec<u8> {
+        let len_reg = 0x13;
+        let res_reg = 0x10;
+        let input_index = 0;
+        let expected_data_mem_location = 0x22;
+        let actual_data_mem_location = 0x23;
+        vec![
+            op::gtf_args(len_reg, input_index, GTFArgs::InputDataCoinDataLength),
+            // get expected data from predicate data
+            op::gtf_args(
+                expected_data_mem_location,
+                input_index,
+                GTFArgs::InputCoinPredicateData,
+            ),
+            // get actual data
+            op::gtf_args(
+                actual_data_mem_location,
+                input_index,
+                GTFArgs::InputDataCoinData,
+            ),
+            // compare
+            op::meq(
+                res_reg,
+                expected_data_mem_location,
+                actual_data_mem_location,
+                len_reg,
+            ),
+            op::ret(res_reg),
+        ]
+        .into_iter()
+        .collect()
+    }
 
     #[test]
     fn validate__predicate_can_find_data_coin_data() {
-        todo!()
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let predicate: Vec<u8> =
+            predicate_checking_predicate_data_matches_input_data_coin();
+        let owner = Input::predicate_owner(&predicate);
+        let amount = 1000;
+
+        let consensus_parameters = ConsensusParameters::default();
+        let config = Config {
+            forbid_fake_coins_default: true,
+            consensus_parameters: consensus_parameters.clone(),
+        };
+        let data = vec![99u8; 100];
+        let predicate_data = data.clone();
+
+        let mut tx = TransactionBuilder::script(
+            vec![op::ret(RegId::ONE)].into_iter().collect(),
+            vec![],
+        )
+        .max_fee_limit(amount)
+        .add_input(Input::data_coin_predicate(
+            rng.gen(),
+            owner,
+            amount,
+            AssetId::BASE,
+            rng.gen(),
+            0,
+            predicate,
+            predicate_data,
+            data,
+        ))
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: Default::default(),
+        })
+        .finalize();
+        tx.estimate_predicates(
+            &consensus_parameters.clone().into(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .unwrap();
+        let db = &mut Database::default();
+
+        // insert coin into state
+        if let Input::DataCoinPredicate(DataCoinPredicate {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            ..
+        }) = tx.inputs()[0]
+        {
+            let mut coin = CompressedCoin::default();
+            coin.set_owner(owner);
+            coin.set_amount(amount);
+            coin.set_asset_id(asset_id);
+            coin.set_tx_pointer(tx_pointer);
+            db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+        } else {
+            panic!("Expected a DataCoinPredicate");
+        }
+
+        let producer = create_executor(db.clone(), config.clone());
+
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+            ..
+        } = producer
+            .produce_without_commit_with_source_direct_resolve(Components {
+                header_to_produce: PartialBlockHeader::default(),
+                transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                coinbase_recipient: Default::default(),
+                gas_price: 1,
+            })
+            .unwrap()
+            .into_result();
+        assert!(skipped_transactions.is_empty());
+
+        let validator = create_executor(db.clone(), config);
+        let result = validator.validate(&block);
+        assert!(result.is_ok(), "{result:?}")
     }
 
     #[test]

@@ -1,3 +1,4 @@
+use super::table_entry::TableEntry;
 use crate::GenesisCommitment;
 use fuel_core_storage::{
     tables::Coins,
@@ -8,6 +9,7 @@ use fuel_core_types::{
         Coin,
         CompressedCoin,
         CompressedCoinV1,
+        DataCoin,
     },
     fuel_crypto::Hasher,
     fuel_tx::{
@@ -25,8 +27,6 @@ use serde::{
     Deserialize,
     Serialize,
 };
-
-use super::table_entry::TableEntry;
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CoinConfig {
@@ -115,6 +115,30 @@ impl GenesisCommitment for Coin {
             .chain(tx_pointer.tx_index().to_be_bytes())
             .chain(utxo_id.tx_id())
             .chain(utxo_id.output_index().to_be_bytes())
+            .finalize();
+
+        Ok(coin_hash)
+    }
+}
+
+impl GenesisCommitment for DataCoin {
+    fn root(&self) -> anyhow::Result<MerkleRoot> {
+        let owner = self.owner;
+        let amount = self.amount;
+        let asset_id = self.asset_id;
+        let tx_pointer = self.tx_pointer;
+        let utxo_id = self.utxo_id;
+        let data = &self.data;
+
+        let coin_hash = *Hasher::default()
+            .chain(owner)
+            .chain(amount.to_be_bytes())
+            .chain(asset_id)
+            .chain(tx_pointer.block_height().to_be_bytes())
+            .chain(tx_pointer.tx_index().to_be_bytes())
+            .chain(utxo_id.tx_id())
+            .chain(utxo_id.output_index().to_be_bytes())
+            .chain(data)
             .finalize();
 
         Ok(coin_hash)

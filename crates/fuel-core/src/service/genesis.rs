@@ -691,7 +691,7 @@ mod tests {
                 db.on_chain()
                     .storage::<Coins>()
                     .get(&coin_id)
-                    .map(|v| v.unwrap().into_owned().uncompress(coin_id))
+                    .map(|v| v.unwrap().into_owned().uncompress_coin(coin_id))
                     .unwrap()
             })
             .collect()

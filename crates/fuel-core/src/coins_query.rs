@@ -1653,7 +1653,7 @@ mod tests {
             let coin_by_owner = owner_coin_id_key(&owner, &id);
             StorageMutate::<OwnedCoins>::insert(db, &coin_by_owner, &()).unwrap();
 
-            coin.uncompress(id)
+            coin.uncompress_coin(id)
         }
 
         pub fn make_message(&mut self, owner: Address, amount: Word) -> Message {

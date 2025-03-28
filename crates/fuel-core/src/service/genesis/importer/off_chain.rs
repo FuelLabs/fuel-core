@@ -1,3 +1,7 @@
+use super::{
+    import_task::ImportTable,
+    Handler,
+};
 use crate::{
     database::{
         database_description::off_chain::OffChain,
@@ -35,13 +39,11 @@ use fuel_core_storage::{
     transactional::StorageTransaction,
     StorageAsMut,
 };
-use fuel_core_types::services::executor::Event;
-use std::borrow::Cow;
-
-use super::{
-    import_task::ImportTable,
-    Handler,
+use fuel_core_types::{
+    entities::coins::coin::UncompressedCoin,
+    services::executor::Event,
 };
+use std::borrow::Cow;
 
 fn balances_indexation_enabled() -> bool {
     use std::sync::OnceLock;
@@ -167,7 +169,13 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
         tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let events = group.into_iter().map(|TableEntry { value, key }| {
-            Cow::Owned(Event::CoinCreated(value.uncompress(key)))
+            // Cow::Owned(Event::CoinCreated(value.uncompress_coin(key)))
+            match value.uncompress(key) {
+                UncompressedCoin::Coin(coin) => Cow::Owned(Event::CoinCreated(coin)),
+                UncompressedCoin::DataCoin(data_coin) => {
+                    Cow::Owned(Event::DataCoinCreated(data_coin))
+                }
+            }
         });
         worker_service::process_executor_events(
             events,

@@ -8,7 +8,10 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    entities::coins::coin::Coin,
+    entities::coins::coin::{
+        Coin,
+        UncompressedCoin,
+    },
     fuel_tx::UtxoId,
     fuel_types::Address,
 };
@@ -19,7 +22,7 @@ use futures::{
 };
 
 impl ReadView {
-    pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<Coin> {
+    pub fn coin(&self, utxo_id: UtxoId) -> StorageResult<UncompressedCoin> {
         let coin = self
             .on_chain
             .as_ref()
@@ -34,7 +37,7 @@ impl ReadView {
     pub async fn coins(
         &self,
         utxo_ids: Vec<UtxoId>,
-    ) -> impl Iterator<Item = StorageResult<Coin>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<UncompressedCoin>> + '_ {
         // TODO: Use multiget when it's implemented.
         //  https://github.com/FuelLabs/fuel-core/issues/2344
         let coins = utxo_ids.into_iter().map(|id| self.coin(id));
