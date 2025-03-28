@@ -106,11 +106,11 @@ mod tests {
         > for FuelBlocks
     {
         fn key() -> Box<Self::Key> {
-            todo!()
+            Box::new(<FuelBlocks as crate::Mappable>::Key::default())
         }
 
         fn value() -> Box<Self::Value> {
-            todo!()
+            Box::new(<FuelBlocks as crate::Mappable>::Value::default())
         }
     }
 
