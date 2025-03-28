@@ -59,19 +59,11 @@ impl MerklizedTableWithBlueprint for FuelBlocks {
 #[cfg(test)]
 mod tests {
     use crate::{
-        codec::{
-            postcard::Postcard,
-            primitive::Primitive,
-        },
         structured_storage::{
             test::InMemoryStorage,
             TableWithBlueprint,
         },
         tables::{
-            merkle::{
-                FuelBlockMerkleData,
-                FuelBlockMerkleMetadata,
-            },
             FuelBlocks,
         },
         transactional::ReadTransaction,
@@ -91,16 +83,8 @@ mod tests {
     };
     use fuel_vm_private::crypto::ephemeral_merkle_root;
 
-    use super::BlockEncoder;
-
     impl
-        crate::blueprint::merklized::basic_tests::BasicMerkleizedStorageTests<
-            Primitive<4>,
-            Postcard,
-            FuelBlockMerkleMetadata,
-            FuelBlockMerkleData,
-            BlockEncoder,
-        > for FuelBlocks
+        crate::blueprint::merklized::basic_tests::BasicMerkleizedStorageTests for FuelBlocks
     {
         fn key() -> Box<Self::Key> {
             Box::new(<FuelBlocks as crate::Mappable>::Key::default())

@@ -408,53 +408,46 @@ pub mod basic_tests {
         transactional::WriteTransaction,
     };
 
+    use crate::blueprint::merklized::MerklizedTableWithBlueprint;
+
     #[allow(dead_code)]
     /// TODO
-    pub trait BasicMerkleizedStorageTests<
-        KeyCodec,
-        ValueCodec,
-        Metadata,
-        Nodes,
-        ValueEncoder,
-    >:
-        TableWithBlueprint<
-        Blueprint = Merklized<KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder>,
-    >
+    pub trait BasicMerkleizedStorageTests: MerklizedTableWithBlueprint
     where
-        KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
-        ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
-        ValueEncoder: Encode<Self::Value>,
-        Metadata: Mappable<
+        Self::KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
+        Self::ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
+        Self::ValueEncoder: Encode<Self::Value>,
+        Self::Metadata: Mappable<
             Key = DenseMetadataKey<Self::OwnedKey>,
             OwnedKey = DenseMetadataKey<Self::OwnedKey>,
             Value = DenseMerkleMetadata,
             OwnedValue = DenseMerkleMetadata,
         >,
-        Metadata: TableWithBlueprint<Column = Self::Column>,
-        Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
-        Nodes: TableWithBlueprint<Column = Self::Column>,
+        Self::Metadata: TableWithBlueprint<Column = Self::MerkleizedColumn>,
+        Self::Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
+        Self::Nodes: TableWithBlueprint<Column = Self::MerkleizedColumn>,
         Self::OwnedValue: PartialEq + core::fmt::Debug,
 
-        for<'a, 'b> Metadata::Blueprint: BlueprintMutate<
-            Metadata,
+        for<'a, 'b> <Self::Metadata as TableWithBlueprint>::Blueprint: BlueprintMutate<
+            Self::Metadata,
             StructuredStorage<
-                &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>,
+                &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::MerkleizedColumn>>,
             >,
         >,
-        for<'a> Metadata::Blueprint: BlueprintMutate<
-            Metadata,
-            StorageTransaction<&'a mut InMemoryStorage<Self::Column>>,
+        for<'a> <Self::Metadata as TableWithBlueprint>::Blueprint: BlueprintMutate<
+            Self::Metadata,
+            StorageTransaction<&'a mut InMemoryStorage<Self::MerkleizedColumn>>,
         >,
 
-        for<'a, 'b> Nodes::Blueprint: BlueprintMutate<
-            Nodes,
+        for<'a, 'b> <Self::Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<
+            Self::Nodes,
             StructuredStorage<
-                &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>,
+                &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::MerkleizedColumn>>,
             >,
         >,
-        for<'a> Nodes::Blueprint: BlueprintMutate<
-            Nodes,
-            StorageTransaction<&'a mut InMemoryStorage<Self::Column>>,
+        for<'a> <Self::Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<
+            Self::Nodes,
+            StorageTransaction<&'a mut InMemoryStorage<Self::MerkleizedColumn>>,
         >,
     {
         /// TODO
