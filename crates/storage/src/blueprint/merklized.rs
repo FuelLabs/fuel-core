@@ -366,7 +366,8 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-/// TODO
+/// A trait that provides basic tests for the merklized storage.
+/// It is used to test the merklized storage with different key and value codecs.
 #[allow(warnings)]
 pub mod basic_tests {
     use crate::{
@@ -411,7 +412,8 @@ pub mod basic_tests {
     use crate::blueprint::merklized::MerklizedTableWithBlueprint;
 
     #[allow(dead_code)]
-    /// TODO
+    /// A trait that provides basic tests for the merklized storage.
+    /// It is used to test the merklized storage with different key and value codecs.
     pub trait BasicMerkleizedStorageTests: MerklizedTableWithBlueprint
     where
         Self::KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
@@ -450,13 +452,13 @@ pub mod basic_tests {
             StorageTransaction<&'a mut InMemoryStorage<Self::MerkleizedColumn>>,
         >,
     {
-        /// TODO
+        /// Returns a test key for the table
         fn key() -> Box<Self::Key>;
 
-        /// TODO
+        /// Returns a test value for the table
         fn value() -> Box<Self::Value>;
 
-        /// TODO
+        /// Tests that inserting a value and retrieving it returns the same value
         fn test_insert() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
@@ -476,7 +478,7 @@ pub mod basic_tests {
             assert_eq!(returned, Self::value().to_owned().into());
         }
 
-        /// TODO
+        /// Tests that attempting to remove a value returns an error
         fn test_remove_returns_error() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
