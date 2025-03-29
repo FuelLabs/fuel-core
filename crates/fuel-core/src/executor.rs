@@ -61,7 +61,10 @@ mod tests {
             primitives::DaBlockHeight,
         },
         entities::{
-            coins::coin::CompressedCoin,
+            coins::coin::{
+                CompressedCoin,
+                CompressedCoinV2,
+            },
             relayer::message::{
                 Message,
                 MessageV1,
@@ -3029,12 +3032,12 @@ mod tests {
             0,
             predicate,
             predicate_data,
-            data,
+            data.clone(),
         ))
         .add_output(Output::Change {
             to: Default::default(),
             amount: 0,
-            asset_id: Default::default(),
+            asset_id: AssetId::BASE,
         })
         .finalize();
         tx.estimate_predicates(
@@ -3055,11 +3058,13 @@ mod tests {
             ..
         }) = tx.inputs()[0]
         {
-            let mut coin = CompressedCoin::default();
-            coin.set_owner(owner);
-            coin.set_amount(amount);
-            coin.set_asset_id(asset_id);
-            coin.set_tx_pointer(tx_pointer);
+            let coin = CompressedCoin::V2(CompressedCoinV2 {
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+                data,
+            });
             db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
         } else {
             panic!("Expected a DataCoinPredicate");
@@ -3080,6 +3085,7 @@ mod tests {
             })
             .unwrap()
             .into_result();
+        dbg!(&skipped_transactions);
         assert!(skipped_transactions.is_empty());
 
         let validator = create_executor(db.clone(), config);

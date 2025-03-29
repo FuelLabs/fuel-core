@@ -1745,6 +1745,10 @@ where
                     Input::CoinPredicate(CoinPredicate {
                         predicate_gas_used, ..
                     })
+                    | Input::DataCoinPredicate(DataCoinPredicate {
+                        predicate_gas_used,
+                        ..
+                    })
                     | Input::MessageCoinPredicate(MessageCoinPredicate {
                         predicate_gas_used,
                         ..
