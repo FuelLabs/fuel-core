@@ -269,6 +269,19 @@ where
                     .storage_as_mut::<OwnedCoins>()
                     .remove(&key)?;
             }
+            Event::DataCoinCreated(data_coin) => {
+                let coin_by_owner =
+                    owner_coin_id_key(&data_coin.owner, &data_coin.utxo_id);
+                block_st_transaction
+                    .storage_as_mut::<OwnedCoins>()
+                    .insert(&coin_by_owner, &())?;
+            }
+            Event::DataCoinConsumed(data_coin) => {
+                let key = owner_coin_id_key(&data_coin.owner, &data_coin.utxo_id);
+                block_st_transaction
+                    .storage_as_mut::<OwnedCoins>()
+                    .remove(&key)?;
+            }
             Event::ForcedTransactionFailed {
                 id,
                 block_height,

@@ -475,11 +475,11 @@ where
 
                 match coin {
                     CoinType::Coin(coin) => Input::coin_signed(
-                        coin.0.utxo_id,
-                        coin.0.owner,
-                        coin.0.amount,
-                        coin.0.asset_id,
-                        coin.0.tx_pointer,
+                        *coin.0.utxo_id(),
+                        *coin.0.owner(),
+                        *coin.0.amount(),
+                        *coin.0.asset_id(),
+                        *coin.0.tx_pointer(),
                         signature_index,
                     ),
                     CoinType::MessageCoin(message) => Input::message_coin_signed(
@@ -496,11 +496,11 @@ where
                 let predicate_gas_used = 0;
                 match coin {
                     CoinType::Coin(coin) => Input::coin_predicate(
-                        coin.0.utxo_id,
+                        *coin.0.utxo_id(),
                         predicate.predicate_address,
-                        coin.0.amount,
-                        coin.0.asset_id,
-                        coin.0.tx_pointer,
+                        *coin.0.amount(),
+                        *coin.0.asset_id(),
+                        *coin.0.tx_pointer(),
                         predicate_gas_used,
                         predicate.predicate.clone(),
                         predicate.predicate_data.clone(),

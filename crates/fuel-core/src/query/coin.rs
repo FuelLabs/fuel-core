@@ -8,10 +8,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 use fuel_core_types::{
-    entities::coins::coin::{
-        Coin,
-        UncompressedCoin,
-    },
+    entities::coins::coin::UncompressedCoin,
     fuel_tx::UtxoId,
     fuel_types::Address,
 };
@@ -51,7 +48,7 @@ impl ReadView {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<Coin>> + '_ {
+    ) -> impl Stream<Item = StorageResult<UncompressedCoin>> + '_ {
         self.owned_coins_ids(owner, start_coin, direction)
             .chunks(self.batch_size)
             .map(|chunk| {

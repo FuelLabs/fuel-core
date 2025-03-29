@@ -1,12 +1,3 @@
-use fuel_core_storage::StorageAsMut;
-use fuel_core_types::{
-    entities::{
-        coins::coin::Coin,
-        Message,
-    },
-    services::executor::Event,
-};
-
 use crate::graphql_api::{
     ports::worker::OffChainDatabaseTransaction,
     storage::balances::{
@@ -15,6 +6,17 @@ use crate::graphql_api::{
         MessageBalance,
         MessageBalances,
     },
+};
+use fuel_core_storage::StorageAsMut;
+use fuel_core_types::{
+    entities::{
+        coins::coin::{
+            Coin,
+            DataCoin,
+        },
+        Message,
+    },
+    services::executor::Event,
 };
 
 use super::error::IndexationError;
@@ -112,9 +114,53 @@ where
         .map_err(Into::into)
 }
 
+fn increase_data_coin_balance<T>(
+    block_st_transaction: &mut T,
+    coin: &DataCoin,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
+    let storage = block_st_transaction.storage::<CoinBalances>();
+    let current_amount = storage.get(&key)?.unwrap_or_default().into_owned();
+    let new_amount = current_amount.saturating_add(u128::from(coin.amount));
+
+    block_st_transaction
+        .storage::<CoinBalances>()
+        .insert(&key, &new_amount)
+        .map_err(Into::into)
+}
+
 fn decrease_coin_balance<T>(
     block_st_transaction: &mut T,
     coin: &Coin,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = CoinBalancesKey::new(&coin.owner, &coin.asset_id);
+    let storage = block_st_transaction.storage::<CoinBalances>();
+    let current_amount = storage.get(&key)?.unwrap_or_default().into_owned();
+
+    let new_amount = current_amount
+        .checked_sub(u128::from(coin.amount))
+        .ok_or_else(|| IndexationError::CoinBalanceWouldUnderflow {
+            owner: coin.owner,
+            asset_id: coin.asset_id,
+            current_amount,
+            requested_deduction: u128::from(coin.amount),
+        })?;
+
+    block_st_transaction
+        .storage::<CoinBalances>()
+        .insert(&key, &new_amount)
+        .map_err(Into::into)
+}
+
+fn decrease_data_coin_balance<T>(
+    block_st_transaction: &mut T,
+    coin: &DataCoin,
 ) -> Result<(), IndexationError>
 where
     T: OffChainDatabaseTransaction,
@@ -159,6 +205,12 @@ where
         }
         Event::CoinCreated(coin) => increase_coin_balance(block_st_transaction, coin),
         Event::CoinConsumed(coin) => decrease_coin_balance(block_st_transaction, coin),
+        Event::DataCoinCreated(coin) => {
+            increase_data_coin_balance(block_st_transaction, coin)
+        }
+        Event::DataCoinConsumed(coin) => {
+            decrease_data_coin_balance(block_st_transaction, coin)
+        }
         Event::ForcedTransactionFailed { .. } => Ok(()),
     }
 }

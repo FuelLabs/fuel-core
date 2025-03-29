@@ -345,7 +345,10 @@ mod tests {
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
-        entities::coins::coin::Coin,
+        entities::coins::coin::{
+            Coin,
+            UncompressedCoin,
+        },
         fuel_tx::UtxoId,
         fuel_types::{
             Address,
@@ -500,14 +503,14 @@ mod tests {
 
         assert!(matches!(
             alice_coins.as_slice(),
-            &[Coin {
+            &[UncompressedCoin::Coin(Coin {
                 utxo_id,
                 owner,
                 amount,
                 asset_id,
                 tx_pointer,
                 ..
-            }] if utxo_id == alice_utxo_id
+            })] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
             && asset_id == asset_id_alice
@@ -515,12 +518,12 @@ mod tests {
         ));
         assert!(matches!(
             bob_coins.as_slice(),
-            &[Coin {
+            &[UncompressedCoin::Coin(Coin {
                 owner,
                 amount,
                 asset_id,
                 ..
-            }] if owner == bob
+            })] if owner == bob
             && amount == bob_value
             && asset_id == asset_id_bob
         ));
@@ -681,7 +684,7 @@ mod tests {
         assert!(init_result.is_err())
     }
 
-    fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<Coin> {
+    fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<UncompressedCoin> {
         db.off_chain()
             .latest_view()
             .unwrap()
@@ -691,7 +694,7 @@ mod tests {
                 db.on_chain()
                     .storage::<Coins>()
                     .get(&coin_id)
-                    .map(|v| v.unwrap().into_owned().uncompress_coin(coin_id))
+                    .map(|v| v.unwrap().into_owned().uncompress(coin_id))
                     .unwrap()
             })
             .collect()

@@ -126,6 +126,39 @@ impl Encode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
 
                 SerializedCoinsToSpendIndexKey::Message(serialized_coin)
             }
+            CoinsToSpendIndexKey::DataCoin {
+                owner,
+                asset_id,
+                amount,
+                utxo_id,
+                data: _data,
+            } => {
+                // retryable_flag | address | asset_id | amount | utxo_id | coin_type
+                let retryable_flag_bytes = NON_RETRYABLE_BYTE;
+
+                // retryable_flag | address | asset_id | amount | utxo_id | coin_type
+                let mut serialized_coin = [0u8; COIN_VARIANT_SIZE];
+                let mut start = 0;
+                let mut end = RETRYABLE_FLAG_SIZE;
+                serialized_coin[start] = retryable_flag_bytes[0];
+                start = end;
+                end = end.saturating_add(Address::LEN);
+                serialized_coin[start..end].copy_from_slice(owner.as_ref());
+                start = end;
+                end = end.saturating_add(AssetId::LEN);
+                serialized_coin[start..end].copy_from_slice(asset_id.as_ref());
+                start = end;
+                end = end.saturating_add(AMOUNT_SIZE);
+                serialized_coin[start..end].copy_from_slice(&amount.to_be_bytes());
+                start = end;
+                end = end.saturating_add(UTXO_ID_SIZE);
+                serialized_coin[start..end].copy_from_slice(&utxo_id_to_bytes(utxo_id));
+                start = end;
+                serialized_coin[start] = CoinType::Coin as u8;
+
+                todo!("Need to add data");
+                // SerializedCoinsToSpendIndexKey::Coin(serialized_coin)
+            }
         }
     }
 }

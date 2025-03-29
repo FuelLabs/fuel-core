@@ -181,6 +181,14 @@ impl UncompressedCoin {
             UncompressedCoin::DataCoin(coin) => &coin.tx_pointer,
         }
     }
+
+    /// Returns the data attached to coin if it exists
+    pub fn data(&self) -> Option<&Vec<u8>> {
+        match self {
+            UncompressedCoin::Coin(_) => None,
+            UncompressedCoin::DataCoin(coin) => Some(&coin.data),
+        }
+    }
 }
 
 impl From<CompressedCoinV1> for CompressedCoin {

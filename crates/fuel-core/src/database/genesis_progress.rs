@@ -112,12 +112,11 @@ impl GenesisDatabase {
         let mut root_calculator = MerkleRootCalculator::new();
         for coin in coins {
             let (utxo_id, coin) = coin?;
-            // root_calculator.push(coin.uncompress_coin(utxo_id).root()?.as_slice());
             let root = match coin.uncompress(utxo_id) {
-                UncompressedCoin::Coin(coin) => coin.root()?.as_slice(),
-                UncompressedCoin::DataCoin(data_coin) => data_coin.root()?.as_slice(),
+                UncompressedCoin::Coin(coin) => coin.root()?,
+                UncompressedCoin::DataCoin(data_coin) => data_coin.root()?,
             };
-            root_calculator.push(root);
+            root_calculator.push(&root);
         }
 
         Ok(root_calculator.root())

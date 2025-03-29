@@ -28,6 +28,7 @@ use crate::{
         scalars::{
             Address,
             AssetId,
+            HexString,
             Nonce,
             UtxoId,
             U128,
@@ -48,7 +49,7 @@ use async_graphql::{
 use fuel_core_types::{
     entities::coins::{
         self,
-        coin::Coin as CoinModel,
+        coin::UncompressedCoin,
         message_coin::{
             self,
             MessageCoin as MessageCoinModel,
@@ -63,39 +64,43 @@ use fuel_core_types::{
 use itertools::Itertools;
 use tokio_stream::StreamExt;
 
-pub struct Coin(pub(crate) CoinModel);
+pub struct Coin(pub(crate) UncompressedCoin);
 
 #[async_graphql::Object]
 impl Coin {
     async fn utxo_id(&self) -> UtxoId {
-        self.0.utxo_id.into()
+        (*self.0.utxo_id()).into()
     }
 
     async fn owner(&self) -> Address {
-        self.0.owner.into()
+        (*self.0.owner()).into()
     }
 
     async fn amount(&self) -> U64 {
-        self.0.amount.into()
+        (*self.0.amount()).into()
     }
 
     async fn asset_id(&self) -> AssetId {
-        self.0.asset_id.into()
+        (*self.0.asset_id()).into()
     }
 
     /// TxPointer - the height of the block this coin was created in
     async fn block_created(&self) -> U32 {
-        u32::from(self.0.tx_pointer.block_height()).into()
+        u32::from(self.0.tx_pointer().block_height()).into()
     }
 
     /// TxPointer - the index of the transaction that created this coin
     async fn tx_created_idx(&self) -> U16 {
-        self.0.tx_pointer.tx_index().into()
+        self.0.tx_pointer().tx_index().into()
+    }
+
+    async fn data(&self) -> Option<HexString> {
+        self.0.data().map(|data| HexString(data.clone()))
     }
 }
 
-impl From<CoinModel> for Coin {
-    fn from(value: CoinModel) -> Self {
+impl From<UncompressedCoin> for Coin {
+    fn from(value: UncompressedCoin) -> Self {
         Coin(value)
     }
 }
@@ -153,7 +158,7 @@ pub enum CoinType {
 impl CoinType {
     pub fn amount(&self) -> u64 {
         match self {
-            CoinType::Coin(coin) => coin.0.amount,
+            CoinType::Coin(coin) => *coin.0.amount(),
             CoinType::MessageCoin(coin) => coin.0.amount,
         }
     }
@@ -251,14 +256,14 @@ impl CoinQuery {
                 .filter_map(|result| {
                     if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
                     {
-                        if coin.asset_id != filter_asset_id.0 {
+                        if *coin.asset_id() != filter_asset_id.0 {
                             return None
                         }
                     }
 
                     Some(result)
                 })
-                .map(|res| res.map(|coin| (coin.utxo_id.into(), coin.into())));
+                .map(|res| res.map(|coin| ((*coin.utxo_id()).into(), coin.into())));
 
             Ok(coins)
         })
@@ -463,6 +468,7 @@ fn into_coin_id(selected: &[CoinsToSpendIndexKey]) -> Vec<CoinId> {
     for coin in selected {
         let coin = match coin {
             CoinsToSpendIndexKey::Coin { utxo_id, .. } => CoinId::Utxo(*utxo_id),
+            CoinsToSpendIndexKey::DataCoin { utxo_id, .. } => CoinId::Utxo(*utxo_id),
             CoinsToSpendIndexKey::Message { nonce, .. } => CoinId::Message(*nonce),
         };
         coins.push(coin);

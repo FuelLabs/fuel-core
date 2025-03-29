@@ -375,6 +375,7 @@ where
 fn is_excluded(key: &CoinsToSpendIndexKey, exclude: &Exclude) -> bool {
     match key {
         CoinsToSpendIndexKey::Coin { utxo_id, .. } => exclude.contains_coin(utxo_id),
+        CoinsToSpendIndexKey::DataCoin { utxo_id, .. } => exclude.contains_coin(utxo_id),
         CoinsToSpendIndexKey::Message { nonce, .. } => exclude.contains_message(nonce),
     }
 }
@@ -462,8 +463,8 @@ mod tests {
         blockchain::primitives::DaBlockHeight,
         entities::{
             coins::coin::{
-                Coin,
                 CompressedCoin,
+                UncompressedCoin,
             },
             relayer::message::{
                 Message,
@@ -1025,8 +1026,8 @@ mod tests {
                 .owned_coins(&owner)
                 .await
                 .into_iter()
-                .filter(|coin| coin.amount == 5)
-                .map(|coin| CoinId::Utxo(coin.utxo_id))
+                .filter(|coin| *coin.amount() == 5)
+                .map(|coin| CoinId::Utxo(*coin.utxo_id()))
                 .collect_vec();
 
             exclusion_assert(owner, &asset_ids, base_asset_id, db, excluded_ids).await;
@@ -1637,7 +1638,7 @@ mod tests {
             owner: Address,
             amount: Word,
             asset_id: AssetId,
-        ) -> Coin {
+        ) -> UncompressedCoin {
             let index = self.last_coin_index;
             self.last_coin_index += 1;
 
@@ -1653,7 +1654,7 @@ mod tests {
             let coin_by_owner = owner_coin_id_key(&owner, &id);
             StorageMutate::<OwnedCoins>::insert(db, &coin_by_owner, &()).unwrap();
 
-            coin.uncompress_coin(id)
+            coin.uncompress(id)
         }
 
         pub fn make_message(&mut self, owner: Address, amount: Word) -> Message {
@@ -1680,7 +1681,7 @@ mod tests {
             message
         }
 
-        pub async fn owned_coins(&self, owner: &Address) -> Vec<Coin> {
+        pub async fn owned_coins(&self, owner: &Address) -> Vec<UncompressedCoin> {
             let query = self.service_database();
             let query = query.test_view();
             query
