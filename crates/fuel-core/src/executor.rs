@@ -63,6 +63,7 @@ mod tests {
         entities::{
             coins::coin::{
                 CompressedCoin,
+                CompressedCoinV1,
                 CompressedCoinV2,
             },
             relayer::message::{
@@ -3001,10 +3002,11 @@ mod tests {
         .into_iter()
         .collect()
     }
-
     #[test]
     fn validate__predicate_can_find_data_coin_data() {
         let mut rng = StdRng::seed_from_u64(2322u64);
+
+        // given
         let predicate: Vec<u8> =
             predicate_checking_predicate_data_matches_input_data_coin();
         let owner = Input::predicate_owner(&predicate);
@@ -3072,6 +3074,7 @@ mod tests {
 
         let producer = create_executor(db.clone(), config.clone());
 
+        // when
         let ExecutionResult {
             block,
             skipped_transactions,
@@ -3085,8 +3088,104 @@ mod tests {
             })
             .unwrap()
             .into_result();
-        dbg!(&skipped_transactions);
+
+        // then
         assert!(skipped_transactions.is_empty());
+
+        let validator = create_executor(db.clone(), config);
+        let result = validator.validate(&block);
+        assert!(result.is_ok(), "{result:?}")
+    }
+
+    #[test]
+    fn validate__predicate_fails_if_data_less_coin() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        // given
+        let predicate: Vec<u8> =
+            predicate_checking_predicate_data_matches_input_data_coin();
+        let owner = Input::predicate_owner(&predicate);
+        let amount = 1000;
+
+        let consensus_parameters = ConsensusParameters::default();
+        let config = Config {
+            forbid_fake_coins_default: true,
+            consensus_parameters: consensus_parameters.clone(),
+        };
+        let data = vec![99u8; 100];
+        let predicate_data = data.clone();
+
+        let mut tx = TransactionBuilder::script(
+            vec![op::ret(RegId::ONE)].into_iter().collect(),
+            vec![],
+        )
+        .max_fee_limit(amount)
+        .add_input(Input::coin_predicate(
+            // not a data coin
+            rng.gen(),
+            owner,
+            amount,
+            AssetId::BASE,
+            rng.gen(),
+            0,
+            predicate,
+            predicate_data,
+        ))
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: AssetId::BASE,
+        })
+        .finalize();
+        tx.estimate_predicates(
+            &consensus_parameters.clone().into(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .unwrap();
+        let db = &mut Database::default();
+
+        // insert coin into state
+        if let Input::CoinPredicate(CoinPredicate {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            ..
+        }) = tx.inputs()[0]
+        {
+            let coin = CompressedCoin::V1(CompressedCoinV1 {
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+            });
+            db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+        } else {
+            panic!("Expected a DataCoinPredicate");
+        }
+
+        let producer = create_executor(db.clone(), config.clone());
+
+        // when
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+            tx_status,
+            ..
+        } = producer
+            .produce_without_commit_with_source_direct_resolve(Components {
+                header_to_produce: PartialBlockHeader::default(),
+                transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                coinbase_recipient: Default::default(),
+                gas_price: 1,
+            })
+            .unwrap()
+            .into_result();
+        // then
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(tx_status.len(), 1);
 
         let validator = create_executor(db.clone(), config);
         let result = validator.validate(&block);
