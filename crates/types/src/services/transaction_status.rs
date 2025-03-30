@@ -214,7 +214,7 @@ impl From<PreconfirmationStatus> for TransactionStatus {
                     total_gas,
                     total_fee,
                     receipts: Some(receipts),
-                    outputs: Some(outputs),
+                    resolved_outputs: Some(outputs),
                 }
                 .into(),
             ),
@@ -232,7 +232,7 @@ impl From<PreconfirmationStatus> for TransactionStatus {
                         total_gas,
                         total_fee,
                         receipts: Some(receipts),
-                        outputs: Some(outputs),
+                        resolved_outputs: Some(outputs),
                         reason,
                     }
                     .into(),
@@ -242,9 +242,22 @@ impl From<PreconfirmationStatus> for TransactionStatus {
     }
 }
 
+/// The status of the transaction possible during the preconfirmation phase.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PreConfirmationStatus {
+    /// Transaction was successfully executed by block producer.
+    Success(Arc<statuses::PreConfirmationSuccess>),
+    /// Transaction was squeezed out by the block producer.
+    SqueezedOut(Arc<statuses::PreConfirmationSqueezedOut>),
+    /// Transaction was included in a block by block producer, but the execution has failed.
+    Failure(Arc<statuses::PreConfirmationFailure>),
+}
+
 /// The status of the transaction during its lifecycle.
 pub mod statuses {
     use super::*;
+    use crate::fuel_tx::UtxoId;
 
     /// Transaction was submitted into the TxPool
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -306,7 +319,7 @@ pub mod statuses {
         /// Receipts produced by the transaction during execution.
         pub receipts: Option<Vec<Receipt>>,
         /// Dynamic outputs produced by the transaction during execution.
-        pub outputs: Option<Vec<Output>>,
+        pub resolved_outputs: Option<Vec<(UtxoId, Output)>>,
     }
 
     /// Transaction was squeezed out of the TxPool
@@ -402,7 +415,7 @@ pub mod statuses {
         /// Receipts produced by the transaction during execution.
         pub receipts: Option<Vec<Receipt>>,
         /// Dynamic outputs produced by the transaction during execution.
-        pub outputs: Option<Vec<Output>>,
+        pub resolved_outputs: Option<Vec<(UtxoId, Output)>>,
         /// The reason why the transaction has failed
         pub reason: String,
     }
@@ -414,7 +427,7 @@ pub mod statuses {
                 total_gas: 0,
                 total_fee: 0,
                 receipts: None,
-                outputs: None,
+                resolved_outputs: None,
                 reason: "Dummy reason".to_string(),
             }
         }

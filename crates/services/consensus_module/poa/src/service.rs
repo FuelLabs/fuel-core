@@ -22,7 +22,6 @@ use crate::{
         PredefinedBlocks,
         TransactionPool,
         TransactionsSource,
-        TxStatusManager,
         WaitForReadySignal,
     },
     sync::{
@@ -67,8 +66,7 @@ use fuel_core_types::{
 use serde::Serialize;
 use tokio::time::sleep_until;
 
-pub type Service<T, B, I, S, PB, C, TxStatusManager, RS> =
-    ServiceRunner<MainTask<T, B, I, S, PB, C, TxStatusManager, RS>>;
+pub type Service<B, I, S, PB, C, RS> = ServiceRunner<MainTask<B, I, S, PB, C, RS>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -123,12 +121,10 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<T, B, I, S, PB, C, TxStatusManager, RS> {
+pub struct MainTask<B, I, S, PB, C, RS> {
     signer: Arc<S>,
     block_producer: B,
     block_importer: I,
-    txpool: T,
-    tx_status_manager: TxStatusManager,
     new_txs_watcher: tokio::sync::watch::Receiver<()>,
     request_receiver: mpsc::Receiver<Request>,
     shared_state: SharedState,
@@ -145,21 +141,18 @@ pub struct MainTask<T, B, I, S, PB, C, TxStatusManager, RS> {
     block_production_ready_signal: BlockProductionReadySignal<RS>,
 }
 
-impl<T, B, I, S, PB, C, TxStatusMgr, RS> MainTask<T, B, I, S, PB, C, TxStatusMgr, RS>
+impl<B, I, S, PB, C, RS> MainTask<B, I, S, PB, C, RS>
 where
-    TxStatusMgr: TxStatusManager,
-    T: TransactionPool,
     I: BlockImporter,
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
 {
     #[allow(clippy::too_many_arguments)]
-    pub fn new<P: P2pPort>(
+    pub fn new<P: P2pPort, T: TransactionPool>(
         last_block: &BlockHeader,
         config: Config,
         txpool: T,
-        tx_status_manager: TxStatusMgr,
         block_producer: B,
         block_importer: I,
         p2p_port: P,
@@ -199,7 +192,6 @@ where
 
         Self {
             signer,
-            txpool,
             block_producer,
             block_importer,
             new_txs_watcher,
@@ -212,7 +204,6 @@ where
             trigger,
             sync_task_handle,
             clock,
-            tx_status_manager,
             production_timeout,
             block_production_ready_signal,
         }
@@ -275,10 +266,8 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C, TxStatusMgr, RS> MainTask<T, B, I, S, PB, C, TxStatusMgr, RS>
+impl<B, I, S, PB, C, RS> MainTask<B, I, S, PB, C, RS>
 where
-    TxStatusMgr: TxStatusManager,
-    T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
     S: BlockSigner,
@@ -397,19 +386,13 @@ where
             .into();
 
         if !skipped_transactions.is_empty() {
-            let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
             for (tx_id, err) in skipped_transactions {
                 tracing::error!(
-                "During block production got invalid transaction {:?} with error {:?}",
-                tx_id,
-                err
-            );
-                tx_ids_to_remove.push((tx_id, err.to_string()));
+                    "During block production got invalid transaction {:?} with error {:?}",
+                    tx_id,
+                    err
+                );
             }
-            self.txpool.notify_skipped_txs(
-                tx_ids_to_remove.iter().map(|(tx_id, _)| *tx_id).collect(),
-            );
-            self.tx_status_manager.notify_skipped_txs(tx_ids_to_remove);
         }
 
         // Sign the block and seal it
@@ -585,8 +568,7 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<T, B, I, S, PB, C, TxStatusManager, RS> RunnableService
-    for MainTask<T, B, I, S, PB, C, TxStatusManager, RS>
+impl<B, I, S, PB, C, RS> RunnableService for MainTask<B, I, S, PB, C, RS>
 where
     Self: RunnableTask,
     RS: WaitForReadySignal,
@@ -594,7 +576,7 @@ where
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<T, B, I, S, PB, C, TxStatusManager, RS>;
+    type Task = MainTask<B, I, S, PB, C, RS>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -622,11 +604,8 @@ where
     }
 }
 
-impl<T, B, I, S, PB, C, TxStatusMgr, RS> RunnableTask
-    for MainTask<T, B, I, S, PB, C, TxStatusMgr, RS>
+impl<B, I, S, PB, C, RS> RunnableTask for MainTask<B, I, S, PB, C, RS>
 where
-    TxStatusMgr: TxStatusManager,
-    T: TransactionPool,
     B: BlockProducer,
     I: BlockImporter,
     S: BlockSigner,
@@ -706,11 +685,10 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB, C, TxStatusMgr, RS>(
+pub fn new_service<T, B, I, P, S, PB, C, RS>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
-    tx_status_manager: TxStatusMgr,
     block_producer: B,
     block_importer: I,
     p2p_port: P,
@@ -718,9 +696,8 @@ pub fn new_service<T, B, I, P, S, PB, C, TxStatusMgr, RS>(
     predefined_blocks: PB,
     clock: C,
     block_production_ready_signal: RS,
-) -> Service<T, B, I, S, PB, C, TxStatusMgr, RS>
+) -> Service<B, I, S, PB, C, RS>
 where
-    TxStatusMgr: TxStatusManager + 'static,
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
     I: BlockImporter + 'static,
@@ -734,7 +711,6 @@ where
         last_block,
         config,
         txpool,
-        tx_status_manager,
         block_producer,
         block_importer,
         p2p_port,

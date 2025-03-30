@@ -19,6 +19,9 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
+/// The root of the registry.
+pub type RegistryRoot = fuel_core_types::fuel_tx::Bytes32;
+
 /// A partially complete fuel block header that does not
 /// have any generated fields because it has not been executed yet.
 #[derive(
@@ -29,12 +32,14 @@ pub struct CompressedBlockHeader {
     pub application: ApplicationHeader<Empty>,
     /// The consensus header.
     pub consensus: ConsensusHeader<Empty>,
-    // The block id.
+    /// The block id.
     pub block_id: BlockId,
+    // The registry root
+    pub registry_root: RegistryRoot,
 }
 
-impl From<&BlockHeader> for CompressedBlockHeader {
-    fn from(header: &BlockHeader) -> Self {
+impl CompressedBlockHeader {
+    fn new(header: &BlockHeader, registry_root: RegistryRoot) -> Self {
         let ConsensusHeader {
             prev_root,
             height,
@@ -56,6 +61,7 @@ impl From<&BlockHeader> for CompressedBlockHeader {
                 generated: Empty {},
             },
             block_id: header.id(),
+            registry_root,
         }
     }
 }
@@ -112,9 +118,10 @@ impl CompressedBlockPayloadV1 {
         header: &BlockHeader,
         registrations: RegistrationsPerTable,
         transactions: Vec<CompressedTransaction>,
+        registry_root: RegistryRoot,
     ) -> Self {
         Self {
-            header: CompressedBlockHeader::from(header),
+            header: CompressedBlockHeader::new(header, registry_root),
             registrations,
             transactions,
         }

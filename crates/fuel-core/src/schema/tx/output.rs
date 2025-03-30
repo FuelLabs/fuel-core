@@ -15,9 +15,33 @@ use crate::schema::scalars::{
     AssetId,
     Bytes32,
     ContractId,
+    UtxoId,
     U16,
     U64,
 };
+
+pub struct ResolvedOutput {
+    utxo_id: fuel_tx::UtxoId,
+    output: output::Output,
+}
+
+#[Object]
+impl ResolvedOutput {
+    async fn utxo_id(&self) -> UtxoId {
+        self.utxo_id.into()
+    }
+
+    async fn output(&self) -> Output {
+        (&self.output).into()
+    }
+}
+
+impl From<(fuel_tx::UtxoId, output::Output)> for ResolvedOutput {
+    fn from(value: (fuel_tx::UtxoId, output::Output)) -> Self {
+        let (utxo_id, output) = value;
+        ResolvedOutput { utxo_id, output }
+    }
+}
 
 #[derive(Union)]
 pub enum Output {

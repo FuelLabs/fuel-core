@@ -826,11 +826,6 @@ mod tests {
         use fuel_core_storage::transactional::WriteTransaction;
 
         #[test]
-        fn column_keys_not_exceed_count_test() {
-            column_keys_not_exceed_count::<OffChain>();
-        }
-
-        #[test]
         fn database_advances_with_a_new_block() {
             // Given
             let mut database = Database::<OffChain>::default();

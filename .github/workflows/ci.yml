@@ -149,6 +149,8 @@ jobs:
             args: run -p fuel-core-client --no-default-features
           - command: nextest
             args: run -p fuel-core-chain-config --no-default-features
+          - command: nextest
+            args: run --workspace --features fault-proving --test integration_tests
           # Don't split this command; this is a workaround.
           # We need to run `cargo check` first to fetch the locked dependencies
           # for `fuel-core 0.26.0`(because of the bug with `--offline`
