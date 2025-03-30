@@ -179,3 +179,117 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
         "got unexpected error {err}"
     )
 }
+
+fn predicate_checking_predicate_data_matches_input_data_coin() -> Vec<u8> {
+    let len_reg = 0x13;
+    let res_reg = 0x10;
+    let input_index = 0;
+    let expected_data_mem_location = 0x22;
+    let actual_data_mem_location = 0x23;
+    vec![
+        op::gtf_args(len_reg, input_index, GTFArgs::InputDataCoinDataLength),
+        // get expected data from predicate data
+        op::gtf_args(
+            expected_data_mem_location,
+            input_index,
+            GTFArgs::InputCoinPredicateData,
+        ),
+        // get actual data
+        op::gtf_args(
+            actual_data_mem_location,
+            input_index,
+            GTFArgs::InputDataCoinData,
+        ),
+        // compare
+        op::meq(
+            res_reg,
+            expected_data_mem_location,
+            actual_data_mem_location,
+            len_reg,
+        ),
+        op::ret(res_reg),
+    ]
+    .into_iter()
+    .collect()
+}
+
+#[tokio::test]
+async fn submit__tx_with_predicate_can_check_data_coin() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
+    let mut rng = StdRng::seed_from_u64(2322);
+
+    // given
+    let amount = 500;
+    let limit = 1000;
+    let asset_id = rng.gen();
+    let predicate = predicate_checking_predicate_data_matches_input_data_coin();
+    let coin_data = vec![123; 100];
+    let predicate_data = coin_data.clone();
+    let owner = Input::predicate_owner(&predicate);
+    let mut predicate_tx =
+        TransactionBuilder::script(Default::default(), Default::default())
+            .add_input(Input::data_coin_predicate(
+                rng.gen(),
+                owner,
+                amount,
+                asset_id,
+                Default::default(),
+                Default::default(),
+                predicate,
+                predicate_data,
+                coin_data,
+            ))
+            .add_output(Output::change(rng.gen(), 0, asset_id))
+            .script_gas_limit(limit)
+            .finalize();
+
+    // create test context with predicates disabled
+    let context = TestSetupBuilder::default()
+        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .finalize()
+        .await;
+
+    assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
+
+    predicate_tx
+        .estimate_predicates(
+            &CheckPredicateParams::from(
+                &context
+                    .srv
+                    .shared
+                    .config
+                    .snapshot_reader
+                    .chain_config()
+                    .consensus_parameters,
+            ),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
+
+    assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
+
+    let predicate_tx = predicate_tx.into();
+    context
+        .client
+        .submit_and_await_commit(&predicate_tx)
+        .await
+        .unwrap();
+
+    // check transaction change amount to see if predicate was spent
+    let transaction: Transaction = context
+        .client
+        .transaction(&predicate_tx.id(&ChainId::default()))
+        .await
+        .unwrap()
+        .unwrap()
+        .transaction
+        .try_into()
+        .unwrap();
+
+    assert!(
+        matches!(transaction.as_script().unwrap().outputs()[0], Output::Change { amount: change_amount, .. } if change_amount == amount)
+    )
+}

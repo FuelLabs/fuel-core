@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{
         coin_config_helpers::CoinConfigGenerator,
-        CoinConfig,
+        ConfigCoin,
         MessageConfig,
         StateConfig,
     },
@@ -56,11 +56,14 @@ async fn balance() {
             (owner, 150, asset_id),
         ]
         .into_iter()
-        .map(|(owner, amount, asset_id)| CoinConfig {
-            owner,
-            amount,
-            asset_id,
-            ..coin_generator.generate()
+        .map(|(owner, amount, asset_id)| {
+            ConfigCoin {
+                owner,
+                amount,
+                asset_id,
+                ..coin_generator.generate()
+            }
+            .into()
         })
         .collect(),
         messages: vec![
@@ -220,11 +223,14 @@ async fn first_5_balances() {
                             (owner, 150, asset_id),
                         ]
                     })
-                    .map(|(owner, amount, asset_id)| CoinConfig {
-                        owner: *owner,
-                        amount,
-                        asset_id,
-                        ..coin_generator.generate()
+                    .map(|(owner, amount, asset_id)| {
+                        ConfigCoin {
+                            owner: *owner,
+                            amount,
+                            asset_id,
+                            ..coin_generator.generate()
+                        }
+                        .into()
                     }),
             );
         }
@@ -295,11 +301,11 @@ async fn first_5_balances() {
 }
 
 mod pagination {
+    use crate::balances::ConfigCoin;
     use fuel_core::{
         chain_config::{
             coin_config_helpers::CoinConfigGenerator,
             ChainConfig,
-            CoinConfig,
             MessageConfig,
             StateConfig,
         },
@@ -336,11 +342,14 @@ mod pagination {
             coins.extend(
                 coin.iter()
                     .flat_map(|(asset_id, amount)| vec![(owner, amount, asset_id)])
-                    .map(|(owner, amount, asset_id)| CoinConfig {
-                        owner: *owner,
-                        amount: *amount as u64,
-                        asset_id: *asset_id,
-                        ..coin_generator.generate()
+                    .map(|(owner, amount, asset_id)| {
+                        ConfigCoin {
+                            owner: *owner,
+                            amount: *amount as u64,
+                            asset_id: *asset_id,
+                            ..coin_generator.generate()
+                        }
+                        .into()
                     }),
             );
             coins

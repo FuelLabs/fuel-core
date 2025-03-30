@@ -18,6 +18,7 @@ use crate::{
         AssetId,
     },
 };
+use alloc::vec::Vec;
 
 /// Represents the user's coin for some asset with `asset_id`.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -306,6 +307,7 @@ impl CompressedCoin {
     /// Returns `None`, if the `input` is a different type of input.
     /// Otherwise, returns the result of the field comparison.
     pub fn matches_input(&self, input: &Input) -> Option<bool> {
+        tracing::debug!("Checking if CompressedCoin matches Input: {:?}", input);
         match input {
             Input::CoinSigned(CoinSigned {
                 owner,
@@ -343,7 +345,12 @@ impl CompressedCoin {
                         && amount == &coin.amount
                         && asset_id == &coin.asset_id,
                 ),
-                _ => None,
+                _ => {
+                    tracing::debug!(
+                        "Invalid type for CompressedCoin: expected V2 for DataCoin but found V1. \
+                  ");
+                    None
+                }
             },
             _ => None,
         }

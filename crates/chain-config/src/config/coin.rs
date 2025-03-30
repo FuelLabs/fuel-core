@@ -1,5 +1,8 @@
-use super::table_entry::TableEntry;
-use crate::GenesisCommitment;
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
 use fuel_core_storage::{
     tables::Coins,
     MerkleRoot,
@@ -23,29 +26,144 @@ use fuel_core_types::{
         Bytes32,
     },
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
+
+use crate::GenesisCommitment;
+
+use super::table_entry::TableEntry;
+
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub enum CoinConfig {
+    Coin(ConfigCoin),
+    DataCoin(ConfigDataCoin),
+}
 
 #[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct CoinConfig {
-    /// auto-generated if None
+pub struct ConfigCoin {
     pub tx_id: Bytes32,
     pub output_index: u16,
-    /// used if coin is forked from another chain to preserve id & tx_pointer
     pub tx_pointer_block_height: BlockHeight,
-    /// used if coin is forked from another chain to preserve id & tx_pointer
-    /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: u16,
     pub owner: Address,
     pub amount: u64,
     pub asset_id: AssetId,
 }
 
+#[derive(Default, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct ConfigDataCoin {
+    pub tx_id: Bytes32,
+    pub output_index: u16,
+    pub tx_pointer_block_height: BlockHeight,
+    pub tx_pointer_tx_idx: u16,
+    pub owner: Address,
+    pub amount: u64,
+    pub asset_id: AssetId,
+    pub data: Vec<u8>,
+}
+
+impl CoinConfig {
+    pub fn tx_id(&self) -> Bytes32 {
+        match self {
+            CoinConfig::Coin(ConfigCoin { tx_id, .. }) => *tx_id,
+            CoinConfig::DataCoin(ConfigDataCoin { tx_id, .. }) => *tx_id,
+        }
+    }
+
+    pub fn output_index(&self) -> u16 {
+        match self {
+            CoinConfig::Coin(ConfigCoin { output_index, .. }) => *output_index,
+            CoinConfig::DataCoin(ConfigDataCoin { output_index, .. }) => *output_index,
+        }
+    }
+
+    pub fn mut_output_index(&mut self) -> &mut u16 {
+        match self {
+            CoinConfig::Coin(ConfigCoin { output_index, .. }) => output_index,
+            CoinConfig::DataCoin(ConfigDataCoin { output_index, .. }) => output_index,
+        }
+    }
+
+    pub fn tx_pointer_block_height(&self) -> BlockHeight {
+        match self {
+            CoinConfig::Coin(ConfigCoin {
+                tx_pointer_block_height,
+                ..
+            }) => *tx_pointer_block_height,
+            CoinConfig::DataCoin(ConfigDataCoin {
+                tx_pointer_block_height,
+                ..
+            }) => *tx_pointer_block_height,
+        }
+    }
+
+    pub fn tx_pointer_tx_idx(&self) -> u16 {
+        match self {
+            CoinConfig::Coin(ConfigCoin {
+                tx_pointer_tx_idx, ..
+            }) => *tx_pointer_tx_idx,
+            CoinConfig::DataCoin(ConfigDataCoin {
+                tx_pointer_tx_idx, ..
+            }) => *tx_pointer_tx_idx,
+        }
+    }
+
+    pub fn owner(&self) -> Address {
+        match self {
+            CoinConfig::Coin(ConfigCoin { owner, .. }) => *owner,
+            CoinConfig::DataCoin(ConfigDataCoin { owner, .. }) => *owner,
+        }
+    }
+
+    pub fn mut_owner(&mut self) -> &mut Address {
+        match self {
+            CoinConfig::Coin(ConfigCoin { owner, .. }) => owner,
+            CoinConfig::DataCoin(ConfigDataCoin { owner, .. }) => owner,
+        }
+    }
+
+    pub fn amount(&self) -> u64 {
+        match self {
+            CoinConfig::Coin(ConfigCoin { amount, .. }) => *amount,
+            CoinConfig::DataCoin(ConfigDataCoin { amount, .. }) => *amount,
+        }
+    }
+
+    pub fn asset_id(&self) -> AssetId {
+        match self {
+            CoinConfig::Coin(ConfigCoin { asset_id, .. }) => *asset_id,
+            CoinConfig::DataCoin(ConfigDataCoin { asset_id, .. }) => *asset_id,
+        }
+    }
+
+    pub fn mut_asset_id(&mut self) -> &mut AssetId {
+        match self {
+            CoinConfig::Coin(ConfigCoin { asset_id, .. }) => asset_id,
+            CoinConfig::DataCoin(ConfigDataCoin { asset_id, .. }) => asset_id,
+        }
+    }
+
+    pub fn data(&self) -> Option<&Vec<u8>> {
+        match self {
+            CoinConfig::Coin(_) => None,
+            CoinConfig::DataCoin(ConfigDataCoin { data, .. }) => Some(data),
+        }
+    }
+}
+
+impl From<ConfigCoin> for CoinConfig {
+    fn from(value: ConfigCoin) -> Self {
+        CoinConfig::Coin(value)
+    }
+}
+
+impl From<ConfigDataCoin> for CoinConfig {
+    fn from(value: ConfigDataCoin) -> Self {
+        CoinConfig::DataCoin(value)
+    }
+}
+
 impl From<TableEntry<Coins>> for CoinConfig {
     fn from(value: TableEntry<Coins>) -> Self {
-        CoinConfig {
+        ConfigCoin {
             tx_id: *value.key.tx_id(),
             output_index: value.key.output_index(),
             tx_pointer_block_height: value.value.tx_pointer().block_height(),
@@ -54,20 +172,21 @@ impl From<TableEntry<Coins>> for CoinConfig {
             amount: *value.value.amount(),
             asset_id: *value.value.asset_id(),
         }
+        .into()
     }
 }
 
 impl From<CoinConfig> for TableEntry<Coins> {
     fn from(config: CoinConfig) -> Self {
         Self {
-            key: UtxoId::new(config.tx_id, config.output_index),
+            key: UtxoId::new(config.tx_id(), config.output_index()),
             value: CompressedCoin::V1(CompressedCoinV1 {
-                owner: config.owner,
-                amount: config.amount,
-                asset_id: config.asset_id,
+                owner: config.owner(),
+                amount: config.amount(),
+                asset_id: config.asset_id(),
                 tx_pointer: TxPointer::new(
-                    config.tx_pointer_block_height,
-                    config.tx_pointer_tx_idx,
+                    config.tx_pointer_block_height(),
+                    config.tx_pointer_tx_idx(),
                 ),
             }),
         }
@@ -76,18 +195,18 @@ impl From<CoinConfig> for TableEntry<Coins> {
 
 impl CoinConfig {
     pub fn utxo_id(&self) -> UtxoId {
-        UtxoId::new(self.tx_id, self.output_index)
+        UtxoId::new(self.tx_id(), self.output_index())
     }
 
     pub fn tx_pointer(&self) -> TxPointer {
-        TxPointer::new(self.tx_pointer_block_height, self.tx_pointer_tx_idx)
+        TxPointer::new(self.tx_pointer_block_height(), self.tx_pointer_tx_idx())
     }
 }
 
 #[cfg(feature = "test-helpers")]
 impl crate::Randomize for CoinConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
-        Self {
+        ConfigCoin {
             tx_id: crate::Randomize::randomize(&mut rng),
             output_index: rng.gen(),
             tx_pointer_block_height: rng.gen(),
@@ -96,6 +215,7 @@ impl crate::Randomize for CoinConfig {
             amount: rng.gen(),
             asset_id: crate::Randomize::randomize(&mut rng),
         }
+        .into()
     }
 }
 
@@ -147,13 +267,17 @@ impl GenesisCommitment for DataCoin {
 
 #[cfg(feature = "test-helpers")]
 pub mod coin_config_helpers {
-    use crate::CoinConfig;
     use fuel_core_types::{
         fuel_types::{
             Address,
             Bytes32,
         },
         fuel_vm::SecretKey,
+    };
+
+    use crate::{
+        CoinConfig,
+        ConfigCoin,
     };
 
     type CoinCount = u16;
@@ -175,13 +299,17 @@ pub mod coin_config_helpers {
             Self { count: 0 }
         }
 
-        pub fn generate(&mut self) -> CoinConfig {
+        pub fn generate(&mut self) -> ConfigCoin {
             let tx_id = tx_id(self.count);
 
-            let config = CoinConfig {
+            let config = ConfigCoin {
                 tx_id,
                 output_index: self.count,
-                ..Default::default()
+                tx_pointer_block_height: Default::default(),
+                tx_pointer_tx_idx: Default::default(),
+                owner: Default::default(),
+                amount: Default::default(),
+                asset_id: Default::default(),
             };
 
             self.count = self.count.checked_add(1).expect("Max coin count reached");
@@ -192,22 +320,28 @@ pub mod coin_config_helpers {
         pub fn generate_with(&mut self, secret: SecretKey, amount: u64) -> CoinConfig {
             let owner = Address::from(*secret.public_key().hash());
 
-            CoinConfig {
+            ConfigCoin {
+                tx_id: Default::default(),
+                output_index: Default::default(),
+                tx_pointer_block_height: Default::default(),
                 amount,
                 owner,
-                ..self.generate()
+                tx_pointer_tx_idx: Default::default(),
+                asset_id: Default::default(),
             }
+            .into()
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use fuel_core_types::{
         fuel_types::Address,
         fuel_vm::SecretKey,
     };
+
+    use super::*;
 
     #[test]
     fn test_generate_unique_utxo_id() {

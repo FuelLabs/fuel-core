@@ -4096,6 +4096,7 @@ dependencies = [
  "serde",
  "tai64",
  "tokio",
+ "tracing",
  "zeroize",
 ]
 

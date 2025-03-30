@@ -212,7 +212,7 @@ async fn test_regression_in_subscribe() {
         empty_create
             .clone()
             .add_input(contract.clone())
-            .add_output(contract_created)
+            .add_output(contract_created.clone())
             .finalize()
             .into(),
         empty_create
