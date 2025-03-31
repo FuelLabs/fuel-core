@@ -28,6 +28,7 @@ pub const RETRYABLE_FLAG_SIZE: usize = size_of::<u8>();
 pub enum CoinType {
     Coin,
     Message,
+    DataCoin,
 }
 
 pub const COIN_TYPE_SIZE: usize = size_of::<CoinType>();
@@ -50,6 +51,8 @@ pub const MESSAGE_VARIANT_SIZE: usize = RETRYABLE_FLAG_SIZE
 
 pub enum SerializedCoinsToSpendIndexKey {
     Coin([u8; COIN_VARIANT_SIZE]),
+    // TODO: Is this okay as a `Vec`?
+    DataCoin(Vec<u8>),
     Message([u8; MESSAGE_VARIANT_SIZE]),
 }
 
@@ -57,6 +60,7 @@ impl Encoder for SerializedCoinsToSpendIndexKey {
     fn as_bytes(&self) -> Cow<[u8]> {
         match self {
             SerializedCoinsToSpendIndexKey::Coin(bytes) => Cow::Borrowed(bytes),
+            SerializedCoinsToSpendIndexKey::DataCoin(bytes) => Cow::Borrowed(bytes),
             SerializedCoinsToSpendIndexKey::Message(bytes) => Cow::Borrowed(bytes),
         }
     }
@@ -131,33 +135,43 @@ impl Encode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
                 asset_id,
                 amount,
                 utxo_id,
-                data: _data,
+                data,
             } => {
                 // retryable_flag | address | asset_id | amount | utxo_id | coin_type
                 let retryable_flag_bytes = NON_RETRYABLE_BYTE;
 
                 // retryable_flag | address | asset_id | amount | utxo_id | coin_type
-                let mut serialized_coin = [0u8; COIN_VARIANT_SIZE];
-                let mut start = 0;
-                let mut end = RETRYABLE_FLAG_SIZE;
-                serialized_coin[start] = retryable_flag_bytes[0];
-                start = end;
-                end = end.saturating_add(Address::LEN);
-                serialized_coin[start..end].copy_from_slice(owner.as_ref());
-                start = end;
-                end = end.saturating_add(AssetId::LEN);
-                serialized_coin[start..end].copy_from_slice(asset_id.as_ref());
-                start = end;
-                end = end.saturating_add(AMOUNT_SIZE);
-                serialized_coin[start..end].copy_from_slice(&amount.to_be_bytes());
-                start = end;
-                end = end.saturating_add(UTXO_ID_SIZE);
-                serialized_coin[start..end].copy_from_slice(&utxo_id_to_bytes(utxo_id));
-                start = end;
-                serialized_coin[start] = CoinType::Coin as u8;
+                let mut serialized_coin =
+                    Vec::with_capacity(COIN_VARIANT_SIZE + data.len());
+                // let mut start = 0;
+                // let mut end = RETRYABLE_FLAG_SIZE;
+                // serialized_coin[start] = retryable_flag_bytes[0];
+                // start = end;
+                // end = end.saturating_add(Address::LEN);
+                // serialized_coin[start..end].copy_from_slice(owner.as_ref());
+                // start = end;
+                // end = end.saturating_add(AssetId::LEN);
+                // serialized_coin[start..end].copy_from_slice(asset_id.as_ref());
+                // start = end;
+                // end = end.saturating_add(AMOUNT_SIZE);
+                // serialized_coin[start..end].copy_from_slice(&amount.to_be_bytes());
+                // start = end;
+                // end = end.saturating_add(UTXO_ID_SIZE);
+                // serialized_coin[start..end].copy_from_slice(&utxo_id_to_bytes(utxo_id));
+                // start = end;
+                // end = end.saturating_add(data.len());
+                // serialized_coin[start..end].copy_from_slice(&data);
+                // serialized_coin[start] = CoinType::DataCoin as u8;
+                // TODO: Check that this works!
+                serialized_coin.push(retryable_flag_bytes[0]);
+                serialized_coin.extend_from_slice(owner.as_ref());
+                serialized_coin.extend_from_slice(asset_id.as_ref());
+                serialized_coin.extend_from_slice(&amount.to_be_bytes());
+                serialized_coin.extend_from_slice(&utxo_id_to_bytes(utxo_id));
+                serialized_coin.extend_from_slice(&data);
+                serialized_coin.push(CoinType::DataCoin as u8);
 
-                todo!("Need to add data");
-                // SerializedCoinsToSpendIndexKey::Coin(serialized_coin)
+                SerializedCoinsToSpendIndexKey::DataCoin(serialized_coin)
             }
         }
     }
@@ -199,6 +213,35 @@ impl Decode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
                     asset_id,
                     amount,
                     utxo_id,
+                }
+            }
+            CoinType::DataCoin => {
+                let bytes: Vec<u8> = bytes.to_vec();
+                let mut end = RETRYABLE_FLAG_SIZE;
+                let mut start = end;
+                end = end.saturating_add(Address::LEN);
+                let owner = Address::try_from(&bytes[start..end])?;
+                start = end;
+                end = end.saturating_add(AssetId::LEN);
+                let asset_id = AssetId::try_from(&bytes[start..end])?;
+                start = end;
+                end = end.saturating_add(AMOUNT_SIZE);
+                let amount = u64::from_be_bytes(bytes[start..end].try_into()?);
+                start = end;
+                end = bytes.len() - 1; // Exclude the last byte which is coin type
+
+                let utxo_id_bytes = &bytes[start..end];
+                let (tx_id_bytes, output_index_bytes) = utxo_id_bytes.split_at(TxId::LEN);
+                let tx_id = TxId::try_from(tx_id_bytes)?;
+                let output_index = u16::from_be_bytes(output_index_bytes.try_into()?);
+                let utxo_id = UtxoId::new(tx_id, output_index);
+
+                CoinsToSpendIndexKey::DataCoin {
+                    owner,
+                    asset_id,
+                    amount,
+                    utxo_id,
+                    data: bytes[end..].to_vec(),
                 }
             }
             CoinType::Message => {

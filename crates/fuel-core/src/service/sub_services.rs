@@ -23,10 +23,16 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
 
-use fuel_core_compression_service::service::new_service as new_compression_service;
-
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
+use fuel_core_compression_service::service::new_service as new_compression_service;
+use fuel_core_storage::{
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
+    tables::Coins,
+};
 
 #[cfg(feature = "p2p")]
 use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
@@ -124,6 +130,7 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let (preconfirmation_sender, _) = tokio::sync::mpsc::channel(1024);
 
+    // 1
     let genesis_block = on_chain_view
         .genesis_block()?
         .unwrap_or(create_genesis_block(config).compress(&chain_id));
@@ -457,6 +464,14 @@ pub fn init_sub_services(
         graphql_block_height_subscription_handle,
         Box::new(compression_service_adapter),
     )?;
+
+    // 2
+    let coins: Vec<_> = database
+        .on_chain()
+        .iter_all::<Coins>(Some(IterDirection::Forward))
+        .collect();
+
+    tracing::debug!("Initialized coins table with: {:?}", coins);
 
     let shared = SharedState {
         poa_adapter,

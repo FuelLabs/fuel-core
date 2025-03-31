@@ -760,9 +760,19 @@ impl Storage for GraphStorage {
                     } else if utxo_validation {
                         match persistent_storage.utxo(utxo_id) {
                             Ok(Some(coin)) => {
+                                tracing::debug!(
+                                    "Validating input \n{:?} \nagainst persistent storage coin: \n{:?}",
+                                    input,
+                                    coin
+                                );
                                 if !coin
                                     .matches_input(input)
-                                    .expect("The input is coin above")
+                                    .expect("Input is a coin above")
+                                //     .ok_or(InputValidationErrorType::Inconsistency(
+                                //     Error::InputValidation(
+                                //         InputValidationError::NotInsertedIoCoinMismatch,
+                                //     ),
+                                // ))?
                                 {
                                     return Err(InputValidationErrorType::Inconsistency(Error::InputValidation(
                                         InputValidationError::NotInsertedIoCoinMismatch,

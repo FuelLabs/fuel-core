@@ -1,6 +1,7 @@
 // Tests related to the predicate execution feature
 
 use crate::helpers::TestSetupBuilder;
+use fuel_core_storage::tables::Coins;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
@@ -250,6 +251,19 @@ async fn submit__tx_with_predicate_can_check_data_coin() {
         .config_coin_inputs_from_transactions(&[&predicate_tx])
         .finalize()
         .await;
+
+    use fuel_core_storage::StorageAsRef;
+
+    let coin = context
+        .srv
+        .shared
+        .database
+        .on_chain()
+        .storage::<Coins>()
+        .get(&predicate_tx.inputs()[0].utxo_id().unwrap())
+        .expect("Failed to get coin from db");
+
+    tracing::debug!("zzzzzz {:?}", coin);
 
     assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
 

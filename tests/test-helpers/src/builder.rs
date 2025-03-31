@@ -218,6 +218,8 @@ impl TestSetupBuilder {
                         ..
                     }) = input
                     {
+                        tracing::debug!("Adding data coin input: tx_id: {:?}, output_index: {}, owner: {:?}, amount: {}, asset_id: {:?}, data: {:?}",
+                            utxo_id.tx_id(), utxo_id.output_index(), owner, amount, asset_id, data);
                         Some(
                             ConfigDataCoin {
                                 tx_id: *utxo_id.tx_id(),
@@ -306,6 +308,13 @@ impl TestSetupBuilder {
             gas_price_config,
             ..Config::local_node_with_configs(chain_conf, state)
         };
+
+        let state = config
+            .snapshot_reader
+            .get_in_memory_data_source_state()
+            .unwrap();
+
+        tracing::debug!("outputs to add to state: {:?}", state.coins);
         config.combined_db_config.database_config = self.database_config;
 
         let srv = FuelService::new_node(config).await.unwrap();

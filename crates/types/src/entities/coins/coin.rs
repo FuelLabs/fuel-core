@@ -332,18 +332,21 @@ impl CompressedCoin {
                 owner,
                 amount,
                 asset_id,
+                data,
                 ..
             })
             | Input::DataCoinPredicate(DataCoinPredicate {
                 owner,
                 amount,
                 asset_id,
+                data,
                 ..
             }) => match self {
                 CompressedCoin::V2(coin) => Some(
                     owner == &coin.owner
                         && amount == &coin.amount
-                        && asset_id == &coin.asset_id,
+                        && asset_id == &coin.asset_id
+                        && data == data,
                 ),
                 _ => {
                     tracing::debug!(

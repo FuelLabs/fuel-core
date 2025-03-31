@@ -3,6 +3,7 @@ use serde::{
     Serialize,
 };
 
+use crate::GenesisCommitment;
 use fuel_core_storage::{
     tables::Coins,
     MerkleRoot,
@@ -12,6 +13,7 @@ use fuel_core_types::{
         Coin,
         CompressedCoin,
         CompressedCoinV1,
+        CompressedCoinV2,
         DataCoin,
     },
     fuel_crypto::Hasher,
@@ -26,8 +28,6 @@ use fuel_core_types::{
         Bytes32,
     },
 };
-
-use crate::GenesisCommitment;
 
 use super::table_entry::TableEntry;
 
@@ -162,33 +162,73 @@ impl From<ConfigDataCoin> for CoinConfig {
 }
 
 impl From<TableEntry<Coins>> for CoinConfig {
-    fn from(value: TableEntry<Coins>) -> Self {
-        ConfigCoin {
-            tx_id: *value.key.tx_id(),
-            output_index: value.key.output_index(),
-            tx_pointer_block_height: value.value.tx_pointer().block_height(),
-            tx_pointer_tx_idx: value.value.tx_pointer().tx_index(),
-            owner: *value.value.owner(),
-            amount: *value.value.amount(),
-            asset_id: *value.value.asset_id(),
-        }
-        .into()
+    fn from(_value: TableEntry<Coins>) -> Self {
+        // ConfigCoin {
+        //     tx_id: *value.key.tx_id(),
+        //     output_index: value.key.output_index(),
+        //     tx_pointer_block_height: value.value.tx_pointer().block_height(),
+        //     tx_pointer_tx_idx: value.value.tx_pointer().tx_index(),
+        //     owner: *value.value.owner(),
+        //     amount: *value.value.amount(),
+        //     asset_id: *value.value.asset_id(),
+        // }
+        // .into()
+        todo!()
     }
 }
 
 impl From<CoinConfig> for TableEntry<Coins> {
     fn from(config: CoinConfig) -> Self {
-        Self {
-            key: UtxoId::new(config.tx_id(), config.output_index()),
-            value: CompressedCoin::V1(CompressedCoinV1 {
-                owner: config.owner(),
-                amount: config.amount(),
-                asset_id: config.asset_id(),
-                tx_pointer: TxPointer::new(
-                    config.tx_pointer_block_height(),
-                    config.tx_pointer_tx_idx(),
-                ),
-            }),
+        match config {
+            CoinConfig::Coin(config) => {
+                tracing::debug!(
+                    "Creating TableEntry for CoinConfig: tx_id={:?}, output_index={}, owner={:?}, amount={}, asset_id={:?}",
+                    config.tx_id,
+                    config.output_index,
+                    config.owner,
+                    config.amount,
+                    config.asset_id
+                );
+                let value = CompressedCoin::V1(CompressedCoinV1 {
+                    owner: config.owner,
+                    amount: config.amount,
+                    asset_id: config.asset_id,
+                    tx_pointer: TxPointer::new(
+                        config.tx_pointer_block_height,
+                        config.tx_pointer_tx_idx,
+                    ),
+                });
+                Self {
+                    key: UtxoId::new(config.tx_id, config.output_index),
+                    value,
+                }
+            }
+            CoinConfig::DataCoin(config) => {
+                tracing::debug!(
+                    "Creating TableEntry for DataCoinConfig: tx_id={:?}, output_index={}, owner={:?}, amount={}, asset_id={:?}, data_len={}",
+                    config.tx_id,
+                    config.output_index,
+                    config.owner,
+                    config.amount,
+                    config.asset_id,
+                    config.data.len()
+                );
+                let value = CompressedCoin::V2(CompressedCoinV2 {
+                    owner: config.owner,
+                    amount: config.amount,
+                    asset_id: config.asset_id,
+                    tx_pointer: TxPointer::new(
+                        config.tx_pointer_block_height,
+                        config.tx_pointer_tx_idx,
+                    ),
+                    data: config.data,
+                });
+
+                Self {
+                    key: UtxoId::new(config.tx_id, config.output_index),
+                    value,
+                }
+            }
         }
     }
 }
