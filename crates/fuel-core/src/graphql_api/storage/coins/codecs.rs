@@ -137,7 +137,6 @@ impl Encode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
                 utxo_id,
                 data,
             } => {
-                // retryable_flag | address | asset_id | amount | utxo_id | coin_type
                 let retryable_flag_bytes = NON_RETRYABLE_BYTE;
 
                 // retryable_flag | address | asset_id | amount | utxo_id | coin_type
