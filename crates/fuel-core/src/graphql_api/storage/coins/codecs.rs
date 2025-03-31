@@ -139,7 +139,6 @@ impl Encode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
             } => {
                 let retryable_flag_bytes = NON_RETRYABLE_BYTE;
 
-                // retryable_flag | address | asset_id | amount | utxo_id | coin_type
                 let mut serialized_coin =
                     Vec::with_capacity(COIN_VARIANT_SIZE + data.len());
                 // TODO: Check that this works!
