@@ -130,7 +130,6 @@ pub fn init_sub_services(
     #[cfg(not(feature = "p2p"))]
     let (preconfirmation_sender, _) = tokio::sync::mpsc::channel(1024);
 
-    // 1
     let genesis_block = on_chain_view
         .genesis_block()?
         .unwrap_or(create_genesis_block(config).compress(&chain_id));
