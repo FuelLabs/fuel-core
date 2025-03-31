@@ -104,13 +104,6 @@ pub async fn execute_genesis_block(
     )
     .await?;
 
-    let coins: Vec<_> = db
-        .on_chain()
-        .iter_all::<Coins>(Some(IterDirection::Forward))
-        .collect();
-
-    tracing::debug!("qqqqqqqqq: {:?}", coins);
-
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()
         .iter_all_keys::<GenesisMetadata<OnChain>>(None)
