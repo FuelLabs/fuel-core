@@ -31,6 +31,7 @@ use crate::{
         tx::{
             input,
             output,
+            output::ResolvedOutput,
             upgrade_purpose::UpgradePurpose,
         },
         ReadViewProvider,
@@ -255,12 +256,14 @@ impl PreconfirmationSuccessStatus {
         Ok(receipts)
     }
 
-    async fn resolved_outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
+    async fn resolved_outputs(
+        &self,
+    ) -> async_graphql::Result<Option<Vec<ResolvedOutput>>> {
         let outputs = self
             .status
-            .outputs
+            .resolved_outputs
             .as_ref()
-            .map(|outputs| outputs.iter().map(Into::into).collect());
+            .map(|outputs| outputs.iter().map(|&x| x.into()).collect());
         Ok(outputs)
     }
 }
@@ -371,12 +374,14 @@ impl PreconfirmationFailureStatus {
         Ok(receipts)
     }
 
-    async fn resolved_outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
+    async fn resolved_outputs(
+        &self,
+    ) -> async_graphql::Result<Option<Vec<ResolvedOutput>>> {
         let outputs = self
             .status
-            .outputs
+            .resolved_outputs
             .as_ref()
-            .map(|outputs| outputs.iter().map(Into::into).collect());
+            .map(|outputs| outputs.iter().map(|&x| x.into()).collect());
         Ok(outputs)
     }
 }

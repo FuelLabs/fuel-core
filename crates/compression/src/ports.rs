@@ -119,3 +119,29 @@ where
         <D as EvictorDb<T>>::set_latest_assigned_key(self, key)
     }
 }
+
+#[cfg(feature = "fault-proving")]
+pub mod fault_proving {
+    pub trait GetRegistryRoot {
+        type Error: core::fmt::Display;
+        fn registry_root(
+            &self,
+        ) -> Result<crate::compressed_block_payload::v1::RegistryRoot, Self::Error>;
+    }
+
+    impl<D> GetRegistryRoot for &mut D
+    where
+        D: GetRegistryRoot,
+    {
+        type Error = D::Error;
+        fn registry_root(
+            &self,
+        ) -> Result<crate::compressed_block_payload::v1::RegistryRoot, Self::Error>
+        {
+            D::registry_root(self)
+        }
+    }
+}
+
+#[cfg(feature = "fault-proving")]
+pub use fault_proving::*;

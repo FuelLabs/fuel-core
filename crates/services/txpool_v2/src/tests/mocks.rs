@@ -60,6 +60,7 @@ use fuel_core_types::{
         },
         transaction_status::{
             statuses,
+            PreConfirmationStatus,
             TransactionStatus,
         },
     },
@@ -72,9 +73,12 @@ use std::{
         Mutex,
     },
 };
-use tokio::sync::mpsc::{
-    Receiver,
-    Sender,
+use tokio::sync::{
+    broadcast,
+    mpsc::{
+        Receiver,
+        Sender,
+    },
 };
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -89,11 +93,21 @@ pub struct Data {
 #[derive(Clone)]
 pub struct MockTxStatusManager {
     tx: Sender<(TxId, TransactionStatus)>,
+    tx_preconfirmations_update_sender: broadcast::Sender<(TxId, PreConfirmationStatus)>,
 }
 
 impl MockTxStatusManager {
-    pub fn new(tx: Sender<(TxId, TransactionStatus)>) -> Self {
-        Self { tx }
+    pub fn new(
+        tx_preconfirmations_update_sender: broadcast::Sender<(
+            TxId,
+            PreConfirmationStatus,
+        )>,
+        tx: Sender<(TxId, TransactionStatus)>,
+    ) -> Self {
+        Self {
+            tx_preconfirmations_update_sender,
+            tx,
+        }
     }
 }
 
@@ -107,6 +121,15 @@ impl ports::TxStatusManager for MockTxStatusManager {
         for (tx_id, tx_status) in statuses {
             self.status_update(tx_id, tx_status.into());
         }
+    }
+
+    fn preconfirmations_update_listener(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(
+        TxId,
+        fuel_core_types::services::transaction_status::PreConfirmationStatus,
+    )> {
+        self.tx_preconfirmations_update_sender.subscribe()
     }
 }
 
