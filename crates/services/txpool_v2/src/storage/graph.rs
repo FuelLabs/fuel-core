@@ -768,11 +768,6 @@ impl Storage for GraphStorage {
                                 if !coin
                                     .matches_input(input)
                                     .expect("Input is a coin above")
-                                //     .ok_or(InputValidationErrorType::Inconsistency(
-                                //     Error::InputValidation(
-                                //         InputValidationError::NotInsertedIoCoinMismatch,
-                                //     ),
-                                // ))?
                                 {
                                     return Err(InputValidationErrorType::Inconsistency(Error::InputValidation(
                                         InputValidationError::NotInsertedIoCoinMismatch,
