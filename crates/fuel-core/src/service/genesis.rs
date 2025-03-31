@@ -96,13 +96,6 @@ pub async fn execute_genesis_block(
         off_chain,
     };
 
-    let coins: Vec<_> = db
-        .on_chain()
-        .iter_all::<Coins>(Some(IterDirection::Forward))
-        .collect();
-
-    tracing::debug!("pppppppppp: {:?}", coins);
-
     SnapshotImporter::import(
         genesis_db.clone(),
         genesis_block.clone(),
