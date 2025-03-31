@@ -234,10 +234,6 @@ impl CompressedCoin {
         }
     }
 
-    // pub fn uncompress_data_coin(self, _utxo_id: UtxoId) -> Option<DataCoin> {
-    //     None
-    // }
-
     /// Get the owner of the coin
     pub fn owner(&self) -> &Address {
         match self {
