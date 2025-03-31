@@ -464,14 +464,6 @@ pub fn init_sub_services(
         Box::new(compression_service_adapter),
     )?;
 
-    // 2
-    let coins: Vec<_> = database
-        .on_chain()
-        .iter_all::<Coins>(Some(IterDirection::Forward))
-        .collect();
-
-    tracing::debug!("Initialized coins table with: {:?}", coins);
-
     let shared = SharedState {
         poa_adapter,
         txpool_shared_state: txpool.shared.clone(),
