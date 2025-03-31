@@ -12,9 +12,10 @@ use fuel_core_services::StateWatcher;
 use fuel_core_types::{
     fuel_tx::{
         Bytes32,
-        Transaction,
+        TxId,
     },
     fuel_types::BlockHeight,
+    services::preconfirmation::PreconfirmationStatus,
 };
 use std::time::Duration;
 
@@ -26,13 +27,13 @@ pub enum Status {
 }
 
 pub struct FakeTxReceiver {
-    recv: tokio::sync::mpsc::Receiver<Vec<(Transaction, Status)>>,
+    recv: tokio::sync::mpsc::Receiver<Vec<Preconfirmation>>,
 }
 
 impl TxReceiver for FakeTxReceiver {
-    type Txs = Vec<(Transaction, Status)>;
+    type Txs = Vec<Preconfirmation>;
 
-    async fn receive(&mut self) -> Result<Vec<(Transaction, Status)>> {
+    async fn receive(&mut self) -> Result<Vec<Preconfirmation>> {
         let txs = self.recv.recv().await;
         match txs {
             Some(txs) => Ok(txs),
@@ -45,25 +46,22 @@ pub struct FakeBroadcast {
     delegation_key_sender: tokio::sync::mpsc::Sender<
         FakeParentSignedData<DelegatePreConfirmationKey<Bytes32>>,
     >,
-    tx_sender:
-        tokio::sync::mpsc::Sender<FakeDelegateSignedData<Vec<(Transaction, Status)>>>,
+    tx_sender: tokio::sync::mpsc::Sender<FakeDelegateSignedData<Preconfirmations>>,
 }
 
 impl Broadcast for FakeBroadcast {
     type DelegateKey = FakeSigningKey;
     type ParentKey = FakeParentSignature;
-    type Preconfirmations = Vec<(Transaction, Status)>;
+    type Preconfirmations = Preconfirmations;
 
     async fn broadcast_preconfirmations(
         &mut self,
         message: Self::Preconfirmations,
         signature: Signature<Self>,
-        expiration: Tai64,
     ) -> Result<()> {
         let txs = FakeDelegateSignedData {
             data: message,
             dummy_signature: signature,
-            key_expiration: expiration,
         };
         self.tx_sender.send(txs).await.map_err(|error| {
             Error::Broadcast(format!("Could not send {:?} over channel", error))
@@ -74,6 +72,7 @@ impl Broadcast for FakeBroadcast {
     async fn broadcast_delegate_key(
         &mut self,
         data: DelegatePreConfirmationKey<PublicKey<Self>>,
+        _: u64,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> Result<()> {
         let delegate_key = FakeParentSignedData {
@@ -100,7 +99,6 @@ pub struct FakeParentSignature {
 pub struct FakeDelegateSignedData<T> {
     data: T,
     dummy_signature: String,
-    key_expiration: Tai64,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -192,8 +190,8 @@ pub struct TestImplHandles {
         FakeParentSignedData<DelegatePreConfirmationKey<Bytes32>>,
     >,
     pub broadcast_tx_handle:
-        tokio::sync::mpsc::Receiver<FakeDelegateSignedData<Vec<(Transaction, Status)>>>,
-    pub tx_sender_handle: tokio::sync::mpsc::Sender<Vec<(Transaction, Status)>>,
+        tokio::sync::mpsc::Receiver<FakeDelegateSignedData<Preconfirmations>>,
+    pub tx_sender_handle: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
 }
 
 #[derive(Default)]
@@ -242,6 +240,7 @@ impl TaskBuilder {
             key_generator,
             current_delegate_key,
             sealed_delegate_message: Sealed { entity, signature },
+            nonce: 0,
             key_rotation_trigger,
             echo_delegation_trigger: tokio::time::interval(period),
         };
@@ -291,7 +290,7 @@ impl TaskBuilder {
         tokio::sync::mpsc::Receiver<
             FakeParentSignedData<DelegatePreConfirmationKey<Bytes32>>,
         >,
-        tokio::sync::mpsc::Receiver<FakeDelegateSignedData<Vec<(Transaction, Status)>>>,
+        tokio::sync::mpsc::Receiver<FakeDelegateSignedData<Preconfirmations>>,
     ) {
         let (delegation_key_sender, delegation_key_receiver) =
             tokio::sync::mpsc::channel(10);
@@ -307,7 +306,7 @@ impl TaskBuilder {
         &self,
     ) -> (
         FakeTxReceiver,
-        tokio::sync::mpsc::Sender<Vec<(Transaction, Status)>>,
+        tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
     ) {
         let (tx_sender, tx_receiver) = tokio::sync::mpsc::channel(1);
         let tx_receiver = FakeTxReceiver { recv: tx_receiver };
@@ -424,7 +423,9 @@ async fn run__will_rebroadcast_generated_key_with_correct_signature_after_1_seco
         dummy_signature: dummy_signature.into(),
     };
 
-    assert_eq!(actual_1, actual_2);
+    assert_eq!(actual_1.data.expiration, actual_2.data.expiration);
+    assert_eq!(actual_1.data.public_key, actual_2.data.public_key);
+    assert_eq!(actual_1.dummy_signature, actual_2.dummy_signature);
     assert_eq!(expected, actual_1);
 }
 
@@ -463,18 +464,18 @@ async fn run__received_tx_will_be_broadcast_with_current_delegate_key_signature(
 
     // when
     let txs = vec![
-        (
-            Transaction::default(),
-            Status::Success {
-                height: BlockHeight::from(1),
+        Preconfirmation {
+            tx_id: TxId::zeroed(),
+            status: PreconfirmationStatus::SqueezedOut {
+                reason: "foo".into(),
             },
-        ),
-        (
-            Transaction::default(),
-            Status::Fail {
-                height: BlockHeight::from(2),
+        },
+        Preconfirmation {
+            tx_id: TxId::zeroed(),
+            status: PreconfirmationStatus::SqueezedOut {
+                reason: "bar".into(),
             },
-        ),
+        },
     ];
     tokio::task::spawn(async move {
         let _ = task.run(&mut state_watcher).await;
@@ -491,9 +492,11 @@ async fn run__received_tx_will_be_broadcast_with_current_delegate_key_signature(
     let actual = handles.broadcast_tx_handle.try_recv().unwrap();
     let dummy_signature = current_delegate_key.to_string();
     let expected = FakeDelegateSignedData {
-        data: txs,
+        data: Preconfirmations {
+            expiration: Tai64::UNIX_EPOCH,
+            preconfirmations: txs,
+        },
         dummy_signature,
-        key_expiration: Tai64::UNIX_EPOCH,
     };
     assert_eq!(expected, actual);
 }

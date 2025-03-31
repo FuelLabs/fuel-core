@@ -27,9 +27,9 @@ use crate::tx_status_stream::{
 };
 
 /// Subscriber channel buffer size.
-/// Subscribers will only ever get at most a submitted
-/// and final transaction status update.
-const BUFFER_SIZE: usize = 2;
+/// Subscribers will only ever get at most a submitted,
+/// a preconfirmation and final transaction status update.
+const BUFFER_SIZE: usize = 3;
 
 #[derive(Clone)]
 pub struct TxStatusChange {

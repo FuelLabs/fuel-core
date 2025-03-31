@@ -21,7 +21,7 @@ use fuel_core_types::{
         TxPointer,
     },
     fuel_types::Address,
-    services::txpool::TransactionExecutionStatus,
+    services::transaction_status::TransactionExecutionStatus,
 };
 
 #[cfg(feature = "test-helpers")]

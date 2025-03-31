@@ -17,7 +17,10 @@ mod tests {
     };
 
     #[cfg(not(feature = "wasm-executor"))]
-    use fuel_core_types::services::preconfirmation::PreconfirmationStatus;
+    use fuel_core_types::services::preconfirmation::{
+        Preconfirmation,
+        PreconfirmationStatus,
+    };
 
     use crate as fuel_core;
     use fuel_core::database::Database;
@@ -3117,19 +3120,19 @@ mod tests {
     async fn execute_block__send_preconfirmations() {
         // Given
         struct MockPreconfirmationsSender {
-            sender: tokio::sync::mpsc::Sender<Vec<PreconfirmationStatus>>,
+            sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
         }
 
         impl PreconfirmationSenderPort for MockPreconfirmationsSender {
             fn try_send(
                 &self,
-                preconfirmations: Vec<PreconfirmationStatus>,
-            ) -> Vec<PreconfirmationStatus> {
+                preconfirmations: Vec<Preconfirmation>,
+            ) -> Vec<Preconfirmation> {
                 preconfirmations
             }
 
             /// Send a batch of pre-confirmations, awaiting for the send to be successful.
-            async fn send(&self, preconfirmations: Vec<PreconfirmationStatus>) {
+            async fn send(&self, preconfirmations: Vec<Preconfirmation>) {
                 self.sender.send(preconfirmations).await.unwrap();
             }
         }
@@ -3173,7 +3176,7 @@ mod tests {
         let preconfirmations = receiver.recv().await.unwrap();
         assert_eq!(preconfirmations.len(), 1);
         assert!(matches!(
-            preconfirmations[0],
+            preconfirmations[0].status,
             PreconfirmationStatus::Success { .. }
         ));
         assert_eq!(res.skipped_transactions.len(), 0);

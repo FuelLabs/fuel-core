@@ -556,8 +556,8 @@ mod tests {
         // }
         #[cfg(feature = "p2p")]
         {
-            // p2p & sync
-            expected_services += 2;
+            // p2p & sync & preconfirmation signature service
+            expected_services += 3;
         }
         #[cfg(feature = "shared-sequencer")]
         {

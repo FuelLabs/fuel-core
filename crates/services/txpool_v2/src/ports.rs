@@ -29,16 +29,27 @@ use fuel_core_types::{
             NetworkData,
             PeerId,
         },
-        txpool::TransactionStatus,
+        transaction_status::{
+            PreConfirmationStatus,
+            TransactionStatus,
+        },
     },
 };
+use tokio::sync::broadcast;
 
 use crate::GasPrice;
 
 pub use fuel_core_storage::transactional::AtomicView;
+use fuel_core_types::services::transaction_status::statuses;
 
 pub trait TxStatusManager: Send + Sync + 'static {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus);
+
+    fn preconfirmations_update_listener(
+        &self,
+    ) -> broadcast::Receiver<(TxId, PreConfirmationStatus)>;
+
+    fn squeezed_out_txs(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>);
 }
 
 pub trait BlockImporter {

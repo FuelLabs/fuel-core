@@ -7,7 +7,7 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::Bytes32,
-    services::txpool::TransactionStatus as TxPoolTxStatus,
+    services::transaction_status::TransactionStatus as TxPoolTxStatus,
 };
 use futures::{
     Stream,

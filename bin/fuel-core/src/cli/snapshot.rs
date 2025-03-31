@@ -290,7 +290,7 @@ mod tests {
             UtxoId,
         },
         fuel_types::ChainId,
-        services::txpool::TransactionExecutionStatus,
+        services::transaction_status::TransactionExecutionStatus,
         tai64::Tai64,
     };
     use itertools::Itertools;

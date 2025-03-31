@@ -24,7 +24,7 @@ use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_txpool::error::RemovedReason;
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::txpool::TransactionStatus,
+    services::transaction_status::TransactionStatus,
     tai64::Tai64,
 };
 use futures::StreamExt;

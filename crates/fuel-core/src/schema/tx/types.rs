@@ -31,6 +31,7 @@ use crate::{
         tx::{
             input,
             output,
+            output::ResolvedOutput,
             upgrade_purpose::UpgradePurpose,
         },
         ReadViewProvider,
@@ -83,7 +84,7 @@ use fuel_core_types::{
             TransactionExecutionResult,
             TransactionExecutionStatus,
         },
-        txpool::{
+        transaction_status::{
             self,
             TransactionStatus as TxStatus,
         },
@@ -163,7 +164,7 @@ impl SubmittedStatus {
 #[derive(Debug)]
 pub struct SuccessStatus {
     tx_id: TxId,
-    status: Arc<txpool::statuses::Success>,
+    status: Arc<transaction_status::statuses::Success>,
 }
 
 #[Object]
@@ -214,7 +215,7 @@ impl SuccessStatus {
 #[derive(Debug)]
 pub struct PreconfirmationSuccessStatus {
     pub tx_id: TxId,
-    pub status: Arc<txpool::statuses::PreConfirmationSuccess>,
+    pub status: Arc<transaction_status::statuses::PreConfirmationSuccess>,
 }
 
 #[Object]
@@ -255,12 +256,14 @@ impl PreconfirmationSuccessStatus {
         Ok(receipts)
     }
 
-    async fn resolved_outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
+    async fn resolved_outputs(
+        &self,
+    ) -> async_graphql::Result<Option<Vec<ResolvedOutput>>> {
         let outputs = self
             .status
-            .outputs
+            .resolved_outputs
             .as_ref()
-            .map(|outputs| outputs.iter().map(Into::into).collect());
+            .map(|outputs| outputs.iter().map(|&x| x.into()).collect());
         Ok(outputs)
     }
 }
@@ -268,7 +271,7 @@ impl PreconfirmationSuccessStatus {
 #[derive(Debug)]
 pub struct FailureStatus {
     tx_id: TxId,
-    status: Arc<txpool::statuses::Failure>,
+    status: Arc<transaction_status::statuses::Failure>,
 }
 
 #[Object]
@@ -326,7 +329,7 @@ impl FailureStatus {
 #[derive(Debug)]
 pub struct PreconfirmationFailureStatus {
     pub tx_id: TxId,
-    pub status: Arc<txpool::statuses::PreConfirmationFailure>,
+    pub status: Arc<transaction_status::statuses::PreConfirmationFailure>,
 }
 
 #[Object]
@@ -371,12 +374,14 @@ impl PreconfirmationFailureStatus {
         Ok(receipts)
     }
 
-    async fn resolved_outputs(&self) -> async_graphql::Result<Option<Vec<Output>>> {
+    async fn resolved_outputs(
+        &self,
+    ) -> async_graphql::Result<Option<Vec<ResolvedOutput>>> {
         let outputs = self
             .status
-            .outputs
+            .resolved_outputs
             .as_ref()
-            .map(|outputs| outputs.iter().map(Into::into).collect());
+            .map(|outputs| outputs.iter().map(|&x| x.into()).collect());
         Ok(outputs)
     }
 }
@@ -384,7 +389,7 @@ impl PreconfirmationFailureStatus {
 #[derive(Debug)]
 pub struct SqueezedOutStatus {
     pub tx_id: TxId,
-    pub status: Arc<txpool::statuses::SqueezedOut>,
+    pub status: Arc<transaction_status::statuses::SqueezedOut>,
 }
 
 #[Object]
@@ -1095,7 +1100,7 @@ pub(crate) async fn get_tx_status(
 ) -> Result<Option<TransactionStatus>, StorageError> {
     let api_result = query
         .tx_status(&id)
-        .into_api_result::<txpool::TransactionStatus, StorageError>()?;
+        .into_api_result::<transaction_status::TransactionStatus, StorageError>()?;
     match api_result {
         Some(status) => {
             let status = TransactionStatus::new(id, status);

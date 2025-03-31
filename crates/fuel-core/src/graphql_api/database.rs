@@ -64,7 +64,7 @@ use fuel_core_types::{
     fuel_vm::BlobData,
     services::{
         graphql_api::ContractBalance,
-        txpool::TransactionExecutionStatus,
+        transaction_status::TransactionExecutionStatus,
     },
 };
 use futures::Stream;

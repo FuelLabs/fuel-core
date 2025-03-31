@@ -3480,6 +3480,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-chain-config",
  "fuel-core-metrics",
+ "fuel-core-poa",
  "fuel-core-shared-sequencer",
  "fuel-core-storage",
  "fuel-core-types 0.42.0",
@@ -4022,7 +4023,6 @@ version = "0.42.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "derive_more 0.99.19",
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-tx-status-manager",
@@ -4094,6 +4094,7 @@ dependencies = [
  "fuel-core-types 0.42.0",
  "fuel-vm 0.60.0",
  "k256",
+ "postcard",
  "rand 0.8.5",
  "secrecy",
  "serde",

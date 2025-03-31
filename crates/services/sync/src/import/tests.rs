@@ -1495,12 +1495,6 @@ impl PeerReportTestBuilder {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn debug(mut self) -> Self {
-        self.debug = true;
-        self
-    }
-
     pub fn with_get_sealed_block_headers(
         mut self,
         get_headers: Option<Vec<SealedBlockHeader>>,
