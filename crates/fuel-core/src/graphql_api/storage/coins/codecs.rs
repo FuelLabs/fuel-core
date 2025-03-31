@@ -143,25 +143,6 @@ impl Encode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
                 // retryable_flag | address | asset_id | amount | utxo_id | coin_type
                 let mut serialized_coin =
                     Vec::with_capacity(COIN_VARIANT_SIZE + data.len());
-                // let mut start = 0;
-                // let mut end = RETRYABLE_FLAG_SIZE;
-                // serialized_coin[start] = retryable_flag_bytes[0];
-                // start = end;
-                // end = end.saturating_add(Address::LEN);
-                // serialized_coin[start..end].copy_from_slice(owner.as_ref());
-                // start = end;
-                // end = end.saturating_add(AssetId::LEN);
-                // serialized_coin[start..end].copy_from_slice(asset_id.as_ref());
-                // start = end;
-                // end = end.saturating_add(AMOUNT_SIZE);
-                // serialized_coin[start..end].copy_from_slice(&amount.to_be_bytes());
-                // start = end;
-                // end = end.saturating_add(UTXO_ID_SIZE);
-                // serialized_coin[start..end].copy_from_slice(&utxo_id_to_bytes(utxo_id));
-                // start = end;
-                // end = end.saturating_add(data.len());
-                // serialized_coin[start..end].copy_from_slice(&data);
-                // serialized_coin[start] = CoinType::DataCoin as u8;
                 // TODO: Check that this works!
                 serialized_coin.push(retryable_flag_bytes[0]);
                 serialized_coin.extend_from_slice(owner.as_ref());
