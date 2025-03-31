@@ -169,7 +169,6 @@ impl ImportTable for Handler<OwnedCoins, Coins> {
         tx: &mut StorageTransaction<&mut GenesisDatabase<Self::DbDesc>>,
     ) -> anyhow::Result<()> {
         let events = group.into_iter().map(|TableEntry { value, key }| {
-            // Cow::Owned(Event::CoinCreated(value.uncompress_coin(key)))
             match value.uncompress(key) {
                 UncompressedCoin::Coin(coin) => Cow::Owned(Event::CoinCreated(coin)),
                 UncompressedCoin::DataCoin(data_coin) => {
