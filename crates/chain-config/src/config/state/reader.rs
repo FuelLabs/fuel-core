@@ -278,7 +278,6 @@ impl SnapshotReader {
                 }
             }
             DataSource::InMemory { state, group_size } => {
-                tracing::debug!("Creating in-memory data source");
                 let collection = state
                     .as_table()
                     .into_iter()
