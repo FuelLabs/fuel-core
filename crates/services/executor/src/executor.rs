@@ -2391,9 +2391,6 @@ where
             if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
-            // execution_data
-            //     .events
-            //     .push(ExecutorEvent::CoinCreated(coin.uncompress_coin(utxo_id)));
             match coin.uncompress(utxo_id) {
                 UncompressedCoin::Coin(coin) => {
                     execution_data.events.push(ExecutorEvent::CoinCreated(coin));
