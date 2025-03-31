@@ -91,7 +91,7 @@ fn infinite_loop_tx<R: Rng + rand::CryptoRng>(
     rng: &mut R,
     asset_id: Option<AssetId>,
 ) -> Transaction {
-    let script = vec![op::jmp(RegId::ZERO)];
+    let script = [op::jmp(RegId::ZERO)];
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);
     let asset_id = asset_id.unwrap_or_else(|| *builder.get_params().base_asset_id());
@@ -214,14 +214,14 @@ async fn produce_block__raises_gas_price() {
     let threshold = 50;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
-    node_config.gas_price_config.exec_gas_price_change_percent = percent;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent.into();
     node_config
         .gas_price_config
-        .exec_gas_price_threshold_percent = threshold;
+        .exec_gas_price_threshold_percent = threshold.into();
     node_config.block_production = Trigger::Never;
     node_config.gas_price_config.da_gas_price_p_component = 0;
     node_config.gas_price_config.da_gas_price_d_component = 0;
-    node_config.gas_price_config.max_da_gas_price_change_percent = 0;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 0.into();
     node_config.gas_price_config.min_da_gas_price = 0;
     node_config.gas_price_config.max_da_gas_price = 1;
 
@@ -266,14 +266,14 @@ async fn produce_block__lowers_gas_price() {
     let threshold = 50;
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
-    node_config.gas_price_config.exec_gas_price_change_percent = percent;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent.into();
     node_config
         .gas_price_config
-        .exec_gas_price_threshold_percent = threshold;
+        .exec_gas_price_threshold_percent = threshold.into();
     node_config.block_production = Trigger::Never;
     node_config.gas_price_config.da_gas_price_p_component = 0;
     node_config.gas_price_config.da_gas_price_d_component = 0;
-    node_config.gas_price_config.max_da_gas_price_change_percent = 0;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 0.into();
     node_config.gas_price_config.min_da_gas_price = 0;
     node_config.gas_price_config.max_da_gas_price = 1;
 
@@ -351,11 +351,11 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     let starting_gas_price = 1000;
     let percent = 10;
     node_config.gas_price_config.starting_exec_gas_price = starting_gas_price;
-    node_config.gas_price_config.exec_gas_price_change_percent = percent;
+    node_config.gas_price_config.exec_gas_price_change_percent = percent.into();
     // Always increase
     node_config
         .gas_price_config
-        .exec_gas_price_threshold_percent = 0;
+        .exec_gas_price_threshold_percent = 0.into();
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
@@ -729,7 +729,7 @@ fn node_config_with_da_committer_url(url: url::Url) -> Config {
     node_config.block_producer.coinbase_recipient = Some([5; 32].into());
     node_config.gas_price_config.min_da_gas_price = starting_gas_price;
     node_config.gas_price_config.max_da_gas_price = u64::MAX;
-    node_config.gas_price_config.max_da_gas_price_change_percent = 15;
+    node_config.gas_price_config.max_da_gas_price_change_percent = 15.into();
     node_config.block_production = Trigger::Never;
     node_config.gas_price_config.da_committer_url = Some(url);
     node_config.gas_price_config.da_poll_interval = Some(Duration::from_millis(100));
@@ -776,9 +776,9 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
     let half_of_blocks = block_delay as u32 / 2;
     let count = half_of_blocks;
     let block_bytes = 1000;
-    let total_size_bytes = block_bytes * count as u32;
+    let total_size_bytes = block_bytes * count;
     let gas = 16 * total_size_bytes as u128;
-    let cost_gwei = gas * 1; // blob gas price 1 gwei
+    let cost_gwei = gas; // blob gas price 1 gwei
     let cost = cost_gwei * 1_000_000_000; // Wei
     mock.add_response(RawDaBlockCosts {
         id: 1,
@@ -830,7 +830,7 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
             gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
             if profit > 0 && !success {
                 success = true;
-                success_iteration = i as i32;
+                success_iteration = i;
             }
         }
     });
@@ -933,7 +933,7 @@ fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
 
 #[tokio::test]
 async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
-    let mut rng = StdRng::seed_from_u64(1234 as u64);
+    let mut rng = StdRng::seed_from_u64(1234_u64);
 
     // given
     let unexpected_high_min_gas_limit = u64::MAX;

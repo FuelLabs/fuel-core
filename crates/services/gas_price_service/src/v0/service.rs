@@ -193,7 +193,10 @@ mod tests {
         RunnableTask,
         StateWatcher,
     };
-    use fuel_core_types::fuel_types::BlockHeight;
+    use fuel_core_types::{
+        clamped_percentage::ClampedPercentage,
+        fuel_types::BlockHeight,
+    };
     use std::sync::Arc;
     use tokio::sync::mpsc;
 
@@ -260,8 +263,8 @@ mod tests {
         let config = V0AlgorithmConfig {
             starting_gas_price: 100,
             min_gas_price: 10,
-            gas_price_change_percent: 10,
-            gas_price_threshold_percent: 0,
+            gas_price_change_percent: ClampedPercentage::new(10),
+            gas_price_threshold_percent: ClampedPercentage::new(0),
         };
         let (algo_updater, shared_algo) =
             initialize_algorithm(&config, l2_block_height, &metadata_storage).unwrap();

@@ -124,10 +124,7 @@ where
         + Sync
         + 'static,
 {
-    type Transaction<'a>
-        = StorageTransaction<&'a mut Storage>
-    where
-        Self: 'a;
+    type Transaction<'a> = StorageTransaction<&'a mut Storage> where Self: 'a;
 
     fn begin_transaction(&mut self) -> GasPriceResult<Self::Transaction<'_>> {
         let tx = self.write_transaction();
