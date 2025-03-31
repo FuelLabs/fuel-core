@@ -410,7 +410,6 @@ pub mod basic_tests {
 
     use crate::blueprint::merklized::MerklizedTableWithBlueprint;
 
-    #[allow(dead_code)]
     /// A trait that provides basic tests for the merklized storage.
     /// It is used to test the merklized storage with different key and value codecs.
     pub trait BasicMerkleizedStorageTests: MerklizedTableWithBlueprint
