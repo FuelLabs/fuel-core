@@ -184,7 +184,7 @@ pub struct SpendQueryElementInput {
     pub amount: U128,
     /// The maximum number of currencies for selection.
     pub max: Option<U16>,
-    /// Allow partial selection.
+    /// If true, returns available coins instead of failing when the requested amount is unavailable.
     pub allow_partial: Option<bool>,
 }
 
