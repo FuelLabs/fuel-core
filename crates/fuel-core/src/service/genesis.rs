@@ -61,6 +61,10 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 pub use exporter::Exporter;
+use fuel_core_storage::{
+    iter::IterDirection,
+    tables::Coins,
+};
 pub use task_manager::NotifyCancel;
 
 mod exporter;
@@ -92,6 +96,13 @@ pub async fn execute_genesis_block(
         off_chain,
     };
 
+    let coins: Vec<_> = db
+        .on_chain()
+        .iter_all::<Coins>(Some(IterDirection::Forward))
+        .collect();
+
+    tracing::debug!("pppppppppp: {:?}", coins);
+
     SnapshotImporter::import(
         genesis_db.clone(),
         genesis_block.clone(),
@@ -99,6 +110,13 @@ pub async fn execute_genesis_block(
         watcher,
     )
     .await?;
+
+    let coins: Vec<_> = db
+        .on_chain()
+        .iter_all::<Coins>(Some(IterDirection::Forward))
+        .collect();
+
+    tracing::debug!("qqqqqqqqq: {:?}", coins);
 
     let genesis_progress_on_chain: Vec<String> = db
         .on_chain()

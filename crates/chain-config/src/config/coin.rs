@@ -179,7 +179,7 @@ impl From<TableEntry<Coins>> for CoinConfig {
 
 impl From<CoinConfig> for TableEntry<Coins> {
     fn from(config: CoinConfig) -> Self {
-        match config {
+        let entry = match config {
             CoinConfig::Coin(config) => {
                 tracing::debug!(
                     "Creating TableEntry for CoinConfig: tx_id={:?}, output_index={}, owner={:?}, amount={}, asset_id={:?}",
@@ -229,7 +229,13 @@ impl From<CoinConfig> for TableEntry<Coins> {
                     value,
                 }
             }
-        }
+        };
+        tracing::debug!(
+            "Created TableEntry: key={:?}, value={:?}",
+            &entry.key,
+            &entry.value,
+        );
+        entry
     }
 }
 
