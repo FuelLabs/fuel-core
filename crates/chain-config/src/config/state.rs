@@ -266,10 +266,6 @@ impl AddTable<Coins> for StateConfigBuilder {
 
 impl AsTable<Coins> for StateConfig {
     fn as_table(&self) -> Vec<TableEntry<Coins>> {
-        tracing::debug!(
-            "Converting StateConfig to Coins table with {} entries",
-            self.coins.len()
-        );
         self.coins
             .clone()
             .into_iter()
