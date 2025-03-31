@@ -454,7 +454,7 @@ pub mod basic_tests {
         fn key() -> Box<Self::Key>;
 
         /// Returns a random key for testing
-        fn random_key(rng: &mut impl RngCore) -> Box<Self::Key>;
+        fn random_key(rng: &mut StdRng) -> Box<Self::Key>;
 
         /// Returns a test value for the table
         fn value() -> Box<Self::Value>;
@@ -749,293 +749,77 @@ pub mod basic_tests {
 #[cfg(feature = "test-helpers")]
 #[macro_export]
 macro_rules! basic_merklelized_storage_tests {
-    ($table:ident, $key:expr, $value_insert:expr, $value_return:expr, $random_key:expr) => {
+    ($table:ident, $key:expr, $value:expr, $random_key:expr) => {
         $crate::paste::item! {
-        #[cfg(test)]
-        #[allow(unused_imports)]
-        mod [< $table:snake _basic_tests >] {
-            use super::*;
-            use $crate::{
-                structured_storage::test::InMemoryStorage,
-                transactional::WriteTransaction,
-                StorageAsMut,
-            };
-            use $crate::StorageInspect;
-            use $crate::StorageMutate;
-            use $crate::rand;
-            use $crate::tables::merkle::DenseMetadataKey;
-            use rand::SeedableRng;
+            #[cfg(test)]
+            mod [< $table:snake _basic_tests >] {
+                use super::*;
+                use $crate::blueprint::merklized::basic_tests::BasicMerkleizedStorageTests;
 
-            #[allow(dead_code)]
-            fn random<T, R>(rng: &mut R) -> T
-            where
-                rand::distributions::Standard: rand::distributions::Distribution<T>,
-                R: rand::Rng,
-            {
-                use rand::Rng;
-                rng.gen()
-            }
+                impl BasicMerkleizedStorageTests for $table {
+                    fn key() -> Box<Self::Key> {
+                        Box::new($key)
+                    }
 
-            #[test]
-            fn get() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-                let key = $key;
+                    fn random_key(rng: &mut rand::rngs::StdRng) -> Box<Self::Key> {
+                        Box::new($random_key(rng))
+                    }
 
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&key, &$value_insert)
-                    .unwrap();
+                    fn value() -> Box<Self::Value> {
+                        Box::new($value)
+                    }
+                }
 
-                assert_eq!(
-                    storage_transaction
-                        .storage_as_mut::<$table>()
-                        .get(&key)
-                        .expect("Should get without errors")
-                        .expect("Should not be empty")
-                        .into_owned(),
-                    $value_return
-                );
-            }
+                #[test]
+                fn merkleized_storage__test_get() {
+                    $table::test_get();
+                }
 
-            #[test]
-            fn insert() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-                let key = $key;
+                #[test]
+                fn merkleized_storage__test_insert() {
+                    $table::test_insert();
+                }
 
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&key, &$value_insert)
-                    .unwrap();
+                #[test]
+                fn merkleized_storage__test_remove_returns_error() {
+                    $table::test_remove_returns_error();
+                }
 
-                let returned = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .get(&key)
-                    .unwrap()
-                    .unwrap()
-                    .into_owned();
-                assert_eq!(returned, $value_return);
-            }
+                #[test]
+                fn merkleized_storage__test_exists() {
+                    $table::test_exists();
+                }
 
-            #[test]
-            fn remove_returns_error() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-                let key = $key;
+                #[test]
+                fn merkleized_storage__test_batch_mutate_works() {
+                    $table::test_batch_mutate_works();
+                }
 
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&key, &$value_insert)
-                    .unwrap();
+                #[test]
+                fn merkleized_storage__test_batch_remove_fails() {
+                    $table::test_batch_remove_fails();
+                }
 
-                let result = storage_transaction.storage_as_mut::<$table>().remove(&key);
+                #[test]
+                fn merkleized_storage__test_root_returns_error_empty_metadata() {
+                    $table::test_root_returns_error_empty_metadata();
+                }
 
-                assert!(result.is_err());
-            }
+                #[test]
+                fn merkleized_storage__test_update_produces_non_zero_root() {
+                    $table::test_update_produces_non_zero_root();
+                }
 
-            #[test]
-            fn exists() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-                let key = $key;
+                #[test]
+                fn merkleized_storage__test_has_different_root_after_each_update() {
+                    $table::test_has_different_root_after_each_update();
+                }
 
-                // Given
-                assert!(!storage_transaction
-                    .storage_as_mut::<$table>()
-                    .contains_key(&key)
-                    .unwrap());
-
-                // When
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&key, &$value_insert)
-                    .unwrap();
-
-                // Then
-                assert!(storage_transaction
-                    .storage_as_mut::<$table>()
-                    .contains_key(&key)
-                    .unwrap());
-            }
-
-            #[test]
-            fn batch_mutate_works() {
-                use $crate::rand::{
-                    Rng,
-                    rngs::StdRng,
-                    RngCore,
-                    SeedableRng,
-                };
-
-                let empty_storage = InMemoryStorage::default();
-
-                let mut init_storage = InMemoryStorage::default();
-                let mut init_structured_storage = init_storage.write_transaction();
-
-                let mut rng = &mut StdRng::seed_from_u64(31337);
-                let gen = || Some($random_key(&mut rng));
-                let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
-                let value = $value_insert;
-
-                <_ as $crate::StorageBatchMutate<$table>>::init_storage(
-                    &mut init_structured_storage,
-                    &mut data.iter().map(|k| {
-                        let value: &<$table as $crate::Mappable>::Value = &value;
-                        (k, value)
-                    })
-                ).expect("Should initialize the storage successfully");
-                init_structured_storage.commit().expect("Should commit the storage");
-
-                let mut insert_storage = InMemoryStorage::default();
-                let mut insert_structured_storage = insert_storage.write_transaction();
-
-                <_ as $crate::StorageBatchMutate<$table>>::insert_batch(
-                    &mut insert_structured_storage,
-                    &mut data.iter().map(|k| {
-                        let value: &<$table as $crate::Mappable>::Value = &value;
-                        (k, value)
-                    })
-                ).expect("Should insert batch successfully");
-                insert_structured_storage.commit().expect("Should commit the storage");
-
-                assert_eq!(init_storage, insert_storage);
-                assert_ne!(init_storage, empty_storage);
-                assert_ne!(insert_storage, empty_storage);
-            }
-
-            #[test]
-            fn batch_remove_fails() {
-                use $crate::rand::{
-                    Rng,
-                    rngs::StdRng,
-                    RngCore,
-                    SeedableRng,
-                };
-
-                let mut init_storage = InMemoryStorage::default();
-                let mut init_structured_storage = init_storage.write_transaction();
-
-                let mut rng = &mut StdRng::seed_from_u64(31337);
-                let gen = || Some($random_key(&mut rng));
-                let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
-                let value = $value_insert;
-
-                <_ as $crate::StorageBatchMutate<$table>>::init_storage(
-                    &mut init_structured_storage,
-                    &mut data.iter().map(|k| {
-                        let value: &<$table as $crate::Mappable>::Value = &value;
-                        (k, value)
-                    })
-                ).expect("Should initialize the storage successfully");
-
-                let result = <_ as $crate::StorageBatchMutate<$table>>::remove_batch(
-                    &mut init_structured_storage,
-                    &mut data.iter()
-                );
-
-                assert!(result.is_err());
-            }
-
-            #[test]
-            fn root_returns_error_empty_metadata() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let root = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .root(&$key);
-                assert!(root.is_err())
-            }
-
-            #[test]
-            fn update_produces_non_zero_root() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
-                let key = $random_key(&mut rng);
-                let value = $value_insert;
-                storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
-                    .unwrap();
-
-                let root = storage_transaction.storage_as_mut::<$table>().root(&key)
-                    .expect("Should get the root");
-                let empty_root = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
-                assert_ne!(root, empty_root);
-            }
-
-            #[test]
-            fn has_different_root_after_each_update() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
-
-                let mut prev_root = fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
-
-                for _ in 0..10 {
-                    let key = $random_key(&mut rng);
-                    let value = $value_insert;
-                    storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
-                        .unwrap();
-
-                    let root = storage_transaction.storage_as_mut::<$table>().root(&key)
-                        .expect("Should get the root");
-                    assert_ne!(root, prev_root);
-                    prev_root = root;
+                #[test]
+                fn merkleized_storage__test_can_generate_and_validate_proofs() {
+                    $table::test_can_generate_and_validate_proofs();
                 }
             }
-
-            #[test]
-            fn can_generate_and_validate_proofs() {
-                use crate::tables::merkle::FuelBlockMerkleMetadata;
-                use crate::tables::merkle::FuelBlockMerkleData;
-                use crate::structured_storage::blocks::BlockEncoder;
-                use crate::codec::Encode;
-                use fuel_core_types::fuel_merkle::binary;
-
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let mut rng = rand::rngs::StdRng::seed_from_u64(1234);
-                let key = $random_key(&mut rng);
-                let value = $value_insert;
-
-                let encoded_value = BlockEncoder::encode(&value);
-
-                storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
-                    .unwrap();
-
-                let root = storage_transaction.storage_as_mut::<$table>().root(&key)
-                    .expect("Should get the root");
-
-                let _merkle_metadata = storage_transaction.storage::<crate::tables::merkle::FuelBlockMerkleMetadata>()
-                    .get(&DenseMetadataKey::Primary(0.into())).expect("expected metadata");
-
-                let tree: binary::MerkleTree<FuelBlockMerkleData, _> =
-                    binary::MerkleTree::load(&storage_transaction, 1).expect("could not load merkle tree");
-
-                let (returned_root, returned_proof_set) = tree.prove(0).expect("failed to produce proof");
-
-                let proof_is_valid = binary::verify(&returned_root, &encoded_value, &returned_proof_set, 0, 1);
-                assert!(proof_is_valid);
-
-                assert_eq!(returned_root, root);
-            }
-
-        }}
-    };
-    ($table:ident, $key:expr, $value_insert:expr, $value_return:expr) => {
-        $crate::basic_merklelized_storage_tests!(
-            $table,
-            $key,
-            $value_insert,
-            $value_return,
-            random
-        );
-    };
-    ($table:ident, $key:expr, $value:expr) => {
-        $crate::basic_merklelized_storage_tests!($table, $key, $value, $value);
+        }
     };
 }
