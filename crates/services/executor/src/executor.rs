@@ -2249,8 +2249,6 @@ where
                 ))
                 .map(Cow::into_owned)
         } else {
-            debug!("vvvvvv creating new coin for utxo_id: {:?} owner: {:?} amount: {} asset_id: {:?} vvvvvv",
-                utxo_id, owner, amount, asset_id);
             // if utxo validation is disabled, just assign this new input to the original block
             let coin = CompressedCoinV1 {
                 owner,
