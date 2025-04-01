@@ -360,7 +360,7 @@ where
 /// A trait that provides basic tests for the merklized storage.
 /// It is used to test the merklized storage with different key and value codecs.
 #[allow(warnings)]
-pub mod basic_tests {
+pub mod basic_tests_bmt {
     use core::ops::Deref;
 
     use crate::{
@@ -751,9 +751,9 @@ macro_rules! basic_merklelized_storage_tests {
     ($table:ident, $key:expr, $value:expr, $random_key:expr) => {
         $crate::paste::item! {
             #[cfg(test)]
-            mod [< $table:snake _basic_tests >] {
+            mod [< $table:snake _basic_tests_bmt >] {
                 use super::*;
-                use $crate::blueprint::merklized::basic_tests::BasicMerkleizedStorageTests;
+                use $crate::blueprint::merklized::basic_tests_bmt::BasicMerkleizedStorageTests;
 
                 impl BasicMerkleizedStorageTests for $table {
                     fn key() -> Box<Self::Key> {
