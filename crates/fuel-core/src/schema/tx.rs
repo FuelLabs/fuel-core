@@ -84,7 +84,10 @@ use fuel_core_types::{
         CheckPredicateParams,
         EstimatePredicates,
     },
-    services::transaction_status,
+    services::{
+        executor::DryRunResult,
+        transaction_status,
+    },
 };
 use futures::{
     Stream,
@@ -158,7 +161,10 @@ impl TxQuery {
             Ok(gas)
         })?;
 
-        let (tx_statuses, storage_reads) = block_producer
+        let DryRunResult {
+            transactions,
+            storage_reads,
+        } = block_producer
             .dry_run_txs(
                 transactions,
                 block_height.map(|x| x.into()),
@@ -169,7 +175,7 @@ impl TxQuery {
             )
             .await?;
 
-        let tx_statuses = tx_statuses
+        let tx_statuses = transactions
             .into_iter()
             .map(|(_, status)| DryRunTransactionExecutionStatus(status))
             .collect();
@@ -487,7 +493,7 @@ impl TxQuery {
                 false,
             )
             .await?
-            .0
+            .transactions
             .into_iter()
             .next()
             .ok_or_else(|| {
@@ -576,9 +582,8 @@ impl TxQuery {
         // Requires `--historical-execution` flag to be enabled.
         block_height: Option<U32>,
     ) -> async_graphql::Result<DryRunStorageReads> {
-        Ok(self
-            .dry_run_inner(ctx, txs, utxo_validation, gas_price, block_height, true)
-            .await?)
+        self.dry_run_inner(ctx, txs, utxo_validation, gas_price, block_height, true)
+            .await
     }
 
     /// Get execution trace for an already-executed block.

@@ -22,9 +22,9 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            DryRunResult,
             Result as ExecutorResult,
             StorageReadReplayEvent,
-            TransactionExecutionStatus,
             UncommittedResult,
         },
     },
@@ -113,10 +113,7 @@ pub trait DryRunner: Send + Sync {
         forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
         record_storage_read_replay: bool,
-    ) -> ExecutorResult<(
-        Vec<(Transaction, TransactionExecutionStatus)>,
-        Vec<StorageReadReplayEvent>,
-    )>;
+    ) -> ExecutorResult<DryRunResult>;
 }
 
 pub trait StorageReadReplayRecorder: Send + Sync {

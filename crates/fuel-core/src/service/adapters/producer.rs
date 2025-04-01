@@ -63,9 +63,9 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            DryRunResult,
             Result as ExecutorResult,
             StorageReadReplayEvent,
-            TransactionExecutionStatus,
             UncommittedResult,
         },
     },
@@ -132,10 +132,7 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
         record_storage_read_replay: bool,
-    ) -> ExecutorResult<(
-        Vec<(Transaction, TransactionExecutionStatus)>,
-        Vec<StorageReadReplayEvent>,
-    )> {
+    ) -> ExecutorResult<DryRunResult> {
         self.executor.dry_run(
             block,
             forbid_fake_coins,

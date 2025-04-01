@@ -42,11 +42,11 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            DryRunResult,
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
             StorageReadReplayEvent,
-            TransactionExecutionStatus,
             ValidationResult,
         },
         Uncommitted,
@@ -363,6 +363,7 @@ where
 
         let options = self.config.as_ref().into();
         self.produce_inner_sync(component, options, ProduceBlockMode::Produce)
+            .map(|r| r.map_result(|(v, _)| v))
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -374,7 +375,15 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner_sync(block, options, ProduceBlockMode::DryRunLatest)
+        self.produce_inner_sync(
+            block,
+            options,
+            ProduceBlockMode::DryRun {
+                height: BlockHeightSelection::Latest,
+                record_storage_reads: false,
+            },
+        )
+        .map(|r| r.map_result(|(v, _)| v))
     }
 }
 
@@ -430,10 +439,7 @@ where
         forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
         record_storage_reads: bool,
-    ) -> ExecutorResult<(
-        Vec<(Transaction, TransactionExecutionStatus)>,
-        Vec<StorageReadReplayEvent>,
-    )> {
+    ) -> ExecutorResult<DryRunResult> {
         if at_height.is_some() && !self.config.allow_historical_execution {
             return Err(ExecutorError::Other(
                 "The historical execution is not allowed".to_string(),
@@ -486,9 +492,12 @@ where
         }
 
         let (_, txs) = block.into_inner();
-        let result = txs.into_iter().zip(tx_status).collect();
+        let transactions = txs.into_iter().zip(tx_status).collect();
 
-        Ok((result, storage_reads))
+        Ok(DryRunResult {
+            transactions,
+            storage_reads,
+        })
     }
 
     pub fn validate(
