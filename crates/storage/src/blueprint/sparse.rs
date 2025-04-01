@@ -48,6 +48,40 @@ use std::borrow::Cow;
 #[cfg(not(feature = "std"))]
 use alloc::borrow::Cow;
 
+/// TODO
+pub trait SmtTableWithBlueprint: Mappable + Sized {
+    /// The column type used by the merklized table
+    type SmtColumn: StorageColumn;
+
+    /// The key codec type for encoding/decoding keys
+    type KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>;
+
+    /// The value codec type for encoding/decoding values
+    type ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>;
+
+    /// The metadata table type for storing SMT metadata
+    type Metadata: TableWithBlueprint<
+        Column = Self::SmtColumn,
+        Value = SparseMerkleMetadata,
+        OwnedValue = SparseMerkleMetadata,
+    >;
+
+    /// The nodes table type for storing merkle nodes
+    type Nodes: TableWithBlueprint<
+        Key = MerkleRoot,
+        OwnedKey = MerkleRoot,
+        Value = sparse::Primitive,
+        OwnedValue = sparse::Primitive,
+        Column = Self::SmtColumn,
+    >;
+
+    /// The converter type for mapping column keys to SMT instances
+    type KeyConverter: PrimaryKey<
+        InputKey = Self::Key,
+        OutputKey = <Self::Metadata as Mappable>::Key,
+    >;
+}
+
 /// The trait that allows to convert the key of the table into the key of the metadata table.
 /// If the key comprises several entities, it is possible to build a Merkle tree over different primary keys.
 /// The trait defines the key over which to build an SMT.

@@ -57,17 +57,21 @@ pub trait MerklizedTableWithBlueprint: Mappable + Sized {
     type ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>;
 
     /// The metadata table type for storing merkle metadata
-    type Metadata: Mappable
-        + TableWithBlueprint<
-            Column = Self::MerkleizedColumn,
-            Key = DenseMetadataKey<Self::OwnedKey>,
-            OwnedKey = DenseMetadataKey<Self::OwnedKey>,
-            Value = DenseMerkleMetadata,
-            OwnedValue = DenseMerkleMetadata,
-        >;
+    type Metadata: TableWithBlueprint<
+        Column = Self::MerkleizedColumn,
+        Key = DenseMetadataKey<Self::OwnedKey>,
+        OwnedKey = DenseMetadataKey<Self::OwnedKey>,
+        Value = DenseMerkleMetadata,
+        OwnedValue = DenseMerkleMetadata,
+    >;
 
     /// The nodes table type for storing merkle nodes
-    type Nodes: Mappable + TableWithBlueprint<Column = Self::MerkleizedColumn>;
+    type Nodes: TableWithBlueprint<
+        Key = u64,
+        Value = Primitive,
+        OwnedValue = Primitive,
+        Column = Self::MerkleizedColumn,
+    >;
 
     /// The value encoder type for encoding values for merkle proofs
     type ValueEncoder: Encode<Self::Value>;
@@ -417,9 +421,6 @@ pub mod basic_tests_bmt {
         Self::KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
         Self::ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
         Self::ValueEncoder: Encode<Self::Value>,
-        Self::Metadata: TableWithBlueprint<Column = Self::MerkleizedColumn>,
-        Self::Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
-        Self::Nodes: TableWithBlueprint<Column = Self::MerkleizedColumn>,
         Self::OwnedValue: PartialEq + core::fmt::Debug,
         Self::MerkleizedColumn: PartialEq,
 
