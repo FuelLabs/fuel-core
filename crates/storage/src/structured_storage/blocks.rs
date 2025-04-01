@@ -1,7 +1,7 @@
 //! The module contains implementations and tests for the `FuelBlocks` table.
 
 use crate::{
-    blueprint::merklized::MerklizedTableWithBlueprint,
+    blueprint::merklized::Merklized,
     codec::{
         postcard::Postcard,
         primitive::Primitive,
@@ -21,6 +21,8 @@ use fuel_core_types::blockchain::block::{
     CompressedBlock,
 };
 use fuel_vm_private::fuel_tx::Bytes32;
+
+use super::TableWithBlueprint;
 
 /// The encoder of `CompressedBlock` for the `FuelBlocks` table.
 pub struct BlockEncoder;
@@ -43,15 +45,18 @@ impl Encode<Block> for BlockEncoder {
     }
 }
 
-impl MerklizedTableWithBlueprint for FuelBlocks {
-    type KeyCodec = Primitive<4>;
-    type ValueCodec = Postcard;
-    type Metadata = FuelBlockMerkleMetadata;
-    type Nodes = FuelBlockMerkleData;
-    type ValueEncoder = BlockEncoder;
-    type MerkleizedColumn = Column;
+impl TableWithBlueprint for FuelBlocks {
+    type Blueprint = Merklized<
+        Primitive<4>,
+        Postcard,
+        FuelBlockMerkleMetadata,
+        FuelBlockMerkleData,
+        BlockEncoder,
+    >;
 
-    fn column() -> Column {
+    type Column = Column;
+
+    fn column() -> Self::Column {
         Column::FuelBlocks
     }
 }

@@ -18,13 +18,9 @@ use crate::{
         BatchOperations,
         KeyValueInspect,
         KeyValueMutate,
-        StorageColumn,
     },
     not_found,
-    structured_storage::{
-        StructuredStorage,
-        TableWithBlueprint,
-    },
+    structured_storage::StructuredStorage,
     tables::merkle::{
         DenseMerkleMetadata,
         DenseMerkleMetadataV1,
@@ -42,57 +38,6 @@ use fuel_core_types::fuel_merkle::binary::Primitive;
 
 #[cfg(feature = "alloc")]
 use alloc::borrow::ToOwned;
-
-/// A trait for tables that use the merklized blueprint.
-/// Implementing this trait automatically provides a `TableWithBlueprint` implementation
-/// that uses the `Merklized` blueprint.
-pub trait MerklizedTableWithBlueprint: Mappable + Sized {
-    /// The column type used by the merklized table
-    type MerkleizedColumn: StorageColumn;
-
-    /// The key codec type for encoding/decoding keys
-    type KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>;
-
-    /// The value codec type for encoding/decoding values
-    type ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>;
-
-    /// The metadata table type for storing merkle metadata
-    type Metadata: TableWithBlueprint<
-        Column = Self::MerkleizedColumn,
-        Key = DenseMetadataKey<Self::OwnedKey>,
-        OwnedKey = DenseMetadataKey<Self::OwnedKey>,
-        Value = DenseMerkleMetadata,
-        OwnedValue = DenseMerkleMetadata,
-    >;
-
-    /// The nodes table type for storing merkle nodes
-    type Nodes: TableWithBlueprint<
-        Key = u64,
-        Value = Primitive,
-        OwnedValue = Primitive,
-        Column = Self::MerkleizedColumn,
-    >;
-
-    /// The value encoder type for encoding values for merkle proofs
-    type ValueEncoder: Encode<Self::Value>;
-
-    /// The column occupied by the table.
-    fn column() -> Self::MerkleizedColumn;
-}
-
-/// Automatically implement TableWithBlueprint for any type that implements MerklizedTableWithBlueprint
-impl<T> TableWithBlueprint for T
-where
-    T: MerklizedTableWithBlueprint,
-{
-    type Blueprint =
-        Merklized<T::KeyCodec, T::ValueCodec, T::Metadata, T::Nodes, T::ValueEncoder>;
-    type Column = T::MerkleizedColumn;
-
-    fn column() -> Self::Column {
-        T::column()
-    }
-}
 
 /// The `Merklized` blueprint builds the storage as a [`Plain`](super::plain::Plain)
 /// blueprint and maintains the binary merkle tree by the `Metadata` table.
@@ -412,8 +357,6 @@ pub mod basic_tests_bmt {
         transactional::WriteTransaction,
     };
 
-    use crate::blueprint::merklized::MerklizedTableWithBlueprint;
-
     /// A trait that provides basic tests for the merklized storage.
     /// It is used to test the merklized storage with different key and value codecs.
     pub trait BasicMerkleizedStorageTests: MerklizedTableWithBlueprint
@@ -422,32 +365,28 @@ pub mod basic_tests_bmt {
         Self::ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
         Self::ValueEncoder: Encode<Self::Value>,
         Self::OwnedValue: PartialEq + core::fmt::Debug,
-        Self::MerkleizedColumn: PartialEq,
+        Self::Column: PartialEq,
 
         for<'a, 'b> <Self::Metadata as TableWithBlueprint>::Blueprint: BlueprintMutate<
             Self::Metadata,
             StructuredStorage<
-                &'a mut StorageTransaction<
-                    &'b mut InMemoryStorage<Self::MerkleizedColumn>,
-                >,
+                &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>,
             >,
         >,
         for<'a> <Self::Metadata as TableWithBlueprint>::Blueprint: BlueprintMutate<
             Self::Metadata,
-            StorageTransaction<&'a mut InMemoryStorage<Self::MerkleizedColumn>>,
+            StorageTransaction<&'a mut InMemoryStorage<Self::Column>>,
         >,
 
         for<'a, 'b> <Self::Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<
             Self::Nodes,
             StructuredStorage<
-                &'a mut StorageTransaction<
-                    &'b mut InMemoryStorage<Self::MerkleizedColumn>,
-                >,
+                &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>,
             >,
         >,
         for<'a> <Self::Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<
             Self::Nodes,
-            StorageTransaction<&'a mut InMemoryStorage<Self::MerkleizedColumn>>,
+            StorageTransaction<&'a mut InMemoryStorage<Self::Column>>,
         >,
     {
         /// Returns a test key for the table
@@ -741,6 +680,85 @@ pub mod basic_tests_bmt {
 
             assert_eq!(returned_root, root);
         }
+    }
+
+    /// Helper trait enabling referencing generics in
+    /// Merklized `TableWithBlueprint` implementations
+    /// as associated types.
+    pub trait MerklizedTableWithBlueprint:
+        TableWithBlueprint<
+        Blueprint = Merklized<
+            Self::KeyCodec,
+            Self::ValueCodec,
+            Self::Metadata,
+            Self::Nodes,
+            Self::ValueEncoder,
+        >,
+    >
+    {
+        /// The key codec type for encoding/decoding keys
+        type KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>;
+
+        /// The value codec type for encoding/decoding values
+        type ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>;
+
+        /// The metadata table type for storing merkle metadata
+        type Metadata: TableWithBlueprint<
+            Column = Self::Column,
+            Key = DenseMetadataKey<Self::OwnedKey>,
+            OwnedKey = DenseMetadataKey<Self::OwnedKey>,
+            Value = DenseMerkleMetadata,
+            OwnedValue = DenseMerkleMetadata,
+        >;
+
+        /// The nodes table type for storing merkle nodes
+        type Nodes: TableWithBlueprint<
+            Key = u64,
+            Value = Primitive,
+            OwnedValue = Primitive,
+            Column = Self::Column,
+        >;
+
+        /// The value encoder type for encoding values for merkle proofs
+        type ValueEncoder: Encode<Self::Value>;
+    }
+
+    impl<T, KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder>
+        MerklizedTableWithBlueprint for T
+    where
+        T: TableWithBlueprint<
+            Blueprint = Merklized<KeyCodec, ValueCodec, Metadata, Nodes, ValueEncoder>,
+        >,
+        KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
+
+        ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
+
+        Metadata: TableWithBlueprint<
+            Column = Self::Column,
+            Key = DenseMetadataKey<Self::OwnedKey>,
+            OwnedKey = DenseMetadataKey<Self::OwnedKey>,
+            Value = DenseMerkleMetadata,
+            OwnedValue = DenseMerkleMetadata,
+        >,
+
+        Nodes: TableWithBlueprint<
+            Key = u64,
+            Value = Primitive,
+            OwnedValue = Primitive,
+            Column = Self::Column,
+        >,
+
+        ValueEncoder: Encode<Self::Value>,
+    {
+        type KeyCodec = KeyCodec;
+
+        type ValueCodec = ValueCodec;
+
+        type Metadata = Metadata;
+
+        type Nodes = Nodes;
+
+        type ValueEncoder = ValueEncoder;
     }
 }
 

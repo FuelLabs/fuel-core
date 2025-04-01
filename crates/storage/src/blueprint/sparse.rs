@@ -82,6 +82,19 @@ pub trait SmtTableWithBlueprint: Mappable + Sized {
     >;
 }
 
+/// Blanket implementation of TableWithBlueprint for any type that implements SmtTableWithBlueprint
+// impl<T> TableWithBlueprint for T
+// where
+//    T: SmtTableWithBlueprint,
+//{
+//    type Blueprint = Sparse<T::KeyCodec, T::ValueCodec, T::Metadata, T::Nodes, T::KeyConverter>;
+//    type Column = T::SmtColumn;
+//
+//    fn column() -> Self::Column {
+//        T::column()
+//    }
+//}
+
 /// The trait that allows to convert the key of the table into the key of the metadata table.
 /// If the key comprises several entities, it is possible to build a Merkle tree over different primary keys.
 /// The trait defines the key over which to build an SMT.
