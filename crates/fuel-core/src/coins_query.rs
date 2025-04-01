@@ -757,7 +757,7 @@ mod tests {
             }
 
             #[tokio::test]
-            async fn largest_first__ok_when_not_enough_coins_and_allow_partial_true() {
+            async fn query__ok_when_not_enough_coins_and_allow_partial_true() {
                 // Given
                 let (owner, asset_ids, base_asset_id, db) = setup_coins();
                 let asset_id = asset_ids[0];
