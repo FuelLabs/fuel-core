@@ -886,7 +886,8 @@ mod tests {
             .unwrap();
         println!("{}", String::from_utf8(output.stderr).unwrap());
 
-        assert!(output.status.success());
+        panic!("{:?}", output.status);
+        // assert!(output.status.success());
     }
 
     #[test]

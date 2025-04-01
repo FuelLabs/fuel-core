@@ -162,18 +162,33 @@ impl From<ConfigDataCoin> for CoinConfig {
 }
 
 impl From<TableEntry<Coins>> for CoinConfig {
-    fn from(_value: TableEntry<Coins>) -> Self {
-        // ConfigCoin {
-        //     tx_id: *value.key.tx_id(),
-        //     output_index: value.key.output_index(),
-        //     tx_pointer_block_height: value.value.tx_pointer().block_height(),
-        //     tx_pointer_tx_idx: value.value.tx_pointer().tx_index(),
-        //     owner: *value.value.owner(),
-        //     amount: *value.value.amount(),
-        //     asset_id: *value.value.asset_id(),
-        // }
-        // .into()
-        todo!()
+    fn from(value: TableEntry<Coins>) -> Self {
+        match value.value {
+            CompressedCoin::V1(coin) => CoinConfig::Coin(ConfigCoin {
+                tx_id: *value.key.tx_id(),
+                output_index: value.key.output_index(),
+                tx_pointer_block_height: coin.tx_pointer.block_height(),
+                tx_pointer_tx_idx: coin.tx_pointer.tx_index(),
+                owner: coin.owner,
+                amount: coin.amount,
+                asset_id: coin.asset_id,
+            }),
+            CompressedCoin::V2(data_coin) => {
+                CoinConfig::DataCoin(ConfigDataCoin {
+                    tx_id: *value.key.tx_id(),
+                    output_index: value.key.output_index(),
+                    tx_pointer_block_height: data_coin.tx_pointer.block_height(),
+                    tx_pointer_tx_idx: data_coin.tx_pointer.tx_index(),
+                    owner: data_coin.owner,
+                    amount: data_coin.amount,
+                    asset_id: data_coin.asset_id,
+                    data: data_coin.data.clone(), // Clone the data for the new struct
+                })
+            }
+            _ => {
+                unreachable!("Covered both variants")
+            }
+        }
     }
 }
 
@@ -181,14 +196,6 @@ impl From<CoinConfig> for TableEntry<Coins> {
     fn from(config: CoinConfig) -> Self {
         let entry = match config {
             CoinConfig::Coin(config) => {
-                tracing::debug!(
-                    "Creating TableEntry for CoinConfig: tx_id={:?}, output_index={}, owner={:?}, amount={}, asset_id={:?}",
-                    config.tx_id,
-                    config.output_index,
-                    config.owner,
-                    config.amount,
-                    config.asset_id
-                );
                 let value = CompressedCoin::V1(CompressedCoinV1 {
                     owner: config.owner,
                     amount: config.amount,
@@ -204,15 +211,6 @@ impl From<CoinConfig> for TableEntry<Coins> {
                 }
             }
             CoinConfig::DataCoin(config) => {
-                tracing::debug!(
-                    "Creating TableEntry for DataCoinConfig: tx_id={:?}, output_index={}, owner={:?}, amount={}, asset_id={:?}, data_len={}",
-                    config.tx_id,
-                    config.output_index,
-                    config.owner,
-                    config.amount,
-                    config.asset_id,
-                    config.data.len()
-                );
                 let value = CompressedCoin::V2(CompressedCoinV2 {
                     owner: config.owner,
                     amount: config.amount,
@@ -357,11 +355,7 @@ pub mod coin_config_helpers {
             let config = ConfigCoin {
                 tx_id,
                 output_index: self.count,
-                tx_pointer_block_height: Default::default(),
-                tx_pointer_tx_idx: Default::default(),
-                owner: Default::default(),
-                amount: Default::default(),
-                asset_id: Default::default(),
+                ..Default::default()
             };
 
             self.count = self.count.checked_add(1).expect("Max coin count reached");
@@ -373,13 +367,9 @@ pub mod coin_config_helpers {
             let owner = Address::from(*secret.public_key().hash());
 
             ConfigCoin {
-                tx_id: Default::default(),
-                output_index: Default::default(),
-                tx_pointer_block_height: Default::default(),
                 amount,
                 owner,
-                tx_pointer_tx_idx: Default::default(),
-                asset_id: Default::default(),
+                ..self.generate()
             }
             .into()
         }
