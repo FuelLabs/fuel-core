@@ -158,8 +158,7 @@ async fn dry_run__storage_read_replay__multiple_dry_runs_keep_original_reads() {
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let (_, contract_id) =
-        counter_contract::deploy(&client, &mut rng).await;
+    let (_, contract_id) = counter_contract::deploy(&client, &mut rng).await;
 
     let mut storage_slot_key = contract_id.to_vec();
     storage_slot_key.extend(Bytes32::zeroed().to_vec());
@@ -169,19 +168,15 @@ async fn dry_run__storage_read_replay__multiple_dry_runs_keep_original_reads() {
     let tx2 = counter_contract::increment_tx(&mut rng, contract_id);
     let tx3 = counter_contract::increment_tx(&mut rng, contract_id);
     let (statuses, storage_reads) = client
-        .dry_run_opt_record_storage_reads(
-            &[tx1, tx2, tx3],
-            None,
-            None,
-            None,
-        )
+        .dry_run_opt_record_storage_reads(&[tx1, tx2, tx3], None, None, None)
         .await
         .unwrap();
 
     // then
     assert_eq!(statuses.len(), 3, "Expected three transactions in dry run");
     for i in 0..3 {
-        let TransactionExecutionResult::Success { result, .. } = statuses[i as usize].result
+        let TransactionExecutionResult::Success { result, .. } =
+            statuses[i as usize].result
         else {
             panic!("Expected transaction to be successful");
         };
@@ -189,11 +184,7 @@ async fn dry_run__storage_read_replay__multiple_dry_runs_keep_original_reads() {
         else {
             panic!("Expected return value");
         };
-        assert_eq!(
-            value,
-            i + 1,
-            "Counter value mismatch"
-        );
+        assert_eq!(value, i + 1, "Counter value mismatch");
     }
 
     // The storage reads should be the same for all transactions
@@ -212,5 +203,4 @@ async fn dry_run__storage_read_replay__multiple_dry_runs_keep_original_reads() {
             "Counter value from storage events mismatch"
         );
     }
-
 }
