@@ -730,8 +730,7 @@ mod tests {
             };
 
             #[tokio::test]
-            async fn query__error_when_not_enough_coins_and_allow_partial_false()
-            {
+            async fn query__error_when_not_enough_coins_and_allow_partial_false() {
                 // Given
                 let (owner, asset_ids, base_asset_id, db) = setup_coins();
                 let asset_id = asset_ids[0];
