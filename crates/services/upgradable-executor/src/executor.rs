@@ -893,7 +893,7 @@ where
         let mut g = storage_rec.lock();
         let storage_reads = core::mem::take(&mut *g);
 
-        Ok(result?.map_result(|r| (r, storage_reads)))
+        Ok(result.map_result(|r| (r, storage_reads)))
     }
 
     #[cfg(feature = "wasm-executor")]
