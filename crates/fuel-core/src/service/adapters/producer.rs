@@ -132,8 +132,16 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
         record_storage_read_replay: bool,
-    ) -> ExecutorResult<(Vec<(Transaction, TransactionExecutionStatus)>, Vec<StorageReadReplayEvent>)> {
-        self.executor.dry_run(block, forbid_fake_coins, at_height, record_storage_read_replay)
+    ) -> ExecutorResult<(
+        Vec<(Transaction, TransactionExecutionStatus)>,
+        Vec<StorageReadReplayEvent>,
+    )> {
+        self.executor.dry_run(
+            block,
+            forbid_fake_coins,
+            at_height,
+            record_storage_read_replay,
+        )
     }
 }
 
