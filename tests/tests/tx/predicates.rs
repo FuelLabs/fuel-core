@@ -285,6 +285,7 @@ async fn submit__tx_with_predicate_can_check_data_coin() {
 
     assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
 
+    // when
     let predicate_tx = predicate_tx.into();
     context
         .client
@@ -292,7 +293,7 @@ async fn submit__tx_with_predicate_can_check_data_coin() {
         .await
         .unwrap();
 
-    // check transaction change amount to see if predicate was spent
+    // then
     let transaction: Transaction = context
         .client
         .transaction(&predicate_tx.id(&ChainId::default()))
