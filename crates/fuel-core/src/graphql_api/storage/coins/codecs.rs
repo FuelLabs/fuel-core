@@ -140,14 +140,14 @@ impl Encode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
                 let retryable_flag_bytes = NON_RETRYABLE_BYTE;
 
                 let mut serialized_coin =
-                    Vec::with_capacity(COIN_VARIANT_SIZE + data.len());
+                    Vec::with_capacity(COIN_VARIANT_SIZE.saturating_add(data.len()));
                 // TODO: Check that this works!
                 serialized_coin.push(retryable_flag_bytes[0]);
                 serialized_coin.extend_from_slice(owner.as_ref());
                 serialized_coin.extend_from_slice(asset_id.as_ref());
                 serialized_coin.extend_from_slice(&amount.to_be_bytes());
                 serialized_coin.extend_from_slice(&utxo_id_to_bytes(utxo_id));
-                serialized_coin.extend_from_slice(&data);
+                serialized_coin.extend_from_slice(data);
                 serialized_coin.push(CoinType::DataCoin as u8);
 
                 SerializedCoinsToSpendIndexKey::DataCoin(serialized_coin)
@@ -207,20 +207,23 @@ impl Decode<CoinsToSpendIndexKey> for Manual<CoinsToSpendIndexKey> {
                 end = end.saturating_add(AMOUNT_SIZE);
                 let amount = u64::from_be_bytes(bytes[start..end].try_into()?);
                 start = end;
-                end = bytes.len() - 1; // Exclude the last byte which is coin type
-
-                let utxo_id_bytes = &bytes[start..end];
-                let (tx_id_bytes, output_index_bytes) = utxo_id_bytes.split_at(TxId::LEN);
+                end = start.saturating_add(TxId::LEN);
+                let tx_id_bytes = &bytes[start..end];
                 let tx_id = TxId::try_from(tx_id_bytes)?;
+                start = end;
+                end = start.saturating_add(UTXO_ID_SIZE);
+                let output_index_bytes = &bytes[start..end];
                 let output_index = u16::from_be_bytes(output_index_bytes.try_into()?);
                 let utxo_id = UtxoId::new(tx_id, output_index);
+                start = end;
+                let data = bytes[start..].to_vec();
 
                 CoinsToSpendIndexKey::DataCoin {
                     owner,
                     asset_id,
                     amount,
                     utxo_id,
-                    data: bytes[end..].to_vec(),
+                    data,
                 }
             }
             CoinType::Message => {

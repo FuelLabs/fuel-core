@@ -3,7 +3,7 @@
 use fuel_core::service::config::Trigger;
 use fuel_core_chain_config::{
     ChainConfig,
-    CoinConfig,
+    ConfigCoin,
     SnapshotMetadata,
 };
 use fuel_core_storage::transactional::AtomicView;
@@ -169,15 +169,18 @@ fn main() {
                     ..
                 }) = input
                 {
-                    Some(CoinConfig {
-                        tx_id: *utxo_id.tx_id(),
-                        output_index: utxo_id.output_index(),
-                        tx_pointer_block_height: tx_pointer.block_height(),
-                        tx_pointer_tx_idx: tx_pointer.tx_index(),
-                        owner: *owner,
-                        amount: *amount,
-                        asset_id: *asset_id,
-                    })
+                    Some(
+                        ConfigCoin {
+                            tx_id: *utxo_id.tx_id(),
+                            output_index: utxo_id.output_index(),
+                            tx_pointer_block_height: tx_pointer.block_height(),
+                            tx_pointer_tx_idx: tx_pointer.tx_index(),
+                            owner: *owner,
+                            amount: *amount,
+                            asset_id: *asset_id,
+                        }
+                        .into(),
+                    )
                 } else {
                     None
                 }

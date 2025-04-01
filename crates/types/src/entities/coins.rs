@@ -60,7 +60,7 @@ impl CoinType {
     /// Returns the owner of the coin.
     pub fn owner(&self) -> &Address {
         match self {
-            CoinType::Coin(coin) => &coin.owner(),
+            CoinType::Coin(coin) => coin.owner(),
             CoinType::MessageCoin(coin) => &coin.recipient,
         }
     }

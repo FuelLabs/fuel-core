@@ -26,13 +26,6 @@ use fuel_core_types::signer::SignMode;
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
 use fuel_core_compression_service::service::new_service as new_compression_service;
-use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
-    tables::Coins,
-};
 
 #[cfg(feature = "p2p")]
 use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{

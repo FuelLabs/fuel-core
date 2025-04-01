@@ -342,7 +342,7 @@ impl CompressedCoin {
                     owner == &coin.owner
                         && amount == &coin.amount
                         && asset_id == &coin.asset_id
-                        && data == data,
+                        && data == &coin.data,
                 ),
                 _ => {
                     tracing::debug!(

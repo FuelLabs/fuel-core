@@ -250,7 +250,7 @@ impl CoinConfig {
 }
 
 #[cfg(feature = "test-helpers")]
-impl crate::Randomize for CoinConfig {
+impl crate::Randomize for ConfigCoin {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         ConfigCoin {
             tx_id: crate::Randomize::randomize(&mut rng),
@@ -261,7 +261,13 @@ impl crate::Randomize for CoinConfig {
             amount: rng.gen(),
             asset_id: crate::Randomize::randomize(&mut rng),
         }
-        .into()
+    }
+}
+
+#[cfg(feature = "test-helpers")]
+impl crate::Randomize for CoinConfig {
+    fn randomize(rng: impl ::rand::Rng) -> Self {
+        ConfigCoin::randomize(rng).into()
     }
 }
 
@@ -395,7 +401,7 @@ mod tests {
         let config1 = generator.generate();
         let config2 = generator.generate();
 
-        assert_ne!(config1.utxo_id(), config2.utxo_id());
+        assert_ne!(config1.tx_id, config2.tx_id);
     }
 
     #[test]
@@ -407,7 +413,7 @@ mod tests {
         let mut generator = coin_config_helpers::CoinConfigGenerator::new();
         let config = generator.generate_with(secret, amount);
 
-        assert_eq!(config.owner, Address::from(*secret.public_key().hash()));
-        assert_eq!(config.amount, amount);
+        assert_eq!(config.owner(), Address::from(*secret.public_key().hash()));
+        assert_eq!(config.amount(), amount);
     }
 }
