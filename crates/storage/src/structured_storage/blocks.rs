@@ -64,12 +64,13 @@ impl TableWithBlueprint for FuelBlocks {
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
+    use super::*;
     use crate::{
+        blueprint::merklized::basic_tests_bmt::BasicMerkleizedStorageTests,
         structured_storage::{
             test::InMemoryStorage,
             TableWithBlueprint,
         },
-        tables::FuelBlocks,
         transactional::ReadTransaction,
         StorageAsMut,
         StorageMutate,
@@ -91,12 +92,21 @@ mod tests {
         Rng,
     };
 
-    crate::basic_merklelized_storage_tests!(
-        FuelBlocks,
-        fuel_vm_private::fuel_types::BlockHeight::new(0),
-        fuel_core_types::blockchain::block::CompressedBlock::default(),
-        |rng: &mut StdRng| rng.gen()
-    );
+    impl BasicMerkleizedStorageTests for FuelBlocks {
+        fn key() -> Box<Self::Key> {
+            Box::new(fuel_vm_private::fuel_types::BlockHeight::new(0))
+        }
+
+        fn random_key(rng: &mut StdRng) -> Box<Self::Key> {
+            Box::new(rng.gen())
+        }
+
+        fn value() -> Box<Self::Value> {
+            Box::new(fuel_core_types::blockchain::block::CompressedBlock::default())
+        }
+    }
+
+    crate::basic_merklelized_storage_tests!(FuelBlocks);
 
     #[test_case::test_case(&[0]; "initial block with height 0")]
     #[test_case::test_case(&[1337]; "initial block with arbitrary height")]

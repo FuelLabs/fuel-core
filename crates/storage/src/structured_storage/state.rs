@@ -50,7 +50,12 @@ mod smt {
     }
 
     #[cfg(test)]
+    #[allow(non_snake_case)]
     mod test {
+        use rand::Rng;
+
+        use crate::blueprint::sparse::basic_tests::BasicSmtStorageTests;
+
         use super::*;
 
         fn generate_key(
@@ -80,6 +85,66 @@ mod smt {
             let mut bytes = [0u8; 32];
             rng.fill(bytes.as_mut());
             bytes.to_vec()
+        }
+
+        impl BasicSmtStorageTests for ContractsState {
+            fn primary_key() -> Box<<Self::Metadata as Mappable>::Key> {
+                Box::new(fuel_core_types::fuel_tx::ContractId::zeroed())
+            }
+
+            fn foreign_key() -> Box<<Self::Metadata as Mappable>::Key> {
+                Box::new(fuel_core_types::fuel_tx::ContractId::from([1u8; 32]))
+            }
+
+            fn generate_key(
+                current_key: &<Self::Metadata as Mappable>::Key,
+                rng: &mut rand::prelude::StdRng,
+            ) -> Box<Self::Key> {
+                let mut bytes = [0u8; 32];
+                rng.fill(bytes.as_mut());
+                Box::new(<ContractsState as Mappable>::Key::new(current_key, &bytes.into()))
+            }
+
+            fn generate_value(rng: &mut rand::prelude::StdRng) -> Box<Self::Value> {
+                let mut bytes = [0u8; 32];
+                rng.fill(bytes.as_mut());
+                Box::from(bytes)
+            }
+        }
+
+        #[test]
+        fn smt_storage__test_root() {
+            ContractsState::test_root();
+        }
+
+        #[test]
+        fn smt_storage__test_root_returns_empty_root() {
+            ContractsState::test_root_returns_empty_root();
+        }
+
+        #[test]
+        fn smt_storage__test_put_updates_merkle_root() {
+            ContractsState::test_put_updates_merkle_root();
+        }
+
+        #[test]
+        fn smt_storage__test_remove_updates_merkle_root() {
+            ContractsState::test_remove_updates_merkle_root();
+        }
+
+        #[test]
+        fn smt_storage__test_foreign_metadata_isolation() {
+            ContractsState::test_foreign_metadata_isolation();
+        }
+
+        #[test]
+        fn smt_storage__test_put_creates_merkle_metadata() {
+            ContractsState::test_put_creates_merkle_metadata();
+        }
+
+        #[test]
+        fn smt_storage__test_remove_deletes_merkle_metadata() {
+            ContractsState::test_remove_deletes_merkle_metadata();
         }
 
         crate::root_storage_tests!(

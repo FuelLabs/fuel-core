@@ -361,9 +361,6 @@ pub mod basic_tests_bmt {
     /// It is used to test the merklized storage with different key and value codecs.
     pub trait BasicMerkleizedStorageTests: MerklizedTableWithBlueprint
     where
-        Self::KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
-        Self::ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
-        Self::ValueEncoder: Encode<Self::Value>,
         Self::OwnedValue: PartialEq + core::fmt::Debug,
         Self::Column: PartialEq,
 
@@ -762,82 +759,60 @@ pub mod basic_tests_bmt {
     }
 }
 
-/// The macro that generates basic storage tests for the table with the merklelized structure.
-/// It uses the [`InMemoryStorage`](crate::structured_storage::test::InMemoryStorage).
+/// The macro that generates test functions for tables using the merklelized structure.
+/// The table must implement `BasicMerkleizedStorageTests`.
 #[cfg(feature = "test-helpers")]
 #[macro_export]
 macro_rules! basic_merklelized_storage_tests {
-    ($table:ident, $key:expr, $value:expr, $random_key:expr) => {
-        $crate::paste::item! {
-            #[cfg(test)]
-            mod [< $table:snake _basic_tests_bmt >] {
-                use super::*;
-                use $crate::blueprint::merklized::basic_tests_bmt::BasicMerkleizedStorageTests;
+    ($table:ident) => {
+        #[test]
+        fn merkleized_storage__test_get() {
+            $table::test_get();
+        }
 
-                impl BasicMerkleizedStorageTests for $table {
-                    fn key() -> Box<Self::Key> {
-                        Box::new($key)
-                    }
+        #[test]
+        fn merkleized_storage__test_insert() {
+            $table::test_insert();
+        }
 
-                    fn random_key(rng: &mut rand::rngs::StdRng) -> Box<Self::Key> {
-                        Box::new($random_key(rng))
-                    }
+        #[test]
+        fn merkleized_storage__test_remove_returns_error() {
+            $table::test_remove_returns_error();
+        }
 
-                    fn value() -> Box<Self::Value> {
-                        Box::new($value)
-                    }
-                }
+        #[test]
+        fn merkleized_storage__test_exists() {
+            $table::test_exists();
+        }
 
-                #[test]
-                fn merkleized_storage__test_get() {
-                    $table::test_get();
-                }
+        #[test]
+        fn merkleized_storage__test_batch_mutate_works() {
+            $table::test_batch_mutate_works();
+        }
 
-                #[test]
-                fn merkleized_storage__test_insert() {
-                    $table::test_insert();
-                }
+        #[test]
+        fn merkleized_storage__test_batch_remove_fails() {
+            $table::test_batch_remove_fails();
+        }
 
-                #[test]
-                fn merkleized_storage__test_remove_returns_error() {
-                    $table::test_remove_returns_error();
-                }
+        #[test]
+        fn merkleized_storage__test_root_returns_error_empty_metadata() {
+            $table::test_root_returns_error_empty_metadata();
+        }
 
-                #[test]
-                fn merkleized_storage__test_exists() {
-                    $table::test_exists();
-                }
+        #[test]
+        fn merkleized_storage__test_update_produces_non_zero_root() {
+            $table::test_update_produces_non_zero_root();
+        }
 
-                #[test]
-                fn merkleized_storage__test_batch_mutate_works() {
-                    $table::test_batch_mutate_works();
-                }
+        #[test]
+        fn merkleized_storage__test_has_different_root_after_each_update() {
+            $table::test_has_different_root_after_each_update();
+        }
 
-                #[test]
-                fn merkleized_storage__test_batch_remove_fails() {
-                    $table::test_batch_remove_fails();
-                }
-
-                #[test]
-                fn merkleized_storage__test_root_returns_error_empty_metadata() {
-                    $table::test_root_returns_error_empty_metadata();
-                }
-
-                #[test]
-                fn merkleized_storage__test_update_produces_non_zero_root() {
-                    $table::test_update_produces_non_zero_root();
-                }
-
-                #[test]
-                fn merkleized_storage__test_has_different_root_after_each_update() {
-                    $table::test_has_different_root_after_each_update();
-                }
-
-                #[test]
-                fn merkleized_storage__test_can_generate_and_validate_proofs() {
-                    $table::test_can_generate_and_validate_proofs();
-                }
-            }
+        #[test]
+        fn merkleized_storage__test_can_generate_and_validate_proofs() {
+            $table::test_can_generate_and_validate_proofs();
         }
     };
 }
