@@ -38,11 +38,10 @@ jobs:
         run: |
           cargo criterion -p fuel-core-benches --message-format json --bench vm > nightly_benchmarks.json
           cargo run -p fuel-core-benches --bin collect --release -- --input nightly_benchmarks.json --format consensus-parameters --output nightly_benchmarks.json
-          echo "benchmark_results=$(cat nightly_benchmarks.json | tr -d '\n' | jq '.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs')" # this will fail when consensus parameters version changes
+          echo "benchmark_results=$(cat nightly_benchmarks.json | tr -d '\n' | jq '.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs')" >> "$GITHUB_OUTPUT" # this will fail when consensus parameters version changes
   create_pr:
     needs: benchmark
-    runs-on:
-      group: fuelcore-benchmark
+    runs-on: ubuntu-latest
     if: ${{ github.event.inputs.create_pr == 'true' }}
     steps:
       - uses: actions/checkout@v4
