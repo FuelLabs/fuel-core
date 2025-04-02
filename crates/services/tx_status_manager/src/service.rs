@@ -253,7 +253,19 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
                     "Received new delegate signature from peer: {:?}",
                     seal.entity.public_key
                 );
-                if !self.signature_verification.add_new_delegate(&seal) {
+                if self.signature_verification.add_new_delegate(&seal) {
+                    if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                        GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        },
+                        GossipsubMessageAcceptance::Accept,
+                    ) {
+                        tracing::warn!(
+                            "Failed to notify gossip transaction validity: {e:?}"
+                        );
+                    }
+                } else {
                     if let Err(e) = self.p2p.notify_gossip_transaction_validity(
                         GossipsubMessageInfo {
                             message_id,
@@ -276,6 +288,17 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
                     tracing::debug!("Preconfirmation signature verified");
                     let Sealed { entity, .. } = sealed;
                     self.handle_preconfirmations(entity.preconfirmations);
+                    if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                        GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        },
+                        GossipsubMessageAcceptance::Accept,
+                    ) {
+                        tracing::warn!(
+                            "Failed to notify gossip transaction validity: {e:?}"
+                        );
+                    }
                 } else {
                     // There is a chance that this is a signature for whom the delegate key hasn't
                     // arrived yet, in which case the pre-confirmation will be lost
