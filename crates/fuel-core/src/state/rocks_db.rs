@@ -300,7 +300,6 @@ where
             opts.set_row_cache(&cache);
         }
         opts.set_max_background_jobs(6);
-        opts.set_max_write_buffer_number(4);
         opts.set_bytes_per_sync(1048576);
         opts.set_max_open_files(max_fds);
 
@@ -468,7 +467,6 @@ where
         opts.create_if_missing(true);
         opts.set_compression_type(DBCompressionType::Lz4);
         opts.set_block_based_table_factory(block_opts);
-        opts.set_max_write_buffer_number(4);
 
         opts
     }
