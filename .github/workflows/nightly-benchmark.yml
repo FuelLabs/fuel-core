@@ -70,9 +70,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install GitHub CLI
-        uses: actions4gh/setup-gh@v1
-
       - run: |
           jq --argjson benchmark_results "$benchmark_results" \
             '.consensus_parameters.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs = $benchmark_results' \
