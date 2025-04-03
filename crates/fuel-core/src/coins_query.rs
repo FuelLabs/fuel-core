@@ -287,14 +287,12 @@ pub async fn select_coins_to_spend(
     let (selected_big_coins_total, selected_big_coins) =
         big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
-    if selected_big_coins_total < total {
-        if !allow_partial {
-            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-                asset_id: *asset_id,
-                collected_amount: selected_big_coins_total,
-                max,
-            })
-        }
+    if selected_big_coins_total < total && !allow_partial {
+        return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+            asset_id: *asset_id,
+            collected_amount: selected_big_coins_total,
+            max,
+        })
     }
 
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
