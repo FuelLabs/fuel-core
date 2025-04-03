@@ -58,7 +58,11 @@ use fuel_core_types::{
             GossipsubMessageInfo,
             PeerId,
         },
-        txpool::TransactionStatus,
+        transaction_status::{
+            statuses,
+            PreConfirmationStatus,
+            TransactionStatus,
+        },
     },
 };
 use std::{
@@ -69,9 +73,12 @@ use std::{
         Mutex,
     },
 };
-use tokio::sync::mpsc::{
-    Receiver,
-    Sender,
+use tokio::sync::{
+    broadcast,
+    mpsc::{
+        Receiver,
+        Sender,
+    },
 };
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -86,20 +93,43 @@ pub struct Data {
 #[derive(Clone)]
 pub struct MockTxStatusManager {
     tx: Sender<(TxId, TransactionStatus)>,
+    tx_preconfirmations_update_sender: broadcast::Sender<(TxId, PreConfirmationStatus)>,
 }
 
 impl MockTxStatusManager {
-    pub fn new(tx: Sender<(TxId, TransactionStatus)>) -> Self {
-        Self { tx }
+    pub fn new(
+        tx_preconfirmations_update_sender: broadcast::Sender<(
+            TxId,
+            PreConfirmationStatus,
+        )>,
+        tx: Sender<(TxId, TransactionStatus)>,
+    ) -> Self {
+        Self {
+            tx_preconfirmations_update_sender,
+            tx,
+        }
     }
 }
 
 impl ports::TxStatusManager for MockTxStatusManager {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
         let tx = self.tx.clone();
-        tokio::spawn(async move {
-            tx.send((tx_id, tx_status)).await.unwrap();
-        });
+        tx.try_send((tx_id, tx_status)).unwrap();
+    }
+
+    fn squeezed_out_txs(&self, statuses: Vec<(TxId, statuses::SqueezedOut)>) {
+        for (tx_id, tx_status) in statuses {
+            self.status_update(tx_id, tx_status.into());
+        }
+    }
+
+    fn preconfirmations_update_listener(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<(
+        TxId,
+        fuel_core_types::services::transaction_status::PreConfirmationStatus,
+    )> {
+        self.tx_preconfirmations_update_sender.subscribe()
     }
 }
 
@@ -353,7 +383,7 @@ impl MockImporter {
                 let block = blocks.pop();
                 if let Some(sealed_block) = block {
                     let result: SharedImportResult = Arc::new(
-                        ImportResult::new_from_local(sealed_block, vec![], vec![]),
+                        ImportResult::new_from_local(sealed_block, vec![], vec![]).wrap(),
                     );
 
                     Some((result, blocks))

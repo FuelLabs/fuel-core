@@ -31,10 +31,7 @@ use fuel_core_services::{
 use fuel_core_txpool::{
     collision_manager::basic::BasicCollisionManager,
     config::Config,
-    error::{
-        Error,
-        RemovedReason,
-    },
+    error::Error,
     pool::Pool,
     ports::{
         AtomicView,
@@ -81,10 +78,8 @@ use fuel_core_types::{
             PeerId,
             TransactionGossipData,
         },
-        txpool::{
-            ArcPoolTx,
-            TransactionStatus,
-        },
+        transaction_status::TransactionStatus,
+        txpool::ArcPoolTx,
     },
     tai64::Tai64,
 };
@@ -116,11 +111,12 @@ mod pruner;
 mod subscriptions;
 pub(crate) mod verifications;
 
-pub type TxPool = Pool<
+pub type TxPool<TxStatusManager> = Pool<
     GraphStorage,
     <GraphStorage as Storage>::StorageIndex,
     BasicCollisionManager<<GraphStorage as Storage>::StorageIndex>,
     RatioTipGasSelection<GraphStorage>,
+    TxStatusManager,
 >;
 
 pub(crate) type Shared<T> = Arc<RwLock<T>>;
@@ -161,6 +157,7 @@ impl TryFrom<TxInfo> for TransactionStatus {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 pub enum WritePoolRequest {
     InsertTxs {
         transactions: Vec<Arc<Transaction>>,
@@ -324,10 +321,7 @@ where
         for height in range_to_remove {
             let expired_txs = self.pruner.height_expiration_txs.remove(&height);
             if let Some(expired_txs) = expired_txs {
-                let result = self.pool_worker.remove_tx_and_coin_dependents((
-                    expired_txs,
-                    Error::Removed(RemovedReason::Ttl),
-                ));
+                let result = self.pool_worker.remove_expired_transactions(expired_txs);
 
                 if let Err(err) = result {
                     tracing::error!("{err}");
@@ -372,15 +366,6 @@ where
                 expiration,
                 source,
             } => {
-                let duration = time
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .expect("Time can't be less than UNIX EPOCH");
-                // We do it at the top of the function to avoid any inconsistency in case of error
-                let Ok(duration) = i64::try_from(duration.as_secs()) else {
-                    tracing::error!("Failed to convert the duration to i64");
-                    return
-                };
-
                 match source {
                     ExtendedInsertionSource::P2P { from_peer_info } => {
                         let _ = self.p2p.notify_gossip_transaction_validity(
@@ -404,10 +389,6 @@ where
                 }
 
                 self.pruner.time_txs_submitted.push_front((time, tx_id));
-                self.tx_status_manager.status_update(
-                    tx_id,
-                    TransactionStatus::submitted(Tai64::from_unix(duration)),
-                );
 
                 if expiration < u32::MAX.into() {
                     let block_height_expiration = self
@@ -423,6 +404,8 @@ where
                 error,
                 source,
             } => {
+                let is_duplicate = error.is_duplicate_tx();
+                let tx_status = TransactionStatus::squeezed_out(error.to_string());
                 match source {
                     InsertionSource::P2P { from_peer_info } => {
                         let _ = self.p2p.notify_gossip_transaction_validity(
@@ -432,21 +415,19 @@ where
                     }
                     InsertionSource::RPC { response_channel } => {
                         if let Some(channel) = response_channel {
-                            let _ = channel.send(Err(error.clone()));
+                            let _ = channel.send(Err(error));
                         }
                     }
                 }
 
-                self.tx_status_manager.status_update(
-                    tx_id,
-                    TransactionStatus::squeezed_out(error.to_string()),
-                );
-            }
-            PoolNotification::Removed { tx_id, error } => {
-                self.tx_status_manager.status_update(
-                    tx_id,
-                    TransactionStatus::squeezed_out(error.to_string()),
-                );
+                // If the transaction is a duplicate, we don't want to update
+                // the status with useless information for the end user.
+                // Transaction already is inserted into the pool,
+                // so main goal of the user is already achieved -
+                // his transaction is accepted by the pool.
+                if !is_duplicate {
+                    self.tx_status_manager.status_update(tx_id, tx_status);
+                }
             }
         }
     }
@@ -691,10 +672,7 @@ where
             }
         }
 
-        let result = self.pool_worker.remove_tx_and_coin_dependents((
-            txs_to_remove,
-            Error::Removed(RemovedReason::Ttl),
-        ));
+        let result = self.pool_worker.remove_expired_transactions(txs_to_remove);
 
         if let Err(err) = result {
             tracing::error!("{err}");
@@ -803,6 +781,7 @@ where
 
     let service_channel_limits = config.service_channel_limits;
     let utxo_validation = config.utxo_validation;
+    let tx_status_manager = Arc::new(tx_status_manager);
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
             max_txs_chain_count: config.max_txs_chain_count,
@@ -812,6 +791,7 @@ where
         config,
         pool_stats_sender,
         new_txs_notifier.clone(),
+        tx_status_manager.clone(),
     );
 
     // BlockHeight is < 64 bytes, so we can use SeqLock
@@ -822,7 +802,6 @@ where
         PoolWorkerInterface::new(txpool, storage_provider, &service_channel_limits);
 
     let shared_state = SharedState {
-        request_remove_sender: pool_worker.request_remove_sender.clone(),
         request_read_sender: pool_worker.request_read_sender.clone(),
         write_pool_requests_sender,
         select_transactions_requests_sender: pool_worker
@@ -847,6 +826,6 @@ where
         shared_state,
         metrics,
         tx_sync_history: Default::default(),
-        tx_status_manager: Arc::new(tx_status_manager),
+        tx_status_manager,
     })
 }

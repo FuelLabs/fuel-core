@@ -63,9 +63,15 @@ where
     Description: DatabaseDescription,
 {
     fn default() -> Self {
-        use strum::EnumCount;
+        use enum_iterator::all;
+
+        let largest_column_idx = all::<Description::Column>()
+            .map(|column| column.as_usize())
+            .max()
+            .expect("there should be atleast 1 column in the storage");
+
         Self {
-            inner: (0..Description::Column::COUNT)
+            inner: (0..=largest_column_idx)
                 .map(|_| Mutex::new(BTreeMap::new()))
                 .collect(),
             _marker: Default::default(),

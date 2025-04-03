@@ -1,12 +1,21 @@
 use crate::{
     config::CompressionConfig,
     ports::{
-        block_source::BlockSource,
+        block_source::{
+            BlockSource,
+            BlockWithMetadata,
+            BlockWithMetadataExt,
+        },
         compression_storage::{
             CompressionStorage,
             WriteCompressedBlock,
         },
         configuration::CompressionConfigProvider,
+    },
+    sync_state::{
+        new_sync_state_channel,
+        SyncStateNotifier,
+        SyncStateObserver,
     },
     temporal_registry::{
         CompressionContext,
@@ -15,7 +24,6 @@ use crate::{
 };
 use fuel_core_compression::compress::compress;
 use fuel_core_services::{
-    EmptyShared,
     RunnableService,
     RunnableTask,
     ServiceRunner,
@@ -35,6 +43,8 @@ pub struct CompressionService<S> {
     storage: S,
     /// The compression config.
     config: CompressionConfig,
+    /// The sync notifier
+    sync_notifier: SyncStateNotifier,
 }
 
 use fuel_core_storage::transactional::WriteTransaction;
@@ -48,10 +58,13 @@ where
         storage: S,
         config: CompressionConfig,
     ) -> Self {
+        let (sync_notifier, _) = new_sync_state_channel();
+
         Self {
             block_stream,
             storage,
             config,
+            sync_notifier,
         }
     }
 }
@@ -62,7 +75,7 @@ where
 {
     fn compress_block(
         &mut self,
-        block_with_metadata: &crate::ports::block_source::BlockWithMetadata,
+        block_with_metadata: &BlockWithMetadata,
     ) -> crate::Result<()> {
         let mut storage_tx = self.storage.write_transaction();
 
@@ -83,7 +96,7 @@ where
         .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
 
         storage_tx
-            .write_compressed_block(&block_with_metadata.height(), &compressed_block)?;
+            .write_compressed_block(block_with_metadata.height(), &compressed_block)?;
 
         storage_tx
             .commit()
@@ -94,11 +107,47 @@ where
 
     fn handle_new_block(
         &mut self,
-        block_with_metadata: &crate::ports::block_source::BlockWithMetadata,
+        block_with_metadata: &BlockWithMetadata,
     ) -> crate::Result<()> {
+        // set the status to not synced
+        self.sync_notifier
+            .send(crate::sync_state::SyncState::NotSynced)
+            .ok();
         // compress the block
         self.compress_block(block_with_metadata)?;
-        // get registry root (?) and push to shared state
+        // set the status to synced
+        self.sync_notifier
+            .send(crate::sync_state::SyncState::Synced(
+                *block_with_metadata.height(),
+            ))
+            .ok();
+        Ok(())
+    }
+}
+
+/// Shared data for the compression service.
+#[derive(Debug, Clone)]
+pub struct SharedData {
+    /// Allows to observe the sync state.
+    sync_observer: SyncStateObserver,
+}
+
+impl SharedData {
+    /// Waits until the compression service has synced
+    /// with current l2 block height
+    pub async fn await_synced(&self) -> crate::Result<()> {
+        let mut observer = self.sync_observer.clone();
+        loop {
+            if observer.borrow_and_update().is_synced() {
+                break;
+            }
+
+            observer
+                .changed()
+                .await
+                .map_err(|_| crate::errors::CompressionError::FailedToGetSyncStatus)?;
+        }
+
         Ok(())
     }
 }
@@ -110,11 +159,13 @@ where
 {
     const NAME: &'static str = "CompressionService";
     type Task = Self;
-    type SharedData = EmptyShared;
+    type SharedData = SharedData;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        EmptyShared
+        SharedData {
+            sync_observer: self.sync_notifier.subscribe(),
+        }
     }
 
     async fn into_task(
@@ -150,7 +201,7 @@ where
                         fuel_core_services::TaskNextAction::Stop
                     }
                     Some(block_with_metadata) => {
-                        tracing::debug!("Got new block: {:?}", block_with_metadata.height());
+                        tracing::debug!("Got new block: {:?}", &block_with_metadata.height());
                         if let Err(e) = self.handle_new_block(&block_with_metadata) {
                             tracing::error!("Error handling new block: {:?}", e);
                             return fuel_core_services::TaskNextAction::ErrorContinue(anyhow::anyhow!(e));
@@ -192,7 +243,10 @@ where
 mod tests {
     use super::*;
     use crate::{
-        ports::block_source::BlockWithMetadata,
+        ports::block_source::{
+            BlockWithMetadata,
+            BlockWithMetadataExt,
+        },
         storage,
     };
     use fuel_core_services::{
@@ -315,11 +369,13 @@ mod tests {
             storage,
             config_provider.config(),
         );
+        let sync_observer = service.shared_data();
 
         // when
         let _ = service.run(&mut StateWatcher::started()).await;
 
         // then
+        sync_observer.await_synced().await.unwrap();
         let maybe_block = service
             .storage
             .storage_as_ref::<storage::CompressedBlocks>()

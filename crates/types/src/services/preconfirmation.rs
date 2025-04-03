@@ -4,6 +4,7 @@ use crate::fuel_tx::{
     Receipt,
     TxId,
     TxPointer,
+    UtxoId,
 };
 use fuel_vm_private::fuel_tx::Output;
 use tai64::Tai64;
@@ -13,6 +14,7 @@ use alloc::{
     string::String,
     vec::Vec,
 };
+
 /// A collection of pre-confirmations that have been signed by a delegate
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -54,7 +56,7 @@ pub enum PreconfirmationStatus {
         /// Receipts produced by the transaction during execution.
         receipts: Vec<Receipt>,
         /// Dynamic outputs produced by the transaction during execution.
-        outputs: Vec<Output>,
+        outputs: Vec<(UtxoId, Output)>,
     },
     /// Transaction will not be included in a block, rejected at `block_height`
     Failure {
@@ -67,6 +69,6 @@ pub enum PreconfirmationStatus {
         /// Receipts produced by the transaction during execution.
         receipts: Vec<Receipt>,
         /// Dynamic outputs produced by the transaction during execution.
-        outputs: Vec<Output>,
+        outputs: Vec<(UtxoId, Output)>,
     },
 }

@@ -11,7 +11,7 @@ use fuel_core_types::{
     fuel_types::ChainId,
     services::{
         block_importer::ImportResult,
-        txpool::TransactionStatus,
+        transaction_status::TransactionStatus,
     },
 };
 use std::{
@@ -300,11 +300,9 @@ async fn prune_expired_transactions() {
 
     // When
     sender
-        .send(Arc::new(ImportResult::new_from_local(
-            expiration_block,
-            vec![],
-            vec![],
-        )))
+        .send(Arc::new(
+            ImportResult::new_from_local(expiration_block, vec![], vec![]).wrap(),
+        ))
         .await
         .unwrap();
 
@@ -396,11 +394,9 @@ async fn prune_expired_does_not_trigger_twice() {
 
     // When
     sender
-        .send(Arc::new(ImportResult::new_from_local(
-            expiration_block,
-            vec![],
-            vec![],
-        )))
+        .send(Arc::new(
+            ImportResult::new_from_local(expiration_block, vec![], vec![]).wrap(),
+        ))
         .await
         .unwrap();
 

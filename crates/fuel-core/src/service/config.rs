@@ -35,13 +35,13 @@ use fuel_core_types::{
 
 use crate::{
     combined_database::CombinedDatabaseConfig,
-    graphql_api::{
-        worker_service::DaCompressionConfig,
-        ServiceConfig as GraphQLConfig,
-    },
+    graphql_api::ServiceConfig as GraphQLConfig,
 };
 
-use fuel_core_types::fuel_types::AssetId;
+use fuel_core_types::fuel_types::{
+    AssetId,
+    ChainId,
+};
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
 
@@ -72,7 +72,7 @@ pub struct Config {
     pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
-    pub da_compression: DaCompressionConfig,
+    pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -80,6 +80,9 @@ pub struct Config {
     pub p2p: Option<P2PConfig<NotInitialized>>,
     #[cfg(feature = "p2p")]
     pub sync: fuel_core_sync::Config,
+    #[cfg(feature = "p2p")]
+    pub pre_confirmation_signature_service:
+        fuel_core_poa::pre_confirmation_signature_service::config::Config,
     #[cfg(feature = "shared-sequencer")]
     pub shared_sequencer: fuel_core_shared_sequencer::Config,
     pub consensus_signer: SignMode,
@@ -195,7 +198,7 @@ impl Config {
             block_producer: fuel_core_producer::Config {
                 ..Default::default()
             },
-            da_compression: DaCompressionConfig::Disabled,
+            da_compression: DaCompressionMode::Disabled,
             gas_price_config,
             block_importer,
             #[cfg(feature = "relayer")]
@@ -204,6 +207,10 @@ impl Config {
             p2p: Some(P2PConfig::<NotInitialized>::default(network_name.as_str())),
             #[cfg(feature = "p2p")]
             sync: fuel_core_sync::Config::default(),
+            #[cfg(feature = "p2p")]
+            pre_confirmation_signature_service:
+                fuel_core_poa::pre_confirmation_signature_service::config::Config::default(
+                ),
             #[cfg(feature = "shared-sequencer")]
             shared_sequencer: fuel_core_shared_sequencer::Config::local_node(),
             consensus_signer: SignMode::Key(fuel_core_types::secrecy::Secret::new(
@@ -242,6 +249,13 @@ impl Config {
             .consensus_parameters
             .base_asset_id()
     }
+
+    pub fn chain_id(&self) -> ChainId {
+        self.snapshot_reader
+            .chain_config()
+            .consensus_parameters
+            .chain_id()
+    }
 }
 
 impl From<&Config> for fuel_core_poa::Config {
@@ -258,6 +272,23 @@ impl From<&Config> for fuel_core_poa::Config {
                 .chain_config()
                 .consensus_parameters
                 .chain_id(),
+        }
+    }
+}
+
+#[cfg(feature = "p2p")]
+impl From<&Config> for fuel_core_poa::pre_confirmation_signature_service::config::Config {
+    fn from(value: &Config) -> Self {
+        fuel_core_poa::pre_confirmation_signature_service::config::Config {
+            echo_delegation_interval: value
+                .pre_confirmation_signature_service
+                .echo_delegation_interval,
+            key_expiration_interval: value
+                .pre_confirmation_signature_service
+                .key_expiration_interval,
+            key_rotation_interval: value
+                .pre_confirmation_signature_service
+                .key_rotation_interval,
         }
     }
 }
@@ -323,4 +354,15 @@ impl GasPriceConfig {
             da_poll_interval: Some(Duration::from_secs(1)),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct DaCompressionConfig {
+    pub retention_duration: Duration,
+}
+
+#[derive(Debug, Clone)]
+pub enum DaCompressionMode {
+    Disabled,
+    Enabled(DaCompressionConfig),
 }

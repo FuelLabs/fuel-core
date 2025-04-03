@@ -1,15 +1,12 @@
 use core::time::Duration;
 use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
-    fuel_core_graphql_api::{
-        da_compression::{
-            DbTx,
-            DecompressDbTx,
-        },
-        worker_service::DaCompressionConfig,
-    },
     p2p_test_helpers::*,
     service::{
+        config::{
+            DaCompressionConfig,
+            DaCompressionMode,
+        },
         Config,
         FuelService,
     },
@@ -21,6 +18,10 @@ use fuel_core_client::client::{
 use fuel_core_compression::{
     decompress::decompress,
     VersionedCompressedBlock,
+};
+use fuel_core_compression_service::temporal_registry::{
+    CompressionStorageWrapper,
+    DecompressionContext,
 };
 use fuel_core_storage::transactional::{
     AtomicView,
@@ -60,10 +61,10 @@ async fn can_fetch_da_compressed_block_from_graphql() {
 
     let mut config = config_with_fee();
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
-    let compression_config = fuel_core_compression::Config {
-        temporal_registry_retention: Duration::from_secs(3600),
+    let compression_config = DaCompressionConfig {
+        retention_duration: Duration::from_secs(3600),
     };
-    config.da_compression = DaCompressionConfig::Enabled(compression_config);
+    config.da_compression = DaCompressionMode::Enabled(compression_config.clone());
     let chain_id = config
         .snapshot_reader
         .chain_config()
@@ -90,6 +91,7 @@ async fn can_fetch_da_compressed_block_from_graphql() {
             panic!("unexpected result {other:?}")
         }
     };
+    srv.await_compression_synced().await.unwrap();
 
     let block = client
         .da_compressed_block(block_height)
@@ -102,14 +104,22 @@ async fn can_fetch_da_compressed_block_from_graphql() {
     let db = &srv.shared.database;
 
     let on_chain_before_execution = db.on_chain().view_at(&0u32.into()).unwrap();
-    let mut tx_inner = db.off_chain().clone().into_transaction();
-    let db_tx = DecompressDbTx {
-        db_tx: DbTx {
-            db_tx: &mut tx_inner,
+    let mut tx_inner = db.compression().clone().into_transaction();
+    let db_tx = DecompressionContext {
+        compression_storage: CompressionStorageWrapper {
+            storage_tx: &mut tx_inner,
         },
         onchain_db: on_chain_before_execution,
     };
-    let decompressed = decompress(compression_config, db_tx, block).await.unwrap();
+    let decompressed = decompress(
+        fuel_core_compression::Config {
+            temporal_registry_retention: compression_config.retention_duration,
+        },
+        db_tx,
+        block,
+    )
+    .await
+    .unwrap();
 
     let block_from_on_chain_db = db
         .on_chain()
@@ -140,8 +150,8 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     let pub_key = Input::owner(&secret.public_key());
 
     let mut config = Config::local_node();
-    config.da_compression = DaCompressionConfig::Enabled(fuel_core_compression::Config {
-        temporal_registry_retention: Duration::from_secs(3600),
+    config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
+        retention_duration: Duration::from_secs(3600),
     });
 
     let Nodes {
@@ -166,13 +176,14 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     // Insert some txs
     let expected = producer.insert_txs().await;
     validator.consistency_20s(&expected).await;
+    validator.node.await_compression_synced().await.unwrap();
 
     let block_height = 1u32.into();
 
-    let block = v_client
+    let compressed_block = v_client
         .da_compressed_block(block_height)
         .await
         .unwrap()
         .expect("Compressed block not available from validator");
-    let _: VersionedCompressedBlock = postcard::from_bytes(&block).unwrap();
+    let _: VersionedCompressedBlock = postcard::from_bytes(&compressed_block).unwrap();
 }

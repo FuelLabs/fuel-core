@@ -363,11 +363,14 @@ mod tests {
             entity: block,
             consensus: Default::default(),
         };
-        std::sync::Arc::new(ImportResult::new_from_local(
-            sealed_block,
-            Default::default(),
-            Default::default(),
-        ))
+        std::sync::Arc::new(
+            ImportResult::new_from_local(
+                sealed_block,
+                Default::default(),
+                Default::default(),
+            )
+            .wrap(),
+        )
     }
 
     #[tokio::test]
@@ -437,11 +440,14 @@ mod tests {
             entity: block,
             consensus: Default::default(),
         };
-        std::sync::Arc::new(ImportResult::new_from_local(
-            sealed_block,
-            Default::default(),
-            Default::default(),
-        ))
+        std::sync::Arc::new(
+            ImportResult::new_from_local(
+                sealed_block,
+                Default::default(),
+                Default::default(),
+            )
+            .wrap(),
+        )
     }
 
     #[tokio::test]

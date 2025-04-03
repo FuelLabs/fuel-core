@@ -16,6 +16,8 @@ pub mod ports;
 pub mod service;
 /// Storage traits for the compression service
 pub mod storage;
+/// Sync state for the compression service
+pub mod sync_state;
 /// Temporal Registry implementations
 pub mod temporal_registry;
 
