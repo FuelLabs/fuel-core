@@ -1,13 +1,21 @@
-use crate::{
-    ports::{
-        MaybeCheckedTransaction,
-        NewTxWaiterPort,
-        PreconfirmationSenderPort,
-        RelayerPort,
-        TransactionsSource,
-    },
-    refs::ContractRef,
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+#[cfg(feature = "alloc")]
+use alloc::{
+    format,
+    string::ToString,
+    vec,
+    vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
+use parking_lot::Mutex as ParkingMutex;
+use tracing::{
+    debug,
+    warn,
+};
+
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -49,6 +57,7 @@ use fuel_core_types::{
         coins::coin::{
             CompressedCoin,
             CompressedCoinV1,
+            UncompressedCoin,
         },
         contract::ContractUtxoInfo,
         RelayedTransaction,
@@ -74,6 +83,8 @@ use fuel_core_types::{
             coin::{
                 CoinPredicate,
                 CoinSigned,
+                DataCoinPredicate,
+                DataCoinSigned,
             },
             message::{
                 MessageCoinPredicate,
@@ -150,31 +161,16 @@ use fuel_core_types::{
         relayer::Event,
     },
 };
-use parking_lot::Mutex as ParkingMutex;
-use tracing::{
-    debug,
-    warn,
-};
 
-#[cfg(feature = "std")]
-use std::borrow::Cow;
-
-#[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
-
-#[cfg(feature = "alloc")]
-use alloc::{
-    format,
-    string::ToString,
-    vec,
-    vec::Vec,
-};
-use fuel_core_types::{
-    entities::coins::coin::UncompressedCoin,
-    fuel_tx::input::coin::{
-        DataCoinPredicate,
-        DataCoinSigned,
+use crate::{
+    ports::{
+        MaybeCheckedTransaction,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+        RelayerPort,
+        TransactionsSource,
     },
+    refs::ContractRef,
 };
 
 /// The maximum amount of transactions that can be included in a block,
