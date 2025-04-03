@@ -57,7 +57,7 @@ jobs:
       - name: Set benchmark result output
         id: benchmarks
         run: | # this will fail when consensus parameters version changes
-          echo "benchmark_results=$(cat nightly_benchmarks.json | tr -d '\n' | jq '.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs')" >> "$GITHUB_OUTPUT"
+          echo "benchmark_results=$(cat nightly_benchmarks.json | jq '.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs' | tr -d '\n' )" >> "$GITHUB_OUTPUT"
 
   create_pr:
     needs: benchmark
