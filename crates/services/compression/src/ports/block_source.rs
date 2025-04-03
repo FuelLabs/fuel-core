@@ -9,6 +9,8 @@ pub(crate) trait BlockWithMetadataExt {
     fn block(&self) -> &fuel_core_types::blockchain::block::Block;
     #[cfg(test)]
     fn default() -> Self;
+    #[cfg(test)]
+    fn test_block_with_height(height: BlockHeight) -> Self;
 }
 
 impl BlockWithMetadataExt for BlockWithMetadata {
@@ -29,6 +31,19 @@ impl BlockWithMetadataExt for BlockWithMetadata {
         use fuel_core_types::services::block_importer::ImportResult;
 
         std::sync::Arc::new(ImportResult::default().wrap())
+    }
+
+    #[cfg(test)]
+    fn test_block_with_height(height: BlockHeight) -> Self {
+        use fuel_core_types::services::block_importer::ImportResult;
+
+        let mut import_result = ImportResult::default();
+        import_result
+            .sealed_block
+            .entity
+            .header_mut()
+            .set_block_height(height.into());
+        std::sync::Arc::new(import_result.wrap())
     }
 }
 

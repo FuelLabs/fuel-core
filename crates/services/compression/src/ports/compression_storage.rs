@@ -22,12 +22,16 @@ pub trait LatestHeight {
 pub trait CompressionStorage:
     KeyValueInspect<Column = MerkleizedColumn<storage::column::CompressionColumn>>
     + Modifiable
+    + Send
+    + Sync
 {
 }
 
 impl<T> CompressionStorage for T where
     T: KeyValueInspect<Column = MerkleizedColumn<storage::column::CompressionColumn>>
         + Modifiable
+        + Send
+        + Sync
 {
 }
 

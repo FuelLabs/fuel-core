@@ -164,9 +164,10 @@ where
             let block_with_metadata = self
                 .block_source
                 .get_block(next_block_height)
-                .ok_or(crate::errors::CompressionError::FailedToGetBlock(
-                    "during sync".to_string(),
-                ))?;
+                .ok_or(crate::errors::CompressionError::FailedToGetBlock(format!(
+                    "during synchronization of canonical chain at height: {:?}",
+                    next_block_height
+                )))?;
 
             self.handle_new_block(&block_with_metadata)?
         }
@@ -206,7 +207,7 @@ impl SharedData {
 impl<B, S, CH> RunnableService for CompressionService<B, S, CH>
 where
     B: BlockSource,
-    S: CompressionStorage + LatestHeight + Send + Sync,
+    S: CompressionStorage + LatestHeight,
     CH: CanonicalHeight,
 {
     const NAME: &'static str = "CompressionService";
@@ -234,8 +235,8 @@ where
 impl<B, S, CH> RunnableTask for CompressionService<B, S, CH>
 where
     B: BlockSource,
-    S: CompressionStorage + LatestHeight + Send + Sync,
-    CH: CanonicalHeight + Send + Sync,
+    S: CompressionStorage + LatestHeight,
+    CH: CanonicalHeight,
 {
     async fn run(
         &mut self,
@@ -292,8 +293,8 @@ pub fn new_service<B, S, C, CH>(
 ) -> crate::Result<ServiceRunner<CompressionService<B, S, CH>>>
 where
     B: BlockSource,
-    S: CompressionStorage + LatestHeight + Send + Sync,
-    C: CompressionConfigProvider + Send + Sync,
+    S: CompressionStorage + LatestHeight,
+    C: CompressionConfigProvider,
     CH: CanonicalHeight,
 {
     let config = config_provider.config();
@@ -358,7 +359,21 @@ mod tests {
 
     impl LatestHeight for MockStorage {
         fn latest_height(&self) -> Option<u32> {
-            None
+            // get changes for the compressed blocks column
+            let compressed_block_changes = self.changes().get(
+                &MerkleizedColumn::<storage::column::CompressionColumn>::TableColumn(
+                    storage::column::CompressionColumn::CompressedBlocks,
+                )
+                .as_u32(),
+            );
+            match compressed_block_changes {
+                Some(changes) => Some(u32::from_be_bytes(
+                    changes.iter().last().unwrap().0.as_slice()[..4]
+                        .try_into()
+                        .unwrap(),
+                )),
+                None => None,
+            }
         }
     }
 
@@ -378,8 +393,14 @@ mod tests {
         }
     }
 
-    #[derive(Default)]
+    #[derive(Default, Clone)]
     struct MockCanonicalHeightProvider(u32);
+
+    impl MockCanonicalHeightProvider {
+        fn new(height: u32) -> Self {
+            Self(height)
+        }
+    }
 
     impl CanonicalHeight for MockCanonicalHeightProvider {
         fn get(&self) -> Option<u32> {
@@ -491,6 +512,40 @@ mod tests {
             .storage
             .storage_as_ref::<storage::CompressedBlocks>()
             .get(&0.into())
+            .unwrap();
+        assert!(maybe_block.is_some());
+    }
+
+    #[tokio::test]
+    async fn compression_service__can_resync_with_canonical_height() {
+        // given
+        // we provide a block source with some old blocks,
+        // and a canonical height provider with a height of 5
+        let block_count = 10;
+        let mut blocks = Vec::with_capacity(block_count);
+        for i in 0..block_count as u32 {
+            blocks.push(BlockWithMetadata::test_block_with_height(i));
+        }
+        let block_source = MockBlockSource::new(blocks);
+        let storage = test_storage();
+        let config_provider = MockConfigProvider::default();
+        let canonical_height_provider = MockCanonicalHeightProvider::new(5);
+
+        let service = CompressionService::new(
+            block_source,
+            storage,
+            config_provider.config(),
+            canonical_height_provider.clone(),
+        );
+
+        // when
+        let service = service.into_task(&Default::default(), ()).await.unwrap();
+
+        // then
+        let maybe_block = service
+            .storage
+            .storage_as_ref::<storage::CompressedBlocks>()
+            .get(&canonical_height_provider.get().unwrap().into())
             .unwrap();
         assert!(maybe_block.is_some());
     }
