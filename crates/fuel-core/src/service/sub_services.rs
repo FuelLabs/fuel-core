@@ -413,6 +413,7 @@ pub fn init_sub_services(
                 compression_importer_adapter,
                 database.compression().clone(),
                 cfg.clone(),
+                database.on_chain().clone(),
             )
             .map_err(|e| anyhow::anyhow!(e))?,
         ),

@@ -7,6 +7,7 @@ use crate::{
             BlockWithMetadata,
             BlockWithMetadataExt,
         },
+        canonical_height::CanonicalHeight,
         compression_storage::{
             CompressionStorage,
             LatestHeight,
@@ -42,11 +43,13 @@ use futures::{
 /// perform compression of the block, and store the compressed block.
 /// We don't need to share any data between this task and anything else yet(?)
 /// perhaps we want to expose a way to get the registry root
-pub struct CompressionService<B, S> {
+pub struct CompressionService<B, S, CH> {
     /// The block source.
     block_source: B,
     /// The block stream.
     block_stream: crate::ports::block_source::BlockStream,
+    /// The canonical height getter.
+    canonical_height: CH,
     /// The compression storage.
     storage: S,
     /// The compression config.
@@ -55,17 +58,24 @@ pub struct CompressionService<B, S> {
     sync_notifier: SyncStateNotifier,
 }
 
-impl<B, S> CompressionService<B, S>
+impl<B, S, CH> CompressionService<B, S, CH>
 where
     B: BlockSource,
     S: CompressionStorage,
+    CH: CanonicalHeight,
 {
-    fn new(block_source: B, storage: S, config: CompressionConfig) -> Self {
+    fn new(
+        block_source: B,
+        storage: S,
+        config: CompressionConfig,
+        canonical_height: CH,
+    ) -> Self {
         let block_stream = block_source.subscribe();
         let (sync_notifier, _) = new_sync_state_channel();
 
         Self {
             block_source,
+            canonical_height,
             block_stream,
             storage,
             config,
@@ -74,10 +84,11 @@ where
     }
 }
 
-impl<B, S> CompressionService<B, S>
+impl<B, S, CH> CompressionService<B, S, CH>
 where
     B: BlockSource,
     S: CompressionStorage + LatestHeight,
+    CH: CanonicalHeight,
 {
     fn compress_block(
         &mut self,
@@ -131,14 +142,15 @@ where
     }
 
     async fn sync_previously_produced_blocks(&mut self) -> crate::Result<()> {
+        let canonical_height = self.canonical_height.get();
         loop {
             let storage_height = self.storage.latest_height();
 
-            if Some(0) < storage_height {
+            if canonical_height < storage_height {
                 return Err(crate::errors::CompressionError::FailedToGetSyncStatus);
             }
 
-            if Some(0) == storage_height {
+            if canonical_height == storage_height {
                 break;
             }
 
@@ -191,10 +203,11 @@ impl SharedData {
 }
 
 #[async_trait::async_trait]
-impl<B, S> RunnableService for CompressionService<B, S>
+impl<B, S, CH> RunnableService for CompressionService<B, S, CH>
 where
-    B: BlockSource + Send + Sync,
+    B: BlockSource,
     S: CompressionStorage + LatestHeight + Send + Sync,
+    CH: CanonicalHeight,
 {
     const NAME: &'static str = "CompressionService";
     type Task = Self;
@@ -218,10 +231,11 @@ where
     }
 }
 
-impl<B, S> RunnableTask for CompressionService<B, S>
+impl<B, S, CH> RunnableTask for CompressionService<B, S, CH>
 where
-    B: BlockSource + Send + Sync,
+    B: BlockSource,
     S: CompressionStorage + LatestHeight + Send + Sync,
+    CH: CanonicalHeight + Send + Sync,
 {
     async fn run(
         &mut self,
@@ -270,21 +284,24 @@ where
 }
 
 /// Create a new compression service.
-pub fn new_service<B, S, C>(
+pub fn new_service<B, S, C, CH>(
     block_source: B,
     storage: S,
     config_provider: C,
-) -> crate::Result<ServiceRunner<CompressionService<B, S>>>
+    canonical_height: CH,
+) -> crate::Result<ServiceRunner<CompressionService<B, S, CH>>>
 where
-    B: BlockSource + Send + Sync,
+    B: BlockSource,
     S: CompressionStorage + LatestHeight + Send + Sync,
     C: CompressionConfigProvider + Send + Sync,
+    CH: CanonicalHeight,
 {
     let config = config_provider.config();
     Ok(ServiceRunner::new(CompressionService::new(
         block_source,
         storage,
         config,
+        canonical_height,
     )))
 }
 
@@ -361,14 +378,30 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct MockCanonicalHeightProvider(u32);
+
+    impl CanonicalHeight for MockCanonicalHeightProvider {
+        fn get(&self) -> Option<u32> {
+            Some(self.0)
+        }
+    }
+
     #[tokio::test]
     async fn compression_service__can_be_started_and_stopped() {
         // given
         let block_source = EmptyBlockSource;
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
+        let canonical_height_provider = MockCanonicalHeightProvider::default();
 
-        let service = new_service(block_source, storage, config_provider).unwrap();
+        let service = new_service(
+            block_source,
+            storage,
+            config_provider,
+            canonical_height_provider,
+        )
+        .unwrap();
 
         // when
         service.start_and_await().await.unwrap();
@@ -410,9 +443,14 @@ mod tests {
         let block_source = MockBlockSource::new(vec![]);
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
+        let canonical_height_provider = MockCanonicalHeightProvider::default();
 
-        let mut service =
-            CompressionService::new(block_source, storage, config_provider.config());
+        let mut service = CompressionService::new(
+            block_source,
+            storage,
+            config_provider.config(),
+            canonical_height_provider,
+        );
 
         // when
         let _ = service.run(&mut StateWatcher::started()).await;
@@ -434,9 +472,14 @@ mod tests {
         let block_source = MockBlockSource::new(vec![block_with_metadata]);
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
+        let canonical_height_provider = MockCanonicalHeightProvider::default();
 
-        let mut service =
-            CompressionService::new(block_source, storage, config_provider.config());
+        let mut service = CompressionService::new(
+            block_source,
+            storage,
+            config_provider.config(),
+            canonical_height_provider,
+        );
         let sync_observer = service.shared_data();
 
         // when

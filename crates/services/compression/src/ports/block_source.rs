@@ -58,7 +58,7 @@ impl PartialEq<BlockHeight> for BlockAt {
 }
 
 /// Port for L2 blocks source
-pub trait BlockSource {
+pub trait BlockSource: Send + Sync {
     /// Should provide a stream of blocks with metadata
     fn subscribe(&self) -> BlockStream;
     /// Should provide the block at a given height

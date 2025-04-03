@@ -1,6 +1,9 @@
 use crate::{
     database::{
-        database_description::compression::CompressionDatabase,
+        database_description::{
+            compression::CompressionDatabase,
+            on_chain::OnChain,
+        },
         Database,
     },
     service::adapters::BlockImporterAdapter,
@@ -12,6 +15,7 @@ use fuel_core_compression_service::{
             self,
             BlockAt,
         },
+        canonical_height,
         compression_storage,
         configuration,
     },
@@ -73,6 +77,12 @@ impl configuration::CompressionConfigProvider
 
 impl compression_storage::LatestHeight for Database<CompressionDatabase> {
     fn latest_height(&self) -> Option<u32> {
+        HistoricalView::latest_height(self).map(Into::into)
+    }
+}
+
+impl canonical_height::CanonicalHeight for Database<OnChain> {
+    fn get(&self) -> Option<u32> {
         HistoricalView::latest_height(self).map(Into::into)
     }
 }
