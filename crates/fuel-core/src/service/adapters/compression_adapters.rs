@@ -12,9 +12,11 @@ use fuel_core_compression_service::{
             self,
             BlockAt,
         },
+        compression_storage,
         configuration,
     },
 };
+use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::services::block_importer::SharedImportResult;
 
 use super::import_result_provider::{
@@ -66,6 +68,12 @@ impl configuration::CompressionConfigProvider
 {
     fn config(&self) -> config::CompressionConfig {
         config::CompressionConfig::new(self.retention_duration)
+    }
+}
+
+impl compression_storage::LatestHeight for Database<CompressionDatabase> {
+    fn latest_height(&self) -> Option<u32> {
+        HistoricalView::latest_height(self).map(Into::into)
     }
 }
 

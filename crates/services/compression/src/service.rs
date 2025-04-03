@@ -2,12 +2,14 @@ use crate::{
     config::CompressionConfig,
     ports::{
         block_source::{
+            BlockAt,
             BlockSource,
             BlockWithMetadata,
             BlockWithMetadataExt,
         },
         compression_storage::{
             CompressionStorage,
+            LatestHeight,
             WriteCompressedBlock,
         },
         configuration::CompressionConfigProvider,
@@ -29,6 +31,7 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
+use fuel_core_storage::transactional::WriteTransaction;
 use futures::{
     FutureExt,
     StreamExt,
@@ -39,7 +42,9 @@ use futures::{
 /// perform compression of the block, and store the compressed block.
 /// We don't need to share any data between this task and anything else yet(?)
 /// perhaps we want to expose a way to get the registry root
-pub struct CompressionService<S> {
+pub struct CompressionService<B, S> {
+    /// The block source.
+    block_source: B,
     /// The block stream.
     block_stream: crate::ports::block_source::BlockStream,
     /// The compression storage.
@@ -50,20 +55,17 @@ pub struct CompressionService<S> {
     sync_notifier: SyncStateNotifier,
 }
 
-use fuel_core_storage::transactional::WriteTransaction;
-
-impl<S> CompressionService<S>
+impl<B, S> CompressionService<B, S>
 where
+    B: BlockSource,
     S: CompressionStorage,
 {
-    fn new(
-        block_stream: crate::ports::block_source::BlockStream,
-        storage: S,
-        config: CompressionConfig,
-    ) -> Self {
+    fn new(block_source: B, storage: S, config: CompressionConfig) -> Self {
+        let block_stream = block_source.subscribe();
         let (sync_notifier, _) = new_sync_state_channel();
 
         Self {
+            block_source,
             block_stream,
             storage,
             config,
@@ -72,9 +74,10 @@ where
     }
 }
 
-impl<S> CompressionService<S>
+impl<B, S> CompressionService<B, S>
 where
-    S: CompressionStorage,
+    B: BlockSource,
+    S: CompressionStorage + LatestHeight,
 {
     fn compress_block(
         &mut self,
@@ -126,6 +129,38 @@ where
             .ok();
         Ok(())
     }
+
+    async fn sync_previously_produced_blocks(&mut self) -> crate::Result<()> {
+        loop {
+            let storage_height = self.storage.latest_height();
+
+            if Some(0) < storage_height {
+                return Err(crate::errors::CompressionError::FailedToGetSyncStatus);
+            }
+
+            if Some(0) == storage_height {
+                break;
+            }
+
+            let next_block_height = storage_height.map(|height| height.saturating_add(1));
+
+            let next_block_height = match next_block_height {
+                Some(block_height) => BlockAt::Specific(block_height),
+                None => BlockAt::Genesis,
+            };
+
+            let block_with_metadata = self
+                .block_source
+                .get_block(next_block_height)
+                .ok_or(crate::errors::CompressionError::FailedToGetBlock(
+                    "during sync".to_string(),
+                ))?;
+
+            self.handle_new_block(&block_with_metadata)?
+        }
+
+        Ok(())
+    }
 }
 
 /// Shared data for the compression service.
@@ -156,9 +191,10 @@ impl SharedData {
 }
 
 #[async_trait::async_trait]
-impl<S> RunnableService for CompressionService<S>
+impl<B, S> RunnableService for CompressionService<B, S>
 where
-    S: CompressionStorage + Send + Sync,
+    B: BlockSource + Send + Sync,
+    S: CompressionStorage + LatestHeight + Send + Sync,
 {
     const NAME: &'static str = "CompressionService";
     type Task = Self;
@@ -176,18 +212,16 @@ where
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        // handle any blocks that may have been produced before into_task is called
-        while let Some(Some(block)) = self.block_stream.next().now_or_never() {
-            self.handle_new_block(&block)?;
-        }
+        self.sync_previously_produced_blocks().await?;
 
         Ok(self)
     }
 }
 
-impl<S> RunnableTask for CompressionService<S>
+impl<B, S> RunnableTask for CompressionService<B, S>
 where
-    S: CompressionStorage + Send + Sync,
+    B: BlockSource + Send + Sync,
+    S: CompressionStorage + LatestHeight + Send + Sync,
 {
     async fn run(
         &mut self,
@@ -240,16 +274,15 @@ pub fn new_service<B, S, C>(
     block_source: B,
     storage: S,
     config_provider: C,
-) -> crate::Result<ServiceRunner<CompressionService<S>>>
+) -> crate::Result<ServiceRunner<CompressionService<B, S>>>
 where
     B: BlockSource + Send + Sync,
-    S: CompressionStorage + Send + Sync,
+    S: CompressionStorage + LatestHeight + Send + Sync,
     C: CompressionConfigProvider + Send + Sync,
 {
     let config = config_provider.config();
-    let block_stream = block_source.subscribe();
     Ok(ServiceRunner::new(CompressionService::new(
-        block_stream,
+        block_source,
         storage,
         config,
     )))
@@ -304,6 +337,12 @@ mod tests {
 
     fn test_storage() -> MockStorage {
         InMemoryStorage::default().into_transaction()
+    }
+
+    impl LatestHeight for MockStorage {
+        fn latest_height(&self) -> Option<u32> {
+            None
+        }
     }
 
     struct MockConfigProvider(crate::config::CompressionConfig);
@@ -372,11 +411,8 @@ mod tests {
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
 
-        let mut service = CompressionService::new(
-            block_source.subscribe(),
-            storage,
-            config_provider.config(),
-        );
+        let mut service =
+            CompressionService::new(block_source, storage, config_provider.config());
 
         // when
         let _ = service.run(&mut StateWatcher::started()).await;
@@ -399,11 +435,8 @@ mod tests {
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
 
-        let mut service = CompressionService::new(
-            block_source.subscribe(),
-            storage,
-            config_provider.config(),
-        );
+        let mut service =
+            CompressionService::new(block_source, storage, config_provider.config());
         let sync_observer = service.shared_data();
 
         // when
