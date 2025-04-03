@@ -366,14 +366,13 @@ mod tests {
                 )
                 .as_u32(),
             );
-            match compressed_block_changes {
-                Some(changes) => Some(u32::from_be_bytes(
+            compressed_block_changes.map(|changes| {
+                u32::from_be_bytes(
                     changes.iter().last().unwrap().0.as_slice()[..4]
                         .try_into()
                         .unwrap(),
-                )),
-                None => None,
-            }
+                )
+            })
         }
     }
 
@@ -451,8 +450,7 @@ mod tests {
         ) -> Option<BlockWithMetadata> {
             self.0
                 .iter()
-                .filter(|block| height == *block.height())
-                .next()
+                .find(|block| height == *block.height())
                 .cloned()
         }
     }
@@ -523,7 +521,7 @@ mod tests {
         // and a canonical height provider with a height of 5
         let block_count = 10;
         let mut blocks = Vec::with_capacity(block_count);
-        for i in 0..block_count as u32 {
+        for i in 0..u32::try_from(block_count).unwrap() {
             blocks.push(BlockWithMetadata::test_block_with_height(i));
         }
         let block_source = MockBlockSource::new(blocks);

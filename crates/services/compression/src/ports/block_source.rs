@@ -66,10 +66,6 @@ impl PartialEq<BlockHeight> for BlockAt {
             Self::Specific(h) => h == other,
         }
     }
-
-    fn ne(&self, other: &BlockHeight) -> bool {
-        !self.eq(other)
-    }
 }
 
 /// Port for L2 blocks source
