@@ -8,7 +8,6 @@ use crate::{
         Encode,
     },
     column::Column,
-    structured_storage::TableWithBlueprint,
     tables::{
         merkle::{
             FuelBlockMerkleData,
@@ -22,6 +21,8 @@ use fuel_core_types::blockchain::block::{
     CompressedBlock,
 };
 use fuel_vm_private::fuel_tx::Bytes32;
+
+use super::TableWithBlueprint;
 
 /// The encoder of `CompressedBlock` for the `FuelBlocks` table.
 pub struct BlockEncoder;
@@ -52,14 +53,16 @@ impl TableWithBlueprint for FuelBlocks {
         FuelBlockMerkleData,
         BlockEncoder,
     >;
+
     type Column = Column;
 
-    fn column() -> Column {
+    fn column() -> Self::Column {
         Column::FuelBlocks
     }
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
     use crate::{
         structured_storage::{
@@ -83,11 +86,16 @@ mod tests {
         fuel_types::ChainId,
     };
     use fuel_vm_private::crypto::ephemeral_merkle_root;
+    use rand::{
+        rngs::StdRng,
+        Rng,
+    };
 
     crate::basic_merklelized_storage_tests!(
         FuelBlocks,
-        <FuelBlocks as crate::Mappable>::Key::default(),
-        <FuelBlocks as crate::Mappable>::Value::default()
+        fuel_vm_private::fuel_types::BlockHeight::new(0),
+        fuel_core_types::blockchain::block::CompressedBlock::default(),
+        |rng: &mut StdRng| rng.gen()
     );
 
     #[test_case::test_case(&[0]; "initial block with height 0")]
