@@ -54,7 +54,7 @@ mod smt {
     mod test {
         use rand::Rng;
 
-        use crate::blueprint::sparse::basic_tests::BasicSmtStorageTests;
+        use crate::blueprint::sparse::root_storage_tests::RootStorageTests;
 
         use super::*;
 
@@ -81,13 +81,7 @@ mod smt {
             generate_key_for_same_contract
         );
 
-        fn generate_value(rng: &mut impl rand::Rng) -> Vec<u8> {
-            let mut bytes = [0u8; 32];
-            rng.fill(bytes.as_mut());
-            bytes.to_vec()
-        }
-
-        impl BasicSmtStorageTests for ContractsState {
+        impl RootStorageTests for ContractsState {
             fn primary_key() -> Box<<Self::Metadata as Mappable>::Key> {
                 Box::new(fuel_core_types::fuel_tx::ContractId::zeroed())
             }
@@ -112,49 +106,7 @@ mod smt {
             }
         }
 
-        #[test]
-        fn smt_storage__test_root() {
-            ContractsState::test_root();
-        }
-
-        #[test]
-        fn smt_storage__test_root_returns_empty_root() {
-            ContractsState::test_root_returns_empty_root();
-        }
-
-        #[test]
-        fn smt_storage__test_put_updates_merkle_root() {
-            ContractsState::test_put_updates_merkle_root();
-        }
-
-        #[test]
-        fn smt_storage__test_remove_updates_merkle_root() {
-            ContractsState::test_remove_updates_merkle_root();
-        }
-
-        #[test]
-        fn smt_storage__test_foreign_metadata_isolation() {
-            ContractsState::test_foreign_metadata_isolation();
-        }
-
-        #[test]
-        fn smt_storage__test_put_creates_merkle_metadata() {
-            ContractsState::test_put_creates_merkle_metadata();
-        }
-
-        #[test]
-        fn smt_storage__test_remove_deletes_merkle_metadata() {
-            ContractsState::test_remove_deletes_merkle_metadata();
-        }
-
-        crate::root_storage_tests!(
-            ContractsState,
-            ContractsStateMerkleMetadata,
-            <ContractsStateMerkleMetadata as Mappable>::Key::from([1u8; 32]),
-            <ContractsStateMerkleMetadata as Mappable>::Key::from([2u8; 32]),
-            generate_key,
-            generate_value
-        );
+        crate::root_storage_tests!(ContractsState);
     }
 
     #[cfg(test)]

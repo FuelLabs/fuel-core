@@ -53,7 +53,12 @@ mod smt {
     }
 
     #[cfg(test)]
+    #[allow(non_snake_case)]
     mod test {
+        use rand::Rng;
+
+        use crate::blueprint::sparse::root_storage_tests::RootStorageTests;
+
         use super::*;
 
         fn generate_key(
@@ -79,20 +84,30 @@ mod smt {
             generate_key_for_same_contract
         );
 
-        fn generate_value(
-            rng: &mut impl rand::Rng,
-        ) -> <ContractsAssets as Mappable>::Value {
-            rng.gen()
+        impl RootStorageTests for ContractsAssets {
+            fn primary_key() -> Box<<Self::Metadata as Mappable>::Key> {
+                Box::new(<ContractsAssetsMerkleMetadata as Mappable>::Key::from([1u8; 32]))
+            }
+
+            fn foreign_key() -> Box<<Self::Metadata as Mappable>::Key> {
+                Box::new(<ContractsAssetsMerkleMetadata as Mappable>::Key::from([2u8; 32]))
+            }
+
+            fn generate_key(
+                current_key: &<Self::Metadata as Mappable>::Key,
+                rng: &mut rand::prelude::StdRng,
+            ) -> Box<Self::Key> {
+                let mut bytes = [0u8; 32];
+                rng.fill(bytes.as_mut());
+                Box::new(<ContractsAssets as Mappable>::Key::new(current_key, &bytes.into()))
+            }
+
+            fn generate_value(rng: &mut rand::prelude::StdRng) -> Box<Self::Value> {
+                Box::new(rng.gen())
+            }
         }
 
-        crate::root_storage_tests!(
-            ContractsAssets,
-            ContractsAssetsMerkleMetadata,
-            <ContractsAssetsMerkleMetadata as Mappable>::Key::from([1u8; 32]),
-            <ContractsAssetsMerkleMetadata as Mappable>::Key::from([2u8; 32]),
-            generate_key,
-            generate_value
-        );
+        crate::root_storage_tests!(ContractsAssets);
     }
 }
 

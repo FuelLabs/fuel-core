@@ -486,8 +486,8 @@ where
 
 #[cfg(feature = "test-helpers")]
 #[allow(warnings)]
-/// TODO
-pub mod basic_tests {
+/// Test module for root storage tests.
+pub mod root_storage_tests {
     use fuel_vm_private::{
         fuel_merkle::sparse,
         fuel_storage::{
@@ -524,8 +524,8 @@ pub mod basic_tests {
         Sparse,
     };
 
-    /// TODO
-    pub trait BasicSmtStorageTests: SmtTableWithBlueprint
+    /// Provides root storage tests for SMT storage tables.
+    pub trait RootStorageTests: SmtTableWithBlueprint
     where
         Self::OwnedValue: PartialEq + core::fmt::Debug,
         Self::Column: PartialEq,
@@ -590,7 +590,7 @@ pub mod basic_tests {
         }
 
         /// Tests that an empty tree returns the expected empty root
-        fn test_root_returns_empty_root() {
+        fn test_root_returns_empty_root_for_empty_metadata() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
@@ -604,7 +604,7 @@ pub mod basic_tests {
         }
 
         /// Tests that inserting different states produces different merkle roots
-        fn test_put_updates_merkle_root() {
+        fn test_put_updates_the_state_merkle_root_for_the_given_metadata() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
@@ -643,7 +643,7 @@ pub mod basic_tests {
         }
 
         /// Tests that removing a state updates the merkle root and returns it to the previous state
-        fn test_remove_updates_merkle_root() {
+        fn test_remove_updates_the_state_merkle_root_for_the_given_metadata() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
@@ -690,7 +690,7 @@ pub mod basic_tests {
         }
 
         /// Tests that operations on one metadata key don't affect another
-        fn test_foreign_metadata_isolation() {
+        fn test_updating_foreign_metadata_does_not_affect_the_given_metadata_insertion() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
@@ -725,7 +725,7 @@ pub mod basic_tests {
         }
 
         /// Tests that putting a value creates Merkle metadata when empty
-        fn test_put_creates_merkle_metadata() {
+        fn test_put_creates_merkle_metadata_when_empty() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
@@ -751,7 +751,7 @@ pub mod basic_tests {
         }
 
         /// Tests that removing the last value deletes the Merkle metadata
-        fn test_remove_deletes_merkle_metadata() {
+        fn test_remove_deletes_merkle_metadata_when_empty() {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
@@ -787,7 +787,9 @@ pub mod basic_tests {
         }
     }
 
-    /// TODO
+    /// Helper trait enabling referencing generics in
+    /// SMT `TableWithBlueprint` implementations
+    /// as associated types.
     pub trait SmtTableWithBlueprint:
         TableWithBlueprint<
         Blueprint = Sparse<
@@ -858,239 +860,47 @@ pub mod basic_tests {
         type Nodes = Nodes;
         type KeyConverter = KeyConverter;
     }
-}
 
-/// The macro that generates SMT storage tests for the table with [`crate::structured_storage::test::InMemoryStorage`].
-#[cfg(feature = "test-helpers")]
-#[macro_export]
-macro_rules! root_storage_tests {
-    ($table:ident, $metadata_table:ident, $current_key:expr, $foreign_key:expr, $generate_key:ident, $generate_value:ident) => {
-        paste::item! {
-        #[cfg(test)]
-        mod [< $table:snake _root_tests >] {
-            use super::*;
-            use $crate::{
-                structured_storage::test::InMemoryStorage,
-                transactional::WriteTransaction,
-                StorageAsMut,
-            };
-            use $crate::rand::{
-                rngs::StdRng,
-                SeedableRng,
-            };
-
+    /// Generates test functions for tables using the sparse merkle tree structure.
+    /// The table must implement `BasicSmtStorageTests`.
+    #[cfg(feature = "test-helpers")]
+    #[macro_export]
+    macro_rules! root_storage_tests {
+        ($table:ident) => {
             #[test]
-            fn root() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let rng = &mut StdRng::seed_from_u64(1234);
-                let key = $generate_key(&$current_key, rng);
-                let value = $generate_value(rng);
-                storage_transaction.storage_as_mut::<$table>().insert(&key, &value)
-                    .unwrap();
-
-                let root = storage_transaction.storage_as_mut::<$table>().root(&$current_key);
-                assert!(root.is_ok())
+            fn smt_storage__test_root() {
+                $table::test_root();
             }
 
             #[test]
-            fn root_returns_empty_root_for_empty_metadata() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let empty_root = fuel_core_types::fuel_merkle::sparse::in_memory::MerkleTree::new().root();
-                let root = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .root(&$current_key)
-                    .unwrap();
-                assert_eq!(root, empty_root)
+            fn smt_storage__test_root_returns_empty_root_for_empty_metadata() {
+                $table::test_root_returns_empty_root_for_empty_metadata();
             }
 
             #[test]
-            fn put_updates_the_state_merkle_root_for_the_given_metadata() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let rng = &mut StdRng::seed_from_u64(1234);
-                let key = $generate_key(&$current_key, rng);
-                let state = $generate_value(rng);
-
-                // Write the first contract state
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&key, &state)
-                    .unwrap();
-
-                // Read the first Merkle root
-                let root_1 = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .root(&$current_key)
-                    .unwrap();
-
-                // Write the second contract state
-                let key = $generate_key(&$current_key, rng);
-                let state = $generate_value(rng);
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&key, &state)
-                    .unwrap();
-
-                // Read the second Merkle root
-                let root_2 = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .root(&$current_key)
-                    .unwrap();
-
-                assert_ne!(root_1, root_2);
+            fn smt_storage__put_updates_the_state_merkle_root_for_the_given_metadata() {
+                $table::test_put_updates_the_state_merkle_root_for_the_given_metadata();
             }
 
             #[test]
-            fn remove_updates_the_state_merkle_root_for_the_given_metadata() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let rng = &mut StdRng::seed_from_u64(1234);
-
-                // Write the first contract state
-                let first_key = $generate_key(&$current_key, rng);
-                let first_state = $generate_value(rng);
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&first_key, &first_state)
-                    .unwrap();
-                let root_0 = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .root(&$current_key)
-                    .unwrap();
-
-                // Write the second contract state
-                let second_key = $generate_key(&$current_key, rng);
-                let second_state = $generate_value(rng);
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&second_key, &second_state)
-                    .unwrap();
-
-                // Read the first Merkle root
-                let root_1 = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .root(&$current_key)
-                    .unwrap();
-
-                // Remove the second contract state
-                storage_transaction.storage_as_mut::<$table>().remove(&second_key).unwrap();
-
-                // Read the second Merkle root
-                let root_2 = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .root(&$current_key)
-                    .unwrap();
-
-                assert_ne!(root_1, root_2);
-                assert_eq!(root_0, root_2);
+            fn smt_storage__test_remove_updates_the_state_merkle_root_for_the_given_metadata() {
+                $table::test_remove_updates_the_state_merkle_root_for_the_given_metadata();
             }
 
             #[test]
-            fn updating_foreign_metadata_does_not_affect_the_given_metadata_insertion() {
-                let given_primary_key = $current_key;
-                let foreign_primary_key = $foreign_key;
-
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let rng = &mut StdRng::seed_from_u64(1234);
-
-                let state_value = $generate_value(rng);
-
-                // Given
-                let given_key = $generate_key(&given_primary_key, rng);
-                let foreign_key = $generate_key(&foreign_primary_key, rng);
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&given_key, &state_value)
-                    .unwrap();
-
-                // When
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&foreign_key, &state_value)
-                    .unwrap();
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .remove(&foreign_key)
-                    .unwrap();
-
-                // Then
-                let result = storage_transaction
-                    .storage_as_mut::<$table>()
-                    .replace(&given_key, &state_value)
-                    .unwrap();
-
-                assert!(result.is_some());
+            fn smt_storage__test_updating_foreign_metadata_does_not_affect_the_given_metadata_insertion() {
+                $table::test_updating_foreign_metadata_does_not_affect_the_given_metadata_insertion();
             }
 
             #[test]
-            fn put_creates_merkle_metadata_when_empty() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let rng = &mut StdRng::seed_from_u64(1234);
-
-                // Given
-                let key = $generate_key(&$current_key, rng);
-                let state = $generate_value(rng);
-
-                // Write a contract state
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&key, &state)
-                    .unwrap();
-
-                // Read the Merkle metadata
-                let metadata = storage_transaction
-                    .storage_as_mut::<$metadata_table>()
-                    .get(&$current_key)
-                    .unwrap();
-
-                assert!(metadata.is_some());
+            fn smt_storage__test_put_creates_merkle_metadata_when_empty() {
+                $table::test_put_creates_merkle_metadata_when_empty();
             }
 
             #[test]
-            fn remove_deletes_merkle_metadata_when_empty() {
-                let mut storage = InMemoryStorage::default();
-                let mut storage_transaction = storage.write_transaction();
-
-                let rng = &mut StdRng::seed_from_u64(1234);
-
-                // Given
-                let key = $generate_key(&$current_key, rng);
-                let state = $generate_value(rng);
-
-                // Write a contract state
-                storage_transaction
-                    .storage_as_mut::<$table>()
-                    .insert(&key, &state)
-                    .unwrap();
-
-                // Read the Merkle metadata
-                storage_transaction
-                    .storage_as_mut::<$metadata_table>()
-                    .get(&$current_key)
-                    .unwrap()
-                    .expect("Expected Merkle metadata to be present");
-
-                // Remove the contract asset
-                storage_transaction.storage_as_mut::<$table>().remove(&key).unwrap();
-
-                // Read the Merkle metadata
-                let metadata = storage_transaction
-                    .storage_as_mut::<$metadata_table>()
-                    .get(&$current_key)
-                    .unwrap();
-
-                assert!(metadata.is_none());
+            fn smt_storage__test_remove_deletes_merkle_metadata_when_empty() {
+                $table::test_remove_deletes_merkle_metadata_when_empty();
             }
-        }}
-    };
+        };
+    }
 }

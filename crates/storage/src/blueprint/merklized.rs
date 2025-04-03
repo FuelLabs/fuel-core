@@ -306,8 +306,7 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-/// A trait that provides basic tests for the merklized storage.
-/// It is used to test the merklized storage with different key and value codecs.
+/// Test module containing helper trait and macro for implementing merkle storage tests.
 #[allow(warnings)]
 pub mod basic_tests_bmt {
     use core::ops::Deref;
@@ -357,8 +356,7 @@ pub mod basic_tests_bmt {
         transactional::WriteTransaction,
     };
 
-    /// A trait that provides basic tests for the merklized storage.
-    /// It is used to test the merklized storage with different key and value codecs.
+    /// Provides basic tests for merklized tables.
     pub trait BasicMerkleizedStorageTests: MerklizedTableWithBlueprint
     where
         Self::OwnedValue: PartialEq + core::fmt::Debug,
@@ -759,7 +757,7 @@ pub mod basic_tests_bmt {
     }
 }
 
-/// The macro that generates test functions for tables using the merklelized structure.
+/// Generates test functions for tables using the merklelized structure.
 /// The table must implement `BasicMerkleizedStorageTests`.
 #[cfg(feature = "test-helpers")]
 #[macro_export]
