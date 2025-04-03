@@ -435,6 +435,7 @@ async fn coins_to_spend_with_cache(
             total_amount,
             max,
             &asset_id,
+            asset.allow_partial.unwrap_or(false),
             excluded,
             db.batch_size,
         )

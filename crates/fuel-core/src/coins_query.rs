@@ -251,6 +251,7 @@ pub async fn select_coins_to_spend(
     total: u128,
     max: u16,
     asset_id: &AssetId,
+    allow_partial: bool,
     exclude: &Exclude,
     batch_size: usize,
 ) -> Result<Vec<CoinsToSpendIndexKey>, CoinsQueryError> {
@@ -287,11 +288,13 @@ pub async fn select_coins_to_spend(
         big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
     if selected_big_coins_total < total {
-        return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-            asset_id: *asset_id,
-            collected_amount: selected_big_coins_total,
-            max,
-        });
+        if !allow_partial {
+            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                asset_id: *asset_id,
+                collected_amount: selected_big_coins_total,
+                max,
+            })
+        }
     }
 
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
@@ -1322,6 +1325,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1384,6 +1388,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1431,6 +1436,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1459,6 +1465,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1486,6 +1493,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1521,6 +1529,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &asset_id,
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
