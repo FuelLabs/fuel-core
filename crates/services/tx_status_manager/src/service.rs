@@ -505,7 +505,6 @@ mod tests {
         pub pre_confirmation_updates: mpsc::Sender<GossipData<P2PPreConfirmationMessage>>,
         pub write_requests_sender: mpsc::UnboundedSender<UpdateRequest>,
         pub read_requests_sender: mpsc::Sender<ReadRequest>,
-        pub tx_status_change: TxStatusChange,
         pub update_sender: UpdateSender,
         pub protocol_signing_key: SecretKey,
     }
@@ -642,7 +641,6 @@ mod tests {
 
         let handles = Handles {
             pre_confirmation_updates: sender,
-            tx_status_change,
             write_requests_sender,
             read_requests_sender,
             update_sender,
@@ -837,6 +835,16 @@ mod tests {
         }
     }
 
+    async fn subscribe_to_status_change(
+        tx_id: Bytes32,
+        read_requests_sender: &mpsc::Sender<ReadRequest>,
+    ) -> BoxStream<'_, TxStatusMessage> {
+        let (sender, receiver) = oneshot::channel();
+        let request = ReadRequest::Subscribe { tx_id, sender };
+        read_requests_sender.send(request).await.unwrap();
+        receiver.await.unwrap().unwrap()
+    }
+
     async fn assert_presence(status_read: &mpsc::Sender<ReadRequest>, txs: Vec<Bytes32>) {
         assert_status(status_read, txs, |s| s.is_some()).await;
     }
@@ -866,6 +874,19 @@ mod tests {
         for (item, &validator) in received_statuses.iter().zip(validators.iter()) {
             assert!(validator(item));
         }
+    }
+
+    #[tokio::test]
+    async fn test_start_stop() {
+        let (task, _) = new_task_with_handles(TTL);
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        // Double start will return false.
+        assert!(service.start().is_err(), "double start should fail");
+
+        let state = service.stop_and_await().await.unwrap();
+        assert!(state.stopped());
     }
 
     #[tokio::test(start_paused = true)]
@@ -1060,7 +1081,7 @@ mod tests {
         assert_absence(&handles.read_requests_sender, vec![tx2_id]).await;
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn run__notifies_about_status_changes() {
         let (task, handles) = new_task_with_handles(TTL);
         let service = ServiceRunner::new(task);
@@ -1072,22 +1093,11 @@ mod tests {
             (tx1_id, status::transaction::submitted()),
             (tx1_id, status::transaction::success()),
         ];
-        let stream = handles
-            .tx_status_change
-            .update_sender
-            .try_subscribe::<MpscChannel>(tx1_id)
-            .unwrap();
+        let stream =
+            subscribe_to_status_change(tx1_id, &handles.read_requests_sender).await;
 
         // When
-        status_updates.iter().for_each(|(tx_id, status)| {
-            handles
-                .write_requests_sender
-                .send(UpdateRequest::Status {
-                    tx_id: *tx_id,
-                    status: status.clone(),
-                })
-                .unwrap();
-        });
+        send_status_updates(&status_updates, &handles.write_requests_sender).await;
 
         // Then
         assert_status_change_notifications(
