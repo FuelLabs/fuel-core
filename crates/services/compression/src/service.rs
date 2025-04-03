@@ -29,7 +29,10 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
-use futures::FutureExt;
+use futures::{
+    FutureExt,
+    StreamExt,
+};
 
 /// The compression service.
 /// Responsible for subscribing to the l2 block stream,
@@ -185,8 +188,6 @@ where
         &mut self,
         watcher: &mut StateWatcher,
     ) -> fuel_core_services::TaskNextAction {
-        use futures::StreamExt;
-
         tokio::select! {
             biased;
 
@@ -213,7 +214,18 @@ where
         }
     }
 
-    async fn shutdown(self) -> anyhow::Result<()> {
+    async fn shutdown(mut self) -> anyhow::Result<()> {
+        // gracefully handle all the remaining blocks in the stream and then stop
+        while let Some(block_with_metadata) = self.block_stream.next().await {
+            if let Err(e) = self.handle_new_block(&block_with_metadata) {
+                return Err(anyhow::anyhow!(e).context(format!(
+                    "Couldn't compress block: {}. Shutting down. \
+                            Node will be in indeterminate state upon restart. \
+                            Suggested to delete compression database.",
+                    block_with_metadata.height()
+                )));
+            }
+        }
         Ok(())
     }
 }
