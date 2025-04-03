@@ -172,10 +172,15 @@ where
     }
 
     async fn into_task(
-        self,
+        mut self,
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        // handle any blocks that may have been produced before into_task is called
+        while let Some(Some(block)) = self.block_stream.next().now_or_never() {
+            self.handle_new_block(&block)?;
+        }
+
         Ok(self)
     }
 }
@@ -284,6 +289,13 @@ mod tests {
         fn subscribe(&self) -> BoxStream<BlockWithMetadata> {
             tokio_stream::pending().into_boxed()
         }
+
+        fn get_block(
+            &self,
+            _: crate::ports::block_source::BlockAt,
+        ) -> Option<BlockWithMetadata> {
+            None
+        }
     }
 
     type MockStorage = StorageTransaction<
@@ -338,6 +350,17 @@ mod tests {
     impl BlockSource for MockBlockSource {
         fn subscribe(&self) -> BoxStream<BlockWithMetadata> {
             tokio_stream::iter(self.0.clone()).into_boxed()
+        }
+
+        fn get_block(
+            &self,
+            height: crate::ports::block_source::BlockAt,
+        ) -> Option<BlockWithMetadata> {
+            self.0
+                .iter()
+                .filter(|block| height == *block.height())
+                .next()
+                .cloned()
         }
     }
 

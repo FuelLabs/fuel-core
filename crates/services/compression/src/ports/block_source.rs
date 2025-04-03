@@ -35,8 +35,32 @@ impl BlockWithMetadataExt for BlockWithMetadata {
 /// Type alias for returned value by .subscribe() method on `BlockSource`
 pub type BlockStream = BoxStream<BlockWithMetadata>;
 
+/// Represents either the Genesis Block or a block at a specific height
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum BlockAt {
+    /// Block at a specific height
+    Specific(BlockHeight),
+    /// Genesis block
+    Genesis,
+}
+
+impl PartialEq<BlockHeight> for BlockAt {
+    fn eq(&self, other: &BlockHeight) -> bool {
+        match self {
+            Self::Genesis => 0 == *other,
+            Self::Specific(h) => h == other,
+        }
+    }
+
+    fn ne(&self, other: &BlockHeight) -> bool {
+        !self.eq(other)
+    }
+}
+
 /// Port for L2 blocks source
 pub trait BlockSource {
     /// Should provide a stream of blocks with metadata
     fn subscribe(&self) -> BlockStream;
+    /// Should provide the block at a given height
+    fn get_block(&self, height: BlockAt) -> Option<BlockWithMetadata>;
 }
