@@ -1,20 +1,22 @@
 use fuel_core_storage::StorageAsMut;
 
-use fuel_core_types::{
-    entities::{
-        coins::coin::Coin,
-        Message,
-    },
-    fuel_tx::AssetId,
-    services::executor::Event,
-};
-
 use crate::graphql_api::{
     ports::worker::OffChainDatabaseTransaction,
     storage::coins::{
         CoinsToSpendIndex,
         CoinsToSpendIndexKey,
     },
+};
+use fuel_core_types::{
+    entities::{
+        coins::coin::{
+            Coin,
+            DataCoin,
+        },
+        Message,
+    },
+    fuel_tx::AssetId,
+    services::executor::Event,
 };
 
 use super::error::IndexationError;
@@ -43,6 +45,27 @@ where
     Ok(())
 }
 
+fn add_data_coin<T>(
+    block_st_transaction: &mut T,
+    coin: &DataCoin,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = CoinsToSpendIndexKey::from_data_coin(coin);
+    let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
+    let maybe_old_value = storage.replace(&key, &())?;
+    if maybe_old_value.is_some() {
+        return Err(IndexationError::CoinToSpendAlreadyIndexed {
+            owner: coin.owner,
+            asset_id: coin.asset_id,
+            amount: coin.amount,
+            utxo_id: coin.utxo_id,
+        });
+    }
+    Ok(())
+}
+
 fn remove_coin<T>(
     block_st_transaction: &mut T,
     coin: &Coin,
@@ -51,6 +74,27 @@ where
     T: OffChainDatabaseTransaction,
 {
     let key = CoinsToSpendIndexKey::from_coin(coin);
+    let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
+    let maybe_old_value = storage.take(&key)?;
+    if maybe_old_value.is_none() {
+        return Err(IndexationError::CoinToSpendNotFound {
+            owner: coin.owner,
+            asset_id: coin.asset_id,
+            amount: coin.amount,
+            utxo_id: coin.utxo_id,
+        });
+    }
+    Ok(())
+}
+
+fn remove_data_coin<T>(
+    block_st_transaction: &mut T,
+    coin: &DataCoin,
+) -> Result<(), IndexationError>
+where
+    T: OffChainDatabaseTransaction,
+{
+    let key = CoinsToSpendIndexKey::from_data_coin(coin);
     let storage = block_st_transaction.storage::<CoinsToSpendIndex>();
     let maybe_old_value = storage.take(&key)?;
     if maybe_old_value.is_none() {
@@ -128,6 +172,12 @@ where
         }
         Event::CoinCreated(coin) => add_coin(block_st_transaction, coin),
         Event::CoinConsumed(coin) => remove_coin(block_st_transaction, coin),
+        Event::DataCoinCreated(data_coin) => {
+            add_data_coin(block_st_transaction, data_coin)
+        }
+        Event::DataCoinConsumed(data_coin) => {
+            remove_data_coin(block_st_transaction, data_coin)
+        }
         Event::ForcedTransactionFailed { .. } => Ok(()),
     }
 }

@@ -5,22 +5,26 @@ expression: encoded_json
 {
   "coins": [
     {
-      "tx_id": "9b07815f04497e2e05d22cac3aa061410b20868cc619154c42a1c61be9902717",
-      "output_index": 3250,
-      "tx_pointer_block_height": 1405935179,
-      "tx_pointer_tx_idx": 35726,
-      "owner": "c168fe4896f5b70ccb10f1a705e061d0fdfa189618d28b0d44efef92cbf44b58",
-      "amount": 16206947779870322207,
-      "asset_id": "222c10916b17a369b4da039d075952b58036f2a7b561446592403c672f0dbe12"
+      "Coin": {
+        "tx_id": "9b07815f04497e2e05d22cac3aa061410b20868cc619154c42a1c61be9902717",
+        "output_index": 3250,
+        "tx_pointer_block_height": 1405935179,
+        "tx_pointer_tx_idx": 35726,
+        "owner": "c168fe4896f5b70ccb10f1a705e061d0fdfa189618d28b0d44efef92cbf44b58",
+        "amount": 16206947779870322207,
+        "asset_id": "222c10916b17a369b4da039d075952b58036f2a7b561446592403c672f0dbe12"
+      }
     },
     {
-      "tx_id": "9f1e39113f9f6164ea2867f8deccf3c3c518f146de9554f03f27a83d5b1185f3",
-      "output_index": 10142,
-      "tx_pointer_block_height": 476225137,
-      "tx_pointer_tx_idx": 52207,
-      "owner": "357e2bd9e13962516b0a41403276437b25f0ffbe897cf476c0777e9d246ff397",
-      "amount": 901131989421222986,
-      "asset_id": "f1b350aa16c42ea0d7117b30c8c8436ce7a9254b30d253e4567ccafa5f36ce84"
+      "Coin": {
+        "tx_id": "9f1e39113f9f6164ea2867f8deccf3c3c518f146de9554f03f27a83d5b1185f3",
+        "output_index": 10142,
+        "tx_pointer_block_height": 476225137,
+        "tx_pointer_tx_idx": 52207,
+        "owner": "357e2bd9e13962516b0a41403276437b25f0ffbe897cf476c0777e9d246ff397",
+        "amount": 901131989421222986,
+        "asset_id": "f1b350aa16c42ea0d7117b30c8c8436ce7a9254b30d253e4567ccafa5f36ce84"
+      }
     }
   ],
   "messages": [

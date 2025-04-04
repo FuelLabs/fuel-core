@@ -1,3 +1,15 @@
+use async_graphql::{
+    Object,
+    Union,
+};
+
+use fuel_core_types::{
+    fuel_asm::Word,
+    fuel_tx,
+    fuel_tx::output,
+    fuel_types,
+};
+
 use crate::schema::scalars::{
     Address,
     AssetId,
@@ -6,16 +18,6 @@ use crate::schema::scalars::{
     UtxoId,
     U16,
     U64,
-};
-use async_graphql::{
-    Object,
-    Union,
-};
-use fuel_core_types::{
-    fuel_asm::Word,
-    fuel_tx,
-    fuel_tx::output,
-    fuel_types,
 };
 
 pub struct ResolvedOutput {
@@ -44,6 +46,7 @@ impl From<(fuel_tx::UtxoId, output::Output)> for ResolvedOutput {
 #[derive(Union)]
 pub enum Output {
     Coin(CoinOutput),
+    DataCoin(DataCoinOutput),
     Contract(ContractOutput),
     Change(ChangeOutput),
     Variable(VariableOutput),
@@ -71,6 +74,31 @@ impl CoinOutput {
     }
 }
 
+pub struct DataCoinOutput {
+    to: fuel_types::Address,
+    amount: Word,
+    asset_id: fuel_types::AssetId,
+    data: Vec<u8>,
+}
+
+#[Object]
+impl DataCoinOutput {
+    async fn to(&self) -> Address {
+        self.to.into()
+    }
+
+    async fn amount(&self) -> U64 {
+        self.amount.into()
+    }
+
+    async fn asset_id(&self) -> AssetId {
+        self.asset_id.into()
+    }
+
+    async fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+}
 pub struct ChangeOutput(CoinOutput);
 
 #[Object]
@@ -153,6 +181,17 @@ impl From<&fuel_tx::Output> for Output {
                 to: *to,
                 amount: *amount,
                 asset_id: *asset_id,
+            }),
+            fuel_tx::Output::DataCoin {
+                to,
+                amount,
+                asset_id,
+                data,
+            } => Output::DataCoin(DataCoinOutput {
+                to: *to,
+                amount: *amount,
+                asset_id: *asset_id,
+                data: data.to_vec(),
             }),
             fuel_tx::Output::Contract(contract) => Output::Contract(contract.into()),
             fuel_tx::Output::Change {

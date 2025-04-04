@@ -35,6 +35,7 @@ serde = { workspace = true, features = ["derive"], optional = true }
 # We force the version because 4.1.0 update leap seconds that breaks our timestamps
 tai64 = { version = "=4.0.0", features = ["serde"] }
 zeroize = "1.5"
+tracing = { workspace = true }
 
 [dev-dependencies]
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }

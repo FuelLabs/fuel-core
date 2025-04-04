@@ -31,7 +31,11 @@ use fuel_core_types::{
     self,
     blockchain::primitives::DaBlockHeight,
     entities::{
-        coins::coin::Coin,
+        coins::coin::{
+            Coin,
+            CompressedCoin,
+            DataCoin,
+        },
         Message,
     },
     fuel_types::BlockHeight,
@@ -218,14 +222,28 @@ fn init_coin(
 ) -> anyhow::Result<()> {
     let utxo_id = coin.key;
 
-    let compressed_coin = Coin {
-        utxo_id,
-        owner: *coin.value.owner(),
-        amount: *coin.value.amount(),
-        asset_id: *coin.value.asset_id(),
-        tx_pointer: *coin.value.tx_pointer(),
-    }
-    .compress();
+    let compressed_coin = match &coin.value {
+        CompressedCoin::V1(coin) => Coin {
+            utxo_id,
+            owner: coin.owner,
+            amount: coin.amount,
+            asset_id: coin.asset_id,
+            tx_pointer: coin.tx_pointer,
+        }
+        .compress(),
+        CompressedCoin::V2(data_coin) => DataCoin {
+            utxo_id,
+            owner: data_coin.owner,
+            amount: data_coin.amount,
+            asset_id: data_coin.asset_id,
+            tx_pointer: data_coin.tx_pointer,
+            data: data_coin.data.clone(),
+        }
+        .compress(),
+        _ => {
+            unreachable!("We have covered the two cases")
+        }
+    };
 
     // ensure coin can't point to blocks in the future
     let coin_height = coin.value.tx_pointer().block_height();

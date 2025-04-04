@@ -139,6 +139,15 @@ impl SnapshotReader {
         Self::new_in_memory(chain_config, state)
     }
 
+    #[cfg(feature = "test-helpers")]
+    pub fn get_in_memory_data_source_state(&self) -> Option<&StateConfig> {
+        match &self.data_source {
+            DataSource::InMemory { state, .. } => Some(state),
+            #[cfg(feature = "parquet")]
+            DataSource::Parquet { .. } => None,
+        }
+    }
+
     pub fn with_chain_config(self, chain_config: ChainConfig) -> Self {
         Self {
             chain_config,
