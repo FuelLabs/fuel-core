@@ -30,11 +30,17 @@ pub struct AssetSpendTarget {
     pub id: AssetId,
     pub target: u128,
     pub max: u16,
+    pub allow_partial: bool,
 }
 
 impl AssetSpendTarget {
-    pub fn new(id: AssetId, target: u128, max: u16) -> Self {
-        Self { id, target, max }
+    pub fn new(id: AssetId, target: u128, max: u16, allow_partial: bool) -> Self {
+        Self {
+            id,
+            target,
+            max,
+            allow_partial,
+        }
     }
 }
 

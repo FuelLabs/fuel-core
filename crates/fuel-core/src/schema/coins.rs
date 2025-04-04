@@ -184,6 +184,8 @@ pub struct SpendQueryElementInput {
     pub amount: U128,
     /// The maximum number of currencies for selection.
     pub max: Option<U16>,
+    /// If true, returns available coins instead of failing when the requested amount is unavailable.
+    pub allow_partial: Option<bool>,
 }
 
 #[derive(async_graphql::InputObject)]
@@ -379,6 +381,7 @@ async fn coins_to_spend_without_cache(
                 e.asset_id.0,
                 e.amount.0,
                 e.max.map(|max| max.0).unwrap_or(max_input).min(max_input),
+                e.allow_partial.unwrap_or(false),
             )
         })
         .collect_vec();
@@ -432,6 +435,7 @@ async fn coins_to_spend_with_cache(
             total_amount,
             max,
             &asset_id,
+            asset.allow_partial.unwrap_or(false),
             excluded,
             db.batch_size,
         )

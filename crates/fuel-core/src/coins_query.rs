@@ -138,6 +138,7 @@ pub async fn largest_first(
     let target = query.asset.target;
     let max = query.asset.max;
     let asset_id = query.asset.id;
+    let allow_partial = query.asset.allow_partial;
     let mut inputs: Vec<CoinType> = query.coins().try_collect().await?;
     inputs.sort_by_key(|coin| Reverse(coin.amount()));
 
@@ -150,13 +151,17 @@ pub async fn largest_first(
             break
         }
 
-        // Error if we can't fit more coins
         if coins.len() >= max as usize {
-            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-                asset_id,
-                collected_amount,
-                max,
-            })
+            if allow_partial {
+                return Ok(coins)
+            } else {
+                // Error if we can't fit more coins
+                return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                    asset_id,
+                    collected_amount,
+                    max,
+                })
+            }
         }
 
         // Add to list
@@ -165,11 +170,15 @@ pub async fn largest_first(
     }
 
     if collected_amount < target {
-        return Err(CoinsQueryError::InsufficientCoinsForTheMax {
-            asset_id,
-            collected_amount,
-            max,
-        })
+        if allow_partial && collected_amount > 0 {
+            return Ok(coins);
+        } else {
+            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                asset_id,
+                collected_amount,
+                max,
+            })
+        }
     }
 
     Ok(coins)
@@ -242,6 +251,7 @@ pub async fn select_coins_to_spend(
     total: u128,
     max: u16,
     asset_id: &AssetId,
+    allow_partial: bool,
     exclude: &Exclude,
     batch_size: usize,
 ) -> Result<Vec<CoinsToSpendIndexKey>, CoinsQueryError> {
@@ -277,12 +287,14 @@ pub async fn select_coins_to_spend(
     let (selected_big_coins_total, selected_big_coins) =
         big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
-    if selected_big_coins_total < total {
+    if selected_big_coins_total == 0
+        || (selected_big_coins_total < total && !allow_partial)
+    {
         return Err(CoinsQueryError::InsufficientCoinsForTheMax {
             asset_id: *asset_id,
             collected_amount: selected_big_coins_total,
             max,
-        });
+        })
     }
 
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
@@ -419,6 +431,7 @@ impl From<anyhow::Error> for CoinsQueryError {
 }
 
 #[allow(clippy::arithmetic_side_effects)]
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -579,7 +592,7 @@ mod tests {
             // Query some targets, including higher than the owner's balance
             for target in 0..20 {
                 let coins = query(
-                    &[AssetSpendTarget::new(asset_id, target, u16::MAX)],
+                    &[AssetSpendTarget::new(asset_id, target, u16::MAX, false)],
                     &owner,
                     base_asset_id,
                     &db.service_database(),
@@ -640,7 +653,7 @@ mod tests {
 
             // Query with too small max_inputs
             let coins = query(
-                &[AssetSpendTarget::new(asset_id, 6, 1)],
+                &[AssetSpendTarget::new(asset_id, 6, 1, false)],
                 &owner,
                 base_asset_id,
                 &db.service_database(),
@@ -681,8 +694,8 @@ mod tests {
         ) {
             let coins = query(
                 &[
-                    AssetSpendTarget::new(asset_ids[0], 3, u16::MAX),
-                    AssetSpendTarget::new(asset_ids[1], 6, u16::MAX),
+                    AssetSpendTarget::new(asset_ids[0], 3, u16::MAX, false),
+                    AssetSpendTarget::new(asset_ids[1], 6, u16::MAX, false),
                 ],
                 &owner,
                 base_asset_id,
@@ -708,6 +721,70 @@ mod tests {
             // Setup coins and messages
             let (owner, asset_ids, base_asset_id, db) = setup_coins_and_messages();
             multiple_assets_helper(owner, &asset_ids, &base_asset_id, db).await;
+        }
+
+        mod allow_partial {
+            use crate::{
+                coins_query::tests::{
+                    largest_first::query,
+                    setup_coins,
+                },
+                query::asset_query::AssetSpendTarget,
+            };
+
+            #[tokio::test]
+            async fn query__error_when_not_enough_coins_and_allow_partial_false() {
+                // Given
+                let (owner, asset_ids, base_asset_id, db) = setup_coins();
+                let asset_id = asset_ids[0];
+                let target = 20_000_000;
+                let allow_partial = false;
+
+                // When
+                let coins = query(
+                    &[AssetSpendTarget::new(
+                        asset_id,
+                        target,
+                        u16::MAX,
+                        allow_partial,
+                    )],
+                    &owner,
+                    &base_asset_id,
+                    &db.service_database(),
+                )
+                .await;
+
+                // Then
+                assert!(coins.is_err());
+            }
+
+            #[tokio::test]
+            async fn query__ok_when_not_enough_coins_and_allow_partial_true() {
+                // Given
+                let (owner, asset_ids, base_asset_id, db) = setup_coins();
+                let asset_id = asset_ids[0];
+                let target = 20_000_000;
+                let allow_partial = true;
+
+                // When
+                let coins = query(
+                    &[AssetSpendTarget::new(
+                        asset_id,
+                        target,
+                        u16::MAX,
+                        allow_partial,
+                    )],
+                    &owner,
+                    &base_asset_id,
+                    &db.service_database(),
+                )
+                .await
+                .expect("should return coins");
+
+                // Then
+                let coins: Vec<_> = coins[0].iter().map(|(_, amount)| *amount).collect();
+                assert_eq!(coins, vec![5, 4, 3, 2, 1]);
+            }
         }
     }
 
@@ -764,7 +841,7 @@ mod tests {
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![AssetSpendTarget::new(asset_id, amount, u16::MAX)],
+                    vec![AssetSpendTarget::new(asset_id, amount, u16::MAX, false)],
                     owner,
                     asset_ids,
                     base_asset_id,
@@ -816,8 +893,9 @@ mod tests {
             // Query with too small max_inputs
             let coins = query(
                 vec![AssetSpendTarget::new(
-                    asset_id, 6, // target
-                    1, // max
+                    asset_id, 6,     // target
+                    1,     // max
+                    false, // allow_partial
                 )],
                 owner,
                 asset_ids,
@@ -863,13 +941,15 @@ mod tests {
                 vec![
                     AssetSpendTarget::new(
                         asset_ids[0],
-                        3, // target
-                        3, // max
+                        3,     // target
+                        3,     // max
+                        false, // allow_partial
                     ),
                     AssetSpendTarget::new(
                         asset_ids[1],
-                        6, // target
-                        3, // max
+                        6,     // target
+                        3,     // max
+                        false, // allow_partial
                     ),
                 ],
                 owner,
@@ -969,7 +1049,7 @@ mod tests {
                     owner,
                     base_asset_id,
                     asset_ids,
-                    vec![AssetSpendTarget::new(asset_id, amount, u16::MAX)],
+                    vec![AssetSpendTarget::new(asset_id, amount, u16::MAX, false)],
                     excluded_ids.clone(),
                 )
                 .await;
@@ -1245,6 +1325,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1307,6 +1388,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1354,6 +1436,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1382,6 +1465,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1409,6 +1493,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &AssetId::default(),
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1444,6 +1529,7 @@ mod tests {
                 TOTAL,
                 MAX,
                 &asset_id,
+                false,
                 &exclude,
                 BATCH_SIZE,
             )
@@ -1454,6 +1540,95 @@ mod tests {
             // Then
             assert!(matches!(result, Err(actual_error)
                 if CoinsQueryError::InsufficientCoinsForTheMax { asset_id, collected_amount: EXPECTED_COLLECTED_AMOUNT, max: MAX } == actual_error));
+        }
+
+        mod allow_partial {
+            use fuel_core_storage::iter::IntoBoxedIter;
+            use fuel_core_types::fuel_tx::AssetId;
+
+            use crate::{
+                coins_query::tests::indexed_coins_to_spend::{
+                    select_coins_to_spend,
+                    setup_test_coins,
+                    BATCH_SIZE,
+                },
+                graphql_api::ports::CoinsToSpendIndexIter,
+                query::asset_query::Exclude,
+            };
+
+            #[tokio::test]
+            async fn query__error_when_not_enough_coins_and_allow_partial_false() {
+                // Given
+                const MAX: u16 = 3;
+                const TOTAL: u128 = 2137;
+
+                let coins = setup_test_coins([1, 1]);
+                let (coins, _): (Vec<_>, Vec<_>) = coins
+                    .into_iter()
+                    .map(|spec| (spec.index_entry, spec.utxo_id))
+                    .unzip();
+
+                let exclude = Exclude::default();
+
+                let coins_to_spend_iter = CoinsToSpendIndexIter {
+                    big_coins_iter: coins.into_iter().into_boxed(),
+                    dust_coins_iter: std::iter::empty().into_boxed(),
+                };
+                let asset_id = AssetId::default();
+
+                // When
+                let result = select_coins_to_spend(
+                    coins_to_spend_iter,
+                    TOTAL,
+                    MAX,
+                    &asset_id,
+                    false,
+                    &exclude,
+                    BATCH_SIZE,
+                )
+                .await;
+
+                // Then
+                assert!(result.is_err());
+            }
+
+            #[tokio::test]
+            async fn query__ok_when_not_enough_coins_and_allow_partial_true() {
+                // Given
+                const MAX: u16 = 3;
+                const TOTAL: u128 = 2137;
+
+                let coins = setup_test_coins([1, 1]);
+                let (coins, _): (Vec<_>, Vec<_>) = coins
+                    .into_iter()
+                    .map(|spec| (spec.index_entry, spec.utxo_id))
+                    .unzip();
+
+                let exclude = Exclude::default();
+
+                let coins_to_spend_iter = CoinsToSpendIndexIter {
+                    big_coins_iter: coins.into_iter().into_boxed(),
+                    dust_coins_iter: std::iter::empty().into_boxed(),
+                };
+                let asset_id = AssetId::default();
+
+                // When
+                let result = select_coins_to_spend(
+                    coins_to_spend_iter,
+                    TOTAL,
+                    MAX,
+                    &asset_id,
+                    true,
+                    &exclude,
+                    BATCH_SIZE,
+                )
+                .await
+                .expect("should return coins");
+
+                // Then
+                let coins: Vec<_> = result.into_iter().map(|key| key.amount()).collect();
+                assert_eq!(coins, vec![1, 1]);
+            }
         }
     }
 
@@ -1501,6 +1676,7 @@ mod tests {
                     id: asset_ids[0],
                     target: target_amount,
                     max: max_coins,
+                    allow_partial: false,
                 }],
                 Cow::Owned(Exclude::default()),
                 base_asset_id,
