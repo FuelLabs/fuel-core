@@ -38,16 +38,10 @@ use futures::{
     StreamExt,
 };
 
-/// The compression service.
-/// Responsible for subscribing to the l2 block stream,
-/// perform compression of the block, and store the compressed block.
-/// We don't need to share any data between this task and anything else yet(?)
-/// perhaps we want to expose a way to get the registry root
-pub struct CompressionService<B, S, CH> {
+/// Uninitialized compression service.
+pub struct UninitializedCompressionService<B, S, CH> {
     /// The block source.
     block_source: B,
-    /// The block stream.
-    block_stream: crate::ports::block_source::BlockStream,
     /// The canonical height getter.
     canonical_height: CH,
     /// The compression storage.
@@ -58,24 +52,52 @@ pub struct CompressionService<B, S, CH> {
     sync_notifier: SyncStateNotifier,
 }
 
-impl<B, S, CH> CompressionService<B, S, CH>
-where
-    B: BlockSource,
-    S: CompressionStorage,
-    CH: CanonicalHeight,
-{
+impl<B, S, CH> UninitializedCompressionService<B, S, CH> {
     fn new(
         block_source: B,
         storage: S,
         config: CompressionConfig,
         canonical_height: CH,
     ) -> Self {
-        let block_stream = block_source.subscribe();
         let (sync_notifier, _) = new_sync_state_channel();
 
         Self {
             block_source,
             canonical_height,
+            storage,
+            config,
+            sync_notifier,
+        }
+    }
+}
+
+/// The compression service.
+/// Responsible for subscribing to the l2 block stream,
+/// perform compression of the block, and store the compressed block.
+/// We don't need to share any data between this task and anything else yet(?)
+/// perhaps we want to expose a way to get the registry root
+pub struct CompressionService<S> {
+    /// The block stream.
+    block_stream: crate::ports::block_source::BlockStream,
+    /// The compression storage.
+    storage: S,
+    /// The compression config.
+    config: CompressionConfig,
+    /// The sync notifier
+    sync_notifier: SyncStateNotifier,
+}
+
+impl<S> CompressionService<S>
+where
+    S: CompressionStorage,
+{
+    fn new(
+        block_stream: crate::ports::block_source::BlockStream,
+        storage: S,
+        config: CompressionConfig,
+        sync_notifier: SyncStateNotifier,
+    ) -> Self {
+        Self {
             block_stream,
             storage,
             config,
@@ -84,63 +106,90 @@ where
     }
 }
 
-impl<B, S, CH> CompressionService<B, S, CH>
+/// reused by uninit and init task
+fn compress_block<S>(
+    storage: &mut S,
+    block_with_metadata: &BlockWithMetadata,
+    config: CompressionConfig,
+) -> crate::Result<()>
+where
+    S: CompressionStorage,
+{
+    let mut storage_tx = storage.write_transaction();
+
+    // compress the block
+    let compression_context = CompressionContext {
+        compression_storage: CompressionStorageWrapper {
+            storage_tx: &mut storage_tx,
+        },
+        block_events: block_with_metadata.events(),
+    };
+    let compressed_block = compress(
+        config.into(),
+        compression_context,
+        block_with_metadata.block(),
+    )
+    .now_or_never()
+    .expect("The current implementation should resolve all futures instantly")
+    .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
+
+    storage_tx.write_compressed_block(block_with_metadata.height(), &compressed_block)?;
+
+    storage_tx
+        .commit()
+        .map_err(crate::errors::CompressionError::FailedToCommitTransaction)?;
+
+    Ok(())
+}
+
+fn handle_new_block<S>(
+    storage: &mut S,
+    block_with_metadata: &BlockWithMetadata,
+    config: CompressionConfig,
+    sync_notifier: SyncStateNotifier,
+) -> crate::Result<()>
+where
+    S: CompressionStorage,
+{
+    // set the status to not synced
+    sync_notifier
+        .send(crate::sync_state::SyncState::NotSynced)
+        .ok();
+    // compress the block
+    compress_block(storage, block_with_metadata, config)?;
+    // set the status to synced
+    sync_notifier
+        .send(crate::sync_state::SyncState::Synced(
+            *block_with_metadata.height(),
+        ))
+        .ok();
+
+    Ok(())
+}
+
+impl<S> CompressionService<S>
+where
+    S: CompressionStorage,
+{
+    fn handle_new_block(
+        &mut self,
+        block_with_metadata: &BlockWithMetadata,
+    ) -> crate::Result<()> {
+        handle_new_block(
+            &mut self.storage,
+            block_with_metadata,
+            self.config,
+            self.sync_notifier.clone(),
+        )
+    }
+}
+
+impl<B, S, CH> UninitializedCompressionService<B, S, CH>
 where
     B: BlockSource,
     S: CompressionStorage + LatestHeight,
     CH: CanonicalHeight,
 {
-    fn compress_block(
-        &mut self,
-        block_with_metadata: &BlockWithMetadata,
-    ) -> crate::Result<()> {
-        let mut storage_tx = self.storage.write_transaction();
-
-        // compress the block
-        let compression_context = CompressionContext {
-            compression_storage: CompressionStorageWrapper {
-                storage_tx: &mut storage_tx,
-            },
-            block_events: block_with_metadata.events(),
-        };
-        let compressed_block = compress(
-            self.config.into(),
-            compression_context,
-            block_with_metadata.block(),
-        )
-        .now_or_never()
-        .expect("The current implementation should resolve all futures instantly")
-        .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
-
-        storage_tx
-            .write_compressed_block(block_with_metadata.height(), &compressed_block)?;
-
-        storage_tx
-            .commit()
-            .map_err(crate::errors::CompressionError::FailedToCommitTransaction)?;
-
-        Ok(())
-    }
-
-    fn handle_new_block(
-        &mut self,
-        block_with_metadata: &BlockWithMetadata,
-    ) -> crate::Result<()> {
-        // set the status to not synced
-        self.sync_notifier
-            .send(crate::sync_state::SyncState::NotSynced)
-            .ok();
-        // compress the block
-        self.compress_block(block_with_metadata)?;
-        // set the status to synced
-        self.sync_notifier
-            .send(crate::sync_state::SyncState::Synced(
-                *block_with_metadata.height(),
-            ))
-            .ok();
-        Ok(())
-    }
-
     async fn sync_previously_produced_blocks(&mut self) -> crate::Result<()> {
         let canonical_height = self.canonical_height.get();
         loop {
@@ -169,7 +218,12 @@ where
                     next_block_height
                 )))?;
 
-            self.handle_new_block(&block_with_metadata)?
+            handle_new_block(
+                &mut self.storage,
+                &block_with_metadata,
+                self.config,
+                self.sync_notifier.clone(),
+            )?;
         }
 
         Ok(())
@@ -204,14 +258,14 @@ impl SharedData {
 }
 
 #[async_trait::async_trait]
-impl<B, S, CH> RunnableService for CompressionService<B, S, CH>
+impl<B, S, CH> RunnableService for UninitializedCompressionService<B, S, CH>
 where
     B: BlockSource,
     S: CompressionStorage + LatestHeight,
     CH: CanonicalHeight,
 {
     const NAME: &'static str = "CompressionService";
-    type Task = Self;
+    type Task = CompressionService<S>;
     type SharedData = SharedData;
     type TaskParams = ();
 
@@ -228,15 +282,20 @@ where
     ) -> anyhow::Result<Self::Task> {
         self.sync_previously_produced_blocks().await?;
 
-        Ok(self)
+        let compression_service = CompressionService::new(
+            self.block_source.subscribe(),
+            self.storage,
+            self.config,
+            self.sync_notifier,
+        );
+
+        Ok(compression_service)
     }
 }
 
-impl<B, S, CH> RunnableTask for CompressionService<B, S, CH>
+impl<S> RunnableTask for CompressionService<S>
 where
-    B: BlockSource,
     S: CompressionStorage + LatestHeight,
-    CH: CanonicalHeight,
 {
     async fn run(
         &mut self,
@@ -290,7 +349,7 @@ pub fn new_service<B, S, C, CH>(
     storage: S,
     config_provider: C,
     canonical_height: CH,
-) -> crate::Result<ServiceRunner<CompressionService<B, S, CH>>>
+) -> crate::Result<ServiceRunner<UninitializedCompressionService<B, S, CH>>>
 where
     B: BlockSource,
     S: CompressionStorage + LatestHeight,
@@ -298,7 +357,7 @@ where
     CH: CanonicalHeight,
 {
     let config = config_provider.config();
-    Ok(ServiceRunner::new(CompressionService::new(
+    Ok(ServiceRunner::new(UninitializedCompressionService::new(
         block_source,
         storage,
         config,
@@ -463,13 +522,13 @@ mod tests {
         let block_source = MockBlockSource::new(vec![]);
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
-        let canonical_height_provider = MockCanonicalHeightProvider::default();
+        let (sync_notifier, _) = new_sync_state_channel();
 
         let mut service = CompressionService::new(
-            block_source,
+            block_source.subscribe(),
             storage,
             config_provider.config(),
-            canonical_height_provider,
+            sync_notifier,
         );
 
         // when
@@ -494,15 +553,19 @@ mod tests {
         let config_provider = MockConfigProvider::default();
         let canonical_height_provider = MockCanonicalHeightProvider::default();
 
-        let mut service = CompressionService::new(
+        let uninit_service = UninitializedCompressionService::new(
             block_source,
             storage,
             config_provider.config(),
             canonical_height_provider,
         );
-        let sync_observer = service.shared_data();
+        let sync_observer = uninit_service.shared_data();
 
         // when
+        let mut service = uninit_service
+            .into_task(&Default::default(), ())
+            .await
+            .unwrap();
         let _ = service.run(&mut StateWatcher::started()).await;
 
         // then
@@ -530,7 +593,7 @@ mod tests {
         let config_provider = MockConfigProvider::default();
         let canonical_height_provider = MockCanonicalHeightProvider::new(5);
 
-        let service = CompressionService::new(
+        let uninit_service = UninitializedCompressionService::new(
             block_source,
             storage,
             config_provider.config(),
@@ -538,7 +601,10 @@ mod tests {
         );
 
         // when
-        let service = service.into_task(&Default::default(), ()).await.unwrap();
+        let service = uninit_service
+            .into_task(&Default::default(), ())
+            .await
+            .unwrap();
 
         // then
         let maybe_block = service
