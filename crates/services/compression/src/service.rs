@@ -295,7 +295,7 @@ where
 
 impl<S> RunnableTask for CompressionService<S>
 where
-    S: CompressionStorage + LatestHeight,
+    S: CompressionStorage,
 {
     async fn run(
         &mut self,
