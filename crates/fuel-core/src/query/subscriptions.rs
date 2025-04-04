@@ -1,14 +1,9 @@
-use std::sync::Arc;
-
 use crate::schema::tx::types::TransactionStatus as ApiTxStatus;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::transaction_status::{
-        statuses::SqueezedOut,
-        TransactionStatus,
-    },
+    services::transaction_status::TransactionStatus,
 };
 use futures::{
     stream::BoxStream,
@@ -57,29 +52,6 @@ where
         // Keep taking the stream until the oneshot channel is closed.
         .take_until(closed)
         .filter_map(move |status | {
-            if allow_preconfirmation {
-                return futures::future::ready(Some(status));
-            }
-
-            // Filter out pre-confirmation statuses.
-            let status = match status {
-                TxStatusMessage::Status(status) => {
-                    if matches!(status, TransactionStatus::PreConfirmationFailure(_)) || matches!(status, TransactionStatus::PreConfirmationSuccess(_)) {
-                        None
-                    } else if let TransactionStatus::PreConfirmationSqueezedOut(s) = status {
-                        let new_status = SqueezedOut {
-                            reason: s.reason.clone(),
-                        };
-                        Some(TxStatusMessage::Status(TransactionStatus::SqueezedOut(Arc::new(new_status))))
-                    } else {
-                        Some(TxStatusMessage::Status(status))
-                    }
-                },
-                TxStatusMessage::FailedStatus => Some(TxStatusMessage::FailedStatus),
-            };
-            futures::future::ready(status)
-        })
-        .map(move |status| {
             if status.is_final() {
                 if let Some(close) = close.take() {
                     let _ = close.send(());
@@ -89,11 +61,15 @@ where
             match status {
                 TxStatusMessage::Status(status) => {
                     let status = ApiTxStatus::new(transaction_id, status);
-                    Ok(status)
+                    if !allow_preconfirmation && (matches!(status, ApiTxStatus::PreconfirmationFailure(_)) || matches!(status, ApiTxStatus::PreconfirmationSuccess(_))) {
+                        futures::future::ready(None)
+                    } else {
+                        futures::future::ready(Some(Ok(status)))
+                    }
                 },
                 // Map a failed status to an error for the api.
                 TxStatusMessage::FailedStatus => {
-                    Err(anyhow::anyhow!("Failed to get transaction status"))
+                    futures::future::ready(Some(Err(anyhow::anyhow!("Failed to get transaction status"))))
                 }
             }
         })

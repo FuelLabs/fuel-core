@@ -693,7 +693,7 @@ async fn submit_and_await_status<'a>(
     ctx: &'a Context<'a>,
     tx: HexString,
     estimate_predicates: bool,
-    _allow_preconfirmation: bool,
+    allow_preconfirmation: bool,
 ) -> async_graphql::Result<
     impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
 > {
@@ -716,13 +716,20 @@ async fn submit_and_await_status<'a>(
     txpool.insert(tx).await?;
 
     Ok(subscription
-        .map(move |event| match event {
-            TxStatusMessage::Status(status) => {
-                let status = TransactionStatus::new(tx_id, status);
-                Ok(status)
-            }
-            TxStatusMessage::FailedStatus => {
-                Err(anyhow::anyhow!("Failed to get transaction status").into())
+        .filter_map(move |status| {
+            match status {
+                TxStatusMessage::Status(status) => {
+                    let status = TransactionStatus::new(tx_id, status);
+                    if !allow_preconfirmation && (matches!(status, TransactionStatus::PreconfirmationFailure(_)) || matches!(status, TransactionStatus::PreconfirmationSuccess(_))) {
+                        None
+                    } else {
+                        Some(Ok(status))
+                    }
+                },
+                // Map a failed status to an error for the api.
+                TxStatusMessage::FailedStatus => {
+                    Some(Err(anyhow::anyhow!("Failed to get transaction status").into()))
+                }
             }
         })
         .take(3))
