@@ -89,7 +89,7 @@ impl FuelService {
             db,
             tx_status_manager,
         };
-        Ok(transaction_status_change(state, rx, id).await)
+        Ok(transaction_status_change(state, rx, id, false).await)
     }
 }
 

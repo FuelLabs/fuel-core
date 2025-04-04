@@ -67,7 +67,8 @@ async fn preconfirmation__received_after_successful_execution() {
         .finalize_as_transaction();
 
     let tx_id = tx.id(&Default::default());
-    let mut tx_statuses_subscriber = client.submit_and_await_status(&tx).await.unwrap();
+    let mut tx_statuses_subscriber =
+        client.submit_and_await_status(&tx, true).await.unwrap();
 
     // When
     assert!(matches!(
@@ -119,6 +120,72 @@ async fn preconfirmation__received_after_successful_execution() {
 }
 
 #[tokio::test]
+async fn preconfirmation__not_received_when_not_asked() {
+    let mut rng = rand::thread_rng();
+    let mut config = Config::local_node();
+    config.block_production = Trigger::Never;
+    let address = Address::new([0; 32]);
+    let amount = 10;
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let gas_limit = 1_000_000;
+    let maturity = Default::default();
+
+    // Given
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
+    ];
+    let script: Vec<u8> = script
+        .iter()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
+        .collect();
+
+    let tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(gas_limit)
+        .maturity(maturity)
+        .add_unsigned_coin_input(
+            SecretKey::random(&mut rng),
+            rng.gen(),
+            amount,
+            AssetId::default(),
+            Default::default(),
+        )
+        .add_output(Output::change(address, 0, AssetId::default()))
+        .finalize_as_transaction();
+
+    let tx_id = tx.id(&Default::default());
+    // When
+    let mut tx_statuses_update_subscriber =
+        client.subscribe_transaction_status(&tx_id).await.unwrap();
+    let mut tx_statuses_subscriber =
+        client.submit_and_await_status(&tx, false).await.unwrap();
+
+    // Then
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    assert!(matches!(
+        tx_statuses_update_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    client.produce_blocks(1, None).await.unwrap();
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Success { block_height, .. } if block_height == BlockHeight::new(1)
+    ));
+    assert!(matches!(
+        tx_statuses_update_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Success { block_height, .. } if block_height == BlockHeight::new(1)
+    ));
+}
+
+#[tokio::test]
 async fn preconfirmation__received_after_failed_execution() {
     let mut rng = rand::thread_rng();
     let mut config = Config::local_node();
@@ -159,7 +226,8 @@ async fn preconfirmation__received_after_failed_execution() {
         .finalize_as_transaction();
 
     let tx_id = tx.id(&Default::default());
-    let mut tx_statuses_subscriber = client.submit_and_await_status(&tx).await.unwrap();
+    let mut tx_statuses_subscriber =
+        client.submit_and_await_status(&tx, true).await.unwrap();
 
     // When
     assert!(matches!(
@@ -236,7 +304,7 @@ async fn preconfirmation__received_tx_inserted_end_block_open_period() {
 
     // When
     client
-        .submit_and_await_status(&tx)
+        .submit_and_await_status(&tx, true)
         .await
         .unwrap()
         .enumerate()
@@ -303,8 +371,10 @@ async fn preconfirmation__received_after_execution__multiple_txs() {
     .finalize_as_transaction();
 
     // Given
-    let mut tx_statuses_subscriber1 = client.submit_and_await_status(&tx1).await.unwrap();
-    let mut tx_statuses_subscriber2 = client.submit_and_await_status(&tx2).await.unwrap();
+    let mut tx_statuses_subscriber1 =
+        client.submit_and_await_status(&tx1, true).await.unwrap();
+    let mut tx_statuses_subscriber2 =
+        client.submit_and_await_status(&tx2, true).await.unwrap();
 
     // When
     assert!(matches!(

@@ -28,6 +28,7 @@ pub(crate) async fn transaction_status_change<'a, State>(
     state: State,
     stream: BoxStream<'a, TxStatusMessage>,
     transaction_id: Bytes32,
+    allow_preconfirmation: bool,
 ) -> impl Stream<Item = anyhow::Result<ApiTxStatus>> + 'a
 where
     State: TxnStatusChangeState + Send + Sync + 'a,
@@ -50,7 +51,7 @@ where
         .chain(stream)
         // Keep taking the stream until the oneshot channel is closed.
         .take_until(closed)
-        .map(move |status| {
+        .filter_map(move |status | {
             if status.is_final() {
                 if let Some(close) = close.take() {
                     let _ = close.send(());
@@ -60,11 +61,15 @@ where
             match status {
                 TxStatusMessage::Status(status) => {
                     let status = ApiTxStatus::new(transaction_id, status);
-                    Ok(status)
+                    if !allow_preconfirmation && (matches!(status, ApiTxStatus::PreconfirmationFailure(_)) || matches!(status, ApiTxStatus::PreconfirmationSuccess(_))) {
+                        futures::future::ready(None)
+                    } else {
+                        futures::future::ready(Some(Ok(status)))
+                    }
                 },
                 // Map a failed status to an error for the api.
                 TxStatusMessage::FailedStatus => {
-                    Err(anyhow::anyhow!("Failed to get transaction status"))
+                    futures::future::ready(Some(Err(anyhow::anyhow!("Failed to get transaction status"))))
                 }
             }
         })
