@@ -1,9 +1,14 @@
+use std::sync::Arc;
+
 use crate::schema::tx::types::TransactionStatus as ApiTxStatus;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::transaction_status::TransactionStatus,
+    services::transaction_status::{
+        statuses::SqueezedOut,
+        TransactionStatus,
+    },
 };
 use futures::{
     stream::BoxStream,
@@ -28,7 +33,7 @@ pub(crate) async fn transaction_status_change<'a, State>(
     state: State,
     stream: BoxStream<'a, TxStatusMessage>,
     transaction_id: Bytes32,
-    _allow_preconfirmation: bool,
+    allow_preconfirmation: bool,
 ) -> impl Stream<Item = anyhow::Result<ApiTxStatus>> + 'a
 where
     State: TxnStatusChangeState + Send + Sync + 'a,
@@ -51,6 +56,29 @@ where
         .chain(stream)
         // Keep taking the stream until the oneshot channel is closed.
         .take_until(closed)
+        .filter_map(move |status | {
+            if allow_preconfirmation {
+                return futures::future::ready(Some(status));
+            }
+
+            // Filter out pre-confirmation statuses.
+            let status = match status {
+                TxStatusMessage::Status(status) => {
+                    if matches!(status, TransactionStatus::PreConfirmationFailure(_)) || matches!(status, TransactionStatus::PreConfirmationSuccess(_)) {
+                        None
+                    } else if let TransactionStatus::PreConfirmationSqueezedOut(s) = status {
+                        let new_status = SqueezedOut {
+                            reason: s.reason.clone(),
+                        };
+                        Some(TxStatusMessage::Status(TransactionStatus::SqueezedOut(Arc::new(new_status))))
+                    } else {
+                        Some(TxStatusMessage::Status(status))
+                    }
+                },
+                TxStatusMessage::FailedStatus => Some(TxStatusMessage::FailedStatus),
+            };
+            futures::future::ready(status)
+        })
         .map(move |status| {
             if status.is_final() {
                 if let Some(close) = close.take() {
