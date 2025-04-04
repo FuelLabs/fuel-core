@@ -3,6 +3,7 @@ edition = { workspace = true }
 license = { workspace = true }
 name = "fuel-core-tests"
 publish = false
+rust-version = { workspace = true }
 version = "0.0.0"
 # Disable automatic test target discovery. This allows us to run all the integ tests as a single binary target (lib.rs)
 # instead of each integ test file being its own compiled & linked binary which is the default behavior. Linking with

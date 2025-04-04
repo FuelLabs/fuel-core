@@ -32,7 +32,7 @@ pub fn unpack_ptr_and_len(val: u64) -> (u32, u32) {
 
 /// Pack a `exists`, `size` and `result` into one `u64`.
 pub fn pack_exists_size_result(exists: bool, size: u32, result: u16) -> u64 {
-    (u64::from(result) << 33 | u64::from(size) << 1) | u64::from(exists)
+    ((u64::from(result) << 33) | (u64::from(size) << 1)) | u64::from(exists)
 }
 
 /// Unpacks an `u64` into `exists`, `size` and `result`.
@@ -40,7 +40,7 @@ pub fn unpack_exists_size_result(val: u64) -> (bool, u32, u16) {
     let exists = (val & 1u64) != 0;
     let size = u32::try_from((val >> 1) & (u32::MAX as u64))
         .expect("It only contains first 32 bytes; qed");
-    let result = u16::try_from(val >> 33 & (u16::MAX as u64))
+    let result = u16::try_from((val >> 33) & (u16::MAX as u64))
         .expect("It only contains first 16 bytes; qed");
 
     (exists, size, result)
@@ -134,6 +134,7 @@ pub enum ReturnType {
 /// versions of the return without introducing new host functions.
 #[cfg(not(feature = "std"))]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum ReturnType {
     /// WASM executor doesn't use this variant, so from its perspective it is empty.
     ExecutionV0,

@@ -159,8 +159,6 @@ pub struct MessageProofArgs {
     /// The `Nonce` identifier of the output message that requires a proof.
     pub nonce: Nonce,
 
-    /// The query supports either `commit_block_id`, or `commit_block_height` set on, not both.
-
     /// The block id of the commitment block.
     /// If it is `None`, the `commit_block_height` should be `Some`.
     pub commit_block_id: Option<BlockId>,

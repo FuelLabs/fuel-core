@@ -23,7 +23,7 @@ use std::{
 use super::*;
 
 fn div_ceil(divisor: usize, dividend: usize) -> usize {
-    (divisor + (dividend - 1)) / dividend
+    divisor.div_ceil(dividend)
 }
 
 #[tokio::test]

@@ -108,7 +108,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<UtxoId>> {
         self.owned_coins_ids(owner, start_coin, Some(direction))
-            .map(|res| res.map_err(StorageError::from))
             .into_boxed()
     }
 
@@ -119,7 +118,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Nonce>> {
         self.owned_message_ids(owner, start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
             .into_boxed()
     }
 
@@ -134,7 +132,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             tx_idx: tx_pointer.tx_index(),
         });
         self.owned_transactions(owner, start, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
             .into_boxed()
     }
 
@@ -188,8 +185,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     ) -> StorageResult<Option<RelayedTransactionStatus>> {
         let status = self
             .storage_as_ref::<RelayedTransactionStatuses>()
-            .get(&id)
-            .map_err(StorageError::from)?
+            .get(&id)?
             .map(|cow| cow.into_owned());
         Ok(status)
     }
@@ -333,7 +329,7 @@ impl OffChainIterableKeyValueView {
         start: Option<CoinBalancesKey>,
         direction: IterDirection,
         base_asset_id: &'a AssetId,
-    ) -> BoxedIter<'_, Result<(AssetId, u128), StorageError>> {
+    ) -> BoxedIter<'a, Result<(AssetId, u128), StorageError>> {
         self.iter_all_filtered_keys::<CoinBalances, _>(
             Some(owner),
             start.as_ref(),
@@ -364,7 +360,7 @@ impl OffChainIterableKeyValueView {
         owner: &Address,
         base_asset_id: &'a AssetId,
         direction: IterDirection,
-    ) -> BoxedIter<'_, Result<(AssetId, u128), StorageError>> {
+    ) -> BoxedIter<'a, Result<(AssetId, u128), StorageError>> {
         let start = start.map(|asset_id| CoinBalancesKey::new(owner, &asset_id));
         let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
         let non_base_asset_balance =
@@ -379,7 +375,7 @@ impl OffChainIterableKeyValueView {
         owner: &Address,
         base_asset_id: &'a AssetId,
         direction: IterDirection,
-    ) -> BoxedIter<'_, Result<(AssetId, u128), StorageError>> {
+    ) -> BoxedIter<'a, Result<(AssetId, u128), StorageError>> {
         let base_asset_balance = self.base_asset_balance(base_asset_id, owner);
         let non_base_asset_balances =
             self.non_base_asset_balances(owner, None, direction, base_asset_id);

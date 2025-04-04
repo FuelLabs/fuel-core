@@ -8,6 +8,7 @@ homepage = { workspace = true }
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "fuel-cli", "fuel-gql"]
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 description = "The fuel cli to interact with `fuel-core` client."
 
 [[bin]]

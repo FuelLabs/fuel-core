@@ -3,6 +3,7 @@ edition = { workspace = true }
 license = { workspace = true }
 name = "fuel-core-benches"
 publish = false
+rust-version = { workspace = true }
 version = "0.0.0"
 
 [dependencies]
