@@ -52,4 +52,15 @@ impl<Result, Changes> Uncommitted<Result, Changes> {
     pub fn into_changes(self) -> Changes {
         self.changes
     }
+
+    /// Discards the result and return storage changes.
+    pub fn map_result<F: FnOnce(Result) -> NewResult, NewResult>(
+        self,
+        f: F,
+    ) -> Uncommitted<NewResult, Changes> {
+        Uncommitted {
+            result: f(self.result),
+            changes: self.changes,
+        }
+    }
 }

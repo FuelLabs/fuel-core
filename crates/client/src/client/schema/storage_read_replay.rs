@@ -22,6 +22,17 @@ impl From<StorageReadReplayEvent>
         }
     }
 }
+impl From<fuel_core_types::services::executor::StorageReadReplayEvent>
+    for StorageReadReplayEvent
+{
+    fn from(event: fuel_core_types::services::executor::StorageReadReplayEvent) -> Self {
+        StorageReadReplayEvent {
+            column: event.column.into(),
+            key: event.key.into(),
+            value: event.value.map(Into::into),
+        }
+    }
+}
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct StorageReadReplayArgs {
