@@ -265,18 +265,16 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
                             "Failed to notify gossip transaction validity: {e:?}"
                         );
                     }
-                } else {
-                    if let Err(e) = self.p2p.notify_gossip_transaction_validity(
-                        GossipsubMessageInfo {
-                            message_id,
-                            peer_id,
-                        },
-                        GossipsubMessageAcceptance::Reject,
-                    ) {
-                        tracing::warn!(
-                            "Failed to notify gossip transaction validity: {e:?}"
-                        );
-                    }
+                } else if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                    GossipsubMessageInfo {
+                        message_id,
+                        peer_id,
+                    },
+                    GossipsubMessageAcceptance::Reject,
+                ) {
+                    tracing::warn!(
+                        "Failed to notify gossip transaction validity: {e:?}"
+                    );
                 }
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
@@ -1504,6 +1502,11 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // then
+        // One success and one fail
+        assert_eq!(
+            handles.p2p_notify_validity_receiver.try_recv().unwrap().1,
+            GossipsubMessageAcceptance::Accept
+        );
         assert_eq!(
             handles.p2p_notify_validity_receiver.try_recv().unwrap().1,
             GossipsubMessageAcceptance::Reject
