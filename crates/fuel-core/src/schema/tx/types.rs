@@ -769,14 +769,14 @@ impl Transaction {
     async fn status(
         &self,
         ctx: &Context<'_>,
-        _allow_preconfirmation: Option<bool>,
+        allow_preconfirmation: Option<bool>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
         let query = ctx.read_view()?;
 
         let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
 
-        get_tx_status(id, query.as_ref(), tx_status_manager)
+        get_tx_status(id, query.as_ref(), tx_status_manager, allow_preconfirmation.unwrap_or(false))
             .await
             .map_err(Into::into)
     }
@@ -1098,6 +1098,7 @@ pub(crate) async fn get_tx_status(
     id: fuel_core_types::fuel_types::Bytes32,
     query: &ReadView,
     tx_status_manager: &DynTxStatusManager,
+    allow_preconfirmation: bool,
 ) -> Result<Option<TransactionStatus>, StorageError> {
     let api_result = query
         .tx_status(&id)
@@ -1110,7 +1111,18 @@ pub(crate) async fn get_tx_status(
         None => {
             let status = tx_status_manager.status(id).await?;
             match status {
-                Some(status) => Ok(Some(TransactionStatus::new(id, status))),
+                Some(status) => {
+                    let status = TransactionStatus::new(id, status);
+
+                    // Filter out preconfirmation statuses if not allowed. Converting to submitted status
+                    // because it's the closest to the preconfirmation status.
+                    // Having `now()` as timestamp isn't ideal but shouldn't cause much inconsistency.
+                    if !allow_preconfirmation && (matches!(status, TransactionStatus::PreconfirmationSuccess(_)) || matches!(status, TransactionStatus::PreconfirmationFailure(_))) {
+                        Ok(Some(TransactionStatus::Submitted(SubmittedStatus(Tai64::now()))))
+                    } else {
+                        Ok(Some(status))
+                    }
+                },
                 None => Ok(None),
             }
         }
