@@ -215,48 +215,47 @@ fn predicate_checking_predicate_data_matches_input_data_coin() -> Vec<u8> {
 }
 
 fn predicate_checking_output_data_matches_input_data_coin() -> Vec<u8> {
-    // let output_len_reg = 0x13;
-    // let input_len_reg = 0x14;
-    // let res_reg = 0x10;
-    // let lengths_match_reg = 0x11;
-    // let data_match_reg = 0x12;
-    // let input_index = 0;
-    // let output_index = 0;
-    // let output_data_mem_location = 0x22;
-    // let input_data_mem_location = 0x23;
-    // vec![
-    //     op::gtf_args(input_len_reg, input_index, GTFArgs::InputDataCoinDataLength),
-    //     op::gtf_args(
-    //         output_len_reg,
-    //         output_index,
-    //         GTFArgs::OutputDataCoinDataLength,
-    //     ),
-    //     // get expected data from predicate data
-    //     op::gtf_args(
-    //         output_data_mem_location,
-    //         output_index,
-    //         GTFArgs::OutputDataCoinData,
-    //     ),
-    //     // get actual data
-    //     op::gtf_args(
-    //         input_data_mem_location,
-    //         input_index,
-    //         GTFArgs::InputDataCoinData,
-    //     ),
-    //     // compare
-    //     op::eq(lengths_match_reg, input_len_reg, output_len_reg),
-    //     op::meq(
-    //         data_match_reg,
-    //         output_data_mem_location,
-    //         input_data_mem_location,
-    //         output_len_reg,
-    //     ),
-    //     op::and(res_reg, lengths_match_reg, data_match_reg),
-    //     op::ret(res_reg),
-    // ]
-    // .into_iter()
-    // .collect()
-    vec![op::ret(0x01)].into_iter().collect()
+    let output_len_reg = 0x13;
+    let input_len_reg = 0x14;
+    let res_reg = 0x10;
+    let lengths_match_reg = 0x11;
+    let data_match_reg = 0x12;
+    let input_index = 0;
+    let output_index = 0;
+    let output_data_mem_location = 0x22;
+    let input_data_mem_location = 0x23;
+    vec![
+        op::gtf_args(input_len_reg, input_index, GTFArgs::InputDataCoinDataLength),
+        op::gtf_args(
+            output_len_reg,
+            output_index,
+            GTFArgs::OutputDataCoinDataLength,
+        ),
+        // get expected data from predicate data
+        op::gtf_args(
+            output_data_mem_location,
+            output_index,
+            GTFArgs::OutputDataCoinData,
+        ),
+        // get actual data
+        op::gtf_args(
+            input_data_mem_location,
+            input_index,
+            GTFArgs::InputDataCoinData,
+        ),
+        // compare
+        op::eq(lengths_match_reg, input_len_reg, output_len_reg),
+        op::meq(
+            data_match_reg,
+            output_data_mem_location,
+            input_data_mem_location,
+            output_len_reg,
+        ),
+        op::and(res_reg, lengths_match_reg, data_match_reg),
+        op::ret(res_reg),
+    ]
+    .into_iter()
+    .collect()
 }
 #[tokio::test]
 async fn submit__tx_with_predicate_can_check_data_coin() {
