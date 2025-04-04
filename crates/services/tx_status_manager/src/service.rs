@@ -704,7 +704,8 @@ mod tests {
 
     fn new_task_with_handles(ttl: Duration) -> (Task<PublicKey, MockP2P>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
-        let (p2p_notify_validity_sender, p2p_notify_validity_receiver) = mpsc::channel(10000);
+        let (p2p_notify_validity_sender, p2p_notify_validity_receiver) =
+            mpsc::channel(10000);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let (tx_status_sender, tx_status_receiver) = broadcast::channel(10000);
         let shared_data = SharedData {
