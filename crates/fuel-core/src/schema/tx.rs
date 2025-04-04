@@ -624,6 +624,8 @@ impl TxStatusSubscription {
         &self,
         ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
+        #[graphql(desc = "If true, accept to receive the preconfirmation status")]
+        allow_preconfirmation: Option<bool>,
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
         let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
@@ -634,11 +636,14 @@ impl TxStatusSubscription {
             tx_status_manager,
             query,
         };
-        Ok(
-            transaction_status_change(status_change_state, rx, id.into())
-                .await
-                .map_err(async_graphql::Error::from),
+        Ok(transaction_status_change(
+            status_change_state,
+            rx,
+            id.into(),
+            allow_preconfirmation.unwrap_or(false),
         )
+        .await
+        .map_err(async_graphql::Error::from))
     }
 
     /// Submits transaction to the `TxPool` and await either success or failure.
@@ -653,7 +658,7 @@ impl TxStatusSubscription {
     > {
         use tokio_stream::StreamExt;
         let subscription =
-            submit_and_await_status(ctx, tx, estimate_predicates.unwrap_or(false))
+            submit_and_await_status(ctx, tx, estimate_predicates.unwrap_or(false), false)
                 .await?;
 
         Ok(subscription
@@ -663,17 +668,24 @@ impl TxStatusSubscription {
 
     /// Submits the transaction to the `TxPool` and returns a stream of events.
     /// Compared to the `submitAndAwait`, the stream also contains
-    /// `SubmittedStatus` as an intermediate state.
+    /// `SubmittedStatus` and potentially preconfirmation as an intermediate state.
     #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
     async fn submit_and_await_status<'a>(
         &self,
         ctx: &'a Context<'a>,
         tx: HexString,
         estimate_predicates: Option<bool>,
+        allow_preconfirmation: Option<bool>,
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
-        submit_and_await_status(ctx, tx, estimate_predicates.unwrap_or(false)).await
+        submit_and_await_status(
+            ctx,
+            tx,
+            estimate_predicates.unwrap_or(false),
+            allow_preconfirmation.unwrap_or(false),
+        )
+        .await
     }
 }
 
@@ -681,6 +693,7 @@ async fn submit_and_await_status<'a>(
     ctx: &'a Context<'a>,
     tx: HexString,
     estimate_predicates: bool,
+    _allow_preconfirmation: bool,
 ) -> async_graphql::Result<
     impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
 > {

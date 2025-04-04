@@ -769,6 +769,7 @@ impl Transaction {
     async fn status(
         &self,
         ctx: &Context<'_>,
+        _allow_preconfirmation: Option<bool>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
         let id = self.1;
         let query = ctx.read_view()?;

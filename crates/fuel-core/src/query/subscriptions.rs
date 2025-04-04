@@ -28,6 +28,7 @@ pub(crate) async fn transaction_status_change<'a, State>(
     state: State,
     stream: BoxStream<'a, TxStatusMessage>,
     transaction_id: Bytes32,
+    _allow_preconfirmation: bool,
 ) -> impl Stream<Item = anyhow::Result<ApiTxStatus>> + 'a
 where
     State: TxnStatusChangeState + Send + Sync + 'a,
