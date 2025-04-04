@@ -63,6 +63,7 @@ jobs:
     needs: benchmark
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       pull-requests: write
 
     if: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
