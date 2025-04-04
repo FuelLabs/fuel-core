@@ -1,6 +1,5 @@
 use crate::{
     database::Database,
-    fuel_core_graphql_api::ports::worker::BlockAt,
     service::adapters::ExecutorAdapter,
 };
 use fuel_core_importer::ports::Validator;
@@ -8,12 +7,15 @@ use fuel_core_storage::{
     not_found,
     transactional::AtomicView,
 };
-use fuel_core_types::services::{
-    block_importer::{
-        ImportResult,
-        SharedImportResult,
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::{
+        block_importer::{
+            ImportResult,
+            SharedImportResult,
+        },
+        executor::ValidationResult,
     },
-    executor::ValidationResult,
 };
 use std::sync::Arc;
 
@@ -30,6 +32,15 @@ impl ImportResultProvider {
             executor_adapter,
         }
     }
+}
+
+/// Represents either the Genesis Block or a block at a specific height
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum BlockAt {
+    /// Block at a specific height
+    Specific(BlockHeight),
+    /// Genesis block
+    Genesis,
 }
 
 impl ImportResultProvider {

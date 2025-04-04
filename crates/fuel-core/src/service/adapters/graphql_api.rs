@@ -1,5 +1,6 @@
 use super::{
     compression_adapters::CompressionServiceAdapter,
+    import_result_provider,
     BlockImporterAdapter,
     BlockProducerAdapter,
     ChainStateInfoProvider,
@@ -248,6 +249,15 @@ impl GraphQLBlockImporter {
     }
 }
 
+impl From<BlockAt> for import_result_provider::BlockAt {
+    fn from(value: BlockAt) -> Self {
+        match value {
+            BlockAt::Genesis => Self::Genesis,
+            BlockAt::Specific(h) => Self::Specific(h),
+        }
+    }
+}
+
 impl worker::BlockImporter for GraphQLBlockImporter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
         self.block_importer_adapter.events_shared_result()
@@ -257,7 +267,8 @@ impl worker::BlockImporter for GraphQLBlockImporter {
         &self,
         height: BlockAt,
     ) -> anyhow::Result<SharedImportResult> {
-        self.import_result_provider_adapter.result_at_height(height)
+        self.import_result_provider_adapter
+            .result_at_height(height.into())
     }
 }
 
