@@ -214,49 +214,6 @@ fn predicate_checking_predicate_data_matches_input_data_coin() -> Vec<u8> {
     .collect()
 }
 
-fn predicate_checking_output_data_matches_input_data_coin() -> Vec<u8> {
-    let output_len_reg = 0x13;
-    let input_len_reg = 0x14;
-    let res_reg = 0x10;
-    let lengths_match_reg = 0x11;
-    let data_match_reg = 0x12;
-    let input_index = 0;
-    let output_index = 0;
-    let output_data_mem_location = 0x22;
-    let input_data_mem_location = 0x23;
-    vec![
-        op::gtf_args(input_len_reg, input_index, GTFArgs::InputDataCoinDataLength),
-        op::gtf_args(
-            output_len_reg,
-            output_index,
-            GTFArgs::OutputDataCoinDataLength,
-        ),
-        // get expected data from predicate data
-        op::gtf_args(
-            output_data_mem_location,
-            output_index,
-            GTFArgs::OutputDataCoinData,
-        ),
-        // get actual data
-        op::gtf_args(
-            input_data_mem_location,
-            input_index,
-            GTFArgs::InputDataCoinData,
-        ),
-        // compare
-        op::eq(lengths_match_reg, input_len_reg, output_len_reg),
-        op::meq(
-            data_match_reg,
-            output_data_mem_location,
-            input_data_mem_location,
-            output_len_reg,
-        ),
-        op::and(res_reg, lengths_match_reg, data_match_reg),
-        op::ret(res_reg),
-    ]
-    .into_iter()
-    .collect()
-}
 #[tokio::test]
 async fn submit__tx_with_predicate_can_check_data_coin() {
     let _ = tracing_subscriber::fmt()
@@ -352,11 +309,57 @@ async fn submit__tx_with_predicate_can_check_data_coin() {
     )
 }
 
+#[allow(unused_variables)]
+fn predicate_checking_output_data_matches_input_data_coin() -> Vec<u8> {
+    let output_data_len_reg = 0x13;
+    let input_data_len_reg = 0x14;
+    let res_reg = 0x10;
+    let lengths_match_reg = 0x11;
+    let data_match_reg = 0x12;
+    let input_index = 0;
+    let output_index = 0;
+    let output_data_mem_location = 0x22;
+    let input_data_mem_location = 0x23;
+    vec![
+        op::gtf_args(
+            input_data_len_reg,
+            input_index,
+            GTFArgs::InputDataCoinDataLength,
+        ),
+        op::gtf_args(
+            output_data_len_reg,
+            output_index,
+            GTFArgs::OutputDataCoinDataLength,
+        ),
+        // output data location
+        op::gtf_args(
+            output_data_mem_location,
+            output_index,
+            GTFArgs::OutputDataCoinData,
+        ),
+        // input data location
+        op::gtf_args(
+            input_data_mem_location,
+            input_index,
+            GTFArgs::InputDataCoinData,
+        ),
+        // compare
+        op::eq(lengths_match_reg, input_data_len_reg, output_data_len_reg),
+        op::meq(
+            data_match_reg,
+            input_data_mem_location,
+            output_data_mem_location,
+            output_data_len_reg,
+        ),
+        op::and(res_reg, lengths_match_reg, data_match_reg),
+        op::ret(res_reg),
+    ]
+    .into_iter()
+    .collect()
+}
+
 #[tokio::test]
 async fn submit__tx_with_predicate_can_check_input_and_output_data_coins() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
     let mut rng = StdRng::seed_from_u64(2322);
 
     // given
