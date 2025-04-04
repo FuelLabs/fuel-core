@@ -272,9 +272,7 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
                     },
                     GossipsubMessageAcceptance::Reject,
                 ) {
-                    tracing::warn!(
-                        "Failed to notify gossip transaction validity: {e:?}"
-                    );
+                    tracing::warn!("Failed to notify gossip transaction validity: {e:?}");
                 }
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
