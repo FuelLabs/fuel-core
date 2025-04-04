@@ -94,6 +94,7 @@ jobs:
             --body "Updated benchmark results" \
             --base master \
             --head "$branch_name"
+            --label "no changelog"
         env:
           benchmark_results: ${{ needs.benchmark.outputs.benchmark_results }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
