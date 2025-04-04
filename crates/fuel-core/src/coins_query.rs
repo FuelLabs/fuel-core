@@ -170,7 +170,7 @@ pub async fn largest_first(
     }
 
     if collected_amount < target {
-        if allow_partial {
+        if allow_partial && collected_amount > 0 {
             return Ok(coins);
         } else {
             return Err(CoinsQueryError::InsufficientCoinsForTheMax {
@@ -287,7 +287,9 @@ pub async fn select_coins_to_spend(
     let (selected_big_coins_total, selected_big_coins) =
         big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
-    if selected_big_coins_total < total && !allow_partial {
+    if selected_big_coins_total == 0
+        || (selected_big_coins_total < total && !allow_partial)
+    {
         return Err(CoinsQueryError::InsufficientCoinsForTheMax {
             asset_id: *asset_id,
             collected_amount: selected_big_coins_total,
@@ -1538,6 +1540,95 @@ mod tests {
             // Then
             assert!(matches!(result, Err(actual_error)
                 if CoinsQueryError::InsufficientCoinsForTheMax { asset_id, collected_amount: EXPECTED_COLLECTED_AMOUNT, max: MAX } == actual_error));
+        }
+
+        mod allow_partial {
+            use fuel_core_storage::iter::IntoBoxedIter;
+            use fuel_core_types::fuel_tx::AssetId;
+
+            use crate::{
+                coins_query::tests::indexed_coins_to_spend::{
+                    select_coins_to_spend,
+                    setup_test_coins,
+                    BATCH_SIZE,
+                },
+                graphql_api::ports::CoinsToSpendIndexIter,
+                query::asset_query::Exclude,
+            };
+
+            #[tokio::test]
+            async fn query__error_when_not_enough_coins_and_allow_partial_false() {
+                // Given
+                const MAX: u16 = 3;
+                const TOTAL: u128 = 2137;
+
+                let coins = setup_test_coins([1, 1]);
+                let (coins, _): (Vec<_>, Vec<_>) = coins
+                    .into_iter()
+                    .map(|spec| (spec.index_entry, spec.utxo_id))
+                    .unzip();
+
+                let exclude = Exclude::default();
+
+                let coins_to_spend_iter = CoinsToSpendIndexIter {
+                    big_coins_iter: coins.into_iter().into_boxed(),
+                    dust_coins_iter: std::iter::empty().into_boxed(),
+                };
+                let asset_id = AssetId::default();
+
+                // When
+                let result = select_coins_to_spend(
+                    coins_to_spend_iter,
+                    TOTAL,
+                    MAX,
+                    &asset_id,
+                    false,
+                    &exclude,
+                    BATCH_SIZE,
+                )
+                .await;
+
+                // Then
+                assert!(result.is_err());
+            }
+
+            #[tokio::test]
+            async fn query__ok_when_not_enough_coins_and_allow_partial_true() {
+                // Given
+                const MAX: u16 = 3;
+                const TOTAL: u128 = 2137;
+
+                let coins = setup_test_coins([1, 1]);
+                let (coins, _): (Vec<_>, Vec<_>) = coins
+                    .into_iter()
+                    .map(|spec| (spec.index_entry, spec.utxo_id))
+                    .unzip();
+
+                let exclude = Exclude::default();
+
+                let coins_to_spend_iter = CoinsToSpendIndexIter {
+                    big_coins_iter: coins.into_iter().into_boxed(),
+                    dust_coins_iter: std::iter::empty().into_boxed(),
+                };
+                let asset_id = AssetId::default();
+
+                // When
+                let result = select_coins_to_spend(
+                    coins_to_spend_iter,
+                    TOTAL,
+                    MAX,
+                    &asset_id,
+                    true,
+                    &exclude,
+                    BATCH_SIZE,
+                )
+                .await
+                .expect("should return coins");
+
+                // Then
+                let coins: Vec<_> = result.into_iter().map(|key| key.amount()).collect();
+                assert_eq!(coins, vec![1, 1]);
+            }
         }
     }
 
