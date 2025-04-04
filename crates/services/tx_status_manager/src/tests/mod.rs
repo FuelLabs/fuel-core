@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+mod public_api;
 mod tests_e2e;
 mod tests_permits;
 mod tests_sending;
