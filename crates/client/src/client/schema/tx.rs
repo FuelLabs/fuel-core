@@ -497,6 +497,15 @@ pub struct TxWithEstimatedPredicatesArg {
     pub estimate_predicates: Option<bool>,
 }
 
+#[derive(cynic::QueryVariables)]
+pub struct SubmitAndAwaitStatusArg {
+    pub tx: HexString,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub estimate_predicates: Option<bool>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub allow_preconfirmation: Option<bool>,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
@@ -643,10 +652,10 @@ pub struct SubmitAndAwaitSubscriptionWithTransaction {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
-    variables = "TxWithEstimatedPredicatesArg"
+    variables = "SubmitAndAwaitStatusArg"
 )]
 pub struct SubmitAndAwaitStatusSubscription {
-    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates)]
+    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates, allowPreconfirmation: $allow_preconfirmation)]
     pub submit_and_await_status: TransactionStatus,
 }
 
