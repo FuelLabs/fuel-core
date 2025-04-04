@@ -316,6 +316,7 @@ mod tests {
             BlockWithMetadataExt,
         },
         storage,
+        storage::CompressedBlocks,
     };
     use fuel_core_services::{
         stream::{
@@ -325,10 +326,16 @@ mod tests {
         Service,
     };
     use fuel_core_storage::{
+        iter::{
+            changes_iterator::ChangesIterator,
+            IterDirection,
+            IteratorOverTable,
+        },
         merkle::column::MerkleizedColumn,
         structured_storage::test::InMemoryStorage,
         transactional::{
             IntoTransaction,
+            StorageChanges,
             StorageTransaction,
         },
         StorageAsRef,
@@ -359,20 +366,14 @@ mod tests {
 
     impl LatestHeight for MockStorage {
         fn latest_height(&self) -> Option<u32> {
-            // get changes for the compressed blocks column
-            let compressed_block_changes = self.changes().get(
-                &MerkleizedColumn::<storage::column::CompressionColumn>::TableColumn(
-                    storage::column::CompressionColumn::CompressedBlocks,
-                )
-                .as_u32(),
-            );
-            compressed_block_changes.map(|changes| {
-                u32::from_be_bytes(
-                    changes.iter().last().unwrap().0.as_slice()[..4]
-                        .try_into()
-                        .unwrap(),
-                )
-            })
+            let changes = StorageChanges::Changes(self.changes().clone());
+            let view = ChangesIterator::new(&changes);
+            let compressed_block_changes = view
+                .iter_all_keys::<CompressedBlocks>(Some(IterDirection::Reverse))
+                .next()
+                .transpose()
+                .unwrap();
+            compressed_block_changes.map(Into::into)
         }
     }
 
