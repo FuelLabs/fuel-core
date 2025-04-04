@@ -720,16 +720,25 @@ async fn submit_and_await_status<'a>(
             match status {
                 TxStatusMessage::Status(status) => {
                     let status = TransactionStatus::new(tx_id, status);
-                    if !allow_preconfirmation && (matches!(status, TransactionStatus::PreconfirmationFailure(_)) || matches!(status, TransactionStatus::PreconfirmationSuccess(_))) {
+                    if !allow_preconfirmation
+                        && (matches!(
+                            status,
+                            TransactionStatus::PreconfirmationFailure(_)
+                        ) || matches!(
+                            status,
+                            TransactionStatus::PreconfirmationSuccess(_)
+                        ))
+                    {
                         None
                     } else {
                         Some(Ok(status))
                     }
-                },
-                // Map a failed status to an error for the api.
-                TxStatusMessage::FailedStatus => {
-                    Some(Err(anyhow::anyhow!("Failed to get transaction status").into()))
                 }
+                // Map a failed status to an error for the api.
+                TxStatusMessage::FailedStatus => Some(Err(anyhow::anyhow!(
+                    "Failed to get transaction status"
+                )
+                .into())),
             }
         })
         .take(3))

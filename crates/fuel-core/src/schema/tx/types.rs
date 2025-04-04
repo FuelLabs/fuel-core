@@ -776,9 +776,14 @@ impl Transaction {
 
         let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
 
-        get_tx_status(id, query.as_ref(), tx_status_manager, allow_preconfirmation.unwrap_or(false))
-            .await
-            .map_err(Into::into)
+        get_tx_status(
+            id,
+            query.as_ref(),
+            tx_status_manager,
+            allow_preconfirmation.unwrap_or(false),
+        )
+        .await
+        .map_err(Into::into)
     }
 
     async fn script(&self) -> Option<HexString> {
@@ -1117,12 +1122,22 @@ pub(crate) async fn get_tx_status(
                     // Filter out preconfirmation statuses if not allowed. Converting to submitted status
                     // because it's the closest to the preconfirmation status.
                     // Having `now()` as timestamp isn't ideal but shouldn't cause much inconsistency.
-                    if !allow_preconfirmation && (matches!(status, TransactionStatus::PreconfirmationSuccess(_)) || matches!(status, TransactionStatus::PreconfirmationFailure(_))) {
-                        Ok(Some(TransactionStatus::Submitted(SubmittedStatus(Tai64::now()))))
+                    if !allow_preconfirmation
+                        && (matches!(
+                            status,
+                            TransactionStatus::PreconfirmationSuccess(_)
+                        ) || matches!(
+                            status,
+                            TransactionStatus::PreconfirmationFailure(_)
+                        ))
+                    {
+                        Ok(Some(TransactionStatus::Submitted(SubmittedStatus(
+                            Tai64::now(),
+                        ))))
                     } else {
                         Ok(Some(status))
                     }
-                },
+                }
                 None => Ok(None),
             }
         }
