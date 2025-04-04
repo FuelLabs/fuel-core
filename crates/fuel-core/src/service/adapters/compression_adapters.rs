@@ -24,7 +24,7 @@ impl configuration::CompressionConfigProvider
     for crate::service::config::DaCompressionConfig
 {
     fn config(&self) -> config::CompressionConfig {
-        config::CompressionConfig::new(self.retention_duration)
+        config::CompressionConfig::new(self.retention_duration, self.metrics)
     }
 }
 

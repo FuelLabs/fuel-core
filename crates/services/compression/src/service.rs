@@ -1,5 +1,8 @@
+use std::time::Instant;
+
 use crate::{
     config::CompressionConfig,
+    metrics::CompressionMetricsManager,
     ports::{
         block_source::{
             BlockSource,
@@ -29,6 +32,7 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
 };
+use fuel_core_storage::transactional::WriteTransaction;
 use futures::FutureExt;
 
 /// The compression service.
@@ -45,9 +49,9 @@ pub struct CompressionService<S> {
     config: CompressionConfig,
     /// The sync notifier
     sync_notifier: SyncStateNotifier,
+    /// metrics manager
+    metrics_manager: Option<CompressionMetricsManager>,
 }
-
-use fuel_core_storage::transactional::WriteTransaction;
 
 impl<S> CompressionService<S>
 where
@@ -60,11 +64,18 @@ where
     ) -> Self {
         let (sync_notifier, _) = new_sync_state_channel();
 
+        let metrics_manager = if config.metrics() {
+            Some(CompressionMetricsManager::new())
+        } else {
+            None
+        };
+
         Self {
             block_stream,
             storage,
             config,
             sync_notifier,
+            metrics_manager,
         }
     }
 }
@@ -76,7 +87,7 @@ where
     fn compress_block(
         &mut self,
         block_with_metadata: &BlockWithMetadata,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<usize> {
         let mut storage_tx = self.storage.write_transaction();
 
         // compress the block
@@ -95,14 +106,14 @@ where
         .expect("The current implementation should resolve all futures instantly")
         .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
 
-        storage_tx
+        let size_of_compressed_block = storage_tx
             .write_compressed_block(block_with_metadata.height(), &compressed_block)?;
 
         storage_tx
             .commit()
             .map_err(crate::errors::CompressionError::FailedToCommitTransaction)?;
 
-        Ok(())
+        Ok(size_of_compressed_block)
     }
 
     fn handle_new_block(
@@ -113,8 +124,22 @@ where
         self.sync_notifier
             .send(crate::sync_state::SyncState::NotSynced)
             .ok();
-        // compress the block
-        self.compress_block(block_with_metadata)?;
+
+        if let Some(metrics_manager) = self.metrics_manager {
+            let (compressed_block_size, compression_duration) = {
+                let start = Instant::now();
+                let compressed_block_size = self.compress_block(block_with_metadata)?;
+                (compressed_block_size, start.elapsed().as_millis())
+            };
+
+            metrics_manager.record_compression_duration_ms(compression_duration);
+            metrics_manager.record_compressed_block_size(compressed_block_size);
+            metrics_manager
+                .record_compression_block_height(*block_with_metadata.height());
+        } else {
+            self.compress_block(block_with_metadata)?;
+        }
+
         // set the status to synced
         self.sync_notifier
             .send(crate::sync_state::SyncState::Synced(
@@ -288,6 +313,7 @@ mod tests {
         fn default() -> Self {
             Self(crate::config::CompressionConfig::new(
                 std::time::Duration::from_secs(10),
+                false,
             ))
         }
     }
