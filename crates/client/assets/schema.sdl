@@ -1281,6 +1281,10 @@ input SpendQueryElementInput {
 	The maximum number of currencies for selection.
 	"""
 	max: U16
+	"""
+	If true, returns available coins instead of failing when the requested amount is unavailable.
+	"""
+	allowPartial: Boolean
 }
 
 type SqueezedOutStatus {
