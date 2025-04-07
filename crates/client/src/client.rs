@@ -1209,14 +1209,29 @@ impl FuelClient {
 
     #[tracing::instrument(skip(self), level = "debug")]
     #[cfg(feature = "subscriptions")]
-    /// Subscribe to the status of a transaction
+    /// Similar to [`Self::subscribe_transaction_status_opt`], but with default options.
     pub async fn subscribe_transaction_status<'a>(
         &'a self,
         id: &'a TxId,
     ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>> + 'a> {
+        self.subscribe_transaction_status_opt(id, None).await
+    }
+
+    #[cfg(feature = "subscriptions")]
+    /// Subscribe to the status of a transaction
+    pub async fn subscribe_transaction_status_opt<'a>(
+        &'a self,
+        id: &'a TxId,
+        allow_preconfirmation: Option<bool>,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
+        use schema::tx::StatusChangeSubscriptionArgs;
         let tx_id: TransactionId = (*id).into();
-        let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: tx_id });
+        let s =
+            schema::tx::StatusChangeSubscription::build(StatusChangeSubscriptionArgs {
+                id: tx_id,
+                allow_preconfirmation,
+            });
 
         tracing::debug!("subscribing");
         let stream = self.subscribe(s).await?.map(|tx| {

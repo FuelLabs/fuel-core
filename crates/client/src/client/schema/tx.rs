@@ -472,14 +472,21 @@ pub struct TransactionsByOwnerQuery {
     pub transactions_by_owner: TransactionConnection,
 }
 
+#[derive(cynic::QueryVariables, Debug)]
+pub struct StatusChangeSubscriptionArgs {
+    pub id: TransactionId,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub allow_preconfirmation: Option<bool>,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
-    variables = "TxIdArgs"
+    variables = "StatusChangeSubscriptionArgs"
 )]
 pub struct StatusChangeSubscription {
-    #[arguments(id: $id)]
+    #[arguments(id: $id, allowPreconfirmation: $allow_preconfirmation)]
     pub status_change: TransactionStatus,
 }
 
