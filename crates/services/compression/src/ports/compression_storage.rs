@@ -12,16 +12,26 @@ use fuel_core_storage::{
 /// Compressed block type alias
 pub type CompressedBlock = fuel_core_compression::VersionedCompressedBlock;
 
+/// Trait for getting the latest height of the compression storage
+pub trait LatestHeight {
+    /// Get the latest height of the compression storage
+    fn latest_height(&self) -> Option<u32>;
+}
+
 /// Trait for interacting with storage that supports compression
 pub trait CompressionStorage:
     KeyValueInspect<Column = MerkleizedColumn<storage::column::CompressionColumn>>
     + Modifiable
+    + Send
+    + Sync
 {
 }
 
 impl<T> CompressionStorage for T where
     T: KeyValueInspect<Column = MerkleizedColumn<storage::column::CompressionColumn>>
         + Modifiable
+        + Send
+        + Sync
 {
 }
 
