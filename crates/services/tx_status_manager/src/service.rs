@@ -318,11 +318,10 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
 }
 
 #[async_trait::async_trait]
-impl<Pubkey, P2P> RunnableService
-    for Task<Pubkey, P2P>
+impl<Pubkey, P2P> RunnableService for Task<Pubkey, P2P>
 where
     Pubkey: ProtocolPublicKey,
-    P2P: P2PSubscriptions
+    P2P: P2PSubscriptions,
 {
     const NAME: &'static str = "TxStatusManagerTask";
     type SharedData = SharedData;
@@ -342,11 +341,10 @@ where
     }
 }
 
-impl<Pubkey, P2P> RunnableTask
-    for Task<Pubkey, P2P>
+impl<Pubkey, P2P> RunnableTask for Task<Pubkey, P2P>
 where
     Pubkey: ProtocolPublicKey,
-    P2P: P2PSubscriptions
+    P2P: P2PSubscriptions,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -797,6 +795,16 @@ mod tests {
             peer_id: Default::default(),
             message_id: vec![],
         }
+    }
+
+    fn bad_sealed_delegate_signature(
+        _protocol_secret_key: SecretKey,
+        delegate_public_key: DelegatePublicKey,
+        expiration: Tai64,
+    ) -> P2PPreConfirmationGossipData {
+        let mut rng = StdRng::seed_from_u64(3890u64);
+        let new_secret_key = SecretKey::random(&mut rng);
+        valid_sealed_delegate_signature(new_secret_key, delegate_public_key, expiration)
     }
 
     fn valid_pre_confirmation_signature(
@@ -1450,6 +1458,37 @@ mod tests {
 
         // then
         assert!(all_streams_timeout(&mut streams).await);
+    }
+
+    #[tokio::test]
+    async fn run__when_delegate_key_bad_signature_report_peer() {
+        // given
+        let (task, mut handles) = new_task_with_handles(TTL);
+        let (_delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
+        let expiration = Tai64(u64::MAX);
+        let delegate_signature_message = bad_sealed_delegate_signature(
+            handles.protocol_signing_key,
+            delegate_verifying_key,
+            expiration,
+        );
+
+        // when
+        handles
+            .pre_confirmation_updates
+            .send(delegate_signature_message)
+            .await
+            .unwrap();
+
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // then
+        assert_eq!(
+            handles.p2p_notify_validity_receiver.try_recv().unwrap().1,
+            GossipsubMessageAcceptance::Reject
+        );
     }
 
     #[tokio::test]
