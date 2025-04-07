@@ -569,11 +569,11 @@ mod tests {
 
         fn notify_gossip_transaction_validity(
             &self,
-            _message_info: GossipsubMessageInfo,
-            _validity: GossipsubMessageAcceptance,
+            message_info: GossipsubMessageInfo,
+            validity: GossipsubMessageAcceptance,
         ) -> anyhow::Result<()> {
             self.p2p_notify_validity_sender
-                .try_send((_message_info, _validity))
+                .try_send((message_info, validity))
                 .unwrap();
             Ok(())
         }
