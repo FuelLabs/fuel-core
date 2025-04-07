@@ -20,6 +20,7 @@ pub(crate) trait TxnStatusChangeState {
     async fn get_tx_status(
         &self,
         id: Bytes32,
+        allow_preconfirmation: bool,
     ) -> StorageResult<Option<TransactionStatus>>;
 }
 
@@ -36,7 +37,7 @@ where
     // Check the database first to see if the transaction already
     // has a status.
     let maybe_db_status = state
-        .get_tx_status(transaction_id)
+        .get_tx_status(transaction_id, allow_preconfirmation)
         .await
         .transpose()
         .map(TxStatusMessage::from);

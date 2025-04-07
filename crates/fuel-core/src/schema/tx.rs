@@ -42,6 +42,7 @@ use crate::{
                 AssembleTx,
             },
             types::{
+                get_tx_status,
                 AssembleTransactionResult,
                 TransactionStatus,
             },
@@ -745,14 +746,15 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
+        allow_preconfirmation: bool,
     ) -> StorageResult<Option<transaction_status::TransactionStatus>> {
-        match self.query.tx_status(&id) {
-            Ok(status) => Ok(Some(status.into())),
-            Err(StorageError::NotFound(_, _)) => {
-                Ok(self.tx_status_manager.status(id).await?)
-            }
-            Err(err) => Err(err),
-        }
+        get_tx_status(
+            &id,
+            self.query.as_ref(),
+            self.tx_status_manager,
+            allow_preconfirmation,
+        )
+        .await
     }
 }
 
