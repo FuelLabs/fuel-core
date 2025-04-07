@@ -63,6 +63,7 @@ jobs:
     needs: benchmark
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       pull-requests: write
 
     if: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
@@ -70,7 +71,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - run: |
+      - name: Parse benchmark results and create PR
+        run: |
           jq --argjson benchmark_results "$benchmark_results" \
             '.consensus_parameters.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs = $benchmark_results' \
             bin/fuel-core/chainspec/local-testnet/chain_config.json > \
@@ -83,12 +85,16 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git commit -m "Update benchmark results"
+
+          git push origin "$branch_name"
+
           # create a new PR
           gh pr create \
             --title "chore(gas_costs): update local chain config with nightly benchmark results" \
             --body "Updated benchmark results" \
             --base master \
             --head "$branch_name"
+            --label "no changelog"
         env:
           benchmark_results: ${{ needs.benchmark.outputs.benchmark_results }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
