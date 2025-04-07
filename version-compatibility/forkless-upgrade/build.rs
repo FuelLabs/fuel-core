@@ -30,7 +30,6 @@ fn build_fuel_core_26() {
     ];
 
     let mut cargo = Command::new(cargo);
-    cargo.env("RUSTFLAGS", "-Ctarget-cpu=mvp");
     cargo.current_dir(project_root()).args(args);
 
     let output = cargo.output();

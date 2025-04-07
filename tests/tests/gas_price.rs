@@ -779,7 +779,7 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
     let block_bytes = 1000;
     let total_size_bytes = block_bytes * count;
     let gas = 16 * total_size_bytes as u128;
-    let cost_gwei = gas; // blob gas price 1 gwei
+    let cost_gwei = gas * 1; // blob gas price 1 gwei
     let cost = cost_gwei * 1_000_000_000; // Wei
     mock.add_response(RawDaBlockCosts {
         id: 1,

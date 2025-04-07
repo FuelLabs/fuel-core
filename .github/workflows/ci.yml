@@ -185,8 +185,6 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
           components: "clippy"
-      - name: Install wasm-tools
-        run: cargo install wasm-tools@1.228.0
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
@@ -224,8 +222,6 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
-      - name: Install wasm-tools
-        run: cargo install wasm-tools@1.228.0
       - name: Publish crate check
         uses: FuelLabs/publish-crates@v1
         with:
@@ -256,8 +252,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-      - name: Install wasm-tools
-        run: cargo install wasm-tools@1.228.0
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -313,9 +307,6 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: "wasm32-unknown-unknown"
-
-      - name: Install wasm-tools
-        run: cargo install wasm-tools@1.228.0
 
       - name: Publish crate
         uses: FuelLabs/publish-crates@v1
@@ -400,9 +391,6 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           target: ${{ matrix.job.target }},"wasm32-unknown-unknown"
-
-      - name: Install wasm-tools
-        run: cargo install wasm-tools@1.228.0
 
       - name: Install cross
         uses: baptiste0928/cargo-install@v1

@@ -33,7 +33,7 @@ There are several system requirements including clang.
 
 ```bash
 brew update
-brew install cmake wasm-tools
+brew install cmake
 ```
 
 #### Debian
@@ -41,23 +41,20 @@ brew install cmake wasm-tools
 ```bash
 apt update
 apt install -y cmake pkg-config build-essential git clang libclang-dev
-cargo install wasm-tools
 ```
 
 #### Arch
 
 ```bash
 pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang
-cargo install wasm-tools
 ```
 
 ### Rust setup
 
-You'll need `wasm32-unknown-unknown` target installed and `wasm-tools` for WASM binary processing.
+You'll need `wasm32-unknown-unknown` target installed.
 
 ```bash
 rustup target add wasm32-unknown-unknown
-cargo install wasm-tools  # If not installed via system package manager
 ```
 
 
