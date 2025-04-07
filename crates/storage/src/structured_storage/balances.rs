@@ -86,11 +86,15 @@ mod smt {
 
         impl RootStorageTests for ContractsAssets {
             fn primary_key() -> Box<<Self::Metadata as Mappable>::Key> {
-                Box::new(<ContractsAssetsMerkleMetadata as Mappable>::Key::from([1u8; 32]))
+                Box::new(<ContractsAssetsMerkleMetadata as Mappable>::Key::from(
+                    [1u8; 32],
+                ))
             }
 
             fn foreign_key() -> Box<<Self::Metadata as Mappable>::Key> {
-                Box::new(<ContractsAssetsMerkleMetadata as Mappable>::Key::from([2u8; 32]))
+                Box::new(<ContractsAssetsMerkleMetadata as Mappable>::Key::from(
+                    [2u8; 32],
+                ))
             }
 
             fn generate_key(
@@ -99,7 +103,10 @@ mod smt {
             ) -> Box<Self::Key> {
                 let mut bytes = [0u8; 32];
                 rng.fill(bytes.as_mut());
-                Box::new(<ContractsAssets as Mappable>::Key::new(current_key, &bytes.into()))
+                Box::new(<ContractsAssets as Mappable>::Key::new(
+                    current_key,
+                    &bytes.into(),
+                ))
             }
 
             fn generate_value(rng: &mut rand::prelude::StdRng) -> Box<Self::Value> {

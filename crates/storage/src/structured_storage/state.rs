@@ -96,7 +96,10 @@ mod smt {
             ) -> Box<Self::Key> {
                 let mut bytes = [0u8; 32];
                 rng.fill(bytes.as_mut());
-                Box::new(<ContractsState as Mappable>::Key::new(current_key, &bytes.into()))
+                Box::new(<ContractsState as Mappable>::Key::new(
+                    current_key,
+                    &bytes.into(),
+                ))
             }
 
             fn generate_value(rng: &mut rand::prelude::StdRng) -> Box<Self::Value> {

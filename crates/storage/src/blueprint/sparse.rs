@@ -489,7 +489,12 @@ where
 /// Test module for root storage tests.
 pub mod root_storage_tests {
     use fuel_vm_private::{
-        fuel_merkle::sparse,
+        fuel_merkle::sparse::{
+            self,
+            proof::Proof,
+            MerkleTree,
+            MerkleTreeKey,
+        },
         fuel_storage::{
             Mappable,
             MerkleRoot,
@@ -506,6 +511,7 @@ pub mod root_storage_tests {
         codec::{
             Decode,
             Encode,
+            Encoder,
         },
         structured_storage::{
             test::InMemoryStorage,
@@ -594,7 +600,8 @@ pub mod root_storage_tests {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
-            let empty_root = fuel_core_types::fuel_merkle::sparse::in_memory::MerkleTree::new().root();
+            let empty_root =
+                fuel_core_types::fuel_merkle::sparse::in_memory::MerkleTree::new().root();
             let current_key = Self::primary_key();
             let root = storage_transaction
                 .storage_as_mut::<Self>()
@@ -677,7 +684,10 @@ pub mod root_storage_tests {
                 .unwrap();
 
             // Remove the second state
-            storage_transaction.storage_as_mut::<Self>().remove(&second_key).unwrap();
+            storage_transaction
+                .storage_as_mut::<Self>()
+                .remove(&second_key)
+                .unwrap();
 
             // Read the second Merkle root
             let root_2 = storage_transaction
@@ -775,7 +785,10 @@ pub mod root_storage_tests {
                 .expect("Expected Merkle metadata to be present");
 
             // Remove the contract asset
-            storage_transaction.storage_as_mut::<Self>().remove(&key).unwrap();
+            storage_transaction
+                .storage_as_mut::<Self>()
+                .remove(&key)
+                .unwrap();
 
             // Read the Merkle metadata
             let metadata = storage_transaction
@@ -784,6 +797,50 @@ pub mod root_storage_tests {
                 .unwrap();
 
             assert!(metadata.is_none());
+        }
+
+        /// Tests that we can generate and validate merkle proofs
+        fn test_can_generate_and_validate_proofs() {
+            let mut storage = InMemoryStorage::default();
+            let mut storage_transaction = storage.write_transaction();
+
+            let rng = &mut StdRng::seed_from_u64(1234);
+            let current_key = Self::primary_key();
+            let key = Self::generate_key(&current_key, rng);
+            let state = Self::generate_value(rng);
+
+            let key_encoder = Self::KeyCodec::encode(&key);
+            let key_bytes = key_encoder.as_bytes();
+            let merkle_key = MerkleTreeKey::new(&*key_bytes);
+            let value_bytes = Self::ValueCodec::encode_as_value(&state);
+
+            // Write the state
+            storage_transaction
+                .storage_as_mut::<Self>()
+                .insert(&key, &state)
+                .unwrap();
+
+            // Read the first root
+            let root = storage_transaction
+                .storage_as_mut::<Self>()
+                .root(&current_key)
+                .unwrap();
+
+            let tree: MerkleTree<Self::Nodes, _> =
+                MerkleTree::load(&storage_transaction, &root)
+                    .expect("could not load merkle tree");
+
+            let Proof::Inclusion(inclusion_proof) = tree
+                .generate_proof(&merkle_key)
+                .expect("failed to generate proof")
+            else {
+                panic!("expected inclusion proof");
+            };
+
+            let proof_is_valid =
+                inclusion_proof.verify(&root, &merkle_key, &*value_bytes);
+
+            assert!(proof_is_valid);
         }
     }
 
@@ -849,10 +906,8 @@ pub mod root_storage_tests {
             OwnedValue = sparse::Primitive,
             Column = Self::Column,
         >,
-        KeyConverter: PrimaryKey<
-            InputKey = Self::Key,
-            OutputKey = <Metadata as Mappable>::Key,
-        >,
+        KeyConverter:
+            PrimaryKey<InputKey = Self::Key, OutputKey = <Metadata as Mappable>::Key>,
     {
         type KeyCodec = KeyCodec;
         type ValueCodec = ValueCodec;
@@ -900,6 +955,11 @@ pub mod root_storage_tests {
             #[test]
             fn smt_storage__test_remove_deletes_merkle_metadata_when_empty() {
                 $table::test_remove_deletes_merkle_metadata_when_empty();
+            }
+
+            #[test]
+            fn smt_storage__test_can_generate_and_validate_proofs() {
+                $table::test_can_generate_and_validate_proofs();
             }
         };
     }

@@ -325,6 +325,10 @@ pub mod basic_tests_bmt {
         },
         Error as StorageError,
     };
+    use fuel_core_types::fuel_merkle::binary::{
+        self,
+        MerkleTree,
+    };
     use fuel_vm_private::{
         fuel_merkle::binary::Primitive,
         fuel_storage::{
@@ -583,8 +587,7 @@ pub mod basic_tests_bmt {
                 .storage_as_mut::<Self>()
                 .root(&key)
                 .expect("Should get the root");
-            let empty_root =
-                fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
+            let empty_root = binary::in_memory::MerkleTree::new().root();
             assert_ne!(root, empty_root);
         }
 
@@ -598,8 +601,7 @@ pub mod basic_tests_bmt {
 
             let mut rng = &mut StdRng::seed_from_u64(1234);
 
-            let mut prev_root =
-                fuel_core_types::fuel_merkle::binary::in_memory::MerkleTree::new().root();
+            let mut prev_root = binary::in_memory::MerkleTree::new().root();
 
             for _ in 0..10 {
                 let key = Self::random_key(&mut rng);
@@ -654,17 +656,14 @@ pub mod basic_tests_bmt {
             let num_leaves = merkle_metadata.version();
             let proof_index = num_leaves.checked_sub(1).unwrap();
 
-            let tree: fuel_core_types::fuel_merkle::binary::MerkleTree<Self::Nodes, _> =
-                fuel_core_types::fuel_merkle::binary::MerkleTree::load(
-                    &storage_transaction,
-                    num_leaves,
-                )
-                .expect("could not load merkle tree");
+            let tree: MerkleTree<Self::Nodes, _> =
+                MerkleTree::load(&storage_transaction, num_leaves)
+                    .expect("could not load merkle tree");
 
             let (returned_root, returned_proof_set) =
                 tree.prove(proof_index).expect("failed to produce proof");
 
-            let proof_is_valid = fuel_core_types::fuel_merkle::binary::verify(
+            let proof_is_valid = binary::verify(
                 &returned_root,
                 &encoded_value.as_bytes(),
                 &returned_proof_set,
