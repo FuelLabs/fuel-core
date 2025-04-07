@@ -318,8 +318,11 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
 }
 
 #[async_trait::async_trait]
-impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> RunnableService
+impl<Pubkey, P2P> RunnableService
     for Task<Pubkey, P2P>
+where
+    Pubkey: ProtocolPublicKey,
+    P2P: P2PSubscriptions
 {
     const NAME: &'static str = "TxStatusManagerTask";
     type SharedData = SharedData;
