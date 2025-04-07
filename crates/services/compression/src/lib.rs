@@ -10,6 +10,7 @@
 pub mod config;
 /// Error types for the compression service
 pub mod errors;
+pub(crate) mod metrics;
 /// Ports for the compression service
 pub mod ports;
 /// Service definition for the compression service

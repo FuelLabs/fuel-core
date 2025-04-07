@@ -551,6 +551,7 @@ impl Command {
             Some(retention_duration) => DaCompressionMode::Enabled(
                 fuel_core::service::config::DaCompressionConfig {
                     retention_duration: retention_duration.into(),
+                    metrics: metrics.is_enabled(Module::Compression),
                 },
             ),
             None => DaCompressionMode::Disabled,

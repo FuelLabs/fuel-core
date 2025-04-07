@@ -359,6 +359,7 @@ impl GasPriceConfig {
 #[derive(Debug, Clone)]
 pub struct DaCompressionConfig {
     pub retention_duration: Duration,
+    pub metrics: bool,
 }
 
 #[derive(Debug, Clone)]
