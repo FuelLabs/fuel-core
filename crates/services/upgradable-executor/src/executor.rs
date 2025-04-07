@@ -721,9 +721,7 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<
-        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
-    >
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
