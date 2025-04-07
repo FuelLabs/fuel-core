@@ -28,7 +28,7 @@ use super::import_result_provider::{
     ImportResultProvider,
 };
 
-/// CompressionBlockImporterAdapter is a wrapper around BlockImporterAdapter
+/// Provides the necessary functionality for accessing latest and historical block data.
 pub struct CompressionBlockImporterAdapter {
     block_importer: BlockImporterAdapter,
     import_result_provider_adapter: ImportResultProvider,
