@@ -1,12 +1,19 @@
-use crate::storage;
+use crate::{
+    errors::CompressionError,
+    storage,
+    storage::CompressedBlocks,
+};
 use fuel_core_storage::{
+    self,
     kv_store::KeyValueInspect,
     merkle::column::MerkleizedColumn,
+    not_found,
     transactional::{
         Modifiable,
         StorageTransaction,
     },
     StorageAsMut,
+    StorageSize,
 };
 
 /// Compressed block type alias
@@ -39,8 +46,8 @@ pub(crate) trait WriteCompressedBlock {
     fn write_compressed_block(
         &mut self,
         height: &u32,
-        compressed_block: &crate::ports::compression_storage::CompressedBlock,
-    ) -> crate::Result<()>;
+        compressed_block: &CompressedBlock,
+    ) -> crate::Result<usize>;
 }
 
 impl<Storage> WriteCompressedBlock for StorageTransaction<Storage>
@@ -51,10 +58,23 @@ where
     fn write_compressed_block(
         &mut self,
         height: &u32,
-        compressed_block: &crate::ports::compression_storage::CompressedBlock,
-    ) -> crate::Result<()> {
-        self.storage_as_mut::<storage::CompressedBlocks>()
-            .insert(&(*height).into(), compressed_block)
-            .map_err(crate::errors::CompressionError::FailedToWriteCompressedBlock)
+        compressed_block: &CompressedBlock,
+    ) -> crate::Result<usize> {
+        let height = (*height).into();
+        self.storage_as_mut::<CompressedBlocks>()
+            .insert(&height, compressed_block)
+            .map_err(CompressionError::FailedToWriteCompressedBlock)?;
+
+        // this should not hit the db, we get it from the transaction
+        let size = StorageSize::<CompressedBlocks>::size_of_value(self, &height)
+            .map_err(CompressionError::FailedToGetCompressedBlockSize)?;
+
+        let Some(size) = size else {
+            return Err(CompressionError::FailedToGetCompressedBlockSize(
+                not_found!(CompressedBlocks),
+            ));
+        };
+
+        Ok(size)
     }
 }
