@@ -186,6 +186,7 @@ impl Wallet {
         let tx_id = tx.id(&self.consensus_params.chain_id());
         println!("submitting tx... {:?}", tx_id);
         let status = self.client.submit_and_await_commit(&tx).await?;
+        println!("Status for {:?} is {:?}", tx_id, status);
 
         // we know the transferred coin should be output 0 from above
         let transferred_utxo = UtxoId::new(tx_id, 0);
