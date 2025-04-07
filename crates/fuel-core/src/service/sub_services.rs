@@ -37,7 +37,10 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
 
 use super::{
     adapters::{
-        compression_adapters::CompressionServiceAdapter,
+        compression_adapters::{
+            CompressionBlockImporterAdapter,
+            CompressionServiceAdapter,
+        },
         FuelBlockSigner,
         P2PAdapter,
         TxStatusManagerAdapter,
@@ -398,13 +401,19 @@ pub fn init_sub_services(
     let compression_service_adapter =
         CompressionServiceAdapter::new(database.compression().clone());
 
+    let compression_importer_adapter = CompressionBlockImporterAdapter::new(
+        importer_adapter.clone(),
+        import_result_provider.clone(),
+    );
+
     let compression_service = match &config.da_compression {
         DaCompressionMode::Disabled => None,
         DaCompressionMode::Enabled(cfg) => Some(
             new_compression_service(
-                importer_adapter.clone(),
+                compression_importer_adapter,
                 database.compression().clone(),
                 cfg.clone(),
+                database.on_chain().clone(),
             )
             .map_err(|e| anyhow::anyhow!(e))?,
         ),
