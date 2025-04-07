@@ -339,8 +339,11 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> RunnableService
     }
 }
 
-impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> RunnableTask
+impl<Pubkey, P2P> RunnableTask
     for Task<Pubkey, P2P>
+where
+    Pubkey: ProtocolPublicKey,
+    P2P: P2PSubscriptions
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
