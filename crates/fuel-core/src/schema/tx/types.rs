@@ -451,11 +451,11 @@ impl TransactionStatus {
     }
 
     pub fn is_preconfirmation(&self) -> bool {
-        match self {
+        matches!(
+            self,
             TransactionStatus::PreconfirmationSuccess(_)
-            | TransactionStatus::PreconfirmationFailure(_) => true,
-            _ => false,
-        }
+                | TransactionStatus::PreconfirmationFailure(_)
+        )
     }
 }
 

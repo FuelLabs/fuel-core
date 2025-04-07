@@ -67,7 +67,10 @@ async fn preconfirmation__received_after_successful_execution() {
         .finalize_as_transaction();
 
     let tx_id = tx.id(&Default::default());
-    let mut tx_statuses_subscriber = client.submit_and_await_status(&tx).await.unwrap();
+    let mut tx_statuses_subscriber = client
+        .submit_and_await_status_opt(&tx, None, Some(true))
+        .await
+        .unwrap();
 
     // When
     assert!(matches!(
@@ -288,7 +291,10 @@ async fn preconfirmation__received_after_failed_execution() {
         .finalize_as_transaction();
 
     let tx_id = tx.id(&Default::default());
-    let mut tx_statuses_subscriber = client.submit_and_await_status(&tx).await.unwrap();
+    let mut tx_statuses_subscriber = client
+        .submit_and_await_status_opt(&tx, None, Some(true))
+        .await
+        .unwrap();
 
     // When
     assert!(matches!(
@@ -365,7 +371,7 @@ async fn preconfirmation__received_tx_inserted_end_block_open_period() {
 
     // When
     client
-        .submit_and_await_status(&tx)
+        .submit_and_await_status_opt(&tx, None, Some(true))
         .await
         .unwrap()
         .enumerate()
@@ -432,8 +438,14 @@ async fn preconfirmation__received_after_execution__multiple_txs() {
     .finalize_as_transaction();
 
     // Given
-    let mut tx_statuses_subscriber1 = client.submit_and_await_status(&tx1).await.unwrap();
-    let mut tx_statuses_subscriber2 = client.submit_and_await_status(&tx2).await.unwrap();
+    let mut tx_statuses_subscriber1 = client
+        .submit_and_await_status_opt(&tx1, None, Some(true))
+        .await
+        .unwrap();
+    let mut tx_statuses_subscriber2 = client
+        .submit_and_await_status_opt(&tx2, None, Some(true))
+        .await
+        .unwrap();
 
     // When
     assert!(matches!(
