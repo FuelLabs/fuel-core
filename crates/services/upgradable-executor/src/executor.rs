@@ -389,7 +389,7 @@ where
                 record_storage_reads: false,
             },
         )
-        .map(|r| r.map_result(|(v, _)| v))
+        .map(|r| r.map_result(|produced| produced.result))
     }
 }
 
