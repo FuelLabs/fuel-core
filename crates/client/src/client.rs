@@ -938,10 +938,8 @@ impl FuelClient {
     pub async fn submit_and_await_status<'a>(
         &'a self,
         tx: &'a Transaction,
-        allow_preconfirmation: bool,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
-        self.submit_and_await_status_opt(tx, None, Some(allow_preconfirmation))
-            .await
+        self.submit_and_await_status_opt(tx, None, None).await
     }
 
     /// Similar to [`Self::submit_and_await_commit_opt`], but includes all intermediate states.

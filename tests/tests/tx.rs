@@ -384,7 +384,7 @@ async fn submit_and_await_status() {
         .await
         .unwrap();
 
-    let mut status_stream = client.submit_and_await_status(&tx, true).await.unwrap();
+    let mut status_stream = client.submit_and_await_status(&tx).await.unwrap();
     let intermediate_status = status_stream.next().await.unwrap().unwrap();
     assert!(matches!(
         intermediate_status,

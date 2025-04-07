@@ -720,15 +720,7 @@ async fn submit_and_await_status<'a>(
             match status {
                 TxStatusMessage::Status(status) => {
                     let status = TransactionStatus::new(tx_id, status);
-                    if !allow_preconfirmation
-                        && (matches!(
-                            status,
-                            TransactionStatus::PreconfirmationFailure(_)
-                        ) || matches!(
-                            status,
-                            TransactionStatus::PreconfirmationSuccess(_)
-                        ))
-                    {
+                    if !allow_preconfirmation && status.is_preconfirmation() {
                         None
                     } else {
                         Some(Ok(status))

@@ -449,6 +449,14 @@ impl TransactionStatus {
             | TransactionStatus::PreconfirmationFailure(_) => false,
         }
     }
+
+    pub fn is_preconfirmation(&self) -> bool {
+        match self {
+            TransactionStatus::PreconfirmationSuccess(_)
+            | TransactionStatus::PreconfirmationFailure(_) => true,
+            _ => false,
+        }
+    }
 }
 
 pub struct Policies(fuel_tx::policies::Policies);
@@ -1122,15 +1130,7 @@ pub(crate) async fn get_tx_status(
                     // Filter out preconfirmation statuses if not allowed. Converting to submitted status
                     // because it's the closest to the preconfirmation status.
                     // Having `now()` as timestamp isn't ideal but shouldn't cause much inconsistency.
-                    if !allow_preconfirmation
-                        && (matches!(
-                            status,
-                            TransactionStatus::PreconfirmationSuccess(_)
-                        ) || matches!(
-                            status,
-                            TransactionStatus::PreconfirmationFailure(_)
-                        ))
-                    {
+                    if !allow_preconfirmation && status.is_preconfirmation() {
                         Ok(Some(TransactionStatus::Submitted(SubmittedStatus(
                             Tai64::now(),
                         ))))

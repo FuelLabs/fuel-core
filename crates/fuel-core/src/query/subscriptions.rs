@@ -61,7 +61,7 @@ where
             match status {
                 TxStatusMessage::Status(status) => {
                     let status = ApiTxStatus::new(transaction_id, status);
-                    if !allow_preconfirmation && (matches!(status, ApiTxStatus::PreconfirmationFailure(_)) || matches!(status, ApiTxStatus::PreconfirmationSuccess(_))) {
+                    if !allow_preconfirmation && status.is_preconfirmation() {
                         futures::future::ready(None)
                     } else {
                         futures::future::ready(Some(Ok(status)))
