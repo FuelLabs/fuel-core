@@ -765,7 +765,7 @@ impl FuelClient {
         let storage_reads = result
             .storage_reads
             .into_iter()
-            .map(|read| read.into())
+            .map(Into::into)
             .collect::<Vec<_>>();
         Ok((tx_statuses, storage_reads))
     }

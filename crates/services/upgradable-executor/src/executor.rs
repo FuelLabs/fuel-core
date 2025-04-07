@@ -127,6 +127,12 @@ impl ProduceBlockMode {
     }
 }
 
+/// Result of various `produce_*` functions
+struct ProducedBlock {
+    result: ExecutionResult,
+    storage_reads: Vec<StorageReadReplayEvent>,
+}
+
 /// The upgradable executor supports the WASM version of the state transition function.
 /// If the block has a version the same as a native executor, we will use it.
 /// If not, the WASM version of the state transition function will be used
@@ -363,7 +369,7 @@ where
 
         let options = self.config.as_ref().into();
         self.produce_inner_sync(component, options, ProduceBlockMode::Produce)
-            .map(|r| r.map_result(|(v, _)| v))
+            .map(|r| r.map_result(|produced| produced.result))
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -405,7 +411,7 @@ where
         let options = self.config.as_ref().into();
         Ok(self
             .produce_inner_sync(block, options, ProduceBlockMode::Produce)?
-            .map_result(|(r, _)| r))
+            .map_result(|produced| produced.result))
     }
 
     /// Produces the block and returns the result of the execution without committing the changes.
@@ -428,7 +434,7 @@ where
                 preconfirmation_sender,
             )
             .await?
-            .map_result(|(r, _)| r))
+            .map_result(|produced| produced.result))
     }
 
     /// Executes the block and returns the result of the execution without committing
@@ -464,15 +470,16 @@ where
             gas_price: component.gas_price,
         };
 
-        let (
-            ExecutionResult {
-                block,
-                skipped_transactions,
-                tx_status,
-                ..
-            },
+        let ProducedBlock {
+            result:
+                ExecutionResult {
+                    block,
+                    skipped_transactions,
+                    tx_status,
+                    ..
+                },
             storage_reads,
-        ) = self
+        } = self
             .produce_inner_sync(
                 component,
                 options,
@@ -631,9 +638,7 @@ where
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
-    ) -> ExecutorResult<
-        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
-    >
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -660,9 +665,7 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<
-        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
-    >
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -805,9 +808,7 @@ where
         options: ExecutionOptions,
         mode: ProduceBlockMode,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<
-        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
-    >
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -925,7 +926,10 @@ where
         let mut g = storage_rec.lock();
         let storage_reads = core::mem::take(&mut *g);
 
-        Ok(result.map_result(|r| (r, storage_reads)))
+        Ok(result.map_result(|result| ProducedBlock {
+            result,
+            storage_reads,
+        }))
     }
 
     #[cfg(feature = "wasm-executor")]
@@ -976,9 +980,7 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<
-        Uncommitted<(ExecutionResult, Vec<StorageReadReplayEvent>), Changes>,
-    >
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -1045,7 +1047,10 @@ where
         let mut g = storage_rec.lock();
         let storage_reads = core::mem::take(&mut *g);
 
-        Ok(result?.map_result(|r| (r, storage_reads)))
+        Ok(result?.map_result(|result| ProducedBlock {
+            result,
+            storage_reads,
+        }))
     }
 
     fn native_validate_inner(

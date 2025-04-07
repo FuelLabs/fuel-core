@@ -1067,12 +1067,12 @@ pub struct DryRunStorageReads {
 
 #[Object]
 impl DryRunStorageReads {
-    async fn tx_statuses(&self) -> Vec<DryRunTransactionExecutionStatus> {
-        self.tx_statuses.clone()
+    async fn tx_statuses(&self) -> &[DryRunTransactionExecutionStatus] {
+        &self.tx_statuses
     }
 
-    async fn storage_reads(&self) -> Vec<StorageReadReplayEvent> {
-        self.storage_reads.clone()
+    async fn storage_reads(&self) -> &[StorageReadReplayEvent] {
+        &self.storage_reads
     }
 }
 
