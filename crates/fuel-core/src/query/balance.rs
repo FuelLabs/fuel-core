@@ -47,7 +47,7 @@ impl ReadView {
         } else {
             AssetQuery::new(
                 &owner,
-                &AssetSpendTarget::new(asset_id, u128::MAX, u16::MAX),
+                &AssetSpendTarget::new(asset_id, u128::MAX, u16::MAX, false),
                 &base_asset_id,
                 None,
                 self,
