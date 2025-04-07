@@ -27,8 +27,8 @@ impl CompressionConfig {
     }
 }
 
-impl From<CompressionConfig> for fuel_core_compression::Config {
-    fn from(config: CompressionConfig) -> Self {
+impl From<&CompressionConfig> for fuel_core_compression::Config {
+    fn from(config: &CompressionConfig) -> Self {
         Self {
             temporal_registry_retention: config.temporal_registry_retention(),
         }
