@@ -12,6 +12,7 @@ use super::rocks_db_key_iterator::{
     ExtractItem,
     RocksDBKeyIterator,
 };
+use core::ops::Deref;
 use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
     iter::{
@@ -71,6 +72,23 @@ use std::{
     },
 };
 use tempfile::TempDir;
+
+#[derive(Debug)]
+struct PrimaryInstance(DBWithThreadMode<MultiThreaded>);
+
+impl Deref for PrimaryInstance {
+    type Target = DBWithThreadMode<MultiThreaded>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Drop for PrimaryInstance {
+    fn drop(&mut self) {
+        self.cancel_all_background_work(true);
+    }
+}
 
 type DB = DBWithThreadMode<MultiThreaded>;
 
@@ -135,7 +153,7 @@ impl DatabaseConfig {
 
 pub struct RocksDb<Description> {
     read_options: ReadOptions,
-    db: Arc<DB>,
+    db: Arc<PrimaryInstance>,
     block_opts: Arc<BlockBasedOptions>,
     create_family: Option<Arc<Mutex<BTreeMap<String, Options>>>>,
     snapshot: Option<rocksdb::SnapshotWithThreadMode<'static, DB>>,
@@ -150,7 +168,6 @@ impl<Description> Drop for RocksDb<Description> {
         // Drop the snapshot before the db.
         // Dropping the snapshot after the db will cause a sigsegv.
         self.snapshot = None;
-        self.db.cancel_all_background_work(true);
     }
 }
 
@@ -402,7 +419,7 @@ where
             }
             ColumnsPolicy::Lazy => Some(Arc::new(Mutex::new(cf_descriptors_to_create))),
         };
-        let db = Arc::new(db);
+        let db = Arc::new(PrimaryInstance(db));
 
         let rocks_db = RocksDb {
             read_options: Self::generate_read_options(&None),

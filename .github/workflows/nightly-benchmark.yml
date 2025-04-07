@@ -1,0 +1,100 @@
+name: Nightly Gas Costs Benchmark
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      create_pr:
+        description: "Create a pull request with the benchmark results"
+        required: true
+        default: "false"
+
+env:
+  GIT_REPO: ${{ github.repository }}
+  GIT_REPO_NAME: ${{ github.event.repository.name }}
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: 1.81.0
+  CONSENSUS_PARAMETERS_VERSION: V2
+
+jobs:
+  benchmark:
+    runs-on:
+      group: fuelcore-benchmark
+    concurrency:
+      group: fuelcore-benchmark # only allow one benchmark run at a time
+      cancel-in-progress: false
+    outputs:
+      benchmark_results: ${{ steps.benchmarks.outputs.benchmark_results }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: "wasm32-unknown-unknown"
+
+      - name: Install criterion
+        run: cargo install cargo-criterion
+
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run benchmarks
+        id: run_benchmarks
+        run: |
+          cargo criterion -p fuel-core-benches --message-format json --bench vm > nightly_benchmarks.json
+          cargo run -p fuel-core-benches --bin collect --release -- --input nightly_benchmarks.json --format consensus-parameters --output nightly_benchmarks.json
+
+      - name: Archive benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly_benchmarks.json
+          path: nightly_benchmarks.json
+
+      - name: Set benchmark result output
+        id: benchmarks
+        run: | # this will fail when consensus parameters version changes
+          echo "benchmark_results=$(cat nightly_benchmarks.json | jq '.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs' | tr -d '\n' )" >> "$GITHUB_OUTPUT"
+
+  create_pr:
+    needs: benchmark
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    if: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Parse benchmark results and create PR
+        run: |
+          jq --argjson benchmark_results "$benchmark_results" \
+            '.consensus_parameters.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs = $benchmark_results' \
+            bin/fuel-core/chainspec/local-testnet/chain_config.json > \
+            bin/fuel-core/chainspec/local-testnet/chain_config.json.tmp && \
+            mv bin/fuel-core/chainspec/local-testnet/chain_config.json.tmp bin/fuel-core/chainspec/local-testnet/chain_config.json
+          # create a new branch
+          branch_name="chore/benchmark-update-$(date +%s)"
+          git checkout -b "$branch_name"
+          git add bin/fuel-core/chainspec/local-testnet/chain_config.json
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit -m "Update benchmark results"
+
+          git push origin "$branch_name"
+
+          # create a new PR
+          gh pr create \
+            --title "chore(gas_costs): update local chain config with nightly benchmark results" \
+            --body "Updated benchmark results" \
+            --base master \
+            --head "$branch_name"
+            --label "no changelog"
+        env:
+          benchmark_results: ${{ needs.benchmark.outputs.benchmark_results }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
