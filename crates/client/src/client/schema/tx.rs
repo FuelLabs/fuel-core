@@ -472,14 +472,21 @@ pub struct TransactionsByOwnerQuery {
     pub transactions_by_owner: TransactionConnection,
 }
 
+#[derive(cynic::QueryVariables, Debug)]
+pub struct StatusChangeSubscriptionArgs {
+    pub id: TransactionId,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub include_preconfirmation: Option<bool>,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
-    variables = "TxIdArgs"
+    variables = "StatusChangeSubscriptionArgs"
 )]
 pub struct StatusChangeSubscription {
-    #[arguments(id: $id)]
+    #[arguments(id: $id, includePreconfirmation: $include_preconfirmation)]
     pub status_change: TransactionStatus,
 }
 
@@ -495,6 +502,15 @@ pub struct TxWithEstimatedPredicatesArg {
     pub tx: HexString,
     #[cynic(skip_serializing_if = "Option::is_none")]
     pub estimate_predicates: Option<bool>,
+}
+
+#[derive(cynic::QueryVariables)]
+pub struct SubmitAndAwaitStatusArg {
+    pub tx: HexString,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub estimate_predicates: Option<bool>,
+    #[cynic(skip_serializing_if = "Option::is_none")]
+    pub include_preconfirmation: Option<bool>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -661,10 +677,10 @@ pub struct SubmitAndAwaitSubscriptionWithTransaction {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Subscription",
-    variables = "TxWithEstimatedPredicatesArg"
+    variables = "SubmitAndAwaitStatusArg"
 )]
 pub struct SubmitAndAwaitStatusSubscription {
-    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates)]
+    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates, includePreconfirmation: $include_preconfirmation)]
     pub submit_and_await_status: TransactionStatus,
 }
 

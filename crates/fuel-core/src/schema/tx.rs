@@ -42,6 +42,7 @@ use crate::{
                 AssembleTx,
             },
             types::{
+                get_tx_status,
                 AssembleTransactionResult,
                 TransactionStatus,
             },
@@ -695,6 +696,8 @@ impl TxStatusSubscription {
         &self,
         ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
+        #[graphql(desc = "If true, accept to receive the preconfirmation status")]
+        include_preconfirmation: Option<bool>,
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
         let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
@@ -705,11 +708,14 @@ impl TxStatusSubscription {
             tx_status_manager,
             query,
         };
-        Ok(
-            transaction_status_change(status_change_state, rx, id.into())
-                .await
-                .map_err(async_graphql::Error::from),
+        Ok(transaction_status_change(
+            status_change_state,
+            rx,
+            id.into(),
+            include_preconfirmation.unwrap_or(false),
         )
+        .await
+        .map_err(async_graphql::Error::from))
     }
 
     /// Submits transaction to the `TxPool` and await either success or failure.
@@ -724,7 +730,7 @@ impl TxStatusSubscription {
     > {
         use tokio_stream::StreamExt;
         let subscription =
-            submit_and_await_status(ctx, tx, estimate_predicates.unwrap_or(false))
+            submit_and_await_status(ctx, tx, estimate_predicates.unwrap_or(false), false)
                 .await?;
 
         Ok(subscription
@@ -734,17 +740,24 @@ impl TxStatusSubscription {
 
     /// Submits the transaction to the `TxPool` and returns a stream of events.
     /// Compared to the `submitAndAwait`, the stream also contains
-    /// `SubmittedStatus` as an intermediate state.
+    /// `SubmittedStatus` and potentially preconfirmation as an intermediate state.
     #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
     async fn submit_and_await_status<'a>(
         &self,
         ctx: &'a Context<'a>,
         tx: HexString,
         estimate_predicates: Option<bool>,
+        include_preconfirmation: Option<bool>,
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
-        submit_and_await_status(ctx, tx, estimate_predicates.unwrap_or(false)).await
+        submit_and_await_status(
+            ctx,
+            tx,
+            estimate_predicates.unwrap_or(false),
+            include_preconfirmation.unwrap_or(false),
+        )
+        .await
     }
 }
 
@@ -752,6 +765,7 @@ async fn submit_and_await_status<'a>(
     ctx: &'a Context<'a>,
     tx: HexString,
     estimate_predicates: bool,
+    include_preconfirmation: bool,
 ) -> async_graphql::Result<
     impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
 > {
@@ -774,13 +788,21 @@ async fn submit_and_await_status<'a>(
     txpool.insert(tx).await?;
 
     Ok(subscription
-        .map(move |event| match event {
-            TxStatusMessage::Status(status) => {
-                let status = TransactionStatus::new(tx_id, status);
-                Ok(status)
-            }
-            TxStatusMessage::FailedStatus => {
-                Err(anyhow::anyhow!("Failed to get transaction status").into())
+        .filter_map(move |status| {
+            match status {
+                TxStatusMessage::Status(status) => {
+                    let status = TransactionStatus::new(tx_id, status);
+                    if !include_preconfirmation && status.is_preconfirmation() {
+                        None
+                    } else {
+                        Some(Ok(status))
+                    }
+                }
+                // Map a failed status to an error for the api.
+                TxStatusMessage::FailedStatus => Some(Err(anyhow::anyhow!(
+                    "Failed to get transaction status"
+                )
+                .into())),
             }
         })
         .take(3))
@@ -795,14 +817,15 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
+        include_preconfirmation: bool,
     ) -> StorageResult<Option<transaction_status::TransactionStatus>> {
-        match self.query.tx_status(&id) {
-            Ok(status) => Ok(Some(status.into())),
-            Err(StorageError::NotFound(_, _)) => {
-                Ok(self.tx_status_manager.status(id).await?)
-            }
-            Err(err) => Err(err),
-        }
+        get_tx_status(
+            &id,
+            self.query.as_ref(),
+            self.tx_status_manager,
+            include_preconfirmation,
+        )
+        .await
     }
 }
 
