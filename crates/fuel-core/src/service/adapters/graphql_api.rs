@@ -1,5 +1,6 @@
 use super::{
     compression_adapters::CompressionServiceAdapter,
+    import_result_provider,
     BlockImporterAdapter,
     BlockProducerAdapter,
     ChainStateInfoProvider,
@@ -67,8 +68,8 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         executor::{
+            DryRunResult,
             StorageReadReplayEvent,
-            TransactionExecutionStatus,
         },
         p2p::PeerInfo,
         transaction_status::TransactionStatus,
@@ -139,9 +140,17 @@ impl BlockProducerPort for BlockProducerAdapter {
         time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
-    ) -> anyhow::Result<Vec<(Transaction, TransactionExecutionStatus)>> {
+        record_storage_reads: bool,
+    ) -> anyhow::Result<DryRunResult> {
         self.block_producer
-            .dry_run(transactions, height, time, utxo_validation, gas_price)
+            .dry_run(
+                transactions,
+                height,
+                time,
+                utxo_validation,
+                gas_price,
+                record_storage_reads,
+            )
             .await
     }
 
@@ -248,6 +257,15 @@ impl GraphQLBlockImporter {
     }
 }
 
+impl From<BlockAt> for import_result_provider::BlockAt {
+    fn from(value: BlockAt) -> Self {
+        match value {
+            BlockAt::Genesis => Self::Genesis,
+            BlockAt::Specific(h) => Self::Specific(h),
+        }
+    }
+}
+
 impl worker::BlockImporter for GraphQLBlockImporter {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
         self.block_importer_adapter.events_shared_result()
@@ -257,7 +275,8 @@ impl worker::BlockImporter for GraphQLBlockImporter {
         &self,
         height: BlockAt,
     ) -> anyhow::Result<SharedImportResult> {
-        self.import_result_provider_adapter.result_at_height(height)
+        self.import_result_provider_adapter
+            .result_at_height(height.into())
     }
 }
 

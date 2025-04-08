@@ -607,6 +607,24 @@ pub struct DryRun {
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DryRunStorageReads {
+    pub tx_statuses: Vec<DryRunTransactionExecutionStatus>,
+    pub storage_reads: Vec<super::storage_read_replay::StorageReadReplayEvent>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "DryRunArg"
+)]
+pub struct DryRunRecordStorageReads {
+    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price, blockHeight: $block_height)]
+    pub dry_run_record_storage_reads: DryRunStorageReads,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
