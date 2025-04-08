@@ -5,7 +5,13 @@ use fuel_core_tx_status_manager::{
     ports::P2PPreConfirmationGossipData,
     service::ProtocolPublicKey,
 };
-use fuel_core_types::fuel_tx::Address;
+use fuel_core_types::{
+    fuel_tx::Address,
+    services::p2p::{
+        GossipsubMessageAcceptance,
+        GossipsubMessageInfo,
+    },
+};
 
 #[cfg(feature = "p2p")]
 impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
@@ -26,6 +32,18 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
             fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
         }
     }
+
+    fn notify_gossip_transaction_validity(
+        &self,
+        message_info: GossipsubMessageInfo,
+        validity: GossipsubMessageAcceptance,
+    ) -> anyhow::Result<()> {
+        if let Some(service) = &self.service {
+            service.notify_gossip_transaction_validity(message_info, validity)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 #[cfg(not(feature = "p2p"))]
@@ -34,6 +52,14 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
 
     fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
         Box::pin(fuel_core_services::stream::pending())
+    }
+
+    fn notify_gossip_transaction_validity(
+        &self,
+        _message_info: GossipsubMessageInfo,
+        _validity: GossipsubMessageAcceptance,
+    ) -> anyhow::Result<()> {
+        Ok(())
     }
 }
 
