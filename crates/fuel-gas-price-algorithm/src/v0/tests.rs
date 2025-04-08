@@ -2,6 +2,8 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::cast_possible_truncation)]
 
+use fuel_core_types::clamped_percentage::ClampedPercentage;
+
 use super::AlgorithmUpdaterV0;
 
 #[cfg(test)]
@@ -12,7 +14,7 @@ mod update_l2_block_data_tests;
 pub struct UpdaterBuilder {
     min_exec_gas_price: u64,
     starting_exec_gas_price: u64,
-    exec_gas_price_change_percent: u64,
+    exec_gas_price_change_percent: ClampedPercentage,
     l2_block_height: u32,
     l2_block_capacity_threshold: u64,
 }
@@ -22,7 +24,7 @@ impl UpdaterBuilder {
         Self {
             min_exec_gas_price: 0,
             starting_exec_gas_price: 0,
-            exec_gas_price_change_percent: 0,
+            exec_gas_price_change_percent: ClampedPercentage::new(0),
             l2_block_height: 0,
             l2_block_capacity_threshold: 50,
         }
@@ -39,7 +41,7 @@ impl UpdaterBuilder {
     }
 
     fn with_exec_gas_price_change_percent(mut self, percent: u64) -> Self {
-        self.exec_gas_price_change_percent = percent;
+        self.exec_gas_price_change_percent = ClampedPercentage::new(percent as u8);
         self
     }
 
@@ -62,7 +64,9 @@ impl UpdaterBuilder {
             new_exec_price: self.starting_exec_gas_price,
             exec_gas_price_change_percent: self.exec_gas_price_change_percent,
             l2_block_height: self.l2_block_height,
-            l2_block_fullness_threshold_percent: self.l2_block_capacity_threshold,
+            l2_block_fullness_threshold_percent: ClampedPercentage::new(
+                self.l2_block_capacity_threshold as u8,
+            ),
         }
     }
 }
