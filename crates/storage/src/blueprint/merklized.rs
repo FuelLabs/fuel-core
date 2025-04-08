@@ -311,14 +311,10 @@ pub mod basic_tests_bmt {
     use core::ops::Deref;
 
     use crate::{
-        blueprint::{
-            BlueprintMutate,
-        },
+        blueprint::BlueprintMutate,
         codec::Encoder,
         structured_storage::StructuredStorage,
-        transactional::{
-            StorageTransaction,
-        },
+        transactional::StorageTransaction,
     };
     use fuel_core_types::fuel_merkle::binary::{
         self,
@@ -326,9 +322,7 @@ pub mod basic_tests_bmt {
     };
     use fuel_vm_private::{
         fuel_merkle::binary::Primitive,
-        fuel_storage::{
-            StorageAsMut,
-        },
+        fuel_storage::StorageAsMut,
     };
     use rand::{
         rngs::StdRng,
