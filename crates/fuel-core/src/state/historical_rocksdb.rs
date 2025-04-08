@@ -621,6 +621,10 @@ where
     fn rollback_block_to(&self, height: &Description::Height) -> StorageResult<()> {
         self.rollback_block_to(height.as_u64())
     }
+
+    fn shutdown(&self) {
+        self.db.shutdown()
+    }
 }
 
 pub fn height_key(key: &[u8], height: &u64) -> Vec<u8> {

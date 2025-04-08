@@ -283,8 +283,7 @@ where
         }
     }
 
-    async fn shutdown(mut self) -> anyhow::Result<()> {
-        self.pool_worker.stop();
+    async fn shutdown(self) -> anyhow::Result<()> {
         Ok(())
     }
 }

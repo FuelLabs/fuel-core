@@ -8,6 +8,7 @@ use fuel_core_types::{
     },
     fuel_types::Bytes32,
     services::transaction_status::TransactionStatus as TxPoolTxStatus,
+    tai64::Tai64,
 };
 use futures::{
     Stream,
@@ -89,7 +90,7 @@ impl FuelService {
             db,
             tx_status_manager,
         };
-        Ok(transaction_status_change(state, rx, id).await)
+        Ok(transaction_status_change(state, rx, id, true).await)
     }
 }
 
@@ -99,11 +100,28 @@ struct StatusChangeState<'a> {
 }
 
 impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
-    async fn get_tx_status(&self, id: Bytes32) -> StorageResult<Option<TxPoolTxStatus>> {
+    async fn get_tx_status(
+        &self,
+        id: Bytes32,
+        include_preconfirmation: bool,
+    ) -> StorageResult<Option<TxPoolTxStatus>> {
         match self.db.get_tx_status(&id)? {
             Some(status) => Ok(Some(status.into())),
             None => {
                 let status = self.tx_status_manager.status(id).await?;
+                let status = status.map(|status| {
+                    // Filter out preconfirmation statuses if not allowed. Converting to submitted status
+                    // because it's the closest to the preconfirmation status.
+                    // Having `now()` as timestamp isn't ideal but shouldn't cause much inconsistency.
+                    if !include_preconfirmation
+                        && status.is_preconfirmation()
+                        && !status.is_final()
+                    {
+                        TxPoolTxStatus::submitted(Tai64::now())
+                    } else {
+                        status
+                    }
+                });
                 Ok(status)
             }
         }

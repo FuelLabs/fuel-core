@@ -855,6 +855,10 @@ where
 
         Ok(())
     }
+
+    pub fn shutdown(&self) {
+        while Arc::strong_count(&self.db) > 1 {}
+    }
 }
 
 pub(crate) struct KeyOnly;

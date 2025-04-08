@@ -171,6 +171,19 @@ impl TransactionStatus {
         }
     }
 
+    /// Returns `true` if the status is pre confirmation.
+    pub fn is_preconfirmation(&self) -> bool {
+        match self {
+            TransactionStatus::Submitted(_)
+            | TransactionStatus::Success(_)
+            | TransactionStatus::Failure(_)
+            | TransactionStatus::SqueezedOut(_) => false,
+            TransactionStatus::PreConfirmationSuccess(_)
+            | TransactionStatus::PreConfirmationFailure(_)
+            | TransactionStatus::PreConfirmationSqueezedOut(_) => true,
+        }
+    }
+
     /// Returns `true` if the status is `Submitted`.
     pub fn is_submitted(&self) -> bool {
         matches!(self, Self::Submitted { .. })

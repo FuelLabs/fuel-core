@@ -29,6 +29,8 @@ use tokio::{
             self,
             Receiver,
             Sender,
+            UnboundedReceiver,
+            UnboundedSender,
         },
         oneshot,
     },
@@ -62,16 +64,29 @@ const MAX_PENDING_REMOVE_POOL_REQUESTS: usize = 1_000;
 
 const SIZE_EXTRACT_BLOCK_TRANSACTIONS_CHANNEL: usize = 100_000;
 const SIZE_NOTIFICATION_CHANNEL: usize = 10_000_000;
-const SIZE_THREAD_MANAGEMENT_CHANNEL: usize = 10;
 
 pub(super) struct PoolWorkerInterface {
-    thread_management_sender: Sender<ThreadManagementRequest>,
+    thread_management_sender: UnboundedSender<ThreadManagementRequest>,
     pub(super) request_insert_sender: Sender<PoolInsertRequest>,
     pub(super) request_update_sender: Sender<PoolUpdateRequest>,
     pub(super) request_read_sender: Sender<PoolReadRequest>,
     pub(super) extract_block_transactions_sender: Sender<PoolExtractBlockTransactions>,
     pub(super) notification_receiver: Receiver<PoolNotification>,
     handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for PoolWorkerInterface {
+    fn drop(&mut self) {
+        let _ = self
+            .thread_management_sender
+            .send(ThreadManagementRequest::Stop);
+
+        if let Some(handle) = self.handle.take() {
+            if handle.join().is_err() {
+                tracing::error!("Failed to join pool worker thread");
+            }
+        }
+    }
 }
 
 impl PoolWorkerInterface {
@@ -95,7 +110,7 @@ impl PoolWorkerInterface {
         let (notification_sender, notification_receiver) =
             mpsc::channel(SIZE_NOTIFICATION_CHANNEL);
         let (thread_management_sender, thread_management_receiver) =
-            mpsc::channel(SIZE_THREAD_MANAGEMENT_CHANNEL);
+            mpsc::unbounded_channel();
 
         let handle = std::thread::spawn({
             let tx_insert_from_pending_sender = request_insert_sender.clone();
@@ -168,20 +183,6 @@ impl PoolWorkerInterface {
                     e
                 )
             })
-    }
-
-    pub fn stop(&mut self) {
-        if let Err(e) = self
-            .thread_management_sender
-            .try_send(ThreadManagementRequest::Stop)
-        {
-            tracing::error!("Failed to send stop request: {}", e);
-        }
-        if let Some(handle) = self.handle.take() {
-            if handle.join().is_err() {
-                tracing::error!("Failed to join pool worker thread");
-            }
-        }
     }
 }
 
@@ -260,7 +261,7 @@ pub(super) enum PoolNotification {
 
 pub(super) struct PoolWorker<View, TxStatusManager> {
     tx_insert_from_pending_sender: Sender<PoolInsertRequest>,
-    thread_management_receiver: Receiver<ThreadManagementRequest>,
+    thread_management_receiver: UnboundedReceiver<ThreadManagementRequest>,
     request_remove_receiver: Receiver<PoolUpdateRequest>,
     request_read_receiver: Receiver<PoolReadRequest>,
     extract_block_transactions_receiver: Receiver<PoolExtractBlockTransactions>,
