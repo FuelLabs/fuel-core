@@ -485,7 +485,6 @@ where
 }
 
 #[cfg(feature = "test-helpers")]
-#[allow(warnings)]
 /// Test module for root storage tests.
 pub mod root_storage_tests {
     use fuel_vm_private::{
