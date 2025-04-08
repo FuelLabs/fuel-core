@@ -1342,7 +1342,7 @@ type Subscription {
 		"""
 		If true, accept to receive the preconfirmation status
 		"""
-		allowPreconfirmation: Boolean
+		includePreconfirmation: Boolean
 	): TransactionStatus!
 	"""
 	Submits transaction to the `TxPool` and await either success or failure.
@@ -1353,7 +1353,7 @@ type Subscription {
 	Compared to the `submitAndAwait`, the stream also contains
 	`SubmittedStatus` and potentially preconfirmation as an intermediate state.
 	"""
-	submitAndAwaitStatus(tx: HexString!, estimatePredicates: Boolean, allowPreconfirmation: Boolean): TransactionStatus!
+	submitAndAwaitStatus(tx: HexString!, estimatePredicates: Boolean, includePreconfirmation: Boolean): TransactionStatus!
 	contractStorageSlots(contractId: ContractId!): StorageSlot!
 	contractStorageBalances(contractId: ContractId!): ContractBalance!
 }
@@ -1395,7 +1395,7 @@ type Transaction {
 	outputContract: ContractOutput
 	witnesses: [HexString!]
 	receiptsRoot: Bytes32
-	status(allowPreconfirmation: Boolean): TransactionStatus
+	status(includePreconfirmation: Boolean): TransactionStatus
 	script: HexString
 	scriptData: HexString
 	bytecodeWitnessIndex: U16

@@ -20,7 +20,7 @@ pub(crate) trait TxnStatusChangeState {
     async fn get_tx_status(
         &self,
         id: Bytes32,
-        allow_preconfirmation: bool,
+        include_preconfirmation: bool,
     ) -> StorageResult<Option<TransactionStatus>>;
 }
 
@@ -29,7 +29,7 @@ pub(crate) async fn transaction_status_change<'a, State>(
     state: State,
     stream: BoxStream<'a, TxStatusMessage>,
     transaction_id: Bytes32,
-    allow_preconfirmation: bool,
+    include_preconfirmation: bool,
 ) -> impl Stream<Item = anyhow::Result<ApiTxStatus>> + 'a
 where
     State: TxnStatusChangeState + Send + Sync + 'a,
@@ -37,7 +37,7 @@ where
     // Check the database first to see if the transaction already
     // has a status.
     let maybe_db_status = state
-        .get_tx_status(transaction_id, allow_preconfirmation)
+        .get_tx_status(transaction_id, include_preconfirmation)
         .await
         .transpose()
         .map(TxStatusMessage::from);
@@ -62,7 +62,7 @@ where
             match status {
                 TxStatusMessage::Status(status) => {
                     let status = ApiTxStatus::new(transaction_id, status);
-                    if !allow_preconfirmation && status.is_preconfirmation() {
+                    if !include_preconfirmation && status.is_preconfirmation() {
                         futures::future::ready(None)
                     } else {
                         futures::future::ready(Some(Ok(status)))

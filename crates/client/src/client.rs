@@ -948,7 +948,7 @@ impl FuelClient {
         &'a self,
         tx: &'a Transaction,
         estimate_predicates: Option<bool>,
-        allow_preconfirmation: Option<bool>,
+        include_preconfirmation: Option<bool>,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
         use schema::tx::SubmitAndAwaitStatusArg;
@@ -957,7 +957,7 @@ impl FuelClient {
             SubmitAndAwaitStatusArg {
                 tx: HexString(Bytes(tx)),
                 estimate_predicates,
-                allow_preconfirmation,
+                include_preconfirmation,
             },
         );
 
@@ -1222,7 +1222,7 @@ impl FuelClient {
     pub async fn subscribe_transaction_status_opt<'a>(
         &'a self,
         id: &'a TxId,
-        allow_preconfirmation: Option<bool>,
+        include_preconfirmation: Option<bool>,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
         use schema::tx::StatusChangeSubscriptionArgs;
@@ -1230,7 +1230,7 @@ impl FuelClient {
         let s =
             schema::tx::StatusChangeSubscription::build(StatusChangeSubscriptionArgs {
                 id: tx_id,
-                allow_preconfirmation,
+                include_preconfirmation,
             });
 
         tracing::debug!("subscribing");

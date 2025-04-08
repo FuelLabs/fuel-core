@@ -476,7 +476,7 @@ pub struct TransactionsByOwnerQuery {
 pub struct StatusChangeSubscriptionArgs {
     pub id: TransactionId,
     #[cynic(skip_serializing_if = "Option::is_none")]
-    pub allow_preconfirmation: Option<bool>,
+    pub include_preconfirmation: Option<bool>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -486,7 +486,7 @@ pub struct StatusChangeSubscriptionArgs {
     variables = "StatusChangeSubscriptionArgs"
 )]
 pub struct StatusChangeSubscription {
-    #[arguments(id: $id, allowPreconfirmation: $allow_preconfirmation)]
+    #[arguments(id: $id, includePreconfirmation: $include_preconfirmation)]
     pub status_change: TransactionStatus,
 }
 
@@ -510,7 +510,7 @@ pub struct SubmitAndAwaitStatusArg {
     #[cynic(skip_serializing_if = "Option::is_none")]
     pub estimate_predicates: Option<bool>,
     #[cynic(skip_serializing_if = "Option::is_none")]
-    pub allow_preconfirmation: Option<bool>,
+    pub include_preconfirmation: Option<bool>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -662,7 +662,7 @@ pub struct SubmitAndAwaitSubscriptionWithTransaction {
     variables = "SubmitAndAwaitStatusArg"
 )]
 pub struct SubmitAndAwaitStatusSubscription {
-    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates, allowPreconfirmation: $allow_preconfirmation)]
+    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates, includePreconfirmation: $include_preconfirmation)]
     pub submit_and_await_status: TransactionStatus,
 }
 

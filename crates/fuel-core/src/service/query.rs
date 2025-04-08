@@ -103,7 +103,7 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
-        allow_preconfirmation: bool,
+        include_preconfirmation: bool,
     ) -> StorageResult<Option<TxPoolTxStatus>> {
         match self.db.get_tx_status(&id)? {
             Some(status) => Ok(Some(status.into())),
@@ -113,7 +113,7 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
                     // Filter out preconfirmation statuses if not allowed. Converting to submitted status
                     // because it's the closest to the preconfirmation status.
                     // Having `now()` as timestamp isn't ideal but shouldn't cause much inconsistency.
-                    if !allow_preconfirmation
+                    if !include_preconfirmation
                         && status.is_preconfirmation()
                         && !status.is_final()
                     {

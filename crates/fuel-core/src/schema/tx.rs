@@ -626,7 +626,7 @@ impl TxStatusSubscription {
         ctx: &'a Context<'a>,
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
         #[graphql(desc = "If true, accept to receive the preconfirmation status")]
-        allow_preconfirmation: Option<bool>,
+        include_preconfirmation: Option<bool>,
     ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
     {
         let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
@@ -641,7 +641,7 @@ impl TxStatusSubscription {
             status_change_state,
             rx,
             id.into(),
-            allow_preconfirmation.unwrap_or(false),
+            include_preconfirmation.unwrap_or(false),
         )
         .await
         .map_err(async_graphql::Error::from))
@@ -676,7 +676,7 @@ impl TxStatusSubscription {
         ctx: &'a Context<'a>,
         tx: HexString,
         estimate_predicates: Option<bool>,
-        allow_preconfirmation: Option<bool>,
+        include_preconfirmation: Option<bool>,
     ) -> async_graphql::Result<
         impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
     > {
@@ -684,7 +684,7 @@ impl TxStatusSubscription {
             ctx,
             tx,
             estimate_predicates.unwrap_or(false),
-            allow_preconfirmation.unwrap_or(false),
+            include_preconfirmation.unwrap_or(false),
         )
         .await
     }
@@ -694,7 +694,7 @@ async fn submit_and_await_status<'a>(
     ctx: &'a Context<'a>,
     tx: HexString,
     estimate_predicates: bool,
-    allow_preconfirmation: bool,
+    include_preconfirmation: bool,
 ) -> async_graphql::Result<
     impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
 > {
@@ -721,7 +721,7 @@ async fn submit_and_await_status<'a>(
             match status {
                 TxStatusMessage::Status(status) => {
                     let status = TransactionStatus::new(tx_id, status);
-                    if !allow_preconfirmation && status.is_preconfirmation() {
+                    if !include_preconfirmation && status.is_preconfirmation() {
                         None
                     } else {
                         Some(Ok(status))
@@ -746,13 +746,13 @@ impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
     async fn get_tx_status(
         &self,
         id: Bytes32,
-        allow_preconfirmation: bool,
+        include_preconfirmation: bool,
     ) -> StorageResult<Option<transaction_status::TransactionStatus>> {
         get_tx_status(
             &id,
             self.query.as_ref(),
             self.tx_status_manager,
-            allow_preconfirmation,
+            include_preconfirmation,
         )
         .await
     }
