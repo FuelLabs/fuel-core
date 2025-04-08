@@ -530,6 +530,8 @@ pub mod root_storage_tests {
         Sparse,
     };
 
+    type BlueprintOf<T> = <T as TableWithBlueprint>::Blueprint;
+
     /// Provides root storage tests for SMT storage tables.
     pub trait RootStorageTests: SmtTableWithBlueprint
     where
@@ -537,24 +539,24 @@ pub mod root_storage_tests {
         Self::Column: PartialEq,
         <Self::Metadata as Mappable>::Key: Sized,
 
-        for<'a, 'b> <Self::Metadata as TableWithBlueprint>::Blueprint: BlueprintMutate<
+        for<'a, 'b> BlueprintOf<Self::Metadata>: BlueprintMutate<
             Self::Metadata,
             StructuredStorage<
                 &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>,
             >,
         >,
-        for<'a> <Self::Metadata as TableWithBlueprint>::Blueprint: BlueprintMutate<
+        for<'a> BlueprintOf<Self::Metadata>: BlueprintMutate<
             Self::Metadata,
             StorageTransaction<&'a mut InMemoryStorage<Self::Column>>,
         >,
 
-        for<'a, 'b> <Self::Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<
+        for<'a, 'b> BlueprintOf<Self::Nodes>: BlueprintMutate<
             Self::Nodes,
             StructuredStorage<
                 &'a mut StorageTransaction<&'b mut InMemoryStorage<Self::Column>>,
             >,
         >,
-        for<'a> <Self::Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<
+        for<'a> BlueprintOf<Self::Nodes>: BlueprintMutate<
             Self::Nodes,
             StorageTransaction<&'a mut InMemoryStorage<Self::Column>>,
         >,
