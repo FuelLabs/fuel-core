@@ -486,7 +486,7 @@ where
 
 #[cfg(feature = "test-helpers")]
 /// Test module for root storage tests.
-pub mod root_storage_tests {
+pub mod root_storage_tests_smt {
     use fuel_vm_private::{
         fuel_merkle::sparse::{
             self,
