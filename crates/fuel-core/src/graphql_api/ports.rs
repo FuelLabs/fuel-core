@@ -65,8 +65,8 @@ use fuel_core_types::{
     fuel_vm::interpreter::Memory,
     services::{
         executor::{
+            DryRunResult,
             StorageReadReplayEvent,
-            TransactionExecutionStatus,
         },
         graphql_api::ContractBalance,
         p2p::PeerInfo,
@@ -274,7 +274,8 @@ pub trait BlockProducerPort: Send + Sync {
         time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
-    ) -> anyhow::Result<Vec<(Transaction, TransactionExecutionStatus)>>;
+        record_storage_reads: bool,
+    ) -> anyhow::Result<DryRunResult>;
 
     async fn storage_read_replay(
         &self,

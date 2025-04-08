@@ -162,7 +162,7 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
     // When
     let client_sentry = FuelClient::from(sentry.node.bound_address);
     let mut tx_statuses_subscriber = client_sentry
-        .submit_and_await_status(&tx)
+        .submit_and_await_status_opt(&tx, None, Some(true))
         .await
         .expect("Should be able to subscribe for events");
 
@@ -308,7 +308,7 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
     // When
     let client_sentry = FuelClient::from(sentry.node.bound_address);
     let mut tx_statuses_subscriber = client_sentry
-        .submit_and_await_status(&tx)
+        .submit_and_await_status_opt(&tx, None, Some(true))
         .await
         .expect("Should be able to subscribe for events");
 
@@ -452,7 +452,7 @@ async fn preconfirmation__propagate_p2p_after_squeezed_out_on_producer() {
     // When
     let client_sentry = FuelClient::from(sentry.node.bound_address);
     let mut tx_statuses_subscriber = client_sentry
-        .submit_and_await_status(&tx)
+        .submit_and_await_status_opt(&tx, None, Some(true))
         .await
         .expect("Should be able to subscribe for events");
 
@@ -605,7 +605,7 @@ async fn preconfirmation__sentry_allows_usage_of_dynamic_outputs() {
         .unwrap();
 
     let tx_statuses_subscriber = client_sentry
-        .submit_and_await_status(&final_script_with_transfers)
+        .submit_and_await_status_opt(&final_script_with_transfers, None, Some(true))
         .await
         .expect("Should be able to subscribe for events");
 
@@ -675,7 +675,11 @@ async fn preconfirmation__sentry_allows_usage_of_dynamic_outputs() {
 
     // When
     let mut tx_statuses_subscriber = client_sentry
-        .submit_and_await_status(&transaction_that_rely_on_variable_inputs)
+        .submit_and_await_status_opt(
+            &transaction_that_rely_on_variable_inputs,
+            None,
+            Some(true),
+        )
         .await
         .expect("Should be able to subscribe for events");
 

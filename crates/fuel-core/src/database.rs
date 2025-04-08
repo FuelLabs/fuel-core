@@ -181,6 +181,12 @@ where
         self.iter_all_filtered::<T, _>(prefix, None, Some(direction))
             .map_ok(|(key, value)| TableEntry { key, value })
     }
+
+    pub fn shutdown(self) {
+        let (storage, _) = self.into_inner();
+
+        storage.data.shutdown()
+    }
 }
 
 impl<Description> GenesisDatabase<Description>

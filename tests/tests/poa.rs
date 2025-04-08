@@ -106,12 +106,13 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
     for _ in 0..BLOCK_TO_PRODUCE {
         produce_block_with_tx(&mut rng, &core.client).await;
     }
-    let on_chain_view = core.node.shared.database.on_chain().latest_view()?;
 
     // Given
     let predefined_blocks: Vec<_> = (1..=BLOCK_TO_PRODUCE)
         .map(|block_height| {
             let block_height = block_height as u32;
+            let on_chain_view =
+                core.node.shared.database.on_chain().latest_view().unwrap();
             on_chain_view
                 .get_full_block(&block_height.into())
                 .unwrap()
@@ -145,6 +146,13 @@ async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
     let blocks_from_new_node: Vec<_> = (1..=BLOCK_TO_PRODUCE)
         .map(|block_height| {
             let block_height = block_height as u32;
+            let on_chain_view = new_core
+                .node
+                .shared
+                .database
+                .on_chain()
+                .latest_view()
+                .unwrap();
             on_chain_view
                 .get_full_block(&block_height.into())
                 .unwrap()

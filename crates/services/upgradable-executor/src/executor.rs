@@ -42,11 +42,11 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            DryRunResult,
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
             StorageReadReplayEvent,
-            TransactionExecutionStatus,
             ValidationResult,
         },
         Uncommitted,
@@ -98,15 +98,39 @@ enum ExecutionStrategy {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum BlockHeightSelection {
+    Latest,
+    Past { height: BlockHeight },
+}
+
 enum ProduceBlockMode {
     Produce,
-    DryRunLatest,
-    DryRunAt { height: BlockHeight },
+    DryRun {
+        height: BlockHeightSelection,
+        record_storage_reads: bool,
+    },
 }
 impl ProduceBlockMode {
     fn is_dry_run(&self) -> bool {
-        matches!(self, Self::DryRunLatest | Self::DryRunAt { .. })
+        matches!(self, Self::DryRun { .. })
     }
+
+    fn record_storage_reads(&self) -> bool {
+        match self {
+            Self::Produce => false,
+            Self::DryRun {
+                record_storage_reads,
+                ..
+            } => *record_storage_reads,
+        }
+    }
+}
+
+/// Result of various `produce_*` functions
+struct ProducedBlock {
+    result: ExecutionResult,
+    storage_reads: Vec<StorageReadReplayEvent>,
 }
 
 /// The upgradable executor supports the WASM version of the state transition function.
@@ -345,6 +369,7 @@ where
 
         let options = self.config.as_ref().into();
         self.produce_inner_sync(component, options, ProduceBlockMode::Produce)
+            .map(|r| r.map_result(|produced| produced.result))
     }
 
     /// Executes a dry-run of the block and returns the result of the execution without committing the changes.
@@ -356,7 +381,15 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner_sync(block, options, ProduceBlockMode::DryRunLatest)
+        self.produce_inner_sync(
+            block,
+            options,
+            ProduceBlockMode::DryRun {
+                height: BlockHeightSelection::Latest,
+                record_storage_reads: false,
+            },
+        )
+        .map(|r| r.map_result(|produced| produced.result))
     }
 }
 
@@ -376,7 +409,9 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner_sync(block, options, ProduceBlockMode::Produce)
+        Ok(self
+            .produce_inner_sync(block, options, ProduceBlockMode::Produce)?
+            .map_result(|produced| produced.result))
     }
 
     /// Produces the block and returns the result of the execution without committing the changes.
@@ -390,14 +425,16 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let options = self.config.as_ref().into();
-        self.produce_inner(
-            components,
-            options,
-            ProduceBlockMode::Produce,
-            new_tx_waiter,
-            preconfirmation_sender,
-        )
-        .await
+        Ok(self
+            .produce_inner(
+                components,
+                options,
+                ProduceBlockMode::Produce,
+                new_tx_waiter,
+                preconfirmation_sender,
+            )
+            .await?
+            .map_result(|produced| produced.result))
     }
 
     /// Executes the block and returns the result of the execution without committing
@@ -407,7 +444,8 @@ where
         component: Components<Vec<Transaction>>,
         forbid_fake_coins: Option<bool>,
         at_height: Option<BlockHeight>,
-    ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>> {
+        record_storage_reads: bool,
+    ) -> ExecutorResult<DryRunResult> {
         if at_height.is_some() && !self.config.allow_historical_execution {
             return Err(ExecutorError::Other(
                 "The historical execution is not allowed".to_string(),
@@ -432,31 +470,41 @@ where
             gas_price: component.gas_price,
         };
 
-        let ExecutionResult {
-            block,
-            skipped_transactions,
-            tx_status,
-            ..
+        let ProducedBlock {
+            result:
+                ExecutionResult {
+                    block,
+                    skipped_transactions,
+                    tx_status,
+                    ..
+                },
+            storage_reads,
         } = self
             .produce_inner_sync(
                 component,
                 options,
-                match at_height {
-                    Some(height) => ProduceBlockMode::DryRunAt { height },
-                    None => ProduceBlockMode::DryRunLatest,
+                ProduceBlockMode::DryRun {
+                    height: match at_height {
+                        Some(height) => BlockHeightSelection::Past { height },
+                        None => BlockHeightSelection::Latest,
+                    },
+                    record_storage_reads,
                 },
             )?
             .into_result();
 
-        // If one of the transactions fails, return an error.
+        // If any of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
             return Err(err)
         }
 
         let (_, txs) = block.into_inner();
-        let result = txs.into_iter().zip(tx_status).collect();
+        let transactions = txs.into_iter().zip(tx_status).collect();
 
-        Ok(result)
+        Ok(DryRunResult {
+            transactions,
+            storage_reads,
+        })
     }
 
     pub fn validate(
@@ -590,7 +638,7 @@ where
         block: Components<TxSource>,
         options: ExecutionOptions,
         mode: ProduceBlockMode,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -617,7 +665,7 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -673,7 +721,7 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -758,7 +806,7 @@ where
         options: ExecutionOptions,
         mode: ProduceBlockMode,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -783,19 +831,34 @@ where
 
         let db_height = match mode {
             ProduceBlockMode::Produce => block.header_to_produce.height().pred(),
-            ProduceBlockMode::DryRunLatest => None,
-            ProduceBlockMode::DryRunAt { height } => height.pred(),
+            ProduceBlockMode::DryRun { height, .. } => match height {
+                BlockHeightSelection::Latest => None,
+                BlockHeightSelection::Past { height } => height.pred(),
+            },
         };
 
         let instance_without_input =
             crate::instance::Instance::new(&self.engine).add_source(source)?;
 
+        let mut storage_rec = Default::default();
         let instance_without_input = if let Some(previous_block_height) = db_height {
             let storage = self.storage_view_provider.view_at(&previous_block_height)?;
-            instance_without_input.add_storage(storage)?
+            if mode.record_storage_reads() {
+                let storage = StorageAccessRecorder::new(storage);
+                storage_rec = storage.record.clone();
+                instance_without_input.add_storage(storage)?
+            } else {
+                instance_without_input.add_storage(storage)?
+            }
         } else {
             let storage = self.storage_view_provider.latest_view()?;
-            instance_without_input.add_storage(storage)?
+            if mode.record_storage_reads() {
+                let storage = StorageAccessRecorder::new(storage);
+                storage_rec = storage.record.clone();
+                instance_without_input.add_storage(storage)?
+            } else {
+                instance_without_input.add_storage(storage)?
+            }
         };
 
         let relayer = self.relayer_view_provider.latest_view()?;
@@ -858,7 +921,13 @@ where
 
         let _ = preconfirmation_sender.send(preconfirmations).await;
 
-        Ok(result)
+        let mut g = storage_rec.lock();
+        let storage_reads = core::mem::take(&mut *g);
+
+        Ok(result.map_result(|result| ProducedBlock {
+            result,
+            storage_reads,
+        }))
     }
 
     #[cfg(feature = "wasm-executor")]
@@ -909,7 +978,7 @@ where
         mode: ProduceBlockMode,
         new_tx_waiter: impl NewTxWaiterPort,
         preconfirmation_sender: impl PreconfirmationSenderPort,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    ) -> ExecutorResult<Uncommitted<ProducedBlock, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -917,31 +986,69 @@ where
 
         let db_height = match mode {
             ProduceBlockMode::Produce => block.header_to_produce.height().pred(),
-            ProduceBlockMode::DryRunLatest => None,
-            ProduceBlockMode::DryRunAt { height } => height.pred(),
+            ProduceBlockMode::DryRun { height, .. } => match height {
+                BlockHeightSelection::Latest => None,
+                BlockHeightSelection::Past { height } => height.pred(),
+            },
         };
 
-        if let Some(previous_block_height) = db_height {
+        let mut storage_rec = Default::default();
+
+        let result = if let Some(previous_block_height) = db_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
-            ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(
-                    block,
-                    mode.is_dry_run(),
-                    new_tx_waiter,
-                    preconfirmation_sender,
-                )
-                .await
+            if mode.record_storage_reads() {
+                let database = StorageAccessRecorder::new(database);
+                storage_rec = database.record.clone();
+                ExecutionInstance::new(relayer, database, options)
+                    .produce_without_commit(
+                        block,
+                        mode.is_dry_run(),
+                        new_tx_waiter,
+                        preconfirmation_sender,
+                    )
+                    .await
+            } else {
+                ExecutionInstance::new(relayer, database, options)
+                    .produce_without_commit(
+                        block,
+                        mode.is_dry_run(),
+                        new_tx_waiter,
+                        preconfirmation_sender,
+                    )
+                    .await
+            }
         } else {
             let database = self.storage_view_provider.latest_view()?;
-            ExecutionInstance::new(relayer, database, options)
-                .produce_without_commit(
-                    block,
-                    mode.is_dry_run(),
-                    new_tx_waiter,
-                    preconfirmation_sender,
-                )
-                .await
-        }
+            if mode.record_storage_reads() {
+                let database = StorageAccessRecorder::new(database);
+                storage_rec = database.record.clone();
+                ExecutionInstance::new(relayer, database, options)
+                    .produce_without_commit(
+                        block,
+                        mode.is_dry_run(),
+                        new_tx_waiter,
+                        preconfirmation_sender,
+                    )
+                    .await
+            } else {
+                ExecutionInstance::new(relayer, database, options)
+                    .produce_without_commit(
+                        block,
+                        mode.is_dry_run(),
+                        new_tx_waiter,
+                        preconfirmation_sender,
+                    )
+                    .await
+            }
+        };
+
+        let mut g = storage_rec.lock();
+        let storage_reads = core::mem::take(&mut *g);
+
+        Ok(result?.map_result(|result| ProducedBlock {
+            result,
+            storage_reads,
+        }))
     }
 
     fn native_validate_inner(

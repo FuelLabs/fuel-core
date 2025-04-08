@@ -20,6 +20,7 @@ pub struct GlobalRegistry {
 }
 
 mod buckets;
+pub mod compression_metrics;
 pub mod config;
 pub mod core_metrics;
 pub mod futures;

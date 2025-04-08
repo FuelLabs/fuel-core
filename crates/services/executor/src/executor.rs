@@ -331,7 +331,8 @@ impl ExecutionData {
     }
 }
 
-/// Per-block execution options
+/// Per-block execution options.
+/// These are passed to the executor.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
     /// The flag allows the usage of fake coins in the inputs of the transaction.

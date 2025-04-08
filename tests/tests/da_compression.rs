@@ -63,6 +63,7 @@ async fn can_fetch_da_compressed_block_from_graphql() {
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
     let compression_config = DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
+        metrics: false,
     };
     config.da_compression = DaCompressionMode::Enabled(compression_config.clone());
     let chain_id = config
@@ -152,6 +153,7 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     let mut config = Config::local_node();
     config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
+        metrics: false,
     });
 
     let Nodes {
