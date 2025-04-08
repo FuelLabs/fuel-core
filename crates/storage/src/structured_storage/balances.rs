@@ -57,7 +57,7 @@ mod smt {
     mod test {
         use rand::Rng;
 
-        use crate::blueprint::sparse::root_storage_tests::RootStorageTests;
+        use crate::blueprint::sparse::root_storage_tests_smt::RootStorageTests;
 
         use super::*;
 
