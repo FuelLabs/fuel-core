@@ -477,8 +477,8 @@ pub mod basic_tests_bmt {
             let mut init_storage = InMemoryStorage::default();
             let mut init_structured_storage = init_storage.write_transaction();
 
-            let mut rng = &mut StdRng::seed_from_u64(31337);
-            let gen = || Some(Self::random_key(&mut rng));
+            let rng = &mut StdRng::seed_from_u64(31337);
+            let gen = || Some(Self::random_key(rng));
             let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
             let value = Self::value();
 
@@ -519,8 +519,8 @@ pub mod basic_tests_bmt {
             let mut init_storage = InMemoryStorage::default();
             let mut init_structured_storage = init_storage.write_transaction();
 
-            let mut rng = &mut StdRng::seed_from_u64(31337);
-            let gen = || Some(Self::random_key(&mut rng));
+            let rng = &mut StdRng::seed_from_u64(31337);
+            let gen = || Some(Self::random_key(rng));
             let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
             let value = Self::value();
 
@@ -563,8 +563,8 @@ pub mod basic_tests_bmt {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
-            let mut rng = &mut StdRng::seed_from_u64(1234);
-            let key = Self::random_key(&mut rng);
+            let rng = &mut StdRng::seed_from_u64(1234);
+            let key = Self::random_key(rng);
             let value = Self::value();
             storage_transaction
                 .storage_as_mut::<Self>()
@@ -587,12 +587,12 @@ pub mod basic_tests_bmt {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
-            let mut rng = &mut StdRng::seed_from_u64(1234);
+            let rng = &mut StdRng::seed_from_u64(1234);
 
             let mut prev_root = binary::in_memory::MerkleTree::new().root();
 
             for _ in 0..10 {
-                let key = Self::random_key(&mut rng);
+                let key = Self::random_key(rng);
                 let value = Self::value();
                 storage_transaction
                     .storage_as_mut::<Self>()
@@ -617,8 +617,8 @@ pub mod basic_tests_bmt {
             let mut storage = InMemoryStorage::default();
             let mut storage_transaction = storage.write_transaction();
 
-            let mut rng = &mut StdRng::seed_from_u64(1234);
-            let key = Self::random_key(&mut rng);
+            let rng = &mut StdRng::seed_from_u64(1234);
+            let key = Self::random_key(rng);
             let owned_key = Self::OwnedKey::from(key.to_owned());
 
             let value = Self::value();
