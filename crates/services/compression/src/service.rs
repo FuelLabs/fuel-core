@@ -125,7 +125,7 @@ where
 fn compress_block<S>(
     storage: &mut S,
     block_with_metadata: &BlockWithMetadata,
-    config: CompressionConfig,
+    config: &CompressionConfig,
 ) -> crate::Result<usize>
 where
     S: CompressionStorage,
@@ -140,7 +140,7 @@ where
         block_events: block_with_metadata.events(),
     };
     let compressed_block = compress(
-        config.into(),
+        &config.into(),
         compression_context,
         block_with_metadata.block(),
     )
@@ -161,7 +161,7 @@ where
 fn handle_new_block<S>(
     storage: &mut S,
     block_with_metadata: &BlockWithMetadata,
-    config: CompressionConfig,
+    config: &CompressionConfig,
     sync_notifier: &SyncStateNotifier,
     metrics_manager: &Option<CompressionMetricsManager>,
 ) -> crate::Result<()>
@@ -208,7 +208,7 @@ where
         handle_new_block(
             &mut self.storage,
             block_with_metadata,
-            self.config,
+            &self.config,
             &self.sync_notifier,
             &self.metrics_manager,
         )
@@ -252,7 +252,7 @@ where
             handle_new_block(
                 &mut self.storage,
                 &block_with_metadata,
-                self.config,
+                &self.config,
                 &self.sync_notifier,
                 &self.metrics_manager,
             )?;
