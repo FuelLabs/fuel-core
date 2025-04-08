@@ -752,7 +752,7 @@ pub mod basic_tests_bmt {
 /// The table must implement `BasicMerkleizedStorageTests`.
 #[cfg(feature = "test-helpers")]
 #[macro_export]
-macro_rules! basic_merklelized_storage_tests {
+macro_rules! basic_merklized_storage_tests {
     ($table:ident) => {
         #[test]
         fn merkleized_storage__test_get() {

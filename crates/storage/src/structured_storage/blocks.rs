@@ -106,7 +106,7 @@ mod tests {
         }
     }
 
-    crate::basic_merklelized_storage_tests!(FuelBlocks);
+    crate::basic_merklized_storage_tests!(FuelBlocks);
 
     #[test_case::test_case(&[0]; "initial block with height 0")]
     #[test_case::test_case(&[1337]; "initial block with arbitrary height")]
