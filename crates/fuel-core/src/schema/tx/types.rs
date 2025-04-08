@@ -1042,6 +1042,7 @@ impl DryRunFailureStatus {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct DryRunTransactionExecutionStatus(pub TransactionExecutionStatus);
 
 #[Object]
@@ -1059,6 +1060,23 @@ impl DryRunTransactionExecutionStatus {
     }
 }
 
+pub struct DryRunStorageReads {
+    pub tx_statuses: Vec<DryRunTransactionExecutionStatus>,
+    pub storage_reads: Vec<StorageReadReplayEvent>,
+}
+
+#[Object]
+impl DryRunStorageReads {
+    async fn tx_statuses(&self) -> &[DryRunTransactionExecutionStatus] {
+        &self.tx_statuses
+    }
+
+    async fn storage_reads(&self) -> &[StorageReadReplayEvent] {
+        &self.storage_reads
+    }
+}
+
+#[derive(Clone)]
 pub struct StorageReadReplayEvent {
     column: U32,
     key: HexString,
