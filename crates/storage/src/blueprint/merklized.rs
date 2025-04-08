@@ -307,23 +307,18 @@ where
 
 #[cfg(feature = "test-helpers")]
 /// Test module containing helper trait and macro for implementing merkle storage tests.
-#[allow(warnings)]
 pub mod basic_tests_bmt {
     use core::ops::Deref;
 
     use crate::{
         blueprint::{
-            BlueprintInspect,
             BlueprintMutate,
         },
         codec::Encoder,
-        kv_store::KeyValueInspect,
         structured_storage::StructuredStorage,
         transactional::{
-            InMemoryTransaction,
             StorageTransaction,
         },
-        Error as StorageError,
     };
     use fuel_core_types::fuel_merkle::binary::{
         self,
@@ -332,14 +327,11 @@ pub mod basic_tests_bmt {
     use fuel_vm_private::{
         fuel_merkle::binary::Primitive,
         fuel_storage::{
-            Mappable,
             StorageAsMut,
-            StorageMutate,
         },
     };
     use rand::{
         rngs::StdRng,
-        RngCore,
         SeedableRng,
     };
 
