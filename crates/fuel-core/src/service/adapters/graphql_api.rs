@@ -68,8 +68,8 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         executor::{
+            DryRunResult,
             StorageReadReplayEvent,
-            TransactionExecutionStatus,
         },
         p2p::PeerInfo,
         transaction_status::TransactionStatus,
@@ -140,9 +140,17 @@ impl BlockProducerPort for BlockProducerAdapter {
         time: Option<Tai64>,
         utxo_validation: Option<bool>,
         gas_price: Option<u64>,
-    ) -> anyhow::Result<Vec<(Transaction, TransactionExecutionStatus)>> {
+        record_storage_reads: bool,
+    ) -> anyhow::Result<DryRunResult> {
         self.block_producer
-            .dry_run(transactions, height, time, utxo_validation, gas_price)
+            .dry_run(
+                transactions,
+                height,
+                time,
+                utxo_validation,
+                gas_price,
+                record_storage_reads,
+            )
             .await
     }
 
