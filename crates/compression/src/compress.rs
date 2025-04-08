@@ -72,7 +72,7 @@ use not_fault_proving::CompressDb;
 /// the registry is valid for only the current block height. On any other height you could be
 /// referring to keys that have already been overwritten, or have not been written to yet.
 pub async fn compress<D>(
-    config: Config,
+    config: &'_ Config,
     mut db: D,
     block: &Block,
 ) -> anyhow::Result<VersionedCompressedBlock>
@@ -109,8 +109,8 @@ where
 
 /// Preparation pass through the block to collect all keys accessed during compression.
 /// Returns dummy values. The resulting "compressed block" should be discarded.
-struct PrepareCtx<D> {
-    config: Config,
+struct PrepareCtx<'a, D> {
+    config: &'a Config,
     /// Current timestamp
     timestamp: Tai64,
     /// Database handle
@@ -119,17 +119,17 @@ struct PrepareCtx<D> {
     accessed_keys: PerRegistryKeyspace<HashSet<RegistryKey>>,
 }
 
-impl<D> ContextError for PrepareCtx<D> {
+impl<'a, D> ContextError for PrepareCtx<'a, D> {
     type Error = anyhow::Error;
 }
 
-impl<D> CompressibleBy<PrepareCtx<D>> for UtxoId
+impl<'a, D> CompressibleBy<PrepareCtx<'a, D>> for UtxoId
 where
     D: CompressDb,
 {
     async fn compress_with(
         &self,
-        _ctx: &mut PrepareCtx<D>,
+        _ctx: &mut PrepareCtx<'a, D>,
     ) -> anyhow::Result<CompressedUtxoId> {
         Ok(CompressedUtxoId {
             tx_pointer: TxPointer::default(),
@@ -150,18 +150,18 @@ struct CompressCtxKeyspace<T> {
 
 macro_rules! compression {
     ($($ident:ty: $type:ty),*) => { paste::paste! {
-        pub struct CompressCtx<D> {
-            config: Config,
+        pub struct CompressCtx<'a, D> {
+            config: &'a Config,
             timestamp: Tai64,
             db: D,
             $($ident: CompressCtxKeyspace<$type>,)*
         }
 
-        impl<D> PrepareCtx<D> where D: CompressDb {
+        impl<'a, D> PrepareCtx<'a, D> where D: CompressDb {
             /// Converts the preparation context into a [`CompressCtx`]
             /// keeping accessed keys to avoid its eviction during compression.
             /// Initializes the cache evictors from the database, which may fail.
-            pub fn into_compression_context(mut self) -> anyhow::Result<CompressCtx<D>> {
+            pub fn into_compression_context(mut self) -> anyhow::Result<CompressCtx<'a, D>> {
                 Ok(CompressCtx {
                     $(
                         $ident: CompressCtxKeyspace {
@@ -177,7 +177,7 @@ macro_rules! compression {
             }
         }
 
-        impl<D> CompressCtx<D> where D: CompressDb {
+        impl<'a, D> CompressCtx<'a, D> where D: CompressDb {
             /// Finalizes the compression context, returning the changes to the registry.
             /// Commits the registrations and cache evictor states to the database.
             fn finalize(mut self) -> anyhow::Result<RegistrationsPerTable> {
@@ -194,13 +194,13 @@ macro_rules! compression {
         }
 
         $(
-            impl<D> CompressibleBy<PrepareCtx<D>> for $type
+            impl<'a, D> CompressibleBy<PrepareCtx<'a, D>> for $type
             where
                 D: TemporalRegistry<$type> + EvictorDb<$type>
             {
                 async fn compress_with(
                     &self,
-                    ctx: &mut PrepareCtx<D>,
+                    ctx: &mut PrepareCtx<'a, D>,
                 ) -> anyhow::Result<RegistryKey> {
                     if *self == <$type>::default() {
                         return Ok(RegistryKey::ZERO);
@@ -218,13 +218,13 @@ macro_rules! compression {
                 }
             }
 
-            impl<D> CompressibleBy<CompressCtx<D>> for $type
+            impl<'a, D> CompressibleBy<CompressCtx<'a, D>> for $type
             where
                 D: TemporalRegistry<$type> + EvictorDb<$type>
             {
                 async fn compress_with(
                     &self,
-                    ctx: &mut CompressCtx<D>,
+                    ctx: &mut CompressCtx<'a, D>,
                 ) -> anyhow::Result<RegistryKey> {
                     if self == &Default::default() {
                         return Ok(RegistryKey::DEFAULT_VALUE);
@@ -260,17 +260,17 @@ compression!(
     predicate_code: PredicateCode
 );
 
-impl<D> ContextError for CompressCtx<D> {
+impl<'a, D> ContextError for CompressCtx<'a, D> {
     type Error = anyhow::Error;
 }
 
-impl<D> CompressibleBy<CompressCtx<D>> for UtxoId
+impl<'a, D> CompressibleBy<CompressCtx<'a, D>> for UtxoId
 where
     D: CompressDb,
 {
     async fn compress_with(
         &self,
-        ctx: &mut CompressCtx<D>,
+        ctx: &mut CompressCtx<'a, D>,
     ) -> anyhow::Result<CompressedUtxoId> {
         ctx.db.lookup(*self)
     }
