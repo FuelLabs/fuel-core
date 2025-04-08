@@ -248,7 +248,7 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
         peer_id: PeerId,
     ) {
         match preconfirmations {
-            PreConfirmationMessage::Delegate { seal, .. } => {
+            PreConfirmationMessage::Delegate(seal) => {
                 tracing::debug!(
                     "Received new delegate signature from peer: {:?}",
                     seal.entity.public_key
@@ -780,16 +780,18 @@ mod tests {
         protocol_secret_key: SecretKey,
         delegate_public_key: DelegatePublicKey,
         expiration: Tai64,
+        nonce: u64,
     ) -> P2PPreConfirmationGossipData {
         let entity = DelegatePreConfirmationKey {
             public_key: delegate_public_key,
             expiration,
+            nonce,
         };
         let bytes = postcard::to_allocvec(&entity).unwrap();
         let message = Message::new(&bytes);
         let signature = Signature::sign(&protocol_secret_key, &message);
         let seal = Sealed { entity, signature };
-        let inner = P2PPreConfirmationMessage::Delegate { seal, nonce: 0 };
+        let inner = P2PPreConfirmationMessage::Delegate(seal);
         GossipData {
             data: Some(inner),
             peer_id: Default::default(),
@@ -804,7 +806,12 @@ mod tests {
     ) -> P2PPreConfirmationGossipData {
         let mut rng = StdRng::seed_from_u64(3890u64);
         let new_secret_key = SecretKey::random(&mut rng);
-        valid_sealed_delegate_signature(new_secret_key, delegate_public_key, expiration)
+        valid_sealed_delegate_signature(
+            new_secret_key,
+            delegate_public_key,
+            expiration,
+            0,
+        )
     }
 
     fn valid_pre_confirmation_signature(
@@ -1377,10 +1384,12 @@ mod tests {
             delegate_signing_key,
             expiration,
         );
+        let nonce = 0;
         let delegate_signature_message = valid_sealed_delegate_signature(
             handles.protocol_signing_key,
             delegate_verifying_key,
             expiration,
+            nonce,
         );
 
         let streams = tx_ids
@@ -1512,10 +1521,12 @@ mod tests {
             delegate_signing_key,
             expiration,
         );
+        let nonce = 0;
         let delegate_signature_message = valid_sealed_delegate_signature(
             handles.protocol_signing_key,
             delegate_verifying_key,
             expiration,
+            nonce,
         );
 
         let mut streams = tx_ids
@@ -1579,10 +1590,12 @@ mod tests {
             expiration,
         );
 
+        let nonce = 0;
         let delegate_signature_message = valid_sealed_delegate_signature(
             handles.protocol_signing_key,
             delegate_verifying_key,
             expiration,
+            nonce,
         );
 
         let mut streams = tx_ids
@@ -1654,12 +1667,14 @@ mod tests {
         let service = ServiceRunner::new(task);
         service.start_and_await().await.unwrap();
 
+        let nonce = 0;
         for expiration_modifier in 0..100u64 {
             let expiration = first_expiration + expiration_modifier;
             let valid_delegate_signature = valid_sealed_delegate_signature(
                 handles.protocol_signing_key,
                 delegate_public_key,
                 expiration,
+                nonce,
             );
             handles
                 .pre_confirmation_updates

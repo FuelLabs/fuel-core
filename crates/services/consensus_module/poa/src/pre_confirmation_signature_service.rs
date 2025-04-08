@@ -128,20 +128,16 @@ where
             echo_delegation_trigger,
         } = self;
 
+        let mut nonce = 0;
         // The first key rotation is triggered immediately
         let expiration = key_rotation_trigger.next_rotation().await?;
         let (new_delegate_key, sealed) =
-            create_delegate_key(&mut key_generator, &parent_signature, expiration)
+            create_delegate_key(&mut key_generator, &parent_signature, expiration, nonce)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
 
-        let mut nonce = 0;
         if let Err(e) = broadcast
-            .broadcast_delegate_key(
-                sealed.entity.clone(),
-                nonce,
-                sealed.signature.clone(),
-            )
+            .broadcast_delegate_key(sealed.entity.clone(), sealed.signature.clone())
             .await
         {
             tracing::error!("Failed to broadcast delegate key: {:?}", e);
@@ -166,6 +162,7 @@ async fn create_delegate_key<Gen, DelegateKey, Parent>(
     key_generator: &mut Gen,
     parent_signature: &Parent,
     expiration: Tai64,
+    nonce: u64,
 ) -> Result<(
     ExpiringKey<DelegateKey>,
     Sealed<DelegatePreConfirmationKey<DelegateKey::PublicKey>, Parent::Signature>,
@@ -181,6 +178,7 @@ where
     let message = DelegatePreConfirmationKey {
         public_key,
         expiration,
+        nonce,
     };
 
     const MAX_ATTEMPTS: usize = 5;
@@ -255,18 +253,20 @@ where
                 tracing::debug!("Key rotation triggered");
                 let expiration = try_or_stop!(res);
 
+                let nonce = 0;
                 let (new_delegate_key, sealed) = try_or_stop!(create_delegate_key(
                     &mut self.key_generator,
                     &self.parent_signature,
                     expiration,
+                    nonce,
                 ).await);
 
                 self.current_delegate_key = new_delegate_key;
                 self.sealed_delegate_message = sealed.clone();
-                self.nonce = 0;
+                self.nonce = nonce;
 
                 try_or_continue!(
-                    self.broadcast.broadcast_delegate_key(sealed.entity, self.nonce, sealed.signature).await,
+                    self.broadcast.broadcast_delegate_key(sealed.entity, sealed.signature).await,
                     |err| tracing::error!("Failed to broadcast newly generated delegate key: {:?}", err)
                 );
                 self.nonce = self.nonce.saturating_add(1);
@@ -277,7 +277,7 @@ where
                 let sealed = self.sealed_delegate_message.clone();
 
                 try_or_continue!(
-                    self.broadcast.broadcast_delegate_key(sealed.entity, self.nonce, sealed.signature).await,
+                    self.broadcast.broadcast_delegate_key(sealed.entity, sealed.signature).await,
                     |err| tracing::error!("Failed to re-broadcast delegate key: {:?}", err)
                 );
                 self.nonce = self.nonce.saturating_add(1);

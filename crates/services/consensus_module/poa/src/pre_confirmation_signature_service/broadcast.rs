@@ -33,7 +33,6 @@ pub trait Broadcast: Send {
     fn broadcast_delegate_key(
         &mut self,
         delegate: DelegatePreConfirmationKey<PublicKey<Self>>,
-        nonce: u64,
         signature: <Self::ParentKey as ParentSignature>::Signature,
     ) -> impl Future<Output = Result<()>> + Send;
 }
