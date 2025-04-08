@@ -838,8 +838,7 @@ pub mod root_storage_tests_smt {
                 panic!("expected inclusion proof");
             };
 
-            let proof_is_valid =
-                inclusion_proof.verify(&root, &merkle_key, &value_bytes);
+            let proof_is_valid = inclusion_proof.verify(&root, &merkle_key, &value_bytes);
 
             assert!(proof_is_valid);
         }
