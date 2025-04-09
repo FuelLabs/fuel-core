@@ -389,7 +389,7 @@ where
                     .new_extracted_transaction(&storage_entry.transaction);
                 self.spent_inputs.maybe_spend_inputs(
                     storage_entry.transaction.id(),
-                    &storage_entry.transaction.inputs(),
+                    storage_entry.transaction.inputs(),
                 );
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
                 storage_entry.transaction
@@ -434,7 +434,7 @@ where
                 self.extracted_outputs
                     .new_extracted_transaction(&transaction.transaction);
                 self.spent_inputs
-                    .spend_inputs(tx_id, &transaction.transaction.inputs());
+                    .spend_inputs(tx_id, transaction.transaction.inputs());
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
 
                 for dependent in dependents {
