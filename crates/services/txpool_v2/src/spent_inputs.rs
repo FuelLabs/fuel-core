@@ -36,6 +36,10 @@ impl SpentInputs {
         }
     }
 
+    /// Marks inputs as spent, by preserves the information about the spender in the case
+    /// if we need to unspend inputs later, see [`unspend_inputs`] for more details.
+    ///
+    /// This function is called when `TxPool` extracts transactions for the block producer.
     pub fn maybe_spend_inputs(&mut self, tx_id: TxId, inputs: &[Input]) {
         let inputs = inputs
             .iter()
@@ -83,6 +87,8 @@ impl SpentInputs {
         }
     }
 
+    /// If transaction is skipped during the block production, this functions
+    /// can be used to unspend inputs, allowing other transactions to spend them.
     pub fn unspend_inputs(&mut self, tx_id: TxId) {
         let inputs = self.spender_of_inputs.remove(&tx_id);
 
