@@ -42,6 +42,7 @@ use alloc::{
     string::String,
     vec::Vec,
 };
+use fuel_vm_private::prelude::Transaction;
 
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -277,6 +278,15 @@ pub struct StorageReadReplayEvent {
     /// Value at the column:key pair. None if the key was not found.
     #[educe(Debug(method("fmt_option_truncated_hex::<16>")))]
     pub value: Option<Vec<u8>>,
+}
+
+/// The result of a dry run.
+#[derive(Debug, Clone)]
+pub struct DryRunResult {
+    /// Transactions that were executed, and their execution status.
+    pub transactions: Vec<(Transaction, TransactionExecutionStatus)>,
+    /// Storage read events, only populated if it was requested.
+    pub storage_reads: Vec<StorageReadReplayEvent>,
 }
 
 #[allow(missing_docs)]

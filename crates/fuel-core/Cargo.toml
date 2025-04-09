@@ -57,6 +57,7 @@ rocksdb = { version = "0.21", default-features = false, features = [
 ], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
+serde_with = { workspace = true, optional = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 tempfile = { workspace = true, optional = true }
@@ -93,7 +94,8 @@ tokio-test = "0.4.4"
 tracing-subscriber = { workspace = true }
 
 [features]
-default = ["rocksdb"]
+default = ["rocksdb", "serde"]
+serde = ["dep:serde_with"]
 smt = [
   "fuel-core-storage/smt",
   "fuel-core-executor/smt",

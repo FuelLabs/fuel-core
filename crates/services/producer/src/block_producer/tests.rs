@@ -609,7 +609,7 @@ mod dry_run {
         // When
         let _ = ctx
             .producer()
-            .dry_run(vec![], None, Some(simulated_block_time), None, None)
+            .dry_run(vec![], None, Some(simulated_block_time), None, None, false)
             .await;
 
         // Then
@@ -630,7 +630,7 @@ mod dry_run {
         // When
         let _ = ctx
             .producer()
-            .dry_run(vec![], None, Some(simulated_block_time), None, None)
+            .dry_run(vec![], None, Some(simulated_block_time), None, None, false)
             .await;
 
         // Then
@@ -648,7 +648,10 @@ mod dry_run {
             .build_with_executor(executor.clone());
 
         // When
-        let _ = ctx.producer().dry_run(vec![], None, None, None, None).await;
+        let _ = ctx
+            .producer()
+            .dry_run(vec![], None, None, None, None, false)
+            .await;
 
         // Then
         assert_eq!(executor.captured_block_timestamp(), last_block_time);
@@ -674,7 +677,7 @@ mod dry_run {
 
         // When
         let result = producer
-            .dry_run(vec![], Some(SAME_HEIGHT.into()), None, None, None)
+            .dry_run(vec![], Some(SAME_HEIGHT.into()), None, None, None, false)
             .await;
 
         // Then

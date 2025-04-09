@@ -733,6 +733,43 @@ impl FuelClient {
             .collect()
     }
 
+    /// Like `dry_run_opt`, but also returns the storage reads
+    pub async fn dry_run_opt_record_storage_reads(
+        &self,
+        txs: &[Transaction],
+        // Disable utxo input checks (exists, unspent, and valid signature)
+        utxo_validation: Option<bool>,
+        gas_price: Option<u64>,
+        at_height: Option<BlockHeight>,
+    ) -> io::Result<(Vec<TransactionExecutionStatus>, Vec<StorageReadReplayEvent>)> {
+        let txs = txs
+            .iter()
+            .map(|tx| HexString(Bytes(tx.to_bytes())))
+            .collect::<Vec<HexString>>();
+        let query: Operation<schema::tx::DryRunRecordStorageReads, DryRunArg> =
+            schema::tx::DryRunRecordStorageReads::build(DryRunArg {
+                txs,
+                utxo_validation,
+                gas_price: gas_price.map(|gp| gp.into()),
+                block_height: at_height.map(|bh| bh.into()),
+            });
+        let result = self
+            .query(query)
+            .await
+            .map(|r| r.dry_run_record_storage_reads)?;
+        let tx_statuses = result
+            .tx_statuses
+            .into_iter()
+            .map(|tx_status| tx_status.try_into().map_err(Into::into))
+            .collect::<io::Result<Vec<_>>>()?;
+        let storage_reads = result
+            .storage_reads
+            .into_iter()
+            .map(Into::into)
+            .collect::<Vec<_>>();
+        Ok((tx_statuses, storage_reads))
+    }
+
     /// Get storage read replay for a block
     pub async fn storage_read_replay(
         &self,
@@ -939,7 +976,7 @@ impl FuelClient {
         &'a self,
         tx: &'a Transaction,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
-        self.submit_and_await_status_opt(tx, None).await
+        self.submit_and_await_status_opt(tx, None, None).await
     }
 
     /// Similar to [`Self::submit_and_await_commit_opt`], but includes all intermediate states.
@@ -948,13 +985,16 @@ impl FuelClient {
         &'a self,
         tx: &'a Transaction,
         estimate_predicates: Option<bool>,
+        include_preconfirmation: Option<bool>,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
+        use schema::tx::SubmitAndAwaitStatusArg;
         let tx = tx.clone().to_bytes();
         let s = schema::tx::SubmitAndAwaitStatusSubscription::build(
-            TxWithEstimatedPredicatesArg {
+            SubmitAndAwaitStatusArg {
                 tx: HexString(Bytes(tx)),
                 estimate_predicates,
+                include_preconfirmation,
             },
         );
 
@@ -1206,14 +1246,29 @@ impl FuelClient {
 
     #[tracing::instrument(skip(self), level = "debug")]
     #[cfg(feature = "subscriptions")]
-    /// Subscribe to the status of a transaction
+    /// Similar to [`Self::subscribe_transaction_status_opt`], but with default options.
     pub async fn subscribe_transaction_status<'a>(
         &'a self,
         id: &'a TxId,
     ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>> + 'a> {
+        self.subscribe_transaction_status_opt(id, None).await
+    }
+
+    #[cfg(feature = "subscriptions")]
+    /// Subscribe to the status of a transaction
+    pub async fn subscribe_transaction_status_opt<'a>(
+        &'a self,
+        id: &'a TxId,
+        include_preconfirmation: Option<bool>,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
+        use schema::tx::StatusChangeSubscriptionArgs;
         let tx_id: TransactionId = (*id).into();
-        let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: tx_id });
+        let s =
+            schema::tx::StatusChangeSubscription::build(StatusChangeSubscriptionArgs {
+                id: tx_id,
+                include_preconfirmation,
+            });
 
         tracing::debug!("subscribing");
         let stream = self.subscribe(s).await?.map(|tx| {

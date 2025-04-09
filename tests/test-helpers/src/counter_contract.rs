@@ -84,11 +84,6 @@ pub async fn deploy(
         intermediate_status,
         TransactionStatus::Submitted { .. }
     ));
-    let preconfirmation_status = status_stream.next().await.unwrap().unwrap();
-    match preconfirmation_status {
-        TransactionStatus::PreconfirmationSuccess { .. } => {}
-        _ => panic!("Tx wasn't preconfirmed: {:?}", preconfirmation_status),
-    };
     let final_status = status_stream.next().await.unwrap().unwrap();
     let TransactionStatus::Success { block_height, .. } = final_status else {
         panic!("Tx wasn't included in a block: {:?}", final_status);

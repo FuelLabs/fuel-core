@@ -147,12 +147,12 @@ impl FuelService {
 
         let (services, shared) = sub_services::init_sub_services(
             &config,
-            database,
+            database.clone(),
             block_production_ready_signal.clone(),
         )?;
 
         let sub_services = Arc::new(services);
-        let task = Task::new(sub_services.clone(), shared.clone())?;
+        let task = Task::new(sub_services.clone(), database, shared.clone())?;
         let runner = ServiceRunner::new_with_params(
             task,
             TaskParams {
@@ -409,14 +409,24 @@ pub type SubServices = Vec<Box<dyn ServiceTrait + Send + Sync + 'static>>;
 struct Task {
     /// The list of started sub services.
     services: Arc<SubServices>,
+    /// The copies of the databases used by services.
+    database: CombinedDatabase,
     /// The address bound by the system for serving the API
     pub shared: SharedState,
 }
 
 impl Task {
     /// Private inner method for initializing the fuel service task
-    pub fn new(services: Arc<SubServices>, shared: SharedState) -> anyhow::Result<Task> {
-        Ok(Task { services, shared })
+    pub fn new(
+        services: Arc<SubServices>,
+        database: CombinedDatabase,
+        shared: SharedState,
+    ) -> anyhow::Result<Task> {
+        Ok(Task {
+            services,
+            database,
+            shared,
+        })
     }
 }
 
@@ -491,6 +501,7 @@ impl RunnableTask for Task {
                 );
             }
         }
+        self.database.shutdown();
         Ok(())
     }
 }

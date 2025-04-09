@@ -36,10 +36,10 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            DryRunResult,
             Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
-            TransactionExecutionStatus,
             UncommittedResult,
         },
     },
@@ -212,10 +212,14 @@ impl DryRunner for MockExecutorWithCapture {
         block: Components<Vec<Transaction>>,
         _utxo_validation: Option<bool>,
         _height: Option<BlockHeight>,
-    ) -> ExecutorResult<Vec<(Transaction, TransactionExecutionStatus)>> {
+        _record_storage_read_replay: bool,
+    ) -> ExecutorResult<DryRunResult> {
         *self.captured.lock().unwrap() = Some(block);
 
-        Ok(Vec::new())
+        Ok(DryRunResult {
+            transactions: Vec::new(),
+            storage_reads: Vec::new(),
+        })
     }
 }
 

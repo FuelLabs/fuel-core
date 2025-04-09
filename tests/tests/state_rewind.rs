@@ -116,10 +116,10 @@ async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
         database_modifications.insert(last_block_height, block.changes.as_ref().clone());
     }
 
-    let view = node.shared.database.on_chain().latest_view().unwrap();
     for i in 0..TOTAL_BLOCKS {
         let height_to_execute = rng.gen_range(1..last_block_height);
 
+        let view = node.shared.database.on_chain().latest_view().unwrap();
         let block = view
             .get_full_block(&height_to_execute.into())
             .unwrap()
@@ -376,11 +376,10 @@ async fn backup_and_restore__should_work_with_state_rewind() -> anyhow::Result<(
     .unwrap();
     let node = &driver.node;
 
-    let view = node.shared.database.on_chain().latest_view().unwrap();
-
     for i in 0..TOTAL_BLOCKS {
         let height_to_execute = rng.gen_range(1..last_block_height);
 
+        let view = node.shared.database.on_chain().latest_view().unwrap();
         let block = view
             .get_full_block(&height_to_execute.into())
             .unwrap()
