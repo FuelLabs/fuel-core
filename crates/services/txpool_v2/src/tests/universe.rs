@@ -429,7 +429,7 @@ impl TestPoolUniverse {
             .unwrap()
             .coins
             .insert(utxo_id, coin.clone());
-        (coin.uncompress(utxo_id), input)
+        (coin.uncompress_coin(utxo_id).unwrap(), input)
     }
 
     pub fn create_output_and_input(&mut self) -> (Output, UnsetInput) {

@@ -1,6 +1,5 @@
 use fuel_core::{
     chain_config::{
-        CoinConfig,
         MessageConfig,
         StateConfig,
     },
@@ -29,6 +28,7 @@ mod coin {
     use fuel_core::chain_config::{
         coin_config_helpers::CoinConfigGenerator,
         ChainConfig,
+        ConfigCoin,
     };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
@@ -57,11 +57,14 @@ mod coin {
                 (owner, 150, asset_id_b),
             ]
             .into_iter()
-            .map(|(owner, amount, asset_id)| CoinConfig {
-                owner,
-                amount,
-                asset_id,
-                ..coin_generator.generate()
+            .map(|(owner, amount, asset_id)| {
+                ConfigCoin {
+                    owner,
+                    amount,
+                    asset_id,
+                    ..coin_generator.generate()
+                }
+                .into()
             })
             .collect(),
             messages: vec![],
@@ -512,7 +515,10 @@ mod message_coin {
 
 // It is combination of coins and deposit coins test cases.
 mod all_coins {
-    use fuel_core::chain_config::coin_config_helpers::CoinConfigGenerator;
+    use fuel_core::chain_config::{
+        coin_config_helpers::CoinConfigGenerator,
+        ConfigCoin,
+    };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::blockchain::primitives::DaBlockHeight;
 
@@ -532,11 +538,14 @@ mod all_coins {
                 (owner, 150, asset_id_b),
             ]
             .into_iter()
-            .map(|(owner, amount, asset_id)| CoinConfig {
-                owner,
-                amount,
-                asset_id,
-                ..coin_generator.generate()
+            .map(|(owner, amount, asset_id)| {
+                ConfigCoin {
+                    owner,
+                    amount,
+                    asset_id,
+                    ..coin_generator.generate()
+                }
+                .into()
             })
             .collect(),
             messages: vec![(owner, 50), (owner, 150)]

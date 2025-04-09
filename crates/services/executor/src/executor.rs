@@ -1,13 +1,21 @@
-use crate::{
-    ports::{
-        MaybeCheckedTransaction,
-        NewTxWaiterPort,
-        PreconfirmationSenderPort,
-        RelayerPort,
-        TransactionsSource,
-    },
-    refs::ContractRef,
+#[cfg(not(feature = "std"))]
+use alloc::borrow::Cow;
+#[cfg(feature = "alloc")]
+use alloc::{
+    format,
+    string::ToString,
+    vec,
+    vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::borrow::Cow;
+
+use parking_lot::Mutex as ParkingMutex;
+use tracing::{
+    debug,
+    warn,
+};
+
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -49,6 +57,7 @@ use fuel_core_types::{
         coins::coin::{
             CompressedCoin,
             CompressedCoinV1,
+            UncompressedCoin,
         },
         contract::ContractUtxoInfo,
         RelayedTransaction,
@@ -74,6 +83,8 @@ use fuel_core_types::{
             coin::{
                 CoinPredicate,
                 CoinSigned,
+                DataCoinPredicate,
+                DataCoinSigned,
             },
             message::{
                 MessageCoinPredicate,
@@ -150,24 +161,16 @@ use fuel_core_types::{
         relayer::Event,
     },
 };
-use parking_lot::Mutex as ParkingMutex;
-use tracing::{
-    debug,
-    warn,
-};
 
-#[cfg(feature = "std")]
-use std::borrow::Cow;
-
-#[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
-
-#[cfg(feature = "alloc")]
-use alloc::{
-    format,
-    string::ToString,
-    vec,
-    vec::Vec,
+use crate::{
+    ports::{
+        MaybeCheckedTransaction,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+        RelayerPort,
+        TransactionsSource,
+    },
+    refs::ContractRef,
 };
 
 /// The maximum amount of transactions that can be included in a block,
@@ -261,7 +264,7 @@ pub fn convert_tx_execution_result_to_preconfirmation(
             if output.is_change() || output.is_variable() && output.amount() != Some(0) {
                 let output_index = u16::try_from(i).ok()?;
                 let utxo_id = UtxoId::new(tx_id, output_index);
-                Some((utxo_id, *output))
+                Some((utxo_id, output.clone()))
             } else {
                 None
             }
@@ -1742,6 +1745,10 @@ where
                     Input::CoinPredicate(CoinPredicate {
                         predicate_gas_used, ..
                     })
+                    | Input::DataCoinPredicate(DataCoinPredicate {
+                        predicate_gas_used,
+                        ..
+                    })
                     | Input::MessageCoinPredicate(MessageCoinPredicate {
                         predicate_gas_used,
                         ..
@@ -1952,7 +1959,9 @@ where
         for input in inputs {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         if !coin.matches_input(input).unwrap_or_default() {
                             return Err(
@@ -2046,9 +2055,18 @@ where
                             )
                         })?;
 
-                    execution_data
-                        .events
-                        .push(ExecutorEvent::CoinConsumed(coin.uncompress(*utxo_id)));
+                    match coin.uncompress(*utxo_id) {
+                        UncompressedCoin::Coin(coin) => {
+                            execution_data
+                                .events
+                                .push(ExecutorEvent::CoinConsumed(coin));
+                        }
+                        UncompressedCoin::DataCoin(data_coin) => {
+                            execution_data
+                                .events
+                                .push(ExecutorEvent::DataCoinConsumed(data_coin));
+                        }
+                    }
                 }
                 Input::MessageDataSigned(_) | Input::MessageDataPredicate(_)
                     if reverted =>
@@ -2271,6 +2289,21 @@ where
                     to,
                     db,
                 )?,
+                Output::DataCoin {
+                    amount,
+                    asset_id,
+                    to,
+                    data,
+                } => Self::insert_data_coin(
+                    block_height,
+                    execution_data,
+                    utxo_id,
+                    amount,
+                    asset_id,
+                    to,
+                    data,
+                    db,
+                )?,
                 Output::Contract(contract) => {
                     if let Some(Input::Contract(input::contract::Contract {
                         contract_id,
@@ -2353,9 +2386,60 @@ where
             if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
                 return Err(ExecutorError::OutputAlreadyExists)
             }
-            execution_data
-                .events
-                .push(ExecutorEvent::CoinCreated(coin.uncompress(utxo_id)));
+            match coin.uncompress(utxo_id) {
+                UncompressedCoin::Coin(coin) => {
+                    execution_data.events.push(ExecutorEvent::CoinCreated(coin));
+                }
+                UncompressedCoin::DataCoin(data_coin) => {
+                    execution_data
+                        .events
+                        .push(ExecutorEvent::DataCoinCreated(data_coin));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn insert_data_coin<T>(
+        block_height: BlockHeight,
+        execution_data: &mut ExecutionData,
+        utxo_id: UtxoId,
+        amount: &Word,
+        asset_id: &AssetId,
+        to: &Address,
+        _data: &[u8],
+        db: &mut TxStorageTransaction<T>,
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
+        // Only insert a coin output if it has some amount.
+        // This is because variable or transfer outputs won't have any value
+        // if there's a revert or panic and shouldn't be added to the utxo set.
+        if *amount > Word::MIN {
+            let coin = CompressedCoinV1 {
+                owner: *to,
+                amount: *amount,
+                asset_id: *asset_id,
+                tx_pointer: TxPointer::new(block_height, execution_data.tx_count),
+            }
+            .into();
+
+            if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
+                return Err(ExecutorError::OutputAlreadyExists)
+            }
+            match coin.uncompress(utxo_id) {
+                UncompressedCoin::Coin(coin) => {
+                    execution_data.events.push(ExecutorEvent::CoinCreated(coin));
+                }
+                UncompressedCoin::DataCoin(data_coin) => {
+                    execution_data
+                        .events
+                        .push(ExecutorEvent::DataCoinCreated(data_coin));
+                }
+            }
         }
 
         Ok(())

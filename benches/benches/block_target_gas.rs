@@ -428,7 +428,7 @@ fn run_with_service_with_extra_inputs(
             }
 
             for output in &extra_outputs {
-                tx_builder.add_output(*output);
+                tx_builder.add_output(output.clone());
             }
             let mut tx = tx_builder.finalize_as_transaction();
             let chain_config = shared.config.snapshot_reader.chain_config().clone();

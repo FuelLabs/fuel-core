@@ -3,12 +3,15 @@ use std::{
     time::Duration,
 };
 
+use crate::error::BlacklistedError;
 use fuel_core_types::{
     fuel_tx::{
         input::{
             coin::{
                 CoinPredicate,
                 CoinSigned,
+                DataCoinPredicate,
+                DataCoinSigned,
             },
             message::{
                 MessageCoinPredicate,
@@ -25,8 +28,6 @@ use fuel_core_types::{
     fuel_types::Nonce,
     services::txpool::PoolTransaction,
 };
-
-use crate::error::BlacklistedError;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct BlackList {
@@ -64,7 +65,11 @@ impl BlackList {
         for input in tx.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, owner, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. }) => {
+                | Input::DataCoinSigned(DataCoinSigned { utxo_id, owner, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, owner, .. })
+                | Input::DataCoinPredicate(DataCoinPredicate {
+                    utxo_id, owner, ..
+                }) => {
                     if self.coins.contains(utxo_id) {
                         return Err(BlacklistedError::BlacklistedUTXO(*utxo_id));
                     }

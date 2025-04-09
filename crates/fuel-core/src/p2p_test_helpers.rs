@@ -1,10 +1,7 @@
 //! # Helpers for creating networks of nodes
 
 use crate::{
-    chain_config::{
-        coin_config_helpers::CoinConfigGenerator,
-        CoinConfig,
-    },
+    chain_config::coin_config_helpers::CoinConfigGenerator,
     combined_database::CombinedDatabase,
     database::{
         database_description::off_chain::OffChain,
@@ -268,12 +265,8 @@ pub async fn make_nodes(
             let all: Vec<_> = (0..num_test_txs)
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
-                    let initial_coin = CoinConfig {
-                        // set idx to prevent overlapping utxo_ids when
-                        // merging with existing coins from config
-                        output_index: 10,
-                        ..coin_generator.generate_with(secret, 10000)
-                    };
+                    let mut initial_coin = coin_generator.generate_with(secret, 10000);
+                    *initial_coin.mut_output_index() = 10;
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
@@ -282,8 +275,8 @@ pub async fn make_nodes(
                     .add_unsigned_coin_input(
                         secret,
                         initial_coin.utxo_id(),
-                        initial_coin.amount,
-                        initial_coin.asset_id,
+                        initial_coin.amount(),
+                        initial_coin.asset_id(),
                         Default::default(),
                     )
                     .finalize_as_transaction();

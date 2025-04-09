@@ -171,3 +171,7 @@ insta = "1.8"
 tempfile = "3.4"
 tikv-jemallocator = "0.5"
 url = "2.2"
+
+# add patch for fuel-vm
+[patch.crates-io]
+fuel-vm-private = { path = "../fuel-vm/fuel-vm",  version = "0.60.0", package = "fuel-vm" }
