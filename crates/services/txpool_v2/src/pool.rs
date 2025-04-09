@@ -154,6 +154,16 @@ where
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
     ) -> Result<(), InsertionErrorType> {
+        let tx_id = tx.id();
+        let contains = persistent_storage
+            .contains_tx(&tx_id)
+            .map_err(|e| Error::Database(format!("{:?}", e)))?;
+        if contains {
+            return Err(InsertionErrorType::Error(Error::InputValidation(
+                InputValidationError::DuplicateTxId(tx_id),
+            )))
+        }
+
         let insertion_result = self.insert_inner(tx, persistent_storage);
         self.register_transaction_counts();
         insertion_result

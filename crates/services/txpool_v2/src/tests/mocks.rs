@@ -67,7 +67,10 @@ use fuel_core_types::{
 };
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     sync::{
         Arc,
         Mutex,
@@ -88,6 +91,7 @@ pub struct Data {
     pub contracts: HashMap<ContractId, Contract>,
     pub blobs: HashMap<BlobId, BlobBytes>,
     pub messages: HashMap<Nonce, Message>,
+    pub transactions: HashSet<TxId>,
 }
 
 #[derive(Clone)]
@@ -157,6 +161,10 @@ impl MockDb {
 }
 
 impl TxPoolPersistentStorage for MockDb {
+    fn contains_tx(&self, tx_id: &TxId) -> StorageResult<bool> {
+        Ok(self.data.lock().unwrap().transactions.contains(tx_id))
+    }
+
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         Ok(self.data.lock().unwrap().coins.get(utxo_id).cloned())
     }
