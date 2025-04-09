@@ -153,7 +153,11 @@ async fn informs_immediately_if_the_input_was_spent_during_previous_blocks_witho
 
     let script = vec![op::ret(RegId::ONE)];
     let tx = client
-        .assemble_script(script, vec![], default_signing_wallet())
+        .assemble_script(script.clone(), vec![], default_signing_wallet())
+        .await
+        .unwrap();
+    let different_tx_with_same_input = client
+        .assemble_script(script, vec![123], default_signing_wallet())
         .await
         .unwrap();
 
@@ -172,7 +176,7 @@ async fn informs_immediately_if_the_input_was_spent_during_previous_blocks_witho
     // When
     let status = tokio::time::timeout(
         Duration::from_secs(10),
-        client.submit_and_await_commit(&tx),
+        client.submit_and_await_commit(&different_tx_with_same_input),
     )
     .await;
 
