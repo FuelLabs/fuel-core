@@ -12,10 +12,7 @@ use fuel_core_client::client::{
         PageDirection,
         PaginationRequest,
     },
-    types::{
-        message::MessageStatus,
-        TransactionStatus,
-    },
+    types::message::MessageStatus,
 };
 use fuel_core_types::{
     blockchain::header::LATEST_STATE_TRANSITION_VERSION,
@@ -296,12 +293,8 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
         .finalize_as_transaction();
     core.client.submit_and_await_commit(&tx).await.unwrap();
 
-    let TransactionStatus::SqueezedOut { reason } =
-        core.client.submit_and_await_commit(&tx).await.unwrap()
-    else {
-        panic!("Expected transaction to be squeezed out")
-    };
-    assert!(reason.contains("Transaction id was already used"));
+    let err = core.client.submit_and_await_commit(&tx).await.unwrap_err();
+    assert!(err.to_string().contains("Transaction id already exists"));
 
     // Stop the node, keep the db
     let db_dir = core.kill().await;
@@ -326,15 +319,8 @@ async fn test_regenesis_processed_transactions_are_preserved() -> anyhow::Result
     ])
     .await?;
 
-    let TransactionStatus::SqueezedOut { reason } =
-        core.client.submit_and_await_commit(&tx).await.unwrap()
-    else {
-        panic!("Expected transaction to be squeezed out")
-    };
-    assert!(
-        reason.contains("Transaction id was already used"),
-        "Unexpected message {reason:?}"
-    );
+    let err = core.client.submit_and_await_commit(&tx).await.unwrap_err();
+    assert!(err.to_string().contains("Transaction id already exists"));
 
     core.kill().await;
     Ok(())

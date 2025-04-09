@@ -1,9 +1,11 @@
 //! Block header types
 
-mod v1;
+/// The V1 version of the header.
+pub mod v1;
 
+/// The V2 version of the header.
 #[cfg(feature = "fault-proving")]
-mod v2;
+pub mod v2;
 
 use super::{
     consensus::ConsensusType,
