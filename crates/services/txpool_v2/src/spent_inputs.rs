@@ -14,6 +14,7 @@ use std::{
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
 enum InputKey {
+    Tx(TxId),
     Utxo(UtxoId),
     Message(Nonce),
 }
@@ -57,6 +58,7 @@ impl SpentInputs {
         for input in inputs.iter() {
             self.spent_inputs.put(*input, ());
         }
+        self.spent_inputs.put(InputKey::Tx(tx_id), ());
         self.spender_of_inputs.insert(tx_id, inputs);
     }
 
@@ -78,6 +80,7 @@ impl SpentInputs {
     }
 
     pub fn spend_inputs_by_tx_id(&mut self, tx_id: TxId) {
+        self.spent_inputs.put(InputKey::Tx(tx_id), ());
         let inputs = self.spender_of_inputs.remove(&tx_id);
 
         if let Some(inputs) = inputs {
@@ -90,6 +93,7 @@ impl SpentInputs {
     /// If transaction is skipped during the block production, this functions
     /// can be used to unspend inputs, allowing other transactions to spend them.
     pub fn unspend_inputs(&mut self, tx_id: TxId) {
+        self.spent_inputs.pop(&InputKey::Tx(tx_id));
         let inputs = self.spender_of_inputs.remove(&tx_id);
 
         if let Some(inputs) = inputs {
@@ -105,6 +109,10 @@ impl SpentInputs {
 
     pub fn is_spent_message(&self, input: &Nonce) -> bool {
         self.spent_inputs.contains(&InputKey::Message(*input))
+    }
+
+    pub fn is_spent_tx(&self, tx: &TxId) -> bool {
+        self.spent_inputs.contains(&InputKey::Tx(*tx))
     }
 }
 

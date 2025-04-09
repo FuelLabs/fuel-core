@@ -155,10 +155,11 @@ where
         persistent_storage: &impl TxPoolPersistentStorage,
     ) -> Result<(), InsertionErrorType> {
         let tx_id = tx.id();
-        let contains = persistent_storage
-            .contains_tx(&tx_id)
-            .map_err(|e| Error::Database(format!("{:?}", e)))?;
-        if contains {
+        if self.spent_inputs.is_spent_tx(&tx_id)
+            || persistent_storage
+                .contains_tx(&tx_id)
+                .map_err(|e| Error::Database(format!("{:?}", e)))?
+        {
             return Err(InsertionErrorType::Error(Error::InputValidation(
                 InputValidationError::DuplicateTxId(tx_id),
             )))
