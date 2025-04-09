@@ -68,6 +68,9 @@ pub trait ChainStateInfoProvider: Send + Sync + 'static {
 pub trait TxPoolPersistentStorage:
     Clone + PredicateStorageRequirements + Send + Sync + 'static
 {
+    /// Returns `true` if the transaction already is inside the storage.
+    fn contains_tx(&self, tx_id: &TxId) -> StorageResult<bool>;
+
     /// Get the UTXO by its ID.
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 
