@@ -523,6 +523,14 @@ impl CombinedDatabase {
 
         Ok(())
     }
+
+    pub fn shutdown(self) {
+        self.on_chain.shutdown();
+        self.off_chain.shutdown();
+        self.relayer.shutdown();
+        self.gas_price.shutdown();
+        self.compression.shutdown();
+    }
 }
 
 /// A trait for listening to shutdown signals.

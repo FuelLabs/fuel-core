@@ -140,7 +140,7 @@ async fn subscribe_txn_status() {
             let client = client.clone();
             async move {
                 client
-                    .subscribe_transaction_status(&id)
+                    .subscribe_transaction_status_opt(&id, Some(true))
                     .await
                     .unwrap()
                     .enumerate()

@@ -32,6 +32,9 @@ use fuel_core_types::{
             DelegatePreConfirmationKey,
             DelegatePublicKey,
             GossipData,
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            PeerId,
             PreConfirmationMessage,
             ProtocolSignature,
             Sealed,
@@ -138,13 +141,14 @@ impl SharedData {
     }
 }
 
-pub struct Task<Pubkey> {
+pub struct Task<Pubkey, P2P> {
     manager: TxStatusManager,
     subscriptions: Subscriptions,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
     write_requests_receiver: mpsc::UnboundedReceiver<UpdateRequest>,
     shared_data: SharedData,
     signature_verification: SignatureVerification<Pubkey>,
+    p2p: P2P,
 }
 
 pub trait ProtocolPublicKey: Send {
@@ -227,7 +231,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
     }
 }
 
-impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
+impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
     fn handle_preconfirmations(&mut self, preconfirmations: Vec<Preconfirmation>) {
         preconfirmations
             .into_iter()
@@ -240,6 +244,8 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
     fn new_preconfirmations_from_p2p(
         &mut self,
         preconfirmations: P2PPreConfirmationMessage,
+        message_id: Vec<u8>,
+        peer_id: PeerId,
     ) {
         match preconfirmations {
             PreConfirmationMessage::Delegate { seal, .. } => {
@@ -247,9 +253,27 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                     "Received new delegate signature from peer: {:?}",
                     seal.entity.public_key
                 );
-                // TODO: Report peer for sending invalid delegation
-                //  https://github.com/FuelLabs/fuel-core/issues/2872
-                let _ = self.signature_verification.add_new_delegate(&seal);
+                if self.signature_verification.add_new_delegate(&seal) {
+                    if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                        GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        },
+                        GossipsubMessageAcceptance::Accept,
+                    ) {
+                        tracing::warn!(
+                            "Failed to notify gossip transaction validity: {e:?}"
+                        );
+                    }
+                } else if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                    GossipsubMessageInfo {
+                        message_id,
+                        peer_id,
+                    },
+                    GossipsubMessageAcceptance::Reject,
+                ) {
+                    tracing::warn!("Failed to notify gossip transaction validity: {e:?}");
+                }
             }
             PreConfirmationMessage::Preconfirmations(sealed) => {
                 tracing::debug!("Received new preconfirmations from peer");
@@ -260,13 +284,33 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
                     tracing::debug!("Preconfirmation signature verified");
                     let Sealed { entity, .. } = sealed;
                     self.handle_preconfirmations(entity.preconfirmations);
+                    if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                        GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        },
+                        GossipsubMessageAcceptance::Accept,
+                    ) {
+                        tracing::warn!(
+                            "Failed to notify gossip transaction validity: {e:?}"
+                        );
+                    }
                 } else {
                     // There is a chance that this is a signature for whom the delegate key hasn't
                     // arrived yet, in which case the pre-confirmation will be lost
                     tracing::warn!("Preconfirmation signature verification failed");
 
-                    // TODO: Report peer for sending invalid preconfirmation
-                    //  https://github.com/FuelLabs/fuel-core/issues/2872
+                    if let Err(e) = self.p2p.notify_gossip_transaction_validity(
+                        GossipsubMessageInfo {
+                            message_id,
+                            peer_id,
+                        },
+                        GossipsubMessageAcceptance::Reject,
+                    ) {
+                        tracing::warn!(
+                            "Failed to notify gossip transaction validity: {e:?}"
+                        );
+                    }
                 }
             }
         }
@@ -274,7 +318,11 @@ impl<Pubkey: ProtocolPublicKey> Task<Pubkey> {
 }
 
 #[async_trait::async_trait]
-impl<Pubkey: ProtocolPublicKey> RunnableService for Task<Pubkey> {
+impl<Pubkey, P2P> RunnableService for Task<Pubkey, P2P>
+where
+    Pubkey: ProtocolPublicKey,
+    P2P: P2PSubscriptions,
+{
     const NAME: &'static str = "TxStatusManagerTask";
     type SharedData = SharedData;
     type Task = Self;
@@ -293,7 +341,11 @@ impl<Pubkey: ProtocolPublicKey> RunnableService for Task<Pubkey> {
     }
 }
 
-impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
+impl<Pubkey, P2P> RunnableTask for Task<Pubkey, P2P>
+where
+    Pubkey: ProtocolPublicKey,
+    P2P: P2PSubscriptions,
+{
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
@@ -303,9 +355,9 @@ impl<Pubkey: ProtocolPublicKey> RunnableTask for Task<Pubkey> {
             }
 
             tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
-                if let Some(GossipData { data, .. }) = tx_status_from_p2p {
+                if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
                     if let Some(msg) = data {
-                        self.new_preconfirmations_from_p2p(msg);
+                        self.new_preconfirmations_from_p2p(msg, message_id, peer_id);
                     }
                     TaskNextAction::Continue
                 } else {
@@ -365,7 +417,7 @@ pub fn new_service<P2P, Pubkey>(
     p2p: P2P,
     config: Config,
     protocol_pubkey: Pubkey,
-) -> ServiceRunner<Task<Pubkey>>
+) -> ServiceRunner<Task<Pubkey, P2P>>
 where
     P2P: P2PSubscriptions<GossipedStatuses = P2PPreConfirmationGossipData>,
     Pubkey: ProtocolPublicKey,
@@ -404,6 +456,7 @@ where
         write_requests_receiver,
         shared_data,
         signature_verification,
+        p2p,
     })
 }
 
@@ -439,6 +492,8 @@ mod tests {
                 DelegatePreConfirmationKey,
                 DelegatePublicKey,
                 GossipData,
+                GossipsubMessageAcceptance,
+                GossipsubMessageInfo,
                 Sealed,
             },
             preconfirmation::{
@@ -472,6 +527,7 @@ mod tests {
         ports::{
             P2PPreConfirmationGossipData,
             P2PPreConfirmationMessage,
+            P2PSubscriptions,
         },
         subscriptions::Subscriptions,
         update_sender::{
@@ -501,12 +557,40 @@ mod tests {
     const HALF_OF_TTL: Duration = Duration::from_secs(2);
     const QUART_OF_TTL: Duration = Duration::from_secs(1);
 
+    pub struct MockP2P {
+        p2p_notify_validity_sender:
+            mpsc::Sender<(GossipsubMessageInfo, GossipsubMessageAcceptance)>,
+    }
+
+    impl P2PSubscriptions for MockP2P {
+        type GossipedStatuses = P2PPreConfirmationGossipData;
+
+        fn gossiped_tx_statuses(
+            &self,
+        ) -> fuel_core_services::stream::BoxStream<Self::GossipedStatuses> {
+            Box::pin(tokio_stream::empty())
+        }
+
+        fn notify_gossip_transaction_validity(
+            &self,
+            message_info: GossipsubMessageInfo,
+            validity: GossipsubMessageAcceptance,
+        ) -> anyhow::Result<()> {
+            self.p2p_notify_validity_sender
+                .try_send((message_info, validity))
+                .unwrap();
+            Ok(())
+        }
+    }
+
     struct Handles {
         pub pre_confirmation_updates: mpsc::Sender<GossipData<P2PPreConfirmationMessage>>,
         pub write_requests_sender: mpsc::UnboundedSender<UpdateRequest>,
         pub read_requests_sender: mpsc::Sender<ReadRequest>,
         pub update_sender: UpdateSender,
         pub protocol_signing_key: SecretKey,
+        pub p2p_notify_validity_receiver:
+            mpsc::Receiver<(GossipsubMessageInfo, GossipsubMessageAcceptance)>,
     }
 
     pub(super) mod status {
@@ -618,8 +702,10 @@ mod tests {
         }
     }
 
-    fn new_task_with_handles(ttl: Duration) -> (Task<PublicKey>, Handles) {
+    fn new_task_with_handles(ttl: Duration) -> (Task<PublicKey, MockP2P>, Handles) {
         let (read_requests_sender, read_requests_receiver) = mpsc::channel(1);
+        let (p2p_notify_validity_sender, p2p_notify_validity_receiver) =
+            mpsc::channel(10000);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let (tx_status_sender, tx_status_receiver) = broadcast::channel(10000);
         let shared_data = SharedData {
@@ -627,7 +713,6 @@ mod tests {
             write_requests_sender: write_requests_sender.clone(),
             tx_status_receiver,
         };
-
         let (sender, receiver) = mpsc::channel(1_000);
         let new_tx_status = Box::pin(ReceiverStream::new(receiver));
         let subscriptions = Subscriptions { new_tx_status };
@@ -645,6 +730,7 @@ mod tests {
             read_requests_sender,
             update_sender,
             protocol_signing_key: signing_key,
+            p2p_notify_validity_receiver,
         };
 
         let task = Task {
@@ -654,6 +740,9 @@ mod tests {
             write_requests_receiver,
             shared_data,
             signature_verification,
+            p2p: MockP2P {
+                p2p_notify_validity_sender,
+            },
         };
 
         (task, handles)
@@ -706,6 +795,16 @@ mod tests {
             peer_id: Default::default(),
             message_id: vec![],
         }
+    }
+
+    fn bad_sealed_delegate_signature(
+        _protocol_secret_key: SecretKey,
+        delegate_public_key: DelegatePublicKey,
+        expiration: Tai64,
+    ) -> P2PPreConfirmationGossipData {
+        let mut rng = StdRng::seed_from_u64(3890u64);
+        let new_secret_key = SecretKey::random(&mut rng);
+        valid_sealed_delegate_signature(new_secret_key, delegate_public_key, expiration)
     }
 
     fn valid_pre_confirmation_signature(
@@ -1362,9 +1461,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn run__when_delegate_key_bad_signature_report_peer() {
+        // given
+        let (task, mut handles) = new_task_with_handles(TTL);
+        let (_delegate_signing_key, delegate_verifying_key) = delegate_key_pair();
+        let expiration = Tai64(u64::MAX);
+        let delegate_signature_message = bad_sealed_delegate_signature(
+            handles.protocol_signing_key,
+            delegate_verifying_key,
+            expiration,
+        );
+
+        // when
+        handles
+            .pre_confirmation_updates
+            .send(delegate_signature_message)
+            .await
+            .unwrap();
+
+        let service = ServiceRunner::new(task);
+        service.start_and_await().await.unwrap();
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // then
+        assert_eq!(
+            handles.p2p_notify_validity_receiver.try_recv().unwrap().1,
+            GossipsubMessageAcceptance::Reject
+        );
+    }
+
+    #[tokio::test]
     async fn run__when_pre_confirmations_bad_signature_then_do_not_send() {
         // given
-        let (task, handles) = new_task_with_handles(TTL);
+        let (task, mut handles) = new_task_with_handles(TTL);
 
         let tx_ids = vec![[3u8; 32].into(), [4u8; 32].into()];
         let preconfirmations = tx_ids
@@ -1415,6 +1545,15 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // then
+        // One success and one fail
+        assert_eq!(
+            handles.p2p_notify_validity_receiver.try_recv().unwrap().1,
+            GossipsubMessageAcceptance::Accept
+        );
+        assert_eq!(
+            handles.p2p_notify_validity_receiver.try_recv().unwrap().1,
+            GossipsubMessageAcceptance::Reject
+        );
         assert!(all_streams_timeout(&mut streams).await);
     }
 

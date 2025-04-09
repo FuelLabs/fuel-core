@@ -203,8 +203,8 @@ mod tests {
         assert_eq!(err, OutOfCapacity);
     }
 
-    #[test]
-    fn second_spawn_works_when_first_is_finished() {
+    #[tokio::test]
+    async fn second_spawn_works_when_first_is_finished() {
         const NUMBER_OF_PENDING_TASKS: usize = 1;
         let heavy_task_processor =
             AsyncProcessor::new("Test", 1, NUMBER_OF_PENDING_TASKS).unwrap();
@@ -215,10 +215,8 @@ mod tests {
             sleep(Duration::from_secs(1));
             sender.send(()).unwrap();
         });
-        first_spawn.expect("Expected Ok result");
-        futures::executor::block_on(async move {
-            receiver.await.unwrap();
-        });
+        first_spawn.expect("Expected Ok result").await.unwrap();
+        receiver.await.unwrap();
 
         // When
         let second_spawn = heavy_task_processor.try_spawn(async move {

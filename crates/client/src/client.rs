@@ -976,7 +976,7 @@ impl FuelClient {
         &'a self,
         tx: &'a Transaction,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
-        self.submit_and_await_status_opt(tx, None).await
+        self.submit_and_await_status_opt(tx, None, None).await
     }
 
     /// Similar to [`Self::submit_and_await_commit_opt`], but includes all intermediate states.
@@ -985,13 +985,16 @@ impl FuelClient {
         &'a self,
         tx: &'a Transaction,
         estimate_predicates: Option<bool>,
+        include_preconfirmation: Option<bool>,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
+        use schema::tx::SubmitAndAwaitStatusArg;
         let tx = tx.clone().to_bytes();
         let s = schema::tx::SubmitAndAwaitStatusSubscription::build(
-            TxWithEstimatedPredicatesArg {
+            SubmitAndAwaitStatusArg {
                 tx: HexString(Bytes(tx)),
                 estimate_predicates,
+                include_preconfirmation,
             },
         );
 
@@ -1243,14 +1246,29 @@ impl FuelClient {
 
     #[tracing::instrument(skip(self), level = "debug")]
     #[cfg(feature = "subscriptions")]
-    /// Subscribe to the status of a transaction
+    /// Similar to [`Self::subscribe_transaction_status_opt`], but with default options.
     pub async fn subscribe_transaction_status<'a>(
         &'a self,
         id: &'a TxId,
     ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>> + 'a> {
+        self.subscribe_transaction_status_opt(id, None).await
+    }
+
+    #[cfg(feature = "subscriptions")]
+    /// Subscribe to the status of a transaction
+    pub async fn subscribe_transaction_status_opt<'a>(
+        &'a self,
+        id: &'a TxId,
+        include_preconfirmation: Option<bool>,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
         use cynic::SubscriptionBuilder;
+        use schema::tx::StatusChangeSubscriptionArgs;
         let tx_id: TransactionId = (*id).into();
-        let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: tx_id });
+        let s =
+            schema::tx::StatusChangeSubscription::build(StatusChangeSubscriptionArgs {
+                id: tx_id,
+                include_preconfirmation,
+            });
 
         tracing::debug!("subscribing");
         let stream = self.subscribe(s).await?.map(|tx| {

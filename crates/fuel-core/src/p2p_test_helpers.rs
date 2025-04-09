@@ -592,6 +592,10 @@ impl Node {
                             || matches!(status, TransactionStatus::Success { .. }) {
                             break
                         }
+
+                        if matches!(status, TransactionStatus::SqueezedOut(_)) {
+                            panic!("Transaction was squeezed out: {:?}", status);
+                        }
                     }
                     _ = self.node.await_shutdown() => {
                         panic!("Got a stop signal")
