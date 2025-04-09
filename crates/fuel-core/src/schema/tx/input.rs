@@ -3,8 +3,6 @@ use async_graphql::{
     Union,
 };
 
-use fuel_core_types::fuel_tx;
-
 use crate::schema::scalars::{
     Address,
     AssetId,
@@ -17,6 +15,10 @@ use crate::schema::scalars::{
     U16,
     U64,
 };
+use fuel_core_types::{
+    fuel_tx,
+    fuel_tx::input::coin::UnverifiedCoin,
+};
 
 #[derive(Union)]
 pub enum Input {
@@ -24,6 +26,8 @@ pub enum Input {
     DataCoin(InputDataCoin),
     Contract(InputContract),
     Message(InputMessage),
+    ReadOnlyCoin(InputUnverifiedCoin),
+    ReadOnlyDataCoin(InputUnverifiedDataCoin),
 }
 
 pub struct InputCoin {
@@ -131,6 +135,73 @@ impl InputDataCoin {
     async fn data(&self) -> HexString {
         self.data.clone()
     }
+}
+
+pub struct InputUnverifiedCoin {
+    utxo_id: UtxoId,
+    owner: Address,
+    amount: U64,
+    asset_id: AssetId,
+    tx_pointer: TxPointer,
+}
+
+#[Object]
+impl InputUnverifiedCoin {
+    async fn utxo_id(&self) -> UtxoId {
+        self.utxo_id
+    }
+
+    async fn owner(&self) -> Address {
+        self.owner
+    }
+
+    async fn amount(&self) -> U64 {
+        self.amount
+    }
+
+    async fn asset_id(&self) -> AssetId {
+        self.asset_id
+    }
+
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+}
+
+#[Object]
+impl InputUnverifiedDataCoin {
+    async fn utxo_id(&self) -> UtxoId {
+        self.utxo_id
+    }
+
+    async fn owner(&self) -> Address {
+        self.owner
+    }
+
+    async fn amount(&self) -> U64 {
+        self.amount
+    }
+
+    async fn asset_id(&self) -> AssetId {
+        self.asset_id
+    }
+
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+
+    async fn data(&self) -> HexString {
+        self.data.clone()
+    }
+}
+
+pub struct InputUnverifiedDataCoin {
+    utxo_id: UtxoId,
+    owner: Address,
+    amount: U64,
+    asset_id: AssetId,
+    tx_pointer: TxPointer,
+    data: HexString,
 }
 
 pub struct InputContract {
@@ -302,6 +373,38 @@ impl From<&fuel_tx::Input> for Input {
                 predicate_data: HexString(predicate_data.clone()),
                 data: HexString(Default::default()),
             }),
+            fuel_tx::Input::ReadOnly(inner) => match inner {
+                fuel_tx::input::ReadOnly::Coin(UnverifiedCoin {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    tx_pointer,
+                }) => Input::ReadOnlyCoin(InputUnverifiedCoin {
+                    utxo_id: UtxoId(*utxo_id),
+                    owner: Address(*owner),
+                    amount: (*amount).into(),
+                    asset_id: AssetId(*asset_id),
+                    tx_pointer: TxPointer(*tx_pointer),
+                }),
+                fuel_tx::input::ReadOnly::DataCoin(
+                    fuel_tx::input::coin::UnverifiedDataCoin {
+                        utxo_id,
+                        owner,
+                        amount,
+                        asset_id,
+                        tx_pointer,
+                        data,
+                    },
+                ) => Input::ReadOnlyDataCoin(InputUnverifiedDataCoin {
+                    utxo_id: UtxoId(*utxo_id),
+                    owner: Address(*owner),
+                    amount: (*amount).into(),
+                    asset_id: AssetId(*asset_id),
+                    tx_pointer: TxPointer(*tx_pointer),
+                    data: HexString(data.clone()),
+                }),
+            },
             fuel_tx::Input::Contract(contract) => Input::Contract(contract.into()),
             fuel_tx::Input::MessageCoinSigned(
                 fuel_tx::input::message::MessageCoinSigned {

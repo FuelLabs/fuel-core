@@ -16,6 +16,16 @@ use tracing::{
     warn,
 };
 
+use crate::{
+    ports::{
+        MaybeCheckedTransaction,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+        RelayerPort,
+        TransactionsSource,
+    },
+    refs::ContractRef,
+};
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -85,6 +95,8 @@ use fuel_core_types::{
                 CoinSigned,
                 DataCoinPredicate,
                 DataCoinSigned,
+                UnverifiedCoin,
+                UnverifiedDataCoin,
             },
             message::{
                 MessageCoinPredicate,
@@ -92,6 +104,7 @@ use fuel_core_types::{
                 MessageDataPredicate,
                 MessageDataSigned,
             },
+            ReadOnly,
         },
         output,
         Address,
@@ -160,17 +173,6 @@ use fuel_core_types::{
         },
         relayer::Event,
     },
-};
-
-use crate::{
-    ports::{
-        MaybeCheckedTransaction,
-        NewTxWaiterPort,
-        PreconfirmationSenderPort,
-        RelayerPort,
-        TransactionsSource,
-    },
-    refs::ContractRef,
 };
 
 /// The maximum amount of transactions that can be included in a block,
@@ -1961,7 +1963,12 @@ where
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
-                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. })
+                | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
+                    utxo_id,
+                    ..
+                }))
+                | Input::ReadOnly(ReadOnly::Coin(UnverifiedCoin { utxo_id, .. })) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         if !coin.matches_input(input).unwrap_or_default() {
                             return Err(

@@ -4381,7 +4381,6 @@ dependencies = [
  "strum 0.24.1",
  "substrate-bn",
  "tai64",
- "tracing",
 ]
 
 [[package]]

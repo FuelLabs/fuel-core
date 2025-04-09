@@ -249,6 +249,9 @@ where
                     set_contracts.insert(c.contract_id);
                 }
 
+                Input::ReadOnly(_) => {
+                    // Doesn't require witness
+                }
                 Input::CoinPredicate(_)
                 | Input::DataCoinPredicate(_)
                 | Input::MessageCoinPredicate(_)
@@ -753,7 +756,8 @@ where
             | Input::DataCoinPredicate(_)
             | Input::MessageCoinSigned(_)
             | Input::MessageCoinPredicate(_) => true,
-            Input::MessageDataSigned(_)
+            Input::ReadOnly(_)
+            | Input::MessageDataSigned(_)
             | Input::MessageDataPredicate(_)
             | Input::Contract(_) => false,
         });

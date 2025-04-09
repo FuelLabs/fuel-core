@@ -7,6 +7,11 @@ use std::{
     time::SystemTime,
 };
 
+use super::{
+    RemovedTransactions,
+    Storage,
+    StorageData,
+};
 use crate::{
     error::{
         DependencyError,
@@ -28,6 +33,8 @@ use fuel_core_types::{
                 CoinSigned,
                 DataCoinPredicate,
                 DataCoinSigned,
+                UnverifiedCoin,
+                UnverifiedDataCoin,
             },
             contract::Contract,
             message::{
@@ -36,6 +43,7 @@ use fuel_core_types::{
                 MessageDataPredicate,
                 MessageDataSigned,
             },
+            ReadOnly,
         },
         ContractId,
         Input,
@@ -51,12 +59,6 @@ use fuel_core_types::{
 use petgraph::{
     graph::NodeIndex,
     prelude::StableDiGraph,
-};
-
-use super::{
-    RemovedTransactions,
-    Storage,
-    StorageData,
 };
 
 pub struct GraphStorage {
@@ -420,7 +422,12 @@ impl GraphStorage {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
-                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. })
+                | Input::ReadOnly(ReadOnly::Coin(UnverifiedCoin { utxo_id, .. }))
+                | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
+                    utxo_id,
+                    ..
+                })) => {
                     if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         direct_dependencies.insert(*node_id);
 
@@ -740,7 +747,21 @@ impl Storage for GraphStorage {
                     amount,
                     asset_id,
                     ..
-                }) => {
+                })
+                | Input::ReadOnly(ReadOnly::Coin(UnverifiedCoin {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                }))
+                | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })) => {
                     if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         let Some(node) = self.graph.node_weight(*node_id) else {
                             return Err(InputValidationErrorType::Inconsistency(
