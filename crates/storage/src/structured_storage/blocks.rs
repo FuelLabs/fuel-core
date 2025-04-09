@@ -66,7 +66,10 @@ impl TableWithBlueprint for FuelBlocks {
 mod tests {
     use super::*;
     use crate::{
-        blueprint::merklized::basic_tests_bmt::BasicMerkleizedStorageTests,
+        blueprint::merklized::basic_tests_bmt::{
+            BMTTestDataGenerator,
+            Wrapper,
+        },
         structured_storage::{
             test::InMemoryStorage,
             TableWithBlueprint,
@@ -86,23 +89,47 @@ mod tests {
         },
         fuel_types::ChainId,
     };
-    use fuel_vm_private::crypto::ephemeral_merkle_root;
+    use fuel_vm_private::{
+        crypto::ephemeral_merkle_root,
+        fuel_storage::Mappable,
+    };
     use rand::{
         rngs::StdRng,
         Rng,
     };
 
-    impl BasicMerkleizedStorageTests for FuelBlocks {
-        fn key() -> Box<Self::Key> {
-            Box::new(fuel_vm_private::fuel_types::BlockHeight::new(0))
+    impl BMTTestDataGenerator for FuelBlocks {
+        type Key = <FuelBlocks as Mappable>::Key;
+        type Value = Wrapper<<FuelBlocks as Mappable>::OwnedValue>;
+
+        fn key() -> Self::Key {
+            fuel_vm_private::fuel_types::BlockHeight::new(0)
         }
 
-        fn random_key(rng: &mut StdRng) -> Box<Self::Key> {
-            Box::new(rng.gen())
+        fn random_key(rng: &mut StdRng) -> Self::Key {
+            rng.gen()
         }
 
-        fn value() -> Box<Self::Value> {
-            Box::new(fuel_core_types::blockchain::block::CompressedBlock::default())
+        fn generate_value(rng: &mut StdRng) -> Self::Value {
+            let header = PartialBlockHeader {
+                application: Default::default(),
+                consensus: ConsensusHeader::<Empty> {
+                    height: rng.gen(),
+                    ..Default::default()
+                },
+            };
+            let block = PartialFuelBlock::new(header, vec![]);
+            let block = block
+                .generate(
+                    &[],
+                    Default::default(),
+                    #[cfg(feature = "fault-proving")]
+                    &Default::default(),
+                )
+                .expect("The block is valid")
+                .compress(&Default::default());
+
+            Wrapper(block)
         }
     }
 

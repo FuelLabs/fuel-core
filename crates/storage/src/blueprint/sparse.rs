@@ -927,7 +927,6 @@ pub mod root_storage_tests_smt {
     }
 
     /// Generates test functions for tables using the sparse merkle tree structure.
-    /// The table must implement `BasicSmtStorageTests`.
     #[cfg(feature = "test-helpers")]
     #[macro_export]
     macro_rules! root_storage_tests {
