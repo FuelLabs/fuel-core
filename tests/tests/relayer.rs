@@ -81,6 +81,7 @@ use test_helpers::{
         SigningAccount,
     },
     config_with_fee,
+    default_signing_wallet,
 };
 use tokio::sync::oneshot::Sender;
 
@@ -287,7 +288,7 @@ async fn can_find_failed_relayed_tx() {
 #[tokio::test(flavor = "multi_thread")]
 async fn can_restart_node_with_relayer_data() {
     let mut rng = StdRng::seed_from_u64(1234);
-    let mut config = Config::local_node();
+    let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
     let eth_node = MockMiddleware::default();
@@ -340,8 +341,10 @@ async fn can_restart_node_with_relayer_data() {
         client.health().await.unwrap();
 
         for _ in 0..5 {
-            let tx = Transaction::default_test_tx();
-            client.submit_and_await_commit(&tx).await.unwrap();
+            client
+                .run_script(vec![op::ret(1)], vec![], default_signing_wallet())
+                .await
+                .unwrap();
         }
 
         service.send_stop_signal_and_await_shutdown().await.unwrap();
