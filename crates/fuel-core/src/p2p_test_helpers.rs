@@ -250,6 +250,7 @@ impl Bootstrap {
 }
 
 // set of nodes with the given setups.
+#[allow(clippy::arithmetic_side_effects)]
 pub async fn make_nodes(
     bootstrap_setup: impl IntoIterator<Item = Option<BootstrapSetup>>,
     producers_setup: impl IntoIterator<Item = Option<ProducerSetup>>,
@@ -268,12 +269,12 @@ pub async fn make_nodes(
             let all: Vec<_> = (0..num_test_txs)
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
-                    let initial_coin = CoinConfig {
-                        // set idx to prevent overlapping utxo_ids when
-                        // merging with existing coins from config
-                        output_index: 10,
+                    let mut initial_coin = CoinConfig {
                         ..coin_generator.generate_with(secret, 10000)
                     };
+                    // Shift idx to prevent overlapping utxo_ids when
+                    // merging with existing coins from config
+                    initial_coin.output_index += 100;
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
