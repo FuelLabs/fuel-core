@@ -100,9 +100,11 @@ mod tests {
                     CoinPredicate,
                     CoinSigned,
                     DataCoinPredicate,
+                    UnverifiedDataCoin,
                 },
                 contract,
                 Input,
+                ReadOnly,
             },
             policies::PolicyType,
             Bytes32,
@@ -3620,7 +3622,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_predicate_succeeds_if_read_only_input_matches_output_data() {
+    fn validate__predicate_succeeds_if_read_only_input_matches_output_data() {
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         // given
@@ -3636,7 +3638,6 @@ mod tests {
             consensus_parameters: consensus_parameters.clone(),
         };
         let data = vec![99u8; 100];
-        let predicate_data = data.clone();
         let true_predicate = vec![op::ret(0x01)].into_iter().collect();
         let true_predicate_owner = Input::predicate_owner(&true_predicate);
 
@@ -3644,16 +3645,13 @@ mod tests {
             vec![op::ret(RegId::ONE)].into_iter().collect(),
             vec![],
         )
-        .max_fee_limit(amount)
-        .add_input(Input::data_coin_predicate(
+        .max_fee_limit(100)
+        .add_input(Input::read_only_data_coin(
             rng.gen(),
             owner,
             other_amount,
             AssetId::BASE,
             rng.gen(),
-            0,
-            predicate,
-            predicate_data,
             data.clone(),
         ))
         .add_input(Input::coin_predicate(
@@ -3687,14 +3685,14 @@ mod tests {
         let db = &mut Database::default();
 
         // insert data coin into state
-        if let Input::DataCoinPredicate(DataCoinPredicate {
+        if let Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
             utxo_id,
             owner,
             amount,
             asset_id,
             tx_pointer,
             ..
-        }) = tx.inputs()[0]
+        })) = tx.inputs()[0]
         {
             let coin = CompressedCoin::V2(CompressedCoinV2 {
                 owner,

@@ -3,11 +3,16 @@
 use crate::{
     fuel_asm::Word,
     fuel_tx::{
-        input::coin::{
-            CoinPredicate,
-            CoinSigned,
-            DataCoinPredicate,
-            DataCoinSigned,
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+                DataCoinPredicate,
+                DataCoinSigned,
+                UnverifiedCoin,
+                UnverifiedDataCoin,
+            },
+            ReadOnly,
         },
         Input,
         TxPointer,
@@ -316,7 +321,13 @@ impl CompressedCoin {
                 amount,
                 asset_id,
                 ..
-            }) => match self {
+            })
+            | Input::ReadOnly(ReadOnly::Coin(UnverifiedCoin {
+                owner,
+                amount,
+                asset_id,
+                ..
+            })) => match self {
                 CompressedCoin::V1(coin) => Some(
                     owner == &coin.owner
                         && amount == &coin.amount
@@ -337,7 +348,14 @@ impl CompressedCoin {
                 asset_id,
                 data,
                 ..
-            }) => match self {
+            })
+            | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
+                owner,
+                amount,
+                asset_id,
+                data,
+                ..
+            })) => match self {
                 CompressedCoin::V2(coin) => Some(
                     owner == &coin.owner
                         && amount == &coin.amount
