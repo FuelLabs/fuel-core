@@ -532,7 +532,8 @@ async fn pending_pool__returns_error_for_transaction_that_spends_already_spent_u
     let (output_a, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output_a]), 1);
     let input_a = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
-    let tx2 = universe.build_script_transaction(Some(vec![input_a]), None, 20);
+    let tx2 = universe.build_script_transaction(Some(vec![input_a.clone()]), None, 20);
+    let tx_with_input_a = universe.build_script_transaction(Some(vec![input_a]), None, 1);
 
     // When
     service.shared.insert(tx1.clone()).await.unwrap();
@@ -549,7 +550,7 @@ async fn pending_pool__returns_error_for_transaction_that_spends_already_spent_u
 
     // Insert tx2 will land in pending pool because it uses an input that doesn't exist anymore
     // it should be pruned out of the pending pool after the timeout
-    let result = service.shared.insert(tx2.clone()).await;
+    let result = service.shared.insert(tx_with_input_a.clone()).await;
 
     // Then
     assert_eq!(txs_first_extract.len(), 2);
