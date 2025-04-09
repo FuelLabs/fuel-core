@@ -56,6 +56,7 @@ mod storage;
 
 pub type GasPrice = Word;
 
+mod spent_inputs;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

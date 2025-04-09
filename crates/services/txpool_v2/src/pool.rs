@@ -1,5 +1,6 @@
 mod collisions;
 
+use core::num::NonZeroUsize;
 use std::{
     collections::HashMap,
     iter,
@@ -59,7 +60,10 @@ use crate::{
     },
 };
 
-use crate::error::RemovedReason;
+use crate::{
+    error::RemovedReason,
+    spent_inputs::SpentInputs,
+};
 #[cfg(test)]
 use std::collections::HashSet;
 
@@ -85,6 +89,8 @@ pub struct Pool<S, SI, CM, SA, TxStatusManager> {
     pub(crate) tx_id_to_storage_id: HashMap<TxId, SI>,
     /// All sent outputs when transactions are extracted. Clear when processing a block.
     pub(crate) extracted_outputs: ExtractedOutputs,
+    /// The spent inputs cache.
+    pub(crate) spent_inputs: SpentInputs,
     /// Current pool gas stored.
     pub(crate) current_gas: u64,
     /// Current pool size in bytes.
@@ -108,6 +114,9 @@ impl<S, SI, CM, SA, TxStatusManager> Pool<S, SI, CM, SA, TxStatusManager> {
         new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
         tx_status_manager: Arc<TxStatusManager>,
     ) -> Self {
+        let capacity = NonZeroUsize::new(config.pool_limits.max_txs.saturating_add(1))
+            .expect("Max txs is greater than 0");
+        let spent_inputs = SpentInputs::new(capacity);
         Pool {
             storage,
             collision_manager,
@@ -115,6 +124,7 @@ impl<S, SI, CM, SA, TxStatusManager> Pool<S, SI, CM, SA, TxStatusManager> {
             config,
             tx_id_to_storage_id: HashMap::new(),
             extracted_outputs: ExtractedOutputs::new(),
+            spent_inputs,
             current_gas: 0,
             current_bytes_size: 0,
             pool_stats_sender,
@@ -276,6 +286,7 @@ where
             &tx,
             persistent_storage,
             &self.extracted_outputs,
+            &self.spent_inputs,
             self.config.utxo_validation,
         )?;
 
@@ -376,6 +387,10 @@ where
             .map(|storage_entry| {
                 self.extracted_outputs
                     .new_extracted_transaction(&storage_entry.transaction);
+                self.spent_inputs.maybe_spend_inputs(
+                    storage_entry.transaction.id(),
+                    &storage_entry.transaction.inputs(),
+                );
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
                 storage_entry.transaction
             })
@@ -404,6 +419,7 @@ where
     pub fn process_committed_transactions(&mut self, tx_ids: impl Iterator<Item = TxId>) {
         let mut transactions_to_promote = vec![];
         for tx_id in tx_ids {
+            self.spent_inputs.spend_inputs_by_tx_id(tx_id);
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
                     self.storage.get_direct_dependents(storage_id).collect();
@@ -417,6 +433,8 @@ where
                 };
                 self.extracted_outputs
                     .new_extracted_transaction(&transaction.transaction);
+                self.spent_inputs
+                    .spend_inputs(tx_id, &transaction.transaction.inputs());
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
 
                 for dependent in dependents {
@@ -621,7 +639,7 @@ where
         if self.tx_id_to_storage_id.contains_key(&tx_id) {
             let tx_status = statuses::SqueezedOut {
                 reason: Error::SkippedTransaction(format!(
-                    "Parent transaction with id: {tx_id}, was removed because of: {reason}"
+                    "Transaction with id: {tx_id}, was removed because of: {reason}"
                 ))
                 .to_string(),
             };
@@ -629,6 +647,7 @@ where
         }
 
         self.extracted_outputs.new_skipped_transaction(&tx_id);
+        self.spent_inputs.unspend_inputs(tx_id);
 
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
         if !coin_dependents.is_empty() {

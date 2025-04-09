@@ -150,7 +150,7 @@ fn main() {
     test_builder.initial_coins.extend(
         transactions
             .iter()
-            .flat_map(|t| t.inputs().unwrap())
+            .flat_map(|t| t.inputs())
             .filter_map(|input| {
                 if let Input::CoinSigned(CoinSigned {
                     amount,
