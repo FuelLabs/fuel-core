@@ -83,9 +83,10 @@ impl FuelService {
         &self,
         id: Bytes32,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
+        // First subscribe to the statuses, and only after that create a view.
         let tx_status_manager = &self.shared.tx_status_manager;
-        let db = self.shared.database.off_chain().latest_view()?;
         let rx = tx_status_manager.tx_update_subscribe(id).await?;
+        let db = self.shared.database.off_chain().latest_view()?;
         let state = StatusChangeState {
             db,
             tx_status_manager,
