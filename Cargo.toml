@@ -104,7 +104,7 @@ fuel-vm-private = { version = "0.60.0", package = "fuel-vm", default-features = 
 
 # Common dependencies
 anyhow = "1.0"
-async-graphql = { version = "7.0.15", features = [
+async-graphql = { version = "=7.0.15", features = [
   "graphiql",
   "tracing",
 ], default-features = false }
