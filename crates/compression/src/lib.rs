@@ -9,7 +9,7 @@ pub mod config;
 pub mod decompress;
 mod eviction_policy;
 pub mod ports;
-mod registry;
+pub mod registry;
 
 pub use config::Config;
 use enum_dispatch::enum_dispatch;
