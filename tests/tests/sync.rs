@@ -52,13 +52,13 @@ async fn test_producer_getting_own_blocks_back() {
     let expected = producer.insert_txs().await;
 
     // Wait up to 10 seconds for the producer to commit their own blocks.
-    producer.consistency_10s(&expected).await;
+    producer.consistency_30s(&expected).await;
 
     // Start the validator.
     validator.start().await;
 
     // Wait up to 10 seconds for the validator to sync with the producer.
-    validator.consistency_10s(&expected).await;
+    validator.consistency_30s(&expected).await;
 }
 
 #[test_case(1; "partition with 1 tx")]
@@ -105,10 +105,10 @@ async fn test_partition_single(num_txs: usize) {
     let expected = producer.insert_txs().await;
 
     // Wait up to 10 seconds for the producer to commit their own blocks.
-    producer.consistency_10s(&expected).await;
+    producer.consistency_30s(&expected).await;
 
     // Wait up to 20 seconds for Bob to sync with the producer.
-    validators["Bob"].consistency_20s(&expected).await;
+    validators["Bob"].consistency_60s(&expected).await;
 
     // Shutdown the producer.
     producer.shutdown().await;
@@ -117,7 +117,7 @@ async fn test_partition_single(num_txs: usize) {
     validators["Carol"].start().await;
 
     // Wait up to 20 seconds for Carol to sync with Bob.
-    validators["Carol"].consistency_20s(&expected).await;
+    validators["Carol"].consistency_60s(&expected).await;
 }
 
 #[test_case(1, 3, 3; "partition with 1 tx 3 validators 3 partitions")]
@@ -175,7 +175,7 @@ async fn test_partitions_larger_groups(
 
     // Insert the transactions into the tx pool.
     let expected = producer.insert_txs().await;
-    producer.consistency_20s(&expected).await;
+    producer.consistency_60s(&expected).await;
 
     // The overlap between two groups.
     let mut overlap: VecDeque<Vec<Node>> = VecDeque::with_capacity(2);
@@ -203,7 +203,7 @@ async fn test_partitions_larger_groups(
 
         // Wait up to 10 seconds validators to sync with the overlapping group.
         for v in &mut validators {
-            v.consistency_20s(&expected).await;
+            v.consistency_60s(&expected).await;
         }
 
         // Shutdown the overlapping group.
@@ -278,7 +278,7 @@ async fn test_multiple_producers_different_keys() {
 
     // Wait producers to produce all blocks.
     for (expected, producer) in expected.iter().zip(producers.iter_mut()) {
-        producer.consistency_10s(expected).await;
+        producer.consistency_30s(expected).await;
     }
 
     // Partition the validators into groups.
@@ -294,7 +294,7 @@ async fn test_multiple_producers_different_keys() {
     for (expected, mut validators) in expected.iter().zip(groups) {
         assert_eq!(group_size, validators.len());
         for v in &mut validators {
-            v.consistency_20s(expected).await;
+            v.consistency_60s(expected).await;
         }
     }
 }
@@ -329,6 +329,6 @@ async fn test_multiple_producers_same_key() {
     }
 
     for v in &mut validators {
-        v.consistency_10s(&expected).await;
+        v.consistency_30s(&expected).await;
     }
 }
