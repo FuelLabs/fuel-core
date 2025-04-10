@@ -66,7 +66,7 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
             with_cloned(&config, |config| {
                 async_execute(async {
                     let ctx = TestContext::new(config).await;
-                    tests::transfers::transfer_back(&ctx).await
+                    tests::script::receipts(&ctx).await
                 })
             }),
         ),
@@ -121,7 +121,7 @@ pub fn main_body(config: SuiteConfig, mut args: Arguments) {
         ),
     ];
 
-    libtest_mimic::run(&args, tests).exit();
+    libtest_mimic::run(&args, tests).exit_if_failed();
 }
 
 pub fn load_config_env() -> SuiteConfig {

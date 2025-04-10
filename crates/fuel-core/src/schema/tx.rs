@@ -982,7 +982,7 @@ impl<'a> ContextExt for Context<'a> {
     ) -> anyhow::Result<FuelTx> {
         let mut has_predicates = false;
 
-        for input in tx.inputs()? {
+        for input in tx.inputs().iter() {
             if input.predicate().is_some() {
                 has_predicates = true;
                 break;

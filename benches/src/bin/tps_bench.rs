@@ -150,7 +150,7 @@ fn main() {
     test_builder.initial_coins.extend(
         transactions
             .iter()
-            .flat_map(|t| t.inputs().unwrap())
+            .flat_map(|t| t.inputs().into_owned())
             .filter_map(|input| {
                 if let Input::CoinSigned(CoinSigned {
                     amount,
@@ -174,9 +174,9 @@ fn main() {
                         output_index: utxo_id.output_index(),
                         tx_pointer_block_height: tx_pointer.block_height(),
                         tx_pointer_tx_idx: tx_pointer.tx_index(),
-                        owner: *owner,
-                        amount: *amount,
-                        asset_id: *asset_id,
+                        owner,
+                        amount,
+                        asset_id,
                     })
                 } else {
                     None

@@ -59,6 +59,10 @@ pub enum Error {
         /// The minimum gas price required by TxPool.
         minimal_gas_price: Word,
     },
+    #[display(fmt = "The message input {_0:#x} was already spent")]
+    MessageInputWasAlreadySpent(Nonce),
+    #[display(fmt = "The UTXO input {_0:#x} was already spent")]
+    UtxoInputWasAlreadySpent(UtxoId),
 }
 
 impl Error {
