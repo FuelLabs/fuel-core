@@ -427,6 +427,14 @@ impl GraphStorage {
                 | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
                     utxo_id,
                     ..
+                }))
+                | Input::ReadOnly(ReadOnly::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    ..
+                }))
+                | Input::ReadOnly(ReadOnly::DataCoinPredicate(DataCoinPredicate {
+                    utxo_id,
+                    ..
                 })) => {
                     if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         direct_dependencies.insert(*node_id);
@@ -756,6 +764,20 @@ impl Storage for GraphStorage {
                     ..
                 }))
                 | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                }))
+                | Input::ReadOnly(ReadOnly::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                }))
+                | Input::ReadOnly(ReadOnly::DataCoinPredicate(DataCoinPredicate {
                     utxo_id,
                     owner,
                     amount,

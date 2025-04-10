@@ -1968,7 +1968,15 @@ where
                     utxo_id,
                     ..
                 }))
-                | Input::ReadOnly(ReadOnly::Coin(UnverifiedCoin { utxo_id, .. })) => {
+                | Input::ReadOnly(ReadOnly::Coin(UnverifiedCoin { utxo_id, .. }))
+                | Input::ReadOnly(ReadOnly::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    ..
+                }))
+                | Input::ReadOnly(ReadOnly::DataCoinPredicate(DataCoinPredicate {
+                    utxo_id,
+                    ..
+                })) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         if !coin.matches_input(input).unwrap_or_default() {
                             return Err(
