@@ -419,7 +419,6 @@ mod fault_proving {
                 compute_registry_root!(storage::address::Address),
                 compute_registry_root!(storage::asset_id::AssetId),
                 compute_registry_root!(storage::contract_id::ContractId),
-                compute_registry_root!(storage::evictor_cache::EvictorCache),
                 compute_registry_root!(storage::predicate_code::PredicateCode),
                 compute_registry_root!(storage::script_code::ScriptCode),
                 compute_registry_root!(storage::registry_index::RegistryIndex),
