@@ -123,7 +123,7 @@ where
                     .map_err(|e| anyhow::anyhow!("Failed to get registry root: {}", e))?;
                 let registry_root_after_compression = block.header.registry_root;
                 if registry_root_after_decompression != registry_root_after_compression {
-                    anyhow::bail!("Registry root mismatch");
+                    anyhow::bail!("Registry root mismatch. registry root after decompression: {:?}, registry root after compression: {:?}", registry_root_after_decompression, registry_root_after_compression);
                 }
             }
         }
