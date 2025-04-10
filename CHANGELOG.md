@@ -6,6 +6,34 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.43.0]
+
+### Breaking
+- [2882](https://github.com/FuelLabs/fuel-core/pull/2882): Changed the type of the `resolved_outputs` for pre-confirmations. Now it also includes `Utxoid`. `resolved_outputs` field contains only `Change` and `Variable` outputs, so the `UtxoId` for them could be hard to derive, if transaction has known inputs. This information should help to create dependent transactions more easily.
+- [2900](https://github.com/FuelLabs/fuel-core/pull/2900): Get rid of `Deref` impl on `ImportResult` by introducing wrapper type.
+- [2909](https://github.com/FuelLabs/fuel-core/pull/2909): Compressed block headers now include a merkle root of the temporal registry after compression was performed.
+- [2931](https://github.com/FuelLabs/fuel-core/pull/2931): In `fuel-core-compression`, the `compress` function now takes a reference to `Config` instead of the value.
+
+### Added
+- [2848](https://github.com/FuelLabs/fuel-core/pull/2848): Link all components of preconfirmations and add E2E tests.
+- [2882](https://github.com/FuelLabs/fuel-core/pull/2882): Listen to tx status update from `TxStatusManager` in `TxPool`. Added logic to clean up transactions from the pool if received squeezed out pre confirmations. Added logic to promote transactions on sentry nodes when receive pre-confirmation.
+- [2885](https://github.com/FuelLabs/fuel-core/pull/2885): Notify P2P from `TxStatusManager` in case of bad preconfirmation message.
+- [2901](https://github.com/FuelLabs/fuel-core/pull/2901): New query `dryRunRecordStorageReads` which works like `dryRun` but also returns storage reads, allowing use of execution tracer or local debugger
+- [2912](https://github.com/FuelLabs/fuel-core/pull/2912): Add the `allow_partial` parameter to the `coinsToSpend` query. The default value of this parameters is `false` to preserve the old behavior. If set to `true`, the query returns available coins instead of failing when the requested amount is unavailable.
+- [2914](https://github.com/FuelLabs/fuel-core/pull/2914): Tests ensuring the proof generation and validation of tables with sparse and merklized blueprints work.
+
+### Changed
+- [2859](https://github.com/FuelLabs/fuel-core/pull/2859): Swap out off-chain worker compression for dedicated compression service in `fuel-core-bin`.
+- [2914](https://github.com/FuelLabs/fuel-core/pull/2914): Break out test logic to trait methods for `root_storage_tests` and `basic_merkleized_storage_tests` test macros.
+- [2925](https://github.com/FuelLabs/fuel-core/pull/2925): Make preconfirmation optional on API endpoints.
+
+### Fixed
+- [2918](https://github.com/FuelLabs/fuel-core/pull/2918): Only cancel background work if primary RocksDB instance is dropped
+- [2935](https://github.com/FuelLabs/fuel-core/pull/2935): The change rejects transactions immediately, if they use spent coins. `TxPool` has a SpentInputs LRU cache, storing all spent coins.
+
+### Removed
+- [2859](https://github.com/FuelLabs/fuel-core/pull/2859): Removed DA compression from off-chain worker in favor of dedicated compression service in `fuel-core-bin`.
+
 ## [Version 0.42.0]
 
 ### Breaking
