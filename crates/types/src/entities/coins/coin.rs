@@ -327,6 +327,12 @@ impl CompressedCoin {
                 amount,
                 asset_id,
                 ..
+            }))
+            | Input::ReadOnly(ReadOnly::CoinPredicate(CoinPredicate {
+                owner,
+                amount,
+                asset_id,
+                ..
             })) => match self {
                 CompressedCoin::V1(coin) => Some(
                     owner == &coin.owner
@@ -350,6 +356,13 @@ impl CompressedCoin {
                 ..
             })
             | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
+                owner,
+                amount,
+                asset_id,
+                data,
+                ..
+            }))
+            | Input::ReadOnly(ReadOnly::DataCoinPredicate(DataCoinPredicate {
                 owner,
                 amount,
                 asset_id,

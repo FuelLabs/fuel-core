@@ -1761,6 +1761,17 @@ where
                     }) => {
                         *predicate_gas_used = gas_used;
                     }
+                    Input::ReadOnly(
+                        ReadOnly::CoinPredicate(CoinPredicate {
+                            predicate_gas_used, ..
+                        })
+                        | ReadOnly::DataCoinPredicate(DataCoinPredicate {
+                            predicate_gas_used,
+                            ..
+                        }),
+                    ) => {
+                        *predicate_gas_used = gas_used;
+                    }
                     _ => {
                         debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
                         or we added a new predicate inputs.");
