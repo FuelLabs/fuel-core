@@ -59,9 +59,10 @@ impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::config::Config
 impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::config::Config where V: ppv_lite86::types::MultiLane<T>
 pub fn fuel_core_tx_status_manager::config::Config::vzip(self) -> V
 pub mod fuel_core_tx_status_manager::ports
-pub trait fuel_core_tx_status_manager::ports::P2PSubscriptions
+pub trait fuel_core_tx_status_manager::ports::P2PSubscriptions: core::marker::Send
 pub type fuel_core_tx_status_manager::ports::P2PSubscriptions::GossipedStatuses: fuel_core_types::services::p2p::NetworkData<fuel_core_tx_status_manager::ports::P2PPreConfirmationMessage>
 pub fn fuel_core_tx_status_manager::ports::P2PSubscriptions::gossiped_tx_statuses(&self) -> fuel_core_services::stream::BoxStream<Self::GossipedStatuses>
+pub fn fuel_core_tx_status_manager::ports::P2PSubscriptions::notify_gossip_transaction_validity(&self, message_info: fuel_core_types::services::p2p::GossipsubMessageInfo, validity: fuel_core_types::services::p2p::GossipsubMessageAcceptance) -> anyhow::Result<()>
 pub type fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData = fuel_core_types::services::p2p::GossipData<fuel_core_tx_status_manager::ports::P2PPreConfirmationMessage>
 pub type fuel_core_tx_status_manager::ports::P2PPreConfirmationMessage = fuel_core_types::services::p2p::PreConfirmationMessage<fuel_core_types::services::p2p::DelegatePublicKey, fuel_types::array_types::Bytes64, fuel_core_types::services::p2p::ProtocolSignature>
 pub mod fuel_core_tx_status_manager::service
@@ -117,56 +118,56 @@ pub type fuel_core_tx_status_manager::service::SharedData::Output = T
 impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::SharedData
 impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::SharedData where V: ppv_lite86::types::MultiLane<T>
 pub fn fuel_core_tx_status_manager::service::SharedData::vzip(self) -> V
-pub struct fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey> fuel_core_services::service::RunnableService for fuel_core_tx_status_manager::service::Task<Pubkey>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::SharedData = fuel_core_tx_status_manager::service::SharedData
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Task = fuel_core_tx_status_manager::service::Task<Pubkey>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::TaskParams = ()
-pub const fuel_core_tx_status_manager::service::Task<Pubkey>::NAME: &'static str
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::into_task<'life0, 'async_trait>(self, _: &'life0 fuel_core_services::state::StateWatcher, __arg2: Self::TaskParams) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = anyhow::Result<Self::Task>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::shared_data(&self) -> Self::SharedData
-impl<Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey> fuel_core_services::service::RunnableTask for fuel_core_tx_status_manager::service::Task<Pubkey>
-pub async fn fuel_core_tx_status_manager::service::Task<Pubkey>::run(&mut self, watcher: &mut fuel_core_services::state::StateWatcher) -> fuel_core_services::service::TaskNextAction
-pub async fn fuel_core_tx_status_manager::service::Task<Pubkey>::shutdown(self) -> anyhow::Result<()>
-impl<Pubkey> core::marker::Freeze for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Freeze
-impl<Pubkey> core::marker::Send for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Send
-impl<Pubkey> core::marker::Sync for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Sync
-impl<Pubkey> core::marker::Unpin for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Unpin
-impl<Pubkey> !core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<Pubkey> !core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::From<T>
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::into(self) -> U
-impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::Into<T>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Error = core::convert::Infallible
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
-impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::TryFrom<T>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Error = <U as core::convert::TryFrom<T>>::Error
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
-impl<T> core::any::Any for fuel_core_tx_status_manager::service::Task<Pubkey> where T: 'static + ?core::marker::Sized
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::type_id(&self) -> core::any::TypeId
-impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::borrow(&self) -> &T
-impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::borrow_mut(&mut self) -> &mut T
-impl<T> core::convert::From<T> for fuel_core_tx_status_manager::service::Task<Pubkey>
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::from(t: T) -> T
-impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tap::conv::Conv for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
-impl<T> tap::tap::Tap for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::service::Task<Pubkey>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Output = T
-impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::Task<Pubkey> where V: ppv_lite86::types::MultiLane<T>
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::vzip(self) -> V
+pub struct fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<Pubkey, P2P> fuel_core_services::service::RunnableService for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey, P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::SharedData = fuel_core_tx_status_manager::service::SharedData
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::Task = fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::TaskParams = ()
+pub const fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::NAME: &'static str
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::into_task<'life0, 'async_trait>(self, _: &'life0 fuel_core_services::state::StateWatcher, __arg2: Self::TaskParams) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = anyhow::Result<Self::Task>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::shared_data(&self) -> Self::SharedData
+impl<Pubkey, P2P> fuel_core_services::service::RunnableTask for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey, P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions
+pub async fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::run(&mut self, watcher: &mut fuel_core_services::state::StateWatcher) -> fuel_core_services::service::TaskNextAction
+pub async fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::shutdown(self) -> anyhow::Result<()>
+impl<Pubkey, P2P> core::marker::Freeze for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where P2P: core::marker::Freeze, Pubkey: core::marker::Freeze
+impl<Pubkey, P2P> core::marker::Send for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where P2P: core::marker::Send, Pubkey: core::marker::Send
+impl<Pubkey, P2P> core::marker::Sync for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where P2P: core::marker::Sync, Pubkey: core::marker::Sync
+impl<Pubkey, P2P> core::marker::Unpin for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where P2P: core::marker::Unpin, Pubkey: core::marker::Unpin
+impl<Pubkey, P2P> !core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<Pubkey, P2P> !core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where U: core::convert::From<T>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where U: core::convert::Into<T>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::Error = core::convert::Infallible
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where U: core::convert::TryFrom<T>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where T: 'static + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::from(t: T) -> T
+impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tap::conv::Conv for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where T: ?core::marker::Sized
+impl<T> tap::tap::Tap for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::Output = T
+impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where V: ppv_lite86::types::MultiLane<T>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::vzip(self) -> V
 pub trait fuel_core_tx_status_manager::service::ProtocolPublicKey: core::marker::Send
 pub fn fuel_core_tx_status_manager::service::ProtocolPublicKey::latest_address(&self) -> fuel_types::array_types::Address
-pub fn fuel_core_tx_status_manager::service::new_service<P2P, Pubkey>(p2p: P2P, config: fuel_core_tx_status_manager::config::Config, protocol_pubkey: Pubkey) -> fuel_core_services::service::ServiceRunner<fuel_core_tx_status_manager::service::Task<Pubkey>> where P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions<GossipedStatuses = fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData>, Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey
+pub fn fuel_core_tx_status_manager::service::new_service<P2P, Pubkey>(p2p: P2P, config: fuel_core_tx_status_manager::config::Config, protocol_pubkey: Pubkey) -> fuel_core_services::service::ServiceRunner<fuel_core_tx_status_manager::service::Task<Pubkey, P2P>> where P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions<GossipedStatuses = fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData>, Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey
 pub mod fuel_core_tx_status_manager::utils
 pub fn fuel_core_tx_status_manager::utils::from_executor_to_status(block: &fuel_core_types::blockchain::block::Block, result: fuel_core_types::services::executor::TransactionExecutionResult) -> fuel_core_types::services::transaction_status::TransactionExecutionStatus
 pub enum fuel_core_tx_status_manager::TxStatusMessage
@@ -286,53 +287,53 @@ pub type fuel_core_tx_status_manager::service::SharedData::Output = T
 impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::SharedData
 impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::SharedData where V: ppv_lite86::types::MultiLane<T>
 pub fn fuel_core_tx_status_manager::service::SharedData::vzip(self) -> V
-pub struct fuel_core_tx_status_manager::Task<Pubkey>
-impl<Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey> fuel_core_services::service::RunnableService for fuel_core_tx_status_manager::service::Task<Pubkey>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::SharedData = fuel_core_tx_status_manager::service::SharedData
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Task = fuel_core_tx_status_manager::service::Task<Pubkey>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::TaskParams = ()
-pub const fuel_core_tx_status_manager::service::Task<Pubkey>::NAME: &'static str
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::into_task<'life0, 'async_trait>(self, _: &'life0 fuel_core_services::state::StateWatcher, __arg2: Self::TaskParams) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = anyhow::Result<Self::Task>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::shared_data(&self) -> Self::SharedData
-impl<Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey> fuel_core_services::service::RunnableTask for fuel_core_tx_status_manager::service::Task<Pubkey>
-pub async fn fuel_core_tx_status_manager::service::Task<Pubkey>::run(&mut self, watcher: &mut fuel_core_services::state::StateWatcher) -> fuel_core_services::service::TaskNextAction
-pub async fn fuel_core_tx_status_manager::service::Task<Pubkey>::shutdown(self) -> anyhow::Result<()>
-impl<Pubkey> core::marker::Freeze for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Freeze
-impl<Pubkey> core::marker::Send for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Send
-impl<Pubkey> core::marker::Sync for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Sync
-impl<Pubkey> core::marker::Unpin for fuel_core_tx_status_manager::service::Task<Pubkey> where Pubkey: core::marker::Unpin
-impl<Pubkey> !core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<Pubkey> !core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::From<T>
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::into(self) -> U
-impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::Into<T>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Error = core::convert::Infallible
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
-impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::service::Task<Pubkey> where U: core::convert::TryFrom<T>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Error = <U as core::convert::TryFrom<T>>::Error
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
-impl<T> core::any::Any for fuel_core_tx_status_manager::service::Task<Pubkey> where T: 'static + ?core::marker::Sized
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::type_id(&self) -> core::any::TypeId
-impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::borrow(&self) -> &T
-impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::borrow_mut(&mut self) -> &mut T
-impl<T> core::convert::From<T> for fuel_core_tx_status_manager::service::Task<Pubkey>
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::from(t: T) -> T
-impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tap::conv::Conv for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::service::Task<Pubkey> where T: ?core::marker::Sized
-impl<T> tap::tap::Tap for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::service::Task<Pubkey>
-pub type fuel_core_tx_status_manager::service::Task<Pubkey>::Output = T
-impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::Task<Pubkey>
-impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::Task<Pubkey> where V: ppv_lite86::types::MultiLane<T>
-pub fn fuel_core_tx_status_manager::service::Task<Pubkey>::vzip(self) -> V
+pub struct fuel_core_tx_status_manager::Task<Pubkey, P2P>
+impl<Pubkey, P2P> fuel_core_services::service::RunnableService for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey, P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::SharedData = fuel_core_tx_status_manager::service::SharedData
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::Task = fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::TaskParams = ()
+pub const fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::NAME: &'static str
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::into_task<'life0, 'async_trait>(self, _: &'life0 fuel_core_services::state::StateWatcher, __arg2: Self::TaskParams) -> core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = anyhow::Result<Self::Task>> + core::marker::Send + 'async_trait)>> where Self: 'async_trait, 'life0: 'async_trait
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::shared_data(&self) -> Self::SharedData
+impl<Pubkey, P2P> fuel_core_services::service::RunnableTask for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey, P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions
+pub async fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::run(&mut self, watcher: &mut fuel_core_services::state::StateWatcher) -> fuel_core_services::service::TaskNextAction
+pub async fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::shutdown(self) -> anyhow::Result<()>
+impl<Pubkey, P2P> core::marker::Freeze for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where P2P: core::marker::Freeze, Pubkey: core::marker::Freeze
+impl<Pubkey, P2P> core::marker::Send for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where P2P: core::marker::Send, Pubkey: core::marker::Send
+impl<Pubkey, P2P> core::marker::Sync for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where P2P: core::marker::Sync, Pubkey: core::marker::Sync
+impl<Pubkey, P2P> core::marker::Unpin for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where P2P: core::marker::Unpin, Pubkey: core::marker::Unpin
+impl<Pubkey, P2P> !core::panic::unwind_safe::RefUnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<Pubkey, P2P> !core::panic::unwind_safe::UnwindSafe for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T, U> core::convert::Into<U> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where U: core::convert::From<T>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::into(self) -> U
+impl<T, U> core::convert::TryFrom<U> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where U: core::convert::Into<T>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::Error = core::convert::Infallible
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::try_from(value: U) -> core::result::Result<T, <T as core::convert::TryFrom<U>>::Error>
+impl<T, U> core::convert::TryInto<U> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where U: core::convert::TryFrom<T>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::Error = <U as core::convert::TryFrom<T>>::Error
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::try_into(self) -> core::result::Result<U, <U as core::convert::TryFrom<T>>::Error>
+impl<T> core::any::Any for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where T: 'static + ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::type_id(&self) -> core::any::TypeId
+impl<T> core::borrow::Borrow<T> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::borrow(&self) -> &T
+impl<T> core::borrow::BorrowMut<T> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where T: ?core::marker::Sized
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::borrow_mut(&mut self) -> &mut T
+impl<T> core::convert::From<T> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::from(t: T) -> T
+impl<T> either::into_either::IntoEither for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> fuel_storage::StorageAsMut for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> fuel_storage::StorageAsRef for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tap::conv::Conv for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tap::conv::TryConv for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tap::pipe::Pipe for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where T: ?core::marker::Sized
+impl<T> tap::tap::Tap for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tracing::instrument::Instrument for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> tracing::instrument::WithSubscriber for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<T> typenum::type_operators::Same for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+pub type fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::Output = T
+impl<T> wyz::fmt::FmtForward for fuel_core_tx_status_manager::service::Task<Pubkey, P2P>
+impl<V, T> ppv_lite86::types::VZip<V> for fuel_core_tx_status_manager::service::Task<Pubkey, P2P> where V: ppv_lite86::types::MultiLane<T>
+pub fn fuel_core_tx_status_manager::service::Task<Pubkey, P2P>::vzip(self) -> V
 pub fn fuel_core_tx_status_manager::from_executor_to_status(block: &fuel_core_types::blockchain::block::Block, result: fuel_core_types::services::executor::TransactionExecutionResult) -> fuel_core_types::services::transaction_status::TransactionExecutionStatus
-pub fn fuel_core_tx_status_manager::new_service<P2P, Pubkey>(p2p: P2P, config: fuel_core_tx_status_manager::config::Config, protocol_pubkey: Pubkey) -> fuel_core_services::service::ServiceRunner<fuel_core_tx_status_manager::service::Task<Pubkey>> where P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions<GossipedStatuses = fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData>, Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey
+pub fn fuel_core_tx_status_manager::new_service<P2P, Pubkey>(p2p: P2P, config: fuel_core_tx_status_manager::config::Config, protocol_pubkey: Pubkey) -> fuel_core_services::service::ServiceRunner<fuel_core_tx_status_manager::service::Task<Pubkey, P2P>> where P2P: fuel_core_tx_status_manager::ports::P2PSubscriptions<GossipedStatuses = fuel_core_tx_status_manager::ports::P2PPreConfirmationGossipData>, Pubkey: fuel_core_tx_status_manager::service::ProtocolPublicKey
 pub type fuel_core_tx_status_manager::TxStatusStream = core::pin::Pin<alloc::boxed::Box<(dyn futures_core::stream::Stream<Item = fuel_core_tx_status_manager::TxStatusMessage> + core::marker::Send + core::marker::Sync)>>
