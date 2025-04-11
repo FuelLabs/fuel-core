@@ -13,19 +13,19 @@ use fuel_core_sync::ports::{
 };
 use fuel_core_types::{
     blockchain::{
-        primitives::DaBlockHeight,
         SealedBlock,
         SealedBlockHeader,
+        primitives::DaBlockHeight,
     },
     fuel_types::BlockHeight,
     services::p2p::{
+        PeerId,
+        SourcePeer,
+        Transactions,
         peer_reputation::{
             AppScore,
             PeerReport,
         },
-        PeerId,
-        SourcePeer,
-        Transactions,
     },
 };
 use std::ops::Range;
@@ -34,15 +34,16 @@ use std::ops::Range;
 impl PeerToPeerPort for P2PAdapter {
     fn height_stream(&self) -> BoxStream<BlockHeight> {
         use futures::StreamExt;
-        if let Some(service) = &self.service {
-            fuel_core_services::stream::IntoBoxStream::into_boxed(
+        match &self.service {
+            Some(service) => fuel_core_services::stream::IntoBoxStream::into_boxed(
                 tokio_stream::wrappers::BroadcastStream::new(
                     service.subscribe_block_height(),
                 )
                 .filter_map(|r| futures::future::ready(r.ok().map(|r| r.block_height))),
-            )
-        } else {
-            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+            ),
+            _ => fuel_core_services::stream::IntoBoxStream::into_boxed(
+                tokio_stream::pending(),
+            ),
         }
     }
 
@@ -50,10 +51,9 @@ impl PeerToPeerPort for P2PAdapter {
         &self,
         block_height_range: Range<u32>,
     ) -> anyhow::Result<SourcePeer<Option<Vec<SealedBlockHeader>>>> {
-        let result = if let Some(service) = &self.service {
-            service.get_sealed_block_headers(block_height_range).await
-        } else {
-            Err(anyhow::anyhow!("No P2P service available"))
+        let result = match &self.service {
+            Some(service) => service.get_sealed_block_headers(block_height_range).await,
+            _ => Err(anyhow::anyhow!("No P2P service available")),
         };
         match result {
             Ok((peer_id, headers)) => {
@@ -69,10 +69,9 @@ impl PeerToPeerPort for P2PAdapter {
         &self,
         block_ids: Range<u32>,
     ) -> anyhow::Result<SourcePeer<Option<Vec<Transactions>>>> {
-        let result = if let Some(service) = &self.service {
-            service.get_transactions(block_ids).await
-        } else {
-            Err(anyhow::anyhow!("No P2P service available"))
+        let result = match &self.service {
+            Some(service) => service.get_transactions(block_ids).await,
+            _ => Err(anyhow::anyhow!("No P2P service available")),
         };
         match result {
             Ok((peer_id, transactions)) => {
@@ -92,21 +91,21 @@ impl PeerToPeerPort for P2PAdapter {
             peer_id,
             data: range,
         } = range;
-        if let Some(service) = &self.service {
-            service.get_transactions_from_peer(peer_id, range).await
-        } else {
-            Err(anyhow::anyhow!("No P2P service available"))
+        match &self.service {
+            Some(service) => service.get_transactions_from_peer(peer_id, range).await,
+            _ => Err(anyhow::anyhow!("No P2P service available")),
         }
     }
 
     fn report_peer(&self, peer: PeerId, report: PeerReportReason) -> anyhow::Result<()> {
-        if let Some(service) = &self.service {
-            let service_name = "Sync";
-            let new_report = self.process_report(report);
-            service.report_peer(peer, new_report, service_name)?;
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("No P2P service available"))
+        match &self.service {
+            Some(service) => {
+                let service_name = "Sync";
+                let new_report = self.process_report(report);
+                service.report_peer(peer, new_report, service_name)?;
+                Ok(())
+            }
+            _ => Err(anyhow::anyhow!("No P2P service available")),
         }
     }
 }

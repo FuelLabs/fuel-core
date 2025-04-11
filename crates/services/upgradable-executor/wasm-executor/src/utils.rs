@@ -3,6 +3,7 @@ use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
     services::{
+        Uncommitted,
         block_producer::Components,
         executor::{
             Error as ExecutorError,
@@ -10,7 +11,6 @@ use fuel_core_types::{
             UncommittedResult,
             ValidationResult,
         },
-        Uncommitted,
     },
 };
 #[cfg(feature = "std")]

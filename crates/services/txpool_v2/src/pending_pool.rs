@@ -1,9 +1,9 @@
 use std::{
     collections::{
-        hash_map::Entry,
         HashMap,
         HashSet,
         VecDeque,
+        hash_map::Entry,
     },
     time::{
         Duration,
@@ -21,8 +21,8 @@ use fuel_core_types::{
         UtxoId,
     },
     services::txpool::{
-        utxo_ids_with_outputs,
         ArcPoolTx,
+        utxo_ids_with_outputs,
     },
 };
 use tokio::sync::mpsc::Sender;
@@ -279,11 +279,10 @@ mod tests {
 
     use fuel_core_types::{
         fuel_asm::{
-            op,
             RegId,
+            op,
         },
         fuel_tx::{
-            output::contract::Contract as OutputContract,
             Address,
             AssetId,
             ConsensusParameters,
@@ -292,8 +291,10 @@ mod tests {
             Output,
             TransactionBuilder,
             UtxoId,
+            output::contract::Contract as OutputContract,
         },
         fuel_vm::{
+            Contract,
             checked_transaction::{
                 CheckPredicateParams,
                 EstimatePredicates,
@@ -301,7 +302,6 @@ mod tests {
             },
             interpreter::MemoryInstance,
             predicate::EmptyStorage,
-            Contract,
         },
         services::txpool::{
             ArcPoolTx,
@@ -311,8 +311,8 @@ mod tests {
     };
     use futures::FutureExt;
     use rand::{
-        rngs::StdRng,
         SeedableRng,
+        rngs::StdRng,
     };
 
     use super::*;

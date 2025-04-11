@@ -22,10 +22,13 @@ pub mod test_context;
 pub mod tests;
 
 pub fn main_body(config: SuiteConfig, mut args: Arguments) {
-    fn with_cloned(
+    fn with_cloned<T>(
         config: &SuiteConfig,
-        f: impl FnOnce(SuiteConfig) -> anyhow::Result<(), Failed>,
-    ) -> impl FnOnce() -> anyhow::Result<(), Failed> {
+        f: T,
+    ) -> impl FnOnce() -> anyhow::Result<(), Failed> + use<T>
+    where
+        T: FnOnce(SuiteConfig) -> anyhow::Result<(), Failed>,
+    {
         let config = config.clone();
         move || f(config)
     }

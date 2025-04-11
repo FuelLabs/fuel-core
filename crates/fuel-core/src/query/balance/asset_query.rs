@@ -1,9 +1,9 @@
 use crate::graphql_api::database::ReadView;
 use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_storage::{
-    iter::IterDirection,
     Error as StorageError,
     Result as StorageResult,
+    iter::IterDirection,
 };
 use fuel_core_types::{
     entities::coins::{
@@ -108,10 +108,9 @@ impl<'a> AssetsQuery<'a> {
             .map(|id| id.map(CoinId::from))
             .filter(move |result| {
                 if let Ok(id) = result {
-                    if let Some(exclude) = self.exclude {
-                        !exclude.coin_ids.contains(id)
-                    } else {
-                        true
+                    match self.exclude {
+                        Some(exclude) => !exclude.coin_ids.contains(id),
+                        _ => true,
                     }
                 } else {
                     true
@@ -152,7 +151,9 @@ impl<'a> AssetsQuery<'a> {
             })
     }
 
-    fn messages_iter(&self) -> impl Stream<Item = StorageResult<CoinType>> + 'a {
+    fn messages_iter(
+        &self,
+    ) -> impl Stream<Item = StorageResult<CoinType>> + 'a + use<'a> {
         let exclude = self.exclude;
         let database = self.database;
         let stream = self

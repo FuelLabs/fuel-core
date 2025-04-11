@@ -4,9 +4,9 @@ use core::iter::successors;
 use ethnum::U256;
 use fuel_core_types::{
     fuel_asm::{
-        op,
         Instruction,
         RegId,
+        op,
     },
     fuel_tx,
     fuel_types::{
@@ -16,8 +16,8 @@ use fuel_core_types::{
     fuel_vm::interpreter::ReceiptsCtx,
 };
 use rand::{
-    rngs::StdRng,
     Rng,
+    rngs::StdRng,
 };
 
 pub const STATE_SIZE: u64 = 10_000_000;
@@ -86,13 +86,13 @@ pub fn make_receipts(rng: &mut StdRng) -> ReceiptsCtx {
     let mut ctx = ReceiptsCtx::default();
     for _ in 0..BENCH_RECEIPTS {
         ctx.push(fuel_tx::Receipt::Log {
-            id: rng.gen(),
-            ra: rng.gen(),
-            rb: rng.gen(),
-            rc: rng.gen(),
-            rd: rng.gen(),
-            pc: rng.gen(),
-            is: rng.gen(),
+            id: rng.r#gen(),
+            ra: rng.r#gen(),
+            rb: rng.r#gen(),
+            rc: rng.r#gen(),
+            rd: rng.r#gen(),
+            pc: rng.r#gen(),
+            is: rng.r#gen(),
         })
         .expect("Context should not be full");
     }

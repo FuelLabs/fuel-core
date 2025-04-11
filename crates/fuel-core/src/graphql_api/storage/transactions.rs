@@ -6,16 +6,16 @@ use fuel_core_chain_config::{
     TableEntry,
 };
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::{
+        Decode,
+        Encode,
         manual::Manual,
         postcard::Postcard,
         raw::Raw,
-        Decode,
-        Encode,
     },
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 use fuel_core_types::{
     fuel_tx::{

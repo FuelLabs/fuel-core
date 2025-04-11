@@ -1,8 +1,8 @@
 use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
     entities::{
-        coins::coin::Coin,
         Message,
+        coins::coin::Coin,
     },
     services::executor::Event,
 };
@@ -166,8 +166,8 @@ where
 #[cfg(test)]
 mod tests {
     use fuel_core_storage::{
-        transactional::WriteTransaction,
         StorageAsMut,
+        transactional::WriteTransaction,
     };
     use fuel_core_types::{
         fuel_tx::{
@@ -179,8 +179,8 @@ mod tests {
 
     use crate::{
         database::{
-            database_description::off_chain::OffChain,
             Database,
+            database_description::off_chain::OffChain,
         },
         graphql_api::{
             indexation::{

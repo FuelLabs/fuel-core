@@ -205,8 +205,8 @@ mod tests {
     use crate as fuel_core_types;
     use fuel_core_types::fuel_crypto::SecretKey;
     use rand::{
-        rngs::StdRng,
         SeedableRng,
+        rngs::StdRng,
     };
 
     #[cfg(not(feature = "aws-kms"))]
@@ -227,12 +227,14 @@ mod tests {
             };
             let config = aws_config::load_from_env().await;
             let kms_client = aws_sdk_kms::Client::new(&config);
-            assert!(SignMode::Kms {
-                key_id: kms_arn.to_string(),
-                client: kms_client,
-                cached_public_key_bytes: vec![], // Dummy value is ok for this test
-            }
-            .is_available())
+            assert!(
+                SignMode::Kms {
+                    key_id: kms_arn.to_string(),
+                    client: kms_client,
+                    cached_public_key_bytes: vec![], // Dummy value is ok for this test
+                }
+                .is_available()
+            )
         };
     }
 

@@ -1,7 +1,7 @@
 use clap::Parser;
 use fuel_core::{
-    upgradable_executor,
     ShutdownListener,
+    upgradable_executor,
 };
 use fuel_core_chain_config::{
     ChainConfig,
@@ -14,10 +14,10 @@ use std::{
     str::FromStr,
 };
 use tracing_subscriber::{
+    Layer,
     filter::EnvFilter,
     layer::SubscriberExt,
     registry,
-    Layer,
 };
 
 #[cfg(feature = "env")]
@@ -127,7 +127,9 @@ pub async fn run_cli() -> anyhow::Result<()> {
     if opt.is_err() {
         let command = run::Command::try_parse();
         if let Ok(command) = command {
-            tracing::warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
+            tracing::warn!(
+                "This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information"
+            );
             return run::exec(command).await;
         }
     }
@@ -177,8 +179,8 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::cli::{
-        snapshot,
         Fuel,
+        snapshot,
     };
 
     use super::Opt;
@@ -331,8 +333,7 @@ mod tests {
         #[test]
         fn chain_config_is_as_given() {
             // given
-            let line =
-                "./core snapshot --output-directory ./some/path everything --chain ./some/chain/config";
+            let line = "./core snapshot --output-directory ./some/path everything --chain ./some/chain/config";
 
             // when
             let command = parse_cli(line, "")
@@ -427,8 +428,7 @@ mod tests {
         #[test]
         fn group_size_is_configurable() {
             // given
-            let line =
-                "./core snapshot --output-directory dir everything encoding parquet --group-size 101";
+            let line = "./core snapshot --output-directory dir everything encoding parquet --group-size 101";
 
             // when
             let command = parse_cli(line, "")
@@ -479,8 +479,7 @@ mod tests {
         #[test]
         fn can_configure_compression() {
             // given
-            let line =
-                "./core snapshot --output-directory dir everything encoding parquet --compression-level 7";
+            let line = "./core snapshot --output-directory dir everything encoding parquet --compression-level 7";
 
             // when
             let command = parse_cli(line, "")
@@ -527,8 +526,7 @@ mod tests {
         #[test]
         fn json_encoding_doesnt_allow_for_group_size() {
             // given
-            let line =
-                "./core snapshot --output-directory dir everything encoding json --group-size 101";
+            let line = "./core snapshot --output-directory dir everything encoding json --group-size 101";
 
             // when
             let result = parse_cli(line, "");

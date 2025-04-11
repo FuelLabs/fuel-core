@@ -1,7 +1,7 @@
 use crate::{
     buckets::{
-        buckets,
         Buckets,
+        buckets,
     },
     global_registry,
 };
@@ -10,8 +10,8 @@ use prometheus_client::metrics::{
     histogram::Histogram,
 };
 use std::sync::{
-    atomic::AtomicU64,
     OnceLock,
+    atomic::AtomicU64,
 };
 
 pub struct ImporterMetrics {

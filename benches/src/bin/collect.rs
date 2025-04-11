@@ -1,8 +1,8 @@
 use clap::Parser;
 use fuel_core_types::fuel_tx::{
-    consensus_parameters::gas::GasCostsValuesV5,
     ConsensusParameters,
     GasCosts,
+    consensus_parameters::gas::GasCostsValuesV5,
 };
 use serde::{
     Deserialize,
@@ -23,8 +23,8 @@ use std::{
     },
     path::PathBuf,
     sync::mpsc::{
-        channel,
         TryRecvError,
+        channel,
     },
     time::Duration,
 };
@@ -425,7 +425,9 @@ impl State {
         diff.sort_unstable();
 
         if !diff.is_empty() {
-            eprintln!("Warning the following keys were not set by this bench:\n{diff:?}\nWas this intentional?");
+            eprintln!(
+                "Warning the following keys were not set by this bench:\n{diff:?}\nWas this intentional?"
+            );
         }
 
         let map = value.as_mapping().unwrap();

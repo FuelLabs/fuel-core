@@ -25,8 +25,8 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use rand::{
-    rngs::ThreadRng,
     Rng,
+    rngs::ThreadRng,
 };
 use std::path::Path;
 use strum_macros::AsRefStr;

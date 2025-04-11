@@ -20,9 +20,9 @@ use fuel_core_types::{
 use futures::future::join_all;
 use itertools::Itertools;
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::collections::BTreeSet;
 
@@ -41,7 +41,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
             .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
-                rng.gen(),
+                rng.r#gen(),
                 1000 + i,
                 Default::default(),
                 Default::default(),
@@ -53,7 +53,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 Default::default(),
                 contract_id,
             ))
-            .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+            .add_output(Output::change(rng.r#gen(), 0, AssetId::default()))
             .add_output(Output::contract(1, Default::default(), Default::default()))
             .finalize()
         })
@@ -145,29 +145,29 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
 async fn dry_run_override_utxo_validation() {
     let mut rng = StdRng::seed_from_u64(2322);
 
-    let asset_id = rng.gen();
+    let asset_id = rng.r#gen();
     let tx = TransactionBuilder::script(
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
         vec![],
     )
     .script_gas_limit(10000)
     .add_input(Input::coin_signed(
-        rng.gen(),
-        rng.gen(),
+        rng.r#gen(),
+        rng.r#gen(),
         1000,
         AssetId::default(),
         Default::default(),
         0,
     ))
     .add_input(Input::coin_signed(
-        rng.gen(),
-        rng.gen(),
-        rng.gen(),
+        rng.r#gen(),
+        rng.r#gen(),
+        rng.r#gen(),
         asset_id,
         Default::default(),
         0,
     ))
-    .add_output(Output::change(rng.gen(), 0, asset_id))
+    .add_output(Output::change(rng.r#gen(), 0, asset_id))
     .add_witness(Default::default())
     .finalize_as_transaction();
 
@@ -196,7 +196,7 @@ async fn dry_run_override_utxo_validation() {
 async fn dry_run_no_utxo_validation_override() {
     let mut rng = StdRng::seed_from_u64(2322);
 
-    let asset_id = rng.gen();
+    let asset_id = rng.r#gen();
     // construct a tx with invalid inputs
     let tx = TransactionBuilder::script(
         op::ret(RegId::ONE).to_bytes().into_iter().collect(),
@@ -204,22 +204,22 @@ async fn dry_run_no_utxo_validation_override() {
     )
     .script_gas_limit(1000)
     .add_input(Input::coin_signed(
-        rng.gen(),
-        rng.gen(),
+        rng.r#gen(),
+        rng.r#gen(),
         1000,
         AssetId::default(),
         Default::default(),
         0,
     ))
     .add_input(Input::coin_signed(
-        rng.gen(),
-        rng.gen(),
-        rng.gen(),
+        rng.r#gen(),
+        rng.r#gen(),
+        rng.r#gen(),
         asset_id,
         Default::default(),
         0,
     ))
-    .add_output(Output::change(rng.gen(), 0, asset_id))
+    .add_output(Output::change(rng.r#gen(), 0, asset_id))
     .add_witness(Default::default())
     .finalize_as_transaction();
 
@@ -248,12 +248,12 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
             .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 secret,
-                rng.gen(),
+                rng.r#gen(),
                 rng.gen_range((100000 + i as u64)..(200000 + i as u64)),
                 Default::default(),
                 Default::default(),
             )
-            .add_output(Output::change(rng.gen(), 0, Default::default()))
+            .add_output(Output::change(rng.r#gen(), 0, Default::default()))
             .finalize()
         })
         .collect_vec();

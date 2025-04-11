@@ -1,8 +1,8 @@
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::postcard::Postcard,
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 
 /// The table that stores all statistic about blockchain. Each key is a string, while the value

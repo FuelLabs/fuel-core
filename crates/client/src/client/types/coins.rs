@@ -1,4 +1,5 @@
 use crate::client::{
+    PaginatedResult,
     schema,
     types::primitives::{
         Address,
@@ -6,7 +7,6 @@ use crate::client::{
         Nonce,
         UtxoId,
     },
-    PaginatedResult,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

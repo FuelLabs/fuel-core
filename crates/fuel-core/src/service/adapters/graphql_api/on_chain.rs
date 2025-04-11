@@ -1,9 +1,9 @@
 use crate::{
     database::{
-        database_description::on_chain::OnChain,
         Database,
         OnChainIterableKeyValueView,
         OnChainKeyValueView,
+        database_description::on_chain::OnChain,
     },
     fuel_core_graphql_api::ports::{
         DatabaseBlocks,
@@ -16,6 +16,10 @@ use crate::{
     graphql_api::ports::worker,
 };
 use fuel_core_storage::{
+    ContractsAssetKey,
+    ContractsStateKey,
+    Result as StorageResult,
+    StorageAsRef,
     iter::{
         BoxedIter,
         IntoBoxedIter,
@@ -30,10 +34,6 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
-    ContractsAssetKey,
-    ContractsStateKey,
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{

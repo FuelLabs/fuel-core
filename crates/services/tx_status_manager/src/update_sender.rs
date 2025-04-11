@@ -8,12 +8,12 @@ use fuel_core_types::fuel_tx::Bytes32;
 use parking_lot::Mutex;
 use tokio::{
     sync::{
+        OwnedSemaphorePermit,
+        Semaphore,
         mpsc::{
             self,
             error::TrySendError,
         },
-        OwnedSemaphorePermit,
-        Semaphore,
     },
     time::Instant,
 };

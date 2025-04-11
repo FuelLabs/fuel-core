@@ -17,9 +17,9 @@ use crate::{
         configuration::CompressionConfigProvider,
     },
     sync_state::{
-        new_sync_state_channel,
         SyncStateNotifier,
         SyncStateObserver,
+        new_sync_state_channel,
     },
     temporal_registry::{
         CompressionContext,
@@ -411,17 +411,18 @@ mod tests {
         storage::CompressedBlocks,
     };
     use fuel_core_services::{
+        Service,
         stream::{
             BoxStream,
             IntoBoxStream,
         },
-        Service,
     };
     use fuel_core_storage::{
+        StorageAsRef,
         iter::{
-            changes_iterator::ChangesIterator,
             IterDirection,
             IteratorOverTable,
+            changes_iterator::ChangesIterator,
         },
         merkle::column::MerkleizedColumn,
         structured_storage::test::InMemoryStorage,
@@ -430,7 +431,6 @@ mod tests {
             StorageChanges,
             StorageTransaction,
         },
-        StorageAsRef,
     };
 
     struct EmptyBlockSource;

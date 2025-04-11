@@ -4,14 +4,14 @@ use std::{
 };
 
 use fuel_core_services::{
-    stream::{
-        BoxFuture,
-        BoxStream,
-    },
     RunnableService,
     RunnableTask,
     StateWatcher,
     TaskNextAction,
+    stream::{
+        BoxFuture,
+        BoxStream,
+    },
 };
 use fuel_core_types::{
     blockchain::header::BlockHeader,
@@ -138,11 +138,12 @@ impl RunnableService for SyncTask {
 
 impl RunnableTask for SyncTask {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        let tick: BoxFuture<tokio::time::Instant> = if let Some(timer) = &mut self.timer {
-            Box::pin(timer.tick())
-        } else {
-            let future = core::future::pending();
-            Box::pin(future)
+        let tick: BoxFuture<tokio::time::Instant> = match &mut self.timer {
+            Some(timer) => Box::pin(timer.tick()),
+            _ => {
+                let future = core::future::pending();
+                Box::pin(future)
+            }
         };
         tokio::select! {
             biased;

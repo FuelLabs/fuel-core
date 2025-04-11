@@ -116,11 +116,11 @@ fn test_verify_genesis_block_fields(input: Input) -> anyhow::Result<()> {
     let mut b = Block::default();
     b.header_mut().set_consensus_header(*bh.consensus());
     match (bh, b.header_mut()) {
-        (BlockHeader::V1(bh), BlockHeader::V1(ref mut h)) => {
+        (BlockHeader::V1(bh), BlockHeader::V1(h)) => {
             h.set_application_header(*bh.application())
         }
         #[cfg(feature = "fault-proving")]
-        (BlockHeader::V2(bh), BlockHeader::V2(ref mut h)) => {
+        (BlockHeader::V2(bh), BlockHeader::V2(h)) => {
             h.set_application_header(*bh.application())
         }
         #[cfg_attr(not(feature = "fault-proving"), allow(unreachable_patterns))]

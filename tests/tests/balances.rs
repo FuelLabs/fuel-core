@@ -1,9 +1,9 @@
 use fuel_core::{
     chain_config::{
-        coin_config_helpers::CoinConfigGenerator,
         CoinConfig,
         MessageConfig,
         StateConfig,
+        coin_config_helpers::CoinConfigGenerator,
     },
     service::{
         Config,
@@ -12,6 +12,7 @@ use fuel_core::{
     state::historical_rocksdb::StateRewindPolicy,
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
@@ -20,7 +21,6 @@ use fuel_core_client::client::{
         Address,
         AssetId,
     },
-    FuelClient,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
@@ -297,21 +297,21 @@ async fn first_5_balances() {
 mod pagination {
     use fuel_core::{
         chain_config::{
-            coin_config_helpers::CoinConfigGenerator,
             ChainConfig,
             CoinConfig,
             MessageConfig,
             StateConfig,
+            coin_config_helpers::CoinConfigGenerator,
         },
         service::Config,
     };
     use fuel_core_bin::FuelService;
     use fuel_core_client::client::{
+        FuelClient,
         pagination::{
             PageDirection,
             PaginationRequest,
         },
-        FuelClient,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -592,7 +592,7 @@ async fn contract_balances_in_the_past() {
     assert_eq!(balances_at_minted.len(), 1);
     assert_eq!(balances_at_minted[0].amount.0, amount);
     assert_eq!(
-        balances_at_minted[0].asset_id.0 .0,
+        balances_at_minted[0].asset_id.0.0,
         contract_id.asset_id(&sub_asset_id)
     );
 }

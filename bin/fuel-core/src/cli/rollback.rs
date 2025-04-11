@@ -12,8 +12,8 @@ use fuel_core::{
     },
 };
 use rlimit::{
-    getrlimit,
     Resource,
+    getrlimit,
 };
 use std::path::PathBuf;
 

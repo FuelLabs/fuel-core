@@ -4,12 +4,12 @@
 use clap::Parser;
 use commands::{
     build::{
-        cargo_build_and_dump_schema,
         BuildCommand,
+        cargo_build_and_dump_schema,
     },
     dump::{
-        dump_schema,
         DumpCommand,
+        dump_schema,
     },
 };
 

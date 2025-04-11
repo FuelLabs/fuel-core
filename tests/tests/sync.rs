@@ -6,13 +6,13 @@ use fuel_core_types::{
     fuel_tx::Input,
 };
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::{
     collections::{
-        hash_map::DefaultHasher,
         HashMap,
+        hash_map::DefaultHasher,
     },
     hash::{
         Hash,

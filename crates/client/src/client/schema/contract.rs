@@ -1,15 +1,15 @@
 use crate::client::{
+    PageDirection,
+    PaginationRequest,
     schema::{
-        schema,
         AssetId,
         ContractId,
         HexString,
         PageInfo,
         Salt,
         U64,
+        schema,
     },
-    PageDirection,
-    PaginationRequest,
 };
 
 #[derive(cynic::QueryVariables, Debug)]

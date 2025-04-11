@@ -1,9 +1,9 @@
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         Instruction,
         RegId,
+        op,
     },
     fuel_tx::{
         Address,

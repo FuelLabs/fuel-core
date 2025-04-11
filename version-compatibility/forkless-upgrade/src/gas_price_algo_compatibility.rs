@@ -1,9 +1,9 @@
 #![allow(unused_imports)]
 
 use crate::tests_helper::{
-    default_multiaddr,
     LatestFuelCoreDriver,
     Version36FuelCoreDriver,
+    default_multiaddr,
 };
 use latest_fuel_core_gas_price_service::{
     common::{
@@ -14,31 +14,31 @@ use latest_fuel_core_gas_price_service::{
     v1::metadata::V1Metadata,
 };
 use latest_fuel_core_storage::{
-    transactional::AtomicView as NewAtomicView,
     StorageAsRef as NewStorageAsRef,
+    transactional::AtomicView as NewAtomicView,
 };
 use libp2p::{
-    identity::{
-        secp256k1::Keypair as SecpKeypair,
-        Keypair,
-    },
     PeerId,
+    identity::{
+        Keypair,
+        secp256k1::Keypair as SecpKeypair,
+    },
 };
 use std::{
     ops::Deref,
     time::Duration,
 };
 use version_36_fuel_core_gas_price_service::fuel_gas_price_updater::{
-    fuel_core_storage_adapter::storage::GasPriceMetadata as OldGasPriceMetadata,
     UpdaterMetadata as OldUpdaterMetadata,
     V0Metadata,
+    fuel_core_storage_adapter::storage::GasPriceMetadata as OldGasPriceMetadata,
 };
 use version_36_fuel_core_storage::{
+    StorageAsRef as OldStorageAsRef,
     transactional::{
         AtomicView as OldAtomicView,
         HistoricalView as OldHistoricalView,
     },
-    StorageAsRef as OldStorageAsRef,
 };
 
 #[tokio::test(flavor = "multi_thread")]

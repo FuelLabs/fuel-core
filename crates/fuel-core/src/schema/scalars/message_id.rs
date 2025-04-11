@@ -1,10 +1,10 @@
 use async_graphql::{
-    connection::CursorType,
     InputValueError,
     InputValueResult,
     Scalar,
     ScalarType,
     Value,
+    connection::CursorType,
 };
 use fuel_core_types::fuel_tx;
 use std::{
@@ -21,10 +21,11 @@ pub struct MessageId(pub(crate) fuel_tx::MessageId);
 #[Scalar(name = "MessageId")]
 impl ScalarType for MessageId {
     fn parse(value: Value) -> InputValueResult<Self> {
-        if let Value::String(value) = &value {
-            MessageId::from_str(value.as_str()).map_err(Into::into)
-        } else {
-            Err(InputValueError::expected_type(value))
+        match &value {
+            Value::String(value) => {
+                MessageId::from_str(value.as_str()).map_err(Into::into)
+            }
+            _ => Err(InputValueError::expected_type(value)),
         }
     }
 

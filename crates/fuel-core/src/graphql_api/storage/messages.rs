@@ -6,24 +6,24 @@ use fuel_core_chain_config::{
     TableEntry,
 };
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         raw::Raw,
     },
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 use fuel_core_types::fuel_types::{
     Address,
     Nonce,
 };
 use rand::{
+    Rng,
     distributions::{
         Distribution,
         Standard,
     },
-    Rng,
 };
 
 fuel_core_types::fuel_vm::double_key!(OwnedMessageKey, Address, address, Nonce, nonce);

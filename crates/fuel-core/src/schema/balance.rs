@@ -5,23 +5,23 @@ use crate::{
         query_costs,
     },
     schema::{
+        ReadViewProvider,
         scalars::{
             Address,
             AssetId,
             U128,
         },
-        ReadViewProvider,
     },
 };
 use anyhow::anyhow;
 use async_graphql::{
+    Context,
+    InputObject,
+    Object,
     connection::{
         Connection,
         EmptyFields,
     },
-    Context,
-    InputObject,
-    Object,
 };
 use fuel_core_types::services::graphql_api;
 use futures::StreamExt;

@@ -1,11 +1,11 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    iter::IterDirection,
-    not_found,
-    tables::Coins,
     Error as StorageError,
     Result as StorageResult,
     StorageAsRef,
+    iter::IterDirection,
+    not_found,
+    tables::Coins,
 };
 use fuel_core_types::{
     entities::coins::coin::Coin,
@@ -48,7 +48,7 @@ impl ReadView {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<Coin>> + '_ {
+    ) -> impl Stream<Item = StorageResult<Coin>> + '_ + use<'_> {
         self.owned_coins_ids(owner, start_coin, direction)
             .chunks(self.batch_size)
             .map(|chunk| {

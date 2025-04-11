@@ -5,18 +5,19 @@ use crate::{
         CombinedGenesisDatabase,
     },
     database::{
+        Database,
         database_description::{
             off_chain::OffChain,
             on_chain::OnChain,
         },
         genesis_progress::GenesisMetadata,
-        Database,
     },
     service::config::Config,
 };
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
+    StorageAsMut,
     iter::IteratorOverTable,
     not_found,
     tables::{
@@ -30,11 +31,11 @@ use fuel_core_storage::{
         IntoTransaction,
         ReadTransaction,
     },
-    StorageAsMut,
 };
 use fuel_core_types::{
     self,
     blockchain::{
+        SealedBlock,
         block::Block,
         consensus::{
             Consensus,
@@ -48,7 +49,6 @@ use fuel_core_types::{
             StateTransitionBytecodeVersion,
         },
         primitives::Empty,
-        SealedBlock,
     },
     fuel_crypto::Hasher,
     fuel_types::Bytes32,
@@ -313,13 +313,13 @@ mod tests {
     use super::*;
 
     use crate::{
+        ShutdownListener,
         combined_database::CombinedDatabase,
         database::Database,
         service::{
-            config::Config,
             FuelService,
+            config::Config,
         },
-        ShutdownListener,
     };
     use fuel_core_chain_config::{
         BlobConfig,
@@ -332,6 +332,7 @@ mod tests {
     };
     use fuel_core_producer::ports::BlockProducerDatabase;
     use fuel_core_storage::{
+        StorageAsRef,
         tables::{
             Coins,
             ContractsAssets,
@@ -341,7 +342,6 @@ mod tests {
             AtomicView,
             HistoricalView,
         },
-        StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -355,10 +355,10 @@ mod tests {
     };
     use itertools::Itertools;
     use rand::{
-        rngs::StdRng,
         Rng,
         RngCore,
         SeedableRng,
+        rngs::StdRng,
     };
     use std::vec;
 
@@ -443,19 +443,19 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(10);
 
         // a coin with all options set
-        let alice: Address = rng.gen();
-        let asset_id_alice: AssetId = rng.gen();
-        let alice_value = rng.gen();
+        let alice: Address = rng.r#gen();
+        let asset_id_alice: AssetId = rng.r#gen();
+        let alice_value = rng.r#gen();
         let alice_block_created: BlockHeight = rng.next_u32().into();
-        let alice_block_created_tx_idx = rng.gen();
-        let alice_tx_id = rng.gen();
-        let alice_output_index = rng.gen();
+        let alice_block_created_tx_idx = rng.r#gen();
+        let alice_tx_id = rng.r#gen();
+        let alice_output_index = rng.r#gen();
         let alice_utxo_id = UtxoId::new(alice_tx_id, alice_output_index);
 
         // a coin with minimal options set
-        let bob: Address = rng.gen();
-        let asset_id_bob: AssetId = rng.gen();
-        let bob_value = rng.gen();
+        let bob: Address = rng.r#gen();
+        let asset_id_bob: AssetId = rng.r#gen();
+        let bob_value = rng.r#gen();
 
         let starting_height = {
             let mut h: u32 = alice_block_created.into();
@@ -566,11 +566,11 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(32492);
 
         let msg = MessageConfig {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            nonce: rng.gen(),
-            amount: rng.gen(),
-            data: vec![rng.gen()],
+            sender: rng.r#gen(),
+            recipient: rng.r#gen(),
+            nonce: rng.r#gen(),
+            amount: rng.r#gen(),
+            data: vec![rng.r#gen()],
             da_height: DaBlockHeight(0),
         };
 

@@ -1,14 +1,14 @@
 use crate::{
+    Shared,
     state::{
         State,
         StateWatcher,
     },
-    Shared,
 };
 use anyhow::anyhow;
 use fuel_core_metrics::futures::{
-    future_tracker::FutureTracker,
     FuturesMetrics,
+    future_tracker::FutureTracker,
 };
 use futures::FutureExt;
 use std::any::Any;
@@ -126,7 +126,7 @@ impl From<Result<bool, anyhow::Error>> for TaskNextAction {
 /// expression returns an error.
 #[macro_export]
 macro_rules! try_or_continue {
-    ($expr:expr, $custom:expr) => {{
+    ($expr:expr_2021, $custom:expr_2021) => {{
         match $expr {
             Ok(val) => val,
             Err(err) => {
@@ -135,7 +135,7 @@ macro_rules! try_or_continue {
             }
         }
     }};
-    ($expr:expr) => {{
+    ($expr:expr_2021) => {{
         match $expr {
             Ok(val) => val,
             Err(err) => return TaskNextAction::ErrorContinue(err.into()),
@@ -147,7 +147,7 @@ macro_rules! try_or_continue {
 /// expression returns an error.
 #[macro_export]
 macro_rules! try_or_stop {
-    ($expr:expr, $custom:expr) => {{
+    ($expr:expr_2021, $custom:expr_2021) => {{
         match $expr {
             Ok(val) => val,
             Err(err) => {
@@ -156,7 +156,7 @@ macro_rules! try_or_stop {
             }
         }
     }};
-    ($expr:expr) => {{
+    ($expr:expr_2021) => {{
         match $expr {
             Ok(val) => val,
             Err(err) => return TaskNextAction::Stop,
@@ -346,11 +346,12 @@ where
             tracing::debug!("awaiting run");
             let result = run.catch_unwind().await;
 
-            let stopped_state = if let Err(e) = result {
-                let panic_information = panic_to_string(e);
-                State::StoppedWithError(panic_information)
-            } else {
-                State::Stopped
+            let stopped_state = match result {
+                Err(e) => {
+                    let panic_information = panic_to_string(e);
+                    State::StoppedWithError(panic_information)
+                }
+                _ => State::Stopped,
             };
 
             tracing::debug!("shutting down {:?}", stopped_state);

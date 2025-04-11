@@ -22,16 +22,16 @@ use crate::{
         ValidityError,
     },
     fuel_types::{
-        fmt_option_truncated_hex,
-        fmt_truncated_hex,
         BlockHeight,
         Bytes32,
         ContractId,
         Nonce,
+        fmt_option_truncated_hex,
+        fmt_truncated_hex,
     },
     fuel_vm::{
-        checked_transaction::CheckError,
         ProgramState,
+        checked_transaction::CheckError,
     },
     services::Uncommitted,
 };

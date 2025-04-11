@@ -3,11 +3,11 @@ mod tests {
     use fuel_core::database::Database;
 
     use fuel_core_storage::{
-        tables::ContractsState,
-        vm_storage::VmStorage,
         InterpreterStorage,
         StorageAsMut,
         StorageMutate,
+        tables::ContractsState,
+        vm_storage::VmStorage,
     };
     use fuel_core_types::{
         fuel_tx::ContractId,

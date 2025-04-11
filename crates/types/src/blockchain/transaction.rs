@@ -2,15 +2,15 @@
 
 use crate::{
     fuel_tx::{
-        field::{
-            Inputs,
-            Outputs,
-        },
         Chargeable,
         ConsensusParameters,
         Input,
         Output,
         Transaction,
+        field::{
+            Inputs,
+            Outputs,
+        },
     },
     fuel_vm::checked_transaction::CheckedTransaction,
     services::executor::{
