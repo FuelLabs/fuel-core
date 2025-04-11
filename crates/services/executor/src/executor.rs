@@ -125,7 +125,10 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        canonical::Deserialize,
+        canonical::{
+            Deserialize,
+            Serialize,
+        },
         BlockHeight,
         ContractId,
         MessageId,
@@ -787,6 +790,7 @@ where
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
                 let tx_max_gas = transaction.max_gas(&self.consensus_params)?;
+                debug!("Processing transaction {:?}", tx_id.to_bytes());
                 if tx_max_gas > remaining_gas_limit {
                     data.skipped_transactions.push((
                         tx_id,

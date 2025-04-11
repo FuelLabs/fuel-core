@@ -25,11 +25,16 @@ use fuel_core_types::{
     fuel_asm::op,
     fuel_tx::{
         field::Inputs,
-        input::coin::{
-            CoinPredicate,
-            CoinSigned,
-            DataCoinPredicate,
-            DataCoinSigned,
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+                DataCoinPredicate,
+                DataCoinSigned,
+                UnverifiedCoin,
+                UnverifiedDataCoin,
+            },
+            ReadOnly,
         },
         policies::Policies,
         *,
@@ -185,7 +190,10 @@ impl TestSetupBuilder {
                         utxo_id,
                         tx_pointer,
                         ..
-                    }) = input
+                    })
+                    | Input::ReadOnly(ReadOnly::Coin(UnverifiedCoin { utxo_id, owner, amount, asset_id, tx_pointer }))
+                    | Input::ReadOnly(ReadOnly::CoinPredicate(CoinPredicate { utxo_id, owner, amount, asset_id, tx_pointer, .. }))
+                        = input
                     {
                         Some(
                             ConfigCoin {
@@ -216,7 +224,10 @@ impl TestSetupBuilder {
                         tx_pointer,
                         data,
                         ..
-                    }) = input
+                    })
+                        | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin { utxo_id, owner, amount, asset_id, tx_pointer, data }))
+                    | Input::ReadOnly(ReadOnly::DataCoinPredicate(DataCoinPredicate { utxo_id, owner, amount, asset_id, tx_pointer, data, .. }))
+                        = input
                     {
                         tracing::debug!("Adding data coin input: tx_id: {:?}, output_index: {}, owner: {:?}, amount: {}, asset_id: {:?}, data: {:?}",
                             utxo_id.tx_id(), utxo_id.output_index(), owner, amount, asset_id, data);
