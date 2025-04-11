@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 use crate::tests_helper::{
-    LatestFuelCoreDriver,
     IGNITION_TESTNET_SNAPSHOT,
+    LatestFuelCoreDriver,
 };
 use latest_fuel_core_type::fuel_tx::Bytes32;
 use std::str::FromStr;
