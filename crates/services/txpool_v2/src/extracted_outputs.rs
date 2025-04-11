@@ -133,7 +133,8 @@ impl ExtractedOutputs {
                             coins.remove(&utxo_id.output_index());
                         });
                 }
-                Input::Contract(_)
+                Input::ReadOnly(_)
+                | Input::Contract(_)
                 | Input::MessageCoinPredicate(_)
                 | Input::MessageCoinSigned(_)
                 | Input::MessageDataPredicate(_)

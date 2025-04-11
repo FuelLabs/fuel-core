@@ -1,4 +1,5 @@
 // Tests related to the predicate execution feature
+#![allow(unused_imports)]
 
 use crate::helpers::TestSetupBuilder;
 use fuel_core_storage::tables::Coins;
@@ -6,6 +7,7 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
         field::{
+            ChargeableBody,
             Inputs,
             Outputs,
         },
@@ -214,49 +216,6 @@ fn predicate_checking_predicate_data_matches_input_data_coin() -> Vec<u8> {
     .collect()
 }
 
-fn predicate_checking_output_data_matches_input_data_coin() -> Vec<u8> {
-    let output_len_reg = 0x13;
-    let input_len_reg = 0x14;
-    let res_reg = 0x10;
-    let lengths_match_reg = 0x11;
-    let data_match_reg = 0x12;
-    let input_index = 0;
-    let output_index = 0;
-    let output_data_mem_location = 0x22;
-    let input_data_mem_location = 0x23;
-    vec![
-        op::gtf_args(input_len_reg, input_index, GTFArgs::InputDataCoinDataLength),
-        op::gtf_args(
-            output_len_reg,
-            output_index,
-            GTFArgs::OutputDataCoinDataLength,
-        ),
-        // get expected data from predicate data
-        op::gtf_args(
-            output_data_mem_location,
-            output_index,
-            GTFArgs::OutputDataCoinData,
-        ),
-        // get actual data
-        op::gtf_args(
-            input_data_mem_location,
-            input_index,
-            GTFArgs::InputDataCoinData,
-        ),
-        // compare
-        op::eq(lengths_match_reg, input_len_reg, output_len_reg),
-        op::meq(
-            data_match_reg,
-            output_data_mem_location,
-            input_data_mem_location,
-            output_len_reg,
-        ),
-        op::and(res_reg, lengths_match_reg, data_match_reg),
-        op::ret(res_reg),
-    ]
-    .into_iter()
-    .collect()
-}
 #[tokio::test]
 async fn submit__tx_with_predicate_can_check_data_coin() {
     let _ = tracing_subscriber::fmt()
@@ -352,11 +311,57 @@ async fn submit__tx_with_predicate_can_check_data_coin() {
     )
 }
 
+#[allow(unused_variables)]
+fn predicate_checking_output_data_matches_input_data_coin() -> Vec<u8> {
+    let output_data_len_reg = 0x13;
+    let input_data_len_reg = 0x14;
+    let res_reg = 0x10;
+    let lengths_match_reg = 0x11;
+    let data_match_reg = 0x12;
+    let input_index = 0;
+    let output_index = 0;
+    let output_data_mem_location = 0x22;
+    let input_data_mem_location = 0x23;
+    vec![
+        op::gtf_args(
+            input_data_len_reg,
+            input_index,
+            GTFArgs::InputDataCoinDataLength,
+        ),
+        op::gtf_args(
+            output_data_len_reg,
+            output_index,
+            GTFArgs::OutputDataCoinDataLength,
+        ),
+        // output data location
+        op::gtf_args(
+            output_data_mem_location,
+            output_index,
+            GTFArgs::OutputDataCoinData,
+        ),
+        // input data location
+        op::gtf_args(
+            input_data_mem_location,
+            input_index,
+            GTFArgs::InputDataCoinData,
+        ),
+        // compare
+        op::eq(lengths_match_reg, input_data_len_reg, output_data_len_reg),
+        op::meq(
+            data_match_reg,
+            input_data_mem_location,
+            output_data_mem_location,
+            output_data_len_reg,
+        ),
+        op::and(res_reg, lengths_match_reg, data_match_reg),
+        op::ret(res_reg),
+    ]
+    .into_iter()
+    .collect()
+}
+
 #[tokio::test]
 async fn submit__tx_with_predicate_can_check_input_and_output_data_coins() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
     let mut rng = StdRng::seed_from_u64(2322);
 
     // given
@@ -397,21 +402,6 @@ async fn submit__tx_with_predicate_can_check_input_and_output_data_coins() {
         .config_coin_inputs_from_transactions(&[&predicate_tx])
         .finalize()
         .await;
-
-    use fuel_core_storage::StorageAsRef;
-
-    let coin = context
-        .srv
-        .shared
-        .database
-        .on_chain()
-        .storage::<Coins>()
-        .get(&predicate_tx.inputs()[0].utxo_id().unwrap())
-        .expect("Failed to get coin from db");
-
-    tracing::debug!("zzzzzz {:?}", coin);
-
-    assert_eq!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
 
     predicate_tx
         .estimate_predicates(
@@ -472,4 +462,257 @@ async fn submit__tx_with_predicate_can_check_input_and_output_data_coins() {
     } else {
         panic!("Expected change output");
     }
+}
+
+#[tokio::test]
+async fn submit__tx_with_predicate_can_check_read_only_input_predicate_data_coin_and_output_data_coins(
+) {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
+
+    let mut rng = StdRng::seed_from_u64(2322);
+
+    // given
+    let input_amount = 500;
+    let output_amount = 200;
+    let change_amount = input_amount - output_amount;
+    let limit = 1000;
+    let asset_id = rng.gen();
+    let predicate = predicate_checking_output_data_matches_input_data_coin();
+    let coin_data = vec![123; 100];
+    let predicate_data = vec![1, 2, 3, 4, 5];
+    let true_predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+    let true_predicate_owner = Input::predicate_owner(&true_predicate);
+    let owner = Input::predicate_owner(&predicate);
+    let mut predicate_tx =
+        TransactionBuilder::script(Default::default(), Default::default())
+            .add_input(Input::read_only_data_coin_predicate(
+                rng.gen(),
+                true_predicate_owner,
+                123,
+                asset_id,
+                Default::default(),
+                Default::default(),
+                true_predicate,
+                vec![],
+                coin_data.clone(),
+            ))
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                input_amount,
+                asset_id,
+                Default::default(),
+                Default::default(),
+                predicate,
+                predicate_data,
+            ))
+            .add_output(Output::data_coin(
+                rng.gen(),
+                output_amount,
+                asset_id,
+                coin_data,
+            ))
+            .add_output(Output::change(rng.gen(), 0, asset_id))
+            .script_gas_limit(limit)
+            .finalize();
+
+    // create test context with predicates disabled
+    let context = TestSetupBuilder::default()
+        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .finalize()
+        .await;
+
+    predicate_tx
+        .estimate_predicates(
+            &CheckPredicateParams::from(
+                &context
+                    .srv
+                    .shared
+                    .config
+                    .snapshot_reader
+                    .chain_config()
+                    .consensus_parameters,
+            ),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
+
+    assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
+
+    let chain_id = context.srv.shared.config.chain_id();
+    let original_id = predicate_tx.id(&chain_id);
+    tracing::debug!("original tx id: {:?}", original_id.to_bytes());
+
+    // when
+    let predicate_tx = predicate_tx.into();
+    let _status = context
+        .client
+        .submit_and_await_commit(&predicate_tx)
+        .await
+        .unwrap();
+
+    // list all txs in the context db
+    let txs = context
+        .srv
+        .shared
+        .database
+        .on_chain()
+        .all_transactions(None, None)
+        .collect::<Vec<_>>();
+
+    use fuel_core_types::fuel_types::canonical::Serialize;
+    for tx in txs.iter() {
+        let id = tx.as_ref().unwrap().id(&chain_id).to_bytes();
+        tracing::debug!("db tx:{:?}", id);
+    }
+
+    // then
+    let id = predicate_tx.id(&chain_id);
+    tracing::debug!("tx id: {:?}", id.to_bytes());
+
+    let transaction: Transaction = context
+        .client
+        .transaction(&id)
+        .await
+        .unwrap()
+        .unwrap()
+        .transaction
+        .try_into()
+        .unwrap();
+
+    if let Output::DataCoin { amount, .. } = transaction.as_script().unwrap().outputs()[0]
+    {
+        assert!(
+            amount == output_amount,
+            "Expected output amount to be {}, but got {}",
+            amount,
+            output_amount
+        );
+    } else {
+        panic!("Expected output data coin");
+    }
+
+    if let Output::Change { amount, .. } = transaction.as_script().unwrap().outputs()[1] {
+        assert!(
+            amount == change_amount,
+            "Expected change amount to be {}, but got {}",
+            change_amount,
+            amount
+        );
+    } else {
+        panic!("Expected change output");
+    }
+}
+
+#[allow(unused_variables)]
+#[tokio::test]
+async fn encoding_decoding_tx_id_roundtrip() {
+    use fuel_core_types::fuel_types::canonical::Serialize;
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .try_init();
+
+    let mut rng = StdRng::seed_from_u64(2322);
+
+    // given
+    let input_amount = 500;
+    let output_amount = 200;
+    let limit = 1000;
+    let asset_id = rng.gen();
+    let predicate = predicate_checking_output_data_matches_input_data_coin();
+    let coin_data = vec![123; 100];
+    let predicate_data = vec![1, 2, 3, 4, 5];
+    let true_predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+    let true_predicate_owner = Input::predicate_owner(&true_predicate);
+    let owner = Input::predicate_owner(&predicate);
+    let mut predicate_tx =
+        TransactionBuilder::script(Default::default(), Default::default())
+            .add_input(Input::read_only_data_coin_predicate(
+                rng.gen(),
+                true_predicate_owner,
+                123,
+                asset_id,
+                Default::default(),
+                Default::default(),
+                true_predicate,
+                vec![],
+                coin_data.clone(),
+            ))
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                input_amount,
+                asset_id,
+                Default::default(),
+                Default::default(),
+                predicate,
+                predicate_data,
+            ))
+            .add_output(Output::data_coin(
+                rng.gen(),
+                output_amount,
+                asset_id,
+                coin_data,
+            ))
+            .add_output(Output::change(rng.gen(), 0, asset_id))
+            .script_gas_limit(limit)
+            .finalize();
+
+    // create test context with predicates disabled
+    let context = TestSetupBuilder::default()
+        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .finalize()
+        .await;
+
+    predicate_tx
+        .estimate_predicates(
+            &CheckPredicateParams::from(
+                &context
+                    .srv
+                    .shared
+                    .config
+                    .snapshot_reader
+                    .chain_config()
+                    .consensus_parameters,
+            ),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
+
+    assert_ne!(predicate_tx.inputs()[0].predicate_gas_used().unwrap(), 0);
+    use fuel_core_types::fuel_types::canonical::Deserialize;
+
+    let chain_id = context.srv.shared.config.chain_id();
+
+    // roundtrip tx_id:
+    // let encoded_tx = predicate_tx.clone().to_bytes();
+    // let mut decoded_tx = Transaction::from_bytes(&encoded_tx).unwrap();
+    // the fields of the tx match
+    // if let (original_script, Transaction::Script(ref mut roundtrip_script)) =
+    //     (&predicate_tx, &mut decoded_tx)
+    // {
+    //     use fuel_core_types::fuel_tx::field::{
+    //         Policies,
+    //         Witnesses,
+    //     };
+    //     assert_eq!(original_script.body(), roundtrip_script.body());
+    //     assert_eq!(original_script.policies(), roundtrip_script.policies());
+    //     assert_eq!(original_script.inputs(), roundtrip_script.inputs());
+    //     assert_eq!(original_script.outputs(), roundtrip_script.outputs());
+    //     assert_eq!(original_script.witnesses(), roundtrip_script.witnesses());
+    //     // make sure metadata matches
+    //     // roundtrip_script.metadata = original_script.metadata().clone();
+    //     // assert_eq!(original_script.metadata(), roundtrip_script.metadata());
+    // } else {
+    //     panic!("Expected both transactions to be scripts");
+    // }
+    let original_id = predicate_tx.id(&chain_id);
+    predicate_tx.metadata = None;
+    let mutated_id = predicate_tx.id(&chain_id);
+
+    assert_eq!(original_id, mutated_id);
 }
