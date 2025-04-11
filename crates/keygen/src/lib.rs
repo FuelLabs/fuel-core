@@ -4,19 +4,19 @@
 use clap::ValueEnum;
 use fuel_core_types::{
     fuel_crypto::{
-        rand::{
-            prelude::StdRng,
-            SeedableRng,
-        },
         SecretKey,
+        rand::{
+            SeedableRng,
+            prelude::StdRng,
+        },
     },
     fuel_tx::Input,
     fuel_types::Address,
 };
 use libp2p_identity::{
-    secp256k1,
     Keypair,
     PeerId,
+    secp256k1,
 };
 use serde::Serialize;
 use std::{

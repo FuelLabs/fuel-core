@@ -1,14 +1,23 @@
 use crate::{
-    utils::is_dialable,
     TryPeerId,
+    utils::is_dialable,
 };
 use libp2p::{
     self,
+    Multiaddr,
+    PeerId,
     core::{
-        transport::PortUse,
         Endpoint,
+        transport::PortUse,
     },
     swarm::{
+        ConnectionDenied,
+        ConnectionId,
+        NetworkBehaviour,
+        THandler,
+        THandlerInEvent,
+        THandlerOutEvent,
+        ToSwarm,
         derive_prelude::{
             ConnectionClosed,
             ConnectionEstablished,
@@ -19,16 +28,7 @@ use libp2p::{
             PeerCondition,
         },
         dummy,
-        ConnectionDenied,
-        ConnectionId,
-        NetworkBehaviour,
-        THandler,
-        THandlerInEvent,
-        THandlerOutEvent,
-        ToSwarm,
     },
-    Multiaddr,
-    PeerId,
 };
 use std::{
     collections::{

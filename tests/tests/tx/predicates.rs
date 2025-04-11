@@ -21,9 +21,9 @@ use fuel_core_types::{
     },
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 #[tokio::test]
@@ -33,14 +33,14 @@ async fn transaction_with_valid_predicate_is_executed() {
     // setup tx with a predicate input
     let amount = 500;
     let limit = 1000;
-    let asset_id = rng.gen();
+    let asset_id = rng.r#gen();
     // make predicate return 1 which mean valid
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
     let mut predicate_tx =
         TransactionBuilder::script(Default::default(), Default::default())
             .add_input(Input::coin_predicate(
-                rng.gen(),
+                rng.r#gen(),
                 owner,
                 amount,
                 asset_id,
@@ -49,7 +49,7 @@ async fn transaction_with_valid_predicate_is_executed() {
                 predicate,
                 vec![],
             ))
-            .add_output(Output::change(rng.gen(), 0, asset_id))
+            .add_output(Output::change(rng.r#gen(), 0, asset_id))
             .script_gas_limit(limit)
             .finalize();
 
@@ -108,13 +108,13 @@ async fn transaction_with_invalid_predicate_is_rejected() {
 
     // setup tx with a predicate input
     let amount = 500;
-    let asset_id = rng.gen();
+    let asset_id = rng.r#gen();
     // make predicate return 0 which means invalid
     let predicate = op::ret(RegId::ZERO).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
     let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
         .add_input(Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             owner,
             amount,
             asset_id,
@@ -123,7 +123,7 @@ async fn transaction_with_invalid_predicate_is_rejected() {
             predicate,
             vec![],
         ))
-        .add_output(Output::change(rng.gen(), 0, asset_id))
+        .add_output(Output::change(rng.r#gen(), 0, asset_id))
         .finalize();
 
     // create test context with predicates disabled
@@ -143,13 +143,13 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
 
     // setup tx with a predicate input
     let amount = 500;
-    let asset_id = rng.gen();
+    let asset_id = rng.r#gen();
     // make predicate jump in infinite loop
     let predicate = op::jmp(RegId::ZERO).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
     let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
         .add_input(Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             owner,
             amount,
             asset_id,
@@ -158,7 +158,7 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
             predicate,
             vec![],
         ))
-        .add_output(Output::change(rng.gen(), 0, asset_id))
+        .add_output(Output::change(rng.r#gen(), 0, asset_id))
         .finalize();
 
     // create test context with predicates disabled

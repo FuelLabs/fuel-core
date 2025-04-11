@@ -4,11 +4,11 @@
 use std::sync::Arc;
 
 use fuel_core_services::{
+    SharedMutex,
     stream::{
         BoxStream,
         IntoBoxStream,
     },
-    SharedMutex,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::stream::StreamExt;

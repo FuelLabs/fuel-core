@@ -1,19 +1,19 @@
 use anyhow::anyhow;
 use clap::{
-    builder::ArgPredicate::IsPresent,
     Args,
+    builder::ArgPredicate::IsPresent,
 };
 use fuel_core::{
     p2p::{
+        Multiaddr,
         config::{
-            convert_to_libp2p_keypair,
             Config,
-            NotInitialized,
             MAX_RESPONSE_SIZE,
+            NotInitialized,
+            convert_to_libp2p_keypair,
         },
         gossipsub_config::default_gossipsub_builder,
         heartbeat,
-        Multiaddr,
     },
     types::{
         fuel_crypto,
@@ -368,8 +368,9 @@ mod tests {
 
         // Then
         let err = keypair.expect_err("The path is incorrect it should fail");
-        assert!(err
-            .to_string()
-            .contains("does not exist for keypair argument"));
+        assert!(
+            err.to_string()
+                .contains("does not exist for keypair argument")
+        );
     }
 }

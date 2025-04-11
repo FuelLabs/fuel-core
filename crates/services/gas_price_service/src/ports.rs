@@ -27,7 +27,7 @@ pub trait SetMetadataStorage: Send + Sync {
 
 pub trait GetMetadataStorage: Send + Sync {
     fn get_metadata(&self, block_height: &BlockHeight)
-        -> Result<Option<UpdaterMetadata>>;
+    -> Result<Option<UpdaterMetadata>>;
 }
 
 pub trait SetLatestRecordedHeight: Send + Sync {

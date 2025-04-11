@@ -3,12 +3,12 @@ use ethers_core::types::{
     Block,
     BlockId,
     Filter,
+    H256,
     Log,
     SyncingStatus,
     Transaction,
     TransactionReceipt,
     TxHash,
-    H256,
     U64,
 };
 use ethers_providers::{
@@ -19,8 +19,8 @@ use ethers_providers::{
 };
 use parking_lot::Mutex;
 use serde::{
-    de::DeserializeOwned,
     Serialize,
+    de::DeserializeOwned,
 };
 use std::{
     fmt,

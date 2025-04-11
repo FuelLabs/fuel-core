@@ -1,30 +1,30 @@
 use super::{
-    compression_adapters::CompressionServiceAdapter,
-    import_result_provider,
     BlockImporterAdapter,
     BlockProducerAdapter,
     ChainStateInfoProvider,
     SharedMemoryPool,
     StaticGasPrice,
     TxStatusManagerAdapter,
+    compression_adapters::CompressionServiceAdapter,
+    import_result_provider,
 };
 use crate::{
     database::{
-        database_description::compression::CompressionDatabase,
         Database,
         OnChainIterableKeyValueView,
+        database_description::compression::CompressionDatabase,
     },
     fuel_core_graphql_api::ports::{
-        worker::{
-            self,
-            BlockAt,
-        },
         BlockProducerPort,
         ChainStateProvider,
         DatabaseMessageProof,
         GasPriceEstimate,
         P2pPort,
         TxPoolPort,
+        worker::{
+            self,
+            BlockAt,
+        },
     },
     graphql_api::ports::{
         DatabaseDaCompressedBlocks,
@@ -33,9 +33,9 @@ use crate::{
     },
     service::{
         adapters::{
-            import_result_provider::ImportResultProvider,
             P2PAdapter,
             TxPoolAdapter,
+            import_result_provider::ImportResultProvider,
         },
         vm_pool::MemoryFromPool,
     },
@@ -44,11 +44,11 @@ use async_trait::async_trait;
 use fuel_core_compression_service::storage::CompressedBlocks;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
+    Result as StorageResult,
     blueprint::BlueprintInspect,
     kv_store::KeyValueInspect,
     not_found,
     structured_storage::TableWithBlueprint,
-    Result as StorageResult,
 };
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_txpool::TxPoolStats;
@@ -168,29 +168,32 @@ impl P2pPort for P2PAdapter {
         #[cfg(feature = "p2p")]
         {
             use fuel_core_types::services::p2p::HeartbeatData;
-            if let Some(service) = &self.service {
-                let peers = service.get_all_peers().await?;
-                Ok(peers
-                    .into_iter()
-                    .map(|(peer_id, peer_info)| PeerInfo {
-                        id: fuel_core_types::services::p2p::PeerId::from(
-                            peer_id.to_bytes(),
-                        ),
-                        peer_addresses: peer_info
-                            .peer_addresses
-                            .iter()
-                            .map(|addr| addr.to_string())
-                            .collect(),
-                        client_version: None,
-                        heartbeat_data: HeartbeatData {
-                            block_height: peer_info.heartbeat_data.block_height,
-                            last_heartbeat: peer_info.heartbeat_data.last_heartbeat_sys,
-                        },
-                        app_score: peer_info.score,
-                    })
-                    .collect())
-            } else {
-                Ok(vec![])
+            match &self.service {
+                Some(service) => {
+                    let peers = service.get_all_peers().await?;
+                    Ok(peers
+                        .into_iter()
+                        .map(|(peer_id, peer_info)| PeerInfo {
+                            id: fuel_core_types::services::p2p::PeerId::from(
+                                peer_id.to_bytes(),
+                            ),
+                            peer_addresses: peer_info
+                                .peer_addresses
+                                .iter()
+                                .map(|addr| addr.to_string())
+                                .collect(),
+                            client_version: None,
+                            heartbeat_data: HeartbeatData {
+                                block_height: peer_info.heartbeat_data.block_height,
+                                last_heartbeat: peer_info
+                                    .heartbeat_data
+                                    .last_heartbeat_sys,
+                            },
+                            app_score: peer_info.score,
+                        })
+                        .collect())
+                }
+                _ => Ok(vec![]),
             }
         }
         #[cfg(not(feature = "p2p"))]

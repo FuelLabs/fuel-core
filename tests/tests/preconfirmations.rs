@@ -3,14 +3,14 @@ use std::time::Duration;
 use fuel_core::service::Config;
 use fuel_core_bin::FuelService;
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::{
-        op,
         RegId,
+        op,
     },
     fuel_tx::{
         Address,
@@ -64,34 +64,36 @@ async fn preconfirmation__received_after_successful_execution() {
         TransactionStatus::Submitted { .. }
     ));
     client.produce_blocks(1, None).await.unwrap();
-    if let TransactionStatus::PreconfirmationSuccess {
-        tx_pointer,
-        total_fee: _,
-        total_gas: _,
-        transaction_id,
-        receipts,
-        resolved_outputs,
-    } = tx_statuses_subscriber.next().await.unwrap().unwrap()
-    {
-        // Then
-        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
-        assert_eq!(transaction_id, tx_id);
-        let receipts = receipts.unwrap();
-        assert_eq!(receipts.len(), 3);
-        assert!(matches!(receipts[0],
+    match tx_statuses_subscriber.next().await.unwrap().unwrap() {
+        TransactionStatus::PreconfirmationSuccess {
+            tx_pointer,
+            total_fee: _,
+            total_gas: _,
+            transaction_id,
+            receipts,
+            resolved_outputs,
+        } => {
+            // Then
+            assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
+            assert_eq!(transaction_id, tx_id);
+            let receipts = receipts.unwrap();
+            assert_eq!(receipts.len(), 3);
+            assert!(matches!(receipts[0],
             Receipt::Log {
                 ra, rb, ..
             } if ra == 0xca && rb == 0xba));
 
-        assert!(matches!(receipts[1],
+            assert!(matches!(receipts[1],
             Receipt::Return {
                 val, ..
             } if val == 1));
-        let outputs = resolved_outputs.unwrap();
-        assert_eq!(outputs.len(), 1);
-        assert!(outputs[0].output.is_change());
-    } else {
-        panic!("Expected preconfirmation status");
+            let outputs = resolved_outputs.unwrap();
+            assert_eq!(outputs.len(), 1);
+            assert!(outputs[0].output.is_change());
+        }
+        _ => {
+            panic!("Expected preconfirmation status");
+        }
     }
     assert!(matches!(
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
@@ -213,35 +215,37 @@ async fn preconfirmation__received_after_failed_execution() {
         TransactionStatus::Submitted { .. }
     ));
     client.produce_blocks(1, None).await.unwrap();
-    if let TransactionStatus::PreconfirmationFailure {
-        tx_pointer,
-        total_fee: _,
-        total_gas: _,
-        transaction_id,
-        receipts,
-        resolved_outputs,
-        reason: _,
-    } = tx_statuses_subscriber.next().await.unwrap().unwrap()
-    {
-        // Then
-        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
-        assert_eq!(transaction_id, tx_id);
-        let receipts = receipts.unwrap();
-        assert_eq!(receipts.len(), 3);
-        assert!(matches!(receipts[0],
+    match tx_statuses_subscriber.next().await.unwrap().unwrap() {
+        TransactionStatus::PreconfirmationFailure {
+            tx_pointer,
+            total_fee: _,
+            total_gas: _,
+            transaction_id,
+            receipts,
+            resolved_outputs,
+            reason: _,
+        } => {
+            // Then
+            assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
+            assert_eq!(transaction_id, tx_id);
+            let receipts = receipts.unwrap();
+            assert_eq!(receipts.len(), 3);
+            assert!(matches!(receipts[0],
             Receipt::Log {
                 ra, rb, ..
             } if ra == 0xca && rb == 0xba));
 
-        assert!(matches!(receipts[1],
+            assert!(matches!(receipts[1],
             Receipt::Revert {
                 ra, ..
             } if ra == 1));
-        let outputs = resolved_outputs.unwrap();
-        assert_eq!(outputs.len(), 1);
-        assert!(outputs[0].output.is_change());
-    } else {
-        panic!("Expected preconfirmation status");
+            let outputs = resolved_outputs.unwrap();
+            assert_eq!(outputs.len(), 1);
+            assert!(outputs[0].output.is_change());
+        }
+        _ => {
+            panic!("Expected preconfirmation status");
+        }
     }
 
     assert!(matches!(
@@ -306,7 +310,7 @@ async fn preconfirmation__received_after_execution__multiple_txs() {
     .script_gas_limit(1_000_000)
     .add_unsigned_coin_input(
         SecretKey::random(&mut rng),
-        rng.gen(),
+        rng.r#gen(),
         10,
         AssetId::default(),
         Default::default(),
@@ -324,7 +328,7 @@ async fn preconfirmation__received_after_execution__multiple_txs() {
     .script_gas_limit(1_000_000)
     .add_unsigned_coin_input(
         SecretKey::random(&mut rng),
-        rng.gen(),
+        rng.r#gen(),
         10,
         AssetId::default(),
         Default::default(),

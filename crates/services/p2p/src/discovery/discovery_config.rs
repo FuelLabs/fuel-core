@@ -1,20 +1,20 @@
 use crate::{
+    TryPeerId,
     discovery::{
-        mdns_wrapper::MdnsWrapper,
         Behaviour,
+        mdns_wrapper::MdnsWrapper,
     },
     utils::is_dialable,
-    TryPeerId,
 };
 use libp2p::{
-    kad::{
-        self,
-        store::MemoryStore,
-        Mode,
-    },
-    swarm::StreamProtocol,
     Multiaddr,
     PeerId,
+    kad::{
+        self,
+        Mode,
+        store::MemoryStore,
+    },
+    swarm::StreamProtocol,
 };
 use std::{
     collections::HashSet,

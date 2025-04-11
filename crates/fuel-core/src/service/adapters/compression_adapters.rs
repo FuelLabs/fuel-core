@@ -1,10 +1,10 @@
 use crate::{
     database::{
+        Database,
         database_description::{
             compression::CompressionDatabase,
             on_chain::OnChain,
         },
-        Database,
     },
     service::adapters::BlockImporterAdapter,
 };

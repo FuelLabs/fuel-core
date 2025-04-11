@@ -3,15 +3,15 @@ use atty::Stream;
 use clap::Parser;
 use crossterm::terminal;
 use fuel_core_keygen::{
+    KeyType,
     new_key,
     parse_secret,
-    KeyType,
 };
 use std::io::{
-    stdin,
-    stdout,
     Read,
     Write,
+    stdin,
+    stdout,
 };
 use termion::screen::IntoAlternateScreen;
 

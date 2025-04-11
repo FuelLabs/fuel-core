@@ -6,23 +6,23 @@ use crate::{
     fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
 use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsRef,
     iter::{
         IterDirection,
         IteratorOverTable,
     },
     not_found,
     tables::{
+        FuelBlocks,
+        Transactions,
         merkle::{
             DenseMetadataKey,
             FuelBlockMerkleData,
             FuelBlockMerkleMetadata,
         },
-        FuelBlocks,
-        Transactions,
     },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -134,8 +134,8 @@ mod tests {
     use super::*;
     use crate::database::Database;
     use fuel_core_storage::{
-        transactional::AtomicView,
         StorageMutate,
+        transactional::AtomicView,
     };
     use fuel_core_types::{
         blockchain::{

@@ -10,6 +10,9 @@ use crate::{
     ContractStateConfig,
 };
 use fuel_core_storage::{
+    ContractsAssetKey,
+    ContractsStateKey,
+    Mappable,
     structured_storage::TableWithBlueprint,
     tables::{
         Coins,
@@ -23,9 +26,6 @@ use fuel_core_storage::{
         SealedBlockConsensus,
         Transactions,
     },
-    ContractsAssetKey,
-    ContractsStateKey,
-    Mappable,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -293,11 +293,11 @@ impl crate::Randomize for StateConfig {
             blobs: rand_collection(&mut rng, amount),
             contracts: rand_collection(&mut rng, amount),
             last_block: Some(LastBlockConfig {
-                block_height: rng.gen(),
-                da_block_height: rng.gen(),
-                consensus_parameters_version: rng.gen(),
-                state_transition_version: rng.gen(),
-                blocks_root: rng.gen(),
+                block_height: rng.r#gen(),
+                da_block_height: rng.r#gen(),
+                consensus_parameters_version: rng.r#gen(),
+                state_transition_version: rng.r#gen(),
+                blocks_root: rng.r#gen(),
             }),
         }
     }
@@ -681,8 +681,8 @@ mod tests {
     };
 
     use rand::{
-        rngs::StdRng,
         SeedableRng,
+        rngs::StdRng,
     };
 
     use super::*;

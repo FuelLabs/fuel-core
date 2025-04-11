@@ -7,12 +7,12 @@ use handler::{
     HeartbeatOutEvent,
 };
 use libp2p::{
+    PeerId,
     core::{
-        transport::PortUse,
         Endpoint,
+        transport::PortUse,
     },
     swarm::{
-        derive_prelude::ConnectionId,
         ConnectionDenied,
         FromSwarm,
         NetworkBehaviour,
@@ -21,8 +21,8 @@ use libp2p::{
         THandlerInEvent,
         THandlerOutEvent,
         ToSwarm,
+        derive_prelude::ConnectionId,
     },
-    PeerId,
 };
 use std::{
     collections::VecDeque,

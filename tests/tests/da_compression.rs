@@ -3,21 +3,21 @@ use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
     p2p_test_helpers::*,
     service::{
+        Config,
+        FuelService,
         config::{
             DaCompressionConfig,
             DaCompressionMode,
         },
-        Config,
-        FuelService,
     },
 };
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_compression::{
-    decompress::decompress,
     VersionedCompressedBlock,
+    decompress::decompress,
 };
 use fuel_core_compression_service::temporal_registry::{
     CompressionStorageWrapper,
@@ -30,8 +30,8 @@ use fuel_core_storage::transactional::{
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         RegId,
+        op,
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
@@ -42,8 +42,8 @@ use fuel_core_types::{
     signer::SignMode,
 };
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::str::FromStr;
 use test_helpers::{

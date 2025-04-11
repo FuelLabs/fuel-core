@@ -1,8 +1,8 @@
 use super::scalars::HexString;
 use crate::{
     fuel_core_graphql_api::{
-        query_costs,
         IntoApiResult,
+        query_costs,
     },
     graphql_api::api_service::DaCompressionProvider,
     schema::scalars::U32,

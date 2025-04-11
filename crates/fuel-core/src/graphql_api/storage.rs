@@ -12,6 +12,11 @@ use crate::{
     graphql_api::ports::worker::OffChainDatabaseTransaction,
 };
 use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageAsRef,
+    StorageMutate,
     kv_store::{
         KeyValueInspect,
         StorageColumn,
@@ -20,11 +25,6 @@ use fuel_core_storage::{
         Modifiable,
         StorageTransaction,
     },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
-    StorageMutate,
 };
 use fuel_core_types::{
     fuel_tx::{

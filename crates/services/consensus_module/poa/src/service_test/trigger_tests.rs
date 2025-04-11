@@ -236,8 +236,8 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second(
-) -> anyhow::Result<()> {
+async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second()
+-> anyhow::Result<()> {
     // given
     let config = Config {
         trigger: Trigger::Interval {
@@ -376,8 +376,8 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
 }
 
 #[tokio::test]
-async fn interval_trigger_produces_blocks_with_current_time_when_block_production_is_lagging(
-) {
+async fn interval_trigger_produces_blocks_with_current_time_when_block_production_is_lagging()
+ {
     // Given
 
     let block_time = Duration::from_secs(10);

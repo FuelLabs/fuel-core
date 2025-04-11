@@ -16,9 +16,9 @@ use ethers_core::{
     abi::Tokenize,
     types::{
         Bytes as EthersBytes,
-        Log,
         H160,
         H256,
+        Log,
         U64,
     },
 };

@@ -1,7 +1,7 @@
 use crate::{
     buckets::{
-        buckets,
         Buckets,
+        buckets,
     },
     global_registry,
 };

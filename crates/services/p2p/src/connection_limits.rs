@@ -3,19 +3,13 @@
 
 use libp2p::{
     core::{
-        transport::PortUse,
         ConnectedPoint,
         Endpoint,
         Multiaddr,
+        transport::PortUse,
     },
     identity::PeerId,
     swarm::{
-        behaviour::{
-            ConnectionEstablished,
-            DialFailure,
-            ListenFailure,
-        },
-        dummy,
         ConnectionClosed,
         ConnectionDenied,
         ConnectionId,
@@ -25,13 +19,19 @@ use libp2p::{
         THandlerInEvent,
         THandlerOutEvent,
         ToSwarm,
+        behaviour::{
+            ConnectionEstablished,
+            DialFailure,
+            ListenFailure,
+        },
+        dummy,
     },
 };
 use std::{
     collections::{
-        hash_map::Entry,
         HashMap,
         HashSet,
+        hash_map::Entry,
     },
     fmt,
     sync::Arc,

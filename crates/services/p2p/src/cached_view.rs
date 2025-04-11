@@ -53,11 +53,14 @@ impl CachedView {
         let mut missing_start = None;
 
         for height in range.clone() {
-            if let Some(item) = cache.get(&height) {
-                items.push(item);
-            } else {
-                missing_start = Some(height);
-                break;
+            match cache.get(&height) {
+                Some(item) => {
+                    items.push(item);
+                }
+                _ => {
+                    missing_start = Some(height);
+                    break;
+                }
             }
         }
 

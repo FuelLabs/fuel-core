@@ -25,7 +25,7 @@ pub fn create_contract<R: Rng>(
     contract_code: &[u8],
     rng: &mut R,
 ) -> (Create, ContractId) {
-    let salt: Salt = rng.gen();
+    let salt: Salt = rng.r#gen();
     let contract = Contract::from(contract_code);
     let root = contract.root();
     let state_root = Contract::default_state_root();

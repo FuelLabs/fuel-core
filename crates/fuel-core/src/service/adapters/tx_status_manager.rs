@@ -19,17 +19,18 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
 
     fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
         use tokio_stream::{
-            wrappers::BroadcastStream,
             StreamExt,
+            wrappers::BroadcastStream,
         };
 
-        if let Some(service) = &self.service {
-            Box::pin(
+        match &self.service {
+            Some(service) => Box::pin(
                 BroadcastStream::new(service.subscribe_preconfirmations())
                     .filter_map(|result| result.ok()),
-            )
-        } else {
-            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+            ),
+            _ => fuel_core_services::stream::IntoBoxStream::into_boxed(
+                tokio_stream::pending(),
+            ),
         }
     }
 
@@ -38,10 +39,11 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
         message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
-        if let Some(service) = &self.service {
-            service.notify_gossip_transaction_validity(message_info, validity)
-        } else {
-            Ok(())
+        match &self.service {
+            Some(service) => {
+                service.notify_gossip_transaction_validity(message_info, validity)
+            }
+            _ => Ok(()),
         }
     }
 }

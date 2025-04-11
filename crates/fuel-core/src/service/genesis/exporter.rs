@@ -1,8 +1,8 @@
 use crate::{
     combined_database::CombinedDatabase,
     database::{
-        database_description::DatabaseDescription,
         Database,
+        database_description::DatabaseDescription,
     },
     fuel_core_graphql_api::storage::{
         messages::SpentMessages,
@@ -36,10 +36,6 @@ use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        merkle::{
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
-        },
         Coins,
         ContractsAssets,
         ContractsLatestUtxo,
@@ -50,6 +46,10 @@ use fuel_core_storage::{
         ProcessedTransactions,
         SealedBlockConsensus,
         Transactions,
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
     },
     transactional::AtomicView,
 };
@@ -60,9 +60,9 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 use super::{
+    NotifyCancel,
     progress::MultipleProgressReporter,
     task_manager::TaskManager,
-    NotifyCancel,
 };
 
 pub struct Exporter<Fun, N> {
@@ -100,7 +100,7 @@ where
 
     pub async fn write_full_snapshot(mut self) -> Result<(), anyhow::Error> {
         macro_rules! export {
-            ($db: expr, $($table: ty),*) => {
+            ($db: expr_2021, $($table: ty),*) => {
                 $(self.spawn_task::<$table, _>(None, $db)?;)*
             };
         }

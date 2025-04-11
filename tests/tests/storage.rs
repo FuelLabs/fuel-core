@@ -6,17 +6,17 @@ use fuel_core::{
     state::historical_rocksdb::StateRewindPolicy,
 };
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::fuel_tx::{
-    field::Outputs,
     Bytes32,
     Create,
     Finalizable,
     StorageSlot,
     TransactionBuilder,
+    field::Outputs,
 };
 use futures::TryStreamExt;
 use itertools::Itertools;

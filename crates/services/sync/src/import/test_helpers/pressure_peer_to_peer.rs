@@ -1,8 +1,8 @@
 use crate::{
     import::test_helpers::{
+        SharedCounts,
         empty_header,
         random_peer,
-        SharedCounts,
     },
     ports::{
         MockPeerToPeerPort,

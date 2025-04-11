@@ -3,11 +3,11 @@ use crate::fuel_core_graphql_api::{
     storage::coins::CoinsToSpendIndexKey,
 };
 use fuel_core_storage::codec::{
-    manual::Manual,
-    primitive::utxo_id_to_bytes,
     Decode,
     Encode,
     Encoder,
+    manual::Manual,
+    primitive::utxo_id_to_bytes,
 };
 use fuel_core_types::{
     fuel_tx::{

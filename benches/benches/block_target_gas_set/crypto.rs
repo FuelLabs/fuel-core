@@ -3,8 +3,8 @@ use crate::{
     *,
 };
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 // ECK1: Secp251k1 signature recovery

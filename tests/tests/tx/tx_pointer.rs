@@ -6,10 +6,6 @@ use fuel_core::chain_config::CoinConfig;
 use fuel_core_types::{
     fuel_crypto::SecretKey,
     fuel_tx::{
-        field::{
-            Inputs,
-            Outputs,
-        },
         Address,
         AssetId,
         ContractId,
@@ -22,12 +18,16 @@ use fuel_core_types::{
         TxPointer,
         UniqueIdentifier,
         UtxoId,
+        field::{
+            Inputs,
+            Outputs,
+        },
     },
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 /// Verifies that tx_pointer's are correctly set for both coin and contract input types when
@@ -40,13 +40,13 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
     let starting_block = 10.into();
 
     // setup genesis contract
-    let contract_tx_pointer = TxPointer::new(7.into(), rng.gen());
+    let contract_tx_pointer = TxPointer::new(7.into(), rng.r#gen());
     let (_, contract_id) =
         test_builder.setup_contract(vec![], vec![], Some(contract_tx_pointer));
 
     // setup genesis coin
-    let coin_tx_pointer = TxPointer::new(starting_block, rng.gen());
-    let coin_utxo_id: UtxoId = rng.gen();
+    let coin_tx_pointer = TxPointer::new(starting_block, rng.r#gen());
+    let coin_utxo_id: UtxoId = rng.r#gen();
     let secret_key: SecretKey = SecretKey::random(&mut rng);
     let owner = Input::owner(&secret_key.public_key());
     let amount = 1000;
@@ -117,7 +117,7 @@ async fn tx_pointer_set_from_previous_block() {
     test_builder.starting_block = Some(previous_block_height.into());
 
     // setup genesis coin
-    let coin_utxo_id: UtxoId = rng.gen();
+    let coin_utxo_id: UtxoId = rng.r#gen();
     let secret_key: SecretKey = SecretKey::random(&mut rng);
     let owner = Input::owner(&secret_key.public_key());
     let amount = 1000;
@@ -155,7 +155,7 @@ async fn tx_pointer_set_from_previous_block() {
         ret_tx1.outputs()[0].amount().unwrap(),
         UtxoId::new(tx1.id(&Default::default()), 0),
         contract_id,
-        rng.gen(),
+        rng.r#gen(),
     );
     let tx2 = tx2.into();
     client.submit_and_await_commit(&tx2).await.unwrap();
@@ -200,7 +200,13 @@ async fn tx_pointer_unset_when_utxo_validation_disabled() {
     test_builder.utxo_validation = false;
 
     let secret_key: SecretKey = SecretKey::random(&mut rng);
-    let script = script_tx(secret_key, 1000, Default::default(), contract_id, rng.gen());
+    let script = script_tx(
+        secret_key,
+        1000,
+        Default::default(),
+        contract_id,
+        rng.r#gen(),
+    );
 
     let TestContext {
         client,

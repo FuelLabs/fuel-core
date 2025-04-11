@@ -5,8 +5,8 @@ use super::scalars::{
 use crate::{
     database::database_description::IndexationKind,
     fuel_core_graphql_api::{
-        query_costs,
         Config as GraphQLConfig,
+        query_costs,
     },
     graphql_api::{
         api_service::TxPool,

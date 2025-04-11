@@ -8,8 +8,8 @@ use tokio::sync::{
 };
 
 use fuel_core_consensus_module::{
-    block_verifier::Verifier,
     RelayerConsensusConfig,
+    block_verifier::Verifier,
 };
 use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_gas_price_service::{
@@ -29,8 +29,8 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         consensus::{
-            poa::PoAConsensus,
             Consensus,
+            poa::PoAConsensus,
         },
     },
     fuel_tx::{
@@ -58,8 +58,8 @@ use fuel_core_types::services::p2p::peer_reputation::AppScore;
 
 use crate::{
     database::{
-        database_description::relayer::Relayer,
         Database,
+        database_description::relayer::Relayer,
     },
     fuel_core_graphql_api::ports::GasPriceEstimate,
     service::{

@@ -1,12 +1,12 @@
 use crate::{
+    VersionedBlockPayload,
+    VersionedCompressedBlock,
     config::Config,
     ports::{
         HistoryLookup,
         TemporalRegistry,
     },
     registry::TemporalRegistryAll,
-    VersionedBlockPayload,
-    VersionedCompressedBlock,
 };
 use fuel_core_types::{
     blockchain::block::PartialFuelBlock,
@@ -18,8 +18,17 @@ use fuel_core_types::{
         RegistryKey,
     },
     fuel_tx::{
+        AssetId,
+        CompressedUtxoId,
+        Mint,
+        ScriptCode,
+        Transaction,
+        TxPointer as FuelTxPointer,
+        UtxoId,
         field::TxPointer,
         input::{
+            AsField,
+            PredicateCode,
             coin::{
                 Coin,
                 CoinSpecification,
@@ -28,16 +37,7 @@ use fuel_core_types::{
                 Message,
                 MessageSpecification,
             },
-            AsField,
-            PredicateCode,
         },
-        AssetId,
-        CompressedUtxoId,
-        Mint,
-        ScriptCode,
-        Transaction,
-        TxPointer as FuelTxPointer,
-        UtxoId,
     },
     fuel_types::{
         Address,
@@ -123,7 +123,11 @@ where
                     .map_err(|e| anyhow::anyhow!("Failed to get registry root: {}", e))?;
                 let registry_root_after_compression = block.header.registry_root;
                 if registry_root_after_decompression != registry_root_after_compression {
-                    anyhow::bail!("Registry root mismatch. registry root after decompression: {:?}, registry root after compression: {:?}", registry_root_after_decompression, registry_root_after_compression);
+                    anyhow::bail!(
+                        "Registry root mismatch. registry root after decompression: {:?}, registry root after compression: {:?}",
+                        registry_root_after_decompression,
+                        registry_root_after_compression
+                    );
                 }
             }
         }
@@ -287,11 +291,11 @@ mod tests {
     use fuel_core_types::{
         fuel_compression::RegistryKey,
         fuel_tx::{
-            input::PredicateCode,
             Address,
             AssetId,
             ContractId,
             ScriptCode,
+            input::PredicateCode,
         },
     };
     use serde::{

@@ -1,9 +1,11 @@
 use self::mdns_wrapper::MdnsWrapper;
 use futures::FutureExt;
 use libp2p::{
+    Multiaddr,
+    PeerId,
     core::{
-        transport::PortUse,
         Endpoint,
+        transport::PortUse,
     },
     kad::{
         self,
@@ -11,18 +13,16 @@ use libp2p::{
     },
     mdns,
     swarm::{
+        ConnectionDenied,
+        ConnectionId,
+        NetworkBehaviour,
+        THandler,
         derive_prelude::{
             ConnectionClosed,
             ConnectionEstablished,
             FromSwarm,
         },
-        ConnectionDenied,
-        ConnectionId,
-        NetworkBehaviour,
-        THandler,
     },
-    Multiaddr,
-    PeerId,
 };
 
 use libp2p::swarm::{
@@ -239,16 +239,16 @@ mod tests {
         Event,
     };
     use futures::{
-        future::poll_fn,
         StreamExt,
+        future::poll_fn,
     };
     use libp2p::{
-        identity::Keypair,
-        multiaddr::Protocol,
-        swarm::SwarmEvent,
         Multiaddr,
         PeerId,
         Swarm,
+        identity::Keypair,
+        multiaddr::Protocol,
+        swarm::SwarmEvent,
     };
     use std::{
         collections::HashSet,

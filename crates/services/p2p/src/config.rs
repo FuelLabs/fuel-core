@@ -1,8 +1,8 @@
 use crate::{
+    TryPeerId,
     gossipsub::config::default_gossipsub_config,
     heartbeat,
     peer_manager::ConnectionState,
-    TryPeerId,
 };
 use fuel_core_types::blockchain::consensus::Genesis;
 
@@ -13,14 +13,14 @@ use self::{
 };
 use fuel_core_services::seqlock::SeqLockReader;
 use libp2p::{
-    gossipsub,
-    identity::{
-        secp256k1,
-        Keypair,
-    },
-    noise,
     Multiaddr,
     PeerId,
+    gossipsub,
+    identity::{
+        Keypair,
+        secp256k1,
+    },
+    noise,
 };
 use std::{
     collections::HashSet,

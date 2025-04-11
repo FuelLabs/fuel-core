@@ -1,14 +1,14 @@
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{
-        merkle::ContractsAssetsMerkleMetadata,
-        ContractsAssets,
-    },
     ContractsAssetKey,
     Error as StorageError,
     StorageAsRef,
     StorageBatchMutate,
     StorageInspect,
+    tables::{
+        ContractsAssets,
+        merkle::ContractsAssetsMerkleMetadata,
+    },
 };
 use fuel_core_types::{
     fuel_asm::Word,
@@ -109,18 +109,18 @@ mod tests {
 
     use super::*;
     use crate::database::{
-        database_description::on_chain::OnChain,
         Database,
+        database_description::on_chain::OnChain,
     };
     use fuel_core_storage::{
-        transactional::IntoTransaction,
         StorageAsMut,
+        transactional::IntoTransaction,
     };
     use fuel_core_types::fuel_types::AssetId;
     use rand::{
-        rngs::StdRng,
         Rng,
         SeedableRng,
+        rngs::StdRng,
     };
 
     fn random_asset_id<R>(rng: &mut R) -> AssetId
@@ -135,14 +135,14 @@ mod tests {
     #[test]
     fn init_contract_balances_works() {
         use rand::{
-            rngs::StdRng,
             RngCore,
             SeedableRng,
+            rngs::StdRng,
         };
 
         let rng = &mut StdRng::seed_from_u64(1234);
-        let gen = || Some((random_asset_id(rng), rng.next_u64()));
-        let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
+        let r#gen = || Some((random_asset_id(rng), rng.next_u64()));
+        let data = core::iter::from_fn(r#gen).take(5_000).collect::<Vec<_>>();
 
         let contract_id = ContractId::from([1u8; 32]);
         let mut init_database = Database::<OnChain>::default().into_transaction();
@@ -191,7 +191,7 @@ mod tests {
     where
         R: Rng + ?Sized,
     {
-        rng.gen()
+        rng.r#gen()
     }
 
     mod update_contract_balance {

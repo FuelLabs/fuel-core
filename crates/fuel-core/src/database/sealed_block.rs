@@ -1,5 +1,7 @@
 use crate::database::OnChainIterableKeyValueView;
 use fuel_core_storage::{
+    Result as StorageResult,
+    StorageAsRef,
     iter::{
         IterDirection,
         IteratorOverTable,
@@ -9,18 +11,16 @@ use fuel_core_storage::{
         FuelBlocks,
         SealedBlockConsensus,
     },
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
+        SealedBlock,
+        SealedBlockHeader,
         block::CompressedBlock,
         consensus::{
             Consensus,
             Genesis,
         },
-        SealedBlock,
-        SealedBlockHeader,
     },
     fuel_types::BlockHeight,
     services::p2p::Transactions,

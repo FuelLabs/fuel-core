@@ -140,9 +140,7 @@ pub(crate) enum InputValidationErrorType {
 
 #[derive(Clone, Debug, derive_more::Display)]
 pub enum InputValidationError {
-    #[display(
-        fmt = "Input output mismatch. Coin owner is different from expected input"
-    )]
+    #[display(fmt = "Input output mismatch. Coin owner is different from expected input")]
     NotInsertedIoWrongOwner,
     #[display(fmt = "Input output mismatch. Coin output does not match expected input")]
     NotInsertedIoWrongAmount,

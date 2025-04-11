@@ -6,6 +6,7 @@ use super::column::{
 };
 use fuel_core_compression::VersionedCompressedBlock;
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
@@ -13,7 +14,6 @@ use fuel_core_storage::{
     },
     merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 
 use fuel_core_types::fuel_types::BlockHeight;

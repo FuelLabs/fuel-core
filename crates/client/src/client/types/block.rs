@@ -1,4 +1,5 @@
 use crate::client::{
+    PaginatedResult,
     schema,
     schema::ConversionError,
     types::primitives::{
@@ -9,7 +10,6 @@ use crate::client::{
         Signature,
         TransactionId,
     },
-    PaginatedResult,
 };
 
 use crate::client::schema::block::{
@@ -151,7 +151,7 @@ impl From<schema::block::Genesis> for Genesis {
 
 impl From<schema::block::PoAConsensus> for PoAConsensus {
     fn from(value: schema::block::PoAConsensus) -> Self {
-        let bytes: [u8; 64] = value.signature.0 .0.into();
+        let bytes: [u8; 64] = value.signature.0.0.into();
         Self {
             signature: Signature::from_bytes(bytes),
         }
