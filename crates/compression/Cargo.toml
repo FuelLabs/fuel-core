@@ -14,6 +14,7 @@ keywords = [
 ]
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 description = "Compression and decompression of Fuel blocks for DA storage."
 
 [dependencies]

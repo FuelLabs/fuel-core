@@ -47,7 +47,6 @@ const MAX_PENDING_OUTGOING_CONNECTIONS: u32 = 100;
 #[derive(NetworkBehaviour)]
 pub struct FuelBehaviour {
     /// **WARNING**: The order of the behaviours is important and fragile, at least for the tests.
-
     /// The Behaviour to manage connections to blocked peers.
     blocked_peer: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
 

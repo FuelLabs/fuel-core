@@ -118,7 +118,7 @@ impl<'a> AssetsQuery<'a> {
                 }
             })
             .map(move |res| {
-                res.map_err(StorageError::from).and_then(|id| {
+                res.and_then(|id| {
                     let id = if let CoinId::Utxo(id) = id {
                         id
                     } else {

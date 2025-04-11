@@ -199,7 +199,7 @@ async fn dry_run__storage_read_replay__multiple_dry_runs_keep_original_reads() {
     for storage_bytes in key_reads.iter() {
         assert_eq!(
             0,
-            counter_contract::value_from_storage_bytes(&storage_bytes),
+            counter_contract::value_from_storage_bytes(storage_bytes),
             "Counter value from storage events mismatch"
         );
     }
