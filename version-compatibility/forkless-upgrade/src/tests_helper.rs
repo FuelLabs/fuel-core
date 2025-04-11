@@ -1,11 +1,10 @@
 #![allow(dead_code)]
 
 use fuel_crypto::{
-    fuel_types::ChainId,
     SecretKey,
+    fuel_types::ChainId,
 };
 use fuel_tx::{
-    policies::Policies,
     Input,
     Signable,
     Transaction,
@@ -14,6 +13,7 @@ use fuel_tx::{
     Upload,
     UploadSubsection,
     Witness,
+    policies::Policies,
 };
 use genesis_fuel_core_bin::FuelService as GenesisFuelService;
 use genesis_fuel_core_client::client::FuelClient as GenesisClient;
@@ -22,8 +22,8 @@ use latest_fuel_core_bin::FuelService as LatestFuelService;
 use latest_fuel_core_client::client::FuelClient as LatestClient;
 use libp2p::PeerId;
 use rand::{
-    prelude::StdRng,
     Rng,
+    prelude::StdRng,
 };
 use std::str::FromStr;
 use version_36_fuel_core_bin::FuelService as Version36FuelService;
