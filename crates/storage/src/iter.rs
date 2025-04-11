@@ -346,7 +346,7 @@ pub fn iterator<'a, V>(
     prefix: Option<&[u8]>,
     start: Option<&[u8]>,
     direction: IterDirection,
-) -> impl Iterator<Item = (&'a ReferenceBytesKey, &'a V)> + 'a
+) -> impl Iterator<Item = (&'a ReferenceBytesKey, &'a V)> + 'a + use<'a, V>
 where
     V: Send + Sync,
 {
@@ -404,7 +404,7 @@ pub fn keys_iterator<'a, V>(
     prefix: Option<&[u8]>,
     start: Option<&[u8]>,
     direction: IterDirection,
-) -> impl Iterator<Item = &'a ReferenceBytesKey> + 'a
+) -> impl Iterator<Item = &'a ReferenceBytesKey> + 'a + use<'a, V>
 where
     V: Send + Sync,
 {

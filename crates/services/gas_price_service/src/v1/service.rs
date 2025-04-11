@@ -19,18 +19,18 @@ use crate::{
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
+            DaBlockCosts,
             service::{
                 DaBlockCostsSource,
                 DaSourceService,
                 SharedState as DaSharedState,
             },
-            DaBlockCosts,
         },
         metadata::{
-            updater_from_config,
-            v1_algorithm_from_metadata,
             V1AlgorithmConfig,
             V1Metadata,
+            updater_from_config,
+            v1_algorithm_from_metadata,
         },
         uninitialized_task::fuel_storage_unrecorded_blocks::{
             AsUnrecordedBlocks,
@@ -65,12 +65,12 @@ use futures::FutureExt;
 use std::{
     num::NonZeroU64,
     sync::{
+        Arc,
+        Mutex,
         atomic::{
             AtomicU32,
             Ordering,
         },
-        Arc,
-        Mutex,
     },
 };
 use tokio::sync::broadcast::Receiver;
@@ -458,17 +458,18 @@ fn convert_to_v1_metadata(
     updater_metadata: UpdaterMetadata,
     config: &V1AlgorithmConfig,
 ) -> crate::common::utils::Result<V1Metadata> {
-    if let Ok(v1_metadata) = V1Metadata::try_from(updater_metadata.clone()) {
-        Ok(v1_metadata)
-    } else {
-        let v0_metadata = V0Metadata::try_from(updater_metadata).map_err(|_| {
-            crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(
-                "Could not convert metadata to V0Metadata"
-            ))
-        })?;
-        V1Metadata::construct_from_v0_metadata(v0_metadata, config).map_err(|err| {
-            crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
-        })
+    match V1Metadata::try_from(updater_metadata.clone()) {
+        Ok(v1_metadata) => Ok(v1_metadata),
+        _ => {
+            let v0_metadata = V0Metadata::try_from(updater_metadata).map_err(|_| {
+                crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(
+                    "Could not convert metadata to V0Metadata"
+                ))
+            })?;
+            V1Metadata::construct_from_v0_metadata(v0_metadata, config).map_err(|err| {
+                crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
+            })
+        }
     }
 }
 
@@ -481,15 +482,16 @@ pub fn initialize_algorithm<Metadata>(
 where
     Metadata: GetMetadataStorage,
 {
-    let algorithm_updater = if let Some(updater_metadata) = metadata_storage
+    let algorithm_updater = match metadata_storage
         .get_metadata(&latest_metadata_block_height.into())
         .map_err(|err| {
             crate::common::utils::Error::CouldNotInitUpdater(anyhow::anyhow!(err))
         })? {
-        let v1_metadata = convert_to_v1_metadata(updater_metadata, config)?;
-        v1_algorithm_from_metadata(v1_metadata, config)
-    } else {
-        updater_from_config(config, latest_l2_block_height)
+        Some(updater_metadata) => {
+            let v1_metadata = convert_to_v1_metadata(updater_metadata, config)?;
+            v1_algorithm_from_metadata(v1_metadata, config)
+        }
+        _ => updater_from_config(config, latest_l2_block_height),
     };
 
     let shared_algo =
@@ -506,8 +508,8 @@ mod tests {
     use std::{
         num::NonZeroU64,
         sync::{
-            atomic::AtomicU32,
             Arc,
+            atomic::AtomicU32,
         },
         time::Duration,
     };
@@ -520,13 +522,13 @@ mod tests {
         StateWatcher,
     };
     use fuel_core_storage::{
+        StorageAsMut,
         structured_storage::test::InMemoryStorage,
         transactional::{
             IntoTransaction,
             StorageTransaction,
             WriteTransaction,
         },
-        StorageAsMut,
     };
     use fuel_core_types::fuel_types::BlockHeight;
 
@@ -554,19 +556,19 @@ mod tests {
         },
         v1::{
             da_source_service::{
+                DaBlockCosts,
                 dummy_costs::DummyDaBlockCosts,
                 service::DaSourceService,
-                DaBlockCosts,
             },
             metadata::{
-                updater_from_config,
                 V1AlgorithmConfig,
                 V1Metadata,
+                updater_from_config,
             },
             service::{
-                initialize_algorithm,
                 GasPriceServiceV1,
                 LatestGasPrice,
+                initialize_algorithm,
             },
             uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
         },

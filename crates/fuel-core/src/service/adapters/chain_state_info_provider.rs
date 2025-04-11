@@ -4,20 +4,20 @@ use crate::{
 };
 use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_services::{
-    stream::BoxStream,
     RunnableService,
     RunnableTask,
     ServiceRunner,
     SharedRwLock,
     StateWatcher,
     TaskNextAction,
+    stream::BoxStream,
 };
 use fuel_core_storage::{
+    Result as StorageResult,
+    StorageAsRef,
     not_found,
     tables::ConsensusParametersVersions,
     transactional::AtomicView,
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_txpool::ports::BlockImporter;
 use fuel_core_types::{
@@ -236,27 +236,27 @@ mod tests {
         },
     };
     use fuel_core_services::{
-        stream::IntoBoxStream,
         RunnableService,
         RunnableTask,
         StateWatcher,
+        stream::IntoBoxStream,
     };
     use fuel_core_storage::{
+        StorageAsMut,
         tables::{
             ConsensusParametersVersions,
             StateTransitionBytecodeVersions,
         },
         transactional::IntoTransaction,
-        StorageAsMut,
     };
     use fuel_core_types::{
         blockchain::{
+            SealedBlock,
             block::Block,
             header::{
                 ConsensusParametersVersion,
                 StateTransitionBytecodeVersion,
             },
-            SealedBlock,
         },
         fuel_tx::{
             Bytes32,

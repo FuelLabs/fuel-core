@@ -1,11 +1,5 @@
 use crate::state::generic_database::GenericDatabase;
 use fuel_core_storage::{
-    structured_storage::StructuredStorage,
-    transactional::{
-        ConflictPolicy,
-        Modifiable,
-        StorageTransaction,
-    },
     Error as StorageError,
     Mappable,
     Result as StorageResult,
@@ -14,6 +8,12 @@ use fuel_core_storage::{
     StorageInspect,
     StorageMutate,
     StorageWrite,
+    structured_storage::StructuredStorage,
+    transactional::{
+        ConflictPolicy,
+        Modifiable,
+        StorageTransaction,
+    },
 };
 
 impl<Storage, M, Metadata> StorageMutate<M> for GenericDatabase<Storage, Metadata>

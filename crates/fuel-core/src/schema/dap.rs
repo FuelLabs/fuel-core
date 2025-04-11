@@ -1,8 +1,8 @@
 use crate::{
     database::{
-        database_description::on_chain::OnChain,
         Database,
         OnChainIterableKeyValueView,
+        database_description::on_chain::OnChain,
     },
     fuel_core_graphql_api::api_service::ChainInfoProvider,
     schema::scalars::{
@@ -13,11 +13,12 @@ use crate::{
 use anyhow::anyhow;
 use async_graphql::{
     Context,
+    ID,
     Object,
     SchemaBuilder,
-    ID,
 };
 use fuel_core_storage::{
+    InterpreterStorage,
     not_found,
     transactional::{
         AtomicView,
@@ -25,7 +26,6 @@ use fuel_core_storage::{
         StorageTransaction,
     },
     vm_storage::VmStorage,
-    InterpreterStorage,
 };
 use fuel_core_types::{
     fuel_asm::{
@@ -34,18 +34,20 @@ use fuel_core_types::{
         Word,
     },
     fuel_tx::{
+        ConsensusParameters,
+        Executable,
+        Script,
+        Transaction,
         field::{
             Policies,
             ScriptGasLimit,
             Witnesses,
         },
         policies::PolicyType,
-        ConsensusParameters,
-        Executable,
-        Script,
-        Transaction,
     },
     fuel_vm::{
+        Interpreter,
+        InterpreterError,
         checked_transaction::{
             CheckedTransaction,
             IntoChecked,
@@ -55,8 +57,6 @@ use fuel_core_types::{
             MemoryInstance,
         },
         state::DebugEval,
-        Interpreter,
-        InterpreterError,
     },
 };
 use futures::lock::Mutex;

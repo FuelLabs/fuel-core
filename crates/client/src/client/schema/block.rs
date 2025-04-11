@@ -1,6 +1,5 @@
 use super::Bytes32;
 use crate::client::schema::{
-    schema,
     BlockId,
     ConnectionArgsFields,
     PageInfo,
@@ -10,6 +9,7 @@ use crate::client::schema::{
     U16,
     U32,
     U64,
+    schema,
 };
 use fuel_core_types::{
     fuel_crypto,

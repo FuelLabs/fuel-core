@@ -12,6 +12,8 @@ use tokio::{
 };
 
 use crate::{
+    Config,
+    Trigger,
     ports::{
         BlockImporter,
         BlockProducer,
@@ -28,24 +30,22 @@ use crate::{
         SyncState,
         SyncTask,
     },
-    Config,
-    Trigger,
 };
 use fuel_core_services::{
-    stream::BoxFuture,
     RunnableService,
     RunnableTask,
     Service as OtherService,
     ServiceRunner,
     StateWatcher,
     TaskNextAction,
+    stream::BoxFuture,
 };
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
+        SealedBlock,
         block::Block,
         header::BlockHeader,
-        SealedBlock,
     },
     fuel_tx::{
         Transaction,
@@ -53,13 +53,13 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
     services::{
+        Uncommitted,
         block_importer::ImportResult,
         executor::{
             Error as ExecutorError,
             ExecutionResult,
             UncommittedResult as UncommittedExecutionResult,
         },
-        Uncommitted,
     },
     tai64::Tai64,
 };
@@ -532,17 +532,20 @@ where
         &mut self,
         request: Option<Request>,
     ) -> TaskNextAction {
-        if let Some(request) = request {
-            match request {
-                Request::ManualBlocks((block, response)) => {
-                    let result = self.produce_manual_blocks(block).await;
-                    let _ = response.send(result);
+        match request {
+            Some(request) => {
+                match request {
+                    Request::ManualBlocks((block, response)) => {
+                        let result = self.produce_manual_blocks(block).await;
+                        let _ = response.send(result);
+                    }
                 }
+                TaskNextAction::Continue
             }
-            TaskNextAction::Continue
-        } else {
-            tracing::error!("The PoA task should be the holder of the `Sender`");
-            TaskNextAction::Stop
+            _ => {
+                tracing::error!("The PoA task should be the holder of the `Sender`");
+                TaskNextAction::Stop
+            }
         }
     }
 

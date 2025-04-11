@@ -3,17 +3,17 @@
 use crate::{
     blueprint::merklized::Merklized,
     codec::{
+        Encode,
         postcard::Postcard,
         primitive::Primitive,
-        Encode,
     },
     column::Column,
     tables::{
+        FuelBlocks,
         merkle::{
             FuelBlockMerkleData,
             FuelBlockMerkleMetadata,
         },
-        FuelBlocks,
     },
 };
 use fuel_core_types::blockchain::block::{
@@ -66,17 +66,17 @@ impl TableWithBlueprint for FuelBlocks {
 mod tests {
     use super::*;
     use crate::{
+        StorageAsMut,
+        StorageMutate,
         blueprint::merklized::basic_tests_bmt::{
             BMTTestDataGenerator,
             Wrapper,
         },
         structured_storage::{
-            test::InMemoryStorage,
             TableWithBlueprint,
+            test::InMemoryStorage,
         },
         transactional::ReadTransaction,
-        StorageAsMut,
-        StorageMutate,
     };
     use fuel_core_types::{
         blockchain::{
@@ -94,8 +94,8 @@ mod tests {
         fuel_storage::Mappable,
     };
     use rand::{
-        rngs::StdRng,
         Rng,
+        rngs::StdRng,
     };
 
     impl BMTTestDataGenerator for FuelBlocks {
@@ -107,14 +107,14 @@ mod tests {
         }
 
         fn random_key(rng: &mut StdRng) -> Self::Key {
-            rng.gen()
+            rng.r#gen()
         }
 
         fn generate_value(rng: &mut StdRng) -> Self::Value {
             let header = PartialBlockHeader {
                 application: Default::default(),
                 consensus: ConsensusHeader::<Empty> {
-                    height: rng.gen(),
+                    height: rng.r#gen(),
                     ..Default::default()
                 },
             };

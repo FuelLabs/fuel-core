@@ -6,11 +6,11 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
     },
-    FuelClient,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
@@ -21,9 +21,9 @@ use fuel_core_types::{
     signer::SignMode,
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::time::Duration;
 
@@ -122,9 +122,9 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
         )
         .add_unsigned_coin_input(
             SecretKey::random(&mut rng),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
+            rng.r#gen(),
+            rng.r#gen(),
+            rng.r#gen(),
             Default::default(),
         )
         .finalize_as_transaction();
@@ -154,7 +154,7 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
             .expect("blocks request failed");
 
         // Make sure that we do not depend on scheduler behavior too much
-        for _ in 0..(rng.gen::<u8>() % 8) {
+        for _ in 0..(rng.r#gen::<u8>() % 8) {
             tokio::task::yield_now().await;
         }
 

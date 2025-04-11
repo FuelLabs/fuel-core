@@ -1,10 +1,10 @@
 use async_graphql::{
-    connection::CursorType,
     InputValueError,
     InputValueResult,
     Scalar,
     ScalarType,
     Value,
+    connection::CursorType,
 };
 use fuel_core_types::{
     fuel_types,
@@ -28,7 +28,7 @@ pub mod tx_pointer;
 pub mod utxo_id;
 
 macro_rules! number_scalar {
-    ($i:ident, $t:ty, $name:expr) => {
+    ($i:ident, $t:ty, $name:expr_2021) => {
         /// Need our own scalar type since GraphQL integers are restricted to i32.
         #[derive(
             Copy, Clone, Debug, derive_more::Into, derive_more::From, PartialEq, Eq,
@@ -110,16 +110,17 @@ pub struct Tai64Timestamp(pub Tai64);
 #[Scalar(name = "Tai64Timestamp")]
 impl ScalarType for Tai64Timestamp {
     fn parse(value: Value) -> InputValueResult<Self> {
-        if let Value::String(value) = &value {
-            let num: u64 = value.parse().map_err(InputValueError::custom)?;
-            Ok(Tai64Timestamp(Tai64(num)))
-        } else {
-            Err(InputValueError::expected_type(value))
+        match &value {
+            Value::String(value) => {
+                let num: u64 = value.parse().map_err(InputValueError::custom)?;
+                Ok(Tai64Timestamp(Tai64(num)))
+            }
+            _ => Err(InputValueError::expected_type(value)),
         }
     }
 
     fn to_value(&self) -> Value {
-        Value::String(self.0 .0.to_string())
+        Value::String(self.0.0.to_string())
     }
 }
 
@@ -163,10 +164,11 @@ pub struct HexString(pub(crate) Vec<u8>);
 #[Scalar(name = "HexString")]
 impl ScalarType for HexString {
     fn parse(value: Value) -> InputValueResult<Self> {
-        if let Value::String(value) = &value {
-            HexString::from_str(value.as_str()).map_err(Into::into)
-        } else {
-            Err(InputValueError::expected_type(value))
+        match &value {
+            Value::String(value) => {
+                HexString::from_str(value.as_str()).map_err(Into::into)
+            }
+            _ => Err(InputValueError::expected_type(value)),
         }
     }
 
@@ -221,7 +223,7 @@ impl TryInto<fuel_types::Nonce> for HexString {
 }
 
 macro_rules! fuel_type_scalar {
-    ($name:literal, $id:ident, $ft_id:ident, $len:expr) => {
+    ($name:literal, $id:ident, $ft_id:ident, $len:expr_2021) => {
         #[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
         pub struct $id(pub(crate) fuel_types::$ft_id);
 

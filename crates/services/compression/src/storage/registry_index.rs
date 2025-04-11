@@ -1,21 +1,21 @@
 //! Registry index table
 
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::postcard::Postcard,
     merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 use fuel_core_types::{
     fuel_compression::RegistryKey,
     fuel_tx::{
-        input::PredicateCode,
         Address,
         AssetId,
         Bytes32,
         ContractId,
         ScriptCode,
+        input::PredicateCode,
     },
 };
 use std::ops::Deref;
@@ -87,11 +87,11 @@ impl rand::distributions::Distribution<ReverseKey> for rand::distributions::Stan
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> ReverseKey {
         use strum::EnumCount;
         match rng.next_u32() as usize % ReverseKey::COUNT {
-            0 => ReverseKey::Address(rng.gen()),
-            1 => ReverseKey::AssetId(rng.gen()),
-            2 => ReverseKey::ContractId(rng.gen()),
-            3 => ReverseKey::ScriptCode(rng.gen()),
-            4 => ReverseKey::PredicateCode(rng.gen()),
+            0 => ReverseKey::Address(rng.r#gen()),
+            1 => ReverseKey::AssetId(rng.r#gen()),
+            2 => ReverseKey::ContractId(rng.r#gen()),
+            3 => ReverseKey::ScriptCode(rng.r#gen()),
+            4 => ReverseKey::PredicateCode(rng.r#gen()),
             _ => unreachable!("New reverse key is added but not supported here"),
         }
     }

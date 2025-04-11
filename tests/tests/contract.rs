@@ -4,8 +4,8 @@ use crate::helpers::{
 };
 use fuel_core::{
     database::{
-        database_description::on_chain::OnChain,
         Database,
+        database_description::on_chain::OnChain,
     },
     service::{
         Config,
@@ -13,12 +13,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
     },
     types::TransactionStatus,
-    FuelClient,
 };
 use fuel_core_storage::tables::Coins;
 use fuel_core_types::{

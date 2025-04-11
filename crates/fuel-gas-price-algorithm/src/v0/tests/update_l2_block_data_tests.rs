@@ -1,6 +1,6 @@
 use crate::v0::{
-    tests::UpdaterBuilder,
     Error,
+    tests::UpdaterBuilder,
 };
 
 #[test]

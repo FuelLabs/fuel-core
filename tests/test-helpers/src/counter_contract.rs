@@ -2,14 +2,14 @@
 //! Every time the contract is called, it increments the counter by one and returns the new value.
 
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_tx::{
         Bytes32,
@@ -58,7 +58,7 @@ pub async fn deploy(
     .into_iter()
     .collect();
 
-    let salt: Salt = rng.gen();
+    let salt: Salt = rng.r#gen();
     let tx = TransactionBuilder::create(
         code.into(),
         salt,
@@ -67,7 +67,7 @@ pub async fn deploy(
     .maturity(maturity)
     .add_unsigned_coin_input(
         SecretKey::random(rng),
-        rng.gen(),
+        rng.r#gen(),
         u32::MAX as u64,
         *base_asset_id,
         Default::default(),
@@ -114,15 +114,15 @@ pub fn increment_tx(
         .maturity(maturity)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
-            rng.gen(),
+            rng.r#gen(),
             u32::MAX as u64,
             Default::default(),
             Default::default(),
         )
         .add_input(Input::contract(
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
+            rng.r#gen(),
+            rng.r#gen(),
+            rng.r#gen(),
             Default::default(),
             contract_id,
         ))

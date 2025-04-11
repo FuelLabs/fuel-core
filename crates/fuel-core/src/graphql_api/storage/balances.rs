@@ -1,11 +1,11 @@
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
         raw::Raw,
     },
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -15,9 +15,9 @@ use fuel_core_types::{
     fuel_vm::double_key,
 };
 use rand::{
+    Rng,
     distributions::Standard,
     prelude::Distribution,
-    Rng,
 };
 
 pub type ItemAmount = u64;

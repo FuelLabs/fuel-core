@@ -1,4 +1,6 @@
 use crate::{
+    Config,
+    ImporterResult,
     error::Error,
     local_runner::LocalRunner,
     ports::{
@@ -8,8 +10,6 @@ use crate::{
         Transactional,
         Validator,
     },
-    Config,
-    ImporterResult,
 };
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
@@ -21,12 +21,12 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        consensus::Consensus,
         SealedBlock,
+        consensus::Consensus,
     },
     fuel_tx::{
-        field::MintGasPrice,
         Transaction,
+        field::MintGasPrice,
     },
     fuel_types::{
         BlockHeight,
@@ -55,11 +55,11 @@ use std::{
     },
 };
 use tokio::sync::{
+    OwnedSemaphorePermit,
+    Semaphore,
     broadcast,
     mpsc,
     oneshot,
-    OwnedSemaphorePermit,
-    Semaphore,
 };
 use tracing::warn;
 

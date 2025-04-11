@@ -1,5 +1,6 @@
 use crate::{
     fuel_core_graphql_api::{
+        Config,
         extensions::unify_response,
         ports::{
             BlockProducerPort,
@@ -13,7 +14,6 @@ use crate::{
             TxPoolPort,
             TxStatusManager,
         },
-        Config,
     },
     graphql_api::{
         self,
@@ -34,35 +34,35 @@ use crate::{
     },
 };
 use async_graphql::{
-    http::GraphiQLSource,
     Request,
     Response,
+    http::GraphiQLSource,
 };
 use axum::{
+    Json,
+    Router,
     extract::{
         DefaultBodyLimit,
         Extension,
     },
     http::{
+        HeaderValue,
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS,
             ACCESS_CONTROL_ALLOW_METHODS,
             ACCESS_CONTROL_ALLOW_ORIGIN,
         },
-        HeaderValue,
     },
     response::{
-        sse::Event,
         Html,
         IntoResponse,
         Sse,
+        sse::Event,
     },
     routing::{
         get,
         post,
     },
-    Json,
-    Router,
 };
 use fuel_core_services::{
     AsyncProcessor,
@@ -99,9 +99,9 @@ pub use super::database::ReadDatabase;
 use super::{
     block_height_subscription,
     ports::{
-        worker,
         DatabaseDaCompressedBlocks,
         OnChainDatabaseAt,
+        worker,
     },
 };
 
@@ -376,7 +376,7 @@ where
 async fn render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
-) -> impl IntoResponse {
+) -> impl IntoResponse + use<> {
     Html(
         GraphiQLSource::build()
             .endpoint(endpoint)

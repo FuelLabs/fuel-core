@@ -221,8 +221,8 @@ proptest! {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn gas_price_updater__if_no_metadata_history_start_from_current_block(
-) -> anyhow::Result<()> {
+async fn gas_price_updater__if_no_metadata_history_start_from_current_block()
+-> anyhow::Result<()> {
     let driver = FuelCoreDriver::spawn(&[
         "--debug",
         "--poa-instant",

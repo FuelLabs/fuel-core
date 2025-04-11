@@ -1,6 +1,6 @@
 use crate::{
-    serialization::HexIfHumanReadable,
     TableEntry,
+    serialization::HexIfHumanReadable,
 };
 use fuel_core_types::{
     fuel_types::BlobId,

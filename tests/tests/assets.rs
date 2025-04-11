@@ -1,14 +1,14 @@
 use fuel_core::service::Config;
 use fuel_core_bin::FuelService;
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_tx::{
         Bytes32,

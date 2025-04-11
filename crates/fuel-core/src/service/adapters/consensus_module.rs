@@ -10,15 +10,15 @@ use crate::{
 };
 use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_consensus_module::block_verifier::{
-    config::Config as VerifierConfig,
     Verifier,
+    config::Config as VerifierConfig,
 };
 use fuel_core_poa::ports::RelayerPort;
 use fuel_core_producer::ports::BlockProducerDatabase;
 use fuel_core_storage::{
-    tables::FuelBlocks,
     Result as StorageResult,
     StorageAsRef,
+    tables::FuelBlocks,
 };
 use fuel_core_types::{
     blockchain::{

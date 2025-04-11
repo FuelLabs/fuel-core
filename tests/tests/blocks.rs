@@ -10,22 +10,22 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
     },
     types::TransactionStatus,
-    FuelClient,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
+    StorageAsMut,
     tables::{
         FuelBlocks,
         SealedBlockConsensus,
     },
     transactional::WriteTransaction,
     vm_storage::VmStorageRequirements,
-    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
@@ -38,8 +38,8 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use itertools::{
-    rev,
     Itertools,
+    rev,
 };
 use rstest::rstest;
 use std::{
@@ -49,8 +49,8 @@ use std::{
 use test_helpers::send_graph_ql_query;
 
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 #[tokio::test]
@@ -350,7 +350,10 @@ mod full_block {
     use super::*;
     use cynic::QueryBuilder;
     use fuel_core_client::client::{
+        FuelClient,
         schema::{
+            BlockId,
+            U32,
             block::{
                 BlockByHeightArgs,
                 BlockByHeightArgsFields,
@@ -359,10 +362,7 @@ mod full_block {
             },
             schema,
             tx::OpaqueTransaction,
-            BlockId,
-            U32,
         },
-        FuelClient,
     };
     use fuel_core_executor::executor::max_tx_count;
     use fuel_core_txpool::config::{

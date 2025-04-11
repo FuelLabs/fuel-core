@@ -1,11 +1,11 @@
 use super::ext;
 use fuel_core_storage::{
+    Result as StorageResult,
     column::Column,
     kv_store::{
         KeyValueInspect,
         Value,
     },
-    Result as StorageResult,
 };
 
 pub struct WasmStorage;

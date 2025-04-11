@@ -37,7 +37,6 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_metrics::p2p_metrics::set_blocks_requested;
 use fuel_core_services::{
-    stream::BoxStream,
     AsyncProcessor,
     RunnableService,
     RunnableTask,
@@ -46,6 +45,7 @@ use fuel_core_services::{
     SyncProcessor,
     TaskNextAction,
     TraceErr,
+    stream::BoxStream,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -60,10 +60,6 @@ use fuel_core_types::{
         ChainId,
     },
     services::p2p::{
-        peer_reputation::{
-            AppScore,
-            PeerReport,
-        },
         BlockHeightHeartbeatData,
         GossipData,
         GossipsubMessageAcceptance,
@@ -72,20 +68,24 @@ use fuel_core_types::{
         PeerId as FuelPeerId,
         TransactionGossipData,
         Transactions,
+        peer_reputation::{
+            AppScore,
+            PeerReport,
+        },
     },
 };
 use futures::{
-    future::BoxFuture,
     StreamExt,
+    future::BoxFuture,
 };
 use libp2p::{
+    PeerId,
     gossipsub::{
         MessageAcceptance,
         MessageId,
         PublishError,
     },
     request_response::InboundRequestId,
-    PeerId,
 };
 use std::{
     fmt::Debug,
@@ -1194,7 +1194,9 @@ impl SharedState {
                 "Invalid response from peer {request_response_protocol_error:?}"
             )),
             Ok(Err(response_error_code)) => {
-                warn!("Peer {peer_id:?} failed to respond with sealed headers: {response_error_code:?}");
+                warn!(
+                    "Peer {peer_id:?} failed to respond with sealed headers: {response_error_code:?}"
+                );
                 Ok(None)
             }
             Ok(Ok(headers)) => Ok(Some(headers)),

@@ -15,13 +15,13 @@ use collisions::CollisionsExt;
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_types::{
     fuel_tx::{
-        field::BlobId,
         TxId,
+        field::BlobId,
     },
     services::{
         transaction_status::{
-            statuses,
             TransactionStatus,
+            statuses,
         },
         txpool::{
             ArcPoolTx,

@@ -120,13 +120,13 @@ impl crate::Randomize for ContractConfig {
             contract_id,
             code,
             tx_id: crate::Randomize::randomize(&mut rng),
-            output_index: rng.gen(),
+            output_index: rng.r#gen(),
             tx_pointer_block_height: crate::Randomize::randomize(&mut rng),
-            tx_pointer_tx_idx: rng.gen(),
+            tx_pointer_tx_idx: rng.r#gen(),
             states,
             balances: vec![ContractBalanceConfig {
                 asset_id: crate::Randomize::randomize(&mut rng),
-                amount: rng.gen(),
+                amount: rng.r#gen(),
             }],
         }
     }

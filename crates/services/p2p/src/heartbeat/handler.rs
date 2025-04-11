@@ -1,25 +1,25 @@
 use super::HEARTBEAT_PROTOCOL;
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::{
-    future::BoxFuture,
     AsyncRead,
     AsyncReadExt,
     AsyncWrite,
     AsyncWriteExt,
     FutureExt,
+    future::BoxFuture,
 };
 use libp2p::{
     core::upgrade::ReadyUpgrade,
     swarm::{
+        ConnectionHandler,
+        ConnectionHandlerEvent,
+        Stream,
+        SubstreamProtocol,
         handler::{
             ConnectionEvent,
             FullyNegotiatedInbound,
             FullyNegotiatedOutbound,
         },
-        ConnectionHandler,
-        ConnectionHandlerEvent,
-        Stream,
-        SubstreamProtocol,
     },
 };
 use std::{
@@ -29,8 +29,8 @@ use std::{
     time::Duration,
 };
 use tokio::time::{
-    sleep,
     Sleep,
+    sleep,
 };
 use tracing::debug;
 

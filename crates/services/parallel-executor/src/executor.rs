@@ -4,6 +4,7 @@ use fuel_core_types::{
     blockchain::block::Block,
     fuel_tx::Transaction,
     services::{
+        Uncommitted,
         block_producer::Components,
         executor::{
             ExecutionResult,
@@ -11,7 +12,6 @@ use fuel_core_types::{
             TransactionExecutionStatus,
             ValidationResult,
         },
-        Uncommitted,
     },
 };
 use fuel_core_upgradable_executor::{

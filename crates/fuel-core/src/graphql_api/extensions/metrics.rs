@@ -1,4 +1,10 @@
 use async_graphql::{
+    Response,
+    ServerError,
+    ServerResult,
+    ValidationResult,
+    Value,
+    Variables,
     extensions::{
         Extension,
         ExtensionContext,
@@ -10,12 +16,6 @@ use async_graphql::{
         ResolveInfo,
     },
     parser::types::ExecutableDocument,
-    Response,
-    ServerError,
-    ServerResult,
-    ValidationResult,
-    Value,
-    Variables,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use std::{

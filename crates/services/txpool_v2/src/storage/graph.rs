@@ -9,6 +9,11 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::{
+        ContractId,
+        Input,
+        Output,
+        TxId,
+        UtxoId,
         input::{
             coin::{
                 CoinPredicate,
@@ -22,11 +27,6 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
-        ContractId,
-        Input,
-        Output,
-        TxId,
-        UtxoId,
     },
     services::txpool::{
         ArcPoolTx,
@@ -173,7 +173,9 @@ impl GraphStorage {
 
                 #[cfg(test)]
                 if !nodes_in_queue.insert(dependent) {
-                    panic!("The node is already in the queue for removal. The graph has a cycle.");
+                    panic!(
+                        "The node is already in the queue for removal. The graph has a cycle."
+                    );
                 }
             }
 
@@ -804,8 +806,8 @@ impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
 mod tests {
     use super::*;
     use crate::storage::{
-        graph::GraphStorage,
         StorageData,
+        graph::GraphStorage,
     };
     use std::ops::Add;
 

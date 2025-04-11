@@ -1,13 +1,15 @@
 //! This module provides storage trait implementations for sparse merkleized columns.
 
 use crate::{
+    Mappable,
+    Result as StorageResult,
     blueprint::{
+        BlueprintInspect,
         plain::Plain,
         sparse::{
             PrimaryKey,
             Sparse,
         },
-        BlueprintInspect,
     },
     codec::{
         postcard::Postcard,
@@ -25,8 +27,6 @@ use crate::{
     },
     structured_storage::TableWithBlueprint,
     tables::merkle::SparseMerkleMetadata,
-    Mappable,
-    Result as StorageResult,
 };
 use alloc::borrow::Cow;
 use fuel_core_types::fuel_merkle::sparse;

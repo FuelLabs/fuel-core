@@ -5,7 +5,7 @@ use super::*;
 pub trait EthRemote {
     /// The most recently finalized height on the Ethereum node.
     fn finalized(&self)
-        -> impl core::future::Future<Output = anyhow::Result<u64>> + Send;
+    -> impl core::future::Future<Output = anyhow::Result<u64>> + Send;
 }
 
 pub trait EthLocal {

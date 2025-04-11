@@ -3,9 +3,9 @@ use serde::{
     Serializer,
 };
 use serde_with::{
-    formats::Lowercase,
     DeserializeAs,
     SerializeAs,
+    formats::Lowercase,
 };
 
 /// Encode/decode a byte vector as a hex string if the serializer is human readable. Otherwise, use the default encoding.

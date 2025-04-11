@@ -1,11 +1,11 @@
 use crate::{
-    serialization::HexIfHumanReadable,
     GenesisCommitment,
     TableEntry,
+    serialization::HexIfHumanReadable,
 };
 use fuel_core_storage::{
-    tables::Messages,
     MerkleRoot,
+    tables::Messages,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,

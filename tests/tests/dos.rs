@@ -259,9 +259,11 @@ async fn complex_queries__increased_block_header_cost__failed_to_initialize_serv
         panic!("expected error");
     };
 
-    assert!(error
-        .to_string()
-        .contains("cannot initialize queries with non-default costs in tests"))
+    assert!(
+        error
+            .to_string()
+            .contains("cannot initialize queries with non-default costs in tests")
+    )
 }
 
 #[tokio::test]

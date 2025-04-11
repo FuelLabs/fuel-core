@@ -16,17 +16,17 @@ use crate::pool_worker::{
 };
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
-    seqlock::{
-        SeqLock,
-        SeqLockReader,
-        SeqLockWriter,
-    },
     AsyncProcessor,
     RunnableService,
     RunnableTask,
     ServiceRunner,
     StateWatcher,
     SyncProcessor,
+    seqlock::{
+        SeqLock,
+        SeqLockReader,
+        SeqLockWriter,
+    },
 };
 use fuel_core_txpool::{
     collision_manager::basic::BasicCollisionManager,
@@ -53,11 +53,11 @@ use fuel_core_txpool::{
     },
     shared_state::SharedState,
     storage::{
+        Storage,
         graph::{
             GraphConfig,
             GraphStorage,
         },
-        Storage,
     },
 };
 use fuel_core_types::{
@@ -232,11 +232,11 @@ where
             }
 
             block_result = self.subscriptions.imported_blocks.next() => {
-                if let Some(result) = block_result {
+                match block_result { Some(result) => {
                     self.import_block(result)
-                } else {
+                } _ => {
                     TaskNextAction::Stop
-                }
+                }}
             }
 
             _ = self.pruner.ttl_timer.tick() => {
@@ -244,21 +244,21 @@ where
             }
 
             pool_notification = self.pool_worker.notification_receiver.recv() => {
-                if let Some(notification) = pool_notification {
+                match pool_notification { Some(notification) => {
                     self.process_notification(notification);
                     TaskNextAction::Continue
-                } else {
+                } _ => {
                     TaskNextAction::Stop
-                }
+                }}
             }
 
             write_pool_request = self.subscriptions.write_pool.recv() => {
-                if let Some(write_pool_request) = write_pool_request {
+                match write_pool_request { Some(write_pool_request) => {
                     self.process_write(write_pool_request);
                     TaskNextAction::Continue
-                } else {
+                } _ => {
                     TaskNextAction::Continue
-                }
+                }}
             }
 
             tx_from_p2p = self.subscriptions.new_tx.next() => {
@@ -339,8 +339,8 @@ where
             WritePoolRequest::InsertTx {
                 transaction,
                 response_channel,
-            } => {
-                if let Ok(reservation) = self.transaction_verifier_process.reserve() {
+            } => match self.transaction_verifier_process.reserve() {
+                Ok(reservation) => {
                     let op = self.insert_transaction(
                         transaction,
                         None,
@@ -349,11 +349,12 @@ where
 
                     self.transaction_verifier_process
                         .spawn_reserved(reservation, op);
-                } else {
+                }
+                _ => {
                     tracing::error!("Failed to insert transaction: Out of capacity");
                     let _ = response_channel.send(Err(Error::ServiceQueueFull));
                 }
-            }
+            },
         }
     }
 
@@ -449,7 +450,7 @@ where
         transaction: Arc<Transaction>,
         from_peer_info: Option<GossipsubMessageInfo>,
         response_channel: Option<oneshot::Sender<Result<(), Error>>>,
-    ) -> impl FnOnce() + Send + 'static {
+    ) -> impl FnOnce() + Send + 'static + use<View, P2P, TxStatusManager> {
         let metrics = self.metrics;
         if metrics {
             txpool_metrics()
@@ -659,7 +660,9 @@ where
             let now = SystemTime::now();
             while let Some((time, _)) = self.pruner.time_txs_submitted.back() {
                 let Ok(duration) = now.duration_since(*time) else {
-                    tracing::error!("Failed to calculate the duration since the transaction was submitted");
+                    tracing::error!(
+                        "Failed to calculate the duration since the transaction was submitted"
+                    );
                     return TaskNextAction::Stop;
                 };
                 if duration < self.pruner.txs_ttl {

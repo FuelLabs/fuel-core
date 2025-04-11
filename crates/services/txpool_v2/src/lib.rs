@@ -66,7 +66,7 @@ use fuel_core_types::fuel_asm::Word;
 pub use pool::TxPoolStats;
 pub use selection_algorithms::Constraints;
 pub use service::{
-    new_service,
     Service,
+    new_service,
 };
 pub use shared_state::SharedState;

@@ -21,7 +21,7 @@ impl TryFrom<schema::upgrades::StateTransitionBytecode> for StateTransitionBytec
     fn try_from(
         value: schema::upgrades::StateTransitionBytecode,
     ) -> Result<Self, Self::Error> {
-        let root = value.root.0 .0.as_slice().try_into()?;
+        let root = value.root.0.0.as_slice().try_into()?;
         let bytecode = value.bytecode.try_into()?;
 
         Ok(Self { root, bytecode })

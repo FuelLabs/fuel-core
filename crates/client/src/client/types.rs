@@ -44,13 +44,13 @@ pub use node_info::NodeInfo;
 use crate::client::{
     schema,
     schema::{
+        ConversionError,
         relayed_tx::RelayedTransactionStatus as SchemaRelayedTransactionStatus,
         tx::{
             OpaqueTransactionWithStatus,
             StatusWithTransaction as SchemaStatusWithTx,
             TransactionStatus as SchemaTxStatus,
         },
-        ConversionError,
     },
 };
 use fuel_core_types::{
@@ -63,8 +63,8 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        canonical::Deserialize,
         BlockHeight,
+        canonical::Deserialize,
     },
     fuel_vm::ProgramState,
 };
@@ -418,7 +418,7 @@ impl TryFrom<OpaqueTransactionWithStatus> for TransactionResponse {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueTransactionWithStatus) -> Result<Self, Self::Error> {
-        let bytes = value.raw_payload.0 .0;
+        let bytes = value.raw_payload.0.0;
         let tx: TransactionType = Transaction::from_bytes(bytes.as_slice())
             .map(Into::into)
             .unwrap_or(TransactionType::Unknown);

@@ -1,7 +1,7 @@
 use crate::client::schema::{
-    schema,
     BlobId,
     HexString,
+    schema,
 };
 
 #[derive(cynic::QueryVariables, Debug)]
