@@ -5,26 +5,26 @@
 use crate::{
     bootstrap_node,
     tests_helper::{
-        transactions_from_subsections,
-        upgrade_transaction,
-        Version36FuelCoreDriver,
         POA_SECRET_KEY,
         SUBSECTION_SIZE,
         V36_TESTNET_SNAPSHOT,
+        Version36FuelCoreDriver,
+        transactions_from_subsections,
+        upgrade_transaction,
     },
 };
 use fuel_tx::{
-    field::ChargeableBody,
     UpgradePurpose,
     UploadSubsection,
+    field::ChargeableBody,
 };
 use libp2p::{
     futures::StreamExt,
     identity::secp256k1::Keypair as SecpKeypair,
 };
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::time::Duration;
 
