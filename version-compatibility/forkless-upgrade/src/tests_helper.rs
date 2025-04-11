@@ -33,10 +33,10 @@ use version_36_fuel_core_services as _;
 // Awful version compatibility hack.
 // `$bin_crate::cli::run::get_service` is async in the later versions of fuel-core-bin.
 macro_rules! maybe_await {
-    (true, $expr:expr) => {
+    (true, $expr:expr_2021) => {
         $expr.await
     };
-    (false, $expr:expr) => {
+    (false, $expr:expr_2021) => {
         $expr
     };
 }
@@ -155,7 +155,7 @@ pub fn valid_input(secret_key: &SecretKey, rng: &mut StdRng, amount: u64) -> Inp
     let pk = secret_key.public_key();
     let owner = Input::owner(&pk);
     Input::coin_signed(
-        rng.gen(),
+        rng.r#gen(),
         owner,
         amount,
         BASE_ASSET_ID.parse().unwrap(),
