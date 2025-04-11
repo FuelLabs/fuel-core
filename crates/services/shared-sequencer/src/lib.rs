@@ -7,6 +7,9 @@
 
 use anyhow::anyhow;
 use cosmrs::{
+    AccountId,
+    Coin,
+    Denom,
     tendermint::chain::Id,
     tx::{
         self,
@@ -15,9 +18,6 @@ use cosmrs::{
         SignDoc,
         SignerInfo,
     },
-    AccountId,
-    Coin,
-    Denom,
 };
 use error::PostBlobError;
 use fuel_sequencer_proto::protos::fuelsequencer::sequencing::v1::MsgPostBlob;

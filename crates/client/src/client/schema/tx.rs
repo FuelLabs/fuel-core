@@ -1,11 +1,8 @@
 use crate::client::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
     schema::{
-        coins::ExcludeInput,
-        schema,
-        tx::{
-            transparent_receipt::Receipt,
-            transparent_tx::Output,
-        },
         Address,
         AssetId,
         ConnectionArgsFields,
@@ -15,21 +12,24 @@ use crate::client::{
         Tai64Timestamp,
         TransactionId,
         TxPointer,
-        UtxoId,
         U16,
         U32,
         U64,
+        UtxoId,
+        coins::ExcludeInput,
+        schema,
+        tx::{
+            transparent_receipt::Receipt,
+            transparent_tx::Output,
+        },
     },
     types::TransactionResponse,
-    PageDirection,
-    PaginatedResult,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_tx,
     fuel_types::{
-        canonical::Deserialize,
         Bytes32,
+        canonical::Deserialize,
     },
     fuel_vm,
     services::executor::{
@@ -138,7 +138,7 @@ impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
-        let bytes = value.raw_payload.0 .0;
+        let bytes = value.raw_payload.0.0;
         fuel_tx::Transaction::from_bytes(bytes.as_slice())
             .map_err(ConversionError::TransactionFromBytesError)
     }
@@ -171,16 +171,16 @@ impl TryFrom<ProgramState> for fuel_vm::ProgramState {
     fn try_from(state: ProgramState) -> Result<Self, Self::Error> {
         Ok(match state.return_type {
             ReturnType::Return => fuel_vm::ProgramState::Return({
-                let b = state.data.0 .0;
+                let b = state.data.0.0;
                 let b: [u8; 8] =
                     b.try_into().map_err(|_| ConversionError::BytesLength)?;
                 u64::from_be_bytes(b)
             }),
             ReturnType::ReturnData => fuel_vm::ProgramState::ReturnData({
-                Bytes32::try_from(state.data.0 .0.as_slice())?
+                Bytes32::try_from(state.data.0.0.as_slice())?
             }),
             ReturnType::Revert => fuel_vm::ProgramState::Revert({
-                let b = state.data.0 .0;
+                let b = state.data.0.0;
                 let b: [u8; 8] =
                     b.try_into().map_err(|_| ConversionError::BytesLength)?;
                 u64::from_be_bytes(b)

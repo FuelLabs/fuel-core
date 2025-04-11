@@ -23,9 +23,13 @@ use crate::{
 use anyhow::anyhow;
 use core::cmp::min;
 use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
     codec::{
-        postcard::Postcard,
         Encode,
+        postcard::Postcard,
     },
     kv_store::KeyValueInspect,
     transactional::{
@@ -33,10 +37,6 @@ use fuel_core_storage::{
         StorageTransaction,
         WriteTransaction,
     },
-    Error as StorageError,
-    StorageAsMut,
-    StorageAsRef,
-    StorageInspect,
 };
 use fuel_core_types::{
     blockchain::{
@@ -45,11 +45,11 @@ use fuel_core_types::{
     },
     fuel_merkle::storage::StorageMutate,
     fuel_tx::{
+        Transaction,
         field::{
             MintAmount,
             MintGasPrice,
         },
-        Transaction,
     },
     fuel_types::BlockHeight,
 };

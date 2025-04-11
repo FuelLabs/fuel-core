@@ -20,10 +20,10 @@ use crate::{
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::Transaction,
     fuel_types::{
-        canonical::Serialize,
         BlockHeight,
         Bytes32,
         MessageId,
+        canonical::Serialize,
     },
 };
 use educe::Educe;

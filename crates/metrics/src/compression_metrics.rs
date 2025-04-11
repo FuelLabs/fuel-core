@@ -1,11 +1,11 @@
 use crate::global_registry;
 use prometheus_client::metrics::gauge::Gauge;
 use std::sync::{
+    OnceLock,
     atomic::{
         AtomicU32,
         AtomicU64,
     },
-    OnceLock,
 };
 
 #[derive(Debug)]

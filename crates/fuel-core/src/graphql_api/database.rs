@@ -12,14 +12,6 @@ use crate::{
 };
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
-    not_found,
-    tables::Transactions,
-    transactional::HistoricalView,
     Error as StorageError,
     IsNotFound,
     Mappable,
@@ -28,6 +20,14 @@ use fuel_core_storage::{
     StorageInspect,
     StorageRead,
     StorageSize,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+    },
+    not_found,
+    tables::Transactions,
+    transactional::HistoricalView,
 };
 use fuel_core_types::{
     blockchain::{
@@ -98,18 +98,18 @@ pub struct ReadDatabase {
     /// The on-chain database view provider.
     on_chain: Box<
         dyn HistoricalView<
-            LatestView = OnChainView,
-            Height = BlockHeight,
-            ViewAtHeight = OnChainViewAt,
-        >,
+                LatestView = OnChainView,
+                Height = BlockHeight,
+                ViewAtHeight = OnChainViewAt,
+            >,
     >,
     /// The off-chain database view provider.
     off_chain: Box<
         dyn HistoricalView<
-            LatestView = OffChainView,
-            Height = BlockHeight,
-            ViewAtHeight = OffChainViewAt,
-        >,
+                LatestView = OffChainView,
+                Height = BlockHeight,
+                ViewAtHeight = OffChainViewAt,
+            >,
     >,
     /// The flag indicating which indexation is enabled.
     indexation_flags: IndexationFlags,
@@ -229,10 +229,9 @@ impl ReadView {
     pub fn transaction(&self, tx_id: &TxId) -> StorageResult<Transaction> {
         let result = self.on_chain.transaction(tx_id);
         if result.is_not_found() {
-            if let Some(tx) = self.off_chain.old_transaction(tx_id)? {
-                Ok(tx)
-            } else {
-                Err(not_found!(Transactions))
+            match self.off_chain.old_transaction(tx_id)? {
+                Some(tx) => Ok(tx),
+                _ => Err(not_found!(Transactions)),
             }
         } else {
             result
@@ -439,7 +438,7 @@ impl ReadView {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<UtxoId>> + '_ {
+    ) -> impl Stream<Item = StorageResult<UtxoId>> + '_ + use<'_> {
         let iter = self.off_chain.owned_coins_ids(owner, start_coin, direction);
 
         futures::stream::iter(iter)
@@ -450,7 +449,7 @@ impl ReadView {
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> impl Stream<Item = StorageResult<Nonce>> + '_ {
+    ) -> impl Stream<Item = StorageResult<Nonce>> + '_ + use<'_> {
         futures::stream::iter(self.off_chain.owned_message_ids(
             owner,
             start_message_id,

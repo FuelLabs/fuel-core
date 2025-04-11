@@ -13,9 +13,9 @@ mod tests {
         },
     };
     use rand::{
-        rngs::StdRng,
         Rng,
         SeedableRng,
+        rngs::StdRng,
     };
     use std::{
         io::{
@@ -26,9 +26,9 @@ mod tests {
         },
         iter::repeat_with,
         sync::{
-            atomic::AtomicU64,
             Arc,
             Mutex,
+            atomic::AtomicU64,
         },
     };
 
@@ -111,12 +111,12 @@ mod tests {
         .unwrap();
         let mut rng = StdRng::seed_from_u64(0);
 
-        let big_group = repeat_with(|| rng.gen::<[u8; 32]>().to_vec())
+        let big_group = repeat_with(|| rng.r#gen::<[u8; 32]>().to_vec())
             .take(1000)
             .collect_vec();
         encoder.write(big_group).unwrap();
 
-        let small_group = vec![rng.gen::<[u8; 32]>().to_vec()];
+        let small_group = vec![rng.r#gen::<[u8; 32]>().to_vec()];
         encoder.write(small_group).unwrap();
         encoder.close().unwrap();
         let total_size = buffer.len();

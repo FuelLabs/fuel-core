@@ -4,6 +4,13 @@
 //! merkle tree parallel to the normal storage and maintains it.
 
 use crate::{
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageInspect,
+    StorageMutate,
     blueprint::{
         BlueprintInspect,
         BlueprintMutate,
@@ -24,20 +31,13 @@ use crate::{
     },
     structured_storage::TableWithBlueprint,
     tables::merkle::SparseMerkleMetadata,
-    Error as StorageError,
-    Mappable,
-    MerkleRoot,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::fuel_merkle::{
     sparse,
     sparse::{
-        in_memory,
         MerkleTree,
         MerkleTreeKey,
+        in_memory,
     },
 };
 use itertools::Itertools;
@@ -82,10 +82,10 @@ impl<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
     Metadata: Mappable<Value = SparseMerkleMetadata, OwnedValue = SparseMerkleMetadata>,
     Nodes: Mappable<
-        Key = MerkleRoot,
-        Value = sparse::Primitive,
-        OwnedValue = sparse::Primitive,
-    >,
+            Key = MerkleRoot,
+            Value = sparse::Primitive,
+            OwnedValue = sparse::Primitive,
+        >,
 {
     fn insert_into_tree<S, K>(
         storage: &mut S,
@@ -187,10 +187,10 @@ where
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
     Metadata: Mappable<Value = SparseMerkleMetadata, OwnedValue = SparseMerkleMetadata>,
     Nodes: Mappable<
-        Key = MerkleRoot,
-        Value = sparse::Primitive,
-        OwnedValue = sparse::Primitive,
-    >,
+            Key = MerkleRoot,
+            Value = sparse::Primitive,
+            OwnedValue = sparse::Primitive,
+        >,
     KeyConverter: PrimaryKey<InputKey = M::Key, OutputKey = Metadata::Key>,
     S: StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
@@ -284,9 +284,9 @@ where
     Column: StorageColumn,
     S: BatchOperations<Column = Column>,
     M: TableWithBlueprint<
-        Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
-        Column = Column,
-    >,
+            Blueprint = Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>,
+            Column = Column,
+        >,
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
     Metadata: Mappable<Value = SparseMerkleMetadata, OwnedValue = SparseMerkleMetadata>,
@@ -309,12 +309,10 @@ where
     {
         let mut set = set.peekable();
 
-        let primary_key;
-        if let Some((key, _)) = set.peek() {
-            primary_key = KeyConverter::primary_key(*key);
-        } else {
-            return Ok(())
-        }
+        let primary_key = match set.peek() {
+            Some((key, _)) => KeyConverter::primary_key(*key),
+            _ => return Ok(()),
+        };
 
         if storage
             .storage::<Metadata>()
@@ -377,12 +375,10 @@ where
     {
         let mut set = set.peekable();
 
-        let primary_key;
-        if let Some((key, _)) = set.peek() {
-            primary_key = KeyConverter::primary_key(*key);
-        } else {
-            return Ok(())
-        }
+        let primary_key = match set.peek() {
+            Some((key, _)) => KeyConverter::primary_key(*key),
+            _ => return Ok(()),
+        };
 
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
@@ -435,12 +431,10 @@ where
     {
         let mut set = set.peekable();
 
-        let primary_key;
-        if let Some(key) = set.peek() {
-            primary_key = KeyConverter::primary_key(*key);
-        } else {
-            return Ok(())
-        }
+        let primary_key = match set.peek() {
+            Some(key) => KeyConverter::primary_key(*key),
+            _ => return Ok(()),
+        };
 
         let prev_metadata: Cow<SparseMerkleMetadata> = storage
             .storage::<Metadata>()
@@ -492,9 +486,9 @@ pub mod root_storage_tests_smt {
     use fuel_vm_private::{
         fuel_merkle::sparse::{
             self,
-            proof::Proof,
             MerkleTree,
             MerkleTreeKey,
+            proof::Proof,
         },
         fuel_storage::{
             Mappable,
@@ -502,11 +496,13 @@ pub mod root_storage_tests_smt {
         },
     };
     use rand::{
-        rngs::StdRng,
         SeedableRng,
+        rngs::StdRng,
     };
 
     use crate::{
+        MerkleRoot,
+        MerkleRootStorage,
         blueprint::sparse::{
             PrimaryKey,
             Sparse,
@@ -517,16 +513,14 @@ pub mod root_storage_tests_smt {
             Encoder,
         },
         structured_storage::{
-            test::InMemoryStorage,
             TableWithBlueprint,
+            test::InMemoryStorage,
         },
         tables::merkle::SparseMerkleMetadata,
         transactional::{
             StorageTransaction,
             WriteTransaction,
         },
-        MerkleRoot,
-        MerkleRootStorage,
     };
 
     /// A wrapper type to allow for `AsRef` implementation.
@@ -568,16 +562,16 @@ pub mod root_storage_tests_smt {
         M: SmtTableWithBlueprint<Key = Key, Metadata = Metadata, Nodes = Nodes>
             + SMTTestDataGenerator<Key = Key, PrimaryKey = PrimaryKey, Value = Value>,
         Metadata: Mappable<
-            Key = PrimaryKey,
-            OwnedKey = PrimaryKey,
-            Value = SparseMerkleMetadata,
-            OwnedValue = SparseMerkleMetadata,
-        >,
+                Key = PrimaryKey,
+                OwnedKey = PrimaryKey,
+                Value = SparseMerkleMetadata,
+                OwnedValue = SparseMerkleMetadata,
+            >,
         Nodes: Mappable<
-            Key = MerkleRoot,
-            Value = sparse::Primitive,
-            OwnedValue = sparse::Primitive,
-        >,
+                Key = MerkleRoot,
+                Value = sparse::Primitive,
+                OwnedValue = sparse::Primitive,
+            >,
         PrimaryKey: Sized,
         Key: Sized,
         Value: Sized + AsRef<<M as Mappable>::Value>,
@@ -710,8 +704,8 @@ pub mod root_storage_tests_smt {
         }
 
         /// Tests that operations on one metadata key don't affect another
-        pub fn test_updating_foreign_metadata_does_not_affect_the_given_metadata_insertion(
-        ) {
+        pub fn test_updating_foreign_metadata_does_not_affect_the_given_metadata_insertion()
+         {
             let mut storage = InMemoryStorage::<M::Column>::default();
             let mut storage_transaction = storage.write_transaction();
 
@@ -876,25 +870,25 @@ pub mod root_storage_tests_smt {
 
         /// The metadata table type for storing SMT metadata
         type Metadata: TableWithBlueprint<
-            Column = Self::Column,
-            Value = SparseMerkleMetadata,
-            OwnedValue = SparseMerkleMetadata,
-        >;
+                Column = Self::Column,
+                Value = SparseMerkleMetadata,
+                OwnedValue = SparseMerkleMetadata,
+            >;
 
         /// The nodes table type for storing merkle nodes
         type Nodes: TableWithBlueprint<
-            Key = MerkleRoot,
-            OwnedKey = MerkleRoot,
-            Value = sparse::Primitive,
-            OwnedValue = sparse::Primitive,
-            Column = Self::Column,
-        >;
+                Key = MerkleRoot,
+                OwnedKey = MerkleRoot,
+                Value = sparse::Primitive,
+                OwnedValue = sparse::Primitive,
+                Column = Self::Column,
+            >;
 
         /// The converter type for mapping column keys to SMT instances
         type KeyConverter: PrimaryKey<
-            InputKey = Self::Key,
-            OutputKey = <Self::Metadata as Mappable>::Key,
-        >;
+                InputKey = Self::Key,
+                OutputKey = <Self::Metadata as Mappable>::Key,
+            >;
     }
 
     impl<T, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> SmtTableWithBlueprint for T
@@ -905,17 +899,17 @@ pub mod root_storage_tests_smt {
         KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
         ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
         Metadata: TableWithBlueprint<
-            Column = Self::Column,
-            Value = SparseMerkleMetadata,
-            OwnedValue = SparseMerkleMetadata,
-        >,
+                Column = Self::Column,
+                Value = SparseMerkleMetadata,
+                OwnedValue = SparseMerkleMetadata,
+            >,
         Nodes: TableWithBlueprint<
-            Key = MerkleRoot,
-            OwnedKey = MerkleRoot,
-            Value = sparse::Primitive,
-            OwnedValue = sparse::Primitive,
-            Column = Self::Column,
-        >,
+                Key = MerkleRoot,
+                OwnedKey = MerkleRoot,
+                Value = sparse::Primitive,
+                OwnedValue = sparse::Primitive,
+                Column = Self::Column,
+            >,
         KeyConverter:
             PrimaryKey<InputKey = Self::Key, OutputKey = <Metadata as Mappable>::Key>,
     {

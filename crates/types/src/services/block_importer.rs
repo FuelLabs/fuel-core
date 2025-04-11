@@ -2,15 +2,15 @@
 
 use crate::{
     blockchain::{
-        header::BlockHeader,
         SealedBlock,
+        header::BlockHeader,
     },
     services::{
+        Uncommitted,
         executor::{
             Event,
             TransactionExecutionStatus,
         },
-        Uncommitted,
     },
 };
 use core::ops::Deref;

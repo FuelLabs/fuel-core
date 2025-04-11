@@ -6,11 +6,11 @@ use fuel_core_types::{
 };
 
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::postcard::Postcard,
     merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 
 use super::column::{
@@ -57,7 +57,7 @@ impl rand::distributions::Distribution<TimestampKey> for rand::distributions::St
     #![allow(clippy::arithmetic_side_effects)] // Test-only code, and also safe
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> TimestampKey {
         TimestampKey {
-            keyspace: rng.gen(),
+            keyspace: rng.r#gen(),
             key: RegistryKey::try_from(rng.gen_range(0..2u32.pow(24) - 2)).unwrap(),
         }
     }

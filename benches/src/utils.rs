@@ -60,7 +60,8 @@ mod tests {
 
     fn shallow_temp_dir__drops_if_env_var_is_set() {
         // given
-        env::set_var(DB_CLEAN_UP_ENV_VAR, "true");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { env::set_var(DB_CLEAN_UP_ENV_VAR, "true") };
         let path;
         {
             let dir = ShallowTempDir::new();
@@ -73,12 +74,14 @@ mod tests {
         assert!(!path.exists());
 
         // clean up
-        env::remove_var(DB_CLEAN_UP_ENV_VAR);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { env::remove_var(DB_CLEAN_UP_ENV_VAR) };
     }
 
     fn shallow_temp_dir__does_not_drop_if_env_var_is_set() {
         // given
-        env::set_var(DB_CLEAN_UP_ENV_VAR, "false");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { env::set_var(DB_CLEAN_UP_ENV_VAR, "false") };
         let path;
         {
             let dir = ShallowTempDir::new();
@@ -92,7 +95,8 @@ mod tests {
         assert!(path.exists());
         // clean up manually
         std::fs::remove_dir_all(path).unwrap();
-        env::remove_var(DB_CLEAN_UP_ENV_VAR);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { env::remove_var(DB_CLEAN_UP_ENV_VAR) };
     }
 
     fn shallow_temp_dir__drops_if_env_var_is_not_set() {
@@ -111,7 +115,8 @@ mod tests {
 
     fn shallow_temp_dir__drops_if_env_var_malformed() {
         // given
-        env::set_var(DB_CLEAN_UP_ENV_VAR, "bing_bong");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { env::set_var(DB_CLEAN_UP_ENV_VAR, "bing_bong") };
         let path;
         {
             let dir = ShallowTempDir::new();
@@ -124,12 +129,14 @@ mod tests {
         assert!(!path.exists());
 
         // clean up
-        env::remove_var(DB_CLEAN_UP_ENV_VAR);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { env::remove_var(DB_CLEAN_UP_ENV_VAR) };
     }
 
     fn shallow_temp_dir__panics_while_dropping_if_not_panicking() {
         // given
-        env::set_var(DB_CLEAN_UP_ENV_VAR, "true");
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { env::set_var(DB_CLEAN_UP_ENV_VAR, "true") };
 
         let result = std::panic::catch_unwind(|| {
             let _ = ShallowTempDir::new();
@@ -142,7 +149,8 @@ mod tests {
         assert!(result.is_err());
 
         // clean up
-        env::remove_var(DB_CLEAN_UP_ENV_VAR);
+        // TODO: Audit that the environment access only happens in single-threaded code.
+        unsafe { env::remove_var(DB_CLEAN_UP_ENV_VAR) };
     }
 
     #[test]

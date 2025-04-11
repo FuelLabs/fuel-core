@@ -1,9 +1,9 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    not_found,
-    tables::BlobData,
     Result as StorageResult,
     StorageAsRef,
+    not_found,
+    tables::BlobData,
 };
 use fuel_core_types::fuel_tx::BlobId;
 

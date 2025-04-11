@@ -1,6 +1,6 @@
 use crate::{
-    registry::RegistrationsPerTable,
     VersionedBlockPayload,
+    registry::RegistrationsPerTable,
 };
 use fuel_core_types::{
     blockchain::{

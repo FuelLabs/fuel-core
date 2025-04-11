@@ -11,22 +11,22 @@ use fuel_core::{
     },
 };
 use fuel_core_poa::{
-    ports::Database,
     Trigger,
+    ports::Database,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 #[tokio::test]
 async fn loads_snapshot() {
     let mut rng = StdRng::seed_from_u64(1234);
     let db = CombinedDatabase::default();
-    let blocks_root = rng.gen();
+    let blocks_root = rng.r#gen();
 
     // setup config
     let starting_state = StateConfig {

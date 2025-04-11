@@ -45,8 +45,8 @@ use tokio::{
     time::Instant,
 };
 use tokio_stream::{
-    wrappers::BroadcastStream,
     StreamExt,
+    wrappers::BroadcastStream,
 };
 
 pub mod pre_confirmation_signature;
@@ -144,13 +144,12 @@ impl BlockImporter for BlockImporterAdapter {
 #[cfg(feature = "p2p")]
 impl P2pPort for P2PAdapter {
     fn reserved_peers_count(&self) -> BoxStream<usize> {
-        if let Some(service) = &self.service {
-            Box::pin(
+        match &self.service {
+            Some(service) => Box::pin(
                 BroadcastStream::new(service.subscribe_reserved_peers_count())
                     .filter_map(|result| result.ok()),
-            )
-        } else {
-            Box::pin(tokio_stream::pending())
+            ),
+            _ => Box::pin(tokio_stream::pending()),
         }
     }
 }

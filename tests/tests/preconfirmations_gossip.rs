@@ -10,30 +10,30 @@ use std::{
 use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
     p2p_test_helpers::{
-        make_nodes,
         BootstrapSetup,
         Nodes,
         ProducerSetup,
         ValidatorSetup,
+        make_nodes,
     },
     service::Config,
 };
 use fuel_core_client::client::{
+    FuelClient,
     types::{
+        TransactionStatus,
         assemble_tx::{
             ChangePolicy,
             RequiredBalance,
         },
-        TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_tx::{
         Address,
@@ -51,9 +51,9 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use test_helpers::assemble_tx::{
     AssembleAndRunTx,
@@ -100,7 +100,7 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
         .script_gas_limit(gas_limit)
         .add_unsigned_coin_input(
             SecretKey::random(&mut rng),
-            rng.gen(),
+            rng.r#gen(),
             amount,
             AssetId::default(),
             Default::default(),
@@ -246,7 +246,7 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
         .script_gas_limit(gas_limit)
         .add_unsigned_coin_input(
             SecretKey::random(&mut rng),
-            rng.gen(),
+            rng.r#gen(),
             amount,
             AssetId::default(),
             Default::default(),
@@ -382,7 +382,7 @@ async fn preconfirmation__propagate_p2p_after_squeezed_out_on_producer() {
     .script_gas_limit(gas_limit)
     .add_unsigned_coin_input(
         SecretKey::random(&mut rng),
-        rng.gen(),
+        rng.r#gen(),
         10,
         Default::default(),
         Default::default(),

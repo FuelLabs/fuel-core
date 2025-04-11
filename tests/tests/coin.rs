@@ -1,8 +1,8 @@
 use fuel_core::{
     chain_config::{
-        coin_config_helpers::CoinConfigGenerator,
         CoinConfig,
         StateConfig,
+        coin_config_helpers::CoinConfigGenerator,
     },
     database::Database,
     service::{
@@ -11,6 +11,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
@@ -20,7 +21,6 @@ use fuel_core_client::client::{
         AssetId,
         UtxoId,
     },
-    FuelClient,
 };
 use fuel_core_types::{
     fuel_asm::*,

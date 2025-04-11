@@ -7,20 +7,20 @@ use fuel_core_services::{
 };
 use std::{
     sync::{
+        Arc,
+        Mutex,
         atomic::{
             AtomicU32,
             Ordering,
         },
-        Arc,
-        Mutex,
     },
     time::Duration,
 };
 use tokio::{
     sync::broadcast::Sender,
     time::{
-        interval,
         Interval,
+        interval,
     },
 };
 
@@ -130,7 +130,7 @@ where
     fn filter_costs_that_have_values_greater_than_l2_block_height(
         &self,
         da_block_costs: Vec<DaBlockCosts>,
-    ) -> impl Iterator<Item = DaBlockCosts> {
+    ) -> impl Iterator<Item = DaBlockCosts> + use<Source> {
         let latest_l2_height = self.latest_l2_height.load(Ordering::Acquire);
         da_block_costs.into_iter().filter(move |da_block_costs| {
             let end = *da_block_costs.l2_blocks.end();

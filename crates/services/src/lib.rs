@@ -18,9 +18,9 @@ pub mod yield_stream;
 pub mod stream {
     #[doc(no_inline)]
     pub use futures::stream::{
+        Stream,
         pending,
         unfold,
-        Stream,
     };
 
     /// A `Send` + `Sync` BoxStream with static lifetime.

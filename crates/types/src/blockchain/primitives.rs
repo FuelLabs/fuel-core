@@ -83,7 +83,7 @@ impl AsRef<[u8]> for BlockId {
 #[cfg(feature = "random")]
 impl rand::distributions::Distribution<BlockId> for rand::distributions::Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> BlockId {
-        BlockId(rng.gen())
+        BlockId(rng.r#gen())
     }
 }
 
@@ -148,7 +148,7 @@ impl DaBlockHeight {
 #[cfg(feature = "random")]
 impl rand::distributions::Distribution<DaBlockHeight> for rand::distributions::Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> DaBlockHeight {
-        DaBlockHeight(rng.gen())
+        DaBlockHeight(rng.r#gen())
     }
 }
 

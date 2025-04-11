@@ -9,6 +9,8 @@ use crate::{
     refs::ContractRef,
 };
 use fuel_core_storage::{
+    StorageAsMut,
+    StorageAsRef,
     column::Column,
     kv_store::KeyValueInspect,
     tables::{
@@ -29,8 +31,6 @@ use fuel_core_storage::{
         WriteTransaction,
     },
     vm_storage::VmStorage,
-    StorageAsMut,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
@@ -46,20 +46,36 @@ use fuel_core_types::{
         transaction::TransactionExt,
     },
     entities::{
+        RelayedTransaction,
         coins::coin::{
             CompressedCoin,
             CompressedCoinV1,
         },
         contract::ContractUtxoInfo,
-        RelayedTransaction,
     },
     fuel_asm::{
-        op,
         PanicInstruction,
         Word,
+        op,
     },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
+        Address,
+        AssetId,
+        Bytes32,
+        Cacheable,
+        Chargeable,
+        ConsensusParameters,
+        Input,
+        Mint,
+        Output,
+        PanicReason,
+        Receipt,
+        Transaction,
+        TxId,
+        TxPointer,
+        UniqueIdentifier,
+        UtxoId,
         field::{
             InputContract,
             MaxFeeLimit,
@@ -83,31 +99,17 @@ use fuel_core_types::{
             },
         },
         output,
-        Address,
-        AssetId,
-        Bytes32,
-        Cacheable,
-        Chargeable,
-        ConsensusParameters,
-        Input,
-        Mint,
-        Output,
-        PanicReason,
-        Receipt,
-        Transaction,
-        TxId,
-        TxPointer,
-        UniqueIdentifier,
-        UtxoId,
     },
     fuel_types::{
-        canonical::Deserialize,
         BlockHeight,
         ContractId,
         MessageId,
+        canonical::Deserialize,
     },
     fuel_vm::{
         self,
+        Interpreter,
+        ProgramState,
         checked_transaction::{
             CheckPredicateParams,
             CheckPredicates,
@@ -125,8 +127,6 @@ use fuel_core_types::{
         },
         state::StateTransition,
         verification,
-        Interpreter,
-        ProgramState,
     },
     services::{
         block_producer::Components,
@@ -1753,8 +1753,11 @@ where
                         *predicate_gas_used = gas_used;
                     }
                     _ => {
-                        debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
-                        or we added a new predicate inputs.");
+                        debug_assert!(
+                            false,
+                            "This error is not possible unless VM changes the order of inputs, \
+                        or we added a new predicate inputs."
+                        );
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
                         })
@@ -1953,16 +1956,21 @@ where
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
-                    if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
-                        if !coin.matches_input(input).unwrap_or_default() {
-                            return Err(
-                                TransactionValidityError::CoinMismatch(*utxo_id).into()
-                            )
+                    match db.storage::<Coins>().get(utxo_id)? {
+                        Some(coin) => {
+                            if !coin.matches_input(input).unwrap_or_default() {
+                                return Err(TransactionValidityError::CoinMismatch(
+                                    *utxo_id,
+                                )
+                                .into())
+                            }
                         }
-                    } else {
-                        return Err(
-                            TransactionValidityError::CoinDoesNotExist(*utxo_id).into()
-                        )
+                        _ => {
+                            return Err(TransactionValidityError::CoinDoesNotExist(
+                                *utxo_id,
+                            )
+                            .into())
+                        }
                     }
                 }
                 Input::Contract(contract) => {
@@ -1980,23 +1988,30 @@ where
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
                 | Input::MessageDataSigned(MessageDataSigned { nonce, .. })
                 | Input::MessageDataPredicate(MessageDataPredicate { nonce, .. }) => {
-                    if let Some(message) = db.storage::<Messages>().get(nonce)? {
-                        if message.da_height() > block_da_height {
-                            return Err(TransactionValidityError::MessageSpendTooEarly(
+                    match db.storage::<Messages>().get(nonce)? {
+                        Some(message) => {
+                            if message.da_height() > block_da_height {
+                                return Err(
+                                    TransactionValidityError::MessageSpendTooEarly(
+                                        *nonce,
+                                    )
+                                    .into(),
+                                )
+                            }
+
+                            if !message.matches_input(input).unwrap_or_default() {
+                                return Err(TransactionValidityError::MessageMismatch(
+                                    *nonce,
+                                )
+                                .into())
+                            }
+                        }
+                        _ => {
+                            return Err(TransactionValidityError::MessageDoesNotExist(
                                 *nonce,
                             )
                             .into())
                         }
-
-                        if !message.matches_input(input).unwrap_or_default() {
-                            return Err(
-                                TransactionValidityError::MessageMismatch(*nonce).into()
-                            )
-                        }
-                    } else {
-                        return Err(
-                            TransactionValidityError::MessageDoesNotExist(*nonce).into()
-                        )
                     }
                 }
             }
@@ -2148,7 +2163,7 @@ where
                         .get_coin_or_default(db, *utxo_id, *owner, *amount, *asset_id)?;
                     *tx_pointer = *coin.tx_pointer();
                 }
-                Input::Contract(input::contract::Contract {
+                &mut Input::Contract(input::contract::Contract {
                     ref mut utxo_id,
                     ref mut balance_root,
                     ref mut state_root,

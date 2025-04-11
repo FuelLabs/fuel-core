@@ -1,6 +1,6 @@
 use fuel_core_metrics::futures::{
-    metered_future::MeteredFuture,
     FuturesMetrics,
+    metered_future::MeteredFuture,
 };
 use std::sync::Arc;
 use tokio::sync::{
@@ -52,10 +52,9 @@ impl SyncProcessor {
     /// Reserve a slot for a task to be executed.
     pub fn reserve(&self) -> Result<SyncReservation, OutOfCapacity> {
         let permit = self.semaphore.clone().try_acquire_owned();
-        if let Ok(permit) = permit {
-            Ok(SyncReservation(permit))
-        } else {
-            Err(OutOfCapacity)
+        match permit {
+            Ok(permit) => Ok(SyncReservation(permit)),
+            _ => Err(OutOfCapacity),
         }
     }
 
@@ -71,11 +70,12 @@ impl SyncProcessor {
             op()
         };
         let metered_future = MeteredFuture::new(sync_future, self.metric.clone());
-        if let Some(rayon_thread_pool) = &self.rayon_thread_pool {
-            rayon_thread_pool
-                .spawn_fifo(move || futures::executor::block_on(metered_future));
-        } else {
-            futures::executor::block_on(metered_future)
+        match &self.rayon_thread_pool {
+            Some(rayon_thread_pool) => {
+                rayon_thread_pool
+                    .spawn_fifo(move || futures::executor::block_on(metered_future));
+            }
+            _ => futures::executor::block_on(metered_future),
         }
     }
 

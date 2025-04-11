@@ -1,10 +1,10 @@
 use super::{
-    block::Header,
     BlockId,
     Bytes32,
     HexString,
     PageInfo,
     TransactionId,
+    block::Header,
 };
 use crate::client::{
     pagination::{
@@ -12,11 +12,11 @@ use crate::client::{
         PaginationRequest,
     },
     schema::{
-        schema,
         Address,
         Nonce,
         U32,
         U64,
+        schema,
     },
 };
 

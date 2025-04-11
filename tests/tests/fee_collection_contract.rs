@@ -6,14 +6,14 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_tx::{
         Cacheable,
@@ -25,19 +25,19 @@ use fuel_core_types::{
         Witness,
     },
     fuel_types::{
-        canonical::Serialize,
         Address,
         AssetId,
         BlockHeight,
         ChainId,
         ContractId,
         Salt,
+        canonical::Serialize,
     },
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use test_helpers::{
     assemble_tx::AssembleAndRunTx,
@@ -56,8 +56,8 @@ const TIP: u64 = AMOUNT / 2;
 
 async fn setup(rng: &mut StdRng) -> TestContext {
     // Make contract that coinbase fees are collected into
-    let address: Address = rng.gen();
-    let salt: Salt = rng.gen();
+    let address: Address = rng.r#gen();
+    let salt: Salt = rng.r#gen();
     let contract = fuel_core::chain_config::fee_collection_contract::generate(address);
     let witness: Witness = contract.clone().into();
     let contract = Contract::from(contract);

@@ -17,8 +17,8 @@ use fuel_core::{
 };
 use fuel_core_chain_config::ChainConfig;
 use rlimit::{
-    getrlimit,
     Resource,
+    getrlimit,
 };
 use std::path::{
     Path,
@@ -143,8 +143,8 @@ fn get_default_max_fds() -> i32 {
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use fuel_core::service::genesis::Exporter;
     use fuel_core_chain_config::{
-        SnapshotWriter,
         MAX_GROUP_SIZE,
+        SnapshotWriter,
     };
 
     use crate::cli::ShutdownListener;
@@ -250,6 +250,9 @@ mod tests {
         TableEntry,
     };
     use fuel_core_storage::{
+        ContractsAssetKey,
+        ContractsStateKey,
+        StorageAsMut,
         structured_storage::TableWithBlueprint,
         tables::{
             Coins,
@@ -262,9 +265,6 @@ mod tests {
             Transactions,
         },
         transactional::AtomicView,
-        ContractsAssetKey,
-        ContractsStateKey,
-        StorageAsMut,
     };
     use fuel_core_types::{
         blockchain::{
@@ -295,10 +295,10 @@ mod tests {
     };
     use itertools::Itertools;
     use rand::{
-        rngs::StdRng,
-        seq::SliceRandom,
         Rng,
         SeedableRng,
+        rngs::StdRng,
+        seq::SliceRandom,
     };
     use test_case::test_case;
 
@@ -437,7 +437,7 @@ mod tests {
             let messages = repeat_with(|| self.given_message()).take(amount).collect();
 
             let contract_ids = repeat_with(|| {
-                let contract_id: ContractId = self.rng.gen();
+                let contract_id: ContractId = self.rng.r#gen();
                 contract_id
             })
             .take(amount)
@@ -502,7 +502,7 @@ mod tests {
             )
             .finalize_as_transaction();
 
-            let id = tx.id(&ChainId::new(self.rng.gen::<u64>()));
+            let id = tx.id(&ChainId::new(self.rng.r#gen::<u64>()));
 
             self.db
                 .on_chain_mut()
@@ -514,19 +514,19 @@ mod tests {
         }
 
         fn given_transaction_status(&mut self) -> TableEntry<TransactionStatuses> {
-            let key = self.rng.gen();
+            let key = self.rng.r#gen();
             let status = TransactionExecutionStatus::Success {
-                block_height: self.rng.gen(),
-                time: Tai64(self.rng.gen::<u32>().into()),
+                block_height: self.rng.r#gen(),
+                time: Tai64(self.rng.r#gen::<u32>().into()),
                 result: None,
                 receipts: vec![Receipt::Return {
-                    id: self.rng.gen(),
-                    val: self.rng.gen(),
-                    pc: self.rng.gen(),
-                    is: self.rng.gen(),
+                    id: self.rng.r#gen(),
+                    val: self.rng.r#gen(),
+                    pc: self.rng.r#gen(),
+                    is: self.rng.r#gen(),
                 }],
-                total_gas: self.rng.gen(),
-                total_fee: self.rng.gen(),
+                total_gas: self.rng.r#gen(),
+                total_fee: self.rng.r#gen(),
             };
 
             self.db
@@ -540,11 +540,11 @@ mod tests {
 
         fn given_owned_transaction(&mut self) -> TableEntry<OwnedTransactions> {
             let key = OwnedTransactionIndexKey {
-                owner: self.rng.gen(),
-                block_height: self.rng.gen(),
-                tx_idx: self.rng.gen(),
+                owner: self.rng.r#gen(),
+                block_height: self.rng.r#gen(),
+                tx_idx: self.rng.r#gen(),
             };
-            let value = self.rng.gen();
+            let value = self.rng.r#gen();
 
             self.db
                 .off_chain_mut()
@@ -557,8 +557,8 @@ mod tests {
 
         fn given_block(&mut self) -> TableEntry<FuelBlocks> {
             let mut block = CompressedBlock::default();
-            let height = self.rng.gen();
-            block.header_mut().set_da_height(self.rng.gen());
+            let height = self.rng.r#gen();
+            block.header_mut().set_da_height(self.rng.r#gen());
             block.header_mut().set_block_height(height);
             let _ = self
                 .db
@@ -573,13 +573,13 @@ mod tests {
         }
 
         fn given_coin(&mut self) -> TableEntry<Coins> {
-            let tx_id = self.rng.gen();
-            let output_index = self.rng.gen();
+            let tx_id = self.rng.r#gen();
+            let output_index = self.rng.r#gen();
             let coin = CompressedCoin::V1(CompressedCoinV1 {
-                owner: self.rng.gen(),
-                amount: self.rng.gen(),
-                asset_id: self.rng.gen(),
-                tx_pointer: self.rng.gen(),
+                owner: self.rng.r#gen(),
+                amount: self.rng.r#gen(),
+                asset_id: self.rng.r#gen(),
+                tx_pointer: self.rng.r#gen(),
             });
             let key = UtxoId::new(tx_id, output_index);
             self.db
@@ -593,12 +593,12 @@ mod tests {
 
         fn given_message(&mut self) -> TableEntry<Messages> {
             let message = Message::V1(MessageV1 {
-                sender: self.rng.gen(),
-                recipient: self.rng.gen(),
-                amount: self.rng.gen(),
-                nonce: self.rng.gen(),
+                sender: self.rng.r#gen(),
+                recipient: self.rng.r#gen(),
+                amount: self.rng.r#gen(),
+                nonce: self.rng.r#gen(),
                 data: self.generate_data(100),
-                da_height: DaBlockHeight(self.rng.gen()),
+                da_height: DaBlockHeight(self.rng.r#gen()),
             });
 
             let key = *message.nonce();
@@ -637,8 +637,8 @@ mod tests {
             &mut self,
             contract_id: ContractId,
         ) -> TableEntry<ContractsLatestUtxo> {
-            let utxo_id = UtxoId::new(self.rng.gen(), self.rng.gen());
-            let tx_pointer = TxPointer::new(self.rng.gen(), self.rng.gen());
+            let utxo_id = UtxoId::new(self.rng.r#gen(), self.rng.r#gen());
+            let tx_pointer = TxPointer::new(self.rng.r#gen(), self.rng.r#gen());
 
             let value = ContractUtxoInfo::V1((utxo_id, tx_pointer).into());
             self.db
@@ -657,7 +657,7 @@ mod tests {
             &mut self,
             contract_id: ContractId,
         ) -> TableEntry<ContractsState> {
-            let state_key = self.rng.gen();
+            let state_key = self.rng.r#gen();
             let key = ContractsStateKey::new(&contract_id, &state_key);
             let state_value = self.generate_data(100);
             self.db
@@ -675,9 +675,9 @@ mod tests {
             &mut self,
             contract_id: ContractId,
         ) -> TableEntry<ContractsAssets> {
-            let asset_id = self.rng.gen();
+            let asset_id = self.rng.r#gen();
             let key = ContractsAssetKey::new(&contract_id, &asset_id);
-            let amount = self.rng.gen();
+            let amount = self.rng.r#gen();
             self.db
                 .on_chain_mut()
                 .storage_as_mut::<ContractsAssets>()

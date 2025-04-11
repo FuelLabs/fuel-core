@@ -1,6 +1,6 @@
 use crate::futures::{
-    future_tracker::FutureTracker,
     FuturesMetrics,
+    future_tracker::FutureTracker,
 };
 use std::{
     future::Future,

@@ -20,8 +20,8 @@ use fuel_core_gas_price_service::{
     v1::metadata::V1AlgorithmConfig,
 };
 use fuel_core_storage::{
-    transactional::HistoricalView,
     Result as StorageResult,
+    transactional::HistoricalView,
 };
 use fuel_core_types::{
     blockchain::{
@@ -34,12 +34,12 @@ use fuel_core_types::{
 
 use crate::{
     database::{
-        database_description::gas_price::GasPriceDatabase,
         Database,
+        database_description::gas_price::GasPriceDatabase,
     },
     service::{
-        config::GasPriceConfig,
         Config,
+        config::GasPriceConfig,
     },
 };
 

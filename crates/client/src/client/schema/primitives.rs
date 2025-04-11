@@ -10,11 +10,11 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use serde::{
-    de::Error,
     Deserialize,
     Deserializer,
     Serialize,
     Serializer,
+    de::Error,
 };
 use std::{
     fmt::{
@@ -87,7 +87,7 @@ macro_rules! fuel_type_scalar {
 
         impl From<$id> for ::fuel_core_types::fuel_types::$ft_id {
             fn from(s: $id) -> Self {
-                ::fuel_core_types::fuel_types::$ft_id::new(s.0 .0.into())
+                ::fuel_core_types::fuel_types::$ft_id::new(s.0.0.into())
             }
         }
 
@@ -120,7 +120,7 @@ fuel_type_scalar!(Nonce, Nonce);
 
 impl LowerHex for Nonce {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        LowerHex::fmt(&self.0 .0, f)
+        LowerHex::fmt(&self.0.0, f)
     }
 }
 
@@ -138,7 +138,7 @@ impl FromStr for UtxoId {
 
 impl From<UtxoId> for ::fuel_core_types::fuel_tx::UtxoId {
     fn from(s: UtxoId) -> Self {
-        s.0 .0
+        s.0.0
     }
 }
 
@@ -150,7 +150,7 @@ impl From<fuel_core_types::fuel_tx::UtxoId> for UtxoId {
 
 impl LowerHex for UtxoId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        LowerHex::fmt(&self.0 .0, f)
+        LowerHex::fmt(&self.0.0, f)
     }
 }
 
@@ -168,13 +168,13 @@ impl FromStr for TxPointer {
 
 impl From<TxPointer> for ::fuel_core_types::fuel_tx::TxPointer {
     fn from(s: TxPointer) -> Self {
-        s.0 .0
+        s.0.0
     }
 }
 
 impl LowerHex for TxPointer {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        LowerHex::fmt(&self.0 .0, f)
+        LowerHex::fmt(&self.0.0, f)
     }
 }
 
@@ -183,7 +183,7 @@ pub struct HexString(pub Bytes);
 
 impl From<HexString> for Vec<u8> {
     fn from(s: HexString) -> Self {
-        s.0 .0
+        s.0.0
     }
 }
 
@@ -333,7 +333,7 @@ impl Serialize for Tai64Timestamp {
     where
         S: Serializer,
     {
-        let s = self.0 .0.to_string();
+        let s = self.0.0.to_string();
         serializer.serialize_str(s.as_str())
     }
 }

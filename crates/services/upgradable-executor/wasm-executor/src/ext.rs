@@ -1,6 +1,6 @@
 use crate::utils::{
-    unpack_exists_size_result,
     InputDeserializationType,
+    unpack_exists_size_result,
 };
 use core::marker::PhantomData;
 use fuel_core_executor::ports::MaybeCheckedTransaction;
@@ -76,7 +76,7 @@ mod host {
     use super::*;
 
     #[link(wasm_import_module = "host_v1")]
-    extern "C" {
+    unsafe extern "C" {
         // TxSource API
 
         /// Returns the size of the next encoded transactions.
@@ -89,7 +89,7 @@ mod host {
     }
 
     #[link(wasm_import_module = "host_v0")]
-    extern "C" {
+    unsafe extern "C" {
         // Initialization API
 
         /// Returns the encoded input for the executor.

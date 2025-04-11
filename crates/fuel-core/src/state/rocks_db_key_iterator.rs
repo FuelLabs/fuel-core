@@ -46,18 +46,22 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
             None
-        } else if let Some(item) = R::extract_item(&self.raw) {
-            match self.direction {
-                IterDirection::Forward => self.raw.next(),
-                IterDirection::Reverse => self.raw.prev(),
-            }
-            Some(DatabaseResult::Ok(item))
         } else {
-            self.done = true;
-            self.raw
-                .status()
-                .err()
-                .map(|e| Some(DatabaseResult::Err(DatabaseError::Other(anyhow!(e)))))?
+            match R::extract_item(&self.raw) {
+                Some(item) => {
+                    match self.direction {
+                        IterDirection::Forward => self.raw.next(),
+                        IterDirection::Reverse => self.raw.prev(),
+                    }
+                    Some(DatabaseResult::Ok(item))
+                }
+                _ => {
+                    self.done = true;
+                    self.raw.status().err().map(|e| {
+                        Some(DatabaseResult::Err(DatabaseError::Other(anyhow!(e))))
+                    })?
+                }
+            }
         }
     }
 }

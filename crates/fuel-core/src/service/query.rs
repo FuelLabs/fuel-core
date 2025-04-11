@@ -18,8 +18,8 @@ use futures::{
 use crate::{
     database::OffChainIterableKeyValueView,
     query::{
-        transaction_status_change,
         TxnStatusChangeState,
+        transaction_status_change,
     },
     schema::tx::types::TransactionStatus,
 };

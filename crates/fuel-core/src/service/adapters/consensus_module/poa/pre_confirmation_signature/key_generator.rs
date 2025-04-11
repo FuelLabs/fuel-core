@@ -16,8 +16,8 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use rand::{
-    prelude::StdRng,
     SeedableRng,
+    prelude::StdRng,
 };
 use serde::Serialize;
 use std::ops::Deref;

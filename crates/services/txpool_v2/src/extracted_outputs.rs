@@ -4,10 +4,6 @@ use std::collections::HashMap;
 
 use fuel_core_types::{
     fuel_tx::{
-        input::coin::{
-            CoinPredicate,
-            CoinSigned,
-        },
         Address,
         AssetId,
         ContractId,
@@ -15,6 +11,10 @@ use fuel_core_types::{
         Output,
         TxId,
         UtxoId,
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
     },
     services::txpool::ArcPoolTx,
 };
