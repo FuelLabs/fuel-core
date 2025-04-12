@@ -429,7 +429,7 @@ async fn submit__tx_with_predicate_can_check_input_and_output_data_coins() {
         .await
         .unwrap();
 
-    // then
+
     let transaction: Transaction = context
         .client
         .transaction(&predicate_tx.id(&ChainId::default()))
@@ -583,3 +583,114 @@ async fn submit__tx_with_predicate_can_check_read_only_input_predicate_data_coin
         panic!("Expected change output");
     }
 }
+
+
+#[tokio::test]
+async fn submit__tx_with_predicate_can_check_read_only_input_data_coin_and_output_data_coins() {
+    let mut rng = StdRng::seed_from_u64(2322);
+
+    // given
+    let input_amount = 500;
+    let output_amount = 200;
+    let change_amount = input_amount - output_amount;
+    let limit = 1000;
+    let asset_id = rng.gen();
+    let predicate = predicate_checking_output_data_matches_input_data_coin();
+    let coin_data = vec![123; 100];
+    let owner = Input::predicate_owner(&predicate);
+    let mut predicate_tx =
+        TransactionBuilder::script(Default::default(), Default::default())
+            .add_input(Input::read_only_data_coin(
+                rng.gen(),
+                owner,
+                input_amount,
+                asset_id,
+                Default::default(),
+                coin_data.clone(),
+            ))
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                owner,
+                input_amount,
+                asset_id,
+                Default::default(),
+                Default::default(),
+                predicate,
+                vec![1,2,3],
+            ))
+            .add_output(Output::data_coin(
+                rng.gen(),
+                output_amount,
+                asset_id,
+                coin_data,
+            ))
+            .add_output(Output::change(rng.gen(), 0, asset_id))
+            .script_gas_limit(limit)
+            .finalize();
+
+    // create test context with predicates disabled
+    let context = TestSetupBuilder::default()
+        .config_coin_inputs_from_transactions(&[&predicate_tx])
+        .finalize()
+        .await;
+
+    predicate_tx
+        .estimate_predicates(
+            &CheckPredicateParams::from(
+                &context
+                    .srv
+                    .shared
+                    .config
+                    .snapshot_reader
+                    .chain_config()
+                    .consensus_parameters,
+            ),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .expect("Predicate check failed");
+
+
+    // when
+    let predicate_tx = predicate_tx.into();
+    context
+        .client
+        .submit_and_await_commit(&predicate_tx)
+        .await
+        .unwrap();
+
+
+    let transaction: Transaction = context
+        .client
+        .transaction(&predicate_tx.id(&ChainId::default()))
+        .await
+        .unwrap()
+        .unwrap()
+        .transaction
+        .try_into()
+        .unwrap();
+
+    if let Output::DataCoin { amount, .. } = transaction.as_script().unwrap().outputs()[0]
+    {
+        assert!(
+            amount == output_amount,
+            "Expected output amount to be {}, but got {}",
+            amount,
+            output_amount
+        );
+    } else {
+        panic!("Expected output data coin");
+    }
+
+    if let Output::Change { amount, .. } = transaction.as_script().unwrap().outputs()[1] {
+        assert!(
+            amount == change_amount,
+            "Expected change amount to be {}, but got {}",
+            change_amount,
+            amount
+        );
+    } else {
+        panic!("Expected change output");
+    }
+}
+
