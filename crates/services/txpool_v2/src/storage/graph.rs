@@ -7,6 +7,11 @@ use std::{
     time::SystemTime,
 };
 
+use super::{
+    RemovedTransactions,
+    Storage,
+    StorageData,
+};
 use crate::{
     error::{
         DependencyError,
@@ -18,6 +23,7 @@ use crate::{
     pending_pool::MissingInput,
     ports::TxPoolPersistentStorage,
     selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
+    spent_inputs::SpentInputs,
     storage::checked_collision::CheckedTransaction,
 };
 use fuel_core_types::{
@@ -51,27 +57,6 @@ use fuel_core_types::{
 use petgraph::{
     graph::NodeIndex,
     prelude::StableDiGraph,
-};
-
-use crate::{
-    error::{
-        DependencyError,
-        Error,
-        InputValidationError,
-        InputValidationErrorType,
-    },
-    extracted_outputs::ExtractedOutputs,
-    pending_pool::MissingInput,
-    ports::TxPoolPersistentStorage,
-    selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
-    spent_inputs::SpentInputs,
-    storage::checked_collision::CheckedTransaction,
-};
-
-use super::{
-    RemovedTransactions,
-    Storage,
-    StorageData,
 };
 
 pub struct GraphStorage {

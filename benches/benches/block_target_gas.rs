@@ -85,6 +85,7 @@ use fuel_core_types::{
         AssetId,
         Bytes32,
         ContractId,
+        SubAssetId,
     },
     fuel_vm::{
         checked_transaction::EstimatePredicates,
@@ -332,7 +333,7 @@ fn service_with_many_contracts(
             .unwrap();
 
         let mut storage_key = primitive_types::U256::zero();
-        let mut sub_id = Bytes32::zeroed();
+        let mut sub_id = SubAssetId::zeroed();
         database
             .init_contract_balances(
                 contract_id,

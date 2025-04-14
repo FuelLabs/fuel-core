@@ -169,15 +169,18 @@ fn main() {
                     ..
                 }) = input
                 {
-                    Some(CoinConfig {
-                        tx_id: *utxo_id.tx_id(),
-                        output_index: utxo_id.output_index(),
-                        tx_pointer_block_height: tx_pointer.block_height(),
-                        tx_pointer_tx_idx: tx_pointer.tx_index(),
-                        owner,
-                        amount,
-                        asset_id,
-                    })
+                    Some(
+                        ConfigCoin {
+                            tx_id: *utxo_id.tx_id(),
+                            output_index: utxo_id.output_index(),
+                            tx_pointer_block_height: tx_pointer.block_height(),
+                            tx_pointer_tx_idx: tx_pointer.tx_index(),
+                            owner,
+                            amount,
+                            asset_id,
+                        }
+                        .into(),
+                    )
                 } else {
                     None
                 }

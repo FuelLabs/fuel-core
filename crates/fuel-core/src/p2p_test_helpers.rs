@@ -266,12 +266,10 @@ pub async fn make_nodes(
             let all: Vec<_> = (0..num_test_txs)
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
-                    let mut initial_coin = CoinConfig {
-                        ..coin_generator.generate_with(secret, 10000)
-                    };
+                    let mut initial_coin = coin_generator.generate_with(secret, 10000);
                     // Shift idx to prevent overlapping utxo_ids when
                     // merging with existing coins from config
-                    initial_coin.output_index += 100;
+                    *initial_coin.mut_output_index() += 100;
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
