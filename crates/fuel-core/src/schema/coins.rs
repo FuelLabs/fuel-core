@@ -105,6 +105,12 @@ impl From<UncompressedCoin> for Coin {
     }
 }
 
+impl From<fuel_core_types::entities::coins::coin::Coin> for Coin {
+    fn from(value: fuel_core_types::entities::coins::coin::Coin) -> Self {
+        Coin(UncompressedCoin::Coin(value))
+    }
+}
+
 pub struct MessageCoin(pub(crate) MessageCoinModel);
 
 #[async_graphql::Object]
@@ -146,6 +152,53 @@ impl From<MessageCoinModel> for MessageCoin {
     }
 }
 
+pub struct DataCoin(pub(crate) UncompressedCoin);
+
+#[async_graphql::Object]
+impl DataCoin {
+    async fn utxo_id(&self) -> UtxoId {
+        (*self.0.utxo_id()).into()
+    }
+
+    async fn owner(&self) -> Address {
+        (*self.0.owner()).into()
+    }
+
+    async fn amount(&self) -> U64 {
+        (*self.0.amount()).into()
+    }
+
+    async fn asset_id(&self) -> AssetId {
+        (*self.0.asset_id()).into()
+    }
+
+    /// TxPointer - the height of the block this coin was created in
+    async fn block_created(&self) -> U32 {
+        u32::from(self.0.tx_pointer().block_height()).into()
+    }
+
+    /// TxPointer - the index of the transaction that created this coin
+    async fn tx_created_idx(&self) -> U16 {
+        self.0.tx_pointer().tx_index().into()
+    }
+
+    async fn data(&self) -> Option<HexString> {
+        self.0.data().map(|data| HexString(data.clone()))
+    }
+}
+
+impl From<UncompressedCoin> for DataCoin {
+    fn from(value: UncompressedCoin) -> Self {
+        DataCoin(value)
+    }
+}
+
+impl From<fuel_core_types::entities::coins::coin::DataCoin> for DataCoin {
+    fn from(value: fuel_core_types::entities::coins::coin::DataCoin) -> Self {
+        DataCoin(UncompressedCoin::DataCoin(value))
+    }
+}
+
 /// The schema analog of the [`coins::CoinType`].
 #[derive(async_graphql::Union)]
 pub enum CoinType {
@@ -153,6 +206,8 @@ pub enum CoinType {
     Coin(Coin),
     /// The bridged coin from the DA layer.
     MessageCoin(MessageCoin),
+    /// A coin that contains additional data.
+    DataCoin(DataCoin),
 }
 
 impl CoinType {
@@ -160,6 +215,7 @@ impl CoinType {
         match self {
             CoinType::Coin(coin) => *coin.0.amount(),
             CoinType::MessageCoin(coin) => coin.0.amount,
+            CoinType::DataCoin(coin) => *coin.0.amount(),
         }
     }
 }
@@ -167,7 +223,10 @@ impl CoinType {
 impl From<coins::CoinType> for CoinType {
     fn from(value: coins::CoinType) -> Self {
         match value {
-            coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
+            coins::CoinType::Coin(coin) => match coin {
+                UncompressedCoin::Coin(c) => CoinType::Coin(c.into()),
+                UncompressedCoin::DataCoin(c) => CoinType::DataCoin(c.into()),
+            },
             coins::CoinType::MessageCoin(coin) => CoinType::MessageCoin(coin.into()),
         }
     }

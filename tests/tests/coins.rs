@@ -219,6 +219,7 @@ mod coin {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     CoinType::Coin(c) => Some(c.utxo_id),
+                    CoinType::DataCoin(d) => Some(d.utxo_id),
                     CoinType::MessageCoin(_) => None,
                     CoinType::Unknown => None,
                 })
@@ -442,6 +443,7 @@ mod message_coin {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     CoinType::Coin(_) => None,
+                    CoinType::DataCoin(_) => None,
                     CoinType::MessageCoin(m) => Some(m.nonce),
                     CoinType::Unknown => None,
                 })
@@ -651,6 +653,7 @@ mod all_coins {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     CoinType::Coin(_) => None,
+                    CoinType::DataCoin(_) => None,
                     CoinType::MessageCoin(m) => Some(m.nonce),
                     CoinType::Unknown => None,
                 })
@@ -661,6 +664,7 @@ mod all_coins {
             .flat_map(|coins| {
                 coins.iter().filter_map(|b| match b {
                     CoinType::Coin(c) => Some(c.utxo_id),
+                    CoinType::DataCoin(d) => Some(d.utxo_id),
                     CoinType::MessageCoin(_) => None,
                     CoinType::Unknown => None,
                 })
@@ -739,6 +743,87 @@ mod all_coins {
             }
             .to_str_error_string()
         );
+    }
+}
+
+mod data_coin {
+    use super::*;
+    use fuel_core::chain_config::{
+        ChainConfig,
+        ConfigDataCoin,
+    };
+    use fuel_core_types::{
+        fuel_crypto::SecretKey,
+        fuel_tx::Address,
+    };
+    use rand::Rng;
+
+    async fn setup(
+        owner: Address,
+        asset_id: AssetId,
+        amount: u64,
+        data: Vec<u8>,
+        consensus_parameters: &ConsensusParameters,
+    ) -> TestContext {
+        let data_coin = ConfigDataCoin {
+            owner,
+            amount,
+            asset_id,
+            data,
+            ..Default::default()
+        }
+        .into();
+        let state = StateConfig {
+            contracts: vec![],
+            coins: vec![data_coin],
+            messages: vec![],
+            ..Default::default()
+        };
+        let chain =
+            ChainConfig::local_testnet_with_consensus_parameters(consensus_parameters);
+        let config = Config::local_node_with_configs(chain, state);
+
+        let srv = FuelService::new_node(config).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+
+        TestContext {
+            srv,
+            rng: StdRng::seed_from_u64(0x123),
+            client,
+        }
+    }
+
+    #[tokio::test]
+    async fn can_get_data_coins() {
+        // Given
+        let mut rng = StdRng::seed_from_u64(1234);
+        let asset_id: AssetId = rng.gen();
+        let amount = 123;
+        let secret_key: SecretKey = SecretKey::random(&mut rng);
+        let pk = secret_key.public_key();
+        let owner = Input::owner(&pk);
+        let data = vec![1, 2, 3, 4, 5];
+        let cp = ConsensusParameters::default();
+        let context = setup(owner, asset_id, amount, data, &cp).await;
+
+        // When
+        let coins = context
+            .client
+            .data_coins_to_spend(&owner, vec![(asset_id, 1, None)], None)
+            .await
+            .unwrap();
+
+        // Then
+        assert_eq!(coins.len(), 1);
+        assert!(!coins[0].is_empty());
+        match &coins[0][0] {
+            CoinType::DataCoin(coin) => {
+                assert_eq!(coin.amount, 50);
+                assert_eq!(coin.owner, owner);
+                assert_eq!(coin.asset_id, asset_id);
+            }
+            _ => panic!("Expected Coin variant"),
+        }
     }
 }
 

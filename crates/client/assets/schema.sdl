@@ -164,6 +164,7 @@ type Coin {
 	TxPointer - the index of the transaction that created this coin
 	"""
 	txCreatedIdx: U16!
+	data: HexString
 }
 
 type CoinConnection {
@@ -215,7 +216,7 @@ type CoinOutput {
 """
 The schema analog of the [`coins::CoinType`].
 """
-union CoinType = Coin | MessageCoin
+union CoinType = Coin | MessageCoin | DataCoin
 
 union Consensus = Genesis | PoAConsensus
 
@@ -316,6 +317,29 @@ enum ContractParametersVersion {
 
 type DaCompressedBlock {
 	bytes: HexString!
+}
+
+type DataCoin {
+	utxoId: UtxoId!
+	owner: Address!
+	amount: U64!
+	assetId: AssetId!
+	"""
+	TxPointer - the height of the block this coin was created in
+	"""
+	blockCreated: U32!
+	"""
+	TxPointer - the index of the transaction that created this coin
+	"""
+	txCreatedIdx: U16!
+	data: HexString
+}
+
+type DataCoinOutput {
+	to: Address!
+	amount: U64!
+	assetId: AssetId!
+	data: [Int!]!
 }
 
 union DependentCost = LightOperation | HeavyOperation
@@ -632,7 +656,7 @@ type IndexationFlags {
 	assetMetadata: Boolean!
 }
 
-union Input = InputCoin | InputContract | InputMessage
+union Input = InputCoin | InputDataCoin | InputContract | InputMessage
 
 type InputCoin {
 	utxoId: UtxoId!
@@ -652,6 +676,19 @@ type InputContract {
 	stateRoot: Bytes32!
 	txPointer: TxPointer!
 	contractId: ContractId!
+}
+
+type InputDataCoin {
+	utxoId: UtxoId!
+	owner: Address!
+	amount: U64!
+	assetId: AssetId!
+	txPointer: TxPointer!
+	witnessIndex: U16!
+	predicateGasUsed: U64!
+	predicate: HexString!
+	predicateData: HexString!
+	data: HexString!
 }
 
 type InputMessage {
@@ -823,7 +860,7 @@ type NodeInfo {
 
 scalar Nonce
 
-union Output = CoinOutput | ContractOutput | ChangeOutput | VariableOutput | ContractCreated
+union Output = CoinOutput | DataCoinOutput | ContractOutput | ChangeOutput | VariableOutput | ContractCreated
 
 """
 A separate `Breakpoint` type to be used as an output, as a single

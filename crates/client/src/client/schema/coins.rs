@@ -3,6 +3,7 @@ use crate::client::{
         schema,
         Address,
         AssetId,
+        HexString,
         Nonce,
         PageInfo,
         UtxoId,
@@ -122,6 +123,18 @@ pub struct Coin {
     pub owner: Address,
 }
 
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DataCoin {
+    pub amount: U64,
+    pub block_created: U32,
+    pub tx_created_idx: U16,
+    pub asset_id: AssetId,
+    pub utxo_id: UtxoId,
+    pub owner: Address,
+    pub data: Option<HexString>,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Coin")]
 pub struct CoinIdFragment {
@@ -180,6 +193,7 @@ pub struct MessageCoin {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum CoinType {
     Coin(Coin),
+    DataCoin(DataCoin),
     MessageCoin(MessageCoin),
     #[cynic(fallback)]
     Unknown,
@@ -189,10 +203,21 @@ impl CoinType {
     pub fn amount(&self) -> u64 {
         match self {
             CoinType::Coin(c) => c.amount.0,
+            CoinType::DataCoin(c) => c.amount.0,
             CoinType::MessageCoin(m) => m.amount.0,
             CoinType::Unknown => 0,
         }
     }
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct DataCoinsToSpendArgs {
+    /// The `Address` of the assets' coins owner.
+    owner: Address,
+    /// The total amount of each asset type to spend.
+    query_per_asset: Vec<SpendQueryElementInput>,
+    /// A list of ids to exclude from the selection.
+    excluded_ids: Option<ExcludeInput>,
 }
 
 #[derive(cynic::QueryVariables, Debug)]
@@ -207,10 +232,22 @@ pub struct CoinsToSpendArgs {
 
 pub(crate) type CoinsToSpendArgsTuple =
     (Address, Vec<SpendQueryElementInput>, Option<ExcludeInput>);
+pub(crate) type DataCoinsToSpendArgsTuple =
+    (Address, Vec<SpendQueryElementInput>, Option<ExcludeInput>);
 
 impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     fn from(r: CoinsToSpendArgsTuple) -> Self {
         CoinsToSpendArgs {
+            owner: r.0,
+            query_per_asset: r.1,
+            excluded_ids: r.2,
+        }
+    }
+}
+
+impl From<DataCoinsToSpendArgsTuple> for DataCoinsToSpendArgs {
+    fn from(r: DataCoinsToSpendArgsTuple) -> Self {
+        DataCoinsToSpendArgs {
             owner: r.0,
             query_per_asset: r.1,
             excluded_ids: r.2,
@@ -225,6 +262,17 @@ impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     variables = "CoinsToSpendArgs"
 )]
 pub struct CoinsToSpendQuery {
+    #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]
+    pub coins_to_spend: Vec<Vec<CoinType>>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "DataCoinsToSpendArgs"
+)]
+pub struct DataCoinsToSpendQuery {
     #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]
     pub coins_to_spend: Vec<Vec<CoinType>>,
 }

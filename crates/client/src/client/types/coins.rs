@@ -9,9 +9,10 @@ use crate::client::{
     PaginatedResult,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CoinType {
     Coin(Coin),
+    DataCoin(DataCoin),
     MessageCoin(MessageCoin),
     Unknown,
 }
@@ -20,6 +21,7 @@ impl CoinType {
     pub fn amount(&self) -> u64 {
         match self {
             CoinType::Coin(c) => c.amount,
+            CoinType::DataCoin(c) => c.amount,
             CoinType::MessageCoin(m) => m.amount,
             CoinType::Unknown => 0,
         }
@@ -34,6 +36,17 @@ pub struct Coin {
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
     pub owner: Address,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DataCoin {
+    pub amount: u64,
+    pub block_created: u32,
+    pub tx_created_idx: u16,
+    pub asset_id: AssetId,
+    pub utxo_id: UtxoId,
+    pub owner: Address,
+    pub data: Vec<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +64,9 @@ impl From<schema::coins::CoinType> for CoinType {
     fn from(value: schema::coins::CoinType) -> Self {
         match value {
             schema::coins::CoinType::Coin(coin) => Self::Coin(coin.into()),
+            schema::coins::CoinType::DataCoin(data_coin) => {
+                Self::DataCoin(data_coin.into())
+            }
             schema::coins::CoinType::MessageCoin(message_coin) => {
                 Self::MessageCoin(message_coin.into())
             }
@@ -68,6 +84,20 @@ impl From<schema::coins::Coin> for Coin {
             asset_id: value.asset_id.into(),
             utxo_id: value.utxo_id.into(),
             owner: value.owner.into(),
+        }
+    }
+}
+
+impl From<schema::coins::DataCoin> for DataCoin {
+    fn from(value: schema::coins::DataCoin) -> Self {
+        Self {
+            amount: value.amount.into(),
+            block_created: value.block_created.into(),
+            tx_created_idx: value.tx_created_idx.into(),
+            asset_id: value.asset_id.into(),
+            utxo_id: value.utxo_id.into(),
+            owner: value.owner.into(),
+            data: value.data.map(|data| data.into()).unwrap_or_default(),
         }
     }
 }
