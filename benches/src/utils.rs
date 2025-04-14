@@ -60,7 +60,6 @@ mod tests {
 
     fn shallow_temp_dir__drops_if_env_var_is_set() {
         // given
-        // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { env::set_var(DB_CLEAN_UP_ENV_VAR, "true") };
         let path;
         {
@@ -74,13 +73,11 @@ mod tests {
         assert!(!path.exists());
 
         // clean up
-        // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { env::remove_var(DB_CLEAN_UP_ENV_VAR) };
     }
 
     fn shallow_temp_dir__does_not_drop_if_env_var_is_set() {
         // given
-        // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { env::set_var(DB_CLEAN_UP_ENV_VAR, "false") };
         let path;
         {
@@ -95,7 +92,6 @@ mod tests {
         assert!(path.exists());
         // clean up manually
         std::fs::remove_dir_all(path).unwrap();
-        // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { env::remove_var(DB_CLEAN_UP_ENV_VAR) };
     }
 
@@ -115,7 +111,6 @@ mod tests {
 
     fn shallow_temp_dir__drops_if_env_var_malformed() {
         // given
-        // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { env::set_var(DB_CLEAN_UP_ENV_VAR, "bing_bong") };
         let path;
         {
@@ -129,13 +124,11 @@ mod tests {
         assert!(!path.exists());
 
         // clean up
-        // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { env::remove_var(DB_CLEAN_UP_ENV_VAR) };
     }
 
     fn shallow_temp_dir__panics_while_dropping_if_not_panicking() {
         // given
-        // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { env::set_var(DB_CLEAN_UP_ENV_VAR, "true") };
 
         let result = std::panic::catch_unwind(|| {
@@ -149,7 +142,6 @@ mod tests {
         assert!(result.is_err());
 
         // clean up
-        // TODO: Audit that the environment access only happens in single-threaded code.
         unsafe { env::remove_var(DB_CLEAN_UP_ENV_VAR) };
     }
 
