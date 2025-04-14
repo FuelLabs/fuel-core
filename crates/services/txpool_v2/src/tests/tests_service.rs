@@ -518,8 +518,7 @@ async fn insert__tx_depends_one_extracted_and_one_pool_tx() {
 }
 
 #[tokio::test]
-async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_already_spent_utxo(
-) {
+async fn pending_pool__returns_error_for_transaction_that_spends_already_spent_utxo() {
     // Given
     const TIMEOUT: u64 = 1;
     let mut universe = TestPoolUniverse::default().config(Config {
@@ -533,7 +532,8 @@ async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_a
     let (output_a, unset_input) = universe.create_output_and_input();
     let tx1 = universe.build_script_transaction(None, Some(vec![output_a]), 1);
     let input_a = unset_input.into_input(UtxoId::new(tx1.id(&Default::default()), 0));
-    let tx2 = universe.build_script_transaction(Some(vec![input_a]), None, 20);
+    let tx2 = universe.build_script_transaction(Some(vec![input_a.clone()]), None, 20);
+    let tx_with_input_a = universe.build_script_transaction(Some(vec![input_a]), None, 1);
 
     // When
     service.shared.insert(tx1.clone()).await.unwrap();
@@ -550,17 +550,62 @@ async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_a
 
     // Insert tx2 will land in pending pool because it uses an input that doesn't exist anymore
     // it should be pruned out of the pending pool after the timeout
-    service.shared.try_insert(vec![tx2.clone()]).unwrap();
+    let result = service.shared.insert(tx_with_input_a.clone()).await;
 
     // Then
     assert_eq!(txs_first_extract.len(), 2);
     assert_eq!(txs_first_extract[0].id(), tx1.id(&Default::default()));
     assert_eq!(txs_first_extract[1].id(), tx2.id(&Default::default()));
+    let err = result.expect_err("Should be an error");
+    assert_eq!(
+        err.to_string(),
+        "The UTXO input 0xcd590cc7b217fad36bc7e48743d5164cee0415acdcbd4cfa90f464e8c77a57b30000 was already spent"
+    );
+
+    service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_unknown_utxo(
+) {
+    // Given
+    const TIMEOUT: u64 = 1;
+    let mut universe = TestPoolUniverse::default().config(Config {
+        pending_pool_tx_ttl: Duration::from_secs(TIMEOUT),
+        utxo_validation: true,
+        ..Default::default()
+    });
+    let service = universe.build_service(None, None);
+    service.start_and_await().await.unwrap();
+
+    let (output_a, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output_a]), 1);
+    let unknown_input = unset_input.into_input(UtxoId::new([123; 32].into(), 0));
+    let tx2 = universe.build_script_transaction(Some(vec![unknown_input]), None, 20);
+
+    // When
+    service.shared.insert(tx1.clone()).await.unwrap();
+    let txs_first_extract = service
+        .shared
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u16::MAX,
+            maximum_block_size: u32::MAX,
+        })
+        .unwrap();
+
+    // Insert tx2 will land in pending pool because it uses an input that doesn't exist anymore
+    // it should be pruned out of the pending pool after the timeout
+    service.shared.try_insert(vec![tx2.clone()]).unwrap();
+
+    // Then
+    assert_eq!(txs_first_extract.len(), 1);
+    assert_eq!(txs_first_extract[0].id(), tx1.id(&Default::default()));
     let ids = vec![tx2.id(&Default::default())];
     universe
         .await_expected_tx_statuses(ids, |status| {
-            matches!(status, TransactionStatus::SqueezedOut(s)
-                    if s.reason == "Transaction input validation failed: UTXO (id: cd590cc7b217fad36bc7e48743d5164cee0415acdcbd4cfa90f464e8c77a57b30000) does not exist")
+            matches!(status, TransactionStatus::SqueezedOut(_))
         })
         .await
         .unwrap();

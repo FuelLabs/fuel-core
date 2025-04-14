@@ -17,7 +17,7 @@ pub(super) struct RecursionFinder<'a> {
     recursion_limit: usize,
 }
 
-impl<'a> RecursionFinder<'a> {
+impl RecursionFinder<'_> {
     pub fn new(recursion_limit: usize) -> Self {
         Self {
             visited: Default::default(),

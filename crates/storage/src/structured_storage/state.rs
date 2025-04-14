@@ -50,7 +50,15 @@ mod smt {
     }
 
     #[cfg(test)]
+    #[allow(non_snake_case)]
     mod test {
+        use rand::{
+            prelude::StdRng,
+            Rng,
+        };
+
+        use crate::blueprint::sparse::root_storage_tests_smt::SMTTestDataGenerator;
+
         use super::*;
 
         fn generate_key(
@@ -76,20 +84,36 @@ mod smt {
             generate_key_for_same_contract
         );
 
-        fn generate_value(rng: &mut impl rand::Rng) -> Vec<u8> {
-            let mut bytes = [0u8; 32];
-            rng.fill(bytes.as_mut());
-            bytes.to_vec()
+        impl SMTTestDataGenerator for ContractsState {
+            type Key = <ContractsState as Mappable>::Key;
+            type PrimaryKey = <ContractsStateMerkleMetadata as Mappable>::Key;
+            type Value = <ContractsState as Mappable>::OwnedValue;
+
+            fn primary_key() -> Self::PrimaryKey {
+                fuel_core_types::fuel_tx::ContractId::from([1u8; 32])
+            }
+
+            fn foreign_key() -> Self::PrimaryKey {
+                fuel_core_types::fuel_tx::ContractId::from([2u8; 32])
+            }
+
+            fn generate_key(
+                current_key: &Self::PrimaryKey,
+                rng: &mut StdRng,
+            ) -> Self::Key {
+                let mut bytes = [0u8; 32];
+                rng.fill(bytes.as_mut());
+                <ContractsState as Mappable>::Key::new(current_key, &bytes.into())
+            }
+
+            fn generate_value(rng: &mut StdRng) -> Self::Value {
+                let mut bytes = [0u8; 32];
+                rng.fill(bytes.as_mut());
+                <ContractsState as Mappable>::OwnedValue::from(bytes.as_slice())
+            }
         }
 
-        crate::root_storage_tests!(
-            ContractsState,
-            ContractsStateMerkleMetadata,
-            <ContractsStateMerkleMetadata as Mappable>::Key::from([1u8; 32]),
-            <ContractsStateMerkleMetadata as Mappable>::Key::from([2u8; 32]),
-            generate_key,
-            generate_value
-        );
+        crate::root_storage_tests!(ContractsState);
     }
 
     #[cfg(test)]

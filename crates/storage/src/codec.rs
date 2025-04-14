@@ -52,7 +52,7 @@ pub trait Decode<T> {
     }
 }
 
-impl<'a> Encoder for Cow<'a, [u8]> {
+impl Encoder for Cow<'_, [u8]> {
     fn as_bytes(&self) -> Cow<[u8]> {
         match self {
             Cow::Borrowed(borrowed) => Cow::Borrowed(borrowed),

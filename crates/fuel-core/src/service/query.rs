@@ -66,9 +66,7 @@ impl FuelService {
             .consensus_parameters
             .chain_id());
         let stream = self.transaction_status_change(id).await?.filter(|status| {
-            futures::future::ready(
-                status.as_ref().map_or(false, |status| status.is_final()),
-            )
+            futures::future::ready(status.as_ref().is_ok_and(|status| status.is_final()))
         });
         futures::pin_mut!(stream);
         self.submit(tx).await?;
@@ -83,9 +81,10 @@ impl FuelService {
         &self,
         id: Bytes32,
     ) -> anyhow::Result<impl Stream<Item = anyhow::Result<TransactionStatus>> + '_> {
+        // First subscribe to the statuses, and only after that create a view.
         let tx_status_manager = &self.shared.tx_status_manager;
-        let db = self.shared.database.off_chain().latest_view()?;
         let rx = tx_status_manager.tx_update_subscribe(id).await?;
+        let db = self.shared.database.off_chain().latest_view()?;
         let state = StatusChangeState {
             db,
             tx_status_manager,
@@ -99,7 +98,7 @@ struct StatusChangeState<'a> {
     tx_status_manager: &'a TxStatusManagerAdapter,
 }
 
-impl<'a> TxnStatusChangeState for StatusChangeState<'a> {
+impl TxnStatusChangeState for StatusChangeState<'_> {
     async fn get_tx_status(
         &self,
         id: Bytes32,

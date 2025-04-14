@@ -12,6 +12,7 @@ use crate::{
     },
     extracted_outputs::ExtractedOutputs,
     ports::TxPoolPersistentStorage,
+    spent_inputs::SpentInputs,
 };
 use fuel_core_types::services::txpool::{
     ArcPoolTx,
@@ -94,6 +95,7 @@ pub trait Storage {
         transaction: &PoolTransaction,
         persistent_storage: &impl TxPoolPersistentStorage,
         extracted_outputs: &ExtractedOutputs,
+        spent_inputs: &SpentInputs,
         utxo_validation: bool,
     ) -> Result<(), InputValidationErrorType>;
 

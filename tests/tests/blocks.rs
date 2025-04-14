@@ -443,7 +443,7 @@ mod full_block {
         let local_node_config = Config::local_node();
         let txpool = fuel_core_txpool::config::Config {
             pool_limits: PoolLimits {
-                max_txs: usize::MAX,
+                max_txs: 2_000_000,
                 max_gas: u64::MAX,
                 max_bytes_size: usize::MAX,
             },

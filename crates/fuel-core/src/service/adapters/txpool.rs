@@ -14,6 +14,7 @@ use fuel_core_storage::{
         Coins,
         ContractsRawCode,
         Messages,
+        ProcessedTransactions,
     },
     Result as StorageResult,
     StorageAsRef,
@@ -204,6 +205,10 @@ const _: () = {
 };
 
 impl fuel_core_txpool::ports::TxPoolPersistentStorage for OnChainIterableKeyValueView {
+    fn contains_tx(&self, tx_id: &TxId) -> StorageResult<bool> {
+        self.storage::<ProcessedTransactions>().contains_key(tx_id)
+    }
+
     fn utxo(&self, utxo_id: &UtxoId) -> StorageResult<Option<CompressedCoin>> {
         self.storage::<Coins>()
             .get(utxo_id)

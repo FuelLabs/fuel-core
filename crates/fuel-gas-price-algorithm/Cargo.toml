@@ -7,6 +7,7 @@ homepage = { workspace = true }
 keywords = ["blockchain", "fuel", "fuel-vm", "gas-price"]
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 version = { workspace = true }
 description = "Fuel gas price algorithm"
 

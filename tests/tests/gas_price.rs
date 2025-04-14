@@ -91,7 +91,7 @@ fn infinite_loop_tx<R: Rng + rand::CryptoRng>(
     rng: &mut R,
     asset_id: Option<AssetId>,
 ) -> Transaction {
-    let script = vec![op::jmp(RegId::ZERO)];
+    let script = [op::jmp(RegId::ZERO)];
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);
     let asset_id = asset_id.unwrap_or_else(|| *builder.get_params().base_asset_id());
@@ -777,9 +777,9 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
     let half_of_blocks = block_delay as u32 / 2;
     let count = half_of_blocks;
     let block_bytes = 1000;
-    let total_size_bytes = block_bytes * count as u32;
+    let total_size_bytes = block_bytes * count;
     let gas = 16 * total_size_bytes as u128;
-    let cost_gwei = gas * 1; // blob gas price 1 gwei
+    let cost_gwei = gas; // blob gas price 1 gwei
     let cost = cost_gwei * 1_000_000_000; // Wei
     mock.add_response(RawDaBlockCosts {
         id: 1,
@@ -831,7 +831,7 @@ fn produce_block__algorithm_recovers_from_divergent_profit() {
             gas_prices.push(metadata.new_scaled_da_gas_price / metadata.gas_price_factor);
             if profit > 0 && !success {
                 success = true;
-                success_iteration = i as i32;
+                success_iteration = i;
             }
         }
     });
@@ -934,7 +934,7 @@ fn produce_block__costs_from_da_are_properly_recorded_in_metadata() {
 
 #[tokio::test]
 async fn sentry__gas_price_estimate__uses_gas_price_from_produced_block() {
-    let mut rng = StdRng::seed_from_u64(1234 as u64);
+    let mut rng = StdRng::seed_from_u64(1234_u64);
 
     // given
     let unexpected_high_min_gas_limit = u64::MAX;
