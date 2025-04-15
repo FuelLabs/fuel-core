@@ -12,6 +12,7 @@ use crate::{
         schema::{
             block::BlockByHeightArgs,
             coins::{
+                DataCoinByIdArgs,
                 DataCoinsConnectionArgs,
                 ExcludeInput,
                 SpendQueryElementInput,
@@ -1475,6 +1476,14 @@ impl FuelClient {
             utxo_id: (*id).into(),
         });
         let coin = self.query(query).await?.coin.map(Into::into);
+        Ok(coin)
+    }
+
+    pub async fn data_coin(&self, id: &UtxoId) -> io::Result<Option<types::DataCoin>> {
+        let query = schema::coins::DataCoinByIdQuery::build(DataCoinByIdArgs {
+            utxo_id: (*id).into(),
+        });
+        let coin = self.query(query).await?.data_coin.map(Into::into);
         Ok(coin)
     }
 

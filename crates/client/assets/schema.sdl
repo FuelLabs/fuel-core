@@ -1146,6 +1146,12 @@ type Query {
 		"""
 		utxoId: UtxoId!
 	): Coin
+	dataCoin(
+		"""
+		The ID of the coin
+		"""
+		utxoId: UtxoId!
+	): DataCoin
 	"""
 	Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
 	"""

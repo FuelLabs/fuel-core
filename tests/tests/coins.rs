@@ -766,6 +766,8 @@ mod data_coin {
     use rand::Rng;
 
     async fn setup(
+        tx_id: TxId,
+        output_index: u16,
         owner: Address,
         asset_id: AssetId,
         amount: u64,
@@ -773,6 +775,8 @@ mod data_coin {
         consensus_parameters: &ConsensusParameters,
     ) -> TestContext {
         let data_coin = ConfigDataCoin {
+            tx_id,
+            output_index,
             owner,
             amount,
             asset_id,
@@ -801,7 +805,7 @@ mod data_coin {
     }
 
     #[tokio::test]
-    async fn can_get_data_coins() {
+    async fn data_coin__can_get_data_coin_from_storage() {
         // Given
         let mut rng = StdRng::seed_from_u64(1234);
         let expected_asset_id: AssetId = rng.gen();
@@ -811,7 +815,60 @@ mod data_coin {
         let expected_owner = Input::owner(&pk);
         let expected_data = vec![1, 2, 3, 4, 5];
         let cp = ConsensusParameters::default();
+        let tx_id = rng.gen();
+        let index = 0;
         let context = setup(
+            tx_id,
+            index,
+            expected_owner,
+            expected_asset_id,
+            expected_amount,
+            expected_data.clone(),
+            &cp,
+        )
+        .await;
+
+        // When
+        let expected_utxo_id = UtxoId::new(tx_id, index);
+        let data_coin = context
+            .client
+            .data_coin(&expected_utxo_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Then
+        let DataCoin {
+            utxo_id,
+            amount,
+            asset_id,
+            owner,
+            data,
+            ..
+        } = &data_coin;
+        assert_eq!(expected_utxo_id, *utxo_id);
+        assert_eq!(expected_amount, *amount);
+        assert_eq!(expected_owner, *owner);
+        assert_eq!(expected_asset_id, *asset_id);
+        assert_eq!(expected_data, *data);
+    }
+
+    #[tokio::test]
+    async fn data_coins__can_get_data_coin_from_storage() {
+        // Given
+        let mut rng = StdRng::seed_from_u64(1234);
+        let expected_asset_id: AssetId = rng.gen();
+        let expected_amount = 123;
+        let secret_key: SecretKey = SecretKey::random(&mut rng);
+        let pk = secret_key.public_key();
+        let expected_owner = Input::owner(&pk);
+        let expected_data = vec![1, 2, 3, 4, 5];
+        let cp = ConsensusParameters::default();
+        let tx_id = rng.gen();
+        let index = 0;
+        let context = setup(
+            tx_id,
+            index,
             expected_owner,
             expected_asset_id,
             expected_amount,
@@ -839,12 +896,14 @@ mod data_coin {
         // Then
         assert_eq!(data_coins.len(), 1);
         let DataCoin {
+            utxo_id,
             amount,
             asset_id,
             owner,
             data,
             ..
         } = &data_coins[0];
+        assert_eq!(UtxoId::new(tx_id, index), *utxo_id);
         assert_eq!(expected_amount, *amount);
         assert_eq!(expected_owner, *owner);
         assert_eq!(expected_asset_id, *asset_id);

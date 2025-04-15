@@ -25,6 +25,11 @@ pub struct CoinByIdArgs {
     pub utxo_id: UtxoId,
 }
 
+#[derive(cynic::QueryVariables, Debug)]
+pub struct DataCoinByIdArgs {
+    pub utxo_id: UtxoId,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
@@ -34,6 +39,17 @@ pub struct CoinByIdArgs {
 pub struct CoinByIdQuery {
     #[arguments(utxoId: $ utxo_id)]
     pub coin: Option<Coin>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "DataCoinByIdArgs"
+)]
+pub struct DataCoinByIdQuery {
+    #[arguments(utxoId: $ utxo_id)]
+    pub data_coin: Option<DataCoin>,
 }
 
 #[derive(cynic::InputObject, Clone, Debug)]

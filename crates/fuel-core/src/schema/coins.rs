@@ -290,6 +290,16 @@ impl CoinQuery {
         query.coin(utxo_id.0).into_api_result()
     }
 
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn data_coin(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
+    ) -> async_graphql::Result<Option<DataCoin>> {
+        let query = ctx.read_view()?;
+        query.coin(utxo_id.0).into_api_result()
+    }
+
     /// Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
     #[graphql(complexity = "{\
         query_costs().storage_iterator\
