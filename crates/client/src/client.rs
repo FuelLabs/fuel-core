@@ -1,3 +1,10 @@
+use self::schema::{
+    block::ProduceBlockArgs,
+    message::{
+        MessageProofArgs,
+        NonceArgs,
+    },
+};
 #[cfg(feature = "subscriptions")]
 use crate::client::types::StatusWithTransaction;
 use crate::{
@@ -5,6 +12,7 @@ use crate::{
         schema::{
             block::BlockByHeightArgs,
             coins::{
+                DataCoinsConnectionArgs,
                 ExcludeInput,
                 SpendQueryElementInput,
             },
@@ -163,14 +171,6 @@ use types::{
     },
     TransactionResponse,
     TransactionStatus,
-};
-
-use self::schema::{
-    block::ProduceBlockArgs,
-    message::{
-        MessageProofArgs,
-        NonceArgs,
-    },
 };
 
 pub mod pagination;
@@ -1497,6 +1497,24 @@ impl FuelClient {
         Ok(coins)
     }
 
+    pub async fn data_coins(
+        &self,
+        owner: &Address,
+        asset_id: Option<&AssetId>,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<types::DataCoin, String>> {
+        let owner: schema::Address = (*owner).into();
+        let asset_id: schema::AssetId = match asset_id {
+            Some(asset_id) => (*asset_id).into(),
+            None => schema::AssetId::default(),
+        };
+        let args = DataCoinsConnectionArgs::from((owner, asset_id, request));
+        let query = schema::coins::DataCoinsQuery::build(args);
+
+        let coins = self.query(query).await?.data_coins.into();
+        Ok(coins)
+    }
+
     /// Retrieve coins to spend in a transaction
     pub async fn coins_to_spend(
         &self,
@@ -1520,39 +1538,6 @@ impl FuelClient {
         let args =
             schema::coins::CoinsToSpendArgs::from((owner, spend_query, excluded_ids));
         let query = schema::coins::CoinsToSpendQuery::build(args);
-
-        let coins_per_asset = self
-            .query(query)
-            .await?
-            .coins_to_spend
-            .into_iter()
-            .map(|v| v.into_iter().map(Into::into).collect::<Vec<_>>())
-            .collect::<Vec<_>>();
-        Ok(coins_per_asset)
-    }
-
-    pub async fn data_coins_to_spend(
-        &self,
-        owner: &Address,
-        spend_query: Vec<(AssetId, u128, Option<u16>)>,
-        // (Utxos, Messages Nonce)
-        excluded_ids: Option<(Vec<UtxoId>, Vec<Nonce>)>,
-    ) -> io::Result<Vec<Vec<types::CoinType>>> {
-        let owner: schema::Address = (*owner).into();
-        let spend_query: Vec<SpendQueryElementInput> = spend_query
-            .iter()
-            .map(|(asset_id, amount, max)| -> Result<_, ConversionError> {
-                Ok(SpendQueryElementInput {
-                    asset_id: (*asset_id).into(),
-                    amount: (*amount).into(),
-                    max: (*max).map(|max| max.into()),
-                })
-            })
-            .try_collect()?;
-        let excluded_ids: Option<ExcludeInput> = excluded_ids.map(Into::into);
-        let args =
-            schema::coins::DataCoinsToSpendArgs::from((owner, spend_query, excluded_ids));
-        let query = schema::coins::DataCoinsToSpendQuery::build(args);
 
         let coins_per_asset = self
             .query(query)

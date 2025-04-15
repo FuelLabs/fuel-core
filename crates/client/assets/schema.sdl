@@ -164,7 +164,6 @@ type Coin {
 	TxPointer - the index of the transaction that created this coin
 	"""
 	txCreatedIdx: U16!
-	data: HexString
 }
 
 type CoinConnection {
@@ -333,6 +332,35 @@ type DataCoin {
 	"""
 	txCreatedIdx: U16!
 	data: HexString
+}
+
+type DataCoinConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [DataCoinEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [DataCoin!]!
+}
+
+"""
+An edge in a connection.
+"""
+type DataCoinEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: DataCoin!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 type DataCoinOutput {
@@ -1122,6 +1150,7 @@ type Query {
 	Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
 	"""
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
+	dataCoins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): DataCoinConnection!
 	"""
 	For each `query_per_asset`, get some spendable coins(of asset specified by the query) owned by
 	`owner` that add up at least the query amount. The returned coins can be spent.

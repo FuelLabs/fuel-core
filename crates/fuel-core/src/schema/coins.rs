@@ -93,10 +93,6 @@ impl Coin {
     async fn tx_created_idx(&self) -> U16 {
         self.0.tx_pointer().tx_index().into()
     }
-
-    async fn data(&self) -> Option<HexString> {
-        self.0.data().map(|data| HexString(data.clone()))
-    }
 }
 
 impl From<UncompressedCoin> for Coin {
@@ -331,6 +327,38 @@ impl CoinQuery {
         .await
     }
 
+    async fn data_coins(
+        &self,
+        ctx: &Context<'_>,
+        filter: CoinFilterInput,
+        first: Option<i32>,
+        after: Option<String>,
+        last: Option<i32>,
+        before: Option<String>,
+    ) -> async_graphql::Result<Connection<UtxoId, DataCoin, EmptyFields, EmptyFields>>
+    {
+        let query = ctx.read_view()?;
+        let owner: fuel_tx::Address = filter.owner.into();
+        crate::schema::query_pagination(after, before, first, last, |start, direction| {
+            let coins = query
+                .owned_coins(&owner, (*start).map(Into::into), direction)
+                .filter_map(|result| {
+                    if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
+                    {
+                        if *coin.asset_id() != filter_asset_id.0 {
+                            return None
+                        }
+                    }
+
+                    Some(result)
+                })
+                .map(|res| res.map(|coin| ((*coin.utxo_id()).into(), coin.into())));
+
+            Ok(coins)
+        })
+        .await
+    }
+
     /// For each `query_per_asset`, get some spendable coins(of asset specified by the query) owned by
     /// `owner` that add up at least the query amount. The returned coins can be spent.
     /// The number of coins is optimized to prevent dust accumulation.
@@ -428,6 +456,34 @@ impl ReadView {
             .await
         }
     }
+
+    pub async fn data_coins_to_spend(
+        &self,
+        owner: fuel_tx::Address,
+        query_per_asset: &[SpendQueryElementInput],
+        excluded: &Exclude,
+        params: &ConsensusParameters,
+        max_input: u16,
+    ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
+        let indexation_available = self
+            .indexation_flags
+            .contains(&IndexationKind::CoinsToSpend);
+        if indexation_available {
+            coins_to_spend_with_cache(owner, query_per_asset, excluded, max_input, self)
+                .await
+        } else {
+            let base_asset_id = params.base_asset_id();
+            coins_to_spend_without_cache(
+                owner,
+                query_per_asset,
+                excluded,
+                max_input,
+                base_asset_id,
+                self,
+            )
+            .await
+        }
+    }
 }
 
 async fn coins_to_spend_without_cache(
@@ -464,7 +520,12 @@ async fn coins_to_spend_without_cache(
             coins
                 .into_iter()
                 .map(|coin| match coin {
-                    coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
+                    coins::CoinType::Coin(coin) => match coin {
+                        UncompressedCoin::Coin(coin) => CoinType::Coin(coin.into()),
+                        UncompressedCoin::DataCoin(coin) => {
+                            CoinType::DataCoin(coin.into())
+                        }
+                    },
                     coins::CoinType::MessageCoin(coin) => {
                         CoinType::MessageCoin(coin.into())
                     }

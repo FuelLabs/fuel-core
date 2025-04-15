@@ -752,6 +752,13 @@ mod data_coin {
         ChainConfig,
         ConfigDataCoin,
     };
+    use fuel_core_client::client::{
+        pagination::{
+            PageDirection,
+            PaginationRequest,
+        },
+        types::DataCoin,
+    };
     use fuel_core_types::{
         fuel_crypto::SecretKey,
         fuel_tx::Address,
@@ -797,33 +804,51 @@ mod data_coin {
     async fn can_get_data_coins() {
         // Given
         let mut rng = StdRng::seed_from_u64(1234);
-        let asset_id: AssetId = rng.gen();
-        let amount = 123;
+        let expected_asset_id: AssetId = rng.gen();
+        let expected_amount = 123;
         let secret_key: SecretKey = SecretKey::random(&mut rng);
         let pk = secret_key.public_key();
-        let owner = Input::owner(&pk);
-        let data = vec![1, 2, 3, 4, 5];
+        let expected_owner = Input::owner(&pk);
+        let expected_data = vec![1, 2, 3, 4, 5];
         let cp = ConsensusParameters::default();
-        let context = setup(owner, asset_id, amount, data, &cp).await;
+        let context = setup(
+            expected_owner,
+            expected_asset_id,
+            expected_amount,
+            expected_data.clone(),
+            &cp,
+        )
+        .await;
 
         // When
-        let coins = context
+        let data_coins = context
             .client
-            .data_coins_to_spend(&owner, vec![(asset_id, 1, None)], None)
+            .data_coins(
+                &expected_owner,
+                Some(&expected_asset_id),
+                PaginationRequest {
+                    cursor: None,
+                    results: 5,
+                    direction: PageDirection::Forward,
+                },
+            )
             .await
-            .unwrap();
+            .unwrap()
+            .results;
 
         // Then
-        assert_eq!(coins.len(), 1);
-        assert!(!coins[0].is_empty());
-        match &coins[0][0] {
-            CoinType::DataCoin(coin) => {
-                assert_eq!(coin.amount, 50);
-                assert_eq!(coin.owner, owner);
-                assert_eq!(coin.asset_id, asset_id);
-            }
-            _ => panic!("Expected Coin variant"),
-        }
+        assert_eq!(data_coins.len(), 1);
+        let DataCoin {
+            amount,
+            asset_id,
+            owner,
+            data,
+            ..
+        } = &data_coins[0];
+        assert_eq!(expected_amount, *amount);
+        assert_eq!(expected_owner, *owner);
+        assert_eq!(expected_asset_id, *asset_id);
+        assert_eq!(expected_data, *data);
     }
 }
 

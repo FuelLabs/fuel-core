@@ -60,6 +60,48 @@ pub struct CoinsConnectionArgs {
     pub last: Option<i32>,
 }
 
+#[derive(cynic::QueryVariables, Debug)]
+pub struct DataCoinsConnectionArgs {
+    /// Filter coins based on a filter
+    filter: CoinFilterInput,
+    /// Skip until coin id (forward pagination)
+    pub after: Option<String>,
+    /// Skip until coin id (backward pagination)
+    pub before: Option<String>,
+    /// Retrieve the first n coins in order (forward pagination)
+    pub first: Option<i32>,
+    /// Retrieve the last n coins in order (backward pagination).
+    /// Can't be used at the same time as `first`.
+    pub last: Option<i32>,
+}
+
+impl From<(Address, AssetId, PaginationRequest<String>)> for DataCoinsConnectionArgs {
+    fn from(r: (Address, AssetId, PaginationRequest<String>)) -> Self {
+        match r.2.direction {
+            PageDirection::Forward => DataCoinsConnectionArgs {
+                filter: CoinFilterInput {
+                    owner: r.0,
+                    asset_id: Some(r.1),
+                },
+                after: r.2.cursor,
+                before: None,
+                first: Some(r.2.results),
+                last: None,
+            },
+            PageDirection::Backward => DataCoinsConnectionArgs {
+                filter: CoinFilterInput {
+                    owner: r.0,
+                    asset_id: Some(r.1),
+                },
+                after: None,
+                before: r.2.cursor,
+                first: None,
+                last: Some(r.2.results),
+            },
+        }
+    }
+}
+
 impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs {
     fn from(r: (Address, AssetId, PaginationRequest<String>)) -> Self {
         match r.2.direction {
@@ -99,6 +141,17 @@ pub struct CoinsQuery {
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "DataCoinsConnectionArgs"
+)]
+pub struct DataCoinsQuery {
+    #[arguments(filter: $ filter, after: $ after, before: $ before, first: $ first, last: $ last)]
+    pub data_coins: DataCoinConnection,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinConnection {
     pub edges: Vec<CoinEdge>,
@@ -107,9 +160,23 @@ pub struct CoinConnection {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DataCoinConnection {
+    pub edges: Vec<DataCoinEdge>,
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinEdge {
     pub cursor: String,
     pub node: Coin,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DataCoinEdge {
+    pub cursor: String,
+    pub node: DataCoin,
 }
 
 #[derive(cynic::QueryFragment, Debug, Clone)]
@@ -262,17 +329,6 @@ impl From<DataCoinsToSpendArgsTuple> for DataCoinsToSpendArgs {
     variables = "CoinsToSpendArgs"
 )]
 pub struct CoinsToSpendQuery {
-    #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]
-    pub coins_to_spend: Vec<Vec<CoinType>>,
-}
-
-#[derive(cynic::QueryFragment, Clone, Debug)]
-#[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "Query",
-    variables = "DataCoinsToSpendArgs"
-)]
-pub struct DataCoinsToSpendQuery {
     #[arguments(owner: $ owner, queryPerAsset: $ query_per_asset, excludedIds: $ excluded_ids)]
     pub coins_to_spend: Vec<Vec<CoinType>>,
 }
