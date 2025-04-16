@@ -56,12 +56,24 @@ pub mod not_fault_proving {
 #[cfg(feature = "fault-proving")]
 pub mod fault_proving {
     use super::*;
-    use crate::ports::GetRegistryRoot;
+    use crate::ports::{
+        CompressedBlockRootProvider,
+        GetRegistryRoot,
+    };
     pub trait DecompressDb:
-        TemporalRegistryAll + HistoryLookup + GetRegistryRoot
+        TemporalRegistryAll
+        + HistoryLookup
+        + GetRegistryRoot
+        + CompressedBlockRootProvider
     {
     }
-    impl<T> DecompressDb for T where T: TemporalRegistryAll + HistoryLookup + GetRegistryRoot {}
+    impl<T> DecompressDb for T where
+        T: TemporalRegistryAll
+            + HistoryLookup
+            + GetRegistryRoot
+            + CompressedBlockRootProvider
+    {
+    }
 }
 
 #[cfg(feature = "fault-proving")]
@@ -124,6 +136,20 @@ where
                 let registry_root_after_compression = block.header.registry_root;
                 if registry_root_after_decompression != registry_root_after_compression {
                     anyhow::bail!("Registry root mismatch. registry root after decompression: {:?}, registry root after compression: {:?}", registry_root_after_decompression, registry_root_after_compression);
+                }
+
+                let prev_compressed_block_root = ctx
+                    .db
+                    .compressed_block_root_at(*block.height().pred().unwrap_or_default())
+                    .map_err(|e| {
+                        anyhow::anyhow!("Failed to get compressed block root: {}", e)
+                    })?
+                    .unwrap_or_default();
+                let compressed_block_root_in_header =
+                    block.header.prev_compressed_block_root;
+
+                if prev_compressed_block_root != compressed_block_root_in_header {
+                    anyhow::bail!("Compressed block root mismatch. compressed block root before decompression: {:?}, compressed block root in header: {:?}", prev_compressed_block_root, compressed_block_root_in_header);
                 }
             }
         }

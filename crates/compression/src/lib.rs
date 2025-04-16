@@ -62,6 +62,8 @@ impl VersionedCompressedBlock {
         transactions: Vec<CompressedTransaction>,
         #[cfg(feature = "fault-proving")]
         registry_root: crate::compressed_block_payload::v1::RegistryRoot,
+        #[cfg(feature = "fault-proving")]
+        prev_compressed_block_root: crate::compressed_block_payload::v1::PrevRoot,
     ) -> Self {
         #[cfg(not(feature = "fault-proving"))]
         return Self::V0(CompressedBlockPayloadV0::new(
@@ -75,6 +77,7 @@ impl VersionedCompressedBlock {
             registrations,
             transactions,
             registry_root,
+            prev_compressed_block_root,
         ))
     }
 }
@@ -253,7 +256,10 @@ mod tests {
         use fuel_core_types::blockchain::primitives::BlockId;
         use std::str::FromStr;
 
-        use crate::compressed_block_payload::v1::RegistryRoot;
+        use crate::compressed_block_payload::v1::{
+            PrevRoot,
+            RegistryRoot,
+        };
 
         proptest!(|(strategy in postcard_roundtrip_strategy())| {
             let PostcardRoundtripStrategy {
@@ -280,6 +286,7 @@ mod tests {
                 },
                 block_id: BlockId::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1a").unwrap(),
                 registry_root: RegistryRoot::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1b").unwrap(),
+                prev_compressed_block_root: PrevRoot::from_str("0xecea85c17070bc2e65f911310dbd01198f4436052ebba96cded9ddf30c58dd1c").unwrap(),
             };
 
 
@@ -309,6 +316,7 @@ mod tests {
             if let VersionedCompressedBlock::V1(block) = decompressed {
                 assert_eq!(block.header.block_id, header.block_id);
                 assert_eq!(block.header.registry_root, header.registry_root);
+                assert_eq!(block.header.prev_compressed_block_root, header.prev_compressed_block_root);
             } else {
                 panic!("Expected V1 block, got {:?}", decompressed);
             }

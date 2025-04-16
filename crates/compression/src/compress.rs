@@ -51,13 +51,24 @@ pub mod not_fault_proving {
 #[cfg(feature = "fault-proving")]
 pub mod fault_proving {
     use super::*;
-    use crate::ports::GetRegistryRoot;
+    use crate::ports::{
+        CompressedBlockRootProvider,
+        GetRegistryRoot,
+    };
     pub trait CompressDb:
-        TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer + GetRegistryRoot
+        TemporalRegistryAll
+        + EvictorDbAll
+        + UtxoIdToPointer
+        + GetRegistryRoot
+        + CompressedBlockRootProvider
     {
     }
     impl<T> CompressDb for T where
-        T: TemporalRegistryAll + EvictorDbAll + UtxoIdToPointer + GetRegistryRoot
+        T: TemporalRegistryAll
+            + EvictorDbAll
+            + UtxoIdToPointer
+            + GetRegistryRoot
+            + CompressedBlockRootProvider
     {
     }
 }
@@ -79,6 +90,12 @@ pub async fn compress<D>(
 where
     D: CompressDb,
 {
+    #[cfg(feature = "fault-proving")]
+    let prev_compressed_block_root = db
+        .compressed_block_root_at(*block.header().height().pred().unwrap_or_default())
+        .map_err(|e| anyhow::anyhow!("Failed to get compressed block root: {}", e))?
+        .unwrap_or_default();
+
     let target = block.transactions_vec();
 
     let mut prepare_ctx = PrepareCtx {
@@ -104,6 +121,8 @@ where
         transactions,
         #[cfg(feature = "fault-proving")]
         registry_root,
+        #[cfg(feature = "fault-proving")]
+        prev_compressed_block_root,
     ))
 }
 

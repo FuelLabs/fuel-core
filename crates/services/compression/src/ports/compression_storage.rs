@@ -1,7 +1,9 @@
 use crate::{
     errors::CompressionError,
-    storage,
-    storage::CompressedBlocks,
+    storage::{
+        self,
+        CompressedBlocks,
+    },
 };
 use fuel_core_storage::{
     self,
@@ -61,9 +63,26 @@ where
         compressed_block: &CompressedBlock,
     ) -> crate::Result<usize> {
         let height = (*height).into();
+
         self.storage_as_mut::<CompressedBlocks>()
             .insert(&height, compressed_block)
             .map_err(CompressionError::FailedToWriteCompressedBlock)?;
+
+        #[cfg(feature = "fault-proving")]
+        {
+            use crate::temporal_registry::fault_proving::ComputeRegistryRoot;
+            use storage::{
+                compressed_blocks::CompressedBlocks,
+                CompressedBlocksRoots,
+            };
+
+            let root =
+                <Self as ComputeRegistryRoot>::root_of_table::<CompressedBlocks>(self)
+                    .map_err(CompressionError::FailedToComputeCompressedBlockRoot)?;
+            self.storage_as_mut::<CompressedBlocksRoots>()
+                .insert(&height, &root)
+                .map_err(CompressionError::FailedToWriteCompressedBlockRoot)?;
+        };
 
         // this should not hit the db, we get it from the transaction
         let size = StorageSize::<CompressedBlocks>::size_of_value(self, &height)

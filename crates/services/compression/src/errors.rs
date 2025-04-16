@@ -35,6 +35,15 @@ pub enum CompressionError {
     /// Failed to compute registry root
     #[error("failed to compute registry root: `{0}`")]
     FailedToComputeRegistryRoot(StorageError),
+    /// Failed to compute compressed block root
+    #[error("failed to compute compressed block root: `{0}`")]
+    FailedToComputeCompressedBlockRoot(StorageError),
+    /// Failed to get compressed block root
+    #[error("failed to get compressed block root: `{0}`")]
+    FailedToGetCompressedBlockRoot(StorageError),
+    /// Failed to write compressed block root
+    #[error("failed to write compressed block root: `{0}`")]
+    FailedToWriteCompressedBlockRoot(StorageError),
     /// Failed to handle new block
     #[error("failed to handle new block: `{0}`")]
     FailedToHandleNewBlock(String),
