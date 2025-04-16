@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Version 0.43.0]
 
 ### Breaking
+- [2958](https://github.com/FuelLabs/fuel-core/pull/2958): Changed the return type of the `balance` endpoint form `u64` to `u128`.
 - [2882](https://github.com/FuelLabs/fuel-core/pull/2882): Changed the type of the `resolved_outputs` for pre-confirmations. Now it also includes `Utxoid`. `resolved_outputs` field contains only `Change` and `Variable` outputs, so the `UtxoId` for them could be hard to derive, if transaction has known inputs. This information should help to create dependent transactions more easily.
 - [2900](https://github.com/FuelLabs/fuel-core/pull/2900): Get rid of `Deref` impl on `ImportResult` by introducing wrapper type.
 - [2909](https://github.com/FuelLabs/fuel-core/pull/2909): Compressed block headers now include a merkle root of the temporal registry after compression was performed.
