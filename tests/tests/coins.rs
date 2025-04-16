@@ -109,15 +109,19 @@ mod coin {
 
         let burn_address: Address = rng.gen();
 
-        let balance_a = context
+        let balance_a: u64 = context
             .client
             .balance(&owner, Some(&asset_id_a))
             .await
+            .unwrap()
+            .try_into()
             .unwrap();
-        let balance_b = context
+        let balance_b: u64 = context
             .client
             .balance(&owner, Some(&asset_id_b))
             .await
+            .unwrap()
+            .try_into()
             .unwrap();
         let recipients = vec![
             (burn_address, asset_id_a, balance_a),
@@ -377,6 +381,8 @@ mod message_coin {
             .client
             .balance(&owner, Some(&base_asset_id))
             .await
+            .unwrap()
+            .try_into()
             .unwrap();
         let burn_address: Address = rng.gen();
 
