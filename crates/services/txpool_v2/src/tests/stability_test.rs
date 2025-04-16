@@ -186,6 +186,7 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
             minimal_gas_price: 0,
+            excluded_contracts: Default::default(),
         });
 
         if result.is_empty() {

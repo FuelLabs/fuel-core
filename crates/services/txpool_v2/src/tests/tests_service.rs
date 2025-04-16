@@ -492,6 +492,7 @@ async fn insert__tx_depends_one_extracted_and_one_pool_tx() {
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         })
         .unwrap();
 
@@ -506,6 +507,7 @@ async fn insert__tx_depends_one_extracted_and_one_pool_tx() {
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         })
         .unwrap();
 
@@ -545,6 +547,7 @@ async fn pending_pool__returns_error_for_transaction_that_spends_already_spent_u
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         })
         .unwrap();
 
@@ -592,6 +595,7 @@ async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_u
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         })
         .unwrap();
 
