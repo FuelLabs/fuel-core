@@ -193,16 +193,13 @@ where
                 };
 
                 for input in stored_transaction.transaction.inputs() {
-                    match input {
-                        fuel_core_types::fuel_tx::Input::Contract(contract) => {
-                            if constraints
-                                .excluded_contracts
-                                .contains(&contract.contract_id)
-                            {
-                                continue 'outer;
-                            }
+                    if let fuel_core_types::fuel_tx::Input::Contract(contract) = input {
+                        if constraints
+                            .excluded_contracts
+                            .contains(&contract.contract_id)
+                        {
+                            continue 'outer;
                         }
-                        _ => {}
                     }
                 }
 
