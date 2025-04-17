@@ -3,8 +3,7 @@ use fuel_core_types::fuel_tx::{
     Receipt,
 };
 
-use fuel_core_storage::StorageAsMut;
-
+use super::error::IndexationError;
 use crate::graphql_api::{
     ports::worker::OffChainDatabaseTransaction,
     storage::assets::{
@@ -12,8 +11,7 @@ use crate::graphql_api::{
         AssetsInfo,
     },
 };
-
-use super::error::IndexationError;
+use fuel_core_storage::StorageAsMut;
 
 pub(crate) fn update<T>(
     receipts: &[Receipt],
@@ -39,7 +37,7 @@ where
                 contract_id,
                 ..
             } => {
-                let asset_id = contract_id.asset_id(sub_id);
+                let asset_id = contract_id.asset_id(&sub_id);
                 let new_supply = current_supply(block_st_transaction, receipt, asset_id)?;
 
                 block_st_transaction.storage::<AssetsInfo>().insert(
@@ -105,17 +103,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_storage::{
-        transactional::WriteTransaction,
-        StorageAsMut,
-    };
-    use fuel_core_types::fuel_tx::{
-        Bytes32,
-        ContractId,
-        ContractIdExt,
-        Receipt,
-    };
-
     use crate::{
         database::{
             database_description::off_chain::OffChain,
@@ -129,6 +116,18 @@ mod tests {
             },
         },
         state::rocks_db::DatabaseConfig,
+    };
+    use fuel_core_storage::{
+        transactional::WriteTransaction,
+        StorageAsMut,
+    };
+    use fuel_core_types::{
+        fuel_tx::{
+            ContractId,
+            ContractIdExt,
+            Receipt,
+        },
+        fuel_types::SubAssetId,
     };
 
     #[test]
@@ -145,7 +144,7 @@ mod tests {
 
         const ASSET_METADATA_IS_ENABLED: bool = true;
 
-        let sub_id: Bytes32 = Bytes32::from([1u8; 32]);
+        let sub_id = SubAssetId::from([1u8; 32]);
         let contract_id: ContractId = ContractId::from([2u8; 32]);
         let contract_asset_id = contract_id.asset_id(&sub_id);
         const MINT_AMOUNT: u64 = 3;
@@ -189,7 +188,7 @@ mod tests {
 
         const ASSET_METADATA_IS_DISABLED: bool = false;
 
-        let sub_id: Bytes32 = Bytes32::from([1u8; 32]);
+        let sub_id = SubAssetId::from([1u8; 32]);
         let contract_id: ContractId = ContractId::from([2u8; 32]);
         let contract_asset_id = contract_id.asset_id(&sub_id);
         const MINT_AMOUNT: u64 = 3;

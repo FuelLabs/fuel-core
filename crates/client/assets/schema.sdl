@@ -215,7 +215,7 @@ type CoinOutput {
 """
 The schema analog of the [`coins::CoinType`].
 """
-union CoinType = Coin | MessageCoin
+union CoinType = Coin | MessageCoin | DataCoin
 
 union Consensus = Genesis | PoAConsensus
 
@@ -316,6 +316,58 @@ enum ContractParametersVersion {
 
 type DaCompressedBlock {
 	bytes: HexString!
+}
+
+type DataCoin {
+	utxoId: UtxoId!
+	owner: Address!
+	amount: U64!
+	assetId: AssetId!
+	"""
+	TxPointer - the height of the block this coin was created in
+	"""
+	blockCreated: U32!
+	"""
+	TxPointer - the index of the transaction that created this coin
+	"""
+	txCreatedIdx: U16!
+	data: HexString
+}
+
+type DataCoinConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [DataCoinEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [DataCoin!]!
+}
+
+"""
+An edge in a connection.
+"""
+type DataCoinEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: DataCoin!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type DataCoinOutput {
+	to: Address!
+	amount: U64!
+	assetId: AssetId!
+	data: [Int!]!
 }
 
 union DependentCost = LightOperation | HeavyOperation
@@ -632,7 +684,7 @@ type IndexationFlags {
 	assetMetadata: Boolean!
 }
 
-union Input = InputCoin | InputContract | InputMessage
+union Input = InputCoin | InputDataCoin | InputContract | InputMessage
 
 type InputCoin {
 	utxoId: UtxoId!
@@ -652,6 +704,19 @@ type InputContract {
 	stateRoot: Bytes32!
 	txPointer: TxPointer!
 	contractId: ContractId!
+}
+
+type InputDataCoin {
+	utxoId: UtxoId!
+	owner: Address!
+	amount: U64!
+	assetId: AssetId!
+	txPointer: TxPointer!
+	witnessIndex: U16!
+	predicateGasUsed: U64!
+	predicate: HexString!
+	predicateData: HexString!
+	data: HexString!
 }
 
 type InputMessage {
@@ -823,7 +888,7 @@ type NodeInfo {
 
 scalar Nonce
 
-union Output = CoinOutput | ContractOutput | ChangeOutput | VariableOutput | ContractCreated
+union Output = CoinOutput | DataCoinOutput | ContractOutput | ChangeOutput | VariableOutput | ContractCreated
 
 """
 A separate `Breakpoint` type to be used as an output, as a single
@@ -1081,10 +1146,17 @@ type Query {
 		"""
 		utxoId: UtxoId!
 	): Coin
+	dataCoin(
+		"""
+		The ID of the coin
+		"""
+		utxoId: UtxoId!
+	): DataCoin
 	"""
 	Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
 	"""
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
+	dataCoins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): DataCoinConnection!
 	"""
 	For each `query_per_asset`, get some spendable coins(of asset specified by the query) owned by
 	`owner` that add up at least the query amount. The returned coins can be spent.

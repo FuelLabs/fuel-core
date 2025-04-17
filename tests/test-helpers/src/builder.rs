@@ -2,6 +2,8 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         CoinConfig,
+        ConfigCoin,
+        ConfigDataCoin,
         ContractBalanceConfig,
         ContractConfig,
         LastBlockConfig,
@@ -26,6 +28,8 @@ use fuel_core_types::{
         input::coin::{
             CoinPredicate,
             CoinSigned,
+            DataCoinPredicate,
+            DataCoinSigned,
         },
         policies::Policies,
         *,
@@ -183,15 +187,52 @@ impl TestSetupBuilder {
                         ..
                     }) = input
                     {
-                        Some(CoinConfig {
-                            tx_id: *utxo_id.tx_id(),
-                            output_index: utxo_id.output_index(),
-                            tx_pointer_block_height: tx_pointer.block_height(),
-                            tx_pointer_tx_idx: tx_pointer.tx_index(),
-                            owner: *owner,
-                            amount: *amount,
-                            asset_id: *asset_id,
-                        })
+                        Some(
+                            ConfigCoin {
+                                tx_id: *utxo_id.tx_id(),
+                                output_index: utxo_id.output_index(),
+                                tx_pointer_block_height: tx_pointer.block_height(),
+                                tx_pointer_tx_idx: tx_pointer.tx_index(),
+                                owner: *owner,
+                                amount: *amount,
+                                asset_id: *asset_id,
+                            }
+                            .into(),
+                        )
+                    } else if let Input::DataCoinSigned(DataCoinSigned {
+                        amount,
+                        owner,
+                        asset_id,
+                        utxo_id,
+                        tx_pointer,
+                        data,
+                        ..
+                    })
+                    | Input::DataCoinPredicate(DataCoinPredicate {
+                        amount,
+                        owner,
+                        asset_id,
+                        utxo_id,
+                        tx_pointer,
+                        data,
+                        ..
+                    }) = input
+                    {
+                        tracing::debug!("Adding data coin input: tx_id: {:?}, output_index: {}, owner: {:?}, amount: {}, asset_id: {:?}, data: {:?}",
+                            utxo_id.tx_id(), utxo_id.output_index(), owner, amount, asset_id, data);
+                        Some(
+                            ConfigDataCoin {
+                                tx_id: *utxo_id.tx_id(),
+                                output_index: utxo_id.output_index(),
+                                tx_pointer_block_height: tx_pointer.block_height(),
+                                tx_pointer_tx_idx: tx_pointer.tx_index(),
+                                owner: *owner,
+                                amount: *amount,
+                                asset_id: *asset_id,
+                                data: data.clone(),
+                            }
+                            .into(),
+                        )
                     } else {
                         None
                     }
@@ -267,6 +308,13 @@ impl TestSetupBuilder {
             gas_price_config,
             ..Config::local_node_with_configs(chain_conf, state)
         };
+
+        let state = config
+            .snapshot_reader
+            .get_in_memory_data_source_state()
+            .unwrap();
+
+        tracing::debug!("outputs to add to state: {:?}", state.coins);
         config.combined_db_config.database_config = self.database_config;
 
         let srv = FuelService::new_node(config).await.unwrap();

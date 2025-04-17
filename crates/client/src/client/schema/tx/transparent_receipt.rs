@@ -365,6 +365,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
             ReceiptType::Mint => fuel_tx::Receipt::Mint {
                 sub_id: schema
                     .sub_id
+                    .map(|bytes| *bytes.0 .0)
                     .ok_or_else(|| MissingField("sub_id".to_string()))?
                     .into(),
                 contract_id: schema.id.map(|id| id.into()).unwrap_or_default(),
@@ -384,6 +385,7 @@ impl TryFrom<Receipt> for fuel_tx::Receipt {
             ReceiptType::Burn => fuel_tx::Receipt::Burn {
                 sub_id: schema
                     .sub_id
+                    .map(|bytes| *bytes.0 .0)
                     .ok_or_else(|| MissingField("sub_id".to_string()))?
                     .into(),
                 contract_id: schema.id.map(|id| id.into()).unwrap_or_default(),

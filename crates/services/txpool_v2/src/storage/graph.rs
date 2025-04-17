@@ -7,12 +7,33 @@ use std::{
     time::SystemTime,
 };
 
+use super::{
+    RemovedTransactions,
+    Storage,
+    StorageData,
+};
+use crate::{
+    error::{
+        DependencyError,
+        Error,
+        InputValidationError,
+        InputValidationErrorType,
+    },
+    extracted_outputs::ExtractedOutputs,
+    pending_pool::MissingInput,
+    ports::TxPoolPersistentStorage,
+    selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
+    spent_inputs::SpentInputs,
+    storage::checked_collision::CheckedTransaction,
+};
 use fuel_core_types::{
     fuel_tx::{
         input::{
             coin::{
                 CoinPredicate,
                 CoinSigned,
+                DataCoinPredicate,
+                DataCoinSigned,
             },
             contract::Contract,
             message::{
@@ -36,27 +57,6 @@ use fuel_core_types::{
 use petgraph::{
     graph::NodeIndex,
     prelude::StableDiGraph,
-};
-
-use crate::{
-    error::{
-        DependencyError,
-        Error,
-        InputValidationError,
-        InputValidationErrorType,
-    },
-    extracted_outputs::ExtractedOutputs,
-    pending_pool::MissingInput,
-    ports::TxPoolPersistentStorage,
-    selection_algorithms::ratio_tip_gas::RatioTipGasSelectionAlgorithmStorage,
-    spent_inputs::SpentInputs,
-    storage::checked_collision::CheckedTransaction,
-};
-
-use super::{
-    RemovedTransactions,
-    Storage,
-    StorageData,
 };
 
 pub struct GraphStorage {
@@ -232,6 +232,85 @@ impl GraphStorage {
                         ));
                     }
                 }
+                Output::DataCoin { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoDataCoinOutput,
+                    ))
+                }
+                Output::Contract(_) => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoContractOutput,
+                    ))
+                }
+                Output::Change { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
+                    ))
+                }
+                Output::Variable { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
+                    ))
+                }
+                Output::ContractCreated { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoContractOutput,
+                    ))
+                }
+            }
+        } else if let Input::DataCoinSigned(DataCoinSigned {
+            owner,
+            amount,
+            asset_id,
+            data,
+            ..
+        })
+        | Input::DataCoinPredicate(DataCoinPredicate {
+            owner,
+            amount,
+            asset_id,
+            data,
+            ..
+        }) = input
+        {
+            let i_owner = owner;
+            let i_amount = amount;
+            let i_asset_id = asset_id;
+            let i_data = data;
+
+            match output {
+                Output::DataCoin {
+                    to,
+                    amount,
+                    asset_id,
+                    data,
+                } => {
+                    if to != i_owner {
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongOwner,
+                        ));
+                    }
+                    if amount != i_amount {
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongAmount,
+                        ));
+                    }
+                    if asset_id != i_asset_id {
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoWrongAssetId,
+                        ));
+                    }
+                    if data != i_data {
+                        return Err(Error::InputValidation(
+                            InputValidationError::NotInsertedIoDataCoinOutput,
+                        ));
+                    }
+                }
+                Output::Coin { .. } => {
+                    return Err(Error::InputValidation(
+                        InputValidationError::NotInsertedIoCoinOutput,
+                    ))
+                }
                 Output::Contract(_) => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedIoContractOutput,
@@ -254,6 +333,7 @@ impl GraphStorage {
                 }
             };
         }
+
         Ok(())
     }
 
@@ -338,7 +418,9 @@ impl GraphStorage {
         for input in transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
-                | Input::CoinPredicate(CoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
+                | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
                     if let Some(node_id) = self.coins_creators.get(utxo_id) {
                         direct_dependencies.insert(*node_id);
 
@@ -413,6 +495,11 @@ impl GraphStorage {
             for (i, output) in expected_tx.outputs().iter().enumerate() {
                 match output {
                     Output::Coin { .. } => {
+                        let utxo_id =
+                            UtxoId::new(expected_tx.id(), i.try_into().unwrap());
+                        coins_creators.insert(utxo_id, expected_tx.id());
+                    }
+                    Output::DataCoin { .. } => {
                         let utxo_id =
                             UtxoId::new(expected_tx.id(), i.try_into().unwrap());
                         coins_creators.insert(utxo_id, expected_tx.id());
@@ -634,7 +721,21 @@ impl Storage for GraphStorage {
                     asset_id,
                     ..
                 })
+                | Input::DataCoinSigned(DataCoinSigned {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
                 | Input::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::DataCoinPredicate(DataCoinPredicate {
                     utxo_id,
                     owner,
                     amount,
@@ -666,9 +767,14 @@ impl Storage for GraphStorage {
 
                         match persistent_storage.utxo(utxo_id) {
                             Ok(Some(coin)) => {
+                                tracing::debug!(
+                                    "Validating input \n{:?} \nagainst persistent storage coin: \n{:?}",
+                                    input,
+                                    coin
+                                );
                                 if !coin
                                     .matches_input(input)
-                                    .expect("The input is coin above")
+                                    .expect("Input is a coin above")
                                 {
                                     return Err(InputValidationErrorType::Inconsistency(Error::InputValidation(
                                         InputValidationError::NotInsertedIoCoinMismatch,

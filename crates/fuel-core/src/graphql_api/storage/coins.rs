@@ -20,7 +20,10 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     entities::{
-        coins::coin::Coin,
+        coins::coin::{
+            Coin,
+            DataCoin,
+        },
         Message,
     },
     fuel_tx::{
@@ -67,6 +70,13 @@ pub enum CoinsToSpendIndexKey {
         amount: u64,
         utxo_id: UtxoId,
     },
+    DataCoin {
+        owner: Address,
+        asset_id: AssetId,
+        amount: u64,
+        utxo_id: UtxoId,
+        data: Vec<u8>,
+    },
     Message {
         retryable_flag: u8,
         owner: Address,
@@ -99,6 +109,16 @@ impl CoinsToSpendIndexKey {
         }
     }
 
+    pub fn from_data_coin(data_coin: &DataCoin) -> Self {
+        Self::DataCoin {
+            owner: data_coin.owner,
+            asset_id: data_coin.asset_id,
+            amount: data_coin.amount,
+            utxo_id: data_coin.utxo_id,
+            data: data_coin.data.clone(),
+        }
+    }
+
     pub fn from_message(message: &Message, base_asset_id: &AssetId) -> Self {
         let retryable_flag_bytes = if message.is_retryable_message() {
             RETRYABLE_BYTE
@@ -117,6 +137,7 @@ impl CoinsToSpendIndexKey {
     pub fn owner(&self) -> &Address {
         match self {
             CoinsToSpendIndexKey::Coin { owner, .. } => owner,
+            CoinsToSpendIndexKey::DataCoin { owner, .. } => owner,
             CoinsToSpendIndexKey::Message { owner, .. } => owner,
         }
     }
@@ -124,6 +145,7 @@ impl CoinsToSpendIndexKey {
     pub fn asset_id(&self) -> &AssetId {
         match self {
             CoinsToSpendIndexKey::Coin { asset_id, .. } => asset_id,
+            CoinsToSpendIndexKey::DataCoin { asset_id, .. } => asset_id,
             CoinsToSpendIndexKey::Message { asset_id, .. } => asset_id,
         }
     }
@@ -131,6 +153,7 @@ impl CoinsToSpendIndexKey {
     pub fn retryable_flag(&self) -> u8 {
         match self {
             CoinsToSpendIndexKey::Coin { .. } => NON_RETRYABLE_BYTE[0],
+            CoinsToSpendIndexKey::DataCoin { .. } => NON_RETRYABLE_BYTE[0],
             CoinsToSpendIndexKey::Message { retryable_flag, .. } => *retryable_flag,
         }
     }
@@ -138,6 +161,7 @@ impl CoinsToSpendIndexKey {
     pub fn amount(&self) -> u64 {
         match self {
             CoinsToSpendIndexKey::Coin { amount, .. } => *amount,
+            CoinsToSpendIndexKey::DataCoin { amount, .. } => *amount,
             CoinsToSpendIndexKey::Message { amount, .. } => *amount,
         }
     }

@@ -33,7 +33,7 @@ use fuel_core_types::{
 use rand::SeedableRng;
 
 use fuel_core::chain_config::{
-    CoinConfig,
+    ConfigCoin,
     ContractConfig,
     StateConfig,
 };
@@ -52,22 +52,24 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
 
     let state_config = StateConfig {
         coins: vec![
-            CoinConfig {
+            ConfigCoin {
                 tx_id: *utxo_id_1.tx_id(),
                 output_index: utxo_id_1.output_index(),
                 owner,
                 amount,
                 asset_id: AssetId::BASE,
                 ..Default::default()
-            },
-            CoinConfig {
+            }
+            .into(),
+            ConfigCoin {
                 tx_id: *utxo_id_2.tx_id(),
                 output_index: utxo_id_2.output_index(),
                 owner,
                 amount,
                 asset_id: AssetId::BASE,
                 ..Default::default()
-            },
+            }
+            .into(),
         ],
         ..Default::default()
     };

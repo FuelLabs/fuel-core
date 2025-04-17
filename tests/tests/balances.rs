@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{
         coin_config_helpers::CoinConfigGenerator,
-        CoinConfig,
+        ConfigCoin,
         MessageConfig,
         StateConfig,
     },
@@ -25,10 +25,8 @@ use fuel_core_client::client::{
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx::{
-        Bytes32,
-        ContractIdExt,
-    },
+    fuel_tx::ContractIdExt,
+    fuel_types::SubAssetId,
 };
 use rand::SeedableRng;
 use test_helpers::{
@@ -56,11 +54,14 @@ async fn balance() {
             (owner, 150, asset_id),
         ]
         .into_iter()
-        .map(|(owner, amount, asset_id)| CoinConfig {
-            owner,
-            amount,
-            asset_id,
-            ..coin_generator.generate()
+        .map(|(owner, amount, asset_id)| {
+            ConfigCoin {
+                owner,
+                amount,
+                asset_id,
+                ..coin_generator.generate()
+            }
+            .into()
         })
         .collect(),
         messages: vec![
@@ -220,11 +221,14 @@ async fn first_5_balances() {
                             (owner, 150, asset_id),
                         ]
                     })
-                    .map(|(owner, amount, asset_id)| CoinConfig {
-                        owner: *owner,
-                        amount,
-                        asset_id,
-                        ..coin_generator.generate()
+                    .map(|(owner, amount, asset_id)| {
+                        ConfigCoin {
+                            owner: *owner,
+                            amount,
+                            asset_id,
+                            ..coin_generator.generate()
+                        }
+                        .into()
                     }),
             );
         }
@@ -295,11 +299,11 @@ async fn first_5_balances() {
 }
 
 mod pagination {
+    use crate::balances::ConfigCoin;
     use fuel_core::{
         chain_config::{
             coin_config_helpers::CoinConfigGenerator,
             ChainConfig,
-            CoinConfig,
             MessageConfig,
             StateConfig,
         },
@@ -336,11 +340,14 @@ mod pagination {
             coins.extend(
                 coin.iter()
                     .flat_map(|(asset_id, amount)| vec![(owner, amount, asset_id)])
-                    .map(|(owner, amount, asset_id)| CoinConfig {
-                        owner: *owner,
-                        amount: *amount as u64,
-                        asset_id: *asset_id,
-                        ..coin_generator.generate()
+                    .map(|(owner, amount, asset_id)| {
+                        ConfigCoin {
+                            owner: *owner,
+                            amount: *amount as u64,
+                            asset_id: *asset_id,
+                            ..coin_generator.generate()
+                        }
+                        .into()
                     }),
             );
             coins
@@ -562,7 +569,7 @@ async fn contract_balances_in_the_past() {
     let client = FuelClient::from(srv.bound_address);
 
     // Given
-    let sub_asset_id = Bytes32::new([1u8; 32]);
+    let sub_asset_id = SubAssetId::new([1u8; 32]);
     let amount = 1234;
 
     let (deployed_height, contract_id) = mint_contract::deploy(&client, &mut rng).await;
