@@ -1564,7 +1564,7 @@ impl FuelClient {
         &self,
         owner: &Address,
         asset_id: Option<&AssetId>,
-    ) -> io::Result<u64> {
+    ) -> io::Result<u128> {
         let owner: schema::Address = (*owner).into();
         let asset_id: schema::AssetId = match asset_id {
             Some(asset_id) => (*asset_id).into(),
@@ -1572,7 +1572,7 @@ impl FuelClient {
         };
         let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
         let balance: types::Balance = self.query(query).await?.balance.into();
-        Ok(balance.amount.try_into().unwrap_or(u64::MAX))
+        Ok(balance.amount)
     }
 
     // Retrieve a page of balances by their owner
