@@ -79,7 +79,10 @@ use fuel_core_types::{
     },
     fuel_types::{
         self,
-        canonical::Deserialize,
+        canonical::{
+            Deserialize,
+            Serialize,
+        },
     },
     fuel_vm::checked_transaction::{
         CheckPredicateParams,
@@ -777,6 +780,9 @@ async fn submit_and_await_status<'a>(
         .current_consensus_params();
     let mut tx = FuelTx::from_bytes(&tx.0)?;
     let tx_id = tx.id(&params.chain_id());
+
+    tracing::debug!("Inserting tx into txpool: {:?}", tx_id.to_bytes());
+    tracing::debug!("decoded tx: {:?}", tx);
 
     if estimate_predicates {
         let query = ctx.read_view()?.into_owned();

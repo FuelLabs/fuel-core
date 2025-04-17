@@ -77,6 +77,9 @@ impl BlackList {
                         return Err(BlacklistedError::BlacklistedOwner(*owner));
                     }
                 }
+                Input::ReadOnly(_) => {
+                    // No reason to prevent reading from read-only input
+                }
                 Input::Contract(contract) => {
                     if self.contracts.contains(&contract.contract_id) {
                         return Err(BlacklistedError::BlacklistedContract(
