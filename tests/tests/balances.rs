@@ -25,10 +25,7 @@ use fuel_core_client::client::{
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx::{
-        Bytes32,
-        ContractIdExt,
-    },
+    fuel_tx::ContractIdExt,
     fuel_types::SubAssetId,
 };
 use rand::SeedableRng;

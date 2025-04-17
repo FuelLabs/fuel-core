@@ -1153,7 +1153,10 @@ fn insert__tx_with_predicate_that_returns_false() {
     assert!(matches!(
         err,
         Error::ConsensusValidity(CheckError::PredicateVerificationFailed(
-            PredicateVerificationFailed::Panic { reason: PanicReason::PredicateReturnedNonOne, ..}
+            PredicateVerificationFailed::Panic {
+                reason: PanicReason::PredicateReturnedNonOne,
+                ..
+            }
         ))
     ));
     universe.assert_pool_integrity(&[]);

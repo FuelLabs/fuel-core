@@ -24,6 +24,7 @@ pub use chain_info::ChainInfo;
 pub use coins::{
     Coin,
     CoinType,
+    DataCoin,
     MessageCoin,
 };
 pub use contract::{

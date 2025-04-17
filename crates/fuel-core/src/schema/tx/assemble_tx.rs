@@ -495,6 +495,15 @@ where
                         message.0.nonce,
                         signature_index,
                     ),
+                    CoinType::DataCoin(data_coin) => Input::data_coin_signed(
+                        *data_coin.0.utxo_id(),
+                        *data_coin.0.owner(),
+                        *data_coin.0.amount(),
+                        *data_coin.0.asset_id(),
+                        *data_coin.0.tx_pointer(),
+                        signature_index,
+                        data_coin.0.data().cloned().unwrap_or_default(),
+                    ),
                 }
             }
             Account::Predicate(predicate) => {
@@ -519,6 +528,17 @@ where
                         predicate_gas_used,
                         predicate.predicate.clone(),
                         predicate.predicate_data.clone(),
+                    ),
+                    CoinType::DataCoin(data_coin) => Input::data_coin_predicate(
+                        *data_coin.0.utxo_id(),
+                        predicate.predicate_address,
+                        *data_coin.0.amount(),
+                        *data_coin.0.asset_id(),
+                        *data_coin.0.tx_pointer(),
+                        predicate_gas_used,
+                        predicate.predicate.clone(),
+                        predicate.predicate_data.clone(),
+                        data_coin.0.data().cloned().unwrap_or_default(),
                     ),
                 }
             }
