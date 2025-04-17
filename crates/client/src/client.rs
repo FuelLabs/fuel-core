@@ -1513,11 +1513,7 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::DataCoin, String>> {
         let owner: schema::Address = (*owner).into();
-        let asset_id: schema::AssetId = match asset_id {
-            Some(asset_id) => (*asset_id).into(),
-            None => schema::AssetId::default(),
-        };
-        let args = DataCoinsConnectionArgs::from((owner, asset_id, request));
+        let args = DataCoinsConnectionArgs::from((owner, asset_id.copied(), request));
         let query = schema::coins::DataCoinsQuery::build(args);
 
         let coins = self.query(query).await?.data_coins.into();

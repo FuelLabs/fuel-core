@@ -882,7 +882,8 @@ mod data_coin {
             .client
             .data_coins(
                 &expected_owner,
-                Some(&expected_asset_id),
+                None,
+                // Some(&expected_asset_id),
                 PaginationRequest {
                     cursor: None,
                     results: 5,

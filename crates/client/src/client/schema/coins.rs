@@ -91,28 +91,34 @@ pub struct DataCoinsConnectionArgs {
     pub last: Option<i32>,
 }
 
-impl From<(Address, AssetId, PaginationRequest<String>)> for DataCoinsConnectionArgs {
-    fn from(r: (Address, AssetId, PaginationRequest<String>)) -> Self {
-        match r.2.direction {
+impl From<(Address, Option<fuel_tx::AssetId>, PaginationRequest<String>)>
+    for DataCoinsConnectionArgs
+{
+    fn from(r: (Address, Option<fuel_tx::AssetId>, PaginationRequest<String>)) -> Self {
+        let (owner, asset_id, pagination) = r;
+        let cursor = pagination.cursor;
+        let results = pagination.results;
+        let schema_asset = asset_id.map(|a| AssetId::from(a));
+        match pagination.direction {
             PageDirection::Forward => DataCoinsConnectionArgs {
                 filter: CoinFilterInput {
-                    owner: r.0,
-                    asset_id: Some(r.1),
+                    owner,
+                    asset_id: schema_asset,
                 },
-                after: r.2.cursor,
+                after: cursor,
                 before: None,
-                first: Some(r.2.results),
+                first: Some(results),
                 last: None,
             },
             PageDirection::Backward => DataCoinsConnectionArgs {
                 filter: CoinFilterInput {
-                    owner: r.0,
-                    asset_id: Some(r.1),
+                    owner,
+                    asset_id: schema_asset,
                 },
                 after: None,
-                before: r.2.cursor,
+                before: cursor,
                 first: None,
-                last: Some(r.2.results),
+                last: Some(results),
             },
         }
     }
