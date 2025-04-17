@@ -2070,6 +2070,20 @@ where
                     amount,
                     asset_id,
                     ..
+                })
+                | Input::DataCoinSigned(DataCoinSigned {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::DataCoinPredicate(DataCoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
                 }) => {
                     // prune utxo from db
                     let coin = db

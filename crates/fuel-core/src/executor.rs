@@ -3891,7 +3891,6 @@ mod tests {
         assert!(result.is_ok(), "{result:?}")
     }
 
-    #[allow(unused_variables)]
     #[test]
     fn validate__can_include_read_only_input_in_multiple_txs() {
         let mut rng = StdRng::seed_from_u64(2322u64);
@@ -4044,7 +4043,6 @@ mod tests {
         .unwrap();
         let (
             ExecutionResult {
-                block,
                 skipped_transactions,
                 ..
             },
@@ -4074,14 +4072,10 @@ mod tests {
         let mut block_2_header = PartialBlockHeader::default();
         block_2_header.consensus.height = 1u32.into();
 
-        let (
-            ExecutionResult {
-                block,
-                skipped_transactions,
-                ..
-            },
-            changes,
-        ): (ExecutionResult, Changes) = producer
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = producer
             .produce_without_commit_with_source_direct_resolve(Components {
                 header_to_produce: block_2_header,
                 transactions_source: OnceTransactionsSource::new(vec![tx_2.into()]),
@@ -4089,10 +4083,228 @@ mod tests {
                 gas_price: 1,
             })
             .unwrap()
-            .into();
+            .into_result();
 
         // then
         assert!(skipped_transactions.is_empty());
+    }
+
+    #[test]
+    fn validate__can_not_include_read_only_input_if_spent() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        let true_predicate: Vec<_> = vec![op::ret(0x01)].into_iter().collect();
+        let true_predicate_owner = Input::predicate_owner(&true_predicate);
+        let utxo_id = rng.gen();
+        let owner = true_predicate_owner;
+        let amount = 1000;
+        let asset_id = AssetId::BASE;
+        let tx_pointer = rng.gen();
+        let predicate_gas_used = 0;
+        let predicate = true_predicate.clone();
+        let predicate_data = vec![];
+        let data = vec![99u8; 100];
+        let predicate_input = Input::data_coin_predicate(
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            predicate_gas_used,
+            predicate.clone(),
+            predicate_data.clone(),
+            data.clone(),
+        );
+        let read_only_input = Input::read_only_data_coin_predicate(
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            predicate_gas_used,
+            predicate.clone(),
+            predicate_data,
+            data.clone(),
+        );
+
+        let input_one = Input::coin_predicate(
+            rng.gen(),
+            true_predicate_owner,
+            10000,
+            AssetId::BASE,
+            rng.gen(),
+            0,
+            true_predicate.clone(),
+            vec![1, 2, 3],
+        );
+
+        let input_two = Input::coin_predicate(
+            rng.gen(),
+            true_predicate_owner,
+            10000,
+            AssetId::BASE,
+            rng.gen(),
+            0,
+            true_predicate.clone(),
+            vec![4, 5, 6],
+        );
+
+        // include read only input and another input to cover costs
+        let mut tx_1 = TransactionBuilder::script(
+            vec![op::ret(RegId::ONE)].into_iter().collect(),
+            vec![],
+        )
+        .max_fee_limit(100)
+        .add_input(predicate_input)
+        .add_input(input_one.clone())
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: AssetId::BASE,
+        })
+        .finalize();
+
+        // include read only input and another input to cover costs
+        let mut tx_2 = TransactionBuilder::script(
+            vec![op::ret(RegId::ONE)].into_iter().collect(),
+            vec![],
+        )
+        .max_fee_limit(100)
+        .add_input(read_only_input.clone())
+        .add_input(input_two.clone())
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: AssetId::BASE,
+        })
+        .finalize();
+
+        let consensus_parameters = ConsensusParameters::default();
+        let config = Config {
+            forbid_fake_coins_default: true,
+            consensus_parameters: consensus_parameters.clone(),
+        };
+        let db = &mut Database::default();
+        // insert coins into state
+        if let Input::ReadOnly(ReadOnly::DataCoinPredicate(DataCoinPredicate {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            data,
+            ..
+        })) = read_only_input
+        {
+            let coin = CompressedCoin::V2(CompressedCoinV2 {
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+                data,
+            });
+            db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+        } else {
+            panic!("Expected a DataCoinPredicate");
+        }
+        if let Input::CoinPredicate(CoinPredicate {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            ..
+        }) = input_one
+        {
+            let coin = CompressedCoin::V1(CompressedCoinV1 {
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+            });
+            db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+        } else {
+            panic!("Expected a DataCoinPredicate");
+        }
+        if let Input::CoinPredicate(CoinPredicate {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            ..
+        }) = input_two
+        {
+            let coin = CompressedCoin::V1(CompressedCoinV1 {
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+            });
+            db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
+        } else {
+            panic!("Expected a DataCoinPredicate");
+        }
+
+        assert_ne!(
+            tx_1.id(&consensus_parameters.chain_id()),
+            tx_2.id(&consensus_parameters.chain_id())
+        );
+        let producer = create_executor(db.clone(), config.clone());
+
+        // submit first tx
+        tx_1.estimate_predicates(
+            &consensus_parameters.clone().into(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .unwrap();
+        let (
+            ExecutionResult {
+                skipped_transactions,
+                ..
+            },
+            changes,
+        ): (ExecutionResult, Changes) = producer
+            .produce_without_commit_with_source_direct_resolve(Components {
+                header_to_produce: PartialBlockHeader::default(),
+                transactions_source: OnceTransactionsSource::new(vec![tx_1.into()]),
+                coinbase_recipient: Default::default(),
+                gas_price: 1,
+            })
+            .unwrap()
+            .into();
+        tracing::debug!("skipped transactions: {:?}", skipped_transactions);
+        assert!(skipped_transactions.is_empty());
+        // We need to commit the changes from the first tx to proceed
+        db.commit_changes(changes).unwrap();
+
+        // when
+        // submit second tx
+        tx_2.estimate_predicates(
+            &consensus_parameters.clone().into(),
+            MemoryInstance::new(),
+            &EmptyStorage,
+        )
+        .unwrap();
+        let mut block_2_header = PartialBlockHeader::default();
+        block_2_header.consensus.height = 1u32.into();
+
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        }: ExecutionResult = producer
+            .produce_without_commit_with_source_direct_resolve(Components {
+                header_to_produce: block_2_header,
+                transactions_source: OnceTransactionsSource::new(vec![tx_2.into()]),
+                coinbase_recipient: Default::default(),
+                gas_price: 1,
+            })
+            .unwrap()
+            .into_result();
+
+        // then
+        assert_eq!(skipped_transactions.len(), 1);
     }
 
     #[test]
