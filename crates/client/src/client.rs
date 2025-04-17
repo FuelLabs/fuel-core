@@ -972,21 +972,21 @@ impl FuelClient {
 
     /// Similar to [`Self::submit_and_await_commit`], but includes all intermediate states.
     #[cfg(feature = "subscriptions")]
-    pub async fn submit_and_await_status<'a>(
-        &'a self,
-        tx: &'a Transaction,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
+    pub async fn submit_and_await_status(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
         self.submit_and_await_status_opt(tx, None, None).await
     }
 
     /// Similar to [`Self::submit_and_await_commit_opt`], but includes all intermediate states.
     #[cfg(feature = "subscriptions")]
-    pub async fn submit_and_await_status_opt<'a>(
-        &'a self,
-        tx: &'a Transaction,
+    pub async fn submit_and_await_status_opt(
+        &self,
+        tx: &Transaction,
         estimate_predicates: Option<bool>,
         include_preconfirmation: Option<bool>,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
         use cynic::SubscriptionBuilder;
         use schema::tx::SubmitAndAwaitStatusArg;
         let tx = tx.clone().to_bytes();
@@ -1010,10 +1010,10 @@ impl FuelClient {
 
     /// Requests all storage slots for the `contract_id`.
     #[cfg(feature = "subscriptions")]
-    pub async fn contract_storage_slots<'a>(
-        &'a self,
-        contract_id: &'a ContractId,
-    ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>> + 'a> {
+    pub async fn contract_storage_slots(
+        &self,
+        contract_id: &ContractId,
+    ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>> + '_> {
         use cynic::SubscriptionBuilder;
         use schema::storage::ContractStorageSlotsArgs;
         let s = schema::storage::ContractStorageSlots::build(ContractStorageSlotsArgs {
@@ -1032,10 +1032,10 @@ impl FuelClient {
 
     /// Requests all storage balances for the `contract_id`.
     #[cfg(feature = "subscriptions")]
-    pub async fn contract_storage_balances<'a>(
-        &'a self,
-        contract_id: &'a ContractId,
-    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>> + 'a>
+    pub async fn contract_storage_balances(
+        &self,
+        contract_id: &ContractId,
+    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>> + '_>
     {
         use cynic::SubscriptionBuilder;
         use schema::{
@@ -1244,20 +1244,20 @@ impl FuelClient {
     #[tracing::instrument(skip(self), level = "debug")]
     #[cfg(feature = "subscriptions")]
     /// Similar to [`Self::subscribe_transaction_status_opt`], but with default options.
-    pub async fn subscribe_transaction_status<'a>(
-        &'a self,
-        id: &'a TxId,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>> + 'a> {
+    pub async fn subscribe_transaction_status(
+        &self,
+        id: &TxId,
+    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>> + '_> {
         self.subscribe_transaction_status_opt(id, None).await
     }
 
     #[cfg(feature = "subscriptions")]
     /// Subscribe to the status of a transaction
-    pub async fn subscribe_transaction_status_opt<'a>(
-        &'a self,
-        id: &'a TxId,
+    pub async fn subscribe_transaction_status_opt(
+        &self,
+        id: &TxId,
         include_preconfirmation: Option<bool>,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + 'a> {
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
         use cynic::SubscriptionBuilder;
         use schema::tx::StatusChangeSubscriptionArgs;
         let tx_id: TransactionId = (*id).into();
