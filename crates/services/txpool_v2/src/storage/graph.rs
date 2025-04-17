@@ -733,7 +733,9 @@ impl Storage for GraphStorage {
                     }
                 }
                 Input::Contract(Contract { contract_id, .. }) => {
-                    if !self.contracts_creators.contains_key(contract_id) {
+                    if utxo_validation
+                        && !self.contracts_creators.contains_key(contract_id)
+                    {
                         match persistent_storage.contract_exist(contract_id) {
                             Ok(true) => {}
                             Ok(false) => {
