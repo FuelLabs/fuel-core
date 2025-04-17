@@ -93,15 +93,17 @@ impl Coin {
     async fn tx_created_idx(&self) -> U16 {
         self.0.tx_pointer().tx_index().into()
     }
-
-    async fn data(&self) -> Option<HexString> {
-        self.0.data().map(|data| HexString(data.clone()))
-    }
 }
 
 impl From<UncompressedCoin> for Coin {
     fn from(value: UncompressedCoin) -> Self {
         Coin(value)
+    }
+}
+
+impl From<fuel_core_types::entities::coins::coin::Coin> for Coin {
+    fn from(value: fuel_core_types::entities::coins::coin::Coin) -> Self {
+        Coin(UncompressedCoin::Coin(value))
     }
 }
 
@@ -146,6 +148,53 @@ impl From<MessageCoinModel> for MessageCoin {
     }
 }
 
+pub struct DataCoin(pub(crate) UncompressedCoin);
+
+#[async_graphql::Object]
+impl DataCoin {
+    async fn utxo_id(&self) -> UtxoId {
+        (*self.0.utxo_id()).into()
+    }
+
+    async fn owner(&self) -> Address {
+        (*self.0.owner()).into()
+    }
+
+    async fn amount(&self) -> U64 {
+        (*self.0.amount()).into()
+    }
+
+    async fn asset_id(&self) -> AssetId {
+        (*self.0.asset_id()).into()
+    }
+
+    /// TxPointer - the height of the block this coin was created in
+    async fn block_created(&self) -> U32 {
+        u32::from(self.0.tx_pointer().block_height()).into()
+    }
+
+    /// TxPointer - the index of the transaction that created this coin
+    async fn tx_created_idx(&self) -> U16 {
+        self.0.tx_pointer().tx_index().into()
+    }
+
+    async fn data(&self) -> Option<HexString> {
+        self.0.data().map(|data| HexString(data.clone()))
+    }
+}
+
+impl From<UncompressedCoin> for DataCoin {
+    fn from(value: UncompressedCoin) -> Self {
+        DataCoin(value)
+    }
+}
+
+impl From<fuel_core_types::entities::coins::coin::DataCoin> for DataCoin {
+    fn from(value: fuel_core_types::entities::coins::coin::DataCoin) -> Self {
+        DataCoin(UncompressedCoin::DataCoin(value))
+    }
+}
+
 /// The schema analog of the [`coins::CoinType`].
 #[derive(async_graphql::Union)]
 pub enum CoinType {
@@ -153,6 +202,8 @@ pub enum CoinType {
     Coin(Coin),
     /// The bridged coin from the DA layer.
     MessageCoin(MessageCoin),
+    /// A coin that contains additional data.
+    DataCoin(DataCoin),
 }
 
 impl CoinType {
@@ -160,6 +211,7 @@ impl CoinType {
         match self {
             CoinType::Coin(coin) => *coin.0.amount(),
             CoinType::MessageCoin(coin) => coin.0.amount,
+            CoinType::DataCoin(coin) => *coin.0.amount(),
         }
     }
 }
@@ -167,7 +219,10 @@ impl CoinType {
 impl From<coins::CoinType> for CoinType {
     fn from(value: coins::CoinType) -> Self {
         match value {
-            coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
+            coins::CoinType::Coin(coin) => match coin {
+                UncompressedCoin::Coin(c) => CoinType::Coin(c.into()),
+                UncompressedCoin::DataCoin(c) => CoinType::DataCoin(c.into()),
+            },
             coins::CoinType::MessageCoin(coin) => CoinType::MessageCoin(coin.into()),
         }
     }
@@ -235,6 +290,16 @@ impl CoinQuery {
         query.coin(utxo_id.0).into_api_result()
     }
 
+    #[graphql(complexity = "query_costs().storage_read + child_complexity")]
+    async fn data_coin(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
+    ) -> async_graphql::Result<Option<DataCoin>> {
+        let query = ctx.read_view()?;
+        query.coin(utxo_id.0).into_api_result()
+    }
+
     /// Gets all unspent coins of some `owner` maybe filtered with by `asset_id` per page.
     #[graphql(complexity = "{\
         query_costs().storage_iterator\
@@ -250,6 +315,38 @@ impl CoinQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
+        let query = ctx.read_view()?;
+        let owner: fuel_tx::Address = filter.owner.into();
+        crate::schema::query_pagination(after, before, first, last, |start, direction| {
+            let coins = query
+                .owned_coins(&owner, (*start).map(Into::into), direction)
+                .filter_map(|result| {
+                    if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
+                    {
+                        if *coin.asset_id() != filter_asset_id.0 {
+                            return None
+                        }
+                    }
+
+                    Some(result)
+                })
+                .map(|res| res.map(|coin| ((*coin.utxo_id()).into(), coin.into())));
+
+            Ok(coins)
+        })
+        .await
+    }
+
+    async fn data_coins(
+        &self,
+        ctx: &Context<'_>,
+        filter: CoinFilterInput,
+        first: Option<i32>,
+        after: Option<String>,
+        last: Option<i32>,
+        before: Option<String>,
+    ) -> async_graphql::Result<Connection<UtxoId, DataCoin, EmptyFields, EmptyFields>>
+    {
         let query = ctx.read_view()?;
         let owner: fuel_tx::Address = filter.owner.into();
         crate::schema::query_pagination(after, before, first, last, |start, direction| {
@@ -369,6 +466,34 @@ impl ReadView {
             .await
         }
     }
+
+    pub async fn data_coins_to_spend(
+        &self,
+        owner: fuel_tx::Address,
+        query_per_asset: &[SpendQueryElementInput],
+        excluded: &Exclude,
+        params: &ConsensusParameters,
+        max_input: u16,
+    ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
+        let indexation_available = self
+            .indexation_flags
+            .contains(&IndexationKind::CoinsToSpend);
+        if indexation_available {
+            coins_to_spend_with_cache(owner, query_per_asset, excluded, max_input, self)
+                .await
+        } else {
+            let base_asset_id = params.base_asset_id();
+            coins_to_spend_without_cache(
+                owner,
+                query_per_asset,
+                excluded,
+                max_input,
+                base_asset_id,
+                self,
+            )
+            .await
+        }
+    }
 }
 
 async fn coins_to_spend_without_cache(
@@ -405,7 +530,12 @@ async fn coins_to_spend_without_cache(
             coins
                 .into_iter()
                 .map(|coin| match coin {
-                    coins::CoinType::Coin(coin) => CoinType::Coin(coin.into()),
+                    coins::CoinType::Coin(coin) => match coin {
+                        UncompressedCoin::Coin(coin) => CoinType::Coin(coin.into()),
+                        UncompressedCoin::DataCoin(coin) => {
+                            CoinType::DataCoin(coin.into())
+                        }
+                    },
                     coins::CoinType::MessageCoin(coin) => {
                         CoinType::MessageCoin(coin.into())
                     }

@@ -1,3 +1,10 @@
+use self::schema::{
+    block::ProduceBlockArgs,
+    message::{
+        MessageProofArgs,
+        NonceArgs,
+    },
+};
 #[cfg(feature = "subscriptions")]
 use crate::client::types::StatusWithTransaction;
 use crate::{
@@ -5,6 +12,8 @@ use crate::{
         schema::{
             block::BlockByHeightArgs,
             coins::{
+                DataCoinByIdArgs,
+                DataCoinsConnectionArgs,
                 ExcludeInput,
                 SpendQueryElementInput,
             },
@@ -163,14 +172,6 @@ use types::{
     },
     TransactionResponse,
     TransactionStatus,
-};
-
-use self::schema::{
-    block::ProduceBlockArgs,
-    message::{
-        MessageProofArgs,
-        NonceArgs,
-    },
 };
 
 pub mod pagination;
@@ -1478,6 +1479,14 @@ impl FuelClient {
         Ok(coin)
     }
 
+    pub async fn data_coin(&self, id: &UtxoId) -> io::Result<Option<types::DataCoin>> {
+        let query = schema::coins::DataCoinByIdQuery::build(DataCoinByIdArgs {
+            utxo_id: (*id).into(),
+        });
+        let coin = self.query(query).await?.data_coin.map(Into::into);
+        Ok(coin)
+    }
+
     /// Retrieve a page of coins by their owner
     pub async fn coins(
         &self,
@@ -1494,6 +1503,20 @@ impl FuelClient {
         let query = schema::coins::CoinsQuery::build(args);
 
         let coins = self.query(query).await?.coins.into();
+        Ok(coins)
+    }
+
+    pub async fn data_coins(
+        &self,
+        owner: &Address,
+        asset_id: Option<&AssetId>,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<types::DataCoin, String>> {
+        let owner: schema::Address = (*owner).into();
+        let args = DataCoinsConnectionArgs::from((owner, asset_id.copied(), request));
+        let query = schema::coins::DataCoinsQuery::build(args);
+
+        let coins = self.query(query).await?.data_coins.into();
         Ok(coins)
     }
 
