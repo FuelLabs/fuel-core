@@ -329,10 +329,7 @@ pub async fn select_coins_to_spend(
     let retained_big_coins_iter =
         skip_big_coins_up_to_amount(selected_big_coins, dust_coins_total);
 
-    Ok((retained_big_coins_iter
-        .map(Into::into)
-        .chain(selected_dust_coins))
-    .collect())
+    Ok((retained_big_coins_iter.chain(selected_dust_coins)).collect())
 }
 
 async fn big_coins(

@@ -29,6 +29,7 @@ use fuel_core_types::{
         Bytes32,
         ContractIdExt,
     },
+    fuel_types::SubAssetId,
 };
 use rand::SeedableRng;
 use test_helpers::{
@@ -571,7 +572,7 @@ async fn contract_balances_in_the_past() {
     let client = FuelClient::from(srv.bound_address);
 
     // Given
-    let sub_asset_id = Bytes32::new([1u8; 32]);
+    let sub_asset_id = SubAssetId::new([1u8; 32]);
     let amount = 1234;
 
     let (deployed_height, contract_id) = mint_contract::deploy(&client, &mut rng).await;

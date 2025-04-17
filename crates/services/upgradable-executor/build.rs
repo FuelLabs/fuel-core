@@ -79,6 +79,7 @@ fn build_wasm() {
     cargo.env("CARGO_PROFILE_RELEASE_OPT_LEVEL", "3");
     cargo.env("CARGO_PROFILE_RELEASE_STRIP", "symbols");
     cargo.env("CARGO_PROFILE_RELEASE_DEBUG", "false");
+
     if env::var("CARGO_CFG_COVERAGE").is_ok() {
         // wasm doesn't support coverage
         cargo.env("CARGO_ENCODED_RUSTFLAGS", "");

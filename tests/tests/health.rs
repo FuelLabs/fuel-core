@@ -6,9 +6,14 @@ use fuel_core::{
         FuelService,
     },
     state::rocks_db::DatabaseConfig,
-    types::fuel_tx::Transaction,
 };
 use fuel_core_client::client::FuelClient;
+use fuel_core_types::fuel_asm::op;
+use test_helpers::{
+    assemble_tx::AssembleAndRunTx,
+    config_with_fee,
+    default_signing_wallet,
+};
 
 #[tokio::test]
 async fn health() {
@@ -69,15 +74,17 @@ async fn can_restart_node_with_transactions() {
             DatabaseConfig::config_for_tests(),
         )
         .unwrap();
-        let service = FuelService::from_combined_database(database, Config::local_node())
+        let service = FuelService::from_combined_database(database, config_with_fee())
             .await
             .unwrap();
         let client = FuelClient::from(service.bound_address);
         client.health().await.unwrap();
 
         for _ in 0..5 {
-            let tx = Transaction::default_test_tx();
-            client.submit_and_await_commit(&tx).await.unwrap();
+            client
+                .run_script(vec![op::ret(1)], vec![], default_signing_wallet())
+                .await
+                .unwrap();
         }
 
         service.send_stop_signal_and_await_shutdown().await.unwrap();

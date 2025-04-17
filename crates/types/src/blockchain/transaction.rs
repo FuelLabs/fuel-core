@@ -29,7 +29,7 @@ use alloc::{
 /// Extension trait for transactions.
 pub trait TransactionExt {
     /// Returns the inputs of the transaction.
-    fn inputs(&self) -> ExecutorResult<&Vec<Input>>;
+    fn inputs(&self) -> Cow<[Input]>;
 
     /// Returns the outputs of the transaction.
     fn outputs(&self) -> Cow<[Output]>;
@@ -39,16 +39,14 @@ pub trait TransactionExt {
 }
 
 impl TransactionExt for Transaction {
-    fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
+    fn inputs(&self) -> Cow<[Input]> {
         match self {
-            Transaction::Script(tx) => Ok(tx.inputs()),
-            Transaction::Create(tx) => Ok(tx.inputs()),
-            Transaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have inputs".to_string(),
-            )),
-            Transaction::Upgrade(tx) => Ok(tx.inputs()),
-            Transaction::Upload(tx) => Ok(tx.inputs()),
-            Transaction::Blob(tx) => Ok(tx.inputs()),
+            Transaction::Script(tx) => Cow::Borrowed(tx.inputs()),
+            Transaction::Create(tx) => Cow::Borrowed(tx.inputs()),
+            Transaction::Mint(_) => Cow::Owned(Vec::new()),
+            Transaction::Upgrade(tx) => Cow::Borrowed(tx.inputs()),
+            Transaction::Upload(tx) => Cow::Borrowed(tx.inputs()),
+            Transaction::Blob(tx) => Cow::Borrowed(tx.inputs()),
         }
     }
 
@@ -80,16 +78,14 @@ impl TransactionExt for Transaction {
 }
 
 impl TransactionExt for CheckedTransaction {
-    fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
+    fn inputs(&self) -> Cow<[Input]> {
         match self {
-            CheckedTransaction::Script(tx) => Ok(tx.transaction().inputs()),
-            CheckedTransaction::Create(tx) => Ok(tx.transaction().inputs()),
-            CheckedTransaction::Mint(_) => Err(ExecutorError::Other(
-                "Mint transaction doesn't have max_gas".to_string(),
-            )),
-            CheckedTransaction::Upgrade(tx) => Ok(tx.transaction().inputs()),
-            CheckedTransaction::Upload(tx) => Ok(tx.transaction().inputs()),
-            CheckedTransaction::Blob(tx) => Ok(tx.transaction().inputs()),
+            CheckedTransaction::Script(tx) => Cow::Borrowed(tx.transaction().inputs()),
+            CheckedTransaction::Create(tx) => Cow::Borrowed(tx.transaction().inputs()),
+            CheckedTransaction::Mint(_) => Cow::Owned(Vec::new()),
+            CheckedTransaction::Upgrade(tx) => Cow::Borrowed(tx.transaction().inputs()),
+            CheckedTransaction::Upload(tx) => Cow::Borrowed(tx.transaction().inputs()),
+            CheckedTransaction::Blob(tx) => Cow::Borrowed(tx.transaction().inputs()),
         }
     }
 

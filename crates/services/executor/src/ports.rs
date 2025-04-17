@@ -124,7 +124,7 @@ impl MaybeCheckedTransaction {
 }
 
 impl TransactionExt for MaybeCheckedTransaction {
-    fn inputs(&self) -> ExecutorResult<&Vec<Input>> {
+    fn inputs(&self) -> Cow<[Input]> {
         match self {
             MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.inputs(),
             MaybeCheckedTransaction::Transaction(tx) => tx.inputs(),

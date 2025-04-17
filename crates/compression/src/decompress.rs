@@ -127,7 +127,7 @@ where
                     .map_err(|e| anyhow::anyhow!("Failed to get registry root: {}", e))?;
                 let registry_root_after_compression = block.header.registry_root;
                 if registry_root_after_decompression != registry_root_after_compression {
-                    anyhow::bail!("Registry root mismatch");
+                    anyhow::bail!("Registry root mismatch. registry root after decompression: {:?}, registry root after compression: {:?}", registry_root_after_decompression, registry_root_after_compression);
                 }
             }
         }
@@ -450,6 +450,7 @@ mod tests {
     #[tokio::test]
     async fn decompress_block_with_unknown_version() {
         #[derive(Clone, Serialize, Deserialize)]
+        #[allow(clippy::large_enum_variant)]
         enum CompressedBlockWithNewVersions {
             V0(crate::CompressedBlockPayloadV0),
             NewVersion(u32),

@@ -1,9 +1,11 @@
 //! Block header types
 
-mod v1;
+/// The V1 version of the header.
+pub mod v1;
 
+/// The V2 version of the header.
 #[cfg(feature = "fault-proving")]
-mod v2;
+pub mod v2;
 
 use super::{
     consensus::ConsensusType,
@@ -328,7 +330,7 @@ pub type ConsensusParametersVersion = u32;
 pub type StateTransitionBytecodeVersion = u32;
 
 /// The latest version of the state transition bytecode.
-pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 25;
+pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 26;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

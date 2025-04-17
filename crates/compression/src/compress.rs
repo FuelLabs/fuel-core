@@ -119,7 +119,7 @@ struct PrepareCtx<'a, D> {
     accessed_keys: PerRegistryKeyspace<HashSet<RegistryKey>>,
 }
 
-impl<'a, D> ContextError for PrepareCtx<'a, D> {
+impl<D> ContextError for PrepareCtx<'_, D> {
     type Error = anyhow::Error;
 }
 
@@ -260,7 +260,7 @@ compression!(
     predicate_code: PredicateCode
 );
 
-impl<'a, D> ContextError for CompressCtx<'a, D> {
+impl<D> ContextError for CompressCtx<'_, D> {
     type Error = anyhow::Error;
 }
 

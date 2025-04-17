@@ -261,7 +261,7 @@ impl_temporal_registry!(ContractId);
 impl_temporal_registry!(ScriptCode);
 impl_temporal_registry!(PredicateCode);
 
-impl<'a, CS> UtxoIdToPointer for CompressionContext<'a, CS> {
+impl<CS> UtxoIdToPointer for CompressionContext<'_, CS> {
     fn lookup(
         &self,
         utxo_id: fuel_core_types::fuel_tx::UtxoId,
@@ -284,7 +284,7 @@ impl<'a, CS> UtxoIdToPointer for CompressionContext<'a, CS> {
     }
 }
 
-impl<'a, CS, Onchain> HistoryLookup for DecompressionContext<'a, CS, Onchain>
+impl<CS, Onchain> HistoryLookup for DecompressionContext<'_, CS, Onchain>
 where
     Onchain: StorageInspect<Coins, Error = fuel_core_storage::Error>
         + StorageInspect<Messages, Error = fuel_core_storage::Error>
@@ -419,7 +419,6 @@ mod fault_proving {
                 compute_registry_root!(storage::address::Address),
                 compute_registry_root!(storage::asset_id::AssetId),
                 compute_registry_root!(storage::contract_id::ContractId),
-                compute_registry_root!(storage::evictor_cache::EvictorCache),
                 compute_registry_root!(storage::predicate_code::PredicateCode),
                 compute_registry_root!(storage::script_code::ScriptCode),
                 compute_registry_root!(storage::registry_index::RegistryIndex),

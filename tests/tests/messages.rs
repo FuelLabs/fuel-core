@@ -483,13 +483,7 @@ async fn can_get_message_proof() {
 
             // 3. Verify the message proof. (message receipt root, message id, proof index, proof set, num message receipts in the block)
             let message_proof_index = result.message_proof.proof_index;
-            let message_proof_set: Vec<_> = result
-                .message_proof
-                .proof_set
-                .iter()
-                .cloned()
-                .map(Bytes32::from)
-                .collect();
+            let message_proof_set: Vec<_> = result.message_proof.proof_set.to_vec();
             assert!(verify_merkle(
                 result.message_block_header.message_outbox_root,
                 &generated_message_id,
@@ -517,13 +511,7 @@ async fn can_get_message_proof() {
 
             // 4. Verify the block proof. (prev_root, block id, proof index, proof set, block count)
             let block_proof_index = result.block_proof.proof_index;
-            let block_proof_set: Vec<_> = result
-                .block_proof
-                .proof_set
-                .iter()
-                .cloned()
-                .map(Bytes32::from)
-                .collect();
+            let block_proof_set: Vec<_> = result.block_proof.proof_set.to_vec();
             let blocks_count = result.commit_block_header.height;
             assert!(verify_merkle(
                 result.commit_block_header.prev_root,

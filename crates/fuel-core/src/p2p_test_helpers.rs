@@ -247,6 +247,7 @@ impl Bootstrap {
 }
 
 // set of nodes with the given setups.
+#[allow(clippy::arithmetic_side_effects)]
 pub async fn make_nodes(
     bootstrap_setup: impl IntoIterator<Item = Option<BootstrapSetup>>,
     producers_setup: impl IntoIterator<Item = Option<ProducerSetup>>,
@@ -266,7 +267,9 @@ pub async fn make_nodes(
                 .map(|_| {
                     let secret = SecretKey::random(&mut rng);
                     let mut initial_coin = coin_generator.generate_with(secret, 10000);
-                    *initial_coin.mut_output_index() = 10;
+                    // Shift idx to prevent overlapping utxo_ids when
+                    // merging with existing coins from config
+                    *initial_coin.mut_output_index() += 100;
                     let tx = TransactionBuilder::script(
                         vec![op::ret(RegId::ONE)].into_iter().collect(),
                         vec![],
@@ -584,6 +587,10 @@ impl Node {
                         if matches!(status, TransactionStatus::Failure { .. })
                             || matches!(status, TransactionStatus::Success { .. }) {
                             break
+                        }
+
+                        if matches!(status, TransactionStatus::SqueezedOut(_)) {
+                            panic!("Transaction was squeezed out: {:?}", status);
                         }
                     }
                     _ = self.node.await_shutdown() => {
