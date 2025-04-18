@@ -1,4 +1,5 @@
 use crate::{
+    GasPrice,
     ports::{
         self,
         AtomicView,
@@ -12,7 +13,6 @@ use crate::{
         WasmChecker,
         WasmValidityError,
     },
-    GasPrice,
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
@@ -25,8 +25,8 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
-        header::ConsensusParametersVersion,
         SealedBlock,
+        header::ConsensusParametersVersion,
     },
     entities::{
         coins::coin::CompressedCoin,
@@ -59,9 +59,9 @@ use fuel_core_types::{
             PeerId,
         },
         transaction_status::{
-            statuses,
             PreConfirmationStatus,
             TransactionStatus,
+            statuses,
         },
     },
 };

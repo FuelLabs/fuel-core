@@ -1,10 +1,10 @@
 //! This module handles bridge communications between the fuel node and the data availability layer.
 
 use crate::{
+    Config,
     log::EthEventLog,
     ports::RelayerDb,
     service::state::EthLocal,
-    Config,
 };
 use async_trait::async_trait;
 use core::time::Duration;
@@ -264,15 +264,16 @@ where
             .await;
         }
 
-        if let Err(err) = result {
-            if !self.retry_on_error {
-                tracing::error!("Exiting due to Error in relayer task: {}", err);
-                TaskNextAction::Stop
-            } else {
-                TaskNextAction::ErrorContinue(err)
+        match result {
+            Err(err) => {
+                if !self.retry_on_error {
+                    tracing::error!("Exiting due to Error in relayer task: {}", err);
+                    TaskNextAction::Stop
+                } else {
+                    TaskNextAction::ErrorContinue(err)
+                }
             }
-        } else {
-            TaskNextAction::Continue
+            _ => TaskNextAction::Continue,
         }
     }
 

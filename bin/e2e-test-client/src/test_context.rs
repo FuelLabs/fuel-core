@@ -1,22 +1,22 @@
 //! Utilities and helper methods for writing tests
 
 use anyhow::{
-    anyhow,
     Context,
+    anyhow,
 };
 use fuel_core_chain_config::ContractConfig;
 use fuel_core_client::client::{
+    FuelClient,
     types::{
         CoinType,
         TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_crypto::PublicKey,
     fuel_tx::{
@@ -33,10 +33,10 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        canonical::Serialize,
         Address,
         AssetId,
         Salt,
+        canonical::Serialize,
     },
     fuel_vm::SecretKey,
 };

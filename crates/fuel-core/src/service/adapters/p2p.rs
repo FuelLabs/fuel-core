@@ -12,8 +12,8 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
-        consensus::Genesis,
         SealedBlockHeader,
+        consensus::Genesis,
     },
     fuel_tx::TxId,
     fuel_types::BlockHeight,
@@ -47,8 +47,8 @@ impl P2pDb for OnChainIterableKeyValueView {
 impl BlockHeightImporter for BlockImporterAdapter {
     fn next_block_height(&self) -> BoxStream<BlockHeight> {
         use tokio_stream::{
-            wrappers::BroadcastStream,
             StreamExt,
+            wrappers::BroadcastStream,
         };
         Box::pin(
             BroadcastStream::new(self.block_importer.subscribe())

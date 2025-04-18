@@ -1,6 +1,6 @@
 use clap::{
-    builder::ArgPredicate::IsPresent,
     Args,
+    builder::ArgPredicate::IsPresent,
 };
 use fuel_core::{
     relayer::Config,

@@ -31,9 +31,9 @@ pub use ethers_core::types::{
     H256,
 };
 pub use service::{
-    new_service,
     Service,
     SharedState,
+    new_service,
 };
 
 #[cfg(test)]

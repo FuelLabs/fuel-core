@@ -32,11 +32,11 @@ use fuel_core_types::{
     },
 };
 use fuel_core_wasm_executor::utils::{
-    pack_exists_size_result,
-    unpack_ptr_and_len,
     InputSerializationType,
     ReturnType,
     WasmSerializationBlockTypes,
+    pack_exists_size_result,
+    unpack_ptr_and_len,
 };
 use std::{
     collections::HashMap,
@@ -337,17 +337,18 @@ impl Instance<Source> {
                 .expect("Memory was initialized above; qed");
 
             let key = &memory.data(&caller)[ptr..ptr.saturating_add(len)];
-            if let Ok(value) = storage.size_of_value(key, column) {
-                let size = u32::try_from(value.unwrap_or_default()).map_err(|e| {
+            match storage.size_of_value(key, column) {
+                Ok(value) => {
+                    let size = u32::try_from(value.unwrap_or_default()).map_err(|e| {
                     anyhow::anyhow!(
                         "The size of the value is more than `u32::MAX`. We support only wasm32: {}",
                         e
                     )
                 })?;
 
-                Ok(pack_exists_size_result(value.is_some(), size, 0))
-            } else {
-                Ok(pack_exists_size_result(false, 0, 0))
+                    Ok(pack_exists_size_result(value.is_some(), size, 0))
+                }
+                _ => Ok(pack_exists_size_result(false, 0, 0)),
             }
         };
 
@@ -374,20 +375,21 @@ impl Instance<Source> {
                 .expect("Memory was initialized above; qed");
 
             let key = &memory.data(&caller)[ptr..ptr.saturating_add(len)];
-            if let Ok(value) = storage.get(key, column) {
-                let value = value.ok_or(anyhow::anyhow!("\
+            match storage.get(key, column) {
+                Ok(value) => {
+                    let value = value.ok_or(anyhow::anyhow!("\
                         The WASM executor should call `get` only after `storage_size_of_value`."))?;
 
-                if value.len() != out_len as usize {
-                    return Err(anyhow::anyhow!(
-                        "The provided buffer size is not equal to the value size."
-                    ));
-                }
+                    if value.len() != out_len as usize {
+                        return Err(anyhow::anyhow!(
+                            "The provided buffer size is not equal to the value size."
+                        ));
+                    }
 
-                caller.write(out_ptr, &value)?;
-                Ok(0)
-            } else {
-                Ok(1)
+                    caller.write(out_ptr, &value)?;
+                    Ok(0)
+                }
+                _ => Ok(1),
             }
         };
 
@@ -454,10 +456,11 @@ impl Instance<Storage> {
             } else {
                 let events = relayer.get_events(&da_block_height);
 
-                if let Ok(events) = events {
-                    let encoded_events =
-                        postcard::to_allocvec(&events).map_err(|e| anyhow::anyhow!(e))?;
-                    let encoded_size =
+                match events {
+                    Ok(events) => {
+                        let encoded_events = postcard::to_allocvec(&events)
+                            .map_err(|e| anyhow::anyhow!(e))?;
+                        let encoded_size =
                         u32::try_from(encoded_events.len()).map_err(|e| {
                             anyhow::anyhow!(
                                 "The size of encoded events is more than `u32::MAX`. We support only wasm32: {}",
@@ -465,13 +468,13 @@ impl Instance<Storage> {
                             )
                         })?;
 
-                    caller
-                        .data_mut()
-                        .relayer_events
-                        .insert(da_block_height, encoded_events.into());
-                    Ok(pack_exists_size_result(true, encoded_size, 0))
-                } else {
-                    Ok(pack_exists_size_result(false, 0, 1))
+                        caller
+                            .data_mut()
+                            .relayer_events
+                            .insert(da_block_height, encoded_events.into());
+                        Ok(pack_exists_size_result(true, encoded_size, 0))
+                    }
+                    _ => Ok(pack_exists_size_result(false, 0, 1)),
                 }
             }
         };

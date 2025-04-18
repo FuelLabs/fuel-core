@@ -1,12 +1,12 @@
 use crate::client::schema::{
-    block::Block,
-    schema,
     Address,
     AssetId,
     ConversionError,
     U16,
     U32,
     U64,
+    block::Block,
+    schema,
 };
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

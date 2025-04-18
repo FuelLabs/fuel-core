@@ -21,8 +21,8 @@ use crate::{
         storage::{
             blocks::FuelBlockIdsToHeights,
             coins::{
-                owner_coin_id_key,
                 OwnedCoins,
+                owner_coin_id_key,
             },
             contracts::ContractsInfo,
             messages::{
@@ -39,12 +39,12 @@ use crate::{
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
-    stream::BoxStream,
     RunnableService,
     RunnableTask,
     ServiceRunner,
     StateWatcher,
     TaskNextAction,
+    stream::BoxStream,
 };
 use fuel_core_storage::{
     Error as StorageError,
@@ -62,6 +62,15 @@ use fuel_core_types::{
     },
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
+        AssetId,
+        ConsensusParameters,
+        Contract,
+        Input,
+        Output,
+        Receipt,
+        Transaction,
+        TxId,
+        UniqueIdentifier,
         field::{
             Inputs,
             Outputs,
@@ -72,15 +81,6 @@ use fuel_core_types::{
             CoinPredicate,
             CoinSigned,
         },
-        AssetId,
-        ConsensusParameters,
-        Contract,
-        Input,
-        Output,
-        Receipt,
-        Transaction,
-        TxId,
-        UniqueIdentifier,
     },
     fuel_types::{
         BlockHeight,
@@ -685,23 +685,23 @@ where
             }
 
             result = self.block_importer.next() => {
-                if let Some(block) = result {
+                match result { Some(block) => {
                     let result = self.process_block(block);
 
                     // In the case of an error, shut down the service to avoid a huge
                     // de-synchronization between on-chain and off-chain databases.
-                    if let Err(e) = result {
+                    match result { Err(e) => {
                         if self.continue_on_error {
                             TaskNextAction::ErrorContinue(e)
                         } else {
                             TaskNextAction::Stop
                         }
-                    } else {
+                    } _ => {
                         TaskNextAction::Continue
-                    }
-                } else {
+                    }}
+                } _ => {
                     TaskNextAction::Stop
-                }
+                }}
             }
         }
     }
@@ -711,10 +711,13 @@ where
         loop {
             let result = self.block_importer.next().now_or_never();
 
-            if let Some(Some(block)) = result {
-                self.process_block(block)?;
-            } else {
-                break;
+            match result {
+                Some(Some(block)) => {
+                    self.process_block(block)?;
+                }
+                _ => {
+                    break;
+                }
             }
         }
         Ok(())

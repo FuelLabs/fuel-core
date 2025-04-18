@@ -4,8 +4,8 @@ use std::{
 };
 
 use adapters::{
-    ready_signal::ReadySignal,
     TxStatusManagerAdapter,
+    ready_signal::ReadySignal,
 };
 pub use config::{
     Config,
@@ -30,6 +30,8 @@ use fuel_core_services::{
     TaskNextAction,
 };
 use fuel_core_storage::{
+    IsNotFound,
+    StorageAsMut,
     not_found,
     tables::SealedBlockConsensus,
     transactional::{
@@ -37,8 +39,6 @@ use fuel_core_storage::{
         ReadTransaction,
         StorageChanges,
     },
-    IsNotFound,
-    StorageAsMut,
 };
 use fuel_core_types::blockchain::consensus::Consensus;
 
@@ -510,11 +510,11 @@ impl RunnableTask for Task {
 #[cfg(test)]
 mod tests {
     use crate::{
+        ShutdownListener,
         service::{
             Config,
             FuelService,
         },
-        ShutdownListener,
     };
     use fuel_core_services::State;
     use std::{

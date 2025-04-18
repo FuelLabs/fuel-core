@@ -5,9 +5,9 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::{
-        relayer::transaction::RelayedTransactionId,
         Message,
         RelayedTransaction,
+        relayer::transaction::RelayedTransactionId,
     },
     fuel_types::Nonce,
     services::relayer::Event,

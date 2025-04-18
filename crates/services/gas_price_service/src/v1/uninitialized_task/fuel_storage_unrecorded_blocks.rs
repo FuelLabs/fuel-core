@@ -3,6 +3,10 @@ use crate::common::fuel_core_storage_adapter::storage::{
     UnrecordedBlocksTable,
 };
 use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageMutate,
     kv_store::{
         KeyValueInspect,
         KeyValueMutate,
@@ -11,10 +15,6 @@ use fuel_core_storage::{
         Modifiable,
         WriteTransaction,
     },
-    Error as StorageError,
-    StorageAsMut,
-    StorageAsRef,
-    StorageMutate,
 };
 use fuel_core_types::{
     fuel_merkle::storage::StorageMutateInfallible,

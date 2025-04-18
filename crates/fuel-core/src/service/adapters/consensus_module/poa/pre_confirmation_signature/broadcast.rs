@@ -1,7 +1,7 @@
 use crate::service::adapters::{
-    consensus_module::poa::pre_confirmation_signature::key_generator::Ed25519Key,
     FuelBlockSigner,
     P2PAdapter,
+    consensus_module::poa::pre_confirmation_signature::key_generator::Ed25519Key,
 };
 use fuel_core_poa::pre_confirmation_signature_service::{
     broadcast::{
@@ -86,8 +86,8 @@ mod tests {
     use fuel_core_p2p::{
         ports::P2PPreConfirmationMessage,
         service::{
-            build_shared_state,
             TaskRequest,
+            build_shared_state,
         },
     };
     use fuel_core_types::{

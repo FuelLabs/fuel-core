@@ -1,13 +1,15 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    Config,
+    Producer,
     block_producer::{
+        Bytes32,
+        Error,
         gas_price::{
             GasPriceProvider,
             MockChainStateInfoProvider,
         },
-        Bytes32,
-        Error,
     },
     mocks::{
         FailingMockExecutor,
@@ -17,8 +19,6 @@ use crate::{
         MockRelayer,
         MockTxPool,
     },
-    Config,
-    Producer,
 };
 use fuel_core_producer as _;
 use fuel_core_types::{
@@ -37,20 +37,20 @@ use fuel_core_types::{
     },
     fuel_tx,
     fuel_tx::{
-        field::InputContract,
         ConsensusParameters,
         Mint,
         Script,
         Transaction,
+        field::InputContract,
     },
     fuel_types::BlockHeight,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::{
     collections::HashMap,
@@ -130,7 +130,7 @@ mod produce_and_execute_block_txpool {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
                     height: prev_height,
-                    prev_root: rng.gen(),
+                    prev_root: rng.r#gen(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -178,7 +178,7 @@ mod produce_and_execute_block_txpool {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
                     height: prev_height,
-                    prev_root: rng.gen(),
+                    prev_root: rng.r#gen(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -237,7 +237,7 @@ mod produce_and_execute_block_txpool {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
                     height: prev_height,
-                    prev_root: rng.gen(),
+                    prev_root: rng.r#gen(),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -579,8 +579,8 @@ mod produce_and_execute_block_txpool {
     }
 
     #[tokio::test]
-    async fn produce_and_execute_block_txpool__missing_gas_price_causes_block_production_to_fail(
-    ) {
+    async fn produce_and_execute_block_txpool__missing_gas_price_causes_block_production_to_fail()
+     {
         // given
         let ctx = TestContext::default();
         let producer = ctx.producer_with_gas_price(None);

@@ -1,24 +1,24 @@
 //! Defines the logic how to interact with the shared sequencer.
 
 use crate::{
+    Client,
+    Config,
     http_api::AccountMetadata,
     ports::{
         BlocksProvider,
         Signer,
     },
-    Client,
-    Config,
 };
 use async_trait::async_trait;
 use core::time::Duration;
 use fuel_core_services::{
-    stream::BoxStream,
     EmptyShared,
     RunnableService,
     RunnableTask,
     ServiceRunner,
     StateWatcher,
     TaskNextAction,
+    stream::BoxStream,
 };
 use fuel_core_types::services::{
     block_importer::SharedImportResult,
@@ -90,21 +90,23 @@ where
         _: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let shared_sequencer_client = if let Some(endpoints) = &self.config.endpoints {
-            let ss = Client::new(endpoints.clone(), self.config.topic).await?;
+        let shared_sequencer_client = match &self.config.endpoints {
+            Some(endpoints) => {
+                let ss = Client::new(endpoints.clone(), self.config.topic).await?;
 
-            if self.signer.is_available() {
-                let cosmos_public_address = ss.sender_account_id(self.signer.as_ref())?;
+                if self.signer.is_available() {
+                    let cosmos_public_address =
+                        ss.sender_account_id(self.signer.as_ref())?;
 
-                tracing::info!(
-                    "Shared sequencer uses account ID: {}",
-                    cosmos_public_address
-                );
+                    tracing::info!(
+                        "Shared sequencer uses account ID: {}",
+                        cosmos_public_address
+                    );
+                }
+
+                Some(ss)
             }
-
-            Some(ss)
-        } else {
-            None
+            _ => None,
         };
 
         let blobs = Arc::new(tokio::sync::Mutex::new(SSBlobs::new()));

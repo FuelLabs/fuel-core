@@ -1,11 +1,10 @@
 #![allow(dead_code)]
 
 use fuel_crypto::{
-    fuel_types::ChainId,
     SecretKey,
+    fuel_types::ChainId,
 };
 use fuel_tx::{
-    policies::Policies,
     Input,
     Signable,
     Transaction,
@@ -14,6 +13,7 @@ use fuel_tx::{
     Upload,
     UploadSubsection,
     Witness,
+    policies::Policies,
 };
 use genesis_fuel_core_bin::FuelService as GenesisFuelService;
 use genesis_fuel_core_client::client::FuelClient as GenesisClient;
@@ -22,8 +22,8 @@ use latest_fuel_core_bin::FuelService as LatestFuelService;
 use latest_fuel_core_client::client::FuelClient as LatestClient;
 use libp2p::PeerId;
 use rand::{
-    prelude::StdRng,
     Rng,
+    prelude::StdRng,
 };
 use std::str::FromStr;
 use version_36_fuel_core_bin::FuelService as Version36FuelService;
@@ -33,10 +33,10 @@ use version_36_fuel_core_services as _;
 // Awful version compatibility hack.
 // `$bin_crate::cli::run::get_service` is async in the later versions of fuel-core-bin.
 macro_rules! maybe_await {
-    (true, $expr:expr) => {
+    (true, $expr:expr_2021) => {
         $expr.await
     };
-    (false, $expr:expr) => {
+    (false, $expr:expr_2021) => {
         $expr
     };
 }
@@ -155,7 +155,7 @@ pub fn valid_input(secret_key: &SecretKey, rng: &mut StdRng, amount: u64) -> Inp
     let pk = secret_key.public_key();
     let owner = Input::owner(&pk);
     Input::coin_signed(
-        rng.gen(),
+        rng.r#gen(),
         owner,
         amount,
         BASE_ASSET_ID.parse().unwrap(),

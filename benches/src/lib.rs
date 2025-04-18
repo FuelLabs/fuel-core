@@ -1,17 +1,17 @@
 use fuel_core::database::GenesisDatabase;
 use fuel_core_storage::{
+    StorageAsMut,
     transactional::{
         IntoTransaction,
         StorageTransaction,
     },
-    StorageAsMut,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         Instruction,
         RegId,
+        op,
     },
     fuel_tx::*,
     fuel_types::{
@@ -26,10 +26,10 @@ use fuel_core_types::{
         },
         consts::*,
         interpreter::{
-            diff,
             InterpreterParams,
             MemoryInstance,
             ReceiptsCtx,
+            diff,
         },
         *,
     },
@@ -213,12 +213,12 @@ impl VmBench {
         let state_root = Contract::default_state_root();
         let id = VmBench::CONTRACT;
 
-        let utxo_id = rng.gen();
-        let balance_root = rng.gen();
-        let tx_pointer = rng.gen();
+        let utxo_id = rng.r#gen();
+        let balance_root = rng.r#gen();
+        let tx_pointer = rng.r#gen();
 
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
-        let output = Output::contract(0, rng.gen(), rng.gen());
+        let output = Output::contract(0, rng.r#gen(), rng.r#gen());
 
         db.deploy_contract_with_id(&[], &contract, &id)?;
 

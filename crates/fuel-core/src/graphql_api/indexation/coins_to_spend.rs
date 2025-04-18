@@ -2,8 +2,8 @@ use fuel_core_storage::StorageAsMut;
 
 use fuel_core_types::{
     entities::{
-        coins::coin::Coin,
         Message,
+        coins::coin::Coin,
     },
     fuel_tx::AssetId,
     services::executor::Event,
@@ -135,9 +135,9 @@ where
 #[cfg(test)]
 mod tests {
     use fuel_core_storage::{
+        StorageAsMut,
         iter::IterDirection,
         transactional::WriteTransaction,
-        StorageAsMut,
     };
     use fuel_core_types::{
         fuel_tx::{
@@ -156,14 +156,14 @@ mod tests {
 
     use crate::{
         database::{
-            database_description::off_chain::OffChain,
             Database,
+            database_description::off_chain::OffChain,
         },
         graphql_api::{
             indexation::{
                 coins_to_spend::{
-                    update,
                     RETRYABLE_BYTE,
+                    update,
                 },
                 error::IndexationError,
                 test_utils::{
@@ -527,13 +527,15 @@ mod tests {
 
         let message = make_nonretryable_message(&owner, 400);
         let message_event = Event::MessageImported(message.clone());
-        assert!(update(
-            &message_event,
-            &mut tx,
-            COINS_TO_SPEND_INDEX_IS_ENABLED,
-            &base_asset_id,
-        )
-        .is_ok());
+        assert!(
+            update(
+                &message_event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .is_ok()
+        );
 
         // When
         let result = update(
@@ -576,13 +578,15 @@ mod tests {
         let coin = make_coin(&owner, &asset_id, 100);
         let coin_event = Event::CoinCreated(coin);
 
-        assert!(update(
-            &coin_event,
-            &mut tx,
-            COINS_TO_SPEND_INDEX_IS_ENABLED,
-            &base_asset_id,
-        )
-        .is_ok());
+        assert!(
+            update(
+                &coin_event,
+                &mut tx,
+                COINS_TO_SPEND_INDEX_IS_ENABLED,
+                &base_asset_id,
+            )
+            .is_ok()
+        );
 
         // When
         let result = update(

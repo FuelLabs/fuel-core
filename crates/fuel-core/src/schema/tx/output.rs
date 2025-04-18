@@ -3,9 +3,9 @@ use crate::schema::scalars::{
     AssetId,
     Bytes32,
     ContractId,
-    UtxoId,
     U16,
     U64,
+    UtxoId,
 };
 use async_graphql::{
     Object,

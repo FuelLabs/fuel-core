@@ -1,8 +1,8 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
-    iter::IterDirection,
     Result as StorageResult,
+    iter::IterDirection,
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,

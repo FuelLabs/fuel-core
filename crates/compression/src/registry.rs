@@ -5,11 +5,11 @@ use crate::ports::{
 use fuel_core_types::{
     fuel_compression::RegistryKey,
     fuel_tx::{
-        input::PredicateCode,
         Address,
         AssetId,
         ContractId,
         ScriptCode,
+        input::PredicateCode,
     },
     tai64::Tai64,
 };

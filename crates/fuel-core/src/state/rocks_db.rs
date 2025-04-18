@@ -1,9 +1,9 @@
 use crate::{
     database::{
-        convert_to_rocksdb_direction,
-        database_description::DatabaseDescription,
         Error as DatabaseError,
         Result as DatabaseResult,
+        convert_to_rocksdb_direction,
+        database_description::DatabaseDescription,
     },
     state::IterDirection,
 };
@@ -15,6 +15,8 @@ use super::rocks_db_key_iterator::{
 use core::ops::Deref;
 use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
     iter::{
         BoxedIter,
         IntoBoxedIter,
@@ -33,8 +35,6 @@ use fuel_core_storage::{
         ReferenceBytesKey,
         StorageChanges,
     },
-    Error as StorageError,
-    Result as StorageResult,
 };
 use itertools::Itertools;
 use rocksdb::{
@@ -495,8 +495,8 @@ where
         let family = self.db.cf_handle(&Self::col_name(column));
 
         match family {
-            None => {
-                if let Some(create_family) = &self.create_family {
+            None => match &self.create_family {
+                Some(create_family) => {
                     let mut lock = create_family
                         .lock()
                         .expect("The create family lock should be available");
@@ -516,10 +516,11 @@ where
                     let family = self.db.cf_handle(&name).expect("invalid column state");
 
                     family
-                } else {
+                }
+                _ => {
                     panic!("Columns in the DB should have been created on DB opening");
                 }
-            }
+            },
             Some(family) => family,
         }
     }
@@ -556,7 +557,7 @@ where
         &self,
         prefix: &[u8],
         column: Description::Column,
-    ) -> impl Iterator<Item = StorageResult<T::Item>> + '_
+    ) -> impl Iterator<Item = StorageResult<T::Item>> + '_ + use<'_, T, Description>
     where
         T: ExtractItem,
     {
@@ -575,29 +576,32 @@ where
             )
         });
 
-        if let Some(iterator) = reverse_iterator {
-            let prefix = prefix.to_vec();
-            iterator
-                .take_while(move |item| {
-                    if let Ok(item) = item {
-                        T::starts_with(item, prefix.as_slice())
-                    } else {
-                        true
-                    }
-                })
-                .into_boxed()
-        } else {
-            // No next item, so we can start backward iteration from the end.
-            let prefix = prefix.to_vec();
-            self.iterator::<T>(column, self.read_options(), IteratorMode::End)
-                .take_while(move |item| {
-                    if let Ok(item) = item {
-                        T::starts_with(item, prefix.as_slice())
-                    } else {
-                        true
-                    }
-                })
-                .into_boxed()
+        match reverse_iterator {
+            Some(iterator) => {
+                let prefix = prefix.to_vec();
+                iterator
+                    .take_while(move |item| {
+                        if let Ok(item) = item {
+                            T::starts_with(item, prefix.as_slice())
+                        } else {
+                            true
+                        }
+                    })
+                    .into_boxed()
+            }
+            _ => {
+                // No next item, so we can start backward iteration from the end.
+                let prefix = prefix.to_vec();
+                self.iterator::<T>(column, self.read_options(), IteratorMode::End)
+                    .take_while(move |item| {
+                        if let Ok(item) = item {
+                            T::starts_with(item, prefix.as_slice())
+                        } else {
+                            true
+                        }
+                    })
+                    .into_boxed()
+            }
         }
     }
 
@@ -606,7 +610,7 @@ where
         column: Description::Column,
         opts: ReadOptions,
         iter_mode: IteratorMode,
-    ) -> impl Iterator<Item = StorageResult<T::Item>> + '_
+    ) -> impl Iterator<Item = StorageResult<T::Item>> + '_ + use<'_, T, Description>
     where
         T: ExtractItem,
     {
@@ -765,11 +769,11 @@ where
         backup_dir: &P,
     ) -> DatabaseResult<rocksdb::backup::BackupEngine> {
         use rocksdb::{
+            Env,
             backup::{
                 BackupEngine,
                 BackupEngineOptions,
             },
-            Env,
         };
 
         let backup_dir = backup_dir.as_ref().join(Description::name());

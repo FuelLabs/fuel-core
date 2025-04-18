@@ -1,9 +1,9 @@
 use anyhow::anyhow;
 use std::{
     collections::{
-        hash_map::Entry,
         HashMap,
         VecDeque,
+        hash_map::Entry,
     },
     time::Duration,
 };
@@ -54,10 +54,11 @@ impl Data {
         use std::collections::HashSet;
         // Each prunable status should be in the pruning queue
         for (status_tx_id, (status_time, _)) in &self.prunable_statuses {
-            assert!(self
-                .pruning_queue
-                .iter()
-                .any(|(time, tx_id)| tx_id == status_tx_id && time == status_time));
+            assert!(
+                self.pruning_queue
+                    .iter()
+                    .any(|(time, tx_id)| tx_id == status_tx_id && time == status_time)
+            );
         }
 
         // There should be a prunable status with given id for each pruning queue entry

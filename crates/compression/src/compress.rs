@@ -1,4 +1,5 @@
 use crate::{
+    VersionedCompressedBlock,
     config::Config,
     eviction_policy::CacheEvictor,
     ports::{
@@ -12,7 +13,6 @@ use crate::{
         RegistrationsPerTable,
         TemporalRegistryAll,
     },
-    VersionedCompressedBlock,
 };
 use anyhow::Context;
 use fuel_core_types::{
@@ -23,11 +23,11 @@ use fuel_core_types::{
         RegistryKey,
     },
     fuel_tx::{
-        input::PredicateCode,
         CompressedUtxoId,
         ScriptCode,
         TxPointer,
         UtxoId,
+        input::PredicateCode,
     },
     fuel_types::{
         Address,

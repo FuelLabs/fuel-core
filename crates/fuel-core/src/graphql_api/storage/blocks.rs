@@ -1,11 +1,11 @@
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::{
         primitive::Primitive,
         raw::Raw,
     },
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 use fuel_core_types::{
     blockchain::primitives::BlockId,

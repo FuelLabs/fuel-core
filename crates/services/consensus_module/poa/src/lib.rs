@@ -22,8 +22,8 @@ pub use config::{
     Trigger,
 };
 pub use service::{
-    new_service,
     Service,
+    new_service,
 };
 
 #[cfg(test)]

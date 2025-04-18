@@ -30,9 +30,9 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transaction {
@@ -42,7 +42,7 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
     let mut tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(10000)
         .add_input(Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             owner,
             1000,
             Default::default(),
@@ -52,7 +52,7 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
             vec![],
         ))
         .add_input(Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             owner,
             1000,
             Default::default(),
@@ -61,8 +61,8 @@ fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transact
             predicate,
             vec![],
         ))
-        .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
-        .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+        .add_output(Output::coin(rng.r#gen(), 50, AssetId::default()))
+        .add_output(Output::change(rng.r#gen(), 0, AssetId::default()))
         .finalize();
     tx.estimate_predicates(
         &CheckPredicateParams::default(),
@@ -182,16 +182,22 @@ async fn test_regression_in_subscribe() {
     let owner = Input::predicate_owner(&predicate);
     let node = FuelService::new_node(config).await.unwrap();
     let coin_pred = Input::coin_predicate(
-        rng.gen(),
+        rng.r#gen(),
         owner,
-        rng.gen(),
-        rng.gen(),
-        rng.gen(),
+        rng.r#gen(),
+        rng.r#gen(),
+        rng.r#gen(),
         Default::default(),
         predicate,
         vec![],
     );
-    let contract = Input::contract(rng.gen(), rng.gen(), rng.gen(), rng.gen(), rng.gen());
+    let contract = Input::contract(
+        rng.r#gen(),
+        rng.r#gen(),
+        rng.r#gen(),
+        rng.r#gen(),
+        rng.r#gen(),
+    );
     let contract_created = Output::contract_created(
         *contract.contract_id().unwrap(),
         *contract.state_root().unwrap(),
@@ -201,7 +207,7 @@ async fn test_regression_in_subscribe() {
         TransactionBuilder::script(vec![op::ret(0)].into_iter().collect(), vec![]);
     empty_script.script_gas_limit(100000);
 
-    let empty_create = TransactionBuilder::create(rng.gen(), rng.gen(), vec![]);
+    let empty_create = TransactionBuilder::create(rng.r#gen(), rng.r#gen(), vec![]);
     let txs = [
         empty_script.clone().add_input(coin_pred).finalize().into(),
         empty_create

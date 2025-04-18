@@ -6,11 +6,11 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
     },
-    FuelClient,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
@@ -21,8 +21,8 @@ use fuel_core_types::{
     signer::SignMode,
 };
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 #[tokio::test(start_paused = true)]

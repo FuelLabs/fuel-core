@@ -1,6 +1,6 @@
 use anyhow::{
-    anyhow,
     Context,
+    anyhow,
 };
 use parquet::{
     data_type::AsBytes,

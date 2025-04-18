@@ -3,6 +3,7 @@ use crate::{
     state::TransactableStorage,
 };
 use fuel_core_storage::{
+    Result as StorageResult,
     iter::{
         BoxedIter,
         IterDirection,
@@ -13,7 +14,6 @@ use fuel_core_storage::{
         KeyValueInspect,
         Value,
     },
-    Result as StorageResult,
 };
 use std::sync::Arc;
 

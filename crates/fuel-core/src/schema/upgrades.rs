@@ -1,13 +1,13 @@
 use crate::{
     graphql_api::{
+        IntoApiResult,
         api_service::ChainInfoProvider,
         query_costs,
-        IntoApiResult,
     },
     schema::{
+        ReadViewProvider,
         chain::ConsensusParameters,
         scalars::HexString,
-        ReadViewProvider,
     },
 };
 use async_graphql::{

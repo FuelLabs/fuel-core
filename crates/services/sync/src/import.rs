@@ -14,9 +14,9 @@ use fuel_core_services::{
 use fuel_core_types::{
     self,
     blockchain::{
-        block::Block,
         SealedBlock,
         SealedBlockHeader,
+        block::Block,
     },
     fuel_types::BlockHeight,
     services::p2p::{
@@ -26,9 +26,9 @@ use fuel_core_types::{
     },
 };
 use futures::{
-    stream::StreamExt,
     FutureExt,
     Stream,
+    stream::StreamExt,
 };
 use std::{
     future::Future,
@@ -42,8 +42,8 @@ use std::{
 use tokio::{
     pin,
     sync::{
-        mpsc,
         Notify,
+        mpsc,
     },
     task::JoinHandle,
 };
@@ -731,10 +731,13 @@ where
     let r = executor.execute_and_commit(block).await;
 
     // If the block executed successfully, mark it as committed.
-    if let Err(err) = &r {
-        tracing::error!("Execution of height {} failed: {:?}", *height, err);
-    } else {
-        state.apply(|s| s.commit(*height));
+    match &r {
+        Err(err) => {
+            tracing::error!("Execution of height {} failed: {:?}", *height, err);
+        }
+        _ => {
+            state.apply(|s| s.commit(*height));
+        }
     }
     r
 }

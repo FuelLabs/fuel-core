@@ -1,11 +1,11 @@
 use crate::{
     fuel_core_graphql_api::query_costs,
     schema::{
+        ReadViewProvider,
         scalars::{
             RelayedTransactionId,
             U32,
         },
-        ReadViewProvider,
     },
 };
 use async_graphql::{

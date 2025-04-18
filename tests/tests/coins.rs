@@ -11,13 +11,13 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    types::CoinType,
     FuelClient,
+    types::CoinType,
 };
 use fuel_core_types::fuel_tx::*;
 use rand::{
-    prelude::StdRng,
     SeedableRng,
+    prelude::StdRng,
 };
 use test_helpers::{
     assemble_tx::AssembleAndRunTx,
@@ -27,8 +27,8 @@ use test_helpers::{
 mod coin {
     use super::*;
     use fuel_core::chain_config::{
-        coin_config_helpers::CoinConfigGenerator,
         ChainConfig,
+        coin_config_helpers::CoinConfigGenerator,
     };
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
@@ -99,15 +99,15 @@ mod coin {
     #[tokio::test]
     async fn excludes_spent_coins() {
         let mut rng = StdRng::seed_from_u64(1234);
-        let asset_id_a: AssetId = rng.gen();
-        let asset_id_b: AssetId = rng.gen();
+        let asset_id_a: AssetId = rng.r#gen();
+        let asset_id_b: AssetId = rng.r#gen();
         let secret_key: SecretKey = SecretKey::random(&mut rng);
         let pk = secret_key.public_key();
         let owner = Input::owner(&pk);
         let cp = ConsensusParameters::default();
         let context = setup(owner, asset_id_a, asset_id_b, &cp).await;
 
-        let burn_address: Address = rng.gen();
+        let burn_address: Address = rng.r#gen();
 
         let balance_a: u64 = context
             .client
@@ -384,7 +384,7 @@ mod message_coin {
             .unwrap()
             .try_into()
             .unwrap();
-        let burn_address: Address = rng.gen();
+        let burn_address: Address = rng.r#gen();
 
         context
             .client

@@ -1,15 +1,6 @@
 //! The wrapper around the storage for VM implements non-storage getters.
 
 use crate::{
-    not_found,
-    tables::{
-        ConsensusParametersVersions,
-        ContractsAssets,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        StateTransitionBytecodeVersions,
-    },
     ContractsAssetsStorage,
     ContractsStateKey,
     Error as StorageError,
@@ -22,6 +13,15 @@ use crate::{
     StorageMutate,
     StorageRead,
     StorageSize,
+    not_found,
+    tables::{
+        ConsensusParametersVersions,
+        ContractsAssets,
+        ContractsRawCode,
+        ContractsState,
+        FuelBlocks,
+        StateTransitionBytecodeVersions,
+    },
 };
 use anyhow::anyhow;
 use fuel_core_types::{
@@ -425,11 +425,7 @@ where
             found_unset |= option.is_none();
         }
 
-        if found_unset {
-            Ok(None)
-        } else {
-            Ok(Some(()))
-        }
+        if found_unset { Ok(None) } else { Ok(Some(())) }
     }
 }
 

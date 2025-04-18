@@ -13,11 +13,11 @@ use test_strategy::proptest;
 
 use crate::{
     tests::utils::{
+        SenderData,
         box_senders,
         construct_senders,
         senders_strategy_any,
         tx_update_strategy,
-        SenderData,
     },
     tx_status_stream::{
         State,
@@ -34,8 +34,8 @@ use crate::{
 };
 
 use super::tests_e2e::{
-    apply_tx_state_transition,
     StateTransitions,
+    apply_tx_state_transition,
 };
 
 /// Model the function that sends a message to the receiver.

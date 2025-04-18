@@ -7,14 +7,14 @@ use crate::{
     },
     fuel_merkle::common::ProofSet,
     fuel_tx::{
+        Input,
         input::message::{
-            compute_message_id,
             MessageCoinPredicate,
             MessageCoinSigned,
             MessageDataPredicate,
             MessageDataSigned,
+            compute_message_id,
         },
-        Input,
     },
     fuel_types::{
         Address,

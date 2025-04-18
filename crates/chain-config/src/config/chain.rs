@@ -5,8 +5,8 @@ use fuel_core_types::{
     fuel_crypto::Hasher,
     fuel_tx::ConsensusParameters,
     fuel_types::{
-        fmt_truncated_hex,
         AssetId,
+        fmt_truncated_hex,
     },
 };
 use serde::{
@@ -19,8 +19,8 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::{
-    genesis::GenesisCommitment,
     ConsensusConfig,
+    genesis::GenesisCommitment,
 };
 
 #[cfg(feature = "std")]

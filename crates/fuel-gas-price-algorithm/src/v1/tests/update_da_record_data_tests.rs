@@ -2,8 +2,8 @@ use crate::v1::tests::UpdaterBuilder;
 use std::collections::BTreeMap;
 
 #[test]
-fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_include_known_blocks_with_previous_cost(
-) {
+fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_include_known_blocks_with_previous_cost()
+ {
     // given
     let recorded_heights = 1u32..=2;
     let recorded_cost = 1_000_000;
@@ -38,8 +38,8 @@ fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_include_kno
 }
 
 #[test]
-fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_never_increase_cost_more_than_recorded_cost(
-) {
+fn update_da_record_data__if_receives_batch_with_unknown_blocks_will_never_increase_cost_more_than_recorded_cost()
+ {
     // given
     let recorded_heights = 1u32..=2;
     let recorded_cost = 200;
@@ -188,8 +188,8 @@ fn update_da_record_data__if_da_height_matches_l2_height_projected_and_known_mat
 }
 
 #[test]
-fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_guesses_on_top(
-) {
+fn update_da_record_data__da_block_updates_projected_total_cost_with_known_and_guesses_on_top()
+ {
     // given
     let da_cost_per_byte = 20;
     let l2_block_height = 15;

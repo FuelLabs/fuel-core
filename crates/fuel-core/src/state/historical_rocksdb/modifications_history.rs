@@ -4,6 +4,7 @@ use crate::{
 };
 use fuel_core_storage::{
     self,
+    Mappable,
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
@@ -11,7 +12,6 @@ use fuel_core_storage::{
     },
     structured_storage::TableWithBlueprint,
     transactional::Changes,
-    Mappable,
 };
 
 /// Versioned modification history. The `const VERSION: usize` generic parameter

@@ -16,12 +16,12 @@ use crate::{
     },
 };
 use fuel_core_storage::{
+    Result as StorageResult,
     kv_store::{
         KeyValueInspect,
         Value,
         WriteOperation,
     },
-    Result as StorageResult,
 };
 use rocksdb::{
     IteratorMode,
@@ -90,22 +90,22 @@ mod tests {
     use crate::{
         database::database_description::on_chain::OnChain,
         state::{
+            TransactableStorage,
             historical_rocksdb::{
                 HistoricalRocksDB,
                 StateRewindPolicy,
             },
-            TransactableStorage,
         },
     };
     use fuel_core_storage::{
+        ContractsAssetKey,
+        StorageAsMut,
+        StorageAsRef,
         tables::ContractsAssets,
         transactional::{
             IntoTransaction,
             ReadTransaction,
         },
-        ContractsAssetKey,
-        StorageAsMut,
-        StorageAsRef,
     };
 
     fn key() -> ContractsAssetKey {

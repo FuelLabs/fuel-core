@@ -1,6 +1,6 @@
 use crate::test_context::{
-    TestContext,
     BASE_AMOUNT,
+    TestContext,
 };
 use fuel_core_chain_config::{
     ContractConfig,
@@ -15,11 +15,11 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::{
+        Salt,
         canonical::{
             Deserialize,
             Serialize,
         },
-        Salt,
     },
     services::executor::TransactionExecutionResult,
 };
