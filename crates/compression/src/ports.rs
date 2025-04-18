@@ -141,6 +141,28 @@ pub mod fault_proving {
             D::registry_root(self)
         }
     }
+
+    pub trait CompressedBlockRootProvider {
+        type Error: core::fmt::Display;
+        fn compressed_block_root_at(
+            &self,
+            height: u32,
+        ) -> Result<Option<crate::compressed_block_payload::v1::PrevRoot>, Self::Error>;
+    }
+
+    impl<D> CompressedBlockRootProvider for &mut D
+    where
+        D: CompressedBlockRootProvider,
+    {
+        type Error = D::Error;
+        fn compressed_block_root_at(
+            &self,
+            height: u32,
+        ) -> Result<Option<crate::compressed_block_payload::v1::PrevRoot>, Self::Error>
+        {
+            D::compressed_block_root_at(self, height)
+        }
+    }
 }
 
 #[cfg(feature = "fault-proving")]

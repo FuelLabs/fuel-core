@@ -358,13 +358,12 @@ where
 }
 
 #[cfg(feature = "fault-proving")]
-mod fault_proving {
+pub(crate) mod fault_proving {
     use super::*;
     use crate::storage::{
+        self,
         column::CompressionColumn,
-        {
-            self,
-        },
+        CompressedBlocksRoots,
     };
     use fuel_core_storage::{
         blueprint::BlueprintInspect,
@@ -387,7 +386,7 @@ mod fault_proving {
         MerkleRootStorage,
     };
 
-    trait ComputeRegistryRoot {
+    pub(crate) trait ComputeRegistryRoot {
         fn registry_root(&self) -> crate::Result<fuel_core_types::fuel_tx::Bytes32>;
         fn root_of_table<Table>(&self) -> Result<MerkleRoot, fuel_core_storage::Error>
         where
@@ -449,6 +448,34 @@ mod fault_proving {
         }
     }
 
+    trait CompressedBlockRoot {
+        fn compressed_block_root_at(
+            &self,
+            height: u32,
+        ) -> crate::Result<Option<fuel_core_types::fuel_tx::Bytes32>>;
+    }
+
+    impl<Storage> CompressedBlockRoot for StorageTransaction<Storage>
+    where
+        Storage: KeyValueInspect<
+            Column = MerkleizedColumn<storage::column::CompressionColumn>,
+        >,
+    {
+        fn compressed_block_root_at(
+            &self,
+            height: u32,
+        ) -> crate::Result<Option<fuel_core_types::fuel_tx::Bytes32>> {
+            let maybe_root = self
+                .storage_as_ref::<CompressedBlocksRoots>()
+                .get(&height.into())
+                .map_err(crate::errors::CompressionError::FailedToGetCompressedBlockRoot)?
+                .map(std::borrow::Cow::into_owned)
+                .map(|root| root.into());
+
+            Ok(maybe_root)
+        }
+    }
+
     macro_rules! impl_compute_registry_root {
         ($type:ty $(, $extra_generic:ident)?) => {
             impl<'a, CS $(, $extra_generic)?> ComputeRegistryRoot for $type
@@ -480,6 +507,27 @@ mod fault_proving {
 
                 fn registry_root(&self) -> crate::Result<fuel_core_types::fuel_tx::Bytes32> {
                     <Self as ComputeRegistryRoot>::registry_root(self)
+                }
+            }
+
+            impl<'a, CS $(, $extra_generic)?> CompressedBlockRoot for $type
+            where
+                CS: CompressionStoragePort,
+            {
+                fn compressed_block_root_at(&self, height: u32) -> crate::Result<Option<fuel_core_types::fuel_tx::Bytes32>> {
+                    let raw_root = self.compression_storage.storage_tx.compressed_block_root_at(height)?;
+                    Ok(raw_root.into())
+                }
+            }
+
+            impl<'a, CS $(, $extra_generic)?> fuel_core_compression::ports::CompressedBlockRootProvider for $type
+            where
+                Self: CompressedBlockRoot,
+            {
+                type Error = crate::errors::CompressionError;
+
+                fn compressed_block_root_at(&self, height: u32) -> crate::Result<Option<fuel_core_types::fuel_tx::Bytes32>> {
+                    <Self as CompressedBlockRoot>::compressed_block_root_at(self, height)
                 }
             }
         };

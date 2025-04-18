@@ -19,6 +19,7 @@ pub mod evictor_cache;
 pub mod predicate_code;
 pub mod registry_index;
 pub mod script_code;
+pub mod compressed_blocks_roots;
 // TODO: https://github.com/FuelLabs/fuel-core/issues/2842
 pub mod timestamps;
 
@@ -46,5 +47,8 @@ pub type RegistryIndex = Merkleized<registry_index::RegistryIndex>;
 /// Merkleized Timestamps table type alias
 pub type Timestamps = Merkleized<timestamps::Timestamps>;
 
-/// Re-export to match api
-pub use compressed_blocks::CompressedBlocks;
+/// Merkleized compressed blocks table type alias
+pub type CompressedBlocks = Merkleized<compressed_blocks::CompressedBlocks>;
+
+/// re-exported compressed block roots index
+pub use compressed_blocks_roots::CompressedBlocksRoots;
