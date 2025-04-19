@@ -3332,8 +3332,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4702e63db53a308a4bb57ba21e8f7dcb08f1146a9b34fce06d964306ed3e1497"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 dependencies = [
  "bitflags 2.9.0",
  "fuel-types 0.60.0",
@@ -3344,8 +3343,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aad1694f1c4f53309056d5343aae7f1944408b5c426d52d34027f4005778e54c"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 dependencies = [
  "fuel-derive 0.60.0",
  "fuel-types 0.60.0",
@@ -4158,8 +4156,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b478d21160fa528667ca477b82e2426efa5ac226a7b6fce67987d62f1b041cac"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 dependencies = [
  "base64ct",
  "coins-bip32",
@@ -4191,8 +4188,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e0b24c724f47a73f021dae315e5d2b5aec03ba6b9ef9d66377106a20a5fdcde"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4229,8 +4225,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d3a023169ea7231b6bd107c513b8b9a7ff849df5ca023c120b348da234ec20a"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 dependencies = [
  "derive_more 0.99.19",
  "digest 0.10.7",
@@ -4262,8 +4257,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8425dc32f86e2d6082126ee34998a9556306c6a79d95b85a62a05b439ff9bb19"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 
 [[package]]
 name = "fuel-tx"
@@ -4290,8 +4284,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db32cb7845a7462b02a8406303bfc5387589387418b5f4817a01bd5d3d16b287"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 dependencies = [
  "bitflags 2.9.0",
  "derive_more 1.0.0",
@@ -4324,8 +4317,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "284f4e00bb184c4d24e7fe12f5a698612c384f2b9354eba4478bb022b4fb0a33"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 dependencies = [
  "fuel-derive 0.60.0",
  "hex",
@@ -4367,8 +4359,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.60.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a07bfdb498244dc1e82de4e396a6c1f4183fd05355454e4847a727c9b5fb3331"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=fix-memory-0-60-0#c7da90ebfc97a5e55c4fc1a72958e42c5a834c1b"
 dependencies = [
  "anyhow",
  "async-trait",

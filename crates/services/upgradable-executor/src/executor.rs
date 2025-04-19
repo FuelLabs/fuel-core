@@ -235,7 +235,8 @@ impl<S, R> Executor<S, R> {
         // is on top of the branch release/v0.41.8 not on master.
         ("0-41-9", 24),
         ("0-42-0", 25),
-        ("0-43-0", LATEST_STATE_TRANSITION_VERSION),
+        ("0-43-0", 26),
+        ("0-43-1", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
