@@ -215,7 +215,7 @@ async fn happy_path() {
     // Make sure that the full balance was been withdrawn
     assert_eq!(
         ctx.client.balance(&ctx.address, None).await.unwrap(),
-        contract_balance_before_collect
+        contract_balance_before_collect as u128
     );
 }
 
