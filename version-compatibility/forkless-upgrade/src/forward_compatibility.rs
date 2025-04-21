@@ -28,6 +28,9 @@ use rand::{
 };
 use std::time::Duration;
 
+// TODO: Enable the test when new `fuel-core` is released
+//  https://github.com/FuelLabs/fuel-core/issues/2928
+#[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_state_transition_function_is_forward_compatible_with_v36_binary() {
     let (_bootstrap_node, addr) = bootstrap_node(V36_TESTNET_SNAPSHOT).await.unwrap();
