@@ -462,7 +462,7 @@ async fn handle(
                 }
                 SyncingStatus::IsSyncing(status) => {
                     json!({ "id": id, "jsonrpc": "2.0", "result": {
-                        "starting_block": status.starting_block, 
+                        "starting_block": status.starting_block,
                         "current_block": status.current_block,
                         "highest_block": status.highest_block,
                     } })
@@ -613,7 +613,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
         .balance(&recipient, Some(&base_asset_id))
         .await
         .unwrap();
-    assert_eq!(query, NON_RETRYABLE_AMOUNT);
+    assert_eq!(query, NON_RETRYABLE_AMOUNT as u128);
 
     // Expect only the non-retryable message balance to be returned via "balances"
     let query = client

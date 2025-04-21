@@ -154,10 +154,10 @@ impl ExtractedOutputs {
     ) -> bool {
         self.coins_created
             .get(utxo_id.tx_id())
-            .map_or(false, |coins| {
+            .is_some_and(|coins| {
                 coins
                     .get(&utxo_id.output_index())
-                    .map_or(false, |(a, am, asid)| {
+                    .is_some_and(|(a, am, asid)| {
                         a == address && am == amount && asid == asset_id
                     })
             })

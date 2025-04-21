@@ -108,7 +108,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<UtxoId>> {
         self.owned_coins_ids(owner, start_coin, Some(direction))
-            .map(|res| res.map_err(StorageError::from))
             .into_boxed()
     }
 
@@ -119,7 +118,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         direction: IterDirection,
     ) -> BoxedIter<'_, StorageResult<Nonce>> {
         self.owned_message_ids(owner, start_message_id, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
             .into_boxed()
     }
 
@@ -134,7 +132,6 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
             tx_idx: tx_pointer.tx_index(),
         });
         self.owned_transactions(owner, start, Some(direction))
-            .map(|result| result.map_err(StorageError::from))
             .into_boxed()
     }
 
@@ -188,8 +185,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
     ) -> StorageResult<Option<RelayedTransactionStatus>> {
         let status = self
             .storage_as_ref::<RelayedTransactionStatuses>()
-            .get(&id)
-            .map_err(StorageError::from)?
+            .get(&id)?
             .map(|cow| cow.into_owned());
         Ok(status)
     }

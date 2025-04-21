@@ -8,6 +8,7 @@ homepage = { workspace = true }
 keywords = ["blockchain", "cryptocurrencies", "fuel-core-p2p", "networking"]
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 description = "Fuel client networking"
 
 [dependencies]
