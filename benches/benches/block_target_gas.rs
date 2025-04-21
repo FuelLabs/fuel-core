@@ -205,7 +205,7 @@ pub struct SanityBenchmarkRunner<'a> {
     extra_outputs: Vec<Output>,
 }
 
-impl<'a> SanityBenchmarkRunner<'a> {
+impl SanityBenchmarkRunner<'_> {
     pub fn with_extra_inputs(mut self, extra_inputs: Vec<Input>) -> Self {
         self.extra_inputs = extra_inputs;
         self

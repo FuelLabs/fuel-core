@@ -7,6 +7,7 @@ homepage = { workspace = true }
 keywords = ["blockchain", "fuel", "fuel-vm", "upgradable"]
 license = { workspace = true }
 repository = { workspace = true }
+rust-version = { workspace = true }
 description = "Fuel Block Upgradable Executor"
 build = "build.rs"
 
@@ -23,7 +24,7 @@ futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-wasmtime = { version = "23.0.2", default-features = false, features = [
+wasmtime = { version = "31.0.0", default-features = false, features = [
   "cache",
   "cranelift",
   "parallel-compilation",

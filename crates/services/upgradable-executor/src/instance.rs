@@ -70,7 +70,7 @@ trait CallerHelper {
         Source: TransactionsSource;
 }
 
-impl<'a> CallerHelper for Caller<'a, ExecutionState> {
+impl CallerHelper for Caller<'_, ExecutionState> {
     fn write(&mut self, ptr: u32, encoded: &[u8]) -> anyhow::Result<()> {
         let memory = self.data_mut().memory.expect("Memory is initialized; qed");
         let mut store = self.as_context_mut();

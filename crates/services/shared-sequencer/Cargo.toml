@@ -8,6 +8,7 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core"]
 license = { workspace = true }
 name = "fuel-core-shared-sequencer"
 repository = { workspace = true }
+rust-version = { workspace = true }
 version = { workspace = true }
 
 [dependencies]

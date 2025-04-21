@@ -93,7 +93,7 @@ pub struct AssembleArguments<'a> {
     pub shared_memory_pool: &'a SharedMemoryPool,
 }
 
-impl<'a> AssembleArguments<'a> {
+impl AssembleArguments<'_> {
     async fn coins(
         &self,
         owner: Address,
