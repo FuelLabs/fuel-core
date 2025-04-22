@@ -784,9 +784,12 @@ mod test {
         services::relayer::Event,
         tai64::Tai64,
     };
-    use std::collections::{
-        BTreeMap,
-        BTreeSet,
+    use std::{
+        cmp::Ordering,
+        collections::{
+            BTreeMap,
+            BTreeSet,
+        },
     };
 
     #[derive(Clone, Debug)]
@@ -848,6 +851,51 @@ mod test {
         }
     }
 
+    /// wrapper type to ensure correct ordering of version strings
+    #[derive(Debug, Eq, PartialEq, Clone)]
+    struct VersionKey(String);
+
+    impl VersionKey {
+        fn new(version: String) -> Self {
+            VersionKey(version)
+        }
+
+        fn as_str(&self) -> &str {
+            &self.0
+        }
+    }
+
+    impl Ord for VersionKey {
+        fn cmp(&self, other: &Self) -> Ordering {
+            let self_parts: Vec<u32> = self
+                .0
+                .split('.')
+                .map(|s| s.parse::<u32>().unwrap_or(0))
+                .collect();
+
+            let other_parts: Vec<u32> = other
+                .0
+                .split('.')
+                .map(|s| s.parse::<u32>().unwrap_or(0))
+                .collect();
+
+            for (a, b) in self_parts.iter().zip(other_parts.iter()) {
+                match a.cmp(b) {
+                    Ordering::Equal => continue,
+                    other => return other,
+                }
+            }
+
+            self_parts.len().cmp(&other_parts.len())
+        }
+    }
+
+    impl PartialOrd for VersionKey {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
     // When this test fails, it is a sign that we need to increase the `Executor::VERSION`.
     #[test]
     fn version_check() {
@@ -860,11 +908,13 @@ mod test {
             .map(|(crate_version, version)| {
                 let executor_crate_version = crate_version.to_string().replace('-', ".");
                 seen_executor_versions.insert(*version);
-                (executor_crate_version, *version)
+                (VersionKey::new(executor_crate_version), *version)
             })
             .collect::<BTreeMap<_, _>>();
 
-        if let Some(expected_version) = seen_crate_versions.get(crate_version) {
+        if let Some(expected_version) =
+            seen_crate_versions.get(&VersionKey::new(crate_version.to_string()))
+        {
             assert_eq!(
                 *expected_version,
                 Executor::<Storage, DisabledRelayer>::VERSION,
@@ -881,7 +931,8 @@ mod test {
 
         let last_crate_version = seen_crate_versions.last_key_value().unwrap().0.clone();
         assert_eq!(
-            crate_version, last_crate_version,
+            crate_version,
+            last_crate_version.as_str(),
             "The last version in the `CRATE_VERSIONS` constant \
                    should be the same as the current crate version."
         );
