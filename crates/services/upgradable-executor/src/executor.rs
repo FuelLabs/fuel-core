@@ -163,7 +163,10 @@ impl<S, R> Executor<S, R> {
         ("0-41-6", 21),
         ("0-41-7", 22),
         ("0-41-8", 23),
-        ("0-41-9", LATEST_STATE_TRANSITION_VERSION),
+        ("0-41-9", 24),
+        // This version of the state transition version shadows the future release,
+        // i.e 0.42.0
+        ("0-41-10", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
