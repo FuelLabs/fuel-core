@@ -41,6 +41,8 @@ fn iter_lw(count: usize, base_reg: u8, word_reg: u8) -> Vec<Instruction> {
         instructions.push(op::ret(RegId::ZERO)); // revert with word_reg
     }
 
+    instructions.push(op::ret(RegId::ONE));
+
     instructions
 }
 
@@ -54,7 +56,7 @@ async fn transaction_that_uses_heap_does_not_leave_dirty_memory_for_next_transac
     let gas_limit = 100_000;
     let base_reg = 0x10;
     let word_reg = 0x11;
-    let heap_size = 10_000;
+    let heap_size = 1_000;
     let word_count = (heap_size / 8) as usize;
     let asset_id = rng.gen();
     let amount = 500;
@@ -77,7 +79,9 @@ async fn transaction_that_uses_heap_does_not_leave_dirty_memory_for_next_transac
 
     // second transaction that reads the heap
     // allocate on the heap
-    let pre_instructions = vec![op::movi(base_reg, heap_size * 3), op::aloc(base_reg)];
+    let heap_size = heap_size * 3;
+    let word_count = (heap_size / 8) as usize;
+    let pre_instructions = vec![op::movi(base_reg, heap_size), op::aloc(base_reg)];
     // read data from the heap, and if any non-zero value is detected, then revert
     let load_instructions = iter_lw(word_count, base_reg, word_reg);
 
@@ -135,20 +139,17 @@ async fn transaction_that_uses_heap_does_not_leave_dirty_memory_for_next_transac
         )
         .expect("Predicate check failed");
 
-   let heap = memory_instance.heap_raw();
-   let bytes = vec![0u8; heap.len()];
+    let heap = memory_instance.heap_raw();
+    let bytes = vec![0u8; heap.len()];
 
     let setup_predicate_tx = setup_predicate_tx.into();
 
-    let setup_res = context
+    context
         .client
         .submit_and_await_commit(&setup_predicate_tx)
-        .await;
+        .await
+        .unwrap();
 
     // the heap should be empty
     assert_eq!(bytes, heap);
-
-    assert!(setup_res.is_err_and(|err| err
-        .to_string()
-        .contains("PredicateVerificationFailed(OutOfGas)")));
 }
