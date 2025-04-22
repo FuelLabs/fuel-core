@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [Version 0.41.10]
+
+### Fixed 
+
+- [2963](https://github.com/FuelLabs/fuel-core/pull/2963): Ensure that vm heap memory is zeroed out on rellocation after `reset`. Bumps `fuel-vm` to `0.59.3`.
+
 ## [Version 0.41.9]
 
 ### Fixed
