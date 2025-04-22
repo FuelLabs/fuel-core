@@ -323,7 +323,7 @@ mod tests {
     };
     use fuel_core_chain_config::{
         BlobConfig,
-        CoinConfig,
+        ConfigCoin,
         ContractConfig,
         LastBlockConfig,
         MessageConfig,
@@ -345,7 +345,10 @@ mod tests {
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
-        entities::coins::coin::Coin,
+        entities::coins::coin::{
+            Coin,
+            UncompressedCoin,
+        },
         fuel_tx::UtxoId,
         fuel_types::{
             Address,
@@ -392,9 +395,12 @@ mod tests {
     async fn genesis_columns_are_cleared_after_import() {
         let mut rng = StdRng::seed_from_u64(10);
 
-        let coins = std::iter::repeat_with(|| CoinConfig {
-            tx_pointer_block_height: 0.into(),
-            ..Randomize::randomize(&mut rng)
+        let coins = std::iter::repeat_with(|| {
+            ConfigCoin {
+                tx_pointer_block_height: 0.into(),
+                ..Randomize::randomize(&mut rng)
+            }
+            .into()
         })
         .take(1000)
         .collect_vec();
@@ -464,7 +470,7 @@ mod tests {
         };
         let state = StateConfig {
             coins: vec![
-                CoinConfig {
+                ConfigCoin {
                     tx_id: alice_tx_id,
                     output_index: alice_output_index,
                     tx_pointer_block_height: alice_block_created,
@@ -472,13 +478,15 @@ mod tests {
                     owner: alice,
                     amount: alice_value,
                     asset_id: asset_id_alice,
-                },
-                CoinConfig {
+                }
+                .into(),
+                ConfigCoin {
                     owner: bob,
                     amount: bob_value,
                     asset_id: asset_id_bob,
                     ..Default::default()
-                },
+                }
+                .into(),
             ],
             last_block: Some(LastBlockConfig {
                 block_height: starting_height,
@@ -500,14 +508,14 @@ mod tests {
 
         assert!(matches!(
             alice_coins.as_slice(),
-            &[Coin {
+            &[UncompressedCoin::Coin(Coin {
                 utxo_id,
                 owner,
                 amount,
                 asset_id,
                 tx_pointer,
                 ..
-            }] if utxo_id == alice_utxo_id
+            })] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
             && asset_id == asset_id_alice
@@ -515,12 +523,12 @@ mod tests {
         ));
         assert!(matches!(
             bob_coins.as_slice(),
-            &[Coin {
+            &[UncompressedCoin::Coin(Coin {
                 owner,
                 amount,
                 asset_id,
                 ..
-            }] if owner == bob
+            })] if owner == bob
             && amount == bob_value
             && asset_id == asset_id_bob
         ));
@@ -631,12 +639,13 @@ mod tests {
     #[tokio::test]
     async fn coin_tx_pointer_cant_exceed_genesis_height() {
         let state = StateConfig {
-            coins: vec![CoinConfig {
+            coins: vec![ConfigCoin {
                 // set txpointer height > genesis height
                 tx_pointer_block_height: BlockHeight::from(11u32),
                 amount: 10,
                 ..Default::default()
-            }],
+            }
+            .into()],
             last_block: Some(LastBlockConfig {
                 block_height: BlockHeight::from(9u32),
                 state_transition_version: 0,
@@ -681,7 +690,7 @@ mod tests {
         assert!(init_result.is_err())
     }
 
-    fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<Coin> {
+    fn get_coins(db: &CombinedDatabase, owner: &Address) -> Vec<UncompressedCoin> {
         db.off_chain()
             .latest_view()
             .unwrap()

@@ -2,6 +2,7 @@ use fuel_core::{
     chain_config::{
         coin_config_helpers::CoinConfigGenerator,
         CoinConfig,
+        ConfigCoin,
         StateConfig,
     },
     database::Database,
@@ -45,11 +46,12 @@ async fn coin() {
     // setup test data in the node
     let output_index = 5;
     let tx_id = TxId::new([1u8; 32]);
-    let coin = CoinConfig {
+    let coin = ConfigCoin {
         output_index,
         tx_id,
         ..Default::default()
-    };
+    }
+    .into();
 
     // setup server & client
     let srv = setup_service(vec![coin]).await;
@@ -72,10 +74,13 @@ async fn first_5_coins(
     // setup test data in the node
     let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (1..10usize)
-        .map(|i| CoinConfig {
-            owner,
-            amount: i as Word,
-            ..coin_generator.generate()
+        .map(|i| {
+            ConfigCoin {
+                owner,
+                amount: i as Word,
+                ..coin_generator.generate()
+            }
+            .into()
         })
         .collect();
 
@@ -108,11 +113,14 @@ async fn only_asset_id_filtered_coins() {
     // setup test data in the node
     let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (1..10usize)
-        .map(|i| CoinConfig {
-            owner,
-            amount: i as Word,
-            asset_id: if i <= 5 { asset_id } else { Default::default() },
-            ..coin_generator.generate()
+        .map(|i| {
+            ConfigCoin {
+                owner,
+                amount: i as Word,
+                asset_id: if i <= 5 { asset_id } else { Default::default() },
+                ..coin_generator.generate()
+            }
+            .into()
         })
         .collect();
 
@@ -146,12 +154,15 @@ async fn get_coins_forwards_backwards(
 ) {
     // setup test data in the node
     let coins: Vec<_> = (1..11usize)
-        .map(|i| CoinConfig {
-            owner,
-            amount: i as Word,
-            asset_id,
-            output_index: i as u16,
-            ..Default::default()
+        .map(|i| {
+            ConfigCoin {
+                owner,
+                amount: i as Word,
+                asset_id,
+                output_index: i as u16,
+                ..Default::default()
+            }
+            .into()
         })
         .collect();
 

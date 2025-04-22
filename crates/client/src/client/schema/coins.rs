@@ -3,6 +3,7 @@ use crate::client::{
         schema,
         Address,
         AssetId,
+        HexString,
         Nonce,
         PageInfo,
         UtxoId,
@@ -24,6 +25,11 @@ pub struct CoinByIdArgs {
     pub utxo_id: UtxoId,
 }
 
+#[derive(cynic::QueryVariables, Debug)]
+pub struct DataCoinByIdArgs {
+    pub utxo_id: UtxoId,
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
@@ -33,6 +39,17 @@ pub struct CoinByIdArgs {
 pub struct CoinByIdQuery {
     #[arguments(utxoId: $ utxo_id)]
     pub coin: Option<Coin>,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "DataCoinByIdArgs"
+)]
+pub struct DataCoinByIdQuery {
+    #[arguments(utxoId: $ utxo_id)]
+    pub data_coin: Option<DataCoin>,
 }
 
 #[derive(cynic::InputObject, Clone, Debug)]
@@ -57,6 +74,54 @@ pub struct CoinsConnectionArgs {
     /// Retrieve the last n coins in order (backward pagination).
     /// Can't be used at the same time as `first`.
     pub last: Option<i32>,
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct DataCoinsConnectionArgs {
+    /// Filter coins based on a filter
+    filter: CoinFilterInput,
+    /// Skip until coin id (forward pagination)
+    pub after: Option<String>,
+    /// Skip until coin id (backward pagination)
+    pub before: Option<String>,
+    /// Retrieve the first n coins in order (forward pagination)
+    pub first: Option<i32>,
+    /// Retrieve the last n coins in order (backward pagination).
+    /// Can't be used at the same time as `first`.
+    pub last: Option<i32>,
+}
+
+impl From<(Address, Option<fuel_tx::AssetId>, PaginationRequest<String>)>
+    for DataCoinsConnectionArgs
+{
+    fn from(r: (Address, Option<fuel_tx::AssetId>, PaginationRequest<String>)) -> Self {
+        let (owner, asset_id, pagination) = r;
+        let cursor = pagination.cursor;
+        let results = pagination.results;
+        let schema_asset = asset_id.map(|a| AssetId::from(a));
+        match pagination.direction {
+            PageDirection::Forward => DataCoinsConnectionArgs {
+                filter: CoinFilterInput {
+                    owner,
+                    asset_id: schema_asset,
+                },
+                after: cursor,
+                before: None,
+                first: Some(results),
+                last: None,
+            },
+            PageDirection::Backward => DataCoinsConnectionArgs {
+                filter: CoinFilterInput {
+                    owner,
+                    asset_id: schema_asset,
+                },
+                after: None,
+                before: cursor,
+                first: None,
+                last: Some(results),
+            },
+        }
+    }
 }
 
 impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs {
@@ -98,6 +163,17 @@ pub struct CoinsQuery {
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "DataCoinsConnectionArgs"
+)]
+pub struct DataCoinsQuery {
+    #[arguments(filter: $ filter, after: $ after, before: $ before, first: $ first, last: $ last)]
+    pub data_coins: DataCoinConnection,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinConnection {
     pub edges: Vec<CoinEdge>,
@@ -106,9 +182,23 @@ pub struct CoinConnection {
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DataCoinConnection {
+    pub edges: Vec<DataCoinEdge>,
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinEdge {
     pub cursor: String,
     pub node: Coin,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DataCoinEdge {
+    pub cursor: String,
+    pub node: DataCoin,
 }
 
 #[derive(cynic::QueryFragment, Debug, Clone)]
@@ -120,6 +210,18 @@ pub struct Coin {
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
     pub owner: Address,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct DataCoin {
+    pub amount: U64,
+    pub block_created: U32,
+    pub tx_created_idx: U16,
+    pub asset_id: AssetId,
+    pub utxo_id: UtxoId,
+    pub owner: Address,
+    pub data: Option<HexString>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -180,6 +282,7 @@ pub struct MessageCoin {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum CoinType {
     Coin(Coin),
+    DataCoin(DataCoin),
     MessageCoin(MessageCoin),
     #[cynic(fallback)]
     Unknown,
@@ -189,10 +292,21 @@ impl CoinType {
     pub fn amount(&self) -> u64 {
         match self {
             CoinType::Coin(c) => c.amount.0,
+            CoinType::DataCoin(c) => c.amount.0,
             CoinType::MessageCoin(m) => m.amount.0,
             CoinType::Unknown => 0,
         }
     }
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct DataCoinsToSpendArgs {
+    /// The `Address` of the assets' coins owner.
+    owner: Address,
+    /// The total amount of each asset type to spend.
+    query_per_asset: Vec<SpendQueryElementInput>,
+    /// A list of ids to exclude from the selection.
+    excluded_ids: Option<ExcludeInput>,
 }
 
 #[derive(cynic::QueryVariables, Debug)]
@@ -207,10 +321,22 @@ pub struct CoinsToSpendArgs {
 
 pub(crate) type CoinsToSpendArgsTuple =
     (Address, Vec<SpendQueryElementInput>, Option<ExcludeInput>);
+pub(crate) type DataCoinsToSpendArgsTuple =
+    (Address, Vec<SpendQueryElementInput>, Option<ExcludeInput>);
 
 impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
     fn from(r: CoinsToSpendArgsTuple) -> Self {
         CoinsToSpendArgs {
+            owner: r.0,
+            query_per_asset: r.1,
+            excluded_ids: r.2,
+        }
+    }
+}
+
+impl From<DataCoinsToSpendArgsTuple> for DataCoinsToSpendArgs {
+    fn from(r: DataCoinsToSpendArgsTuple) -> Self {
+        DataCoinsToSpendArgs {
             owner: r.0,
             query_per_asset: r.1,
             excluded_ids: r.2,

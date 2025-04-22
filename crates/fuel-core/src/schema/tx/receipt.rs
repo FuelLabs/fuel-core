@@ -14,6 +14,8 @@ use async_graphql::{
 use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx,
+    fuel_types,
+    fuel_types::SubAssetId,
 };
 
 #[derive(
@@ -143,7 +145,10 @@ impl Receipt {
         self.0.contract_id().map(|id| ContractId(*id))
     }
     async fn sub_id(&self) -> Option<Bytes32> {
-        self.0.sub_id().copied().map(Into::into)
+        self.0
+            .sub_id()
+            .copied()
+            .map(|sub_id| fuel_types::Bytes32::from(*sub_id).into())
     }
 }
 
@@ -246,14 +251,14 @@ pub fn all_receipts() -> Vec<fuel_tx::Receipt> {
                 vec![5; 30],
             ),
             ReceiptType::Mint => fuel_tx::Receipt::mint(
-                fuel_tx::Bytes32::from([1u8; 32]),
+                SubAssetId::from([1u8; 32]),
                 fuel_tx::ContractId::from([2u8; 32]),
                 3,
                 4,
                 5,
             ),
             ReceiptType::Burn => fuel_tx::Receipt::burn(
-                fuel_tx::Bytes32::from([1u8; 32]),
+                SubAssetId::from([1u8; 32]),
                 fuel_tx::ContractId::from([2u8; 32]),
                 3,
                 4,

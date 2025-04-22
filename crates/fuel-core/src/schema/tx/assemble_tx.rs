@@ -38,7 +38,10 @@ use fuel_core_types::{
             WitnessLimit,
         },
         input::{
-            coin::CoinSigned,
+            coin::{
+                CoinSigned,
+                DataCoinSigned,
+            },
             message::{
                 MessageCoinSigned,
                 MessageDataSigned,
@@ -225,6 +228,11 @@ where
                     witness_index,
                     ..
                 })
+                | Input::DataCoinSigned(DataCoinSigned {
+                    owner,
+                    witness_index,
+                    ..
+                })
                 | Input::MessageCoinSigned(MessageCoinSigned {
                     recipient: owner,
                     witness_index,
@@ -242,6 +250,7 @@ where
                 }
 
                 Input::CoinPredicate(_)
+                | Input::DataCoinPredicate(_)
                 | Input::MessageCoinPredicate(_)
                 | Input::MessageDataPredicate(_) => {
                     has_predicates = true;
@@ -469,11 +478,11 @@ where
 
                 match coin {
                     CoinType::Coin(coin) => Input::coin_signed(
-                        coin.0.utxo_id,
-                        coin.0.owner,
-                        coin.0.amount,
-                        coin.0.asset_id,
-                        coin.0.tx_pointer,
+                        *coin.0.utxo_id(),
+                        *coin.0.owner(),
+                        *coin.0.amount(),
+                        *coin.0.asset_id(),
+                        *coin.0.tx_pointer(),
                         signature_index,
                     ),
                     CoinType::MessageCoin(message) => Input::message_coin_signed(
@@ -483,6 +492,15 @@ where
                         message.0.nonce,
                         signature_index,
                     ),
+                    CoinType::DataCoin(data_coin) => Input::data_coin_signed(
+                        *data_coin.0.utxo_id(),
+                        *data_coin.0.owner(),
+                        *data_coin.0.amount(),
+                        *data_coin.0.asset_id(),
+                        *data_coin.0.tx_pointer(),
+                        signature_index,
+                        data_coin.0.data().cloned().unwrap_or_default(),
+                    ),
                 }
             }
             Account::Predicate(predicate) => {
@@ -490,11 +508,11 @@ where
                 let predicate_gas_used = 0;
                 match coin {
                     CoinType::Coin(coin) => Input::coin_predicate(
-                        coin.0.utxo_id,
+                        *coin.0.utxo_id(),
                         predicate.predicate_address,
-                        coin.0.amount,
-                        coin.0.asset_id,
-                        coin.0.tx_pointer,
+                        *coin.0.amount(),
+                        *coin.0.asset_id(),
+                        *coin.0.tx_pointer(),
                         predicate_gas_used,
                         predicate.predicate.clone(),
                         predicate.predicate_data.clone(),
@@ -507,6 +525,17 @@ where
                         predicate_gas_used,
                         predicate.predicate.clone(),
                         predicate.predicate_data.clone(),
+                    ),
+                    CoinType::DataCoin(data_coin) => Input::data_coin_predicate(
+                        *data_coin.0.utxo_id(),
+                        predicate.predicate_address,
+                        *data_coin.0.amount(),
+                        *data_coin.0.asset_id(),
+                        *data_coin.0.tx_pointer(),
+                        predicate_gas_used,
+                        predicate.predicate.clone(),
+                        predicate.predicate_data.clone(),
+                        data_coin.0.data().cloned().unwrap_or_default(),
                     ),
                 }
             }
@@ -739,7 +768,9 @@ where
 
         let has_spendable_input = script.inputs().iter().any(|input| match input {
             Input::CoinSigned(_)
+            | Input::DataCoinSigned(_)
             | Input::CoinPredicate(_)
+            | Input::DataCoinPredicate(_)
             | Input::MessageCoinSigned(_)
             | Input::MessageCoinPredicate(_) => true,
             Input::MessageDataSigned(_)

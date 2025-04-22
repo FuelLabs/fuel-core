@@ -166,6 +166,10 @@ pub enum InputValidationError {
     NotInsertedBlobIdAlreadyTaken(BlobId),
     #[display(fmt = "Input coin does not match the values from database")]
     NotInsertedIoCoinMismatch,
+    #[display(fmt = "Input dependent on a Coin output")]
+    NotInsertedIoCoinOutput,
+    #[display(fmt = "Input dependent on a DataCoin output")]
+    NotInsertedIoDataCoinOutput,
     #[display(fmt = "Wrong number of outputs: {_0}")]
     WrongOutputNumber(String),
     #[display(fmt = "UTXO (id: {_0}) does not exist")]

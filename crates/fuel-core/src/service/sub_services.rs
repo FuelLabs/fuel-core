@@ -23,10 +23,9 @@ use fuel_core_storage::{
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
 
-use fuel_core_compression_service::service::new_service as new_compression_service;
-
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
+use fuel_core_compression_service::service::new_service as new_compression_service;
 
 #[cfg(feature = "p2p")]
 use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{

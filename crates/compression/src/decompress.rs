@@ -23,6 +23,7 @@ use fuel_core_types::{
             coin::{
                 Coin,
                 CoinSpecification,
+                DataCoin,
             },
             message::{
                 Message,
@@ -214,6 +215,41 @@ where
             predicate_gas_used,
             predicate,
             predicate_data,
+        })
+    }
+}
+
+impl<D, Specification> DecompressibleBy<DecompressCtx<D>> for DataCoin<Specification>
+where
+    D: DecompressDb,
+    Specification: CoinSpecification,
+    Specification::Predicate: DecompressibleBy<DecompressCtx<D>>,
+    Specification::PredicateData: DecompressibleBy<DecompressCtx<D>>,
+    Specification::PredicateGasUsed: DecompressibleBy<DecompressCtx<D>>,
+    Specification::Witness: DecompressibleBy<DecompressCtx<D>>,
+{
+    async fn decompress_with(
+        c: <DataCoin<Specification> as Compressible>::Compressed,
+        ctx: &DecompressCtx<D>,
+    ) -> anyhow::Result<DataCoin<Specification>> {
+        let utxo_id = UtxoId::decompress_with(c.utxo_id, ctx).await?;
+        let coin_info = ctx.db.coin(utxo_id)?;
+        let witness_index = c.witness_index.decompress(ctx).await?;
+        let predicate_gas_used = c.predicate_gas_used.decompress(ctx).await?;
+        let predicate = c.predicate.decompress(ctx).await?;
+        let predicate_data = c.predicate_data.decompress(ctx).await?;
+        let data = c.data.decompress(ctx).await?;
+        Ok(Self {
+            utxo_id,
+            owner: coin_info.owner,
+            amount: coin_info.amount,
+            asset_id: coin_info.asset_id,
+            tx_pointer: Default::default(),
+            witness_index,
+            predicate_gas_used,
+            predicate,
+            predicate_data,
+            data,
         })
     }
 }

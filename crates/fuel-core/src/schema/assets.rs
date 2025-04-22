@@ -1,8 +1,3 @@
-use async_graphql::{
-    Context,
-    Object,
-};
-
 use crate::{
     fuel_core_graphql_api::query_costs,
     graphql_api::storage::assets::AssetDetails,
@@ -16,6 +11,11 @@ use crate::{
         ReadViewProvider,
     },
 };
+use async_graphql::{
+    Context,
+    Object,
+};
+use fuel_core_types::fuel_types::Bytes32;
 
 #[derive(Default)]
 pub struct AssetInfoQuery;
@@ -47,7 +47,7 @@ impl From<AssetDetails> for AssetInfoDetails {
     fn from(details: AssetDetails) -> Self {
         AssetInfoDetails {
             contract_id: details.contract_id.into(),
-            sub_id: details.sub_id.into(),
+            sub_id: SubId::from(Bytes32::from(*details.sub_id)),
             total_supply: details.total_supply.into(),
         }
     }

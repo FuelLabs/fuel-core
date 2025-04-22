@@ -254,10 +254,10 @@ async fn assemble_transaction__transfer_non_based_asset() {
     assert_ne!(base_asset_id, non_base_asset_id);
 
     // Given
-    state_config.coins[0].owner = owner;
-    state_config.coins[0].asset_id = base_asset_id;
-    state_config.coins[1].owner = owner;
-    state_config.coins[1].asset_id = non_base_asset_id;
+    *state_config.coins[0].mut_owner() = owner;
+    *state_config.coins[0].mut_asset_id() = base_asset_id;
+    *state_config.coins[1].mut_owner() = owner;
+    *state_config.coins[1].mut_asset_id() = non_base_asset_id;
 
     let mut config = Config::local_node_with_configs(chain_config, state_config);
     config.utxo_validation = true;
@@ -314,10 +314,10 @@ async fn assemble_transaction__adds_change_output_for_non_required_non_base_bala
     assert_ne!(base_asset_id, non_base_asset_id);
 
     // Given
-    state_config.coins[0].owner = owner;
-    state_config.coins[0].asset_id = base_asset_id;
-    state_config.coins[1].owner = owner;
-    state_config.coins[1].asset_id = non_base_asset_id;
+    *state_config.coins[0].mut_owner() = owner;
+    *state_config.coins[0].mut_asset_id() = base_asset_id;
+    *state_config.coins[1].mut_owner() = owner;
+    *state_config.coins[1].mut_asset_id() = non_base_asset_id;
 
     let mut config = Config::local_node_with_configs(chain_config, state_config);
     config.utxo_validation = true;

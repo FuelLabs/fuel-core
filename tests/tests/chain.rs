@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{
         ChainConfig,
-        CoinConfig,
+        ConfigCoin,
         StateConfig,
     },
     service::{
@@ -62,14 +62,15 @@ async fn network_operates_with_non_zero_chain_id() {
     let utxo_id = UtxoId::new([1; 32].into(), 0);
 
     let state_config = StateConfig {
-        coins: vec![CoinConfig {
+        coins: vec![ConfigCoin {
             tx_id: *utxo_id.tx_id(),
             output_index: utxo_id.output_index(),
             owner,
             amount,
             asset_id: AssetId::BASE,
             ..Default::default()
-        }],
+        }
+        .into()],
         ..Default::default()
     };
     let mut chain_config = ChainConfig::local_testnet();
@@ -110,14 +111,15 @@ async fn network_operates_with_non_zero_base_asset_id() {
     let new_base_asset_id = AssetId::new([6; 32]);
 
     let state_config = StateConfig {
-        coins: vec![CoinConfig {
+        coins: vec![ConfigCoin {
             tx_id: *utxo_id.tx_id(),
             output_index: utxo_id.output_index(),
             owner,
             amount,
             asset_id: new_base_asset_id,
             ..Default::default()
-        }],
+        }
+        .into()],
         ..Default::default()
     };
     let mut chain_config = ChainConfig::local_testnet();
