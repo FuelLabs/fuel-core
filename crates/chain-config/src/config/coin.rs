@@ -228,11 +228,11 @@ impl From<CoinConfig> for TableEntry<Coins> {
                 }
             }
         };
-        tracing::debug!(
-            "Created TableEntry: key={:?}, value={:?}",
-            &entry.key,
-            &entry.value,
-        );
+        // tracing::debug!(
+        //     "Created TableEntry: key={:?}, value={:?}",
+        //     &entry.key,
+        //     &entry.value,
+        // );
         entry
     }
 }
