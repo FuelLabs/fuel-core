@@ -177,7 +177,7 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
 
     // Insert some txs
     let expected = producer.insert_txs().await;
-    validator.consistency_60s(&expected).await;
+    validator.consistency_20s(&expected).await;
     validator.node.await_compression_synced().await.unwrap();
 
     let block_height = 1u32.into();

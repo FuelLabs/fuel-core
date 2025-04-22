@@ -108,7 +108,7 @@ async fn test_peer_info() {
 
     // Wait up to 10 seconds for the validator to sync with the producer.
     // This indicates we have a successful P2P connection.
-    validator.consistency_30s(&expected).await;
+    validator.consistency_10s(&expected).await;
 
     let validator_peer_id = validator
         .node
