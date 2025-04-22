@@ -3803,6 +3803,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-types 0.43.0",
  "fuel-core-upgradable-executor",
+ "rand 0.8.5",
  "tokio",
 ]
 
