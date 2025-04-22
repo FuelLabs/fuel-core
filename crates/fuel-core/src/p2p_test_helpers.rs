@@ -606,18 +606,18 @@ impl Node {
         }
     }
 
-    /// Wait for the node to reach consistency with the given transactions within 30 seconds.
+    /// Wait for the node to reach consistency with the given transactions within 10 seconds.
     pub async fn consistency_10s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        tokio::time::timeout(Duration::from_secs(30), self.consistency(txs))
+        tokio::time::timeout(Duration::from_secs(10), self.consistency(txs))
             .await
             .unwrap_or_else(|_| {
                 panic!("Failed to reach consistency for {:?}", self.config.name)
             });
     }
 
-    /// Wait for the node to reach consistency with the given transactions within 60 seconds.
+    /// Wait for the node to reach consistency with the given transactions within 20 seconds.
     pub async fn consistency_20s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        tokio::time::timeout(Duration::from_secs(60), self.consistency(txs))
+        tokio::time::timeout(Duration::from_secs(20), self.consistency(txs))
             .await
             .unwrap_or_else(|_| {
                 panic!("Failed to reach consistency for {:?}", self.config.name)
