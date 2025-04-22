@@ -64,6 +64,7 @@ mod txn_status_subscription;
 mod txpool;
 mod upgrade;
 mod utxo_validation;
+mod vm_memory;
 
 #[test]
 fn basic_script_snapshot() {
