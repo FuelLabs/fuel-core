@@ -607,7 +607,7 @@ impl Node {
     }
 
     /// Wait for the node to reach consistency with the given transactions within 30 seconds.
-    pub async fn consistency_30s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
+    pub async fn consistency_10s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         tokio::time::timeout(Duration::from_secs(30), self.consistency(txs))
             .await
             .unwrap_or_else(|_| {
@@ -616,7 +616,7 @@ impl Node {
     }
 
     /// Wait for the node to reach consistency with the given transactions within 60 seconds.
-    pub async fn consistency_60s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
+    pub async fn consistency_20s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         tokio::time::timeout(Duration::from_secs(60), self.consistency(txs))
             .await
             .unwrap_or_else(|_| {
