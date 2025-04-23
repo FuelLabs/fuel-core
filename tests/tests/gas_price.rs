@@ -26,6 +26,7 @@ use fuel_core::{
 use fuel_core_client::client::{
     FuelClient,
     types::{
+        TransactionStatus,
         TransactionType,
         gas_price::LatestGasPrice,
     },
