@@ -21,8 +21,8 @@ fuel-core-types = { workspace = true, features = [
   "test-helpers",
   "serde",
 ] }
+fuel-core = { workspace = true, features = ["smt", "test-helpers"] }
 rand = { workspace = true }
-
 
 [features]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
