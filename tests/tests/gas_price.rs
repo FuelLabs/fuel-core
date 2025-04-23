@@ -26,6 +26,7 @@ use fuel_core::{
 use fuel_core_client::client::{
     types::{
         gas_price::LatestGasPrice,
+        TransactionStatus,
         TransactionType,
     },
     FuelClient,
@@ -64,6 +65,7 @@ use fuel_core_types::{
         ConsensusParameters,
         Finalizable,
         Input,
+        Receipt,
         Transaction,
         TransactionBuilder,
     },
@@ -1035,4 +1037,52 @@ async fn cli__starting_recorded_height_is_set_in_db() {
     let expected = BlockHeight::from(starting_recorded_height);
     assert_eq!(expected, actual);
     driver.kill().await;
+}
+
+#[allow(non_snake_case)]
+#[tokio::test]
+async fn gm_opcode__returns_the_same_gas_price_produced_by_the_gas_price_service() {
+    // given: a script transaction that calls the gm opcode to get the current gas price
+    let script = vec![op::gm_args(0x20, GMArgs::GetGasPrice), op::ret(0x20)]
+        .into_iter()
+        .collect();
+    let tx = TransactionBuilder::script(script, vec![])
+        .add_fee_input()
+        .script_gas_limit(1000)
+        .add_max_fee_limit(1000)
+        .finalize();
+
+    let mut context = TestSetupBuilder::default();
+    context.config_coin_inputs_from_transactions(&[&tx]);
+    context.starting_gas_price = 100;
+    let context = context.finalize().await;
+
+    // when: the transaction is submitted
+    let tx_status = context
+        .client
+        .submit_and_await_commit(&tx.into())
+        .await
+        .unwrap();
+
+    let gas_price_from_script = match &tx_status {
+        TransactionStatus::Success { receipts, .. } => match receipts.first() {
+            Some(Receipt::Return { val, .. }) => *val,
+            Some(_) => panic!("Unexpected receipt type"),
+            None => panic!("No receipts found"),
+        },
+        _ => panic!("Transaction failed"),
+    };
+
+    // then: ensure that the gas price returned by the script matches the gas price produced by the gas price service
+    // at the previous block height
+    let db = context.srv.shared.database.gas_price();
+    let latest_height = db.latest_height_from_metadata().unwrap().unwrap();
+    let expected_metadata = db
+        .get_metadata(&latest_height.pred().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        &gas_price_from_script,
+        &expected_metadata.v1().unwrap().new_exec_gas_price()
+    );
 }
