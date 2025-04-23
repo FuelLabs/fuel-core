@@ -630,9 +630,3 @@ fn execute__utxo_ordering_kept() {
         tx2.id(&ChainId::default())
     );
 }
-
-#[test]
-#[ignore]
-fn execute__worst_case_merging() {
-    
-}
