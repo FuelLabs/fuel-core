@@ -1,7 +1,7 @@
 use crate::client::schema::{
-    schema,
     U32,
     U64,
+    schema,
 };
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

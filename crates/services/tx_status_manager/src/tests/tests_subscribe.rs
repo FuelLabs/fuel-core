@@ -2,20 +2,20 @@ use std::collections::HashMap;
 
 use fuel_core_types::fuel_tx::Bytes32;
 use test_strategy::{
-    proptest,
     Arbitrary,
+    proptest,
 };
 
 use crate::{
     tests::utils::{
+        MockCreateChannel,
         box_senders,
         senders_strategy_all_ok,
-        MockCreateChannel,
     },
     update_sender::{
-        subscribe,
         MockSendStatus,
         Sender,
+        subscribe,
     },
 };
 

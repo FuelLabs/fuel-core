@@ -109,8 +109,9 @@ impl StorageSubscription {
         &self,
         ctx: &Context<'a>,
         contract_id: ContractId,
-    ) -> async_graphql::Result<impl Stream<Item = async_graphql::Result<StorageSlot>> + 'a>
-    {
+    ) -> async_graphql::Result<
+        impl Stream<Item = async_graphql::Result<StorageSlot>> + 'a + use<'a>,
+    > {
         require_historical_execution(ctx)?;
         let read_view: &ReadView = ctx.data_unchecked();
 
@@ -130,7 +131,7 @@ impl StorageSubscription {
         ctx: &Context<'a>,
         contract_id: ContractId,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<ContractBalance>> + 'a,
+        impl Stream<Item = async_graphql::Result<ContractBalance>> + 'a + use<'a>,
     > {
         require_historical_execution(ctx)?;
         let read_view: &ReadView = ctx.data_unchecked();

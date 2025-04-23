@@ -1,12 +1,12 @@
 use crate::v1::{
-    tests::{
-        BlockBytes,
-        UpdaterBuilder,
-    },
     Bytes,
     Error,
     Height,
     L2ActivityTracker,
+    tests::{
+        BlockBytes,
+        UpdaterBuilder,
+    },
 };
 use std::collections::BTreeMap;
 
@@ -701,8 +701,8 @@ fn capped_l2_activity_tracker() -> L2ActivityTracker {
 }
 
 #[test]
-fn update_l2_block_data__da_gas_price_wants_to_increase_will_hold_if_activity_in_hold_range(
-) {
+fn update_l2_block_data__da_gas_price_wants_to_increase_will_hold_if_activity_in_hold_range()
+ {
     // given
     let capped_activity = capped_l2_activity_tracker();
     let mut updater = negative_profit_updater_builder()
@@ -729,8 +729,8 @@ fn update_l2_block_data__da_gas_price_wants_to_increase_will_hold_if_activity_in
 }
 
 #[test]
-fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_hold_range(
-) {
+fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_hold_range()
+ {
     // given
     let capped_activity = capped_l2_activity_tracker();
     let mut updater = positive_profit_updater_builder()
@@ -763,8 +763,8 @@ fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activit
 }
 
 #[test]
-fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activity_in_decrease_range(
-) {
+fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activity_in_decrease_range()
+ {
     // given
     let decrease_activity = decrease_l2_activity();
     let mut updater = negative_profit_updater_builder()
@@ -796,8 +796,8 @@ fn update_l2_block_data__da_gas_price_wants_to_increase_will_decrease_if_activit
 }
 
 #[test]
-fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_decrease_range(
-) {
+fn update_l2_block_data__da_gas_price_wants_to_decrease_will_decrease_if_activity_in_decrease_range()
+ {
     // given
     let decrease_activity = decrease_l2_activity();
     let mut updater = positive_profit_updater_builder()

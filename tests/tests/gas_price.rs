@@ -11,12 +11,12 @@ use fuel_core::{
     },
     database::Database,
     p2p_test_helpers::{
-        make_nodes,
         BootstrapSetup,
         CustomizeConfig,
         Nodes,
         ProducerSetup,
         ValidatorSetup,
+        make_nodes,
     },
     service::{
         Config,
@@ -24,12 +24,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     types::{
-        gas_price::LatestGasPrice,
         TransactionStatus,
         TransactionType,
+        gas_price::LatestGasPrice,
     },
-    FuelClient,
 };
 use fuel_core_gas_price_service::{
     common::fuel_core_storage_adapter::storage::GasPriceMetadata,
@@ -40,27 +40,25 @@ use fuel_core_gas_price_service::{
     },
     v1::{
         da_source_service::block_committer_costs::{
-            fake_server::FakeServer,
             RawDaBlockCosts,
+            fake_server::FakeServer,
         },
         metadata::V1Metadata,
     },
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
-    transactional::AtomicView,
     StorageAsRef,
+    transactional::AtomicView,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_asm::*,
     fuel_crypto::{
-        coins_bip32::ecdsa::signature::rand_core::SeedableRng,
         SecretKey,
+        coins_bip32::ecdsa::signature::rand_core::SeedableRng,
     },
     fuel_tx::{
-        consensus_parameters::ConsensusParametersV1,
-        field::MintGasPrice,
         AssetId,
         ConsensusParameters,
         Finalizable,
@@ -68,13 +66,15 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         TransactionBuilder,
+        consensus_parameters::ConsensusParametersV1,
+        field::MintGasPrice,
     },
     fuel_types::BlockHeight,
     services::executor::TransactionExecutionResult,
 };
 use rand::{
-    prelude::StdRng,
     Rng,
+    prelude::StdRng,
 };
 use std::{
     self,
@@ -102,7 +102,7 @@ fn infinite_loop_tx<R: Rng + rand::CryptoRng>(
         .script_gas_limit(800_000)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
-            rng.gen(),
+            rng.r#gen(),
             u32::MAX as u64,
             asset_id,
             Default::default(),
@@ -126,7 +126,7 @@ fn arb_large_tx<R: Rng + rand::CryptoRng>(
         .script_gas_limit(600_000)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
-            rng.gen(),
+            rng.r#gen(),
             u32::MAX as u64,
             asset_id,
             Default::default(),
@@ -149,7 +149,7 @@ fn arb_small_tx<R: Rng + rand::CryptoRng>(
         .script_gas_limit(22430)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
-            rng.gen(),
+            rng.r#gen(),
             u32::MAX as u64,
             asset_id,
             Default::default(),

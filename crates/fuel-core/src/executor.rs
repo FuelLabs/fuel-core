@@ -33,6 +33,9 @@ mod tests {
         refs::ContractRef,
     };
     use fuel_core_storage::{
+        Result as StorageResult,
+        StorageAsMut,
+        StorageAsRef,
         tables::{
             Coins,
             ConsensusParametersVersions,
@@ -43,9 +46,6 @@ mod tests {
             AtomicView,
             WriteTransaction,
         },
-        Result as StorageResult,
-        StorageAsMut,
-        StorageAsRef,
     };
     use fuel_core_types::{
         blockchain::{
@@ -68,9 +68,9 @@ mod tests {
             },
         },
         fuel_asm::{
-            op,
             GTFArgs,
             RegId,
+            op,
         },
         fuel_crypto::SecretKey,
         fuel_merkle::{
@@ -78,28 +78,6 @@ mod tests {
             sparse,
         },
         fuel_tx::{
-            consensus_parameters::gas::GasCostsValuesV1,
-            field::{
-                Expiration,
-                InputContract,
-                Inputs,
-                MintAmount,
-                MintAssetId,
-                OutputContract,
-                Outputs,
-                Policies,
-                Script as ScriptField,
-                TxPointer as TxPointerTraitTrait,
-            },
-            input::{
-                coin::{
-                    CoinPredicate,
-                    CoinSigned,
-                },
-                contract,
-                Input,
-            },
-            policies::PolicyType,
             Bytes32,
             Cacheable,
             ConsensusParameters,
@@ -119,17 +97,42 @@ mod tests {
             UniqueIdentifier,
             UtxoId,
             ValidityError,
+            consensus_parameters::gas::GasCostsValuesV1,
+            field::{
+                Expiration,
+                InputContract,
+                Inputs,
+                MintAmount,
+                MintAssetId,
+                OutputContract,
+                Outputs,
+                Policies,
+                Script as ScriptField,
+                TxPointer as TxPointerTraitTrait,
+            },
+            input::{
+                Input,
+                coin::{
+                    CoinPredicate,
+                    CoinSigned,
+                },
+                contract,
+            },
+            policies::PolicyType,
         },
         fuel_types::{
-            canonical::Serialize,
             Address,
             AssetId,
             BlockHeight,
             ChainId,
             ContractId,
             Word,
+            canonical::Serialize,
         },
         fuel_vm::{
+            Call,
+            CallFrame,
+            Contract,
             checked_transaction::{
                 CheckError,
                 EstimatePredicates,
@@ -142,9 +145,6 @@ mod tests {
             predicate::EmptyStorage,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
-            Call,
-            CallFrame,
-            Contract,
         },
         services::{
             block_producer::Components,
@@ -163,9 +163,9 @@ mod tests {
     use fuel_core_upgradable_executor::executor::Executor;
     use itertools::Itertools;
     use rand::{
-        prelude::StdRng,
         Rng,
         SeedableRng,
+        prelude::StdRng,
     };
 
     #[derive(Clone, Debug, Default)]
@@ -229,8 +229,8 @@ mod tests {
 
     pub(crate) fn setup_executable_script() -> (Create, Script) {
         let mut rng = StdRng::seed_from_u64(2322);
-        let asset_id: AssetId = rng.gen();
-        let owner: Address = rng.gen();
+        let asset_id: AssetId = rng.r#gen();
+        let owner: Address = rng.r#gen();
         let input_amount = 1000;
         let variable_transfer_amount = 100;
         let coin_output_amount = 150;
@@ -1039,9 +1039,9 @@ mod tests {
         let script = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
-                rng.gen(),
-                rng.gen(),
-                rng.gen(),
+                rng.r#gen(),
+                rng.r#gen(),
+                rng.r#gen(),
                 Default::default(),
             )
             .script_gas_limit(gas_limit)
@@ -1144,7 +1144,7 @@ mod tests {
         )
         .add_unsigned_coin_input(
             SecretKey::random(&mut rng),
-            rng.gen(),
+            rng.r#gen(),
             10,
             Default::default(),
             Default::default(),
@@ -1269,7 +1269,7 @@ mod tests {
             producer.produce_and_commit(block.into()).unwrap();
 
         // randomize transaction commitment
-        block.header_mut().set_transaction_root(rng.gen());
+        block.header_mut().set_transaction_root(rng.r#gen());
         block.header_mut().recalculate_metadata();
 
         let err = verifier.validate_and_commit(&block).unwrap_err();
@@ -1503,12 +1503,14 @@ mod tests {
         let mut executor = create_executor(Default::default(), Default::default());
         let block: PartialFuelBlock = PartialFuelBlock {
             header: Default::default(),
-            transactions: vec![TransactionBuilder::script(vec![], vec![])
-                .max_fee_limit(100_000_000)
-                .add_fee_input()
-                .script_gas_limit(0)
-                .tip(123)
-                .finalize_as_transaction()],
+            transactions: vec![
+                TransactionBuilder::script(vec![], vec![])
+                    .max_fee_limit(100_000_000)
+                    .add_fee_input()
+                    .script_gas_limit(0)
+                    .tip(123)
+                    .finalize_as_transaction(),
+            ],
         };
 
         // When
@@ -2057,7 +2059,7 @@ mod tests {
         )
         .add_unsigned_coin_input(
             SecretKey::random(&mut rng),
-            rng.gen(),
+            rng.r#gen(),
             100,
             Default::default(),
             Default::default(),
@@ -2300,7 +2302,7 @@ mod tests {
     #[test]
     fn outputs_with_no_value_are_excluded_from_utxo_set() {
         let mut rng = StdRng::seed_from_u64(2322);
-        let asset_id: AssetId = rng.gen();
+        let asset_id: AssetId = rng.r#gen();
         let input_amount = 0;
         let coin_output_amount = 0;
 
@@ -2352,12 +2354,12 @@ mod tests {
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_message_input(
                 SecretKey::random(rng),
-                rng.gen(),
-                rng.gen(),
+                rng.r#gen(),
+                rng.r#gen(),
                 1000,
                 vec![],
             )
-            .add_output(Output::change(rng.gen(), 1000, AssetId::BASE))
+            .add_output(Output::change(rng.r#gen(), 1000, AssetId::BASE))
             .finalize();
 
         let message = message_from_input(&tx.inputs()[0], da_height);
@@ -2408,14 +2410,14 @@ mod tests {
     #[test]
     fn successful_execution_consume_all_messages() {
         let mut rng = StdRng::seed_from_u64(2322);
-        let to: Address = rng.gen();
+        let to: Address = rng.r#gen();
         let amount = 500;
 
         let tx = TransactionBuilder::script(vec![], vec![])
             // Add `Input::MessageCoin`
-            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.r#gen(), rng.r#gen(), amount, vec![])
             // Add `Input::MessageData`
-            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.r#gen(), rng.r#gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
         let tx_id = tx.id(&ChainId::default());
@@ -2453,16 +2455,16 @@ mod tests {
     #[test]
     fn reverted_execution_consume_only_message_coins() {
         let mut rng = StdRng::seed_from_u64(2322);
-        let to: Address = rng.gen();
+        let to: Address = rng.r#gen();
         let amount = 500;
 
         // Script that return `1` - failed script -> execution result will be reverted.
         let script = vec![op::ret(1)].into_iter().collect();
         let tx = TransactionBuilder::script(script, vec![])
             // Add `Input::MessageCoin`
-            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![])
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.r#gen(), rng.r#gen(), amount, vec![])
             // Add `Input::MessageData`
-            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.gen(), rng.gen(), amount, vec![0xff; 10])
+            .add_unsigned_message_input(SecretKey::random(&mut rng), rng.r#gen(), rng.r#gen(), amount, vec![0xff; 10])
             .add_output(Output::change(to, amount + amount, AssetId::BASE))
             .finalize();
         let tx_id = tx.id(&ChainId::default());
@@ -2759,7 +2761,7 @@ mod tests {
     fn get_block_height_returns_current_executing_block() {
         let mut rng = StdRng::seed_from_u64(1234);
 
-        let base_asset_id = rng.gen();
+        let base_asset_id = rng.r#gen();
 
         // return current block height
         let script = vec![op::bhei(0x10), op::ret(0x10)];
@@ -2767,7 +2769,7 @@ mod tests {
             .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
-                rng.gen(),
+                rng.r#gen(),
                 1000,
                 base_asset_id,
                 Default::default(),
@@ -2776,7 +2778,7 @@ mod tests {
 
         // setup block
         let block_height = rng.gen_range(5u32..1000u32);
-        let block_tx_idx = rng.gen();
+        let block_tx_idx = rng.r#gen();
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
@@ -2823,7 +2825,7 @@ mod tests {
     fn get_time_returns_current_executing_block_time() {
         let mut rng = StdRng::seed_from_u64(1234);
 
-        let base_asset_id = rng.gen();
+        let base_asset_id = rng.r#gen();
 
         // return current block height
         let script = vec![op::bhei(0x10), op::time(0x11, 0x10), op::ret(0x11)];
@@ -2831,7 +2833,7 @@ mod tests {
             .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
-                rng.gen(),
+                rng.r#gen(),
                 1000,
                 base_asset_id,
                 Default::default(),
@@ -2902,11 +2904,11 @@ mod tests {
         )
         .max_fee_limit(amount)
         .add_input(Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             owner,
             amount,
             AssetId::BASE,
-            rng.gen(),
+            rng.r#gen(),
             0,
             predicate,
             vec![],
@@ -2976,11 +2978,11 @@ mod tests {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .max_fee_limit(amount)
             .add_input(Input::coin_predicate(
-                rng.gen(),
+                rng.r#gen(),
                 owner,
                 amount,
                 AssetId::BASE,
-                rng.gen(),
+                rng.r#gen(),
                 0,
                 predicate,
                 vec![],
@@ -3073,12 +3075,12 @@ mod tests {
             }
         }
         let mut rng = StdRng::seed_from_u64(2322u64);
-        let base_asset_id = rng.gen();
+        let base_asset_id = rng.r#gen();
 
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
-                rng.gen(),
+                rng.r#gen(),
                 1000,
                 base_asset_id,
                 Default::default(),
@@ -3137,12 +3139,12 @@ mod tests {
             }
         }
         let mut rng = StdRng::seed_from_u64(2322u64);
-        let base_asset_id = rng.gen();
+        let base_asset_id = rng.r#gen();
 
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
-                rng.gen(),
+                rng.r#gen(),
                 1000,
                 base_asset_id,
                 Default::default(),
@@ -3224,8 +3226,8 @@ mod tests {
 
     #[test]
     #[cfg(not(feature = "wasm-executor"))]
-    fn block_producer_never_includes_more_than_max_tx_count_transactions_with_bad_tx_source(
-    ) {
+    fn block_producer_never_includes_more_than_max_tx_count_transactions_with_bad_tx_source()
+     {
         use fuel_core_executor::executor::max_tx_count;
         use std::sync::Mutex;
 
@@ -3306,21 +3308,21 @@ mod tests {
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
+            StorageAsMut,
             column::Column,
             iter::{
-                changes_iterator::ChangesIterator,
                 IteratorOverTable,
+                changes_iterator::ChangesIterator,
             },
             tables::FuelBlocks,
             transactional::StorageChanges,
-            StorageAsMut,
         };
         use fuel_core_types::{
             entities::RelayedTransaction,
             fuel_merkle::binary::root_calculator::MerkleRootCalculator,
             fuel_tx::{
-                output,
                 Chargeable,
+                output,
             },
             services::executor::ForcedTransactionFailure,
         };
@@ -3479,8 +3481,8 @@ mod tests {
         }
 
         #[test]
-        fn execute_without_commit__block_producer_includes_correct_inbox_event_merkle_root(
-        ) {
+        fn execute_without_commit__block_producer_includes_correct_inbox_event_merkle_root()
+         {
             // given
             let genesis_da_height = 3u64;
             let on_chain_db = database_with_genesis_block(genesis_da_height);
@@ -3562,8 +3564,8 @@ mod tests {
         }
 
         #[test]
-        fn execute_without_commit_with_coinbase__relayed_tx_execute_and_mint_will_have_no_fees(
-        ) {
+        fn execute_without_commit_with_coinbase__relayed_tx_execute_and_mint_will_have_no_fees()
+         {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;
@@ -3764,8 +3766,8 @@ mod tests {
         }
 
         #[test]
-        fn execute_without_commit__relayed_tx_that_passes_checks_but_fails_execution_is_reported(
-        ) {
+        fn execute_without_commit__relayed_tx_that_passes_checks_but_fails_execution_is_reported()
+         {
             let genesis_da_height = 3u64;
             let block_height = 1u32;
             let da_height = 10u64;

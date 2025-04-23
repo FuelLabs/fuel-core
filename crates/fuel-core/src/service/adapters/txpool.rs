@@ -10,14 +10,14 @@ use crate::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
+    Result as StorageResult,
+    StorageAsRef,
     tables::{
         Coins,
         ContractsRawCode,
         Messages,
         ProcessedTransactions,
     },
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_txpool::ports::{
     BlockImporter,
@@ -56,9 +56,9 @@ use fuel_core_types::{
             PreconfirmationStatus,
         },
         transaction_status::{
-            statuses,
             PreConfirmationStatus,
             TransactionStatus,
+            statuses,
         },
     },
 };
@@ -75,10 +75,9 @@ impl BlockImporter for BlockImporterAdapter {
 #[async_trait::async_trait]
 impl fuel_core_txpool::ports::NotifyP2P for P2PAdapter {
     fn broadcast_transaction(&self, transaction: Arc<Transaction>) -> anyhow::Result<()> {
-        if let Some(service) = &self.service {
-            service.broadcast_transaction(transaction)
-        } else {
-            Ok(())
+        match &self.service {
+            Some(service) => service.broadcast_transaction(transaction),
+            _ => Ok(()),
         }
     }
 
@@ -87,10 +86,11 @@ impl fuel_core_txpool::ports::NotifyP2P for P2PAdapter {
         message_info: GossipsubMessageInfo,
         validity: GossipsubMessageAcceptance,
     ) -> anyhow::Result<()> {
-        if let Some(service) = &self.service {
-            service.notify_gossip_transaction_validity(message_info, validity)
-        } else {
-            Ok(())
+        match &self.service {
+            Some(service) => {
+                service.notify_gossip_transaction_validity(message_info, validity)
+            }
+            _ => Ok(()),
         }
     }
 }
@@ -101,31 +101,31 @@ impl fuel_core_txpool::ports::P2PSubscriptions for P2PAdapter {
 
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
         use tokio_stream::{
-            wrappers::BroadcastStream,
             StreamExt,
+            wrappers::BroadcastStream,
         };
-        if let Some(service) = &self.service {
-            Box::pin(
+        match &self.service {
+            Some(service) => Box::pin(
                 BroadcastStream::new(service.subscribe_tx())
                     .filter_map(|result| result.ok()),
-            )
-        } else {
-            fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending())
+            ),
+            _ => fuel_core_services::stream::IntoBoxStream::into_boxed(
+                tokio_stream::pending(),
+            ),
         }
     }
 
     fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
         use tokio_stream::{
-            wrappers::BroadcastStream,
             StreamExt,
+            wrappers::BroadcastStream,
         };
-        if let Some(service) = &self.service {
-            Box::pin(
+        match &self.service {
+            Some(service) => Box::pin(
                 BroadcastStream::new(service.subscribe_new_peers())
                     .filter_map(|result| result.ok()),
-            )
-        } else {
-            Box::pin(fuel_core_services::stream::pending())
+            ),
+            _ => Box::pin(fuel_core_services::stream::pending()),
         }
     }
 }
@@ -134,10 +134,9 @@ impl fuel_core_txpool::ports::P2PSubscriptions for P2PAdapter {
 #[async_trait::async_trait]
 impl fuel_core_txpool::ports::P2PRequests for P2PAdapter {
     async fn request_tx_ids(&self, peer_id: PeerId) -> anyhow::Result<Vec<TxId>> {
-        if let Some(service) = &self.service {
-            service.get_all_transactions_ids_from_peer(peer_id).await
-        } else {
-            Ok(vec![])
+        match &self.service {
+            Some(service) => service.get_all_transactions_ids_from_peer(peer_id).await,
+            _ => Ok(vec![]),
         }
     }
 
@@ -146,12 +145,13 @@ impl fuel_core_txpool::ports::P2PRequests for P2PAdapter {
         peer_id: PeerId,
         tx_ids: Vec<TxId>,
     ) -> anyhow::Result<Vec<Option<Transaction>>> {
-        if let Some(service) = &self.service {
-            service
-                .get_full_transactions_from_peer(peer_id, tx_ids)
-                .await
-        } else {
-            Ok(vec![])
+        match &self.service {
+            Some(service) => {
+                service
+                    .get_full_transactions_from_peer(peer_id, tx_ids)
+                    .await
+            }
+            _ => Ok(vec![]),
         }
     }
 }

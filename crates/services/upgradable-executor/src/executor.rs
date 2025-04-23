@@ -33,13 +33,14 @@ use fuel_core_types::{
     blockchain::{
         block::Block,
         header::{
-            StateTransitionBytecodeVersion,
             LATEST_STATE_TRANSITION_VERSION,
+            StateTransitionBytecodeVersion,
         },
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
     services::{
+        Uncommitted,
         block_producer::Components,
         executor::{
             DryRunResult,
@@ -49,7 +50,6 @@ use fuel_core_types::{
             StorageReadReplayEvent,
             ValidationResult,
         },
-        Uncommitted,
     },
 };
 use futures::FutureExt;
@@ -57,13 +57,13 @@ use std::sync::Arc;
 
 #[cfg(feature = "wasm-executor")]
 use fuel_core_storage::{
+    StorageAsRef,
     not_found,
     structured_storage::StructuredStorage,
     tables::{
         StateTransitionBytecodeVersions,
         UploadedBytecodes,
     },
-    StorageAsRef,
 };
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::blockchain::block::PartialFuelBlock;
@@ -82,9 +82,9 @@ use fuel_core_types::{
 };
 #[cfg(feature = "wasm-executor")]
 use fuel_core_wasm_executor::utils::{
+    ReturnType,
     convert_from_v0_execution_result,
     convert_from_v1_execution_result,
-    ReturnType,
 };
 
 #[cfg(feature = "wasm-executor")]
@@ -549,10 +549,9 @@ where
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_storage_read_replay(block),
                 ExecutionStrategy::Wasm { module } => {
-                    if let Ok(module) = self.get_module(block_version) {
-                        self.wasm_storage_read_replay(&module, block)
-                    } else {
-                        self.wasm_storage_read_replay(module, block)
+                    match self.get_module(block_version) {
+                        Ok(module) => self.wasm_storage_read_replay(&module, block),
+                        _ => self.wasm_storage_read_replay(module, block),
                     }
                 }
             }
@@ -691,24 +690,27 @@ where
                 }
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
-                    if let Some(blocks_module) = maybe_blocks_module {
-                        self.wasm_produce_inner(
-                            &blocks_module,
-                            block,
-                            options,
-                            mode,
-                            preconfirmation_sender,
-                        )
-                        .await
-                    } else {
-                        self.wasm_produce_inner(
-                            module,
-                            block,
-                            options,
-                            mode,
-                            preconfirmation_sender,
-                        )
-                        .await
+                    match maybe_blocks_module {
+                        Some(blocks_module) => {
+                            self.wasm_produce_inner(
+                                &blocks_module,
+                                block,
+                                options,
+                                mode,
+                                preconfirmation_sender,
+                            )
+                            .await
+                        }
+                        _ => {
+                            self.wasm_produce_inner(
+                                module,
+                                block,
+                                options,
+                                mode,
+                                preconfirmation_sender,
+                            )
+                            .await
+                        }
                     }
                 }
             }
@@ -763,10 +765,11 @@ where
                 ExecutionStrategy::Native => self.native_validate_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
                     let maybe_blocks_module = self.get_module(block_version).ok();
-                    if let Some(blocks_module) = maybe_blocks_module {
-                        self.wasm_validate_inner(&blocks_module, block, options)
-                    } else {
-                        self.wasm_validate_inner(module, block, options)
+                    match maybe_blocks_module {
+                        Some(blocks_module) => {
+                            self.wasm_validate_inner(&blocks_module, block, options)
+                        }
+                        _ => self.wasm_validate_inner(module, block, options),
                     }
                 }
             }
@@ -1173,12 +1176,12 @@ where
 mod test {
     use super::*;
     use fuel_core_storage::{
+        Result as StorageResult,
+        StorageAsMut,
         kv_store::Value,
         structured_storage::test::InMemoryStorage,
         tables::ConsensusParametersVersions,
         transactional::WriteTransaction,
-        Result as StorageResult,
-        StorageAsMut,
     };
     use fuel_core_types::{
         blockchain::{
@@ -1408,15 +1411,17 @@ mod test {
                     generated: Empty,
                 },
             },
-            vec![Transaction::mint(
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                AssetId::BASE,
-                Default::default(),
-            )
-            .into()],
+            vec![
+                Transaction::mint(
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                    AssetId::BASE,
+                    Default::default(),
+                )
+                .into(),
+            ],
         )
         .generate(
             &[],
@@ -1469,8 +1474,8 @@ mod test {
     mod wasm {
         use super::*;
         use crate::{
-            executor::Executor,
             WASM_BYTECODE,
+            executor::Executor,
         };
         use fuel_core_storage::tables::UploadedBytecodes;
         use fuel_core_types::fuel_vm::UploadedBytecode;

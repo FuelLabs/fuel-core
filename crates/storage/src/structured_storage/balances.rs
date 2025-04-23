@@ -3,6 +3,7 @@
 #[cfg(feature = "smt")]
 mod smt {
     use crate::{
+        Mappable,
         blueprint::sparse::{
             PrimaryKey,
             Sparse,
@@ -14,13 +15,12 @@ mod smt {
         column::Column,
         structured_storage::TableWithBlueprint,
         tables::{
+            ContractsAssets,
             merkle::{
                 ContractsAssetsMerkleData,
                 ContractsAssetsMerkleMetadata,
             },
-            ContractsAssets,
         },
-        Mappable,
     };
     use alloc::borrow::Cow;
 
@@ -56,8 +56,8 @@ mod smt {
     #[allow(non_snake_case)]
     mod test {
         use rand::{
-            prelude::StdRng,
             Rng,
+            prelude::StdRng,
         };
 
         use crate::blueprint::sparse::root_storage_tests_smt::{
@@ -113,7 +113,7 @@ mod smt {
             }
 
             fn generate_value(rng: &mut StdRng) -> Self::Value {
-                Wrapper(rng.gen())
+                Wrapper(rng.r#gen())
             }
         }
 

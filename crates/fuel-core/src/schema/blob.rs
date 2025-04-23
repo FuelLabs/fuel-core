@@ -2,11 +2,11 @@ use crate::{
     fuel_core_graphql_api::query_costs,
     graphql_api::IntoApiResult,
     schema::{
+        ReadViewProvider,
         scalars::{
             BlobId,
             HexString,
         },
-        ReadViewProvider,
     },
 };
 use async_graphql::{

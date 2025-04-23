@@ -8,8 +8,8 @@ use fuel_core_types::{
     },
 };
 use libp2p::{
-    request_response::OutboundFailure,
     PeerId,
+    request_response::OutboundFailure,
 };
 use serde::{
     Deserialize,
@@ -186,8 +186,8 @@ mod tests {
     }
 
     #[test]
-    fn response_message_error_code__unknown_error_code_is_deserialized_to_unknown_variant(
-    ) {
+    fn response_message_error_code__unknown_error_code_is_deserialized_to_unknown_variant()
+     {
         let serialized_error_code = vec![42];
         let response_message_error_code: ResponseMessageErrorCode =
             postcard::from_bytes(&serialized_error_code).unwrap();

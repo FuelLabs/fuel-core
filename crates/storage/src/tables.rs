@@ -171,7 +171,7 @@ pub mod merkle {
             &self,
             rng: &mut R,
         ) -> DenseMetadataKey<PrimaryKey> {
-            DenseMetadataKey::Primary(rng.gen())
+            DenseMetadataKey::Primary(rng.r#gen())
         }
     }
 

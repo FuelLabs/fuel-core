@@ -1,12 +1,12 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
+            GasPriceSettings,
+            GasPriceSettingsProvider,
             block_bytes,
             get_block_info,
             mint_values,
             storage::GasPriceColumn,
-            GasPriceSettings,
-            GasPriceSettingsProvider,
         },
         gas_price_algorithm::{
             GasPriceAlgorithm,
@@ -39,14 +39,14 @@ use crate::{
             },
         },
         metadata::{
-            v1_algorithm_from_metadata,
             V1AlgorithmConfig,
             V1Metadata,
+            v1_algorithm_from_metadata,
         },
         service::{
-            initialize_algorithm,
             GasPriceServiceV1,
             LatestGasPrice,
+            initialize_algorithm,
         },
         uninitialized_task::fuel_storage_unrecorded_blocks::{
             AsUnrecordedBlocks,
@@ -56,12 +56,12 @@ use crate::{
 };
 use anyhow::Error;
 use fuel_core_services::{
-    stream::BoxStream,
     RunnableService,
     Service,
     ServiceRunner,
     State,
     StateWatcher,
+    stream::BoxStream,
 };
 use fuel_core_storage::{
     kv_store::{
@@ -86,8 +86,8 @@ use fuel_gas_price_algorithm::v1::{
 };
 use std::{
     sync::{
-        atomic::AtomicU32,
         Arc,
+        atomic::AtomicU32,
     },
     time::Duration,
 };

@@ -11,14 +11,18 @@ use fuel_core_services::stream::{
 };
 use fuel_core_types::{
     blockchain::{
+        SealedBlock,
         block::{
             Block,
             CompressedBlock,
         },
         header::ConsensusParametersVersion,
-        SealedBlock,
     },
     fuel_tx::{
+        ConsensusParameters,
+        Mint,
+        Transaction,
+        UniqueIdentifier,
         consensus_parameters::{
             ConsensusParametersV1,
             FeeParameters,
@@ -28,17 +32,13 @@ use fuel_core_types::{
             MintAmount,
             MintGasPrice,
         },
-        ConsensusParameters,
-        Mint,
-        Transaction,
-        UniqueIdentifier,
     },
     fuel_types::ChainId,
     services::block_importer::ImportResult,
 };
 use futures::future::{
-    maybe_done,
     MaybeDone,
+    maybe_done,
 };
 use std::{
     ops::Deref,

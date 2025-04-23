@@ -8,11 +8,11 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     types::primitives::{
         Address,
         AssetId,
     },
-    FuelClient,
 };
 use fuel_core_types::fuel_tx;
 
@@ -190,8 +190,8 @@ async fn request_with_required_block_height_extension_waits_when_within_threshol
 }
 
 #[tokio::test]
-async fn request_with_required_block_height_extension_fails_when_timeout_while_within_threshold(
-) {
+async fn request_with_required_block_height_extension_fails_when_timeout_while_within_threshold()
+ {
     let owner = Address::default();
     let asset_id = AssetId::BASE;
 

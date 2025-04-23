@@ -17,10 +17,6 @@ use crate::{
 };
 
 use fuel_core_services::{
-    stream::{
-        BoxStream,
-        IntoBoxStream,
-    },
     RunnableService,
     RunnableTask,
     Service,
@@ -28,6 +24,10 @@ use fuel_core_services::{
     SharedMutex,
     StateWatcher,
     TaskNextAction,
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;

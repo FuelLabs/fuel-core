@@ -4,6 +4,9 @@
 //! the key and value and puts/takes them into/from the storage.
 
 use crate::{
+    Error as StorageError,
+    Mappable,
+    Result as StorageResult,
     blueprint::{
         BlueprintInspect,
         BlueprintMutate,
@@ -22,9 +25,6 @@ use crate::{
         WriteOperation,
     },
     structured_storage::TableWithBlueprint,
-    Error as StorageError,
-    Mappable,
-    Result as StorageResult,
 };
 
 /// The type that represents the plain blueprint.
@@ -170,7 +170,7 @@ where
 #[cfg(feature = "test-helpers")]
 #[macro_export]
 macro_rules! basic_storage_tests {
-    ($table:ident, $key:expr, $value_insert:expr, $value_return:expr, $random_key:expr) => {
+    ($table:ident, $key:expr_2021, $value_insert:expr_2021, $value_return:expr_2021, $random_key:expr_2021) => {
         $crate::paste::item! {
         #[cfg(test)]
         #[allow(unused_imports)]
@@ -192,7 +192,7 @@ macro_rules! basic_storage_tests {
                 R: rand::Rng,
             {
                 use rand::Rng;
-                rng.gen()
+                rng.r#gen()
             }
 
             #[test]
@@ -321,8 +321,8 @@ macro_rules! basic_storage_tests {
                 let mut init_structured_storage = init_storage.write_transaction();
 
                 let mut rng = &mut StdRng::seed_from_u64(1234);
-                let gen = || Some($random_key(&mut rng));
-                let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
+                let r#gen = || Some($random_key(&mut rng));
+                let data = core::iter::from_fn(r#gen).take(5_000).collect::<Vec<_>>();
                 let value = $value_insert;
 
                 <_ as $crate::StorageBatchMutate<$table>>::init_storage(
@@ -370,10 +370,10 @@ macro_rules! basic_storage_tests {
             }
         }}
     };
-    ($table:ident, $key:expr, $value_insert:expr, $value_return:expr) => {
+    ($table:ident, $key:expr_2021, $value_insert:expr_2021, $value_return:expr_2021) => {
         $crate::basic_storage_tests!($table, $key, $value_insert, $value_return, random);
     };
-    ($table:ident, $key:expr, $value:expr) => {
+    ($table:ident, $key:expr_2021, $value:expr_2021) => {
         $crate::basic_storage_tests!($table, $key, $value, $value);
     };
 }

@@ -1,10 +1,10 @@
 //! Stream that yields each `batch_size` items allowing other tasks to work.
 
 use futures::{
-    ready,
-    stream::Fuse,
     Stream,
     StreamExt,
+    ready,
+    stream::Fuse,
 };
 use std::{
     pin::Pin,

@@ -11,6 +11,7 @@ use ethers_core::{
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::{
+        RelayedTransaction,
         relayer::{
             message::{
                 Message,
@@ -18,7 +19,6 @@ use fuel_core_types::{
             },
             transaction::RelayedTransactionV1,
         },
-        RelayedTransaction,
     },
     fuel_types::{
         Address,

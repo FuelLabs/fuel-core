@@ -4,6 +4,11 @@ use std::{
 };
 
 use async_graphql::{
+    ErrorExtensionValues,
+    Request,
+    Response,
+    ServerResult,
+    Value,
     extensions::{
         Extension,
         ExtensionContext,
@@ -11,11 +16,6 @@ use async_graphql::{
         NextExecute,
         NextPrepareRequest,
     },
-    ErrorExtensionValues,
-    Request,
-    Response,
-    ServerResult,
-    Value,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 

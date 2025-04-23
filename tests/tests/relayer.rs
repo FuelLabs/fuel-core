@@ -18,6 +18,7 @@ use fuel_core::{
     state::rocks_db::DatabaseConfig,
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
@@ -27,18 +28,17 @@ use fuel_core_client::client::{
         RelayedTransactionStatus as ClientRelayedTransactionStatus,
         TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_poa::service::Mode;
 use fuel_core_relayer::test_helpers::{
-    middleware::MockMiddleware,
     EvtToLog,
     LogTestHelper,
+    middleware::MockMiddleware,
 };
 use fuel_core_storage::{
-    tables::Messages,
     StorageAsMut,
     StorageAsRef,
+    tables::Messages,
 };
 use fuel_core_types::{
     entities::relayer::transaction::RelayedTransactionStatus as FuelRelayedTransactionStatus,
@@ -52,18 +52,18 @@ use fuel_core_types::{
 };
 use fuel_types::Bytes20;
 use hyper::{
-    service::{
-        make_service_fn,
-        service_fn,
-    },
     Body,
     Request,
     Response,
     Server,
+    service::{
+        make_service_fn,
+        service_fn,
+    },
 };
 use rand::{
-    prelude::StdRng,
     SeedableRng,
+    prelude::StdRng,
 };
 use serde_json::json;
 use std::{
@@ -119,10 +119,12 @@ async fn relayer_can_download_logs() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
-        .as_str()
-        .try_into()
-        .unwrap()]);
+    relayer_config.relayer = Some(vec![
+        format!("http://{}", eth_node_handle.address)
+            .as_str()
+            .try_into()
+            .unwrap(),
+    ]);
     let db = Database::in_memory();
 
     let srv = FuelService::from_database(db.clone(), config)
@@ -187,10 +189,12 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
-        .as_str()
-        .try_into()
-        .unwrap()]);
+    relayer_config.relayer = Some(vec![
+        format!("http://{}", eth_node_handle.address)
+            .as_str()
+            .try_into()
+            .unwrap(),
+    ]);
 
     // setup fuel node with mocked eth url
     let db = Database::in_memory();
@@ -318,10 +322,12 @@ async fn can_restart_node_with_relayer_data() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
-        .as_str()
-        .try_into()
-        .unwrap()]);
+    relayer_config.relayer = Some(vec![
+        format!("http://{}", eth_node_handle.address)
+            .as_str()
+            .try_into()
+            .unwrap(),
+    ]);
 
     let tmp_dir = tempfile::TempDir::new().unwrap();
 
@@ -526,10 +532,12 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
-    relayer_config.relayer = Some(vec![format!("http://{}", eth_node_handle.address)
-        .as_str()
-        .try_into()
-        .unwrap()]);
+    relayer_config.relayer = Some(vec![
+        format!("http://{}", eth_node_handle.address)
+            .as_str()
+            .try_into()
+            .unwrap(),
+    ]);
 
     config.utxo_validation = true;
 

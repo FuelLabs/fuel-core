@@ -7,13 +7,13 @@ use crate::{
     fuel_core_graphql_api::query_costs,
     graphql_api::storage::assets::AssetDetails,
     schema::{
+        ReadViewProvider,
         scalars::{
             AssetId,
             ContractId,
             SubId,
             U128,
         },
-        ReadViewProvider,
     },
 };
 

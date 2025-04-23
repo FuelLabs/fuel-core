@@ -6,8 +6,8 @@ use crate::helpers::{
 };
 use fuel_core::service::FuelService;
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
@@ -19,9 +19,9 @@ use fuel_core_types::{
 use futures::StreamExt;
 use itertools::Itertools;
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::time::Duration;
 use test_helpers::{
@@ -46,7 +46,7 @@ async fn txs_max_script_gas_limit() {
             .script_gas_limit(MAX_GAS_LIMIT / 2)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
-                rng.gen(),
+                rng.r#gen(),
                 1000 + i,
                 Default::default(),
                 Default::default(),
@@ -54,7 +54,7 @@ async fn txs_max_script_gas_limit() {
             .add_output(Output::Change {
                 amount: 0,
                 asset_id: Default::default(),
-                to: rng.gen(),
+                to: rng.r#gen(),
             })
             .finalize()
         })
@@ -138,8 +138,8 @@ async fn informs_immediately_if_the_input_was_spent_during_open_period() {
 }
 
 #[tokio::test]
-async fn informs_immediately_if_the_input_was_spent_during_previous_blocks_without_timeout(
-) {
+async fn informs_immediately_if_the_input_was_spent_during_previous_blocks_without_timeout()
+ {
     let mut config = config_with_fee();
     config.block_production = Trigger::Open {
         period: Duration::from_secs(1),

@@ -2,13 +2,13 @@
 
 use crate::{
     chain_config::{
-        coin_config_helpers::CoinConfigGenerator,
         CoinConfig,
+        coin_config_helpers::CoinConfigGenerator,
     },
     combined_database::CombinedDatabase,
     database::{
-        database_description::off_chain::OffChain,
         Database,
+        database_description::off_chain::OffChain,
     },
     fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
@@ -36,17 +36,17 @@ use fuel_core_p2p::{
     service::to_message_acceptance,
 };
 use fuel_core_poa::{
-    ports::BlockImporter,
     Trigger,
+    ports::BlockImporter,
 };
 use fuel_core_storage::{
-    transactional::AtomicView,
     StorageAsRef,
+    transactional::AtomicView,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         RegId,
+        op,
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
@@ -67,8 +67,8 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::{
     collections::HashMap,

@@ -1,7 +1,7 @@
 use super::HexString;
 use crate::client::schema::{
-    schema,
     U32,
+    schema,
 };
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

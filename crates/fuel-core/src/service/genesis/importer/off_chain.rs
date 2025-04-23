@@ -1,7 +1,7 @@
 use crate::{
     database::{
-        database_description::off_chain::OffChain,
         GenesisDatabase,
+        database_description::off_chain::OffChain,
     },
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::{
@@ -25,6 +25,7 @@ use crate::{
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
+    StorageAsMut,
     tables::{
         Coins,
         FuelBlocks,
@@ -33,14 +34,13 @@ use fuel_core_storage::{
         Transactions,
     },
     transactional::StorageTransaction,
-    StorageAsMut,
 };
 use fuel_core_types::services::executor::Event;
 use std::borrow::Cow;
 
 use super::{
-    import_task::ImportTable,
     Handler,
+    import_task::ImportTable,
 };
 
 fn balances_indexation_enabled() -> bool {

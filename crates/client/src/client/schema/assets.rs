@@ -1,9 +1,9 @@
 use crate::client::schema::{
-    schema,
     AssetId,
     ContractId,
     SubId,
     U128,
+    schema,
 };
 
 #[derive(cynic::QueryVariables, Debug)]

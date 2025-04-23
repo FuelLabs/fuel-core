@@ -4,12 +4,6 @@ use crate::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
-        field::{
-            Inputs,
-            Outputs,
-            ScriptGasLimit,
-            Tip,
-        },
         Blob,
         Cacheable,
         Chargeable,
@@ -22,6 +16,12 @@ use crate::{
         Upgrade,
         Upload,
         UtxoId,
+        field::{
+            Inputs,
+            Outputs,
+            ScriptGasLimit,
+            Tip,
+        },
     },
     fuel_vm::checked_transaction::Checked,
 };

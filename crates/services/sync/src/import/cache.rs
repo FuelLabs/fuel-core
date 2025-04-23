@@ -221,11 +221,11 @@ impl Cache {
 #[cfg(test)]
 mod tests {
     use crate::import::{
+        Batch,
         cache::{
             Cache,
             CachedDataBatch,
         },
-        Batch,
     };
     use fuel_core_types::{
         blockchain::{

@@ -1,11 +1,11 @@
 use fuel_core_services::{
-    stream::IntoBoxStream,
     Service,
+    stream::IntoBoxStream,
 };
 use fuel_core_types::services::p2p::Transactions;
 use futures::{
-    stream,
     StreamExt,
+    stream,
 };
 
 use crate::{

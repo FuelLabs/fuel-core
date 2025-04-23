@@ -1,13 +1,13 @@
 #![allow(non_snake_case)]
 
 use fuel_core::p2p_test_helpers::{
-    make_nodes,
     BootstrapSetup,
     BootstrapType,
     CustomizeConfig,
     Nodes,
     ProducerSetup,
     ValidatorSetup,
+    make_nodes,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
@@ -15,8 +15,8 @@ use fuel_core_types::{
     fuel_tx::Input,
 };
 use rand::{
-    prelude::StdRng,
     SeedableRng,
+    prelude::StdRng,
 };
 use std::time::Duration;
 
@@ -58,8 +58,8 @@ async fn max_discovery_peers_connected__node_will_not_discover_new_nodes_if_full
 }
 
 #[tokio::test]
-async fn max_functional_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full(
-) {
+async fn max_functional_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full()
+ {
     let mut rng = StdRng::seed_from_u64(1234);
 
     // given

@@ -1,14 +1,18 @@
 use fuel_core_storage::{
+    MerkleRoot,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageAsRef,
     column::Column,
     kv_store::KeyValueInspect,
     tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
         merkle::{
             DenseMetadataKey,
             FuelBlockMerkleMetadata,
         },
-        FuelBlocks,
-        SealedBlockConsensus,
-        Transactions,
     },
     transactional::{
         Changes,
@@ -18,16 +22,12 @@ use fuel_core_storage::{
         StorageTransaction,
         WriteTransaction,
     },
-    MerkleRoot,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{
+        SealedBlock,
         block::Block,
         consensus::Consensus,
-        SealedBlock,
     },
     fuel_tx::UniqueIdentifier,
     fuel_types::{
