@@ -149,6 +149,9 @@ pub struct Config<State = Initialized> {
 
     /// If true, the node will subscribe to pre-confirmations topic
     pub subscribe_to_pre_confirmations: bool,
+    
+    /// If true, the node will subscribe to transactions topic
+    pub subscribe_to_transactions: bool,
 }
 
 /// The initialized state can be achieved only by the `init` function because `()` is private.
@@ -199,6 +202,7 @@ impl Config<NotInitialized> {
             tx_pool_threads: self.tx_pool_threads,
             state: Initialized(()),
             subscribe_to_pre_confirmations: self.subscribe_to_pre_confirmations,
+            subscribe_to_transactions: self.subscribe_to_transactions,
         })
     }
 }
@@ -254,6 +258,7 @@ impl Config<NotInitialized> {
             tx_pool_threads: 0,
             state: NotInitialized,
             subscribe_to_pre_confirmations: true,
+            subscribe_to_transactions: false,
         }
     }
 }
