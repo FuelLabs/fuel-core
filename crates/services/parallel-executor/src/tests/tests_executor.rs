@@ -163,6 +163,11 @@ fn execute__simple_independent_transactions_sorted() {
                     TransactionFiltered::NotFiltered,
                 ))
                 .unwrap();
+            // Request for thread 2
+            let (_request, response_channel) = tx_pool_requests_receiver.recv().unwrap();
+            response_channel
+                .send((vec![], TransactionFiltered::NotFiltered))
+                .unwrap();
         }
     });
 

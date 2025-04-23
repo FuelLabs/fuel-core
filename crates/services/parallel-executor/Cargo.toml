@@ -18,10 +18,7 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [dev-dependencies]
 fuel-core = { workspace = true, features = ["smt", "test-helpers"] }
-fuel-core-types = { workspace = true, features = [
-  "test-helpers",
-  "serde",
-] }
+fuel-core-types = { workspace = true, features = ["test-helpers", "serde",] }
 rand = { workspace = true }
 
 [features]
