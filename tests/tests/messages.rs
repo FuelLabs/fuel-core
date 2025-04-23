@@ -9,31 +9,31 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
     },
     types::{
+        TransactionStatus,
         assemble_tx::{
             ChangePolicy,
             RequiredBalance,
         },
         message::MessageStatus,
-        TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_crypto::*,
     fuel_merkle,
     fuel_tx::{
-        input::message::compute_message_id,
         Word,
+        input::message::compute_message_id,
         *,
     },
     fuel_types::ChainId,

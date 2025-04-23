@@ -1,8 +1,8 @@
 use crate::{
     codecs::{
+        RequestResponseProtocols,
         postcard::PostcardCodec,
         request_response::RequestResponseMessageHandler,
-        RequestResponseProtocols,
     },
     config::Config,
     connection_limits,
@@ -19,6 +19,8 @@ use crate::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
+    Multiaddr,
+    PeerId,
     allow_block_list,
     gossipsub::{
         self,
@@ -35,8 +37,6 @@ use libp2p::{
         ResponseChannel,
     },
     swarm::NetworkBehaviour,
-    Multiaddr,
-    PeerId,
 };
 use std::collections::HashSet;
 

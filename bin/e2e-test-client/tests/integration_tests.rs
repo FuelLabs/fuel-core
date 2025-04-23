@@ -41,11 +41,11 @@ async fn works_in_multinode_local_env() {
     use fuel_core::p2p_test_helpers::*;
     use fuel_core_types::{
         fuel_crypto::{
-            rand::{
-                prelude::StdRng,
-                SeedableRng,
-            },
             SecretKey,
+            rand::{
+                SeedableRng,
+                prelude::StdRng,
+            },
         },
         fuel_tx::Input,
     };

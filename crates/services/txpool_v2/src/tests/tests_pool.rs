@@ -15,23 +15,22 @@ use crate::{
     tests::{
         mocks::MockWasmChecker,
         universe::{
+            GAS_LIMIT,
+            IntoEstimated,
+            TEST_COIN_AMOUNT,
+            TestPoolUniverse,
             create_contract_input,
             create_contract_output,
             create_message_predicate_from_message,
-            IntoEstimated,
-            TestPoolUniverse,
-            GAS_LIMIT,
-            TEST_COIN_AMOUNT,
         },
     },
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         RegId,
+        op,
     },
     fuel_tx::{
-        input::coin::CoinPredicate,
         Address,
         AssetId,
         BlobBody,
@@ -51,15 +50,16 @@ use fuel_core_types::{
         UpgradePurpose,
         UtxoId,
         ValidityError,
+        input::coin::CoinPredicate,
     },
     fuel_types::ChainId,
     fuel_vm::{
+        PredicateVerificationFailed,
         checked_transaction::{
             CheckError,
             CheckedTransaction,
             IntoChecked,
         },
-        PredicateVerificationFailed,
     },
 };
 
@@ -1272,7 +1272,7 @@ fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
         universe.build_script_transaction(inputs.clone(), Some(vec![output_a]), 1);
     let mut pool_dependency_tx = universe.verify_and_insert(dependency_tx).unwrap();
     inputs = Some(vec![
-        unset_input.into_input(UtxoId::new(pool_dependency_tx.id(), 0))
+        unset_input.into_input(UtxoId::new(pool_dependency_tx.id(), 0)),
     ]);
 
     // When

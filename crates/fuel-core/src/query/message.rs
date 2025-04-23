@@ -1,14 +1,14 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsRef,
     iter::{
         BoxedIter,
         IterDirection,
     },
     not_found,
     tables::Messages,
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
@@ -20,9 +20,9 @@ use fuel_core_types::{
     },
     fuel_merkle::binary::in_memory::MerkleTree,
     fuel_tx::{
-        input::message::compute_message_id,
         Receipt,
         TxId,
+        input::message::compute_message_id,
     },
     fuel_types::{
         Address,
@@ -359,8 +359,8 @@ mod tests {
     };
 
     use super::{
-        message_proof,
         MessageProofData,
+        message_proof,
     };
 
     pub struct FakeDB {

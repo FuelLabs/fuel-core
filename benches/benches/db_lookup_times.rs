@@ -1,7 +1,7 @@
 use criterion::{
+    Criterion,
     criterion_group,
     criterion_main,
-    Criterion,
 };
 use fuel_core_benches::db_lookup_times_utils::{
     matrix::matrix,
@@ -10,10 +10,10 @@ use fuel_core_benches::db_lookup_times_utils::{
         seed_full_block_matrix,
     },
     utils::{
-        get_random_block_height,
-        open_rocks_db,
         LookupMethod,
         Result as DbLookupBenchResult,
+        get_random_block_height,
+        open_rocks_db,
     },
 };
 

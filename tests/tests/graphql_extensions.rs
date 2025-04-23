@@ -1,11 +1,10 @@
 use fuel_core::service::Config;
 use fuel_core_bin::FuelService;
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_types::fuel_tx::{
-    policies::Policies,
     Address,
     AssetId,
     Bytes32,
@@ -15,12 +14,13 @@ use fuel_core_types::fuel_tx::{
     UpgradePurpose,
     Upload,
     UploadSubsection,
+    policies::Policies,
 };
 use fuel_core_upgradable_executor::WASM_BYTECODE;
 use itertools::Itertools;
 use rand::{
-    rngs::StdRng,
     Rng,
+    rngs::StdRng,
 };
 use serde_json::Value;
 use test_helpers::{
@@ -83,7 +83,7 @@ async fn upgrade_consensus_parameters(
         &new_consensus_parameters,
         Policies::new().with_max_fee(AMOUNT),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             *privileged_address,
             AMOUNT,
             AssetId::BASE,
@@ -110,8 +110,8 @@ async fn upgrade_consensus_parameters(
 }
 
 #[tokio::test]
-async fn graphql_extensions_should_provide_new_consensus_parameters_version_after_upgrade(
-) {
+async fn graphql_extensions_should_provide_new_consensus_parameters_version_after_upgrade()
+ {
     let mut test_builder = TestSetupBuilder::new(2322);
     let privileged_address = Input::predicate_owner(predicate());
     test_builder.utxo_validation = false;
@@ -176,7 +176,7 @@ async fn upgrade_stf(
         UpgradePurpose::StateTransition { root },
         Policies::new().with_max_fee(amount),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             *privileged_address,
             amount,
             AssetId::BASE,

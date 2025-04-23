@@ -4,8 +4,8 @@
 use ctor::ctor;
 use std::env::var;
 use tracing_subscriber::{
-    fmt::format,
     EnvFilter,
+    fmt::format,
 };
 
 #[ctor]

@@ -20,15 +20,15 @@ use std::{
 };
 
 use crate::{
+    Constraints,
     config::Config,
     tests::{
         mocks::MockImporter,
         universe::{
-            TestPoolUniverse,
             DEFAULT_EXPIRATION_HEIGHT,
+            TestPoolUniverse,
         },
     },
-    Constraints,
 };
 
 #[tokio::test]
@@ -314,17 +314,19 @@ async fn prune_expired_transactions() {
         .unwrap();
 
     // Then
-    assert!(service
-        .shared
-        .find(vec![
-            tx1.id(&Default::default()),
-            tx2.id(&Default::default()),
-            tx3.id(&Default::default()),
-        ])
-        .await
-        .unwrap()
-        .iter()
-        .all(|x| x.is_none()));
+    assert!(
+        service
+            .shared
+            .find(vec![
+                tx1.id(&Default::default()),
+                tx2.id(&Default::default()),
+                tx3.id(&Default::default()),
+            ])
+            .await
+            .unwrap()
+            .iter()
+            .all(|x| x.is_none())
+    );
 
     service.stop_and_await().await.unwrap();
 }
@@ -566,8 +568,8 @@ async fn pending_pool__returns_error_for_transaction_that_spends_already_spent_u
 }
 
 #[tokio::test]
-async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_unknown_utxo(
-) {
+async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_unknown_utxo()
+ {
     // Given
     const TIMEOUT: u64 = 1;
     let mut universe = TestPoolUniverse::default().config(Config {

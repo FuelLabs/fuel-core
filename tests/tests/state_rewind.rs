@@ -6,13 +6,13 @@ use fuel_core::{
     combined_database::CombinedDatabase,
     schema::tx::types::TransactionStatus,
     service::{
-        config::fuel_core_importer::ports::Validator,
         FuelService,
+        config::fuel_core_importer::ports::Validator,
     },
 };
 use fuel_core_client::client::{
-    types::TransactionStatus as ClientTransactionStatus,
     FuelClient,
+    types::TransactionStatus as ClientTransactionStatus,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -36,9 +36,9 @@ use fuel_core_types::{
 use futures::StreamExt;
 use itertools::Itertools;
 use rand::{
-    prelude::StdRng,
     Rng,
     SeedableRng,
+    prelude::StdRng,
 };
 use std::{
     collections::BTreeSet,
@@ -63,7 +63,7 @@ fn transfer_transaction(min_amount: u64, rng: &mut StdRng) -> Transaction {
     let number_of_inputs = rng.gen_range(1..10);
 
     for _ in 0..number_of_inputs {
-        let utxo_id = rng.gen();
+        let utxo_id = rng.r#gen();
         let owner: [u8; 32] = [rng.gen_range(0..10); 32];
         let amount = rng.gen_range(min_amount..min_amount + 100_000);
         builder.add_input(Input::coin_predicate(

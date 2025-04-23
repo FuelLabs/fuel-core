@@ -17,6 +17,7 @@ use tokio::sync::{
 };
 
 use crate::{
+    Constraints,
     error::Error,
     pool::TxPoolStats,
     pool_worker::{
@@ -27,7 +28,6 @@ use crate::{
         TxInfo,
         WritePoolRequest,
     },
-    Constraints,
 };
 
 #[derive(Clone)]

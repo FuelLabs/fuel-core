@@ -1,7 +1,7 @@
 use crate::{
     database::{
-        commit_changes_with_height_update,
         Database,
+        commit_changes_with_height_update,
     },
     service::adapters::{
         BlockImporterAdapter,
@@ -10,33 +10,33 @@ use crate::{
     },
 };
 use fuel_core_importer::{
+    Config,
+    Importer,
     ports::{
         BlockVerifier,
         ImporterDatabase,
         Validator,
     },
-    Config,
-    Importer,
 };
 use fuel_core_storage::{
+    MerkleRoot,
+    Result as StorageResult,
+    StorageAsRef,
     iter::{
         IterDirection,
         IteratorOverTable,
     },
     tables::{
+        FuelBlocks,
         merkle::{
             DenseMetadataKey,
             FuelBlockMerkleMetadata,
         },
-        FuelBlocks,
     },
     transactional::{
         Changes,
         StorageChanges,
     },
-    MerkleRoot,
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_txpool::ports::{
     WasmChecker,
@@ -44,9 +44,9 @@ use fuel_core_txpool::ports::{
 };
 use fuel_core_types::{
     blockchain::{
+        SealedBlock,
         block::Block,
         consensus::Consensus,
-        SealedBlock,
     },
     fuel_tx::Bytes32,
     fuel_types::{

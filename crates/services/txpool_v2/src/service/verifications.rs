@@ -17,13 +17,13 @@ use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+        UpgradePurpose,
         field::{
             MaxFeeLimit,
             UpgradePurpose as _,
         },
-        ConsensusParameters,
-        Transaction,
-        UpgradePurpose,
     },
     fuel_types::BlockHeight,
     fuel_vm::{

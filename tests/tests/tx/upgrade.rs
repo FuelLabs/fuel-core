@@ -1,7 +1,6 @@
 use fuel_core_client::client::types::TransactionStatus;
 use fuel_core_types::{
     fuel_tx::{
-        policies::Policies,
         AssetId,
         Bytes32,
         GasCosts,
@@ -10,14 +9,15 @@ use fuel_core_types::{
         Transaction,
         UpgradePurpose,
         UploadSubsection,
+        policies::Policies,
     },
     fuel_vm::UploadedBytecode,
 };
 use fuel_core_upgradable_executor::WASM_BYTECODE;
 use itertools::Itertools;
 use rand::{
-    rngs::StdRng,
     Rng,
+    rngs::StdRng,
 };
 use test_helpers::{
     builder::{
@@ -93,7 +93,7 @@ async fn can_upgrade_to_uploaded_state_transition() {
         UpgradePurpose::StateTransition { root },
         Policies::new().with_max_fee(amount),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             privileged_address,
             amount,
             AssetId::BASE,
@@ -175,7 +175,7 @@ async fn upgrading_to_invalid_state_transition_fails() {
         UpgradePurpose::StateTransition { root },
         Policies::new().with_max_fee(amount),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             privileged_address,
             amount,
             AssetId::BASE,
@@ -226,7 +226,7 @@ async fn upgrading_to_missing_state_transition_fails() {
         },
         Policies::new().with_max_fee(amount),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             privileged_address,
             amount,
             AssetId::BASE,
@@ -290,7 +290,7 @@ async fn upgrade_to_a_partially_uploaded_state_transition_fails() {
         UpgradePurpose::StateTransition { root },
         Policies::new().with_max_fee(amount),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             privileged_address,
             amount,
             AssetId::BASE,
@@ -378,7 +378,7 @@ async fn upgrade_of_consensus_parameters_affects_used_gas_of_next_tx() {
         &new_consensus_parameters,
         Policies::new().with_max_fee(amount),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             privileged_address,
             amount,
             AssetId::BASE,
@@ -434,7 +434,7 @@ async fn old_consensus_parameters_should_be_queryable_after_upgrade() {
         &new_consensus_parameters,
         Policies::new().with_max_fee(amount),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             privileged_address,
             amount,
             AssetId::BASE,
@@ -517,7 +517,7 @@ async fn state_transition_bytecode_should_be_queryable_by_its_root_and_version()
         UpgradePurpose::StateTransition { root },
         Policies::new().with_max_fee(amount),
         vec![Input::coin_predicate(
-            rng.gen(),
+            rng.r#gen(),
             privileged_address,
             amount,
             AssetId::BASE,

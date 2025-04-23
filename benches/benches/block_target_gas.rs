@@ -7,25 +7,25 @@ use block_target_gas_set::{
     other::run_other,
 };
 use criterion::{
+    BenchmarkGroup,
+    Criterion,
     criterion_group,
     criterion_main,
     measurement::WallTime,
-    BenchmarkGroup,
-    Criterion,
 };
 use ed25519_dalek::Signer;
 use ethnum::U256;
 use fuel_core::{
     combined_database::CombinedDatabase,
     database::{
+        Database,
         balances::BalancesInitializer,
         state::StateInitializer,
-        Database,
     },
     service::{
-        config::Trigger,
         Config,
         FuelService,
+        config::Trigger,
     },
     state::{
         historical_rocksdb::StateRewindPolicy,
@@ -45,12 +45,16 @@ use fuel_core_chain_config::{
     StateConfig,
 };
 use fuel_core_storage::{
+    StorageAsMut,
     tables::ContractsRawCode,
     vm_storage::IncreaseStorageKey,
-    StorageAsMut,
 };
 use fuel_core_types::{
     fuel_asm::{
+        GTFArgs,
+        Instruction,
+        RegId,
+        Word,
         op,
         wideint::{
             CompareArgs,
@@ -60,10 +64,6 @@ use fuel_core_types::{
             MathOp,
             MulArgs,
         },
-        GTFArgs,
-        Instruction,
-        RegId,
-        Word,
     },
     fuel_crypto::{
         secp256r1,
@@ -397,7 +397,7 @@ fn run_with_service_with_extra_inputs(
                 .script_gas_limit(TARGET_BLOCK_GAS_LIMIT - BASE)
                 .add_unsigned_coin_input(
                     SecretKey::random(rng),
-                    rng.gen(),
+                    rng.r#gen(),
                     u32::MAX as u64,
                     AssetId::BASE,
                     Default::default(),

@@ -2,6 +2,17 @@
 //! that implements the storage traits for the tables with blueprint.
 
 use crate::{
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    Result as StorageResult,
+    StorageBatchMutate,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
+    StorageWrite,
     blueprint::{
         BlueprintInspect,
         BlueprintMutate,
@@ -9,9 +20,9 @@ use crate::{
         SupportsMerkle,
     },
     codec::{
-        raw::Raw,
         Encode,
         Encoder,
+        raw::Raw,
     },
     iter::{
         BoxedIter,
@@ -32,17 +43,6 @@ use crate::{
         Changes,
         Modifiable,
     },
-    Error as StorageError,
-    Mappable,
-    MerkleRoot,
-    MerkleRootStorage,
-    Result as StorageResult,
-    StorageBatchMutate,
-    StorageInspect,
-    StorageMutate,
-    StorageRead,
-    StorageSize,
-    StorageWrite,
 };
 
 #[cfg(feature = "std")]
@@ -60,8 +60,8 @@ use alloc::{
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 use fuel_vm_private::storage::{
-    predicate::PredicateStorageRequirements,
     BlobData,
+    predicate::PredicateStorageRequirements,
 };
 
 pub mod balances;
@@ -431,8 +431,8 @@ pub mod test {
         StorageColumn,
     };
     use fuel_core_storage::{
-        kv_store::Value,
         Result as StorageResult,
+        kv_store::Value,
     };
     use std::collections::HashMap;
 

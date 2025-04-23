@@ -1,4 +1,5 @@
 use crate::{
+    Importer,
     importer::Error,
     ports::{
         ImporterDatabase,
@@ -7,26 +8,26 @@ use crate::{
         MockValidator,
         Transactional,
     },
-    Importer,
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
+    Error as StorageError,
+    MerkleRoot,
+    Result as StorageResult,
     transactional::{
         Changes,
         StorageChanges,
     },
-    Error as StorageError,
-    MerkleRoot,
-    Result as StorageResult,
 };
 use fuel_core_types::{
     blockchain::{
+        SealedBlock,
         block::Block,
         consensus::Consensus,
-        SealedBlock,
     },
     fuel_types::BlockHeight,
     services::{
+        Uncommitted,
         block_importer::{
             ImportResult,
             UncommittedResult,
@@ -37,13 +38,12 @@ use fuel_core_types::{
             UncommittedValidationResult,
             ValidationResult,
         },
-        Uncommitted,
     },
 };
 use test_case::test_case;
 use tokio::sync::{
-    broadcast::error::TryRecvError,
     TryAcquireError,
+    broadcast::error::TryRecvError,
 };
 
 mockall::mock! {
@@ -367,10 +367,13 @@ async fn commit_result_assert(
     if result.is_ok() {
         let actual_sealed_block = imported_blocks.try_recv().unwrap();
         assert_eq!(actual_sealed_block.sealed_block, expected_to_broadcast);
-        if let Err(err) = imported_blocks.try_recv() {
-            assert_eq!(err, TryRecvError::Empty);
-        } else {
-            panic!("We should broadcast only one block");
+        match imported_blocks.try_recv() {
+            Err(err) => {
+                assert_eq!(err, TryRecvError::Empty);
+            }
+            _ => {
+                panic!("We should broadcast only one block");
+            }
         }
     }
 
@@ -393,10 +396,13 @@ async fn execute_and_commit_assert(
         let actual_sealed_block = imported_blocks.try_recv().unwrap();
         assert_eq!(actual_sealed_block.sealed_block, expected_to_broadcast);
 
-        if let Err(err) = imported_blocks.try_recv() {
-            assert_eq!(err, TryRecvError::Empty);
-        } else {
-            panic!("We should broadcast only one block");
+        match imported_blocks.try_recv() {
+            Err(err) => {
+                assert_eq!(err, TryRecvError::Empty);
+            }
+            _ => {
+                panic!("We should broadcast only one block");
+            }
         }
     }
 

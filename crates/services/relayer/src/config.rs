@@ -58,10 +58,9 @@ impl Default for Config {
         Self {
             da_deploy_height: DaBlockHeight::from(Self::DEFAULT_DA_DEPLOY_HEIGHT),
             relayer: None,
-            eth_v2_listening_contracts: vec![Bytes20::from_str(
-                "0x03E4538018285e1c03CCce2F92C9538c87606911",
-            )
-            .unwrap()],
+            eth_v2_listening_contracts: vec![
+                Bytes20::from_str("0x03E4538018285e1c03CCce2F92C9538c87606911").unwrap(),
+            ],
             log_page_size: Self::DEFAULT_LOG_PAGE_SIZE,
             sync_minimum_duration: Self::DEFAULT_SYNC_MINIMUM_DURATION,
             syncing_call_frequency: Self::DEFAULT_SYNCING_CALL_FREQ,

@@ -3,6 +3,13 @@
 //! for all entries.
 
 use crate::{
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageInspect,
+    StorageMutate,
     blueprint::{
         BlueprintInspect,
         BlueprintMutate,
@@ -26,13 +33,6 @@ use crate::{
         DenseMerkleMetadataV1,
         DenseMetadataKey,
     },
-    Error as StorageError,
-    Mappable,
-    MerkleRoot,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::fuel_merkle::binary::Primitive;
 
@@ -66,10 +66,10 @@ where
     where
         V: ?Sized,
         Metadata: Mappable<
-            Key = DenseMetadataKey<K>,
-            Value = DenseMerkleMetadata,
-            OwnedValue = DenseMerkleMetadata,
-        >,
+                Key = DenseMetadataKey<K>,
+                Value = DenseMerkleMetadata,
+                OwnedValue = DenseMerkleMetadata,
+            >,
         S: StorageMutate<Metadata, Error = StorageError>
             + StorageMutate<Nodes, Error = StorageError>,
         for<'a> StructuredStorage<&'a mut S>: StorageMutate<Metadata, Error = StorageError>
@@ -143,11 +143,11 @@ where
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
     Encoder: Encode<M::Value>,
     Metadata: Mappable<
-        Key = DenseMetadataKey<M::OwnedKey>,
-        OwnedKey = DenseMetadataKey<M::OwnedKey>,
-        Value = DenseMerkleMetadata,
-        OwnedValue = DenseMerkleMetadata,
-    >,
+            Key = DenseMetadataKey<M::OwnedKey>,
+            OwnedKey = DenseMetadataKey<M::OwnedKey>,
+            Value = DenseMerkleMetadata,
+            OwnedValue = DenseMerkleMetadata,
+        >,
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
     S: StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
@@ -222,11 +222,11 @@ where
     M: Mappable,
     S: KeyValueInspect,
     Metadata: Mappable<
-        Key = DenseMetadataKey<M::OwnedKey>,
-        OwnedKey = DenseMetadataKey<M::OwnedKey>,
-        Value = DenseMerkleMetadata,
-        OwnedValue = DenseMerkleMetadata,
-    >,
+            Key = DenseMetadataKey<M::OwnedKey>,
+            OwnedKey = DenseMetadataKey<M::OwnedKey>,
+            Value = DenseMerkleMetadata,
+            OwnedValue = DenseMerkleMetadata,
+        >,
     Self: BlueprintInspect<M, S>,
     S: StorageInspect<Metadata, Error = StorageError>,
 {
@@ -250,11 +250,11 @@ where
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
     Encoder: Encode<M::Value>,
     Metadata: Mappable<
-        Key = DenseMetadataKey<M::OwnedKey>,
-        OwnedKey = DenseMetadataKey<M::OwnedKey>,
-        Value = DenseMerkleMetadata,
-        OwnedValue = DenseMerkleMetadata,
-    >,
+            Key = DenseMetadataKey<M::OwnedKey>,
+            OwnedKey = DenseMetadataKey<M::OwnedKey>,
+            Value = DenseMerkleMetadata,
+            OwnedValue = DenseMerkleMetadata,
+        >,
     Nodes: Mappable<Key = u64, Value = Primitive, OwnedValue = Primitive>,
     S: StorageMutate<Metadata, Error = StorageError>
         + StorageMutate<Nodes, Error = StorageError>,
@@ -316,8 +316,8 @@ pub mod basic_tests_bmt {
             Encode,
         },
         structured_storage::{
-            test::InMemoryStorage,
             TableWithBlueprint,
+            test::InMemoryStorage,
         },
         tables::merkle::{
             DenseMerkleMetadata,
@@ -335,8 +335,8 @@ pub mod basic_tests_bmt {
         Primitive,
     };
     use rand::{
-        rngs::StdRng,
         SeedableRng,
+        rngs::StdRng,
     };
 
     /// A wrapper type to allow for `AsRef` implementation.
@@ -388,25 +388,22 @@ pub mod basic_tests_bmt {
             + StorageMutate<Metadata, Error = StorageError>
             + StorageMutate<Nodes, Error = StorageError>,
         for<'a, 'b> <Metadata as TableWithBlueprint>::Blueprint: BlueprintMutate<
-            Metadata,
-            StructuredStorage<
-                &'a mut StorageTransaction<&'b mut InMemoryStorage<M::Column>>,
+                Metadata,
+                StructuredStorage<
+                    &'a mut StorageTransaction<&'b mut InMemoryStorage<M::Column>>,
+                >,
             >,
-        >,
         for<'a, 'b> <Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<
-            Nodes,
-            StructuredStorage<
-                &'a mut StorageTransaction<&'b mut InMemoryStorage<M::Column>>,
+                Nodes,
+                StructuredStorage<
+                    &'a mut StorageTransaction<&'b mut InMemoryStorage<M::Column>>,
+                >,
             >,
-        >,
         for<'a> <Metadata as TableWithBlueprint>::Blueprint: BlueprintMutate<
-            Metadata,
-            StorageTransaction<&'a mut InMemoryStorage<M::Column>>,
-        >,
-        for<'a> <Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<
-            Nodes,
-            StorageTransaction<&'a mut InMemoryStorage<M::Column>>,
-        >,
+                Metadata,
+                StorageTransaction<&'a mut InMemoryStorage<M::Column>>,
+            >,
+        for<'a> <Nodes as TableWithBlueprint>::Blueprint: BlueprintMutate<Nodes, StorageTransaction<&'a mut InMemoryStorage<M::Column>>>,
     {
         /// Tests that getting a value returns the same value that was inserted
         pub fn test_get() {
@@ -480,10 +477,12 @@ pub mod basic_tests_bmt {
             let value = M::generate_value(&mut StdRng::seed_from_u64(1234));
 
             // Given
-            assert!(!storage_transaction
-                .storage_as_mut::<M>()
-                .contains_key(&key)
-                .unwrap());
+            assert!(
+                !storage_transaction
+                    .storage_as_mut::<M>()
+                    .contains_key(&key)
+                    .unwrap()
+            );
 
             // When
             storage_transaction
@@ -492,10 +491,12 @@ pub mod basic_tests_bmt {
                 .unwrap();
 
             // Then
-            assert!(storage_transaction
-                .storage_as_mut::<M>()
-                .contains_key(&key)
-                .unwrap());
+            assert!(
+                storage_transaction
+                    .storage_as_mut::<M>()
+                    .contains_key(&key)
+                    .unwrap()
+            );
         }
 
         /// Tests that batch mutation operations work correctly
@@ -506,8 +507,8 @@ pub mod basic_tests_bmt {
             let mut init_structured_storage = init_storage.write_transaction();
 
             let rng = &mut StdRng::seed_from_u64(31337);
-            let gen = || Some(M::random_key(rng));
-            let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
+            let r#gen = || Some(M::random_key(rng));
+            let data = core::iter::from_fn(r#gen).take(5_000).collect::<Vec<_>>();
             let value = M::generate_value(rng);
 
             <_ as crate::StorageBatchMutate<M>>::init_storage(
@@ -548,8 +549,8 @@ pub mod basic_tests_bmt {
             let mut init_structured_storage = init_storage.write_transaction();
 
             let rng = &mut StdRng::seed_from_u64(31337);
-            let gen = || Some(M::random_key(rng));
-            let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
+            let r#gen = || Some(M::random_key(rng));
+            let data = core::iter::from_fn(r#gen).take(5_000).collect::<Vec<_>>();
             let value = M::generate_value(rng);
 
             <_ as crate::StorageBatchMutate<M>>::init_storage(
@@ -702,20 +703,20 @@ pub mod basic_tests_bmt {
 
         /// The metadata table type for storing merkle metadata
         type Metadata: TableWithBlueprint<
-            Column = Self::Column,
-            Key = DenseMetadataKey<Self::OwnedKey>,
-            OwnedKey = DenseMetadataKey<Self::OwnedKey>,
-            Value = DenseMerkleMetadata,
-            OwnedValue = DenseMerkleMetadata,
-        >;
+                Column = Self::Column,
+                Key = DenseMetadataKey<Self::OwnedKey>,
+                OwnedKey = DenseMetadataKey<Self::OwnedKey>,
+                Value = DenseMerkleMetadata,
+                OwnedValue = DenseMerkleMetadata,
+            >;
 
         /// The nodes table type for storing merkle nodes
         type Nodes: TableWithBlueprint<
-            Key = u64,
-            Value = Primitive,
-            OwnedValue = Primitive,
-            Column = Self::Column,
-        >;
+                Key = u64,
+                Value = Primitive,
+                OwnedValue = Primitive,
+                Column = Self::Column,
+            >;
 
         /// The value encoder type for encoding values for merkle proofs
         type ValueEncoder: Encode<Self::Value>;
@@ -730,18 +731,18 @@ pub mod basic_tests_bmt {
         KeyCodec: Encode<Self::Key> + Decode<Self::OwnedKey>,
         ValueCodec: Encode<Self::Value> + Decode<Self::OwnedValue>,
         Metadata: TableWithBlueprint<
-            Column = Self::Column,
-            Key = DenseMetadataKey<Self::OwnedKey>,
-            OwnedKey = DenseMetadataKey<Self::OwnedKey>,
-            Value = DenseMerkleMetadata,
-            OwnedValue = DenseMerkleMetadata,
-        >,
+                Column = Self::Column,
+                Key = DenseMetadataKey<Self::OwnedKey>,
+                OwnedKey = DenseMetadataKey<Self::OwnedKey>,
+                Value = DenseMerkleMetadata,
+                OwnedValue = DenseMerkleMetadata,
+            >,
         Nodes: TableWithBlueprint<
-            Key = u64,
-            Value = Primitive,
-            OwnedValue = Primitive,
-            Column = Self::Column,
-        >,
+                Key = u64,
+                Value = Primitive,
+                OwnedValue = Primitive,
+                Column = Self::Column,
+            >,
         ValueEncoder: Encode<Self::Value>,
     {
         type KeyCodec = KeyCodec;

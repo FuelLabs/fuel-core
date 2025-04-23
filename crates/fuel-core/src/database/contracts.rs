@@ -1,6 +1,9 @@
 use crate::database::OnChainIterableKeyValueView;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
+    ContractsAssetKey,
+    Result as StorageResult,
+    StorageAsRef,
     iter::{
         IterDirection,
         IteratorOverTable,
@@ -12,9 +15,6 @@ use fuel_core_storage::{
         ContractsRawCode,
         ContractsState,
     },
-    ContractsAssetKey,
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::fuel_types::{
     AssetId,
@@ -98,8 +98,8 @@ impl OnChainIterableKeyValueView {
 mod tests {
     use super::*;
     use crate::database::{
-        database_description::on_chain::OnChain,
         Database,
+        database_description::on_chain::OnChain,
     };
     use fuel_core_storage::StorageAsMut;
     use fuel_core_types::fuel_tx::Contract;

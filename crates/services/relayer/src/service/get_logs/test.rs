@@ -15,11 +15,11 @@ use crate::{
     },
     service::state::EthSyncGap,
     test_helpers::{
+        EvtToLog,
         middleware::{
             MockMiddleware,
             TriggerType,
         },
-        EvtToLog,
     },
 };
 use test_case::test_case;

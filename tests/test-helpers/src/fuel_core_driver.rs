@@ -5,8 +5,8 @@ use fuel_core_poa::ports::BlockImporter;
 use fuel_core_types::fuel_types::BlockHeight;
 use std::time::Duration;
 use tempfile::{
-    tempdir,
     TempDir,
+    tempdir,
 };
 
 pub struct FuelCoreDriver {
