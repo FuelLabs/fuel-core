@@ -49,6 +49,42 @@ pub fn run(c: &mut Criterion) {
     );
 
     run_group_ref(
+        &mut c.benchmark_group("jmpf"),
+        "jmpf",
+        VmBench::new(op::jmpf(RegId::ONE, 10)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jmpb"),
+        "jmpb",
+        VmBench::new(op::jmpb(RegId::ONE, 2)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jnzf"),
+        "jnzf",
+        VmBench::new(op::jnzf(RegId::ONE, RegId::ONE, 2)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jnzb"),
+        "jnzb",
+        VmBench::new(op::jnzb(RegId::ONE, RegId::ONE, 2)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jnef"),
+        "jnef",
+        VmBench::new(op::jnef(RegId::ONE, RegId::ONE, RegId::ONE, 2)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jneb"),
+        "jneb",
+        VmBench::new(op::jneb(RegId::ONE, RegId::ONE, RegId::ONE, 2)),
+    );
+
+    run_group_ref(
         &mut c.benchmark_group("ret_script"),
         "ret_script",
         VmBench::new(op::ret(RegId::ONE)).with_call_receipts(receipts_ctx.clone()),
