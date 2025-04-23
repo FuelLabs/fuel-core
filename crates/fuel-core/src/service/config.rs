@@ -63,6 +63,8 @@ pub struct Config {
     pub historical_execution: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
+    /// Force usage of native executor
+    pub use_native_executor: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
     #[cfg(feature = "parallel-executor")]
     pub executor_number_of_cores: NonZeroUsize,
@@ -180,6 +182,7 @@ impl Config {
             debug: true,
             historical_execution: true,
             utxo_validation,
+            use_native_executor: true,
             native_executor_version: Some(native_executor_version),
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores: NonZeroUsize::new(1).expect("1 is not zero"),

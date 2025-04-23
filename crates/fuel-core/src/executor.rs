@@ -218,6 +218,7 @@ mod tests {
     ) -> Executor<Database, DisabledRelayer> {
         let executor_config = fuel_core_upgradable_executor::config::Config {
             forbid_fake_coins_default: config.forbid_fake_coins_default,
+            use_native_executor: true,
             native_executor_version: None,
             allow_historical_execution: true,
         };

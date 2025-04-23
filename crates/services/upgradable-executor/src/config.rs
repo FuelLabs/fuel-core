@@ -5,6 +5,10 @@ use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 pub struct Config {
     /// Default mode for `forbid_fake_coins` in `ExecutionOptions`.
     pub forbid_fake_coins_default: bool,
+
+    /// Use native executor for execution.
+    pub use_native_executor: bool,
+
     /// The version of the native executor to determine usage of native vs WASM executor.
     /// If it is `None`, the `Executor::VERSION` is used.
     ///

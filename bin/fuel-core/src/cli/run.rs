@@ -208,6 +208,9 @@ pub struct Command {
     #[arg(long = "utxo-validation", env)]
     pub utxo_validation: bool,
 
+    #[arg(long = "use-native-executor", env)]
+    pub use_native_executor: bool,
+
     /// Overrides the version of the native executor.
     #[arg(long = "native-executor-version", env)]
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
@@ -333,6 +336,7 @@ impl Command {
             debug,
             historical_execution,
             utxo_validation,
+            use_native_executor,
             native_executor_version,
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores,
@@ -691,6 +695,7 @@ impl Command {
             snapshot_reader,
             debug,
             historical_execution,
+            use_native_executor,
             native_executor_version,
             continue_on_error,
             utxo_validation,

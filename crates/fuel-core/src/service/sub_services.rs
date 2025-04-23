@@ -190,6 +190,7 @@ pub fn init_sub_services(
 
     let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
         forbid_fake_coins_default: config.utxo_validation,
+        use_native_executor: config.use_native_executor,
         native_executor_version: config.native_executor_version,
         allow_historical_execution: config.historical_execution,
     };

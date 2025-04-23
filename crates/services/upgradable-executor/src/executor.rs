@@ -545,7 +545,7 @@ where
     ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
         let block_version = block.header().state_transition_bytecode_version();
         let native_executor_version = self.native_executor_version();
-        if block_version == native_executor_version {
+        if block_version == native_executor_version || self.config.use_native_executor {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_storage_read_replay(block),
                 ExecutionStrategy::Wasm { module } => {
@@ -677,7 +677,7 @@ where
     {
         let block_version = block.header_to_produce.state_transition_bytecode_version;
         let native_executor_version = self.native_executor_version();
-        if block_version == native_executor_version {
+        if block_version == native_executor_version || self.config.use_native_executor {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => {
                     self.native_produce_inner(
@@ -758,7 +758,7 @@ where
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let block_version = block.header().state_transition_bytecode_version();
         let native_executor_version = self.native_executor_version();
-        if block_version == native_executor_version {
+        if block_version == native_executor_version || self.config.use_native_executor {
             match &self.execution_strategy {
                 ExecutionStrategy::Native => self.native_validate_inner(block, options),
                 ExecutionStrategy::Wasm { module } => {
