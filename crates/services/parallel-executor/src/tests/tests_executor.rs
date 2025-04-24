@@ -2,19 +2,19 @@
 
 use fuel_core::database::Database;
 use fuel_core_storage::{
+    StorageAsMut,
     tables::ConsensusParametersVersions,
     transactional::WriteTransaction,
-    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
     fuel_asm::{
-        op,
         RegId,
+        op,
     },
     fuel_crypto::rand::{
-        rngs::StdRng,
         Rng,
+        rngs::StdRng,
     },
     fuel_tx::{
         ConsensusParameters,
