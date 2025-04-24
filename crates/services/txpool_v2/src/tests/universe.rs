@@ -292,8 +292,12 @@ impl TestPoolUniverse {
                 memory_pool: MemoryPool::new(),
                 blacklist: BlackList::default(),
             };
-            let tx =
-                verification.perform_all_verifications(tx, Default::default(), true)?;
+            let tx = verification.perform_all_verifications(
+                tx,
+                Default::default(),
+                true,
+                true,
+            )?;
             let tx = Arc::new(tx);
             pool.write()
                 .insert(tx.clone(), &self.mock_db)
@@ -328,8 +332,12 @@ impl TestPoolUniverse {
                 memory_pool: MemoryPool::new(),
                 blacklist: BlackList::default(),
             };
-            let tx =
-                verification.perform_all_verifications(tx, Default::default(), true)?;
+            let tx = verification.perform_all_verifications(
+                tx,
+                Default::default(),
+                true,
+                true,
+            )?;
             pool.write()
                 .insert(Arc::new(tx), &self.mock_db)
                 .map_err(|e| match e {
@@ -363,8 +371,12 @@ impl TestPoolUniverse {
                 memory_pool: MemoryPool::new(),
                 blacklist: BlackList::default(),
             };
-            let tx =
-                verification.perform_all_verifications(tx, Default::default(), true)?;
+            let tx = verification.perform_all_verifications(
+                tx,
+                Default::default(),
+                true,
+                true,
+            )?;
             pool.write()
                 .insert(Arc::new(tx), &self.mock_db)
                 .map_err(|e| match e {

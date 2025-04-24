@@ -179,3 +179,71 @@ async fn transaction_with_predicates_that_exhaust_gas_limit_are_rejected() {
         "got unexpected error {err}"
     )
 }
+
+#[tokio::test]
+async fn syscall_is_allowed_in_the_predicate() {
+    use fuel_core_types::fuel_vm::interpreter::syscall::{
+        LOG_SYSCALL,
+        STDOUT,
+    };
+
+    let mut rng = StdRng::seed_from_u64(121210);
+
+    const AMOUNT: u64 = 1_000;
+
+    let test_input = "Hello, \n LogSyscall!";
+    let predicate_data: Vec<u8> = test_input.bytes().collect();
+
+    let text_reg = 0x10;
+    let text_size_reg = 0x11;
+    let syscall_id_reg = 0x12;
+    let fd_reg = 0x13;
+
+    let predicate = vec![
+        op::movi(syscall_id_reg, LOG_SYSCALL as u32),
+        op::movi(fd_reg, STDOUT as u32),
+        op::gtf_args(text_reg, 0x00, GTFArgs::InputCoinPredicateData),
+        op::movi(text_size_reg, predicate_data.len().try_into().unwrap()),
+        op::ecal(syscall_id_reg, fd_reg, text_reg, text_size_reg),
+        op::ret(RegId::ONE),
+    ]
+    .into_iter()
+    .collect();
+    let predicate_owner = Input::predicate_owner(&predicate);
+
+    // Given
+    let transaction_with_predicate =
+        TransactionBuilder::script(Default::default(), Default::default())
+            .add_input(Input::coin_predicate(
+                rng.gen(),
+                predicate_owner,
+                AMOUNT,
+                AssetId::BASE,
+                Default::default(),
+                Default::default(),
+                predicate,
+                predicate_data,
+            ))
+            .finalize();
+
+    let mut context = TestSetupBuilder::default();
+    context.utxo_validation = true;
+    context.config_coin_inputs_from_transactions(&[&transaction_with_predicate]);
+    let context = context.finalize().await;
+
+    let mut transaction_with_predicates = transaction_with_predicate.into();
+    context
+        .client
+        .estimate_predicates(&mut transaction_with_predicates)
+        .await
+        .unwrap();
+
+    // When
+    let result = context
+        .client
+        .submit_and_await_commit(&transaction_with_predicates)
+        .await;
+
+    // Then
+    result.expect("Transaction should be executed successfully");
+}

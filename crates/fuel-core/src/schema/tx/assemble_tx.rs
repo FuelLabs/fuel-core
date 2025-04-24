@@ -79,6 +79,7 @@ use std::{
 };
 
 pub struct AssembleArguments<'a> {
+    pub allow_syscall: bool,
     pub fee_index: u16,
     pub required_balances: Vec<RequiredBalance>,
     pub exclude: Exclude,
@@ -675,8 +676,9 @@ where
             .precompute(&chain_id)
             .map_err(|err| anyhow::anyhow!("{:?}", err))?;
 
-        let parameters =
+        let mut parameters =
             CheckPredicateParams::from(self.arguments.consensus_parameters.as_ref());
+        parameters.allow_syscall = self.arguments.allow_syscall;
         let read_view = self.arguments.read_view.clone();
 
         let mut tx_to_estimate = self.tx;

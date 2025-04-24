@@ -22,6 +22,7 @@ pub mod worker_service;
 pub struct Config {
     pub config: ServiceConfig,
     pub utxo_validation: bool,
+    pub allow_syscall: bool,
     pub debug: bool,
     pub historical_execution: bool,
     pub max_tx: usize,

@@ -61,8 +61,8 @@ pub struct Config {
     /// - Enables storage read replay for historical blocks.
     /// - Enables querying historical contract state and balances.
     pub historical_execution: bool,
-    // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
+    pub allow_syscall: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
     #[cfg(feature = "parallel-executor")]
     pub executor_number_of_cores: NonZeroUsize,
@@ -132,6 +132,7 @@ impl Config {
             );
 
         let utxo_validation = false;
+        let allow_syscall = true;
 
         let combined_db_config = CombinedDatabaseConfig {
             #[cfg(feature = "rocksdb")]
@@ -180,6 +181,7 @@ impl Config {
             debug: true,
             historical_execution: true,
             utxo_validation,
+            allow_syscall,
             native_executor_version: Some(native_executor_version),
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores: NonZeroUsize::new(1).expect("1 is not zero"),
@@ -234,9 +236,19 @@ impl Config {
             self.utxo_validation = true;
         }
 
+        if !self.debug && self.allow_syscall {
+            tracing::warn!("The `allow_syscall` should be `false` with disabled `debug`");
+            self.allow_syscall = false;
+        }
+
         if self.txpool.utxo_validation != self.utxo_validation {
             tracing::warn!("The `utxo_validation` of `TxPool` was inconsistent");
             self.txpool.utxo_validation = self.utxo_validation;
+        }
+
+        if self.txpool.allow_syscall != self.allow_syscall {
+            tracing::warn!("The `allow_syscall` of `TxPool` was inconsistent");
+            self.txpool.allow_syscall = self.allow_syscall;
         }
 
         self
