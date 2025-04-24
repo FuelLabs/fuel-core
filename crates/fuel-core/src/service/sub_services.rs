@@ -441,6 +441,7 @@ pub fn init_sub_services(
     let graphql_config = GraphQLConfig {
         config: config.graphql_config.clone(),
         utxo_validation: config.utxo_validation,
+        allow_syscall: config.allow_syscall,
         debug: config.debug,
         historical_execution: config.historical_execution,
         max_tx: config.txpool.pool_limits.max_txs,

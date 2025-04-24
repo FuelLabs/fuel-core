@@ -440,7 +440,7 @@ impl TxQuery {
         let exclude: Exclude = exclude_input.into();
 
         let gas_price = ctx.estimate_gas_price(Some(block_horizon.into()))?;
-        let config = &ctx.data_unchecked::<GraphQLConfig>().config;
+        let config = ctx.data_unchecked::<GraphQLConfig>();
 
         let tx = FuelTx::from_bytes(&tx.0)?;
 
@@ -449,6 +449,7 @@ impl TxQuery {
         let shared_memory_pool = ctx.data_unchecked::<SharedMemoryPool>();
 
         let arguments = AssembleArguments {
+            allow_syscall: config.allow_syscall,
             fee_index,
             required_balances,
             exclude,
@@ -456,8 +457,10 @@ impl TxQuery {
             reserve_gas,
             consensus_parameters,
             gas_price,
-            dry_run_limit: config.assemble_tx_dry_run_limit,
-            estimate_predicates_limit: config.assemble_tx_estimate_predicates_limit,
+            dry_run_limit: config.config.assemble_tx_dry_run_limit,
+            estimate_predicates_limit: config
+                .config
+                .assemble_tx_estimate_predicates_limit,
             block_producer,
             read_view,
             shared_memory_pool,
@@ -993,6 +996,8 @@ impl<'a> ContextExt for Context<'a> {
             return Ok(tx);
         }
 
+        let allow_syscall = self.data_unchecked::<GraphQLConfig>().allow_syscall;
+
         let params = self
             .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
@@ -1000,7 +1005,8 @@ impl<'a> ContextExt for Context<'a> {
         let memory_pool = self.data_unchecked::<SharedMemoryPool>();
         let memory = memory_pool.get_memory().await;
 
-        let parameters = CheckPredicateParams::from(params.as_ref());
+        let mut parameters = CheckPredicateParams::from(params.as_ref());
+        parameters.allow_syscall = allow_syscall;
         let tx = tokio_rayon::spawn_fifo(move || {
             let result = tx.estimate_predicates(&parameters, memory, &query);
             result.map(|_| tx)
