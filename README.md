@@ -3,6 +3,7 @@
 [![build](https://github.com/FuelLabs/fuel-core/actions/workflows/ci.yml/badge.svg)](https://github.com/FuelLabs/fuel-core/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/fuel-core?label=latest)](https://crates.io/crates/fuel-core)
 [![docs](https://docs.rs/fuel-core/badge.svg)](https://docs.rs/fuel-core/)
+[![twitter](https://img.shields.io/twitter/follow/fuel_network)](https://x.com/fuel_network)
 [![discord](https://img.shields.io/badge/chat%20on-discord-orange?&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/xfpK4Pe)
 
 Fuel client implementation.
