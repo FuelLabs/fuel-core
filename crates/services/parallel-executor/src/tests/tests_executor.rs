@@ -88,7 +88,7 @@ fn execute__simple_independent_transactions_sorted() {
         },
     );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
 
     // Given
     let tx1: Transaction = basic_tx(&mut rng);
@@ -204,7 +204,7 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
         },
     );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
 
@@ -332,7 +332,7 @@ fn execute__gas_left_updated_when_state_merges() {
         },
     );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
 
     // Given
     let contract_id_1 = ContractId::new([1; 32]);
@@ -530,7 +530,7 @@ fn execute__utxo_ordering_kept() {
         },
     );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
 
