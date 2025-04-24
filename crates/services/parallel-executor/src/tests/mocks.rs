@@ -18,19 +18,23 @@ pub struct PoolRequestParams {
 }
 
 pub struct MockTxPool {
-    pub get_executable_transactions_results_sender: std::sync::mpsc::Sender<(
-        PoolRequestParams,
-        std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
-    )>,
+    pub get_executable_transactions_results_sender: GetExecutableTransactionsSender
 }
+
+pub type GetExecutableTransactionsSender = std::sync::mpsc::Sender<(
+    PoolRequestParams,
+    std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+)>;
+
+pub type GetExecutableTransactionsReceiver = std::sync::mpsc::Receiver<(
+    PoolRequestParams,
+    std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+)>;
 
 impl MockTxPool {
     pub fn new() -> (
         Self,
-        std::sync::mpsc::Receiver<(
-            PoolRequestParams,
-            std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
-        )>,
+        GetExecutableTransactionsReceiver
     ) {
         let (
             get_executable_transactions_results_sender,
