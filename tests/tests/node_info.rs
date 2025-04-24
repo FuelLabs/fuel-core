@@ -5,8 +5,8 @@ use fuel_core::service::{
     FuelService,
 };
 use fuel_core_client::client::{
-    types::NodeInfo,
     FuelClient,
+    types::NodeInfo,
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::fuel_tx::Transaction;
@@ -64,19 +64,19 @@ async fn tx_pool_stats__should_be_updated_when_transaction_is_submitted() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_peer_info() {
     use fuel_core::p2p_test_helpers::{
-        make_nodes,
         BootstrapSetup,
         Nodes,
         ProducerSetup,
         ValidatorSetup,
+        make_nodes,
     };
     use fuel_core_types::{
         fuel_tx::Input,
         fuel_vm::SecretKey,
     };
     use rand::{
-        rngs::StdRng,
         SeedableRng,
+        rngs::StdRng,
     };
     use std::time::Duration;
 

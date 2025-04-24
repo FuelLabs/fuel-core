@@ -15,8 +15,8 @@ use asset_query::{
 };
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
-    iter::IterDirection,
     Result as StorageResult,
+    iter::IterDirection,
 };
 use fuel_core_types::{
     fuel_tx::{
@@ -26,11 +26,11 @@ use fuel_core_types::{
     services::graphql_api::AddressBalance,
 };
 use futures::{
-    stream,
     FutureExt,
     Stream,
     StreamExt,
     TryStreamExt,
+    stream,
 };
 
 pub mod asset_query;

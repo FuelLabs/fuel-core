@@ -1,17 +1,18 @@
 use crate::{
+    TryPeerId,
     behavior::{
         FuelBehaviour,
         FuelBehaviourEvent,
     },
     codecs::{
+        GossipsubCodec,
         gossipsub::GossipsubMessageHandler,
         postcard::PostcardCodec,
         request_response::RequestResponseMessageHandler,
-        GossipsubCodec,
     },
     config::{
-        build_transport_function,
         Config,
+        build_transport_function,
     },
     dnsaddr_resolution::DnsResolver,
     gossipsub::{
@@ -37,7 +38,6 @@ use crate::{
         ResponseSender,
         V2ResponseMessage,
     },
-    TryPeerId,
 };
 use fuel_core_metrics::{
     global_registry,
@@ -49,6 +49,10 @@ use fuel_core_types::{
 };
 use futures::prelude::*;
 use libp2p::{
+    Multiaddr,
+    PeerId,
+    Swarm,
+    SwarmBuilder,
     gossipsub::{
         self,
         MessageAcceptance,
@@ -71,10 +75,6 @@ use libp2p::{
     },
     swarm::SwarmEvent,
     tcp,
-    Multiaddr,
-    PeerId,
-    Swarm,
-    SwarmBuilder,
 };
 use rand::seq::IteratorRandom;
 use std::{
@@ -260,23 +260,17 @@ impl FuelP2PService {
             swarm_builder
                 .with_bandwidth_metrics(&mut registry)
                 .with_behaviour(|_| behaviour)?
-                .with_swarm_config(|cfg| {
-                    if let Some(timeout) = config.connection_idle_timeout {
-                        cfg.with_idle_connection_timeout(timeout)
-                    } else {
-                        cfg
-                    }
+                .with_swarm_config(|cfg| match config.connection_idle_timeout {
+                    Some(timeout) => cfg.with_idle_connection_timeout(timeout),
+                    _ => cfg,
                 })
                 .build()
         } else {
             swarm_builder
                 .with_behaviour(|_| behaviour)?
-                .with_swarm_config(|cfg| {
-                    if let Some(timeout) = config.connection_idle_timeout {
-                        cfg.with_idle_connection_timeout(timeout)
-                    } else {
-                        cfg
-                    }
+                .with_swarm_config(|cfg| match config.connection_idle_timeout {
+                    Some(timeout) => cfg.with_idle_connection_timeout(timeout),
+                    _ => cfg,
                 })
                 .build()
         };
@@ -758,7 +752,12 @@ impl FuelP2PService {
                 error,
                 request_id,
             } => {
-                tracing::error!("RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
+                tracing::error!(
+                    "RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}",
+                    peer,
+                    request_id,
+                    error
+                );
 
                 // Drop the channel, as we can't send a response
                 let _ = self.inbound_requests_table.remove(&request_id);
@@ -774,7 +773,12 @@ impl FuelP2PService {
                     let _ = self.swarm.disconnect_peer_id(peer);
                 }
 
-                tracing::error!("RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}", peer, request_id, error);
+                tracing::error!(
+                    "RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}",
+                    peer,
+                    request_id,
+                    error
+                );
 
                 if let Some(channel) = self.outbound_requests_table.remove(&request_id) {
                     match channel {

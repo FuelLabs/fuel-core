@@ -8,18 +8,16 @@ use fuel_core_types::{
     services::executor,
 };
 use tokio::sync::{
+    TryAcquireError,
     mpsc,
     oneshot,
-    TryAcquireError,
 };
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {
     #[display(fmt = "The commit is already in the progress: {_0}.")]
     Semaphore(TryAcquireError),
-    #[display(
-        fmt = "The wrong state of database during insertion of the genesis block."
-    )]
+    #[display(fmt = "The wrong state of database during insertion of the genesis block.")]
     InvalidUnderlyingDatabaseGenesisState,
     #[display(fmt = "The wrong state of storage after execution of the block.\
         The actual root is {_1:?}, when the expected root is {_0:?}.")]

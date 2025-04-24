@@ -8,11 +8,11 @@ use crate::{
     },
 };
 use fuel_core_storage::{
+    Result as StorageResult,
     iter::{
         IterDirection,
         IteratorOverTable,
     },
-    Result as StorageResult,
 };
 use fuel_core_types::{
     self,
@@ -30,8 +30,9 @@ impl crate::database::Database {
         &self,
         start: Option<&Bytes32>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<fuel_core_types::fuel_tx::Transaction>> + '_
-    {
+    ) -> impl Iterator<Item = StorageResult<fuel_core_types::fuel_tx::Transaction>>
+    + '_
+    + use<'_> {
         use fuel_core_storage::tables::Transactions;
         self.iter_all_by_start::<Transactions>(start, direction)
             .map(|res| res.map(|(_, tx)| tx))

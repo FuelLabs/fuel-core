@@ -10,8 +10,8 @@ use fuel_core_types::{
 };
 use proptest::prelude::*;
 use test_strategy::{
-    proptest,
     Arbitrary,
+    proptest,
 };
 use tokio_stream::StreamExt;
 

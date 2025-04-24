@@ -3,9 +3,9 @@ mod tests;
 
 use crate::common::{
     fuel_core_storage_adapter::{
-        get_block_info,
         GasPriceSettings,
         GasPriceSettingsProvider,
+        get_block_info,
     },
     utils::{
         BlockInfo,

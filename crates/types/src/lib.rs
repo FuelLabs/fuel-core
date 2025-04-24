@@ -67,10 +67,10 @@ pub mod fuel_vm {
         },
         script_with_data_offset,
         state,
-        storage::predicate,
         storage::ContractsAssetKey,
         storage::ContractsStateKey,
         storage::UploadedBytecode,
+        storage::predicate,
         storage::{
             BlobBytes,
             BlobData,

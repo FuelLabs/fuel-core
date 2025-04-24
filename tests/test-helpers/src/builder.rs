@@ -9,10 +9,10 @@ use fuel_core::{
         StateConfig,
     },
     service::{
-        config::GasPriceConfig,
         Config,
         DbType,
         FuelService,
+        config::GasPriceConfig,
     },
     state::rocks_db::DatabaseConfig,
 };
@@ -34,9 +34,9 @@ use fuel_core_types::{
 };
 use itertools::Itertools;
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::{
     collections::HashMap,
@@ -71,7 +71,7 @@ impl TestContext {
             vec![],
             Policies::new().with_max_fee(0),
             vec![Input::coin_signed(
-                self.rng.gen(),
+                self.rng.r#gen(),
                 from,
                 amount,
                 Default::default(),
@@ -131,11 +131,11 @@ impl TestSetupBuilder {
     ) -> (Salt, ContractId) {
         let contract = Contract::from(code.clone());
         let root = contract.root();
-        let salt: Salt = self.rng.gen();
+        let salt: Salt = self.rng.r#gen();
         let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let tx_pointer = tx_pointer.unwrap_or_default();
-        let utxo_id: UtxoId = self.rng.gen();
+        let utxo_id: UtxoId = self.rng.r#gen();
         self.contracts.insert(
             contract_id,
             ContractConfig {

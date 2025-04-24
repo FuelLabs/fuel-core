@@ -38,12 +38,12 @@ use fuel_core_p2p::{
 };
 use fuel_core_types::{
     blockchain::{
+        SealedBlockHeader,
         consensus::{
-            poa::PoAConsensus,
             Consensus,
+            poa::PoAConsensus,
         },
         header::BlockHeader,
-        SealedBlockHeader,
     },
     fuel_tx::{
         Transaction,
@@ -59,10 +59,12 @@ use fuel_core_types::{
     },
 };
 use futures::{
-    future::join_all,
     StreamExt,
+    future::join_all,
 };
 use libp2p::{
+    Multiaddr,
+    PeerId,
     gossipsub::{
         Sha256Topic,
         Topic,
@@ -72,8 +74,6 @@ use libp2p::{
         ListenError,
         SwarmEvent,
     },
-    Multiaddr,
-    PeerId,
 };
 use rand::Rng;
 use std::{
@@ -746,7 +746,7 @@ async fn gossipsub_scoring_tester(
                 let mut transactions = vec![];
                 for _ in 0..amount_of_msgs_per_second {
                     let random_tx =
-                        TransactionBuilder::script(rand::thread_rng().gen::<[u8; 32]>().to_vec(), rand::thread_rng().gen::<[u8; 32]>().to_vec()).finalize_as_transaction();
+                        TransactionBuilder::script(rand::thread_rng().r#gen::<[u8; 32]>().to_vec(), rand::thread_rng().r#gen::<[u8; 32]>().to_vec()).finalize_as_transaction();
 
                     transactions.push(random_tx.clone());
                     let random_tx = GossipsubBroadcastRequest::NewTx(Arc::new(random_tx));
@@ -931,14 +931,28 @@ fn check_message_matches_request(
     expected: &GossipsubBroadcastRequest,
 ) {
     match (message, expected) {
-        (GossipsubMessage::NewTx(received), GossipsubBroadcastRequest::NewTx(requested)) => {
-            assert_eq!(requested.deref(), received, "Both messages were `NewTx`s, but the received message did not match the requested message");
+        (
+            GossipsubMessage::NewTx(received),
+            GossipsubBroadcastRequest::NewTx(requested),
+        ) => {
+            assert_eq!(
+                requested.deref(),
+                received,
+                "Both messages were `NewTx`s, but the received message did not match the requested message"
+            );
         }
         (
             GossipsubMessage::TxPreConfirmations(received),
             GossipsubBroadcastRequest::TxPreConfirmations(requested),
-        ) => assert_eq!(requested.deref(), received, "Both messages were `Preconfirmations`, but the received message did not match the requested message"),
-        _ => panic!("Message does not match the expected request, expected: {:?}, actual: {:?}", expected, message),
+        ) => assert_eq!(
+            requested.deref(),
+            received,
+            "Both messages were `Preconfirmations`, but the received message did not match the requested message"
+        ),
+        _ => panic!(
+            "Message does not match the expected request, expected: {:?}, actual: {:?}",
+            expected, message
+        ),
     }
 }
 

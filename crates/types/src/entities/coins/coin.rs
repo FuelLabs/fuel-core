@@ -3,13 +3,13 @@
 use crate::{
     fuel_asm::Word,
     fuel_tx::{
+        Input,
+        TxPointer,
+        UtxoId,
         input::coin::{
             CoinPredicate,
             CoinSigned,
         },
-        Input,
-        TxPointer,
-        UtxoId,
     },
     fuel_types::{
         Address,

@@ -11,6 +11,7 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
@@ -19,21 +20,20 @@ use fuel_core_client::client::{
         StatusWithTransaction,
         TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_poa::{
-    service::Mode,
     Trigger,
+    service::Mode,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         RegId,
+        op,
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
-        field::ReceiptsRoot,
         Chargeable,
+        field::ReceiptsRoot,
         *,
     },
     fuel_types::ChainId,
@@ -44,9 +44,9 @@ use fuel_core_types::{
 use futures::StreamExt;
 use itertools::Itertools;
 use rand::{
-    prelude::StdRng,
     Rng,
     SeedableRng,
+    prelude::StdRng,
 };
 use std::{
     io::ErrorKind::NotFound,
@@ -139,7 +139,7 @@ async fn dry_run_create() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let salt: Salt = rng.gen();
+    let salt: Salt = rng.r#gen();
     let contract_code = vec![];
     let contract = Contract::from(contract_code.clone());
     let root = contract.root();
@@ -221,7 +221,7 @@ fn arb_large_script_tx<R: Rng + rand::CryptoRng>(
         .script_gas_limit(22430)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
-            rng.gen(),
+            rng.r#gen(),
             u32::MAX as u64,
             asset_id,
             Default::default(),
@@ -244,8 +244,8 @@ fn config_with_size_limit(block_transaction_size_limit: u32) -> Config {
 }
 
 #[tokio::test]
-async fn transaction_selector_can_saturate_block_according_to_block_transaction_size_limit(
-) {
+async fn transaction_selector_can_saturate_block_according_to_block_transaction_size_limit()
+ {
     let mut rng = rand::rngs::StdRng::from_entropy();
 
     // Create 5 transactions of increasing sizes.
@@ -1040,8 +1040,8 @@ async fn get_owned_transactions() {
 }
 
 #[tokio::test]
-async fn pending_pool_returns_error_after_timeout_for_transaction_that_spends_already_spent_utxo(
-) {
+async fn pending_pool_returns_error_after_timeout_for_transaction_that_spends_already_spent_utxo()
+ {
     let config = config_with_fee();
     let base_asset_id = config.base_asset_id();
     let service = FuelService::new_node(config).await.unwrap();
@@ -1073,7 +1073,7 @@ fn create_mock_tx(val: u64) -> Transaction {
     TransactionBuilder::script(val.to_be_bytes().to_vec(), Default::default())
         .add_unsigned_coin_input(
             SecretKey::random(&mut rng),
-            rng.gen(),
+            rng.r#gen(),
             1_000_000,
             Default::default(),
             Default::default(),

@@ -1,14 +1,14 @@
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    tables::{
-        merkle::ContractsStateMerkleMetadata,
-        ContractsState,
-    },
     ContractsStateKey,
     Error as StorageError,
     StorageAsRef,
     StorageBatchMutate,
     StorageInspect,
+    tables::{
+        ContractsState,
+        merkle::ContractsStateMerkleMetadata,
+    },
 };
 use fuel_core_types::fuel_types::{
     Bytes32,
@@ -117,12 +117,12 @@ where
 mod tests {
     use super::*;
     use crate::database::{
-        database_description::on_chain::OnChain,
         Database,
+        database_description::on_chain::OnChain,
     };
     use fuel_core_storage::{
-        transactional::IntoTransaction,
         StorageAsMut,
+        transactional::IntoTransaction,
     };
     use fuel_core_types::fuel_types::Bytes32;
     use rand::Rng;
@@ -137,19 +137,19 @@ mod tests {
     }
 
     fn random_contract_id(rng: &mut impl Rng) -> ContractId {
-        ContractId::new(rng.gen())
+        ContractId::new(rng.r#gen())
     }
 
     #[test]
     fn init_contract_state_works() {
         use rand::{
-            rngs::StdRng,
             SeedableRng,
+            rngs::StdRng,
         };
 
         let rng = &mut StdRng::seed_from_u64(1234);
-        let gen = || Some((random_bytes32(rng), random_bytes32(rng).to_vec()));
-        let data = core::iter::from_fn(gen).take(5_000).collect::<Vec<_>>();
+        let r#gen = || Some((random_bytes32(rng), random_bytes32(rng).to_vec()));
+        let data = core::iter::from_fn(r#gen).take(5_000).collect::<Vec<_>>();
 
         let contract_id = ContractId::from([1u8; 32]);
         let mut init_database = Database::<OnChain>::default().into_transaction();
@@ -207,8 +207,8 @@ mod tests {
             MerkleTreeKey,
         };
         use rand::{
-            rngs::StdRng,
             SeedableRng,
+            rngs::StdRng,
         };
         use std::collections::HashSet;
 

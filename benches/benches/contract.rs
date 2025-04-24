@@ -7,9 +7,9 @@ use fuel_core_types::fuel_tx::{
     StorageSlot,
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::iter::successors;
 
@@ -58,7 +58,7 @@ pub fn state_root(c: &mut Criterion) {
     const N: usize = 20;
     let sizes = successors(Some(2), |n| Some(n * 2)).take(N);
     for (i, size) in sizes.enumerate() {
-        let gen_storage_slot = || rng.gen::<StorageSlot>();
+        let gen_storage_slot = || rng.r#gen::<StorageSlot>();
         let storage_slots = std::iter::repeat_with(gen_storage_slot)
             .take(size)
             .collect::<Vec<_>>();

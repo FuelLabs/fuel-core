@@ -15,11 +15,11 @@ use crate::{
     graphql_api::database::OnChainViewAt,
 };
 use fuel_core_storage::{
+    Result as StorageResult,
     transactional::{
         AtomicView,
         HistoricalView,
     },
-    Result as StorageResult,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;

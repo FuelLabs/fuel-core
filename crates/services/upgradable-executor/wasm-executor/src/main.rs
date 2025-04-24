@@ -15,9 +15,9 @@
 
 use crate as fuel_core_wasm_executor;
 use crate::utils::{
-    convert_to_v1_execution_result,
     InputDeserializationType,
     WasmDeserializationBlockTypes,
+    convert_to_v1_execution_result,
 };
 use fuel_core_executor::executor::ExecutionInstance;
 use fuel_core_types::{
@@ -32,8 +32,8 @@ use fuel_core_wasm_executor::{
     storage::WasmStorage,
     tx_source::WasmTxSource,
     utils::{
-        pack_ptr_and_len,
         ReturnType,
+        pack_ptr_and_len,
     },
 };
 use futures::FutureExt;
@@ -48,7 +48,7 @@ mod storage;
 mod tx_source;
 pub mod utils;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn execute(input_len: u32) -> u64 {
     let output: ReturnType = execute_without_commit(input_len);
     let encoded = postcard::to_allocvec(&output).expect("Failed to encode the output");

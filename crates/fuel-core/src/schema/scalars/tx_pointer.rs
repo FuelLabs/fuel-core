@@ -1,10 +1,10 @@
 use async_graphql::{
-    connection::CursorType,
     InputValueError,
     InputValueResult,
     Scalar,
     ScalarType,
     Value,
+    connection::CursorType,
 };
 use fuel_core_types::fuel_tx;
 use std::{
@@ -21,10 +21,11 @@ pub struct TxPointer(pub(crate) fuel_tx::TxPointer);
 #[Scalar(name = "TxPointer")]
 impl ScalarType for TxPointer {
     fn parse(value: Value) -> InputValueResult<Self> {
-        if let Value::String(value) = &value {
-            TxPointer::from_str(value.as_str()).map_err(Into::into)
-        } else {
-            Err(InputValueError::expected_type(value))
+        match &value {
+            Value::String(value) => {
+                TxPointer::from_str(value.as_str()).map_err(Into::into)
+            }
+            _ => Err(InputValueError::expected_type(value)),
         }
     }
 

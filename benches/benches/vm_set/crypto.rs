@@ -13,8 +13,8 @@ use fuel_core_types::{
     fuel_crypto::*,
 };
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 pub fn run(c: &mut Criterion) {

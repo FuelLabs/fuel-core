@@ -2,12 +2,12 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
+            GasPriceSettings,
+            GasPriceSettingsProvider,
             storage::{
                 GasPriceColumn,
                 GasPriceMetadata,
             },
-            GasPriceSettings,
-            GasPriceSettingsProvider,
         },
         l2_block_source::L2BlockSource,
         updater_metadata::UpdaterMetadata,
@@ -29,42 +29,44 @@ use crate::{
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
-            service::{
-                new_da_service,
-                DaBlockCostsSource,
-            },
             DaBlockCosts,
+            service::{
+                DaBlockCostsSource,
+                new_da_service,
+            },
         },
         metadata::{
-            updater_from_config,
             V1AlgorithmConfig,
             V1Metadata,
+            updater_from_config,
         },
         service::{
-            initialize_algorithm,
             GasPriceServiceV1,
             LatestGasPrice,
+            initialize_algorithm,
         },
         uninitialized_task::{
-            fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
             UninitializedTask,
+            fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
         },
     },
 };
 use anyhow::{
-    anyhow,
     Result,
+    anyhow,
 };
 use fuel_core_services::{
+    RunnableTask,
+    Service,
+    StateWatcher,
     stream::{
         BoxStream,
         IntoBoxStream,
     },
-    RunnableTask,
-    Service,
-    StateWatcher,
 };
 use fuel_core_storage::{
+    Result as StorageResult,
+    StorageAsMut,
     structured_storage::test::InMemoryStorage,
     transactional::{
         AtomicView,
@@ -72,8 +74,6 @@ use fuel_core_storage::{
         StorageTransaction,
         WriteTransaction,
     },
-    Result as StorageResult,
-    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::{
@@ -101,12 +101,12 @@ use std::{
     num::NonZeroU64,
     ops::Deref,
     sync::{
+        Arc,
+        Mutex,
         atomic::{
             AtomicU32,
             Ordering,
         },
-        Arc,
-        Mutex,
     },
     time::Duration,
 };
@@ -977,8 +977,8 @@ async fn uninitialized_task__init__if_metadata_behind_l2_height_then_sync() {
 }
 
 #[tokio::test]
-async fn uninitialized_task__init__sets_initial_storage_height_to_match_l2_height_if_none(
-) {
+async fn uninitialized_task__init__sets_initial_storage_height_to_match_l2_height_if_none()
+ {
     // given
     let metadata_height = 100;
     let l2_height = 200;

@@ -3,14 +3,14 @@
 use fuel_core::{
     combined_database::CombinedDatabase,
     service::{
-        adapters::consensus_module::poa::block_path,
         Config,
         FuelService,
+        adapters::consensus_module::poa::block_path,
     },
 };
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -21,8 +21,8 @@ use fuel_core_types::{
     signer::SignMode,
 };
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 use tempfile::tempdir;
 use test_helpers::{
@@ -93,8 +93,8 @@ async fn can_get_sealed_block_from_poa_produced_block() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks(
-) -> anyhow::Result<()> {
+async fn starting_node_with_predefined_nodes_produces_these_predefined_blocks()
+-> anyhow::Result<()> {
     const BLOCK_TO_PRODUCE: usize = 10;
     let mut rng = StdRng::seed_from_u64(1234);
 
@@ -170,15 +170,15 @@ mod p2p {
     use fuel_core::{
         chain_config::ConsensusConfig,
         p2p_test_helpers::{
-            make_config,
-            make_node,
             Bootstrap,
             CustomizeConfig,
+            make_config,
+            make_node,
         },
     };
     use fuel_core_poa::{
-        service::Mode,
         Trigger,
+        service::Mode,
     };
     use fuel_core_types::{
         fuel_tx::Input,

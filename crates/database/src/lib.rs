@@ -12,8 +12,8 @@
 #![deny(unused_variables)]
 
 use fuel_core_storage::{
-    transactional::ReferenceBytesKey,
     Error as StorageError,
+    transactional::ReferenceBytesKey,
 };
 use fuel_core_types::services::executor::Error as ExecutorError;
 
@@ -26,9 +26,7 @@ pub enum Error {
     #[display(fmt = "error performing serialization or deserialization")]
     Codec,
     /// The version of database or data is invalid (possibly not migrated).
-    #[display(
-        fmt = "Invalid database version, expected {expected:#x}, found {found:#x}"
-    )]
+    #[display(fmt = "Invalid database version, expected {expected:#x}, found {found:#x}")]
     InvalidDatabaseVersion {
         /// the current database version
         found: u32,

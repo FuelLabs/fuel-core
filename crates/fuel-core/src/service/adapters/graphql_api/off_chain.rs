@@ -1,18 +1,18 @@
 use crate::{
     database::{
-        database_description::{
-            off_chain::OffChain,
-            IndexationKind,
-        },
         Database,
         OffChainIterableKeyValueView,
         OffChainKeyValueView,
+        database_description::{
+            IndexationKind,
+            off_chain::OffChain,
+        },
     },
     fuel_core_graphql_api::{
         ports::{
-            worker,
             OffChainDatabase,
             OffChainDatabaseAt,
+            worker,
         },
         storage::{
             contracts::ContractsInfo,
@@ -45,6 +45,9 @@ use crate::{
     },
 };
 use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsRef,
     iter::{
         BoxedIter,
         IntoBoxedIter,
@@ -56,9 +59,6 @@ use fuel_core_storage::{
         IntoTransaction,
         StorageTransaction,
     },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::{

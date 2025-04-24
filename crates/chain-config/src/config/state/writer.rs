@@ -1,11 +1,11 @@
 use crate::{
-    config::table_entry::TableEntry,
     AddTable,
     ChainConfig,
     LastBlockConfig,
     SnapshotMetadata,
     StateConfigBuilder,
     TableEncoding,
+    config::table_entry::TableEntry,
 };
 use fuel_core_storage::structured_storage::TableWithBlueprint;
 use std::path::PathBuf;
@@ -184,10 +184,15 @@ impl FragmentData {
                 },
             ) => {
                 tables.extend(their_tables);
-                anyhow::ensure!(*compression == their_compression, "Fragments use different compressions.")
+                anyhow::ensure!(
+                    *compression == their_compression,
+                    "Fragments use different compressions."
+                )
             }
-            #[cfg(feature="parquet")]
-            (a,b) => anyhow::bail!("Fragments don't have the same encoding and cannot be merged. Fragments: {a:?} and {b:?}"),
+            #[cfg(feature = "parquet")]
+            (a, b) => anyhow::bail!(
+                "Fragments don't have the same encoding and cannot be merged. Fragments: {a:?} and {b:?}"
+            ),
         };
 
         Ok(self)
@@ -481,8 +486,8 @@ mod tests {
         },
     };
     use rand::{
-        rngs::StdRng,
         SeedableRng,
+        rngs::StdRng,
     };
 
     use crate::StateConfig;

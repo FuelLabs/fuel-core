@@ -6,15 +6,15 @@ use futures::{
 };
 use libp2p::{
     self,
+    PeerId,
     core::{
+        UpgradeInfo,
         upgrade::{
             InboundConnectionUpgrade,
             OutboundConnectionUpgrade,
         },
-        UpgradeInfo,
     },
     noise,
-    PeerId,
 };
 use std::pin::Pin;
 

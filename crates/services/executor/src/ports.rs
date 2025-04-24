@@ -6,13 +6,13 @@ use fuel_core_types::{
     },
     fuel_tx::{
         self,
-        field::Expiration,
         ConsensusParameters,
         Input,
         Output,
         Transaction,
         TxId,
         UniqueIdentifier,
+        field::Expiration,
     },
     fuel_types::{
         BlockHeight,

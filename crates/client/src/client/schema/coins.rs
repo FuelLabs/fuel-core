@@ -1,18 +1,18 @@
 use crate::client::{
+    PageDirection,
+    PaginationRequest,
     schema::{
-        schema,
         Address,
         AssetId,
         Nonce,
         PageInfo,
-        UtxoId,
-        U128,
         U16,
         U32,
         U64,
+        U128,
+        UtxoId,
+        schema,
     },
-    PageDirection,
-    PaginationRequest,
 };
 use fuel_core_types::{
     fuel_tx,

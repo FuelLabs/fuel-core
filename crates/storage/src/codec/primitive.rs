@@ -21,7 +21,7 @@ use fuel_core_types::{
 pub struct Primitive<const SIZE: usize>;
 
 macro_rules! impl_encode {
-    ($($ty:ty, $size:expr),*) => {
+    ($($ty:ty, $size:expr_2021),*) => {
         $(
             impl Encode<$ty> for Primitive<{ $size }> {
                 type Encoder<'a> = [u8; { $size }];
@@ -34,7 +34,7 @@ macro_rules! impl_encode {
     };
 }
 macro_rules! impl_decode {
-    ($($ty:ty, $size:expr),*) => {
+    ($($ty:ty, $size:expr_2021),*) => {
         $(
             impl Decode<$ty> for Primitive<{ $size }> {
                 fn decode(bytes: &[u8]) -> anyhow::Result<$ty> {

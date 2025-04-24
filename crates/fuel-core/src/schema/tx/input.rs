@@ -6,9 +6,9 @@ use crate::schema::scalars::{
     HexString,
     Nonce,
     TxPointer,
-    UtxoId,
     U16,
     U64,
+    UtxoId,
 };
 use async_graphql::{
     Object,

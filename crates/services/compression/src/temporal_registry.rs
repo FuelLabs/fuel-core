@@ -17,6 +17,11 @@ use fuel_core_compression::ports::{
     UtxoIdToPointer,
 };
 use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
     not_found,
     tables::{
         Coins,
@@ -24,19 +29,14 @@ use fuel_core_storage::{
         Messages,
     },
     transactional::StorageTransaction,
-    Error as StorageError,
-    StorageAsMut,
-    StorageAsRef,
-    StorageInspect,
-    StorageMutate,
 };
 use fuel_core_types::{
     fuel_tx::{
-        input::PredicateCode,
         Address,
         AssetId,
         ContractId,
         ScriptCode,
+        input::PredicateCode,
     },
     services::executor::Event,
     tai64::Tai64,
@@ -367,6 +367,9 @@ mod fault_proving {
         },
     };
     use fuel_core_storage::{
+        Mappable,
+        MerkleRoot,
+        MerkleRootStorage,
         blueprint::BlueprintInspect,
         kv_store::{
             KeyValueInspect,
@@ -382,9 +385,6 @@ mod fault_proving {
         },
         structured_storage::TableWithBlueprint,
         transactional::StorageTransaction,
-        Mappable,
-        MerkleRoot,
-        MerkleRootStorage,
     };
 
     trait ComputeRegistryRoot {
@@ -393,10 +393,7 @@ mod fault_proving {
         where
             Table: Mappable + MerkleizedTableColumn<TableColumn = CompressionColumn>,
             Table: TableWithBlueprint,
-            Table::Blueprint: BlueprintInspect<
-                Table,
-                DummyStorage<MerkleizedColumn<CompressionColumn>>,
-            >;
+            Table::Blueprint: BlueprintInspect<Table, DummyStorage<MerkleizedColumn<CompressionColumn>>>;
     }
 
     impl<Storage> ComputeRegistryRoot for StorageTransaction<Storage>
@@ -437,10 +434,7 @@ mod fault_proving {
         where
             Table: Mappable + MerkleizedTableColumn<TableColumn = CompressionColumn>,
             Table: TableWithBlueprint,
-            Table::Blueprint: BlueprintInspect<
-                Table,
-                DummyStorage<MerkleizedColumn<CompressionColumn>>,
-            >,
+            Table::Blueprint: BlueprintInspect<Table, DummyStorage<MerkleizedColumn<CompressionColumn>>>,
         {
             <Self as MerkleRootStorage<u32, Merkleized<Table>>>::root(
                 self,

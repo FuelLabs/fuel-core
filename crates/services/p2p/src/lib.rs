@@ -26,9 +26,9 @@ pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;
 
 pub use libp2p::{
-    multiaddr::Protocol,
     Multiaddr,
     PeerId,
+    multiaddr::Protocol,
 };
 use tracing::warn;
 

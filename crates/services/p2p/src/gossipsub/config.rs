@@ -3,12 +3,12 @@ use super::topics::{
     TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
 };
 use crate::{
+    TryPeerId,
     config::{
         Config,
         MAX_RESPONSE_SIZE,
     },
     utils::is_dialable,
-    TryPeerId,
 };
 use fuel_core_metrics::global_registry;
 use libp2p::gossipsub::{

@@ -1,15 +1,14 @@
 use criterion::{
-    black_box,
     Criterion,
     Throughput,
+    black_box,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         Instruction,
+        op,
     },
     fuel_tx::{
-        policies::Policies,
         AssetId,
         ConsensusParameters,
         Input,
@@ -17,21 +16,22 @@ use fuel_core_types::{
         Script,
         Transaction,
         TxParameters,
+        policies::Policies,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::{
+        Interpreter,
         checked_transaction::{
             Checked,
             IntoChecked,
         },
         interpreter::NotSupportedEcal,
-        Interpreter,
     },
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 fn transaction<R: Rng>(
@@ -43,11 +43,11 @@ fn transaction<R: Rng>(
     let mut inputs = (0..1)
         .map(|_| {
             Input::coin_predicate(
-                rng.gen(),
-                rng.gen(),
-                rng.gen(),
+                rng.r#gen(),
+                rng.r#gen(),
+                rng.r#gen(),
                 AssetId::BASE,
-                rng.gen(),
+                rng.r#gen(),
                 0,
                 vec![255; 1],
                 vec![255; 1],
@@ -59,10 +59,10 @@ fn transaction<R: Rng>(
 
     for i in 0..CONTRACTS_NUMBER {
         inputs.push(Input::contract(
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
-            rng.gen(),
+            rng.r#gen(),
+            rng.r#gen(),
+            rng.r#gen(),
+            rng.r#gen(),
             [i as u8; 32].into(),
         ));
     }

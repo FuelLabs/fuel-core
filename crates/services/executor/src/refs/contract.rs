@@ -1,12 +1,12 @@
 use core::fmt;
 use fuel_core_storage::{
-    not_found,
-    tables::ContractsLatestUtxo,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     StorageAsRef,
     StorageInspect,
+    not_found,
+    tables::ContractsLatestUtxo,
 };
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -97,11 +97,11 @@ where
 mod smt {
     use super::*;
     use fuel_core_storage::{
+        MerkleRootStorage,
         tables::{
             ContractsAssets,
             ContractsState,
         },
-        MerkleRootStorage,
     };
 
     impl<Database> ContractRef<Database>

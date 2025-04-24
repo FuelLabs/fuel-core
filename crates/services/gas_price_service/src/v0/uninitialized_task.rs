@@ -1,9 +1,9 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
-            get_block_info,
             GasPriceSettings,
             GasPriceSettingsProvider,
+            get_block_info,
         },
         gas_price_algorithm::SharedGasPriceAlgo,
         l2_block_source::FuelL2BlockSource,
@@ -29,10 +29,10 @@ use crate::{
     },
 };
 use fuel_core_services::{
-    stream::BoxStream,
     RunnableService,
     ServiceRunner,
     StateWatcher,
+    stream::BoxStream,
 };
 use fuel_core_storage::{
     not_found,
@@ -199,28 +199,28 @@ where
     let exec_gas_price_change_percent = config.gas_price_change_percent;
     let l2_block_fullness_threshold_percent = config.gas_price_threshold_percent;
 
-    let algorithm_updater;
-    if let Some(updater_metadata) = metadata_storage
+    let algorithm_updater = match metadata_storage
         .get_metadata(&latest_block_height.into())
         .map_err(|err| GasPriceError::CouldNotInitUpdater(anyhow::anyhow!(err)))?
     {
-        let previous_metadata: V0Metadata = updater_metadata.try_into()?;
-        algorithm_updater = AlgorithmUpdaterV0::new(
-            previous_metadata.new_exec_price,
-            min_exec_gas_price,
-            exec_gas_price_change_percent,
-            previous_metadata.l2_block_height,
-            l2_block_fullness_threshold_percent,
-        );
-    } else {
-        algorithm_updater = AlgorithmUpdaterV0::new(
+        Some(updater_metadata) => {
+            let previous_metadata: V0Metadata = updater_metadata.try_into()?;
+            AlgorithmUpdaterV0::new(
+                previous_metadata.new_exec_price,
+                min_exec_gas_price,
+                exec_gas_price_change_percent,
+                previous_metadata.l2_block_height,
+                l2_block_fullness_threshold_percent,
+            )
+        }
+        _ => AlgorithmUpdaterV0::new(
             config.starting_gas_price,
             min_exec_gas_price,
             exec_gas_price_change_percent,
             latest_block_height,
             l2_block_fullness_threshold_percent,
-        );
-    }
+        ),
+    };
 
     let shared_algo =
         SharedGasPriceAlgo::new_with_algorithm(algorithm_updater.algorithm());

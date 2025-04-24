@@ -11,8 +11,8 @@ use criterion::{
 use fuel_core_benches::VmBench;
 use fuel_core_types::fuel_asm::*;
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 pub fn run(c: &mut Criterion) {
@@ -46,6 +46,42 @@ pub fn run(c: &mut Criterion) {
         &mut c.benchmark_group("jnzi"),
         "jnzi",
         VmBench::new(op::jnzi(RegId::ONE, 10)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jmpf"),
+        "jmpf",
+        VmBench::new(op::jmpf(RegId::ONE, 10)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jmpb"),
+        "jmpb",
+        VmBench::new(op::jmpb(RegId::ONE, 2)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jnzf"),
+        "jnzf",
+        VmBench::new(op::jnzf(RegId::ONE, RegId::ONE, 2)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jnzb"),
+        "jnzb",
+        VmBench::new(op::jnzb(RegId::ONE, RegId::ONE, 2)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jnef"),
+        "jnef",
+        VmBench::new(op::jnef(RegId::ONE, RegId::ONE, RegId::ONE, 2)),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("jneb"),
+        "jneb",
+        VmBench::new(op::jneb(RegId::ONE, RegId::ONE, RegId::ONE, 2)),
     );
 
     run_group_ref(

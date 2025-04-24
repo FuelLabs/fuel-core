@@ -1,5 +1,6 @@
 use crate::common::updater_metadata::UpdaterMetadata;
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
@@ -7,7 +8,6 @@ use fuel_core_storage::{
     },
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 

@@ -5,6 +5,7 @@ use crate::{
     },
     graphql_api::Config,
     schema::{
+        ReadViewProvider,
         block::Block,
         scalars::{
             Address,
@@ -13,7 +14,6 @@ use crate::{
             U32,
             U64,
         },
-        ReadViewProvider,
     },
 };
 use async_graphql::{

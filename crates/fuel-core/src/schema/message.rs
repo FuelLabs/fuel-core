@@ -1,4 +1,5 @@
 use super::{
+    ReadViewProvider,
     block::Header,
     scalars::{
         Address,
@@ -8,7 +9,6 @@ use super::{
         TransactionId,
         U64,
     },
-    ReadViewProvider,
 };
 use crate::{
     fuel_core_graphql_api::query_costs,
@@ -20,13 +20,13 @@ use crate::{
 };
 use anyhow::anyhow;
 use async_graphql::{
+    Context,
+    Enum,
+    Object,
     connection::{
         Connection,
         EmptyFields,
     },
-    Context,
-    Enum,
-    Object,
 };
 use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_types::entities;
@@ -139,10 +139,8 @@ impl MessageQuery {
         let height = match (commit_block_id, commit_block_height) {
             (Some(commit_block_id), None) => {
                 query.block_height(&commit_block_id.0.into())?
-            },
-            (None, Some(commit_block_height)) => {
-                commit_block_height.0.into()
             }
+            (None, Some(commit_block_height)) => commit_block_height.0.into(),
             _ => Err(anyhow::anyhow!(
                 "Either `commit_block_id` or `commit_block_height` must be provided exclusively"
             ))?,

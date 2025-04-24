@@ -24,9 +24,9 @@ mod tests {
     use crate::v1::da_source_service::{
         dummy_costs::DummyDaBlockCosts,
         service::{
-            new_da_service,
-            DaSourceService,
             DA_BLOCK_COSTS_CHANNEL_SIZE,
+            DaSourceService,
+            new_da_service,
         },
     };
     use fuel_core_services::{
@@ -37,9 +37,9 @@ mod tests {
     use fuel_core_types::fuel_types::BlockHeight;
     use std::{
         sync::{
-            atomic::AtomicU32,
             Arc,
             Mutex,
+            atomic::AtomicU32,
         },
         time::Duration,
     };
@@ -105,8 +105,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run__will_not_return_cost_bundles_for_bundles_that_are_greater_than_l2_height(
-    ) {
+    async fn run__will_not_return_cost_bundles_for_bundles_that_are_greater_than_l2_height()
+     {
         // given
         let l2_height = 4;
         let unexpected_costs = DaBlockCosts {
