@@ -18,7 +18,7 @@ pub struct PoolRequestParams {
 }
 
 pub struct MockTxPool {
-    pub get_executable_transactions_results_sender: GetExecutableTransactionsSender
+    pub get_executable_transactions_results_sender: GetExecutableTransactionsSender,
 }
 
 pub type GetExecutableTransactionsSender = std::sync::mpsc::Sender<(
@@ -32,10 +32,7 @@ pub type GetExecutableTransactionsReceiver = std::sync::mpsc::Receiver<(
 )>;
 
 impl MockTxPool {
-    pub fn new() -> (
-        Self,
-        GetExecutableTransactionsReceiver
-    ) {
+    pub fn new() -> (Self, GetExecutableTransactionsReceiver) {
         let (
             get_executable_transactions_results_sender,
             get_executable_transactions_results_receiver,
