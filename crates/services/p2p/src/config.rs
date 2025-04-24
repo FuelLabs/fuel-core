@@ -258,7 +258,7 @@ impl Config<NotInitialized> {
             tx_pool_threads: 0,
             state: NotInitialized,
             subscribe_to_pre_confirmations: true,
-            subscribe_to_transactions: false,
+            subscribe_to_transactions: true,
         }
     }
 }
