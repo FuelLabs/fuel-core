@@ -121,7 +121,6 @@ use fuel_core_types::{
             ExecutableTransaction,
             InterpreterParams,
             MemoryInstance,
-            NotSupportedEcal,
         },
         state::StateTransition,
         verification,
@@ -165,10 +164,12 @@ use alloc::borrow::Cow;
 #[cfg(feature = "alloc")]
 use alloc::{
     format,
+    string::String,
     string::ToString,
     vec,
     vec::Vec,
 };
+use fuel_core_types::fuel_vm::interpreter::syscall::EcalSyscallHandler;
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
@@ -338,11 +339,8 @@ pub struct ExecutionOptions {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips signature and UTXO existence checks.
     pub forbid_fake_coins: bool,
-    /// Print execution backtraces if transaction execution reverts.
-    ///
-    /// Deprecated field. Do nothing. This fields exists for serialization and
-    /// deserialization compatibility.
-    pub backtrace: bool,
+    /// The flag allows the usage of syscall in the transaction.
+    pub allow_syscall: bool,
 }
 
 /// Per-block execution options
@@ -351,6 +349,7 @@ struct ExecutionOptionsInner {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips signature and UTXO existence checks.
     pub forbid_fake_coins: bool,
+    pub allow_syscall: bool,
     pub dry_run: bool,
 }
 
@@ -512,6 +511,7 @@ type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransa
 pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
     relayer: R,
     consensus_params: ConsensusParameters,
+    checked_predicate_params: CheckPredicateParams,
     options: ExecutionOptionsInner,
     new_tx_waiter: TxWaiter,
     preconfirmation_sender: PreconfirmationSender,
@@ -528,11 +528,15 @@ impl<R, TxWaiter, PreconfirmationSender>
         preconfirmation_sender: PreconfirmationSender,
         dry_run: bool,
     ) -> ExecutorResult<Self> {
+        let mut checked_predicate_params = CheckPredicateParams::from(&consensus_params);
+        checked_predicate_params.allow_syscall = options.allow_syscall;
         Ok(Self {
             relayer,
             consensus_params,
+            checked_predicate_params,
             options: ExecutionOptionsInner {
                 forbid_fake_coins: options.forbid_fake_coins,
+                allow_syscall: options.allow_syscall,
                 dry_run,
             },
             new_tx_waiter,
@@ -1136,6 +1140,7 @@ where
                             relayed_tx,
                             block_height,
                             &self.consensus_params,
+                            &self.checked_predicate_params,
                             memory,
                             block_storage_tx,
                         );
@@ -1168,6 +1173,7 @@ where
         relayed_tx: RelayedTransaction,
         block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
+        checked_predicate_params: &CheckPredicateParams,
         memory: &mut MemoryInstance,
         block_storage_tx: &BlockStorageTransaction<D>,
     ) -> Result<CheckedTransaction, ForcedTransactionFailure>
@@ -1185,6 +1191,7 @@ where
             parsed_tx,
             block_height,
             consensus_params,
+            checked_predicate_params,
             memory,
             block_storage_tx,
         )?;
@@ -1204,6 +1211,7 @@ where
         tx: Transaction,
         height: BlockHeight,
         consensus_params: &ConsensusParameters,
+        checked_predicate_params: &CheckPredicateParams,
         memory: &mut MemoryInstance,
         block_storage_tx: &BlockStorageTransaction<D>,
     ) -> Result<Checked<Transaction>, ForcedTransactionFailure>
@@ -1214,6 +1222,7 @@ where
             .into_checked_reusable_memory(
                 height,
                 consensus_params,
+                checked_predicate_params,
                 memory,
                 block_storage_tx,
             )
@@ -1778,11 +1787,7 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         checked_tx = checked_tx
-            .check_predicates(
-                &CheckPredicateParams::from(&self.consensus_params),
-                memory,
-                storage_tx,
-            )
+            .check_predicates(&self.checked_predicate_params, memory, storage_tx)
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
                     e,
@@ -1848,13 +1853,17 @@ where
 
         let mut reverted;
 
+        let ecal = EcalSyscallHandler::new(self.options.allow_syscall);
+
         let (state, mut tx, receipts) = if !self.options.dry_run {
-            let mut vm = Interpreter::<_, _, _, NotSupportedEcal,
-                verification::Normal>::with_storage(
-                memory,
-                vm_db,
-                InterpreterParams::new(gas_price, &self.consensus_params),
-            );
+            let mut vm =
+                Interpreter::<_, _, _, _, verification::Normal>::with_storage_and_ecal(
+                    memory,
+                    vm_db,
+                    InterpreterParams::new(gas_price, &self.consensus_params),
+                    ecal,
+                );
+            maybe_print_logs(vm.ecal_state().logs(), &tx_id);
 
             let vm_result: StateTransition<_> = vm
                 .transact(ready_tx)
@@ -1871,12 +1880,13 @@ where
                 _,
                 _,
                 _,
-                NotSupportedEcal,
+                _,
                 verification::AttemptContinue,
-            >::with_storage(
+            >::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
+                ecal,
             );
 
             let vm_result: StateTransition<_> = vm
@@ -1886,6 +1896,7 @@ where
                     transaction_id: tx_id,
                 })?
                 .into();
+            maybe_print_logs(vm.ecal_state().logs(), &tx_id);
 
             reverted = vm_result.should_revert();
 
@@ -2359,5 +2370,19 @@ where
         }
 
         Ok(())
+    }
+}
+
+fn maybe_print_logs(logs: &[String], tx_id: &TxId) {
+    if !logs.is_empty() {
+        let logs_string = logs.join("\n");
+        let span = tracing::info_span!(
+            "execute_transaction",
+            tx_id = % tx_id
+        );
+
+        span.in_scope(|| {
+            tracing::info!("\n{}", logs_string);
+        });
     }
 }
