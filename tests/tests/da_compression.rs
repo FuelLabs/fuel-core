@@ -1,6 +1,7 @@
 use core::time::Duration;
 use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
+    combined_database::CombinedDatabase,
     p2p_test_helpers::*,
     service::{
         config::{
@@ -9,6 +10,10 @@ use fuel_core::{
         },
         Config,
         FuelService,
+    },
+    state::{
+        historical_rocksdb::StateRewindPolicy,
+        rocks_db::DatabaseConfig,
     },
 };
 use fuel_core_client::client::{
@@ -38,6 +43,7 @@ use fuel_core_types::{
         Input,
         UniqueIdentifier,
     },
+    fuel_types::BlockHeight,
     secrecy::Secret,
     signer::SignMode,
 };
@@ -188,4 +194,64 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
         .unwrap()
         .expect("Compressed block not available from validator");
     let _: VersionedCompressedBlock = postcard::from_bytes(&compressed_block).unwrap();
+}
+
+#[tokio::test]
+async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_database() {
+    // given: the node starts without compression enabled, and produces blocks
+    let db = CombinedDatabase::temp_database_with_state_rewind_policy(
+        StateRewindPolicy::NoRewind,
+        DatabaseConfig::config_for_tests(),
+    )
+    .unwrap();
+    let mut rng = StdRng::seed_from_u64(10);
+    let poa_secret = SecretKey::random(&mut rng);
+    let blocks_to_produce = 10;
+
+    let mut config = config_with_fee();
+    config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
+    config.da_compression = DaCompressionMode::Disabled;
+    config.combined_db_config.state_rewind_policy = StateRewindPolicy::NoRewind;
+    let srv = FuelService::from_combined_database(db.clone(), config)
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let current_height = client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, blocks_to_produce.into());
+
+    let mut config = srv.shared.config.clone();
+
+    // when: the node is restarted with compression enabled, and blocks are produced
+    config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
+        retention_duration: Duration::from_secs(3600),
+        metrics: false,
+    });
+    let srv = FuelService::from_combined_database(db, config)
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let current_height = client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, BlockHeight::from(blocks_to_produce * 2));
+
+    srv.await_compression_synced().await.unwrap();
+
+    // then: the da compressed blocks from height 1 to height blocks_to_produce don't exist
+    // and the da compressed blocks from height blocks_to_produce + 1 to height blocks_to_produce * 2 exist
+    for height in 0..=blocks_to_produce {
+        let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
+        assert!(compressed_block.is_none());
+    }
+
+    for height in blocks_to_produce + 1..=blocks_to_produce * 2 {
+        let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
+        assert!(compressed_block.is_some());
+    }
 }

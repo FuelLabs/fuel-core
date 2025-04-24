@@ -226,6 +226,12 @@ where
         loop {
             let storage_height = self.storage.latest_height();
 
+            if storage_height.is_none() {
+                // if the storage height is unavailable, don't execute blocks from genesis
+                tracing::info!("Compression database started from scratch");
+                break;
+            }
+
             if canonical_height < storage_height {
                 return Err(crate::errors::CompressionError::FailedToGetSyncStatus);
             }
@@ -362,7 +368,7 @@ where
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
         // gracefully handle all the remaining blocks in the stream and then stop
-        while let Some(block_with_metadata) = self.block_stream.next().await {
+        if let Some(Some(block_with_metadata)) = self.block_stream.next().now_or_never() {
             if let Err(e) = self.handle_new_block(&block_with_metadata) {
                 return Err(anyhow::anyhow!(e).context(format!(
                     "Couldn't compress block: {}. Shutting down. \
@@ -497,7 +503,10 @@ mod tests {
 
     impl CanonicalHeight for MockCanonicalHeightProvider {
         fn get(&self) -> Option<u32> {
-            Some(self.0)
+            match self.0 {
+                0 => None,
+                _ => Some(self.0),
+            }
         }
     }
 
@@ -576,6 +585,7 @@ mod tests {
             .get(&0.into())
             .unwrap();
         assert!(maybe_block.is_none());
+        service.shutdown().await.unwrap();
     }
 
     #[tokio::test]
@@ -611,6 +621,7 @@ mod tests {
             .get(&0.into())
             .unwrap();
         assert!(maybe_block.is_some());
+        service.shutdown().await.unwrap();
     }
 
     #[tokio::test]
@@ -648,5 +659,6 @@ mod tests {
             .get(&canonical_height_provider.get().unwrap().into())
             .unwrap();
         assert!(maybe_block.is_some());
+        service.shutdown().await.unwrap();
     }
 }
