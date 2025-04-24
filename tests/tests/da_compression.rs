@@ -98,7 +98,9 @@ async fn can_fetch_da_compressed_block_from_graphql() {
             panic!("unexpected result {other:?}")
         }
     };
-    srv.await_compression_synced().await.unwrap();
+    srv.await_compression_synced_until(&block_height)
+        .await
+        .unwrap();
 
     let block = client
         .da_compressed_block(block_height)
@@ -184,7 +186,11 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     // Insert some txs
     let expected = producer.insert_txs().await;
     validator.consistency_20s(&expected).await;
-    validator.node.await_compression_synced().await.unwrap();
+    validator
+        .node
+        .await_compression_synced_until(&1u32.into())
+        .await
+        .unwrap();
 
     let block_height = 1u32.into();
 
@@ -241,7 +247,9 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
         .unwrap();
     assert_eq!(current_height, BlockHeight::from(blocks_to_produce * 2));
 
-    srv.await_compression_synced().await.unwrap();
+    srv.await_compression_synced_until(&current_height)
+        .await
+        .unwrap();
 
     // then: the da compressed blocks from height 1 to height blocks_to_produce don't exist
     // and the da compressed blocks from height blocks_to_produce + 1 to height blocks_to_produce * 2 exist

@@ -277,11 +277,11 @@ pub struct SharedData {
 
 impl SharedData {
     /// Waits until the compression service has synced
-    /// with current l2 block height
-    pub async fn await_synced(&self) -> crate::Result<()> {
+    /// with the given block height
+    pub async fn await_synced_until(&self, block_height: &u32) -> crate::Result<()> {
         let mut observer = self.sync_observer.clone();
         loop {
-            if observer.borrow_and_update().is_synced() {
+            if observer.borrow_and_update().is_synced_until(block_height) {
                 break;
             }
 
@@ -614,11 +614,15 @@ mod tests {
         let _ = service.run(&mut StateWatcher::started()).await;
 
         // then
-        sync_observer.await_synced().await.unwrap();
+        let target_block_height = 0;
+        sync_observer
+            .await_synced_until(&target_block_height)
+            .await
+            .unwrap();
         let maybe_block = service
             .storage
             .storage_as_ref::<storage::CompressedBlocks>()
-            .get(&0.into())
+            .get(&target_block_height.into())
             .unwrap();
         assert!(maybe_block.is_some());
         service.shutdown().await.unwrap();
