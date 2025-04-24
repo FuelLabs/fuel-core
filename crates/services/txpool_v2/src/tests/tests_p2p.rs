@@ -1,11 +1,11 @@
 use fuel_core_services::Service;
 use fuel_core_types::{
     fuel_tx::{
-        field::Inputs,
         AssetId,
         Transaction,
         TransactionBuilder,
         UniqueIdentifier,
+        field::Inputs,
     },
     fuel_types::ChainId,
     services::p2p::{
@@ -20,15 +20,15 @@ use std::{
     time::Duration,
 };
 use tokio::sync::{
-    broadcast,
     Notify,
+    broadcast,
 };
 
 use crate::tests::{
     mocks::MockP2P,
     universe::{
-        TestPoolUniverse,
         TEST_COIN_AMOUNT,
+        TestPoolUniverse,
     },
 };
 

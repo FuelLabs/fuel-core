@@ -6,6 +6,11 @@ use crate::ports::{
     Transactional,
 };
 use fuel_core_storage::{
+    Error as StorageError,
+    Mappable,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageMutate,
     blueprint::plain::Plain,
     codec::{
         postcard::Postcard,
@@ -17,11 +22,6 @@ use fuel_core_storage::{
         Modifiable,
         StorageTransaction,
     },
-    Error as StorageError,
-    Mappable,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageMutate,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,

@@ -2,18 +2,18 @@
 //! `cargo bench --bench transaction_throughput -p fuel-core-benches`
 
 use criterion::{
-    criterion_group,
-    criterion_main,
-    measurement::WallTime,
     BenchmarkGroup,
     Criterion,
     SamplingMode,
+    criterion_group,
+    criterion_main,
+    measurement::WallTime,
 };
 use ed25519_dalek::Signer;
 use fuel_core::{
     service::{
-        config::Trigger,
         DbType,
+        config::Trigger,
     },
     state::rocks_db::{
         ColumnsPolicy,
@@ -24,10 +24,10 @@ use fuel_core_benches::*;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GMArgs,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_crypto::*,
     fuel_tx::{
@@ -53,17 +53,17 @@ use fuel_core_types::{
     },
 };
 use rand::{
-    rngs::StdRng,
     SeedableRng,
+    rngs::StdRng,
 };
 use std::{
     sync::Arc,
     time::Duration,
 };
 use test_helpers::builder::{
-    local_chain_config,
     TestContext,
     TestSetupBuilder,
+    local_chain_config,
 };
 
 // Use Jemalloc during benchmarks
@@ -190,13 +190,13 @@ fn signed_transfers(c: &mut Criterion) {
             .script_gas_limit(10000)
             .add_unsigned_coin_input(
                 SecretKey::random(rng),
-                rng.gen(),
+                rng.r#gen(),
                 1000,
                 Default::default(),
                 Default::default(),
             )
             .add_input(Input::coin_predicate(
-                rng.gen(),
+                rng.r#gen(),
                 owner,
                 1000,
                 Default::default(),
@@ -205,8 +205,8 @@ fn signed_transfers(c: &mut Criterion) {
                 predicate.clone(),
                 vec![],
             ))
-            .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
-            .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+            .add_output(Output::coin(rng.r#gen(), 50, AssetId::default()))
+            .add_output(Output::change(rng.r#gen(), 0, AssetId::default()))
             .finalize();
         tx.estimate_predicates(
             &checked_parameters(),
@@ -226,7 +226,7 @@ fn predicate_transfers(c: &mut Criterion) {
 
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .add_input(Input::coin_predicate(
-                rng.gen(),
+                rng.r#gen(),
                 owner,
                 1000,
                 Default::default(),
@@ -235,8 +235,8 @@ fn predicate_transfers(c: &mut Criterion) {
                 predicate.clone(),
                 vec![],
             ))
-            .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
-            .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+            .add_output(Output::coin(rng.r#gen(), 50, AssetId::default()))
+            .add_output(Output::change(rng.r#gen(), 0, AssetId::default()))
             .finalize();
         tx.estimate_predicates(
             &checked_parameters(),
@@ -288,7 +288,7 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
             .add_input(Input::coin_predicate(
-                rng.gen(),
+                rng.r#gen(),
                 owner,
                 1000,
                 Default::default(),
@@ -298,7 +298,7 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
                 predicate_data.clone(),
             ))
             .add_input(Input::coin_predicate(
-                rng.gen(),
+                rng.r#gen(),
                 owner_2,
                 1000,
                 Default::default(),
@@ -307,8 +307,8 @@ fn predicate_transfers_eck1(c: &mut Criterion) {
                 predicate_2,
                 vec![],
             ))
-            .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
-            .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+            .add_output(Output::coin(rng.r#gen(), 50, AssetId::default()))
+            .add_output(Output::change(rng.r#gen(), 0, AssetId::default()))
             .finalize();
         tx.estimate_predicates(
             &checked_parameters(),
@@ -362,7 +362,7 @@ fn predicate_transfers_ed19(c: &mut Criterion) {
         let mut tx = TransactionBuilder::script(vec![], vec![])
             .script_gas_limit(10000)
             .add_input(Input::coin_predicate(
-                rng.gen(),
+                rng.r#gen(),
                 owner,
                 1000,
                 Default::default(),
@@ -372,7 +372,7 @@ fn predicate_transfers_ed19(c: &mut Criterion) {
                 predicate_data.clone(),
             ))
             .add_input(Input::coin_predicate(
-                rng.gen(),
+                rng.r#gen(),
                 owner_2,
                 1000,
                 Default::default(),
@@ -381,8 +381,8 @@ fn predicate_transfers_ed19(c: &mut Criterion) {
                 predicate_2,
                 vec![],
             ))
-            .add_output(Output::coin(rng.gen(), 50, AssetId::default()))
-            .add_output(Output::change(rng.gen(), 0, AssetId::default()))
+            .add_output(Output::coin(rng.r#gen(), 50, AssetId::default()))
+            .add_output(Output::change(rng.r#gen(), 0, AssetId::default()))
             .finalize();
         tx.estimate_predicates(
             &checked_parameters(),

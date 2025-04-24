@@ -152,18 +152,21 @@ impl PeerManager {
         reporting_service: &str,
         punisher: &mut T,
     ) {
-        if let Some(peer) = self.non_reserved_connected_peers.get_mut(&peer_id) {
-            // score should not go over `max_score`
-            let new_score = self.score_config.max_app_score.min(peer.score + score);
-            peer.score = new_score;
+        match self.non_reserved_connected_peers.get_mut(&peer_id) {
+            Some(peer) => {
+                // score should not go over `max_score`
+                let new_score = self.score_config.max_app_score.min(peer.score + score);
+                peer.score = new_score;
 
-            info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {score}");
+                info!(target: "fuel-p2p", "{reporting_service} updated {peer_id} with new score {score}");
 
-            if new_score < self.score_config.min_app_score_allowed {
-                punisher.ban_peer(peer_id);
+                if new_score < self.score_config.min_app_score_allowed {
+                    punisher.ban_peer(peer_id);
+                }
             }
-        } else {
-            log_missing_peer(&peer_id);
+            _ => {
+                log_missing_peer(&peer_id);
+            }
         }
     }
 

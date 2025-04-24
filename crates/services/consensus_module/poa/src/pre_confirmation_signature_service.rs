@@ -1,13 +1,13 @@
 use error::Result;
 use fuel_core_services::{
-    try_or_continue,
-    try_or_stop,
     EmptyShared,
     RunnableService,
     RunnableTask,
     ServiceRunner,
     StateWatcher,
     TaskNextAction,
+    try_or_continue,
+    try_or_stop,
 };
 use fuel_core_types::{
     services::{
@@ -95,10 +95,10 @@ impl<Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableService
 where
     TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
     Brdcst: Broadcast<
-        DelegateKey = DelegateKey,
-        ParentKey = Parent,
-        Preconfirmations = Preconfirmations,
-    >,
+            DelegateKey = DelegateKey,
+            ParentKey = Parent,
+            Preconfirmations = Preconfirmations,
+        >,
     Gen: KeyGenerator<Key = DelegateKey>,
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
@@ -221,10 +221,10 @@ impl<Parent, DelegateKey, TxRcv, Brdcst, Gen, Trigger> RunnableTask
 where
     TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
     Brdcst: Broadcast<
-        DelegateKey = DelegateKey,
-        ParentKey = Parent,
-        Preconfirmations = Preconfirmations,
-    >,
+            DelegateKey = DelegateKey,
+            ParentKey = Parent,
+            Preconfirmations = Preconfirmations,
+        >,
     Gen: KeyGenerator<Key = DelegateKey>,
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,
@@ -306,10 +306,10 @@ pub fn new_service<TxRcv, Brdcst, Parent, Gen, DelegateKey, Trigger>(
 where
     TxRcv: TxReceiver<Txs = Vec<Preconfirmation>>,
     Brdcst: Broadcast<
-        DelegateKey = DelegateKey,
-        ParentKey = Parent,
-        Preconfirmations = Preconfirmations,
-    >,
+            DelegateKey = DelegateKey,
+            ParentKey = Parent,
+            Preconfirmations = Preconfirmations,
+        >,
     Gen: KeyGenerator<Key = DelegateKey>,
     Trigger: KeyRotationTrigger,
     DelegateKey: SigningKey,

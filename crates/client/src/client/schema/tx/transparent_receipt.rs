@@ -1,5 +1,4 @@
 use crate::client::schema::{
-    schema,
     Address,
     AssetId,
     Bytes32,
@@ -9,6 +8,7 @@ use crate::client::schema::{
     HexString,
     Nonce,
     U64,
+    schema,
 };
 use fuel_core_types::{
     fuel_asm::Word,

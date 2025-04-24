@@ -1,15 +1,16 @@
 use crate::database::database_description::{
-    on_chain::OnChain,
     DatabaseDescription,
+    on_chain::OnChain,
 };
 use fuel_core_storage::{
+    Result as StorageResult,
     iter::{
-        iterator,
-        keys_iterator,
         BoxedIter,
         IntoBoxedIter,
         IterDirection,
         IterableStore,
+        iterator,
+        keys_iterator,
     },
     kv_store::{
         KVItem,
@@ -19,7 +20,6 @@ use fuel_core_storage::{
         Value,
     },
     transactional::ReferenceBytesKey,
-    Result as StorageResult,
 };
 use std::collections::BTreeMap;
 
@@ -42,7 +42,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = KVItem> + 'a {
+    ) -> impl Iterator<Item = KVItem> + 'a + use<'a, Description> {
         let btree = &self.inner[column.as_usize()];
 
         iterator(btree, prefix, start, direction)
@@ -56,7 +56,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> impl Iterator<Item = KeyItem> + '_ {
+    ) -> impl Iterator<Item = KeyItem> + '_ + use<'_, Description> {
         let btree = &self.inner[column.as_usize()];
 
         keys_iterator(btree, prefix, start, direction)

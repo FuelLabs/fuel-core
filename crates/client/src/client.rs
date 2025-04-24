@@ -3,6 +3,8 @@ use crate::client::types::StatusWithTransaction;
 use crate::{
     client::{
         schema::{
+            Tai64Timestamp,
+            TransactionId,
             block::BlockByHeightArgs,
             coins::{
                 ExcludeInput,
@@ -16,10 +18,9 @@ use crate::{
                 DryRunArg,
                 TxWithEstimatedPredicatesArg,
             },
-            Tai64Timestamp,
-            TransactionId,
         },
         types::{
+            RelayedTransactionStatus,
             asset::AssetDetail,
             gas_price::LatestGasPrice,
             message::MessageStatus,
@@ -31,7 +32,6 @@ use crate::{
                 UtxoId,
             },
             upgrades::StateTransitionBytecode,
-            RelayedTransactionStatus,
         },
     },
     reqwest_ext::{
@@ -43,8 +43,8 @@ use crate::{
 use anyhow::Context;
 #[cfg(feature = "subscriptions")]
 use base64::prelude::{
-    Engine as _,
     BASE64_STANDARD,
+    Engine as _,
 };
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
@@ -73,9 +73,9 @@ use fuel_core_types::{
     },
     fuel_types::{
         self,
-        canonical::Serialize,
         BlockHeight,
         Nonce,
+        canonical::Serialize,
     },
     services::executor::{
         StorageReadReplayEvent,
@@ -94,6 +94,23 @@ use pagination::{
     PaginationRequest,
 };
 use schema::{
+    Bytes,
+    ContinueTx,
+    ContinueTxArgs,
+    ConversionError,
+    HexString,
+    IdArg,
+    MemoryArgs,
+    RegisterArgs,
+    RunResult,
+    SetBreakpoint,
+    SetBreakpointArgs,
+    SetSingleStepping,
+    SetSingleSteppingArgs,
+    StartTx,
+    StartTxArgs,
+    U32,
+    U64,
     assets::AssetInfoArg,
     balance::BalanceArgs,
     blob::BlobByIdArgs,
@@ -118,23 +135,6 @@ use schema::{
         TxArg,
         TxIdArgs,
     },
-    Bytes,
-    ContinueTx,
-    ContinueTxArgs,
-    ConversionError,
-    HexString,
-    IdArg,
-    MemoryArgs,
-    RegisterArgs,
-    RunResult,
-    SetBreakpoint,
-    SetBreakpointArgs,
-    SetSingleStepping,
-    SetSingleSteppingArgs,
-    StartTx,
-    StartTxArgs,
-    U32,
-    U64,
 };
 #[cfg(feature = "subscriptions")]
 use std::future;
@@ -157,12 +157,12 @@ use std::{
 use tai64::Tai64;
 use tracing as _;
 use types::{
+    TransactionResponse,
+    TransactionStatus,
     assemble_tx::{
         AssembleTransactionResult,
         RequiredBalance,
     },
-    TransactionResponse,
-    TransactionStatus,
 };
 
 use self::schema::{

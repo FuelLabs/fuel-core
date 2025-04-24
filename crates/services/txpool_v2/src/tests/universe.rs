@@ -19,20 +19,11 @@ use fuel_core_types::{
     },
     fuel_asm::op,
     fuel_crypto::rand::{
-        rngs::StdRng,
         Rng,
         SeedableRng,
+        rngs::StdRng,
     },
     fuel_tx::{
-        field::Inputs,
-        input::{
-            coin::{
-                CoinPredicate,
-                CoinSigned,
-            },
-            contract::Contract as ContractInput,
-            Input,
-        },
         ConsensusParameters,
         Contract,
         ContractId,
@@ -42,6 +33,15 @@ use fuel_core_types::{
         TransactionBuilder,
         TxId,
         UtxoId,
+        field::Inputs,
+        input::{
+            Input,
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+            contract::Contract as ContractInput,
+        },
     },
     fuel_types::{
         AssetId,
@@ -64,6 +64,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use crate::{
+    GasPrice,
+    Service,
     collision_manager::basic::BasicCollisionManager,
     config::{
         BlackList,
@@ -80,10 +82,10 @@ use crate::{
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
-        memory::MemoryPool,
-        verifications::Verification,
         Shared,
         TxPool,
+        memory::MemoryPool,
+        verifications::Verification,
     },
     storage::graph::{
         GraphConfig,
@@ -93,8 +95,6 @@ use crate::{
         MockDBProvider,
         MockDb,
     },
-    GasPrice,
-    Service,
 };
 
 use super::mocks::{
@@ -160,10 +160,9 @@ impl TestPoolUniverse {
     }
 
     pub fn latest_stats(&self) -> TxPoolStats {
-        if let Some(receiver) = &self.stats_receiver {
-            *receiver.borrow()
-        } else {
-            TxPoolStats::default()
+        match &self.stats_receiver {
+            Some(receiver) => *receiver.borrow(),
+            _ => TxPoolStats::default(),
         }
     }
 
@@ -276,35 +275,41 @@ impl TestPoolUniverse {
 
     // Returns the added transaction and the list of transactions that were removed from the pool
     pub fn verify_and_insert(&mut self, tx: Transaction) -> Result<ArcPoolTx, Error> {
-        if let Some(pool) = &self.pool {
-            let mut mock_chain_state_info_provider =
-                MockChainStateInfoProvider::default();
-            mock_chain_state_info_provider
-                .expect_latest_consensus_parameters()
-                .returning(|| (0, Arc::new(ConsensusParameters::standard())));
-            let verification = Verification {
-                persistent_storage_provider: Arc::new(MockDBProvider(
-                    self.mock_db.clone(),
-                )),
-                gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
-                chain_state_info_provider: Arc::new(mock_chain_state_info_provider),
-                wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
-                memory_pool: MemoryPool::new(),
-                blacklist: BlackList::default(),
-            };
-            let tx =
-                verification.perform_all_verifications(tx, Default::default(), true)?;
-            let tx = Arc::new(tx);
-            pool.write()
-                .insert(tx.clone(), &self.mock_db)
-                .map_err(|e| match e {
-                    InsertionErrorType::Error(e) => e,
-                    InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
-                })?;
+        match &self.pool {
+            Some(pool) => {
+                let mut mock_chain_state_info_provider =
+                    MockChainStateInfoProvider::default();
+                mock_chain_state_info_provider
+                    .expect_latest_consensus_parameters()
+                    .returning(|| (0, Arc::new(ConsensusParameters::standard())));
+                let verification = Verification {
+                    persistent_storage_provider: Arc::new(MockDBProvider(
+                        self.mock_db.clone(),
+                    )),
+                    gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
+                    chain_state_info_provider: Arc::new(mock_chain_state_info_provider),
+                    wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
+                    memory_pool: MemoryPool::new(),
+                    blacklist: BlackList::default(),
+                };
+                let tx = verification.perform_all_verifications(
+                    tx,
+                    Default::default(),
+                    true,
+                )?;
+                let tx = Arc::new(tx);
+                pool.write()
+                    .insert(tx.clone(), &self.mock_db)
+                    .map_err(|e| match e {
+                        InsertionErrorType::Error(e) => e,
+                        InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                    })?;
 
-            Ok(tx)
-        } else {
-            panic!("Pool needs to be built first");
+                Ok(tx)
+            }
+            _ => {
+                panic!("Pool needs to be built first");
+            }
         }
     }
 
@@ -313,31 +318,37 @@ impl TestPoolUniverse {
         tx: Transaction,
         gas_price: GasPrice,
     ) -> Result<(), Error> {
-        if let Some(pool) = &self.pool {
-            let mut mock_chain_state_info = MockChainStateInfoProvider::default();
-            mock_chain_state_info
-                .expect_latest_consensus_parameters()
-                .returning(|| (0, Arc::new(ConsensusParameters::standard())));
-            let verification = Verification {
-                persistent_storage_provider: Arc::new(MockDBProvider(
-                    self.mock_db.clone(),
-                )),
-                gas_price_provider: Arc::new(MockTxPoolGasPrice::new(gas_price)),
-                chain_state_info_provider: Arc::new(mock_chain_state_info),
-                wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
-                memory_pool: MemoryPool::new(),
-                blacklist: BlackList::default(),
-            };
-            let tx =
-                verification.perform_all_verifications(tx, Default::default(), true)?;
-            pool.write()
-                .insert(Arc::new(tx), &self.mock_db)
-                .map_err(|e| match e {
-                    InsertionErrorType::Error(e) => e,
-                    InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
-                })
-        } else {
-            panic!("Pool needs to be built first");
+        match &self.pool {
+            Some(pool) => {
+                let mut mock_chain_state_info = MockChainStateInfoProvider::default();
+                mock_chain_state_info
+                    .expect_latest_consensus_parameters()
+                    .returning(|| (0, Arc::new(ConsensusParameters::standard())));
+                let verification = Verification {
+                    persistent_storage_provider: Arc::new(MockDBProvider(
+                        self.mock_db.clone(),
+                    )),
+                    gas_price_provider: Arc::new(MockTxPoolGasPrice::new(gas_price)),
+                    chain_state_info_provider: Arc::new(mock_chain_state_info),
+                    wasm_checker: Arc::new(MockWasmChecker::new(Ok(()))),
+                    memory_pool: MemoryPool::new(),
+                    blacklist: BlackList::default(),
+                };
+                let tx = verification.perform_all_verifications(
+                    tx,
+                    Default::default(),
+                    true,
+                )?;
+                pool.write()
+                    .insert(Arc::new(tx), &self.mock_db)
+                    .map_err(|e| match e {
+                        InsertionErrorType::Error(e) => e,
+                        InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                    })
+            }
+            _ => {
+                panic!("Pool needs to be built first");
+            }
         }
     }
 
@@ -347,32 +358,38 @@ impl TestPoolUniverse {
         consensus_params: ConsensusParameters,
         wasm_checker: MockWasmChecker,
     ) -> Result<(), Error> {
-        if let Some(pool) = &self.pool {
-            let mut mock_chain_state_info_provider =
-                MockChainStateInfoProvider::default();
-            mock_chain_state_info_provider
-                .expect_latest_consensus_parameters()
-                .returning(move || (0, Arc::new(consensus_params.clone())));
-            let verification = Verification {
-                persistent_storage_provider: Arc::new(MockDBProvider(
-                    self.mock_db.clone(),
-                )),
-                gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
-                chain_state_info_provider: Arc::new(mock_chain_state_info_provider),
-                wasm_checker: Arc::new(wasm_checker),
-                memory_pool: MemoryPool::new(),
-                blacklist: BlackList::default(),
-            };
-            let tx =
-                verification.perform_all_verifications(tx, Default::default(), true)?;
-            pool.write()
-                .insert(Arc::new(tx), &self.mock_db)
-                .map_err(|e| match e {
-                    InsertionErrorType::Error(e) => e,
-                    InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
-                })
-        } else {
-            panic!("Pool needs to be built first");
+        match &self.pool {
+            Some(pool) => {
+                let mut mock_chain_state_info_provider =
+                    MockChainStateInfoProvider::default();
+                mock_chain_state_info_provider
+                    .expect_latest_consensus_parameters()
+                    .returning(move || (0, Arc::new(consensus_params.clone())));
+                let verification = Verification {
+                    persistent_storage_provider: Arc::new(MockDBProvider(
+                        self.mock_db.clone(),
+                    )),
+                    gas_price_provider: Arc::new(MockTxPoolGasPrice::new(0)),
+                    chain_state_info_provider: Arc::new(mock_chain_state_info_provider),
+                    wasm_checker: Arc::new(wasm_checker),
+                    memory_pool: MemoryPool::new(),
+                    blacklist: BlackList::default(),
+                };
+                let tx = verification.perform_all_verifications(
+                    tx,
+                    Default::default(),
+                    true,
+                )?;
+                pool.write()
+                    .insert(Arc::new(tx), &self.mock_db)
+                    .map_err(|e| match e {
+                        InsertionErrorType::Error(e) => e,
+                        InsertionErrorType::MissingInputs(e) => e.first().unwrap().into(),
+                    })
+            }
+            _ => {
+                panic!("Pool needs to be built first");
+            }
         }
     }
 
@@ -447,10 +464,10 @@ impl TestPoolUniverse {
         // use predicate inputs to avoid expensive cryptography for signatures
         let mut predicate_code: Vec<u8> = vec![op::ret(1)].into_iter().collect();
         // append some randomizing bytes after the predicate has already returned.
-        predicate_code.push(self.rng.gen());
+        predicate_code.push(self.rng.r#gen());
         let owner = Input::predicate_owner(&predicate_code);
         Input::coin_predicate(
-            utxo_id.unwrap_or_else(|| self.rng.gen()),
+            utxo_id.unwrap_or_else(|| self.rng.r#gen()),
             owner,
             amount,
             asset_id,
@@ -471,7 +488,7 @@ impl TestPoolUniverse {
     ) -> Input {
         let owner = Input::predicate_owner(&code);
         Input::coin_predicate(
-            utxo_id.unwrap_or_else(|| self.rng.gen()),
+            utxo_id.unwrap_or_else(|| self.rng.r#gen()),
             owner,
             amount,
             asset_id,

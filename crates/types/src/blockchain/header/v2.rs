@@ -1,11 +1,11 @@
 use crate::{
     blockchain::{
         header::{
-            generate_txns_root,
             ApplicationHeader,
             BlockHeaderMetadata,
             ConsensusHeader,
             GeneratedConsensusFields,
+            generate_txns_root,
         },
         primitives::BlockId,
     },
@@ -90,7 +90,7 @@ impl BlockHeaderV2 {
     }
 
     pub(crate) fn id(&self) -> BlockId {
-        if let Some(ref metadata) = self.metadata() {
+        if let Some(metadata) = self.metadata() {
             metadata.id
         } else {
             self.hash()

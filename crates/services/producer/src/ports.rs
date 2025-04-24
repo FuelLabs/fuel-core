@@ -1,6 +1,6 @@
 use fuel_core_storage::{
-    transactional::Changes,
     Result as StorageResult,
+    transactional::Changes,
 };
 use fuel_core_types::{
     blockchain::{

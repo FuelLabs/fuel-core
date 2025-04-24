@@ -10,8 +10,8 @@ use fuel_core_types::{
         block_importer::SharedImportResult,
         p2p::GossipsubMessageInfo,
         transaction_status::{
-            statuses,
             PreConfirmationStatus,
+            statuses,
         },
         txpool::ArcPoolTx,
     },
@@ -41,6 +41,7 @@ use tokio::{
 };
 
 use crate::{
+    Constraints,
     config::ServiceChannelLimits,
     error::{
         Error,
@@ -55,7 +56,6 @@ use crate::{
         TxInfo,
         TxPool,
     },
-    Constraints,
 };
 
 const MAX_PENDING_READ_POOL_REQUESTS: usize = 10_000;

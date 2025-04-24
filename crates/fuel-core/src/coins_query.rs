@@ -39,7 +39,9 @@ use thiserror::Error;
 pub enum CoinsQueryError {
     #[error("store error occurred: {0}")]
     StorageError(StorageError),
-    #[error("the target cannot be met due to no coins available or exceeding the {max} coin limit.")]
+    #[error(
+        "the target cannot be met due to no coins available or exceeding the {max} coin limit."
+    )]
     InsufficientCoinsForTheMax {
         asset_id: AssetId,
         collected_amount: u128,
@@ -47,11 +49,11 @@ pub enum CoinsQueryError {
     },
     #[error("the query contains duplicate assets")]
     DuplicateAssets(AssetId),
-    #[error(
-        "too many excluded ids: provided ({provided}) is > than allowed ({allowed})"
-    )]
+    #[error("too many excluded ids: provided ({provided}) is > than allowed ({allowed})")]
     TooManyExcludedId { provided: usize, allowed: u16 },
-    #[error("the query requires more coins than the max allowed coins: required ({required}) > max ({max})")]
+    #[error(
+        "the query requires more coins than the max allowed coins: required ({required}) > max ({max})"
+    )]
     TooManyCoinsSelected { required: usize, max: u16 },
     #[error("coins to spend index entry contains wrong coin foreign key")]
     IncorrectCoinForeignKeyInIndex,
@@ -433,19 +435,19 @@ impl From<anyhow::Error> for CoinsQueryError {
 mod tests {
     use crate::{
         coins_query::{
+            CoinsQueryError,
+            SpendQuery,
             largest_first,
             max_dust_count,
             random_improve,
-            CoinsQueryError,
-            SpendQuery,
         },
         combined_database::CombinedDatabase,
         fuel_core_graphql_api::{
             api_service::ReadDatabase as ServiceDatabase,
             storage::{
                 coins::{
-                    owner_coin_id_key,
                     OwnedCoins,
+                    owner_coin_id_key,
                 },
                 messages::{
                     OwnedMessageIds,
@@ -461,12 +463,12 @@ mod tests {
     };
     use assert_matches::assert_matches;
     use fuel_core_storage::{
+        StorageMutate,
         iter::IterDirection,
         tables::{
             Coins,
             Messages,
         },
-        StorageMutate,
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
@@ -490,9 +492,9 @@ mod tests {
         proptest,
     };
     use rand::{
-        rngs::StdRng,
         Rng,
         SeedableRng,
+        rngs::StdRng,
     };
     use std::{
         borrow::Cow,
@@ -502,8 +504,8 @@ mod tests {
     fn setup_coins() -> (Address, [AssetId; 2], AssetId, TestDatabase) {
         let mut rng = StdRng::seed_from_u64(0xf00df00d);
         let owner = Address::default();
-        let asset_ids = [rng.gen(), rng.gen()];
-        let base_asset_id = rng.gen();
+        let asset_ids = [rng.r#gen(), rng.r#gen()];
+        let base_asset_id = rng.r#gen();
         let mut db = TestDatabase::new();
         (0..5usize).for_each(|i| {
             db.make_coin(owner, (i + 1) as Word, asset_ids[0]);
@@ -516,7 +518,7 @@ mod tests {
     fn setup_messages() -> (Address, AssetId, TestDatabase) {
         let mut rng = StdRng::seed_from_u64(0xf00df00d);
         let owner = Address::default();
-        let base_asset_id = rng.gen();
+        let base_asset_id = rng.r#gen();
         let mut db = TestDatabase::new();
         (0..5usize).for_each(|i| {
             db.make_message(owner, (i + 1) as Word);
@@ -528,8 +530,8 @@ mod tests {
     fn setup_coins_and_messages() -> (Address, [AssetId; 2], AssetId, TestDatabase) {
         let mut rng = StdRng::seed_from_u64(0xf00df00d);
         let owner = Address::default();
-        let base_asset_id = rng.gen();
-        let asset_ids = [base_asset_id, rng.gen()];
+        let base_asset_id = rng.r#gen();
+        let asset_ids = [base_asset_id, rng.r#gen()];
         let mut db = TestDatabase::new();
         // 2 coins and 3 messages
         (0..2usize).for_each(|i| {
@@ -1149,8 +1151,8 @@ mod tests {
         use fuel_core_storage::iter::IntoBoxedIter;
         use fuel_core_types::{
             entities::coins::{
-                coin::Coin,
                 CoinId,
+                coin::Coin,
             },
             fuel_tx::{
                 AssetId,
@@ -1161,10 +1163,10 @@ mod tests {
 
         use crate::{
             coins_query::{
-                select_coins_to_spend,
-                select_coins_until,
                 CoinsQueryError,
                 CoinsToSpendIndexKey,
+                select_coins_to_spend,
+                select_coins_until,
             },
             graphql_api::ports::CoinsToSpendIndexIter,
             query::asset_query::Exclude,
@@ -1545,9 +1547,9 @@ mod tests {
 
             use crate::{
                 coins_query::tests::indexed_coins_to_spend::{
+                    BATCH_SIZE,
                     select_coins_to_spend,
                     setup_test_coins,
-                    BATCH_SIZE,
                 },
                 graphql_api::ports::CoinsToSpendIndexIter,
                 query::asset_query::Exclude,
@@ -1693,7 +1695,7 @@ mod tests {
             max_coins: u16::MAX,
         };
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-        let base_asset_id = rng.gen();
+        let base_asset_id = rng.r#gen();
         let coin_result =
             test_case_run(test_case.clone(), CoinType::Coin, base_asset_id).await;
         let message_result =
@@ -1751,7 +1753,7 @@ mod tests {
     #[tokio::test]
     async fn corner_cases(case: TestCase) -> Result<usize, CoinsQueryError> {
         let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-        let base_asset_id = rng.gen();
+        let base_asset_id = rng.r#gen();
         let coin_result =
             test_case_run(case.clone(), CoinType::Coin, base_asset_id).await;
         let message_result = test_case_run(case, CoinType::Message, base_asset_id).await;
@@ -1769,7 +1771,7 @@ mod tests {
             max_coins: 0,
         };
 
-        let base_asset_id = rng.gen();
+        let base_asset_id = rng.r#gen();
         let coin_result =
             test_case_run(case.clone(), CoinType::Coin, base_asset_id).await;
         let message_result = test_case_run(case, CoinType::Message, base_asset_id).await;

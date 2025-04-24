@@ -11,12 +11,12 @@ use crate::{
 };
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
+    Result as StorageResult,
     iter::{
         IterDirection,
         IteratorOverTable,
     },
     tables::Messages,
-    Result as StorageResult,
 };
 use fuel_core_types::{
     entities::relayer::message::Message,
@@ -33,7 +33,7 @@ impl OffChainIterableKeyValueView {
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<Nonce>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<Nonce>> + '_ + use<'_> {
         let start_message_id =
             start_message_id.map(|msg_id| OwnedMessageKey::new(owner, &msg_id));
         self.iter_all_filtered_keys::<OwnedMessageIds, _>(

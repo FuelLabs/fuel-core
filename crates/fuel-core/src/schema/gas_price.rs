@@ -16,8 +16,8 @@ use async_graphql::{
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_tx::{
-        field::MintGasPrice,
         Transaction,
+        field::MintGasPrice,
     },
 };
 

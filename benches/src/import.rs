@@ -4,24 +4,24 @@ use fuel_core_services::{
 };
 pub use fuel_core_sync::import::test_helpers::SharedCounts;
 use fuel_core_sync::{
+    Config,
     import::{
+        Import,
         test_helpers::{
             PressureBlockImporter,
             PressureConsensus,
             PressurePeerToPeer,
         },
-        Import,
     },
     state::State,
-    Config,
 };
 use std::{
     sync::Arc,
     time::Duration,
 };
 use tokio::sync::{
-    watch::Sender,
     Notify,
+    watch::Sender,
 };
 
 pub type PressureImport =

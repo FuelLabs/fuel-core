@@ -8,19 +8,19 @@ mod pressure_peer_to_peer;
 
 use fuel_core_types::{
     blockchain::{
+        SealedBlockHeader,
         consensus::{
             Consensus,
             Sealed,
         },
         header::BlockHeader,
-        SealedBlockHeader,
     },
     fuel_types::BlockHeight,
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 
 pub use counts::{
@@ -35,7 +35,7 @@ pub use pressure_peer_to_peer::PressurePeerToPeer;
 
 pub fn random_peer() -> PeerId {
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-    let bytes = rng.gen::<[u8; 32]>().to_vec();
+    let bytes = rng.r#gen::<[u8; 32]>().to_vec();
     PeerId::from(bytes)
 }
 

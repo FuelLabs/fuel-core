@@ -1,7 +1,7 @@
 use cynic::{
-    http::CynicReqwestError,
     GraphQlResponse,
     Operation,
+    http::CynicReqwestError,
 };
 use fuel_core_types::{
     blockchain::header::{

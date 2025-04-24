@@ -1,7 +1,7 @@
 use crate::client::schema::{
-    schema,
     U32,
     U64,
+    schema,
 };
 #[cfg(feature = "std")]
 use fuel_core_types::services::p2p::{

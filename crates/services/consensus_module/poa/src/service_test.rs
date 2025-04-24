@@ -2,6 +2,9 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    Config,
+    Service,
+    Trigger,
     new_service,
     ports::{
         BlockProducer,
@@ -16,9 +19,6 @@ use crate::{
         WaitForReadySignal,
     },
     service::MainTask,
-    Config,
-    Service,
-    Trigger,
 };
 use fuel_core_chain_config::default_consensus_dev_key;
 use fuel_core_services::{
@@ -29,17 +29,17 @@ use fuel_core_services::{
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
+        SealedBlock,
         block::Block,
         consensus::{
-            poa::PoAConsensus,
             Consensus,
+            poa::PoAConsensus,
         },
         header::{
             BlockHeader,
             PartialBlockHeader,
         },
         primitives::SecretKeyWrapper,
-        SealedBlock,
     },
     fuel_crypto::SecretKey,
     fuel_tx::*,
@@ -56,9 +56,9 @@ use fuel_core_types::{
     },
 };
 use rand::{
-    prelude::StdRng,
     Rng,
     SeedableRng,
+    prelude::StdRng,
 };
 use std::{
     collections::HashMap,
@@ -371,8 +371,8 @@ fn block_for_height(height: u32) -> Block {
 }
 
 #[tokio::test]
-async fn consensus_service__run__will_include_sequential_predefined_blocks_before_new_blocks(
-) {
+async fn consensus_service__run__will_include_sequential_predefined_blocks_before_new_blocks()
+ {
     // given
     let blocks: [(BlockHeight, Block); 3] = [
         (2u32.into(), block_for_height(2)),

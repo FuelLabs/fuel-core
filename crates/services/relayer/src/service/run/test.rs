@@ -122,8 +122,8 @@ async fn logs_are_downloaded_and_written_failed_state_is_not_updated() {
 }
 
 #[tokio::test]
-async fn logs_are_downloaded_and_written_failed_but_state_is_updated_because_of_storage_update(
-) {
+async fn logs_are_downloaded_and_written_failed_but_state_is_updated_because_of_storage_update()
+ {
     let mut relayer = MockRelayerData::default();
     let eth_state = Arc::new(Mutex::new(EthState::new(200, 0)));
     relayer.expect_wait_if_eth_syncing().returning(|| Ok(()));

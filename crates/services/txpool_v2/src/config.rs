@@ -5,6 +5,10 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::{
+        Address,
+        ContractId,
+        Input,
+        UtxoId,
         input::{
             coin::{
                 CoinPredicate,
@@ -17,10 +21,6 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
-        Address,
-        ContractId,
-        Input,
-        UtxoId,
     },
     fuel_types::Nonce,
     services::txpool::PoolTransaction,

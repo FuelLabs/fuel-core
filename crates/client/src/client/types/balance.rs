@@ -1,10 +1,10 @@
 use crate::client::{
+    PaginatedResult,
     schema,
     types::primitives::{
         Address,
         AssetId,
     },
-    PaginatedResult,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]

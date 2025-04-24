@@ -4,6 +4,13 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use async_graphql::{
+    InputType,
+    Name,
+    Pos,
+    Positioned,
+    ServerError,
+    ServerResult,
+    Variables,
     parser::types::{
         Directive,
         ExecutableDocument,
@@ -23,13 +30,6 @@ use async_graphql::{
         MetaType,
         MetaTypeName,
     },
-    InputType,
-    Name,
-    Pos,
-    Positioned,
-    ServerError,
-    ServerResult,
-    Variables,
 };
 use async_graphql_value::Value;
 use std::{
@@ -687,17 +687,18 @@ fn visit_selection<'a, V: Visitor<'a>>(
             visit_fragment_spread(v, ctx, fragment_spread)
         }
         Selection::InlineFragment(inline_fragment) => {
-            if let Some(TypeCondition { on: name }) = &inline_fragment
+            match &inline_fragment
                 .node
                 .type_condition
                 .as_ref()
                 .map(|c| &c.node)
             {
-                ctx.with_type(ctx.registry.types.get(name.node.as_str()), |ctx| {
-                    visit_inline_fragment(v, ctx, inline_fragment)
-                });
-            } else {
-                visit_inline_fragment(v, ctx, inline_fragment)
+                Some(TypeCondition { on: name }) => {
+                    ctx.with_type(ctx.registry.types.get(name.node.as_str()), |ctx| {
+                        visit_inline_fragment(v, ctx, inline_fragment)
+                    });
+                }
+                _ => visit_inline_fragment(v, ctx, inline_fragment),
             }
         }
     }

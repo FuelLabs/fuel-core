@@ -8,6 +8,7 @@ use crate::fuel_core_graphql_api::{
     storage::coins::codecs::UTXO_ID_SIZE,
 };
 use fuel_core_storage::{
+    Mappable,
     blueprint::plain::Plain,
     codec::{
         manual::Manual,
@@ -16,12 +17,11 @@ use fuel_core_storage::{
         raw::Raw,
     },
     structured_storage::TableWithBlueprint,
-    Mappable,
 };
 use fuel_core_types::{
     entities::{
-        coins::coin::Coin,
         Message,
+        coins::coin::Coin,
     },
     fuel_tx::{
         Address,
@@ -189,20 +189,20 @@ mod test {
         for rand::distributions::Standard
     {
         fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> CoinsToSpendIndexKey {
-            if rng.gen() {
+            if rng.r#gen() {
                 CoinsToSpendIndexKey::Coin {
-                    owner: rng.gen(),
-                    asset_id: rng.gen(),
-                    amount: rng.gen(),
-                    utxo_id: rng.gen(),
+                    owner: rng.r#gen(),
+                    asset_id: rng.r#gen(),
+                    amount: rng.r#gen(),
+                    utxo_id: rng.r#gen(),
                 }
             } else {
                 CoinsToSpendIndexKey::Message {
-                    retryable_flag: rng.gen(),
-                    owner: rng.gen(),
-                    asset_id: rng.gen(),
-                    amount: rng.gen(),
-                    nonce: rng.gen(),
+                    retryable_flag: rng.r#gen(),
+                    owner: rng.r#gen(),
+                    asset_id: rng.r#gen(),
+                    amount: rng.r#gen(),
+                    nonce: rng.r#gen(),
                 }
             }
         }

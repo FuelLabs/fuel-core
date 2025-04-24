@@ -1,4 +1,14 @@
 use fuel_core_storage::{
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    PredicateStorageRequirements,
+    Result as StorageResult,
+    StorageAsRef,
+    StorageInspect,
+    StorageRead,
+    StorageSize,
     iter::{
         BoxedIter,
         IterDirection,
@@ -11,16 +21,6 @@ use fuel_core_storage::{
     },
     structured_storage::StructuredStorage,
     tables::BlobData,
-    Error as StorageError,
-    Mappable,
-    MerkleRoot,
-    MerkleRootStorage,
-    PredicateStorageRequirements,
-    Result as StorageResult,
-    StorageAsRef,
-    StorageInspect,
-    StorageRead,
-    StorageSize,
 };
 use std::{
     borrow::Cow,

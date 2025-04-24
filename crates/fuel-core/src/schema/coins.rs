@@ -5,16 +5,16 @@ use std::{
 
 use crate::{
     coins_query::{
-        random_improve,
-        select_coins_to_spend,
         CoinsQueryError,
         SpendQuery,
+        random_improve,
+        select_coins_to_spend,
     },
     database::database_description::IndexationKind,
     fuel_core_graphql_api::{
+        IntoApiResult,
         query_costs,
         storage::coins::CoinsToSpendIndexKey,
-        IntoApiResult,
     },
     graphql_api::{
         api_service::ChainInfoProvider,
@@ -25,35 +25,35 @@ use crate::{
         Exclude,
     },
     schema::{
+        ReadViewProvider,
         scalars::{
             Address,
             AssetId,
             Nonce,
-            UtxoId,
-            U128,
             U16,
             U32,
             U64,
+            U128,
+            UtxoId,
         },
-        ReadViewProvider,
     },
 };
 use async_graphql::{
+    Context,
     connection::{
         Connection,
         EmptyFields,
     },
-    Context,
 };
 use fuel_core_types::{
     entities::coins::{
         self,
+        CoinId,
         coin::Coin as CoinModel,
         message_coin::{
             self,
             MessageCoin as MessageCoinModel,
         },
-        CoinId,
     },
     fuel_tx::{
         self,

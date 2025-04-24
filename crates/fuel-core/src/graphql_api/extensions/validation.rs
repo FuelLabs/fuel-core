@@ -1,4 +1,8 @@
 use async_graphql::{
+    ServerError,
+    ServerResult,
+    ValidationResult,
+    Variables,
     extensions::{
         Extension,
         ExtensionContext,
@@ -7,10 +11,6 @@ use async_graphql::{
         NextValidation,
     },
     parser::types::ExecutableDocument,
-    ServerError,
-    ServerResult,
-    ValidationResult,
-    Variables,
 };
 use recursion_finder::RecursionFinder;
 use std::sync::{
@@ -18,9 +18,9 @@ use std::sync::{
     Mutex,
 };
 use visitor::{
-    visit,
     RuleError,
     VisitorContext,
+    visit,
 };
 
 mod recursion_finder;

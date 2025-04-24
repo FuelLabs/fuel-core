@@ -10,12 +10,16 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Requested height is too high. Requested: {requested_height}, latest: {latest_height}")]
+    #[error(
+        "Requested height is too high. Requested: {requested_height}, latest: {latest_height}"
+    )]
     AlgorithmNotUpToDate {
         requested_height: BlockHeight,
         latest_height: BlockHeight,
     },
-    #[error("Latest block height past requested height. Requested: {requested_height}, latest: {latest_height}")]
+    #[error(
+        "Latest block height past requested height. Requested: {requested_height}, latest: {latest_height}"
+    )]
     RequestedOldBlockHeight {
         requested_height: BlockHeight,
         latest_height: BlockHeight,

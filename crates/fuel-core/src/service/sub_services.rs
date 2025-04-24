@@ -36,18 +36,18 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
 };
 
 use super::{
+    DbType,
     adapters::{
+        FuelBlockSigner,
+        P2PAdapter,
+        TxStatusManagerAdapter,
         compression_adapters::{
             CompressionBlockImporterAdapter,
             CompressionServiceAdapter,
         },
-        FuelBlockSigner,
-        P2PAdapter,
-        TxStatusManagerAdapter,
     },
     config::DaCompressionMode,
     genesis::create_genesis_block,
-    DbType,
 };
 use crate::{
     combined_database::CombinedDatabase,
@@ -61,14 +61,10 @@ use crate::{
     },
     schema::build_schema,
     service::{
+        Config,
+        SharedState,
+        SubServices,
         adapters::{
-            chain_state_info_provider,
-            consensus_module::poa::InDirectoryPredefinedBlocks,
-            fuel_gas_price_provider::FuelGasPriceProvider,
-            graphql_api::GraphQLBlockImporter,
-            import_result_provider::ImportResultProvider,
-            ready_signal::ReadySignal,
-            tx_status_manager::ConsensusConfigProtocolPublicKey,
             BlockImporterAdapter,
             BlockProducerAdapter,
             ChainStateInfoProvider,
@@ -81,10 +77,14 @@ use crate::{
             TxPoolAdapter,
             UniversalGasPriceProvider,
             VerifierAdapter,
+            chain_state_info_provider,
+            consensus_module::poa::InDirectoryPredefinedBlocks,
+            fuel_gas_price_provider::FuelGasPriceProvider,
+            graphql_api::GraphQLBlockImporter,
+            import_result_provider::ImportResultProvider,
+            ready_signal::ReadySignal,
+            tx_status_manager::ConsensusConfigProtocolPublicKey,
         },
-        Config,
-        SharedState,
-        SubServices,
     },
 };
 
