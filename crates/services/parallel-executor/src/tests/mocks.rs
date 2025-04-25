@@ -1,3 +1,10 @@
+use fuel_core_types::{
+    fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+    },
+    fuel_vm::checked_transaction::IntoChecked,
+};
 use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 
 use crate::ports::{
@@ -68,4 +75,61 @@ impl TransactionsSource for MockTxPool {
             .expect("Failed to send request");
         rx.recv().expect("Failed to receive response")
     }
+}
+
+pub struct Consumer {
+    pool_request_params: PoolRequestParams,
+    response_sender:
+        std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+}
+
+impl Consumer {
+    pub fn receive(receiver: &GetExecutableTransactionsReceiver) -> Self {
+        let (pool_request_params, response_sender) = receiver.recv().unwrap();
+
+        Self {
+            pool_request_params,
+            response_sender,
+        }
+    }
+
+    pub fn assert_filter(&self, filter: &Filter) -> &Self {
+        assert_eq!(&self.pool_request_params.filter, filter);
+        self
+    }
+
+    pub fn assert_gas_limit_lt(&self, gas_limit: u64) -> &Self {
+        assert!(
+            self.pool_request_params.gas_limit < gas_limit,
+            "Expected gas limit to be less than {}, but got {}",
+            gas_limit,
+            self.pool_request_params.gas_limit
+        );
+        self
+    }
+
+    pub fn respond_with(
+        &self,
+        txs: &[&Transaction],
+        filtered: TransactionFiltered,
+    ) -> &Self {
+        let txs = into_checked_txs(txs);
+
+        self.response_sender.send((txs, filtered)).unwrap();
+        self
+    }
+}
+
+fn into_checked_txs(txs: &[&Transaction]) -> Vec<MaybeCheckedTransaction> {
+    txs.iter()
+        .map(|&tx| {
+            MaybeCheckedTransaction::CheckedTransaction(
+                tx.clone()
+                    .into_checked_basic(0u32.into(), &ConsensusParameters::default())
+                    .unwrap()
+                    .into(),
+                0,
+            )
+        })
+        .collect()
 }
