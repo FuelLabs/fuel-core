@@ -225,14 +225,14 @@ where
         let canonical_height = self.canonical_height.get();
         let mut overridden = false;
         loop {
-            let storage_height = match (self.config.override_starting_height(), overridden)
-            {
-                (Some(height), false) => {
-                    overridden = true;
-                    Some(height.saturating_sub(1))
-                }
-                (_, _) => self.storage.latest_height(),
-            };
+            let storage_height =
+                match (self.config.override_starting_height(), overridden) {
+                    (Some(height), false) => {
+                        overridden = true;
+                        Some(height.saturating_sub(1))
+                    }
+                    (_, _) => self.storage.latest_height(),
+                };
 
             if storage_height.is_none() {
                 // if the storage height is unavailable, don't execute blocks from genesis
