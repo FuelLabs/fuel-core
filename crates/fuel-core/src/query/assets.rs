@@ -4,8 +4,8 @@ use crate::{
     graphql_api::storage::assets::AssetDetails,
 };
 use fuel_core_storage::{
-    not_found,
     Result as StorageResult,
+    not_found,
 };
 use fuel_core_types::fuel_tx::AssetId;
 

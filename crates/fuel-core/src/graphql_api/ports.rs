@@ -6,6 +6,10 @@ use crate::fuel_core_graphql_api::storage::coins::CoinsToSpendIndexKey;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageInspect,
+    StorageRead,
     iter::{
         BoxedIter,
         IterDirection,
@@ -19,10 +23,6 @@ use fuel_core_storage::{
         StateTransitionBytecodeVersions,
         UploadedBytecodes,
     },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageInspect,
-    StorageRead,
 };
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_txpool::TxPoolStats;

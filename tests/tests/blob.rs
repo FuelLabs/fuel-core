@@ -3,8 +3,8 @@
 use fuel_core::{
     chain_config::StateConfig,
     database::{
-        database_description::on_chain::OnChain,
         Database,
+        database_description::on_chain::OnChain,
     },
     service::{
         Config,
@@ -12,15 +12,15 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_types::{
     fuel_asm::{
-        op,
         GTFArgs,
         Instruction,
         RegId,
+        op,
     },
     fuel_tx::{
         BlobBody,

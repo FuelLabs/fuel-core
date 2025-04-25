@@ -1,16 +1,16 @@
 use crate::client::{
+    PaginatedResult,
     schema,
     schema::ConversionError,
     types::{
+        MerkleProof,
         block::Header,
         primitives::{
             Address,
             Bytes,
             Nonce,
         },
-        MerkleProof,
     },
-    PaginatedResult,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -1,14 +1,14 @@
 use fuel_core_client::client::{
+    FuelClient,
     types::{
+        TransactionStatus,
         assemble_tx::{
             Account,
             ChangePolicy,
             Predicate,
             RequiredBalance,
         },
-        TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_types::{
     fuel_asm::Instruction,
@@ -144,27 +144,17 @@ impl AssembleAndRunTx for FuelClient {
         match wallet {
             SigningAccount::Wallet(secret_key) => {
                 match &mut tx.transaction {
-                    Transaction::Script(ref mut tx) => {
-                        tx.sign_inputs(&secret_key, &chain_id)
-                    }
-                    Transaction::Create(ref mut tx) => {
-                        tx.sign_inputs(&secret_key, &chain_id)
-                    }
+                    Transaction::Script(tx) => tx.sign_inputs(&secret_key, &chain_id),
+                    Transaction::Create(tx) => tx.sign_inputs(&secret_key, &chain_id),
                     Transaction::Mint(_) => {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidInput,
                             "Cannot sign mint transaction",
                         ));
                     }
-                    Transaction::Upgrade(ref mut tx) => {
-                        tx.sign_inputs(&secret_key, &chain_id)
-                    }
-                    Transaction::Upload(ref mut tx) => {
-                        tx.sign_inputs(&secret_key, &chain_id)
-                    }
-                    Transaction::Blob(ref mut tx) => {
-                        tx.sign_inputs(&secret_key, &chain_id)
-                    }
+                    Transaction::Upgrade(tx) => tx.sign_inputs(&secret_key, &chain_id),
+                    Transaction::Upload(tx) => tx.sign_inputs(&secret_key, &chain_id),
+                    Transaction::Blob(tx) => tx.sign_inputs(&secret_key, &chain_id),
                 };
             }
             SigningAccount::Predicate { .. } => {

@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.43.1]
+
+### Fixed
+
+- [2964](https://github.com/FuelLabs/fuel-core/pull/2964): Ensure that vm heap memory is zeroed out on rellocation after `reset`. Adds support for `GM::GetGasPrice` Bumps `fuel-vm` to `0.60.2`.
+
 ## [Version 0.43.0]
 
 ### Breaking
@@ -166,6 +172,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Removed
 - [2863](https://github.com/FuelLabs/fuel-core/pull/2863): Removed everything related to the state root service, as it has been moved to another repo.
+
+## [Version 0.41.10]
+
+### Fixed 
+
+- [2963](https://github.com/FuelLabs/fuel-core/pull/2963): Ensure that vm heap memory is zeroed out on rellocation after `reset`. Bumps `fuel-vm` to `0.59.3`.
 
 ## [Version 0.41.9]
 

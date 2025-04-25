@@ -1,7 +1,9 @@
 #![allow(unused_variables)]
 
 use crate::{
+    FuelService,
     cli::{
+        ShutdownListener,
         default_db_path,
         run::{
             consensus::PoATriggerArgs,
@@ -9,9 +11,7 @@ use crate::{
             tx_pool::TxPoolArgs,
             tx_status_manager::TxStatusManagerArgs,
         },
-        ShutdownListener,
     },
-    FuelService,
 };
 use anyhow::Context;
 use clap::Parser;
@@ -27,14 +27,14 @@ use fuel_core::{
     },
     producer::Config as ProducerConfig,
     service::{
+        Config,
+        DbType,
+        RelayerConsensusConfig,
         config::{
             DaCompressionMode,
             Trigger,
         },
         genesis::NotifyCancel,
-        Config,
-        DbType,
-        RelayerConsensusConfig,
     },
     state::rocks_db::{
         ColumnsPolicy,
@@ -68,16 +68,16 @@ use fuel_core_types::{
     signer::SignMode,
 };
 use pyroscope::{
-    pyroscope::PyroscopeAgentRunning,
     PyroscopeAgent,
+    pyroscope::PyroscopeAgentRunning,
 };
 use pyroscope_pprofrs::{
-    pprof_backend,
     PprofConfig,
+    pprof_backend,
 };
 use rlimit::{
-    getrlimit,
     Resource,
+    getrlimit,
 };
 use std::{
     env,
@@ -474,15 +474,20 @@ impl Command {
             }
         };
 
-        if let Ok(signer_address) = consensus_signer.address() {
-            if let Some(address) = signer_address {
-                info!(
-                    "Consensus signer is specified and its address is {}",
-                    address
+        match consensus_signer.address() {
+            Ok(signer_address) => {
+                if let Some(address) = signer_address {
+                    info!(
+                        "Consensus signer is specified and its address is {}",
+                        address
+                    );
+                }
+            }
+            _ => {
+                warn!(
+                    "Consensus Signer is specified but it was not possible to retrieve its address"
                 );
             }
-        } else {
-            warn!("Consensus Signer is specified but it was not possible to retrieve its address");
         };
 
         if consensus_signer.is_available() && trigger == Trigger::Never {

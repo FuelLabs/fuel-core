@@ -6,6 +6,7 @@ use ethers_core::types::{
     U256,
 };
 use fuel_core_relayer::{
+    Config,
     bridge::{
         MessageSentFilter,
         TransactionFilter,
@@ -14,11 +15,10 @@ use fuel_core_relayer::{
     new_service_test,
     ports::RelayerDb,
     test_helpers::{
-        middleware::MockMiddleware,
         EvtToLog,
         LogTestHelper,
+        middleware::MockMiddleware,
     },
-    Config,
 };
 use fuel_core_services::Service;
 
@@ -243,10 +243,11 @@ async fn relayer__if_a_log_does_not_include_index_then_event_not_included_and_er
     let res = relayer.shared.await_synced().await;
     // then
     assert!(res.is_err());
-    assert!(ctx
-        .mock_db
-        .get_messages_for_block(block_height.into())
-        .is_empty());
+    assert!(
+        ctx.mock_db
+            .get_messages_for_block(block_height.into())
+            .is_empty()
+    );
 }
 
 fn message(nonce: u64, block_number: u64, block_index: u64) -> Log {

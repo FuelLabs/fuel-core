@@ -1,7 +1,7 @@
 use crate::GenesisCommitment;
 use fuel_core_storage::{
-    tables::Coins,
     MerkleRoot,
+    tables::Coins,
 };
 use fuel_core_types::{
     entities::coins::coin::{
@@ -89,11 +89,11 @@ impl crate::Randomize for CoinConfig {
     fn randomize(mut rng: impl ::rand::Rng) -> Self {
         Self {
             tx_id: crate::Randomize::randomize(&mut rng),
-            output_index: rng.gen(),
-            tx_pointer_block_height: rng.gen(),
-            tx_pointer_tx_idx: rng.gen(),
+            output_index: rng.r#gen(),
+            tx_pointer_block_height: rng.r#gen(),
+            tx_pointer_tx_idx: rng.r#gen(),
             owner: crate::Randomize::randomize(&mut rng),
-            amount: rng.gen(),
+            amount: rng.r#gen(),
             asset_id: crate::Randomize::randomize(&mut rng),
         }
     }

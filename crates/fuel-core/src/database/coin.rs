@@ -4,19 +4,19 @@ use crate::{
         OnChainIterableKeyValueView,
     },
     fuel_core_graphql_api::storage::coins::{
-        owner_coin_id_key,
         OwnedCoins,
+        owner_coin_id_key,
     },
 };
 use fuel_core_storage::{
+    Result as StorageResult,
+    StorageAsRef,
     iter::{
         IterDirection,
         IteratorOverTable,
     },
     not_found,
     tables::Coins,
-    Result as StorageResult,
-    StorageAsRef,
 };
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
@@ -33,7 +33,7 @@ impl OffChainIterableKeyValueView {
         owner: &Address,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = StorageResult<UtxoId>> + '_ {
+    ) -> impl Iterator<Item = StorageResult<UtxoId>> + '_ + use<'_> {
         let start_coin = start_coin.map(|b| owner_coin_id_key(owner, &b));
         self.iter_all_filtered_keys::<OwnedCoins, _>(
             Some(*owner),

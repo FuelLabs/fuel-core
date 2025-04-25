@@ -3,6 +3,9 @@ pub trait Randomize {
 }
 
 use fuel_core_storage::{
+    ContractsAssetKey,
+    ContractsStateData,
+    ContractsStateKey,
     tables::{
         Coins,
         ContractsAssets,
@@ -11,21 +14,19 @@ use fuel_core_storage::{
         ContractsState,
         Messages,
     },
-    ContractsAssetKey,
-    ContractsStateData,
-    ContractsStateKey,
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::{
-            poa::PoAConsensus,
             Consensus,
+            poa::PoAConsensus,
         },
         header::PartialBlockHeader,
         primitives::DaBlockHeight,
     },
     entities::{
+        Message,
         coins::coin::{
             CompressedCoin,
             CompressedCoinV1,
@@ -35,11 +36,10 @@ use fuel_core_types::{
             ContractsInfoType,
         },
         relayer::message::MessageV1,
-        Message,
     },
     fuel_asm::{
-        op,
         RegId,
+        op,
     },
     fuel_tx::{
         BlobId,
@@ -87,7 +87,7 @@ macro_rules! delegating_impl {
         $(
             impl $crate::Randomize for $t {
                 fn randomize(mut rng: impl ::rand::Rng) -> Self {
-                    rng.gen()
+                    rng.r#gen()
                 }
             }
         )*
@@ -132,10 +132,10 @@ delegating_impl!(
 impl Randomize for CompressedCoin {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         Self::V1(CompressedCoinV1 {
-            owner: rng.gen(),
-            amount: rng.gen(),
-            asset_id: rng.gen(),
-            tx_pointer: rng.gen(),
+            owner: rng.r#gen(),
+            amount: rng.r#gen(),
+            asset_id: rng.r#gen(),
+            tx_pointer: rng.r#gen(),
         })
     }
 }
@@ -143,19 +143,19 @@ impl Randomize for CompressedCoin {
 impl Randomize for Message {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         Self::V1(MessageV1 {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            nonce: rng.gen(),
-            amount: rng.gen(),
-            data: rng.gen::<[u8; 32]>().to_vec(),
-            da_height: rng.gen(),
+            sender: rng.r#gen(),
+            recipient: rng.r#gen(),
+            nonce: rng.r#gen(),
+            amount: rng.r#gen(),
+            data: rng.r#gen::<[u8; 32]>().to_vec(),
+            da_height: rng.r#gen(),
         })
     }
 }
 
 impl Randomize for fuel_core_types::fuel_vm::Contract {
     fn randomize(mut rng: impl rand::Rng) -> Self {
-        rng.gen::<[u8; 32]>().to_vec().into()
+        rng.r#gen::<[u8; 32]>().to_vec().into()
     }
 }
 
@@ -169,30 +169,30 @@ impl Randomize for ContractsInfoType {
 impl Randomize for ContractUtxoInfo {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         ContractUtxoInfo::V1(fuel_core_types::entities::contract::ContractUtxoInfoV1 {
-            utxo_id: rng.gen(),
-            tx_pointer: rng.gen(),
+            utxo_id: rng.r#gen(),
+            tx_pointer: rng.r#gen(),
         })
     }
 }
 
 impl Randomize for ContractsStateData {
     fn randomize(mut rng: impl rand::Rng) -> Self {
-        rng.gen::<[u8; 32]>().to_vec().into()
+        rng.r#gen::<[u8; 32]>().to_vec().into()
     }
 }
 
 impl Randomize for ContractsAssetKey {
     fn randomize(mut rng: impl rand::Rng) -> Self {
-        let contract_id: ContractId = rng.gen();
-        let asset_id: fuel_core_types::fuel_types::AssetId = rng.gen();
+        let contract_id: ContractId = rng.r#gen();
+        let asset_id: fuel_core_types::fuel_types::AssetId = rng.r#gen();
         Self::new(&contract_id, &asset_id)
     }
 }
 
 impl Randomize for ContractsStateKey {
     fn randomize(mut rng: impl rand::Rng) -> Self {
-        let contract_id: ContractId = rng.gen();
-        let state_key: Bytes32 = rng.gen();
+        let contract_id: ContractId = rng.r#gen();
+        let state_key: Bytes32 = rng.r#gen();
         Self::new(&contract_id, &state_key)
     }
 }
@@ -210,7 +210,7 @@ impl Randomize for CompressedBlock {
                 .generate(
                     &[tx1, tx2],
                     &[],
-                    rng.gen(),
+                    rng.r#gen(),
                     #[cfg(feature = "fault-proving")]
                     &default_chain_id,
                 )
@@ -223,8 +223,8 @@ impl Randomize for CompressedBlock {
 impl Randomize for (BlockHeight, Consensus) {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         (
-            rng.gen::<u32>().into(),
-            Consensus::PoA(PoAConsensus::new(Signature::from_bytes([rng.gen(); 64]))),
+            rng.r#gen::<u32>().into(),
+            Consensus::PoA(PoAConsensus::new(Signature::from_bytes([rng.r#gen(); 64]))),
         )
     }
 }
@@ -233,9 +233,11 @@ impl Randomize for Transaction {
     fn randomize(mut rng: impl rand::Rng) -> Self {
         let program: Vec<u8> = [op::ret(RegId::ONE)].into_iter().collect();
         match rng.gen_range(0..2) {
-            0 => TransactionBuilder::create(program.into(), rng.gen(), vec![rng.gen()])
-                .finalize_as_transaction(),
-            1 => TransactionBuilder::script(program, vec![rng.gen(), rng.gen()])
+            0 => {
+                TransactionBuilder::create(program.into(), rng.r#gen(), vec![rng.r#gen()])
+                    .finalize_as_transaction()
+            }
+            1 => TransactionBuilder::script(program, vec![rng.r#gen(), rng.r#gen()])
                 .finalize_as_transaction(),
             _ => unreachable!(),
         }

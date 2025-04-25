@@ -6,8 +6,8 @@ use crate::{
     },
 };
 use fuel_core_types::blockchain::{
-    primitives::DaBlockHeight,
     SealedBlockHeader,
+    primitives::DaBlockHeight,
 };
 use std::time::Duration;
 

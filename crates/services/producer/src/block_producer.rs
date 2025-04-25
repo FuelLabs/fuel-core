@@ -1,4 +1,5 @@
 use crate::{
+    Config,
     block_producer::gas_price::{
         ChainStateInfoProvider,
         GasPriceProvider as GasPriceProviderConstraint,
@@ -8,11 +9,10 @@ use crate::{
         BlockProducerDatabase,
         RelayerBlockInfo,
     },
-    Config,
 };
 use anyhow::{
-    anyhow,
     Context,
+    anyhow,
 };
 use fuel_core_storage::transactional::{
     AtomicView,
@@ -30,11 +30,11 @@ use fuel_core_types::{
         primitives::DaBlockHeight,
     },
     fuel_tx::{
+        Transaction,
         field::{
             InputContract,
             MintGasPrice,
         },
-        Transaction,
     },
     fuel_types::{
         BlockHeight,
@@ -265,14 +265,14 @@ where
 }
 
 impl<
-        ViewProvider,
-        TxPool,
-        Executor,
-        TxSource,
-        GasPriceProvider,
-        ChainStateProvider,
-        Deadline,
-    > Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
+    ViewProvider,
+    TxPool,
+    Executor,
+    TxSource,
+    GasPriceProvider,
+    ChainStateProvider,
+    Deadline,
+> Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainStateProvider>
 where
     ViewProvider: AtomicView + 'static,
     ViewProvider::LatestView: BlockProducerDatabase,

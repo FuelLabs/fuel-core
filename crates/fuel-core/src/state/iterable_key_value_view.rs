@@ -1,4 +1,5 @@
 use fuel_core_storage::{
+    Result as StorageResult,
     iter::{
         BoxedIter,
         IterDirection,
@@ -11,7 +12,6 @@ use fuel_core_storage::{
         StorageColumn,
         Value,
     },
-    Result as StorageResult,
 };
 use std::sync::Arc;
 

@@ -21,12 +21,22 @@ use crate::{
 use fuel_core_types::{
     entities::coins::CoinId,
     fuel_asm::{
-        op,
         PanicReason,
         Word,
+        op,
     },
     fuel_crypto::Signature,
     fuel_tx::{
+        Address,
+        AssetId,
+        Cacheable,
+        Chargeable,
+        ConsensusParameters,
+        Input,
+        Output,
+        Receipt,
+        Script,
+        Transaction,
         field::{
             Inputs,
             MaxFeeLimit,
@@ -45,20 +55,10 @@ use fuel_core_types::{
             },
         },
         policies::PolicyType,
-        Address,
-        AssetId,
-        Cacheable,
-        Chargeable,
-        ConsensusParameters,
-        Input,
-        Output,
-        Receipt,
-        Script,
-        Transaction,
     },
     fuel_types::{
-        canonical::Serialize,
         ContractId,
+        canonical::Serialize,
     },
     fuel_vm::{
         checked_transaction::CheckPredicateParams,
@@ -71,9 +71,9 @@ use fuel_core_types::{
 };
 use std::{
     collections::{
-        hash_map::Entry,
         HashMap,
         HashSet,
+        hash_map::Entry,
     },
     sync::Arc,
 };

@@ -9,8 +9,8 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    types::TransactionStatus,
     FuelClient,
+    types::TransactionStatus,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -19,9 +19,9 @@ use fuel_core_types::{
     fuel_tx::Input,
 };
 use rand::{
-    rngs::StdRng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
 };
 use test_helpers::assemble_tx::{
     AssembleAndRunTx,
@@ -36,10 +36,10 @@ async fn can_submit_genesis_message() {
     let pk = secret_key.public_key();
 
     let msg1 = MessageConfig {
-        sender: rng.gen(),
+        sender: rng.r#gen(),
         recipient: Input::owner(&pk),
-        nonce: rng.gen(),
-        amount: rng.gen(),
+        nonce: rng.r#gen(),
+        amount: rng.r#gen(),
         data: vec![],
         da_height: DaBlockHeight(0),
     };

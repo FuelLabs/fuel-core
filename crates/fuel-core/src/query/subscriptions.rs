@@ -6,9 +6,9 @@ use fuel_core_types::{
     services::transaction_status::TransactionStatus,
 };
 use futures::{
-    stream::BoxStream,
     Stream,
     StreamExt,
+    stream::BoxStream,
 };
 
 #[cfg(test)]

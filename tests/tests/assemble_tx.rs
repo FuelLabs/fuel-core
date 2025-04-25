@@ -11,7 +11,10 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     types::{
+        CoinType,
+        TransactionStatus,
         assemble_tx::{
             ChangePolicy,
             RequiredBalance,
@@ -20,21 +23,17 @@ use fuel_core_client::client::{
             Bytes32,
             ContractId,
         },
-        CoinType,
-        TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
     fuel_asm::{
-        op,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
-        policies::Policies,
         Address,
         AssetId,
         Input,
@@ -43,6 +42,7 @@ use fuel_core_types::{
         TransactionBuilder,
         TxPointer,
         Word,
+        policies::Policies,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::consts::WORD_SIZE,

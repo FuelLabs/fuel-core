@@ -15,9 +15,9 @@ mod update_sender;
 pub mod utils;
 
 pub use service::{
-    new_service,
     SharedData,
     Task,
+    new_service,
 };
 pub use tx_status_stream::{
     TxStatusMessage,

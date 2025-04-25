@@ -5,14 +5,15 @@ use super::scalars::{
 };
 use crate::{
     fuel_core_graphql_api::{
+        Config as GraphQLConfig,
+        IntoApiResult,
         api_service::ConsensusModule,
         block_height_subscription,
         database::ReadView,
         query_costs,
-        Config as GraphQLConfig,
-        IntoApiResult,
     },
     schema::{
+        ReadViewProvider,
         scalars::{
             BlockId,
             Signature,
@@ -21,24 +22,23 @@ use crate::{
             U64,
         },
         tx::types::Transaction,
-        ReadViewProvider,
     },
 };
 use anyhow::anyhow;
 use async_graphql::{
-    connection::{
-        Connection,
-        EmptyFields,
-    },
     Context,
     Enum,
     Object,
     SimpleObject,
     Union,
+    connection::{
+        Connection,
+        EmptyFields,
+    },
 };
 use fuel_core_storage::{
-    iter::IterDirection,
     Result as StorageResult,
+    iter::IterDirection,
 };
 use fuel_core_types::{
     blockchain::{

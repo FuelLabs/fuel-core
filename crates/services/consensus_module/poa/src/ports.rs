@@ -1,7 +1,7 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    transactional::Changes,
     Result as StorageResult,
+    transactional::Changes,
 };
 use fuel_core_types::{
     blockchain::{

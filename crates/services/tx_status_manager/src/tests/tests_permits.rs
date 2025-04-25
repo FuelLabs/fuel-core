@@ -11,11 +11,11 @@ use tokio::time::Instant;
 
 use crate::{
     tests::utils::{
+        MockCreateChannel,
+        SenderData,
         box_senders,
         construct_senders,
         senders_strategy_all_ok,
-        MockCreateChannel,
-        SenderData,
     },
     update_sender::{
         MockSendStatus,

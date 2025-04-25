@@ -2,11 +2,11 @@ use crate::{
     bootstrap_node,
     tests_helper::{
         GenesisFuelCoreDriver,
-        LatestFuelCoreDriver,
-        Version36FuelCoreDriver,
         IGNITION_TESTNET_SNAPSHOT,
+        LatestFuelCoreDriver,
         POA_SECRET_KEY,
         V36_TESTNET_SNAPSHOT,
+        Version36FuelCoreDriver,
     },
 };
 use latest_fuel_core_type::{
@@ -49,8 +49,8 @@ async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_genesis_binary(
-) {
+async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_genesis_binary()
+ {
     let (_bootstrap_node, addr) =
         bootstrap_node(IGNITION_TESTNET_SNAPSHOT).await.unwrap();
 
@@ -177,8 +177,8 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_genesis_binary(
-) {
+async fn latest_binary_is_backward_compatible_and_can_deserialize_errors_from_genesis_binary()
+ {
     // Given
     let node_with_genesis_transition = LatestFuelCoreDriver::spawn(&[
         "--service-name",

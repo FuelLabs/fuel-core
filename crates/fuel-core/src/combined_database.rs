@@ -6,6 +6,9 @@ use crate::state::{
 
 use crate::{
     database::{
+        Database,
+        GenesisDatabase,
+        Result as DatabaseResult,
         database_description::{
             compression::CompressionDatabase,
             gas_price::GasPriceDatabase,
@@ -13,9 +16,6 @@ use crate::{
             on_chain::OnChain,
             relayer::Relayer,
         },
-        Database,
-        GenesisDatabase,
-        Result as DatabaseResult,
     },
     service::DbType,
 };
@@ -26,6 +26,7 @@ use fuel_core_chain_config::{
 };
 #[cfg(feature = "backup")]
 use fuel_core_services::TraceErr;
+use fuel_core_storage::Result as StorageResult;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
     Coins,
@@ -35,7 +36,6 @@ use fuel_core_storage::tables::{
     ContractsState,
     Messages,
 };
-use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::fuel_types::BlockHeight;
 use std::path::PathBuf;
 

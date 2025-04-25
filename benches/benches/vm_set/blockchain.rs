@@ -14,10 +14,10 @@ use criterion::{
 };
 use fuel_core::{
     database::{
+        GenesisDatabase,
         balances::BalancesInitializer,
         database_description::on_chain::OnChain,
         state::StateInitializer,
-        GenesisDatabase,
     },
     service::Config,
     state::{
@@ -30,6 +30,7 @@ use fuel_core::{
 };
 use fuel_core_benches::*;
 use fuel_core_storage::{
+    StorageAsMut,
     tables::FuelBlocks,
     transactional::{
         IntoTransaction,
@@ -39,7 +40,6 @@ use fuel_core_storage::{
         IncreaseStorageKey,
         VmStorage,
     },
-    StorageAsMut,
 };
 use fuel_core_types::{
     blockchain::header::{
@@ -47,9 +47,9 @@ use fuel_core_types::{
         ConsensusHeader,
     },
     fuel_asm::{
-        op,
         GTFArgs,
         RegId,
+        op,
     },
     fuel_tx::{
         ContractIdExt,
@@ -65,9 +65,9 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use rand::{
-    rngs::StdRng,
     RngCore,
     SeedableRng,
+    rngs::StdRng,
 };
 
 pub struct BenchDb {

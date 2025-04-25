@@ -1,8 +1,8 @@
 use super::{
-    gossipsub::GossipsubMessageHandler,
-    request_response::RequestResponseMessageHandler,
     Decode,
     Encode,
+    gossipsub::GossipsubMessageHandler,
+    request_response::RequestResponseMessageHandler,
 };
 
 use std::{
@@ -96,8 +96,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn codec__serialization_roundtrip_using_v2_on_successful_response_returns_original_value__sealed_headers(
-    ) {
+    async fn codec__serialization_roundtrip_using_v2_on_successful_response_returns_original_value__sealed_headers()
+     {
         // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
@@ -124,8 +124,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn codec__serialization_roundtrip_using_v2_on_successful_response_returns_original_value__full_transactions(
-    ) {
+    async fn codec__serialization_roundtrip_using_v2_on_successful_response_returns_original_value__full_transactions()
+     {
         // Given
         let full_transactions = vec![Some(NetworkableTransactionPool::Transaction(
             Transaction::default_test_tx(),
@@ -155,8 +155,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn codec__serialization_roundtrip_using_v1_on_successful_response_returns_original_value(
-    ) {
+    async fn codec__serialization_roundtrip_using_v1_on_successful_response_returns_original_value()
+     {
         // Given
         let sealed_block_headers = vec![SealedBlockHeader::default()];
         let response = V2ResponseMessage::SealedHeaders(Ok(sealed_block_headers.clone()));
@@ -182,8 +182,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn codec__serialization_roundtrip_using_v2_on_error_response_returns_original_value(
-    ) {
+    async fn codec__serialization_roundtrip_using_v2_on_error_response_returns_original_value()
+     {
         // Given
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::ProtocolV1EmptyResponse,
@@ -213,8 +213,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn codec__serialization_roundtrip_using_v1_on_error_response_returns_predefined_error_code(
-    ) {
+    async fn codec__serialization_roundtrip_using_v1_on_error_response_returns_predefined_error_code()
+     {
         // Given
         let response = V2ResponseMessage::SealedHeaders(Err(
             ResponseMessageErrorCode::RequestedRangeTooLarge,

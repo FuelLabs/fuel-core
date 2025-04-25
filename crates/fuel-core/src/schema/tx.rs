@@ -7,6 +7,8 @@ use super::scalars::{
 use crate::{
     coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
+        Config as GraphQLConfig,
+        IntoApiResult,
         api_service::{
             BlockProducer,
             ChainInfoProvider,
@@ -14,19 +16,18 @@ use crate::{
             TxPool,
         },
         query_costs,
-        Config as GraphQLConfig,
-        IntoApiResult,
     },
     graphql_api::{
         database::ReadView,
         ports::MemoryPool,
     },
     query::{
+        TxnStatusChangeState,
         asset_query::Exclude,
         transaction_status_change,
-        TxnStatusChangeState,
     },
     schema::{
+        ReadViewProvider,
         coins::ExcludeInput,
         gas_price::EstimateGasPriceExt,
         scalars::{
@@ -42,30 +43,29 @@ use crate::{
                 AssembleTx,
             },
             types::{
-                get_tx_status,
                 AssembleTransactionResult,
                 TransactionStatus,
+                get_tx_status,
             },
         },
-        ReadViewProvider,
     },
     service::adapters::SharedMemoryPool,
 };
 use async_graphql::{
+    Context,
+    Object,
+    Subscription,
     connection::{
         Connection,
         EmptyFields,
     },
-    Context,
-    Object,
-    Subscription,
 };
 use fuel_core_storage::{
-    iter::IterDirection,
     Error as StorageError,
     IsNotFound,
     PredicateStorageRequirements,
     Result as StorageResult,
+    iter::IterDirection,
 };
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
@@ -205,13 +205,12 @@ impl TxQuery {
         let id = id.0;
         let txpool = ctx.data_unchecked::<TxPool>();
 
-        if let Some(transaction) = txpool.transaction(id).await? {
-            Ok(Some(Transaction(transaction, id)))
-        } else {
-            query
+        match txpool.transaction(id).await? {
+            Some(transaction) => Ok(Some(Transaction(transaction, id))),
+            _ => query
                 .transaction(&id)
                 .map(|tx| Transaction::from_tx(id, tx))
-                .into_api_result()
+                .into_api_result(),
         }
     }
 
@@ -698,8 +697,9 @@ impl TxStatusSubscription {
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
         #[graphql(desc = "If true, accept to receive the preconfirmation status")]
         include_preconfirmation: Option<bool>,
-    ) -> anyhow::Result<impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a>
-    {
+    ) -> anyhow::Result<
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a + use<'a>,
+    > {
         let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
         let rx = tx_status_manager.tx_update_subscribe(id.into()).await?;
         let query = ctx.read_view()?;
@@ -726,7 +726,7 @@ impl TxStatusSubscription {
         tx: HexString,
         estimate_predicates: Option<bool>,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a + use<'a>,
     > {
         use tokio_stream::StreamExt;
         let subscription =
@@ -749,7 +749,7 @@ impl TxStatusSubscription {
         estimate_predicates: Option<bool>,
         include_preconfirmation: Option<bool>,
     ) -> async_graphql::Result<
-        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a,
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a + use<'a>,
     > {
         submit_and_await_status(
             ctx,
@@ -962,15 +962,16 @@ impl ContextExt for Context<'_> {
         let query = self.read_view()?;
         let txpool = self.data_unchecked::<TxPool>();
 
-        if let Some(tx) = txpool.transaction(id).await? {
-            Ok(Some(tx))
-        } else {
-            let result = query.transaction(&id);
+        match txpool.transaction(id).await? {
+            Some(tx) => Ok(Some(tx)),
+            _ => {
+                let result = query.transaction(&id);
 
-            if result.is_not_found() {
-                Ok(None)
-            } else {
-                result.map(Some)
+                if result.is_not_found() {
+                    Ok(None)
+                } else {
+                    result.map(Some)
+                }
             }
         }
     }

@@ -20,10 +20,10 @@ use crate::{
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::Transaction,
     fuel_types::{
-        canonical::Serialize,
         BlockHeight,
         Bytes32,
         MessageId,
+        canonical::Serialize,
     },
 };
 use educe::Educe;
@@ -330,7 +330,7 @@ pub type ConsensusParametersVersion = u32;
 pub type StateTransitionBytecodeVersion = u32;
 
 /// The latest version of the state transition bytecode.
-pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 26;
+pub const LATEST_STATE_TRANSITION_VERSION: StateTransitionBytecodeVersion = 27;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

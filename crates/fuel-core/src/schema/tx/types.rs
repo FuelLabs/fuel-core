@@ -1,18 +1,19 @@
 use super::{
+    ContextExt,
     input::Input,
     output::Output,
     receipt::Receipt,
-    ContextExt,
 };
 use crate::{
     fuel_core_graphql_api::{
+        IntoApiResult,
         api_service::ChainInfoProvider,
         database::ReadView,
         query_costs,
-        IntoApiResult,
     },
     graphql_api::api_service::DynTxStatusManager,
     schema::{
+        ReadViewProvider,
         block::Block,
         scalars::{
             AssetId,
@@ -34,7 +35,6 @@ use crate::{
             output::ResolvedOutput,
             upgrade_purpose::UpgradePurpose,
         },
-        ReadViewProvider,
     },
 };
 use async_graphql::{
@@ -47,6 +47,8 @@ use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     fuel_tx::{
         self,
+        Executable,
+        TxId,
         field::{
             BytecodeRoot,
             BytecodeWitnessIndex,
@@ -74,8 +76,6 @@ use fuel_core_types::{
             Witnesses,
         },
         policies::PolicyType,
-        Executable,
-        TxId,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::ProgramState as VmProgramState,

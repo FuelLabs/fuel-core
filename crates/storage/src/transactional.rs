@@ -1,6 +1,7 @@
 //! The primitives to work with storage in transactional mode.
 
 use crate::{
+    Result as StorageResult,
     kv_store::{
         BatchOperations,
         KeyValueInspect,
@@ -10,7 +11,6 @@ use crate::{
         WriteOperation,
     },
     structured_storage::StructuredStorage,
-    Result as StorageResult,
 };
 use core::borrow::Borrow;
 
@@ -18,8 +18,8 @@ use core::borrow::Borrow;
 use alloc::{
     boxed::Box,
     collections::{
-        btree_map,
         BTreeMap,
+        btree_map,
     },
     vec::Vec,
 };
@@ -588,8 +588,8 @@ mod test {
     use crate::structured_storage::test::InMemoryStorage;
     #[cfg(test)]
     use crate::{
-        tables::Messages,
         StorageAsMut,
+        tables::Messages,
     };
     #[allow(unused_imports)]
     use std::sync::Arc;

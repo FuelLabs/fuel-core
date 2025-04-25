@@ -9,6 +9,12 @@ use std::{
 
 use fuel_core_types::{
     fuel_tx::{
+        BlobId,
+        ContractId,
+        Input,
+        Output,
+        TxId,
+        UtxoId,
         field::BlobId as _,
         input::{
             coin::{
@@ -22,12 +28,6 @@ use fuel_core_types::{
                 MessageDataSigned,
             },
         },
-        BlobId,
-        ContractId,
-        Input,
-        Output,
-        TxId,
-        UtxoId,
     },
     fuel_types::Nonce,
     services::txpool::PoolTransaction,

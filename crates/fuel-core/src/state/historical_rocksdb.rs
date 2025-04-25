@@ -1,32 +1,36 @@
 use crate::{
     database::{
+        Error as DatabaseError,
+        Result as DatabaseResult,
         database_description::{
             DatabaseDescription,
             DatabaseHeight,
         },
-        Error as DatabaseError,
-        Result as DatabaseResult,
     },
     state::{
+        ColumnType,
+        HeightType,
+        IterableKeyValueView,
+        KeyValueView,
+        TransactableStorage,
         historical_rocksdb::{
             description::{
-                historical_duplicate_column_id,
                 Column,
                 Historical,
+                historical_duplicate_column_id,
             },
             view_at_height::ViewAtHeight,
         },
         iterable_key_value_view::IterableKeyValueViewWrapper,
         key_value_view::KeyValueViewWrapper,
         rocks_db::RocksDb,
-        ColumnType,
-        HeightType,
-        IterableKeyValueView,
-        KeyValueView,
-        TransactableStorage,
     },
 };
 use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageAsRef,
     iter::{
         BoxedIter,
         IterDirection,
@@ -48,10 +52,6 @@ use fuel_core_storage::{
         StorageChanges,
         StorageTransaction,
     },
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
 };
 use itertools::Itertools;
 use modifications_history::{
@@ -658,14 +658,14 @@ mod tests {
     use super::*;
     use crate::database::database_description::on_chain::OnChain;
     use fuel_core_storage::{
+        ContractsAssetKey,
+        StorageAsMut,
+        StorageAsRef,
         tables::ContractsAssets,
         transactional::{
             IntoTransaction,
             ReadTransaction,
         },
-        ContractsAssetKey,
-        StorageAsMut,
-        StorageAsRef,
     };
 
     #[test]

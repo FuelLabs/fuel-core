@@ -5,9 +5,9 @@ use std::{
     cell::UnsafeCell,
     panic::UnwindSafe,
     sync::atomic::{
-        fence,
         AtomicU64,
         Ordering,
+        fence,
     },
 };
 

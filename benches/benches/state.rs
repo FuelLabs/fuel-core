@@ -1,15 +1,15 @@
 use criterion::{
+    BenchmarkGroup,
+    Criterion,
     criterion_group,
     criterion_main,
     measurement::WallTime,
-    BenchmarkGroup,
-    Criterion,
 };
 use fuel_core::{
     database::{
+        Database,
         database_description::on_chain::OnChain,
         state::StateInitializer,
-        Database,
     },
     state::{
         historical_rocksdb::StateRewindPolicy,
@@ -40,10 +40,10 @@ use fuel_core_types::{
     fuel_vm::InterpreterStorage,
 };
 use rand::{
-    rngs::StdRng,
-    thread_rng,
     Rng,
     SeedableRng,
+    rngs::StdRng,
+    thread_rng,
 };
 use std::{
     iter,
@@ -59,11 +59,11 @@ where
     D: StateInitializer,
 {
     let mut rng_keys = thread_rng();
-    let gen_keys = || -> Bytes32 { rng_keys.gen() };
+    let gen_keys = || -> Bytes32 { rng_keys.r#gen() };
     let state_keys = iter::repeat_with(gen_keys).take(n);
 
     let mut rng_values = thread_rng();
-    let gen_values = || -> Bytes32 { rng_values.gen() };
+    let gen_values = || -> Bytes32 { rng_values.r#gen() };
     let state_values = iter::repeat_with(gen_values).map(|b| b.to_vec()).take(n);
 
     // State key-values
@@ -75,8 +75,8 @@ where
 
 fn insert_state_single_contract_database(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-    let state: Bytes32 = rng.gen();
-    let value: Bytes32 = rng.gen();
+    let state: Bytes32 = rng.r#gen();
+    let value: Bytes32 = rng.r#gen();
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
@@ -89,7 +89,7 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
                 },
             )
             .unwrap();
-            let contract: ContractId = rng.gen();
+            let contract: ContractId = rng.r#gen();
             setup(&mut db, &contract, n);
             let outer = db.write_transaction();
             b.iter_custom(|iters| {
@@ -145,13 +145,13 @@ fn insert_state_single_contract_database(c: &mut Criterion) {
 
 fn insert_state_single_contract_transaction(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-    let state: Bytes32 = rng.gen();
-    let value: Bytes32 = rng.gen();
+    let state: Bytes32 = rng.r#gen();
+    let value: Bytes32 = rng.r#gen();
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
             let db = Database::<OnChain>::default();
-            let contract: ContractId = rng.gen();
+            let contract: ContractId = rng.r#gen();
             let mut outer = db.into_transaction();
             setup(&mut outer, &contract, n);
             b.iter_custom(|iters| {
@@ -207,20 +207,20 @@ fn insert_state_single_contract_transaction(c: &mut Criterion) {
 
 fn insert_state_multiple_contracts_database(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-    let state: Bytes32 = rng.gen();
-    let value: Bytes32 = rng.gen();
+    let state: Bytes32 = rng.r#gen();
+    let value: Bytes32 = rng.r#gen();
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
             let mut db = Database::<OnChain>::default();
             for _ in 0..n {
-                let contract: ContractId = rng.gen();
+                let contract: ContractId = rng.r#gen();
                 setup(&mut db, &contract, 1);
             }
             let outer = db.into_transaction();
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
-                let contract: ContractId = rng.gen();
+                let contract: ContractId = rng.r#gen();
                 for _ in 0..iters {
                     let inner = outer.read_transaction();
                     let mut inner_db = VmStorage::new(
@@ -272,20 +272,20 @@ fn insert_state_multiple_contracts_database(c: &mut Criterion) {
 
 fn insert_state_multiple_contracts_transaction(c: &mut Criterion) {
     let mut rng = StdRng::seed_from_u64(0xF00DF00D);
-    let state: Bytes32 = rng.gen();
-    let value: Bytes32 = rng.gen();
+    let state: Bytes32 = rng.r#gen();
+    let value: Bytes32 = rng.r#gen();
 
     let mut bench_state = |group: &mut BenchmarkGroup<WallTime>, name: &str, n: usize| {
         group.bench_function(name, |b| {
             let db = Database::<OnChain>::default();
             let mut outer = db.into_transaction();
             for _ in 0..n {
-                let contract: ContractId = rng.gen();
+                let contract: ContractId = rng.r#gen();
                 setup(&mut outer, &contract, 1);
             }
             b.iter_custom(|iters| {
                 let mut elapsed_time = Duration::default();
-                let contract: ContractId = rng.gen();
+                let contract: ContractId = rng.r#gen();
                 for _ in 0..iters {
                     let inner = outer.read_transaction();
                     let mut inner_db = VmStorage::new(

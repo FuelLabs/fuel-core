@@ -1,10 +1,10 @@
 use async_graphql::{
-    parser::types::Field,
     Positioned,
+    parser::types::Field,
 };
 use std::collections::{
-    hash_map::Entry,
     HashMap,
+    hash_map::Entry,
 };
 
 use super::visitor::{

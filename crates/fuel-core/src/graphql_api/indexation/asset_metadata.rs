@@ -106,8 +106,8 @@ where
 #[cfg(test)]
 mod tests {
     use fuel_core_storage::{
-        transactional::WriteTransaction,
         StorageAsMut,
+        transactional::WriteTransaction,
     };
     use fuel_core_types::fuel_tx::{
         Bytes32,
@@ -118,8 +118,8 @@ mod tests {
 
     use crate::{
         database::{
-            database_description::off_chain::OffChain,
             Database,
+            database_description::off_chain::OffChain,
         },
         graphql_api::{
             indexation::asset_metadata::update,

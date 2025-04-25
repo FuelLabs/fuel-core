@@ -10,8 +10,8 @@ use fuel_core_types::{
 
 use crate::client::schema::{
     self,
-    tx::Destroy,
     ConversionError,
+    tx::Destroy,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

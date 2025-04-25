@@ -1,18 +1,18 @@
 use std::fmt::Debug;
 
 use fuel_core_storage::{
-    structured_storage::TableWithBlueprint,
     Mappable,
+    structured_storage::TableWithBlueprint,
 };
 use itertools::Itertools;
 
 use crate::{
-    config::table_entry::TableEntry,
     AsTable,
     ChainConfig,
     LastBlockConfig,
-    StateConfig,
     MAX_GROUP_SIZE,
+    StateConfig,
+    config::table_entry::TableEntry,
 };
 
 pub struct Groups<T: Mappable> {

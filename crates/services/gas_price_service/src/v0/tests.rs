@@ -27,23 +27,23 @@ use crate::{
         },
         service::GasPriceServiceV0,
         uninitialized_task::{
-            initialize_algorithm,
             UninitializedTask,
+            initialize_algorithm,
         },
     },
 };
 use anyhow::anyhow;
 use fuel_core_services::{
+    RunnableTask,
+    StateWatcher,
     stream::{
         BoxStream,
         IntoBoxStream,
     },
-    RunnableTask,
-    StateWatcher,
 };
 use fuel_core_storage::{
-    transactional::AtomicView,
     Result as StorageResult,
+    transactional::AtomicView,
 };
 use fuel_core_types::{
     blockchain::{

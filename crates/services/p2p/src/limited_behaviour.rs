@@ -1,15 +1,12 @@
 use crate::connection_limits::Connections;
 use libp2p::{
     core::{
-        transport::PortUse,
         Endpoint,
         Multiaddr,
+        transport::PortUse,
     },
     identity::PeerId,
     swarm::{
-        behaviour::ConnectionEstablished,
-        derive_prelude::Either,
-        dummy,
         AddressChange,
         ConnectionClosed,
         ConnectionDenied,
@@ -22,6 +19,9 @@ use libp2p::{
         THandlerInEvent,
         THandlerOutEvent,
         ToSwarm,
+        behaviour::ConnectionEstablished,
+        derive_prelude::Either,
+        dummy,
     },
 };
 use std::{

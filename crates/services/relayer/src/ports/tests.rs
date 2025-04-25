@@ -1,4 +1,5 @@
 use crate::{
+    Config,
     ports::{
         DatabaseTransaction,
         MockDatabaseTransaction,
@@ -6,7 +7,6 @@ use crate::{
         Transactional,
     },
     storage::EventsHistory,
-    Config,
 };
 use fuel_core_storage::test_helpers::{
     MockBasic,

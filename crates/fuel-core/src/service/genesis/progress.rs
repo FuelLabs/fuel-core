@@ -68,11 +68,12 @@ impl ProgressReporter {
         let display_index = u64::try_from(index).unwrap_or(u64::MAX).saturating_add(1);
         self.bar.set_position(display_index);
         if let ReportMethod::Logs(span) = &self.target {
-            span.in_scope(|| {
-                if let Some(len) = self.bar.length() {
+            span.in_scope(|| match self.bar.length() {
+                Some(len) => {
                     let human_eta = HumanDuration(self.bar.eta());
                     tracing::info!("Processing: {display_index}/{len}. ({human_eta})");
-                } else {
+                }
+                _ => {
                     tracing::info!("Processing: {}", display_index);
                 }
             })

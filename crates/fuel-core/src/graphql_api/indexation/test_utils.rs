@@ -1,8 +1,8 @@
 use fuel_core_types::{
     entities::{
+        Message,
         coins::coin::Coin,
         relayer::message::MessageV1,
-        Message,
     },
     fuel_tx::{
         Address,

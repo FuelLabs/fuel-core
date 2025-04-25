@@ -5,20 +5,20 @@ use fuel_core::{
         StateConfig,
     },
     service::{
-        config::GasPriceConfig,
         Config,
         FuelService,
+        config::GasPriceConfig,
     },
 };
 use fuel_core_client::client::{
+    FuelClient,
     types::{
+        TransactionStatus,
         primitives::{
             AssetId,
             UtxoId,
         },
-        TransactionStatus,
     },
-    FuelClient,
 };
 use fuel_core_types::{
     fuel_crypto::SecretKey,

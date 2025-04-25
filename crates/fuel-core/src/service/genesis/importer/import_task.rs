@@ -1,30 +1,30 @@
 use anyhow::bail;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
     structured_storage::TableWithBlueprint,
     transactional::{
         Modifiable,
         StorageTransaction,
         WriteTransaction,
     },
-    StorageAsRef,
-    StorageInspect,
-    StorageMutate,
 };
 
 use crate::{
     database::{
+        GenesisDatabase,
         database_description::DatabaseDescription,
         genesis_progress::{
             GenesisMetadata,
             GenesisProgressMutate,
         },
-        GenesisDatabase,
     },
     service::genesis::{
+        NotifyCancel,
         progress::ProgressReporter,
         task_manager::CancellationToken,
-        NotifyCancel,
     },
 };
 
@@ -91,11 +91,11 @@ where
     GroupGenerator:
         IntoIterator<Item = anyhow::Result<Vec<TableEntry<Logic::TableInSnapshot>>>>,
     GenesisMetadata<DbDesc>: TableWithBlueprint<
-        Column = DbDesc::Column,
-        Key = str,
-        Value = usize,
-        OwnedValue = usize,
-    >,
+            Column = DbDesc::Column,
+            Key = str,
+            Value = usize,
+            OwnedValue = usize,
+        >,
     GenesisDatabase<DbDesc>:
         StorageInspect<GenesisMetadata<DbDesc>> + WriteTransaction + Modifiable,
     for<'a> StorageTransaction<&'a mut GenesisDatabase<DbDesc>>:
@@ -142,8 +142,8 @@ where
 mod tests {
     use crate::{
         database::{
-            genesis_progress::GenesisProgressInspect,
             GenesisDatabase,
+            genesis_progress::GenesisProgressInspect,
         },
         service::genesis::{
             importer::{
@@ -168,6 +168,10 @@ mod tests {
         TableEntry,
     };
     use fuel_core_storage::{
+        Result as StorageResult,
+        StorageAsMut,
+        StorageAsRef,
+        StorageInspect,
         column::Column,
         iter::{
             BoxedIter,
@@ -185,10 +189,6 @@ mod tests {
             StorageChanges,
             StorageTransaction,
         },
-        Result as StorageResult,
-        StorageAsMut,
-        StorageAsRef,
-        StorageInspect,
     };
     use fuel_core_types::{
         entities::coins::coin::{
@@ -199,8 +199,8 @@ mod tests {
         fuel_types::BlockHeight,
     };
     use rand::{
-        rngs::StdRng,
         SeedableRng,
+        rngs::StdRng,
     };
 
     use crate::{
@@ -209,10 +209,10 @@ mod tests {
             genesis_progress::GenesisProgressMutate,
         },
         state::{
-            in_memory::memory_store::MemoryStore,
             IterableKeyValueView,
             KeyValueView,
             TransactableStorage,
+            in_memory::memory_store::MemoryStore,
         },
     };
 
@@ -371,10 +371,12 @@ mod tests {
         runner.run(never_cancel()).unwrap();
 
         // then
-        assert!(outer_db
-            .storage_as_ref::<Coins>()
-            .contains_key(&utxo_id)
-            .unwrap());
+        assert!(
+            outer_db
+                .storage_as_ref::<Coins>()
+                .contains_key(&utxo_id)
+                .unwrap()
+        );
     }
 
     fn insert_a_coin(

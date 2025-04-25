@@ -1,4 +1,5 @@
 use crate::{
+    TxStatusStream,
     config::Config,
     manager::TxStatusManager,
     ports::{
@@ -8,7 +9,6 @@ use crate::{
     },
     subscriptions::Subscriptions,
     update_sender::TxStatusChange,
-    TxStatusStream,
 };
 use fuel_core_services::{
     RunnableService,
@@ -44,9 +44,9 @@ use fuel_core_types::{
             Preconfirmations,
         },
         transaction_status::{
-            statuses,
             PreConfirmationStatus,
             TransactionStatus,
+            statuses,
         },
     },
     tai64::Tai64,
@@ -474,14 +474,14 @@ mod tests {
     };
     use fuel_core_types::{
         fuel_crypto::{
-            rand::{
-                rngs::StdRng,
-                SeedableRng,
-            },
             Message,
             PublicKey,
             SecretKey,
             Signature,
+            rand::{
+                SeedableRng,
+                rngs::StdRng,
+            },
         },
         fuel_tx::{
             Bytes32,
@@ -505,8 +505,8 @@ mod tests {
         tai64::Tai64,
     };
     use futures::{
-        stream::BoxStream,
         StreamExt,
+        stream::BoxStream,
     };
     use status::transaction::{
         random_prunable_tx_status,
@@ -523,6 +523,8 @@ mod tests {
     use tokio_stream::wrappers::ReceiverStream;
 
     use crate::{
+        TxStatusMessage,
+        TxStatusStream,
         manager::TxStatusManager,
         ports::{
             P2PPreConfirmationGossipData,
@@ -535,8 +537,6 @@ mod tests {
             TxStatusChange,
             UpdateSender,
         },
-        TxStatusMessage,
-        TxStatusStream,
     };
 
     use super::{
@@ -618,11 +618,11 @@ mod tests {
                     seq::SliceRandom,
                 },
                 services::transaction_status::{
+                    TransactionStatus,
                     statuses::{
                         PreConfirmationFailure,
                         PreConfirmationSuccess,
                     },
-                    TransactionStatus,
                 },
                 tai64::Tai64,
             };
@@ -1022,8 +1022,8 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn run__non_prunable_is_returned_when_both_prunable_and_non_prunable_are_present(
-    ) {
+    async fn run__non_prunable_is_returned_when_both_prunable_and_non_prunable_are_present()
+     {
         let (task, handles) = new_task_with_handles(TTL);
         let service = ServiceRunner::new(task);
         service.start_and_await().await.unwrap();
@@ -1126,8 +1126,8 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn run__prunes_when_the_same_tx_is_updated_from_non_prunable_to_prunable_status(
-    ) {
+    async fn run__prunes_when_the_same_tx_is_updated_from_non_prunable_to_prunable_status()
+     {
         let (task, handles) = new_task_with_handles(TTL);
         let service = ServiceRunner::new(task);
         service.start_and_await().await.unwrap();
@@ -1321,7 +1321,7 @@ mod tests {
         // Verify that only expected statuses are present
         let (recent_tx_ids, not_recent_tx_ids): (Vec<_>, Vec<_>) = update_times
             .iter()
-            .partition(|(_, &time)| time + ttl >= Instant::now());
+            .partition(|&(_, &time)| time + ttl >= Instant::now());
 
         assert_presence(
             &handles.read_requests_sender,
@@ -1619,8 +1619,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run__can_verify_preconfirmation_signature_while_tracking_multiple_delegate_keys(
-    ) {
+    async fn run__can_verify_preconfirmation_signature_while_tracking_multiple_delegate_keys()
+     {
         // given
         let (task, handles) = new_task_with_handles(TTL);
         let (delegate_secret_key, delegate_public_key) = delegate_key_pair();

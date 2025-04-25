@@ -11,12 +11,12 @@ use fuel_core::{
     },
     database::Database,
     p2p_test_helpers::{
-        make_nodes,
         BootstrapSetup,
         CustomizeConfig,
         Nodes,
         ProducerSetup,
         ValidatorSetup,
+        make_nodes,
     },
     service::{
         Config,
@@ -24,11 +24,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    types::{
-        gas_price::LatestGasPrice,
-        TransactionType,
-    },
     FuelClient,
+    types::{
+        TransactionStatus,
+        TransactionType,
+        gas_price::LatestGasPrice,
+    },
 };
 use fuel_core_gas_price_service::{
     common::fuel_core_storage_adapter::storage::GasPriceMetadata,
@@ -39,40 +40,41 @@ use fuel_core_gas_price_service::{
     },
     v1::{
         da_source_service::block_committer_costs::{
-            fake_server::FakeServer,
             RawDaBlockCosts,
+            fake_server::FakeServer,
         },
         metadata::V1Metadata,
     },
 };
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
-    transactional::AtomicView,
     StorageAsRef,
+    transactional::AtomicView,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_asm::*,
     fuel_crypto::{
-        coins_bip32::ecdsa::signature::rand_core::SeedableRng,
         SecretKey,
+        coins_bip32::ecdsa::signature::rand_core::SeedableRng,
     },
     fuel_tx::{
-        consensus_parameters::ConsensusParametersV1,
-        field::MintGasPrice,
         AssetId,
         ConsensusParameters,
         Finalizable,
         Input,
+        Receipt,
         Transaction,
         TransactionBuilder,
+        consensus_parameters::ConsensusParametersV1,
+        field::MintGasPrice,
     },
     fuel_types::BlockHeight,
     services::executor::TransactionExecutionResult,
 };
 use rand::{
-    prelude::StdRng,
     Rng,
+    prelude::StdRng,
 };
 use std::{
     self,
@@ -100,7 +102,7 @@ fn infinite_loop_tx<R: Rng + rand::CryptoRng>(
         .script_gas_limit(800_000)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
-            rng.gen(),
+            rng.r#gen(),
             u32::MAX as u64,
             asset_id,
             Default::default(),
@@ -124,7 +126,7 @@ fn arb_large_tx<R: Rng + rand::CryptoRng>(
         .script_gas_limit(600_000)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
-            rng.gen(),
+            rng.r#gen(),
             u32::MAX as u64,
             asset_id,
             Default::default(),
@@ -147,7 +149,7 @@ fn arb_small_tx<R: Rng + rand::CryptoRng>(
         .script_gas_limit(22430)
         .add_unsigned_coin_input(
             SecretKey::random(rng),
-            rng.gen(),
+            rng.r#gen(),
             u32::MAX as u64,
             asset_id,
             Default::default(),
@@ -1035,4 +1037,52 @@ async fn cli__starting_recorded_height_is_set_in_db() {
     let expected = BlockHeight::from(starting_recorded_height);
     assert_eq!(expected, actual);
     driver.kill().await;
+}
+
+#[allow(non_snake_case)]
+#[tokio::test]
+async fn gm_opcode__returns_the_same_gas_price_produced_by_the_gas_price_service() {
+    // given: a script transaction that calls the gm opcode to get the current gas price
+    let script = vec![op::gm_args(0x20, GMArgs::GetGasPrice), op::ret(0x20)]
+        .into_iter()
+        .collect();
+    let tx = TransactionBuilder::script(script, vec![])
+        .add_fee_input()
+        .script_gas_limit(1000)
+        .add_max_fee_limit(1000)
+        .finalize();
+
+    let mut context = TestSetupBuilder::default();
+    context.config_coin_inputs_from_transactions(&[&tx]);
+    context.starting_gas_price = 100;
+    let context = context.finalize().await;
+
+    // when: the transaction is submitted
+    let tx_status = context
+        .client
+        .submit_and_await_commit(&tx.into())
+        .await
+        .unwrap();
+
+    let gas_price_from_script = match &tx_status {
+        TransactionStatus::Success { receipts, .. } => match receipts.first() {
+            Some(Receipt::Return { val, .. }) => *val,
+            Some(_) => panic!("Unexpected receipt type"),
+            None => panic!("No receipts found"),
+        },
+        _ => panic!("Transaction failed"),
+    };
+
+    // then: ensure that the gas price returned by the script matches the gas price produced by the gas price service
+    // at the previous block height
+    let db = context.srv.shared.database.gas_price();
+    let latest_height = db.latest_height_from_metadata().unwrap().unwrap();
+    let expected_metadata = db
+        .get_metadata(&latest_height.pred().unwrap())
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        &gas_price_from_script,
+        &expected_metadata.v1().unwrap().new_exec_gas_price()
+    );
 }
