@@ -10,7 +10,7 @@ pub enum TransactionFiltered {
     NotFiltered,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Filter {
     /// The set of contract IDs to filter out
     pub excluded_contract_ids: HashSet<ContractId>,

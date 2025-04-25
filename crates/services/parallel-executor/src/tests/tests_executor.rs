@@ -27,16 +27,18 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::ChainId,
-    fuel_vm::checked_transaction::IntoChecked,
     services::block_producer::Components,
 };
-use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 use rand::SeedableRng;
 
 use crate::{
     config::Config,
     executor::Executor,
-    ports::TransactionFiltered,
+    ports::{
+        Filter,
+        TransactionFiltered,
+    },
+    tests::mocks::Consumer,
 };
 
 use super::mocks::{
@@ -45,21 +47,30 @@ use super::mocks::{
 };
 
 fn basic_tx(rng: &mut StdRng) -> Transaction {
+    TransactionBuilder::script(vec![], vec![])
+        .add_input(given_coin_predicate(rng, 1000))
+        .finalize_as_transaction()
+}
+
+fn empty_filter() -> Filter {
+    Filter {
+        excluded_contract_ids: Default::default(),
+    }
+}
+
+fn given_coin_predicate(rng: &mut StdRng, amount: u64) -> Input {
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
-
-    TransactionBuilder::script(vec![], vec![])
-        .add_input(Input::coin_predicate(
-            rng.r#gen(),
-            owner,
-            1000,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            predicate.clone(),
-            vec![],
-        ))
-        .finalize_as_transaction()
+    Input::coin_predicate(
+        rng.r#gen(),
+        owner,
+        amount,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        predicate,
+        vec![],
+    )
 }
 
 fn _add_consensus_parameters(
@@ -115,80 +126,27 @@ fn execute__simple_independent_transactions_sorted() {
         let tx4 = tx4.clone();
         move || {
             // Request for thread 1
-            let (_request, response_channel) = tx_pool_requests_receiver.recv().unwrap();
-            response_channel
-                .send((
-                    vec![
-                        MaybeCheckedTransaction::CheckedTransaction(
-                            tx2.clone()
-                                .into_checked_basic(
-                                    0u32.into(),
-                                    &ConsensusParameters::default(),
-                                )
-                                .unwrap()
-                                .into(),
-                            0,
-                        ),
-                        MaybeCheckedTransaction::CheckedTransaction(
-                            tx1.clone()
-                                .into_checked_basic(
-                                    0u32.into(),
-                                    &ConsensusParameters::default(),
-                                )
-                                .unwrap()
-                                .into(),
-                            0,
-                        ),
-                        MaybeCheckedTransaction::CheckedTransaction(
-                            tx4.clone()
-                                .into_checked_basic(
-                                    0u32.into(),
-                                    &ConsensusParameters::default(),
-                                )
-                                .unwrap()
-                                .into(),
-                            0,
-                        ),
-                        MaybeCheckedTransaction::CheckedTransaction(
-                            tx3.clone()
-                                .into_checked_basic(
-                                    0u32.into(),
-                                    &ConsensusParameters::default(),
-                                )
-                                .unwrap()
-                                .into(),
-                            0,
-                        ),
-                    ],
-                    TransactionFiltered::NotFiltered,
-                ))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver).respond_with(
+                &[&tx2, &tx1, &tx4, &tx3],
+                TransactionFiltered::NotFiltered,
+            );
             // Request for thread 2
-            let (_request, response_channel) = tx_pool_requests_receiver.recv().unwrap();
-            response_channel
-                .send((vec![], TransactionFiltered::NotFiltered))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
 
-    let transactions = result.block.transactions();
-    assert_eq!(transactions.len(), 4);
-    assert_eq!(
-        transactions[0].id(&ChainId::default()),
-        tx2.id(&ChainId::default())
-    );
-    assert_eq!(
-        transactions[1].id(&ChainId::default()),
-        tx1.id(&ChainId::default())
-    );
-    assert_eq!(
-        transactions[2].id(&ChainId::default()),
-        tx4.id(&ChainId::default())
-    );
-    assert_eq!(
-        transactions[3].id(&ChainId::default()),
-        tx3.id(&ChainId::default())
-    );
+    let expected_ids = [tx2, tx1, tx4, tx3]
+        .map(|tx| tx.id(&ChainId::default()))
+        .to_vec();
+    let actual_ids = result
+        .block
+        .transactions()
+        .iter()
+        .map(|tx| tx.id(&ChainId::default()))
+        .collect::<Vec<_>>();
+
+    assert_eq!(expected_ids, actual_ids);
 }
 
 #[test]
@@ -205,8 +163,6 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
-    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate);
 
     // Given
     let contract_id = ContractId::new([1; 32]);
@@ -220,29 +176,11 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             Default::default(),
             contract_id,
         ))
-        .add_input(Input::coin_predicate(
-            rng.r#gen(),
-            owner,
-            1000,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            predicate.clone(),
-            vec![],
-        ))
+        .add_input(given_coin_predicate(&mut rng, 1000))
         .add_output(Output::contract(0, Default::default(), Default::default()))
         .finalize_as_transaction();
     let short_tx: Transaction = TransactionBuilder::script(vec![], vec![])
-        .add_input(Input::coin_predicate(
-            rng.r#gen(),
-            owner,
-            1000,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            predicate.clone(),
-            vec![],
-        ))
+        .add_input(given_coin_predicate(&mut rng, 1000))
         .finalize_as_transaction();
 
     // When
@@ -260,61 +198,21 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     std::thread::spawn({
         move || {
             // Request for thread 1
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 0);
-            response_sender
-                .send((
-                    vec![MaybeCheckedTransaction::CheckedTransaction(
-                        long_tx
-                            .clone()
-                            .into_checked_basic(
-                                0u32.into(),
-                                &ConsensusParameters::default(),
-                            )
-                            .unwrap()
-                            .into(),
-                        0,
-                    )],
-                    TransactionFiltered::NotFiltered,
-                ))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&empty_filter())
+                .respond_with(&[&long_tx], TransactionFiltered::NotFiltered);
 
             // Request for thread 2
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 1);
-            assert_eq!(
-                pool_request_params
-                    .filter
-                    .excluded_contract_ids
-                    .get(&contract_id),
-                Some(&contract_id)
-            );
-            response_sender
-                .send((vec![], TransactionFiltered::Filtered))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&Filter {
+                    excluded_contract_ids: vec![contract_id].into_iter().collect(),
+                })
+                .respond_with(&[], TransactionFiltered::Filtered);
 
             // Request for thread 1 again
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 0);
-            response_sender
-                .send((
-                    vec![MaybeCheckedTransaction::CheckedTransaction(
-                        short_tx
-                            .clone()
-                            .into_checked_basic(
-                                0u32.into(),
-                                &ConsensusParameters::default(),
-                            )
-                            .unwrap()
-                            .into(),
-                        0,
-                    )],
-                    TransactionFiltered::NotFiltered,
-                ))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&empty_filter())
+                .respond_with(&[&short_tx], TransactionFiltered::NotFiltered);
         }
     });
 }
@@ -346,16 +244,7 @@ fn execute__gas_left_updated_when_state_merges() {
                 Default::default(),
                 contract_id_1,
             ))
-            .add_input(Input::coin_predicate(
-                rng.r#gen(),
-                Default::default(),
-                1000,
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                op::ret(RegId::ONE).to_bytes().to_vec(),
-                vec![],
-            ))
+            .add_input(given_coin_predicate(&mut rng, 1000))
             .add_output(Output::contract(0, Default::default(), Default::default()))
             .finalize_as_transaction();
     let max_gas = tx_contract_1
@@ -370,16 +259,7 @@ fn execute__gas_left_updated_when_state_merges() {
                 Default::default(),
                 contract_id_2,
             ))
-            .add_input(Input::coin_predicate(
-                rng.r#gen(),
-                Default::default(),
-                1000,
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                op::ret(RegId::ONE).to_bytes().to_vec(),
-                vec![],
-            ))
+            .add_input(given_coin_predicate(&mut rng, 1000))
             .add_output(Output::contract(0, Default::default(), Default::default()))
             .finalize_as_transaction();
     let tx_both_contracts: Transaction =
@@ -398,16 +278,7 @@ fn execute__gas_left_updated_when_state_merges() {
                 Default::default(),
                 contract_id_2,
             ))
-            .add_input(Input::coin_predicate(
-                rng.r#gen(),
-                Default::default(),
-                1000,
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                op::ret(RegId::ONE).to_bytes().to_vec(),
-                vec![],
-            ))
+            .add_input(given_coin_predicate(&mut rng, 1000))
             .add_output(Output::contract(0, Default::default(), Default::default()))
             .add_output(Output::contract(1, Default::default(), Default::default()))
             .finalize_as_transaction();
@@ -427,92 +298,30 @@ fn execute__gas_left_updated_when_state_merges() {
     // Request for thread 1
     std::thread::spawn({
         move || {
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 0);
-            response_sender
-                .send((
-                    vec![MaybeCheckedTransaction::CheckedTransaction(
-                        tx_contract_1
-                            .clone()
-                            .into_checked_basic(
-                                0u32.into(),
-                                &ConsensusParameters::default(),
-                            )
-                            .unwrap()
-                            .into(),
-                        0,
-                    )],
-                    TransactionFiltered::NotFiltered,
-                ))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&empty_filter())
+                .respond_with(&[&tx_contract_1], TransactionFiltered::NotFiltered);
 
             // Request for thread 2
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 1);
-            assert_eq!(
-                pool_request_params
-                    .filter
-                    .excluded_contract_ids
-                    .get(&contract_id_1),
-                Some(&contract_id_1)
-            );
-            response_sender
-                .send((
-                    vec![MaybeCheckedTransaction::CheckedTransaction(
-                        tx_contract_2
-                            .clone()
-                            .into_checked_basic(
-                                0u32.into(),
-                                &ConsensusParameters::default(),
-                            )
-                            .unwrap()
-                            .into(),
-                        0,
-                    )],
-                    TransactionFiltered::NotFiltered,
-                ))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&Filter {
+                    excluded_contract_ids: vec![contract_id_1].into_iter().collect(),
+                })
+                .respond_with(&[&tx_contract_2], TransactionFiltered::NotFiltered);
+
             // Request for thread 1 again
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 1);
-            assert_eq!(
-                pool_request_params
-                    .filter
-                    .excluded_contract_ids
-                    .get(&contract_id_2),
-                Some(&contract_id_2)
-            );
-            response_sender
-                .send((vec![], TransactionFiltered::Filtered))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&Filter {
+                    excluded_contract_ids: vec![contract_id_2].into_iter().collect(),
+                })
+                .respond_with(&[], TransactionFiltered::Filtered);
             // Request for thread 1 or 2 again
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            // TODO: Maybe it's ConsensusParameters::default().block_gas_limit() / number_of_cores
-            assert!(
-                pool_request_params.gas_limit
-                    > ConsensusParameters::default().block_gas_limit() - max_gas
-            );
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 0);
-            response_sender
-                .send((
-                    vec![MaybeCheckedTransaction::CheckedTransaction(
-                        tx_both_contracts
-                            .clone()
-                            .into_checked_basic(
-                                0u32.into(),
-                                &ConsensusParameters::default(),
-                            )
-                            .unwrap()
-                            .into(),
-                        0,
-                    )],
-                    TransactionFiltered::NotFiltered,
-                ))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&empty_filter())
+                .assert_gas_limit_lt(
+                    ConsensusParameters::default().block_gas_limit() - max_gas,
+                )
+                .respond_with(&[&tx_both_contracts], TransactionFiltered::NotFiltered);
         }
     });
 }
@@ -539,16 +348,7 @@ fn execute__utxo_ordering_kept() {
     let script = [op::add(RegId::ONE, 0x02, 0x03)];
     let script_bytes: Vec<u8> = script.iter().flat_map(|op| op.to_bytes()).collect();
     let tx1 = TransactionBuilder::script(script_bytes, vec![])
-        .add_input(Input::coin_predicate(
-            rng.r#gen(),
-            owner,
-            1000,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-            predicate.clone(),
-            vec![],
-        ))
+        .add_input(given_coin_predicate(&mut rng, 1000))
         .add_output(Output::coin(owner, 1000, Default::default()))
         .finalize_as_transaction();
     let coin_utxo = UtxoId::new(tx1.id(&ChainId::default()), 0);
@@ -583,44 +383,14 @@ fn execute__utxo_ordering_kept() {
         let tx2 = tx2.clone();
         move || {
             // Request for thread 1
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 0);
-            response_sender
-                .send((
-                    vec![MaybeCheckedTransaction::CheckedTransaction(
-                        tx1.clone()
-                            .into_checked_basic(
-                                0u32.into(),
-                                &ConsensusParameters::default(),
-                            )
-                            .unwrap()
-                            .into(),
-                        0,
-                    )],
-                    TransactionFiltered::NotFiltered,
-                ))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&empty_filter())
+                .respond_with(&[&tx1], TransactionFiltered::NotFiltered);
 
             // Request for thread 2
-            let (pool_request_params, response_sender) =
-                tx_pool_requests_receiver.recv().unwrap();
-            assert_eq!(pool_request_params.filter.excluded_contract_ids.len(), 0);
-            response_sender
-                .send((
-                    vec![MaybeCheckedTransaction::CheckedTransaction(
-                        tx2.clone()
-                            .into_checked_basic(
-                                0u32.into(),
-                                &ConsensusParameters::default(),
-                            )
-                            .unwrap()
-                            .into(),
-                        0,
-                    )],
-                    TransactionFiltered::NotFiltered,
-                ))
-                .unwrap();
+            Consumer::receive(&tx_pool_requests_receiver)
+                .assert_filter(&empty_filter())
+                .respond_with(&[&tx2], TransactionFiltered::NotFiltered);
         }
     });
 
