@@ -222,9 +222,10 @@ where
     CH: CanonicalHeight,
 {
     async fn sync_previously_produced_blocks(&mut self) -> crate::Result<()> {
-        let canonical_height = self.canonical_height.get();
         let mut overridden = false;
         loop {
+            let canonical_height = self.canonical_height.get();
+
             let storage_height =
                 match (self.config.override_starting_height(), overridden) {
                     (Some(height), false) => {
