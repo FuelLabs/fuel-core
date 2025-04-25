@@ -39,23 +39,21 @@ type WorkerID = usize;
 pub struct Scheduler<TxSource> {
     /// The state of each worker
     workers_state: Vec<WorkerState>,
-    /// Latest worker that executed a transaction with a specific contract
-    contracts_info: HashMap<ContractId, WorkerID>,
     /// The list of contracts that are currently being executed for each worker (useful to filter them when asking to transaction source)
     executing_contracts: Vec<Vec<ContractId>>,
     /// Transaction source to ask for new transactions
     transaction_source: TxSource,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
+    /// Total execution time
+    total_execution_time: u64,
+    pub tx_left: u16,
+    pub tx_size_left: u32,
 }
 
 pub struct WorkerState {
     pub status: WorkerStatus,
     pub state: StorageChanges,
-    pub gas_left: u64,
-    pub tx_left: u16,
-    pub tx_size_left: u32,
-    // Maybe something that could wake the scheduler
 }
 
 pub enum WorkerStatus {
@@ -87,10 +85,6 @@ where
             workers_state.push(WorkerState {
                 status: WorkerStatus::Idle,
                 state: StorageChanges::default(),
-                // TODO
-                gas_left: 0,
-                tx_left: 0,
-                tx_size_left: 0,
             });
         }
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -101,27 +95,30 @@ where
 
         Self {
             workers_state,
-            contracts_info: HashMap::new(),
             executing_contracts: vec![Vec::new(); number_of_worker],
             transaction_source,
             runtime: Some(runtime),
+            // TODO
+            total_execution_time: 0,
+            tx_left: 0,
+            tx_size_left: 0,
         }
     }
 
     pub async fn run(&mut self) {
         let runtime = self.runtime.as_ref().unwrap();
         // All workers starts empty, so we fetch the first batch
-        for state in self.workers_state.iter_mut() {
-            let (batch, _) = self.transaction_source.get_executable_transactions(
-                state.gas_left,
-                state.tx_left,
-                state.tx_size_left,
-                Filter {
-                    excluded_contract_ids: HashSet::new(),
-                },
-            );
-            runtime.spawn(async move {})
-        }
+        // for state in self.workers_state.iter_mut() {
+        //     let (batch, _) = self.transaction_source.get_executable_transactions(
+        //         state.gas_left,
+        //         state.tx_left,
+        //         state.tx_size_left,
+        //         Filter {
+        //             excluded_contract_ids: HashSet::new(),
+        //         },
+        //     );
+        //     runtime.spawn(async move {})
+        // }
         // Waiting for the workers to notify us
     }
 }
