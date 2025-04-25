@@ -1,10 +1,7 @@
 #![allow(non_snake_case)]
 
-use fuel_core::database::Database;
 use fuel_core_storage::{
-    StorageAsMut,
-    tables::ConsensusParametersVersions,
-    transactional::WriteTransaction,
+    column::Column, structured_storage::test::InMemoryStorage, tables::ConsensusParametersVersions, transactional::WriteTransaction, StorageAsMut
 };
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
@@ -74,9 +71,9 @@ fn given_coin_predicate(rng: &mut StdRng, amount: u64) -> Input {
 }
 
 fn _add_consensus_parameters(
-    mut database: Database,
+    mut database: InMemoryStorage<Column>,
     consensus_parameters: &ConsensusParameters,
-) -> Database {
+) -> InMemoryStorage<Column> {
     // Set the consensus parameters for the executor.
     let mut tx = database.write_transaction();
     tx.storage_as_mut::<ConsensusParametersVersions>()
@@ -89,8 +86,8 @@ fn _add_consensus_parameters(
 #[test]
 #[ignore]
 fn execute__simple_independent_transactions_sorted() {
-    let executor: Executor<Database, MockRelayer> = Executor::new(
-        Database::default(),
+    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
+        InMemoryStorage::default(),
         MockRelayer,
         Config {
             number_of_cores: std::num::NonZeroUsize::new(2)
@@ -152,8 +149,8 @@ fn execute__simple_independent_transactions_sorted() {
 #[test]
 #[ignore]
 fn execute__filter_contract_id_currently_executed_and_fetch_after() {
-    let executor: Executor<Database, MockRelayer> = Executor::new(
-        Database::default(),
+    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
+        InMemoryStorage::default(),
         MockRelayer,
         Config {
             number_of_cores: std::num::NonZeroUsize::new(2)
@@ -220,8 +217,8 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
 #[test]
 #[ignore]
 fn execute__gas_left_updated_when_state_merges() {
-    let executor: Executor<Database, MockRelayer> = Executor::new(
-        Database::default(),
+    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
+        InMemoryStorage::default(),
         MockRelayer,
         Config {
             number_of_cores: std::num::NonZeroUsize::new(2)
@@ -329,8 +326,8 @@ fn execute__gas_left_updated_when_state_merges() {
 #[test]
 #[ignore]
 fn execute__utxo_ordering_kept() {
-    let executor: Executor<Database, MockRelayer> = Executor::new(
-        Database::default(),
+    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
+        InMemoryStorage::default(),
         MockRelayer,
         Config {
             number_of_cores: std::num::NonZeroUsize::new(2)
