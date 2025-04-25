@@ -223,8 +223,16 @@ where
 {
     async fn sync_previously_produced_blocks(&mut self) -> crate::Result<()> {
         let canonical_height = self.canonical_height.get();
+        let mut overriden = false;
         loop {
-            let storage_height = self.storage.latest_height();
+            let storage_height = match (self.config.override_starting_height(), overriden)
+            {
+                (Some(height), false) => {
+                    overriden = true;
+                    Some(height.saturating_sub(1))
+                }
+                (_, _) => self.storage.latest_height(),
+            };
 
             if storage_height.is_none() {
                 // if the storage height is unavailable, don't execute blocks from genesis
@@ -233,10 +241,12 @@ where
             }
 
             if canonical_height < storage_height {
+                tracing::error!("Canonical height is less than storage height: Canonical height: {:?}, Storage height: {:?}", &canonical_height, &storage_height);
                 return Err(crate::errors::CompressionError::FailedToGetSyncStatus);
             }
 
             if canonical_height == storage_height {
+                tracing::info!("Compression database is up to date");
                 break;
             }
 
@@ -250,10 +260,12 @@ where
             let block_with_metadata = self
                 .block_source
                 .get_block(next_block_height)
-                .ok_or(crate::errors::CompressionError::FailedToGetBlock(format!(
-                    "during synchronization of canonical chain at height: {:?}",
-                    next_block_height
-                )))?;
+                .map_err(|err| {
+                    crate::errors::CompressionError::FailedToGetBlock(format!(
+                        "during synchronization of canonical chain at height: {:?}: {}",
+                        next_block_height, err
+                    ))
+                })?;
 
             handle_new_block(
                 &mut self.storage,
@@ -407,6 +419,8 @@ where
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
+    use std::num::NonZeroU32;
+
     use super::*;
     use crate::{
         ports::block_source::{
@@ -449,8 +463,8 @@ mod tests {
         fn get_block(
             &self,
             _: crate::ports::block_source::BlockAt,
-        ) -> Option<BlockWithMetadata> {
-            None
+        ) -> anyhow::Result<BlockWithMetadata> {
+            anyhow::bail!("Block not found")
         }
     }
 
@@ -481,8 +495,15 @@ mod tests {
         fn default() -> Self {
             Self(crate::config::CompressionConfig::new(
                 std::time::Duration::from_secs(10),
+                None,
                 false,
             ))
+        }
+    }
+
+    impl MockConfigProvider {
+        fn new(config: crate::config::CompressionConfig) -> Self {
+            Self(config)
         }
     }
 
@@ -550,11 +571,12 @@ mod tests {
         fn get_block(
             &self,
             height: crate::ports::block_source::BlockAt,
-        ) -> Option<BlockWithMetadata> {
+        ) -> anyhow::Result<BlockWithMetadata> {
             self.0
                 .iter()
                 .find(|block| height == *block.height())
                 .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Block not found"))
         }
     }
 
@@ -629,10 +651,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn compression_service__can_resync_with_canonical_height() {
-        // given
-        // we provide a block source with some old blocks,
-        // and a canonical height provider with a height of 5
+    async fn compression_service__syncs_from_scratch_when_database_is_empty() {
+        // given: we start the compression service, with a canonical height provider of height 5
         let block_count = 10;
         let mut blocks = Vec::with_capacity(block_count);
         for i in 0..u32::try_from(block_count).unwrap() {
@@ -650,17 +670,60 @@ mod tests {
             canonical_height_provider.clone(),
         );
 
-        // when
+        // when: the syncing with canonical height provider occurs
         let service = uninit_service
             .into_task(&Default::default(), ())
             .await
             .unwrap();
 
-        // then
+        // then: it does not have a compressed block for the canonical height
         let maybe_block = service
             .storage
             .storage_as_ref::<storage::CompressedBlocks>()
             .get(&canonical_height_provider.get().unwrap().into())
+            .unwrap();
+        assert!(maybe_block.is_none());
+        service.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn compression_service__syncs_from_overriden_starting_height_when_provided() {
+        // given: we start the compression service, with a canonical height provider of height 5,
+        // and a config override of starting height 1
+        let block_count = 10;
+        let override_starting_height = 1;
+        let mut blocks = Vec::with_capacity(block_count);
+        for i in 0..u32::try_from(block_count).unwrap() {
+            blocks.push(BlockWithMetadata::test_block_with_height(i));
+        }
+        let block_source = MockBlockSource::new(blocks);
+        let storage = test_storage();
+        let config_provider =
+            MockConfigProvider::new(crate::config::CompressionConfig::new(
+                std::time::Duration::from_secs(10),
+                Some(NonZeroU32::new(override_starting_height).unwrap()),
+                false,
+            ));
+        let canonical_height_provider = MockCanonicalHeightProvider::new(5);
+
+        let uninit_service = UninitializedCompressionService::new(
+            block_source,
+            storage,
+            config_provider.config(),
+            canonical_height_provider.clone(),
+        );
+
+        // when: the syncing with canonical height provider occurs
+        let service = uninit_service
+            .into_task(&Default::default(), ())
+            .await
+            .unwrap();
+
+        // then: it has a block for the overridden starting height
+        let maybe_block = service
+            .storage
+            .storage_as_ref::<storage::CompressedBlocks>()
+            .get(&override_starting_height.into())
             .unwrap();
         assert!(maybe_block.is_some());
         service.shutdown().await.unwrap();

@@ -51,7 +51,10 @@ use rand::{
     rngs::StdRng,
     SeedableRng,
 };
-use std::str::FromStr;
+use std::{
+    num::NonZeroU32,
+    str::FromStr,
+};
 use test_helpers::{
     assemble_tx::{
         AssembleAndRunTx,
@@ -69,6 +72,7 @@ async fn can_fetch_da_compressed_block_from_graphql() {
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
     let compression_config = DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
+        override_starting_height: None,
         metrics: false,
     };
     config.da_compression = DaCompressionMode::Enabled(compression_config.clone());
@@ -161,6 +165,7 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     let mut config = Config::local_node();
     config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
+        override_starting_height: None,
         metrics: false,
     });
 
@@ -234,6 +239,7 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
     // when: the node is restarted with compression enabled, and blocks are produced
     config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
+        override_starting_height: None,
         metrics: false,
     });
     let srv = FuelService::from_combined_database(db, config)
@@ -259,6 +265,72 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
     }
 
     for height in blocks_to_produce + 1..=blocks_to_produce * 2 {
+        let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
+        assert!(compressed_block.is_some());
+    }
+}
+
+#[tokio::test]
+async fn da_compression__starts_and_compresses_blocks_correctly_with_overriden_height() {
+    // given: the node starts without compression enabled, and produces blocks
+    let db = CombinedDatabase::temp_database_with_state_rewind_policy(
+        StateRewindPolicy::RewindFullRange,
+        DatabaseConfig::config_for_tests(),
+    )
+    .unwrap();
+    let mut rng = StdRng::seed_from_u64(10);
+    let poa_secret = SecretKey::random(&mut rng);
+    let blocks_to_produce = 10;
+
+    let mut config = config_with_fee();
+    config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
+    config.da_compression = DaCompressionMode::Disabled;
+    config.combined_db_config.state_rewind_policy = StateRewindPolicy::NoRewind;
+    let srv = FuelService::from_combined_database(db.clone(), config)
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let current_height = client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, blocks_to_produce.into());
+
+    let mut config = srv.shared.config.clone();
+
+    // when: the node is restarted with compression enabled, starting height overriden, blocks are produced
+    let override_starting_height = 10;
+    config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
+        retention_duration: Duration::from_secs(3600),
+        override_starting_height: Some(
+            NonZeroU32::new(override_starting_height).unwrap(),
+        ),
+        metrics: false,
+    });
+    let srv = FuelService::from_combined_database(db, config)
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let current_height = client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, BlockHeight::from(blocks_to_produce * 2));
+
+    srv.await_compression_synced_until(&current_height)
+        .await
+        .unwrap();
+
+    // then: the da compressed blocks from height 1 to height override_starting_height
+    // and the da compressed blocks from height override_starting_height to height blocks_to_produce * 2 exist
+    for height in 0..override_starting_height {
+        let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
+        assert!(compressed_block.is_none());
+    }
+
+    for height in override_starting_height..=blocks_to_produce * 2 {
         let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
         assert!(compressed_block.is_some());
     }
