@@ -223,12 +223,12 @@ where
 {
     async fn sync_previously_produced_blocks(&mut self) -> crate::Result<()> {
         let canonical_height = self.canonical_height.get();
-        let mut overriden = false;
+        let mut overridden = false;
         loop {
-            let storage_height = match (self.config.override_starting_height(), overriden)
+            let storage_height = match (self.config.override_starting_height(), overridden)
             {
                 (Some(height), false) => {
-                    overriden = true;
+                    overridden = true;
                     Some(height.saturating_sub(1))
                 }
                 (_, _) => self.storage.latest_height(),
@@ -687,7 +687,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn compression_service__syncs_from_overriden_starting_height_when_provided() {
+    async fn compression_service__syncs_from_overridden_starting_height_when_provided() {
         // given: we start the compression service, with a canonical height provider of height 5,
         // and a config override of starting height 1
         let block_count = 10;

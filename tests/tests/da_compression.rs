@@ -271,7 +271,7 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
 }
 
 #[tokio::test]
-async fn da_compression__starts_and_compresses_blocks_correctly_with_overriden_height() {
+async fn da_compression__starts_and_compresses_blocks_correctly_with_overridden_height() {
     // given: the node starts without compression enabled, and produces blocks
     let db = CombinedDatabase::temp_database_with_state_rewind_policy(
         StateRewindPolicy::RewindFullRange,
@@ -299,7 +299,7 @@ async fn da_compression__starts_and_compresses_blocks_correctly_with_overriden_h
 
     let mut config = srv.shared.config.clone();
 
-    // when: the node is restarted with compression enabled, starting height overriden, blocks are produced
+    // when: the node is restarted with compression enabled, starting height overridden, blocks are produced
     let override_starting_height = 10;
     config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
