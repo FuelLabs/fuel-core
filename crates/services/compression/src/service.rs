@@ -221,9 +221,18 @@ where
     S: CompressionStorage + LatestHeight,
     CH: CanonicalHeight,
 {
-    async fn sync_previously_produced_blocks(&mut self) -> crate::Result<()> {
+    async fn sync_previously_produced_blocks(
+        &mut self,
+        state_watcher: &StateWatcher,
+    ) -> crate::Result<()> {
         let mut overridden = false;
         loop {
+            // allows early exit if the service is stopping
+            let state = state_watcher.borrow();
+            if state.stopping() || state.stopped() {
+                break;
+            }
+
             let canonical_height = self.canonical_height.get();
 
             let storage_height =
@@ -328,10 +337,10 @@ where
 
     async fn into_task(
         mut self,
-        _state_watcher: &StateWatcher,
+        state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        self.sync_previously_produced_blocks().await?;
+        self.sync_previously_produced_blocks(state_watcher).await?;
 
         let compression_service = CompressionService::new(
             self.block_source.subscribe(),
