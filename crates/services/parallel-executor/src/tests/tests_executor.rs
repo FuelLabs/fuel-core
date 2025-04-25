@@ -1,7 +1,11 @@
 #![allow(non_snake_case)]
 
 use fuel_core_storage::{
-    column::Column, structured_storage::test::InMemoryStorage, tables::ConsensusParametersVersions, transactional::WriteTransaction, StorageAsMut
+    StorageAsMut,
+    column::Column,
+    structured_storage::test::InMemoryStorage,
+    tables::ConsensusParametersVersions,
+    transactional::WriteTransaction,
 };
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
