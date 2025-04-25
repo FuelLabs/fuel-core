@@ -113,10 +113,10 @@ impl Consumer {
         txs: &[&Transaction],
         filtered: TransactionFiltered,
     ) -> &Self {
-        let txs = into_checked_txs(&txs);
+        let txs = into_checked_txs(txs);
 
         self.response_sender.send((txs, filtered)).unwrap();
-        &self
+        self
     }
 }
 
