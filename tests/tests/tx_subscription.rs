@@ -1,9 +1,11 @@
+#![allow(clippy::arithmetic_side_effects)]
 use fuel_core::p2p_test_helpers::{
-    BootstrapSetup, Nodes, ProducerSetup, ValidatorSetup, make_nodes,
+    BootstrapSetup, Nodes, ProducerSetup, ValidatorSetup, make_nodes, CustomizeConfig,
 };
-use fuel_core_client::client::FuelClient;
+use fuel_core_client::client::{FuelClient, types::{TransactionStatus, primitives::ChainId}, pagination::{PaginationRequest, PageDirection}};
 use fuel_core_types::{fuel_tx::*, fuel_vm::*};
-use futures::StreamExt;
+use fuel_core::chain_config::{CoinConfig, StateConfig, coin_config_helpers::CoinConfigGenerator};
+use fuel_core::service::Config;
 use rand::{SeedableRng, rngs::StdRng};
 use std::{
     collections::hash_map::DefaultHasher,
@@ -16,98 +18,193 @@ use std::{
 async fn test_tx_gossiping_enabled_by_default() {
     // Create a random seed based on the test parameters.
     let mut hasher = DefaultHasher::new();
-    let num_txs = 1;
     let num_validators = 1;
-    (num_txs, num_validators, line!()).hash(&mut hasher);
+    (num_validators, line!()).hash(&mut hasher);
     let mut rng = StdRng::seed_from_u64(hasher.finish());
 
-    // Create a set of key pairs.
-    let secrets: Vec<_> = (0..1).map(|_| SecretKey::random(&mut rng)).collect();
-    let pub_keys: Vec<_> = secrets
-        .clone()
-        .into_iter()
-        .map(|secret| Input::owner(&secret.public_key()))
-        .collect();
+    // Create key pairs.
+    let producer_secret = SecretKey::random(&mut rng);
+    let producer_pub_key = Input::owner(&producer_secret.public_key());
+    let producer_address = Address::from(producer_pub_key);
+    let validator_secret = SecretKey::random(&mut rng);
+    let validator_pub_key = Input::owner(&validator_secret.public_key());
 
-    // Create producer and validator with default configuration (subscribe_to_transactions=true)
+    // Manually configure genesis coins for the producer
+    let mut coin_generator = CoinConfigGenerator::new();
+    let producer_genesis_coin = CoinConfig {
+        owner: producer_address,
+        amount: 2_000_000, // Give enough for funding + fees
+        asset_id: AssetId::BASE,
+        ..coin_generator.generate()
+    };
+    let state_config = StateConfig { coins: vec![producer_genesis_coin], ..Default::default() };
+    let mut config = Config::local_node();
+    config.snapshot_reader = config.snapshot_reader.clone().with_state_config(state_config);
+
+    // Create producer and validator
     let Nodes {
         producers,
         validators,
         bootstrap_nodes: _dont_drop,
     } = make_nodes(
-        pub_keys
-            .iter()
-            .map(|pub_key| Some(BootstrapSetup::new(*pub_key))),
-        secrets.clone().into_iter().enumerate().map(|(i, secret)| {
-            Some(
-                ProducerSetup::new(secret)
-                    .with_txs(num_txs)
-                    .with_name(format!("{}:producer", pub_keys[i])),
-            )
-        }),
-        pub_keys.iter().flat_map(|pub_key| {
-            (0..num_validators).map(move |i| {
-                Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
-            })
-        }),
-        None,
+        vec![
+            Some(BootstrapSetup::new(producer_pub_key)),
+            Some(BootstrapSetup::new(validator_pub_key)),
+        ],
+        vec![Some(
+            ProducerSetup::new(producer_secret.clone())
+                .with_txs(0) // Genesis coin provided manually via config
+                .with_name(format!("{}:producer", producer_pub_key)),
+        )],
+        vec![Some(
+            ValidatorSetup::new(producer_pub_key) // Sync from producer
+                .with_name(format!("{}:validator", validator_pub_key)),
+        )],
+        Some(config), // Pass the modified config
     )
     .await;
 
-    // Verify the configuration was applied correctly
-    if let Some(p2p) = &producers[0].node.shared.config.p2p {
-        eprintln!(
-            "Default Producer subscribe_to_transactions: {}",
-            p2p.subscribe_to_transactions
-        );
-        assert!(
-            p2p.subscribe_to_transactions,
-            "Producer should have subscribe_to_transactions=true by default"
-        );
-    }
-    if let Some(p2p) = &validators[0].node.shared.config.p2p {
-        eprintln!(
-            "Default Validator subscribe_to_transactions: {}",
-            p2p.subscribe_to_transactions
-        );
-        assert!(
-            p2p.subscribe_to_transactions,
-            "Validator should have subscribe_to_transactions=true by default"
-        );
-    }
-
     let client_one = FuelClient::from(producers[0].node.bound_address);
     let client_two = FuelClient::from(validators[0].node.bound_address);
+    let validator_address = Address::from(validator_pub_key);
 
-    let (tx_id, _) = producers[0]
-        .insert_txs()
+    // Add a small delay to allow node state to initialize
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // --- Setup: Fund the validator node using producer's genesis coin ---
+    println!("Funding validator {} from producer {}", validator_address, producer_address);
+    let producer_coins = client_one
+        .coins(&producer_address, None, PaginationRequest {
+            cursor: None,
+            results: 10,
+            direction: PageDirection::Forward,
+        })
         .await
-        .into_iter()
-        .next()
-        .expect("Producer is initialized with one transaction");
+        .unwrap();
+    assert!(!producer_coins.results.is_empty(), "Producer has no genesis coins");
+    let producer_coin = producer_coins.results[0].clone();
+    println!("Producer coin to use for funding: {:?}", producer_coin);
 
-    // Wait for the transaction to be committed on the producer node
-    let _ = client_one.await_transaction_commit(&tx_id).await.unwrap();
+    let amount_to_fund: u64 = 1_000_000;
+    let mut funding_builder = TransactionBuilder::script(vec![], vec![]);
+    funding_builder
+        .script_gas_limit(10_000)
+        .add_unsigned_coin_input(
+            producer_secret.clone(), // Use the correct producer secret
+            producer_coin.utxo_id,
+            producer_coin.amount,
+            producer_coin.asset_id,
+            TxPointer::new(producer_coin.block_created.into(), producer_coin.tx_created_idx),
+        )
+        .add_output(Output::coin(validator_address, amount_to_fund, AssetId::BASE))
+        .add_output(Output::change(producer_address, 0, AssetId::BASE));
 
-    // Give some time for the transaction to be gossiped
-    tokio::time::sleep(Duration::from_secs(2)).await;
+    let funding_tx = funding_builder.finalize_as_transaction();
+    let funding_tx_id = funding_tx.id(&ChainId::default());
+    println!("Submitting funding tx {}", funding_tx_id);
+    let funding_status = client_one.submit_and_await_commit(&funding_tx).await.expect("Producer failed to submit funding tx");
+    let funding_commit_height = match funding_status {
+        TransactionStatus::Success { block_height, .. } => block_height,
+        _ => panic!("Funding transaction failed to commit successfully"),
+    };
+    println!("Funding tx {} committed at height {}", funding_tx_id, funding_commit_height);
 
-    // Try to subscribe to the transaction on the validator node, this should work since gossip is enabled by default
-    let mut client_two_subscription = client_two
-        .subscribe_transaction_status(&tx_id)
+    // Wait for validator node to sync past the funding commit height
+    println!("Waiting for validator to sync past height {}", funding_commit_height);
+    let wait_timeout = Duration::from_secs(15);
+    let poll_interval = Duration::from_millis(500);
+    let mut waited = Duration::ZERO;
+    loop {
+        let validator_info = client_two.chain_info().await.expect("Failed to get validator chain info");
+        let validator_height = validator_info.latest_block.header.height;
+        println!("Validator current height: {}", validator_height);
+        if validator_height >= *funding_commit_height {
+            println!("Validator synced.");
+            break;
+        }
+        if waited >= wait_timeout {
+            panic!("Timeout waiting for validator to sync past height {}", funding_commit_height);
+        }
+        tokio::time::sleep(poll_interval).await;
+        waited += poll_interval;
+    }
+
+    // --- Test Logic ---
+    println!("Starting main test logic: Validator submits tx");
+    // Fetch the specific coin UTXO received by the validator from the funding tx
+    let validator_coins = client_two
+        .coins(&validator_address, None, PaginationRequest {
+            cursor: None,
+            results: 10,
+            direction: PageDirection::Forward,
+        })
         .await
-        .expect("Should be able to subscribe for events");
+        .unwrap();
+    assert!(!validator_coins.results.is_empty(), "Validator has no coins after funding delay");
+    let input_coin = validator_coins.results[0].clone(); // Use the first available coin
 
-    // The transaction should be available on the validator node
-    tokio::time::timeout(Duration::from_secs(10), client_two_subscription.next())
-        .await
-        .expect("Should await transaction notification in time");
+    println!("Validator coin to spend: {:?}", input_coin);
+    // We can't easily assert the amount if we just take the first coin,
+    // but we know it should be spendable.
 
-    let response = client_two.transaction(&tx_id).await.unwrap();
+    let outputs = vec![Output::change(
+        producer_address, // Send change back to producer
+        0,
+        AssetId::BASE,
+    )];
+
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder
+        .script_gas_limit(10_000)
+        .add_unsigned_coin_input(
+            validator_secret, // Validator's secret
+            input_coin.utxo_id,
+            input_coin.amount,
+            input_coin.asset_id,
+            TxPointer::new(input_coin.block_created.into(), input_coin.tx_created_idx),
+        );
+    for output in outputs {
+        builder.add_output(output);
+    }
+    let tx = builder.finalize_as_transaction();
+    let tx_id = tx.id(&ChainId::default());
+
+    println!("Validator submitting main tx {}", tx_id);
+    let submission_result = client_two.submit_and_await_commit(&tx).await;
+    assert!(
+        submission_result.is_ok(),
+        "Transaction submission to validator failed: {:?}",
+        submission_result.err()
+    );
+    println!("Validator main tx {} committed", tx_id);
+
+    println!("Checking tx status on producer");
+    // Give some time for gossip and block production by producer
+    tokio::time::sleep(Duration::from_secs(4)).await; // Increased sleep
+
+    let tx_status_on_producer = client_one.transaction_status(&tx_id).await;
+    println!("Producer status for tx {}: {:?}", tx_id, tx_status_on_producer);
+    assert!(
+        tx_status_on_producer.is_ok(),
+        "Failed to query transaction status on producer"
+    );
+    match tx_status_on_producer.unwrap() {
+        TransactionStatus::Success { .. } => {}
+        other => {
+            panic!(
+                "Transaction should have succeeded on producer, but got: {:?}",
+                other
+            );
+        }
+    }
+
+    println!("Checking tx object on producer");
+    let response = client_one.transaction(&tx_id).await.unwrap();
     assert!(
         response.is_some(),
-        "Transaction should have been gossiped to validator"
+        "Transaction should be available on the producer node after being gossiped"
     );
+    println!("Test test_tx_gossiping_enabled_by_default finished successfully");
 }
 
 /// Test to verify that when subscribe-to-transactions flag is used,
@@ -116,9 +213,8 @@ async fn test_tx_gossiping_enabled_by_default() {
 async fn test_tx_gossiping_can_be_disabled() {
     // Create a random seed based on the test parameters.
     let mut hasher = DefaultHasher::new();
-    let num_txs = 1;
     let num_validators = 1;
-    (num_txs, num_validators, line!()).hash(&mut hasher);
+    (num_validators, line!()).hash(&mut hasher);
     let mut rng = StdRng::seed_from_u64(hasher.finish());
 
     // Create a set of key pairs.
@@ -129,79 +225,228 @@ async fn test_tx_gossiping_can_be_disabled() {
         .map(|secret| Input::owner(&secret.public_key()))
         .collect();
 
-    // Create regular nodes first
+    // Get producer/validator details
+    let producer_secret = secrets[0].clone();
+    let producer_pub_key = pub_keys[0];
+    let producer_address = Address::from(producer_pub_key);
+    let validator_pub_key = pub_keys[0];
+    let validator_address = Address::from(validator_pub_key);
+
+    // Configure nodes with gossip DISABLED from the start
+    let overrides = CustomizeConfig::no_overrides().subscribe_to_transactions(false);
+
+    // Manually configure genesis coins for the producer
+    let mut coin_generator = CoinConfigGenerator::new();
+    let producer_genesis_coin = CoinConfig {
+        owner: producer_address,
+        amount: 2_000_000, // Give enough for funding + fees
+        asset_id: AssetId::BASE,
+        ..coin_generator.generate()
+    };
+    let state_config = StateConfig { coins: vec![producer_genesis_coin], ..Default::default() };
+    let mut config = Config::local_node();
+    config.snapshot_reader = config.snapshot_reader.clone().with_state_config(state_config);
+
+    // Build setups separately to avoid closure capture issues
+    let producer_setups: Vec<_> = secrets.clone().into_iter().enumerate().map(|(i, secret)| {
+        let mut setup = ProducerSetup::new(secret.clone())
+            .with_txs(0) // Manual genesis coin
+            .with_name(format!("{}:producer", pub_keys[i]));
+        setup.config_overrides = overrides.clone();
+        Some(setup)
+    }).collect();
+
+    let validator_setups: Vec<_> = (0..num_validators).map(|i| {
+        let mut setup = ValidatorSetup::new(producer_pub_key)
+            .with_name(format!("{producer_pub_key}:{i}"));
+        setup.config_overrides = overrides.clone();
+        Some(setup)
+    }).collect();
+
+    // Create nodes with gossip disabled
     let Nodes {
-        mut producers,
-        mut validators,
+        producers,
+        validators,
         bootstrap_nodes: _dont_drop,
     } = make_nodes(
-        pub_keys
-            .iter()
-            .map(|pub_key| Some(BootstrapSetup::new(*pub_key))),
-        secrets.clone().into_iter().enumerate().map(|(i, secret)| {
-            Some(
-                ProducerSetup::new(secret)
-                    .with_txs(num_txs)
-                    .with_name(format!("{}:producer", pub_keys[i])),
-            )
-        }),
-        pub_keys.iter().flat_map(|pub_key| {
-            (0..num_validators).map(move |i| {
-                Some(ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:{i}")))
-            })
-        }),
-        None,
+        pub_keys.iter().map(|pk| Some(BootstrapSetup::new(*pk))),
+        producer_setups,
+        validator_setups,
+        Some(config), // Pass the modified config
     )
     .await;
 
-    // Shutdown the nodes
-    producers[0].shutdown().await;
-    validators[0].shutdown().await;
-
-    // Modify the P2P configuration to disable transaction subscription
-    if let Some(p2p) = &mut producers[0].config.p2p {
-        p2p.subscribe_to_transactions = false;
-        eprintln!(
-            "Producer subscribe_to_transactions set to: {}",
-            p2p.subscribe_to_transactions
-        );
-    }
-    if let Some(p2p) = &mut validators[0].config.p2p {
-        p2p.subscribe_to_transactions = false;
-        eprintln!(
-            "Validator subscribe_to_transactions set to: {}",
-            p2p.subscribe_to_transactions
-        );
-    }
-
-    // Restart the nodes with the modified configuration
-    producers[0].start().await;
-    validators[0].start().await;
-
     // Verify the configuration was applied correctly
     if let Some(p2p) = &producers[0].node.shared.config.p2p {
-        eprintln!(
-            "Producer subscribe_to_transactions after restart: {}",
-            p2p.subscribe_to_transactions
-        );
         assert!(
             !p2p.subscribe_to_transactions,
-            "Producer should have subscribe_to_transactions=false after config change"
+            "Producer should have subscribe_to_transactions=false"
         );
     }
     if let Some(p2p) = &validators[0].node.shared.config.p2p {
-        eprintln!(
-            "Validator subscribe_to_transactions after restart: {}",
-            p2p.subscribe_to_transactions
-        );
         assert!(
             !p2p.subscribe_to_transactions,
-            "Validator should have subscribe_to_transactions=false after config change"
+            "Validator should have subscribe_to_transactions=false"
         );
     }
 
-    // We've verified that we can set the flag to false, which was the intent of the PR
-    // The test is now complete
+    let client_one = FuelClient::from(producers[0].node.bound_address);
+    let client_two = FuelClient::from(validators[0].node.bound_address);
+
+    // Add a small delay to allow node state to initialize
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // --- Setup: Fund the validator node ---
+    println!(
+        "Funding validator {} from producer {} (gossip disabled test)",
+        validator_address,
+        producer_address
+    );
+
+    // Fetch producer's genesis coin (manually configured)
+    let producer_coins = client_one
+        .coins(&producer_address, None, PaginationRequest {
+            cursor: None,
+            results: 10,
+            direction: PageDirection::Forward,
+        })
+        .await
+        .unwrap();
+    assert!(
+        !producer_coins.results.is_empty(),
+        "Producer has no manual genesis coins (gossip disabled test)"
+    );
+    let producer_coin = producer_coins.results[0].clone();
+    println!("Producer coin to use for funding: {:?}", producer_coin);
+
+    let amount_to_fund: u64 = 1_000_000;
+    let mut funding_builder = TransactionBuilder::script(vec![], vec![]);
+    funding_builder
+        .script_gas_limit(10_000)
+        .add_unsigned_coin_input(
+            producer_secret,
+            producer_coin.utxo_id,
+            producer_coin.amount,
+            producer_coin.asset_id,
+            TxPointer::new(producer_coin.block_created.into(), producer_coin.tx_created_idx),
+        )
+        .add_output(Output::coin(validator_address, amount_to_fund, AssetId::BASE))
+        .add_output(Output::change(producer_address, 0, AssetId::BASE));
+
+    let funding_tx = funding_builder.finalize_as_transaction();
+    let funding_tx_id = funding_tx.id(&ChainId::default());
+    println!("Submitting funding tx {} (gossip disabled test)", funding_tx_id);
+    let funding_status = client_one
+         .submit_and_await_commit(&funding_tx)
+         .await
+         .expect("Producer failed to submit funding tx (gossip disabled test)");
+    let funding_commit_height = match funding_status {
+        TransactionStatus::Success { block_height, .. } => block_height,
+        _ => panic!("Funding transaction failed to commit successfully (gossip disabled test)"),
+    };
+    println!("Funding tx {} committed at height {}", funding_tx_id, funding_commit_height);
+
+    // Wait for validator node to sync past the funding commit height
+    println!("Waiting for validator to sync past height {}", funding_commit_height);
+    let wait_timeout = Duration::from_secs(15);
+    let poll_interval = Duration::from_millis(500);
+    let mut waited = Duration::ZERO;
+    loop {
+        let validator_info = client_two.chain_info().await.expect("Failed to get validator chain info");
+        let validator_height = validator_info.latest_block.header.height;
+        if validator_height >= *funding_commit_height {
+            println!("Validator synced.");
+            break;
+        }
+        if waited >= wait_timeout {
+            panic!("Timeout waiting for validator to sync past height {}", funding_commit_height);
+        }
+        tokio::time::sleep(poll_interval).await;
+        waited += poll_interval;
+    }
+
+    // --- Test Logic: Validator submits tx, should NOT be gossiped ---
+    println!("Starting main test logic: Validator submits tx (gossip disabled)");
+    // Fetch any available coin for the validator (should include the funded one)
+    let validator_coins = client_two
+        .coins(&validator_address, None, PaginationRequest {
+            cursor: None,
+            results: 10,
+            direction: PageDirection::Forward,
+        })
+        .await
+        .unwrap();
+    assert!(!validator_coins.results.is_empty(), "Validator has no coins after funding delay (disabled test)");
+    let input_coin = validator_coins.results[0].clone();
+    println!("Validator coin to spend: {:?}", input_coin);
+
+    let outputs = vec![Output::change(producer_address, 0, AssetId::BASE)];
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder
+        .script_gas_limit(10_000)
+        .add_unsigned_coin_input(
+            producer_secret,
+            input_coin.utxo_id,
+            input_coin.amount,
+            input_coin.asset_id,
+            TxPointer::new(input_coin.block_created.into(), input_coin.tx_created_idx),
+        );
+    for output in outputs {
+        builder.add_output(output);
+    }
+    let tx = builder.finalize_as_transaction();
+    let tx_id = tx.id(&ChainId::default());
+
+    println!("Validator submitting main tx {} (gossip disabled)", tx_id);
+    // Submit the transaction via the validator node (client_two)
+    // Use submit, not submit_and_await_commit
+    let submission_result = client_two.submit(&tx).await;
+    assert!(
+        submission_result.is_ok(),
+        "Transaction submission to validator failed: {:?}",
+        submission_result.err()
+    );
+    println!("Validator main tx {} submitted (gossip disabled)", tx_id);
+
+    // Verify the transaction was NOT included by the producer node (client_one)
+    println!("Checking tx status on producer (gossip disabled)");
+    // Give some time for potential (but disabled) gossip and block production
+    tokio::time::sleep(Duration::from_secs(4)).await;
+
+    let tx_status_on_producer = client_one.transaction_status(&tx_id).await;
+    println!("Producer status for tx {}: {:?}", tx_id, tx_status_on_producer);
+
+    match tx_status_on_producer {
+        Ok(TransactionStatus::Submitted { .. }) => {
+            println!("Transaction status on producer is Submitted, as expected.");
+        }
+        Ok(TransactionStatus::Success { .. }) => {
+            panic!("Transaction status on producer is Success, but gossip was disabled!");
+        }
+        Ok(TransactionStatus::Failure { .. }) => {
+            panic!("Transaction status on producer is Failure, but gossip was disabled!");
+        }
+        Ok(other) => {
+            println!(
+                "Transaction status on producer is {:?}. This might be okay if not Success/Failure.",
+                other
+            );
+        }
+        Err(e) => {
+            println!(
+                "Transaction not found on producer (Error: {}), as expected.",
+                e
+            );
+        }
+    }
+
+    println!("Checking tx object on producer (gossip disabled)");
+    let response = client_one.transaction(&tx_id).await.unwrap();
+    assert!(
+        response.is_none(),
+        "Transaction should NOT be available on the producer node when gossip is disabled"
+    );
+    println!("Test test_tx_gossiping_can_be_disabled finished successfully");
 }
 
 /// Test to verify that the subscribe_to_transactions flag is properly applied
@@ -280,19 +525,15 @@ async fn test_tx_subscription_flag_is_applied() {
             .iter()
             .map(|pub_key| Some(BootstrapSetup::new(*pub_key))),
         secrets.clone().into_iter().enumerate().map(|(i, secret)| {
-            let setup = ProducerSetup::new(secret)
+            let mut setup = ProducerSetup::new(secret.clone())
                 .with_txs(num_txs)
                 .with_name(format!("{}:producer-disabled", pub_keys[i]));
-            // Disable transaction subscription for producer
-            Some(ProducerSetup {
-                config_overrides: setup.config_overrides.subscribe_to_transactions(false),
-                ..setup
-            })
+            setup.config_overrides = setup.config_overrides.subscribe_to_transactions(false);
+            Some(setup)
         }),
         pub_keys.iter().flat_map(|pub_key| {
             (0..num_validators).map(move |i| {
                 let mut setup = ValidatorSetup::new(*pub_key).with_name(format!("{pub_key}:validator-disabled:{i}"));
-                // Disable transaction subscription for validator
                 setup.config_overrides = setup.config_overrides.subscribe_to_transactions(false);
                 Some(setup)
             })
