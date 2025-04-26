@@ -60,7 +60,7 @@ The resulting key pair printed to the console contains an address and secret. Th
 
 The `--network` argument identifies the name of the network to join. The network name is used during peer discovery. For example, users can specify `--network beta-4` to join the Beta 4 network. Similarly, setting the environment variable `NETWORK="beta-4"` will produce the same result.
 
-For more information about client networking, see the Fuel guide on [running a node](https://docs-hub.vercel.app/guides/running-a-node/).
+For more information about client networking, see the Fuel guide on [running a node](https://docs-hub.vercel.app/docs/node-operator/#running-a-node/).
 
 ## Common Issues
 
