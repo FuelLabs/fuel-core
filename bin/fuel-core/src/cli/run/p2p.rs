@@ -237,6 +237,7 @@ impl KeypairArg {
             return Ok(KeypairArg::InlineSecret(secret))
         }
         let path = PathBuf::from_str(s);
+        #[allow(irrefutable_let_patterns)]
         if let Ok(pathbuf) = path {
             if pathbuf.exists() {
                 return Ok(KeypairArg::Path(pathbuf))
