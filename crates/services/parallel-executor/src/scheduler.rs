@@ -84,6 +84,8 @@ pub enum WorkerStatus {
     Merging,
 }
 
+type SkippedTransactions = Vec<MaybeCheckedTransaction>;
+
 // Shutdown the tokio runtime to avoid panic if executor is already
 //   used from another tokio runtime
 impl<TxSource> Drop for Scheduler<TxSource> {
@@ -169,7 +171,12 @@ where
                 let worker_id = i;
                 async move {
                     // TODO: Execute the batch of transactions
-                    (worker_id, Changes::default(), coins_used)
+                    (
+                        worker_id,
+                        Changes::default(),
+                        coins_used,
+                        SkippedTransactions::default(),
+                    )
                 }
             }));
             state.executing_contracts.extend(contracts_used);
@@ -185,7 +192,14 @@ where
                 }
                 result = futures.next() => {
                     match result {
-                        Some(Ok((worker_id, changes, _))) => {
+                        Some(Ok((worker_id, changes, _, skipped_tx))) => {
+                            if !skipped_tx.is_empty() {
+                                // TODO: Handle the skipped transactions
+                                // Wait for all the workers to finish gather all theirs transactions
+                                // re-execute them in one worker without skipped one.
+                                // Tell the TransactionSource that this transaction is skipped
+                                // to avoid sending new transactions that depend on it
+                            }
                             // Update the state of the worker
                             self.workers_state[worker_id].status = WorkerStatus::Idle;
                             self.workers_state[worker_id].executing_contracts.clear();
@@ -231,7 +245,7 @@ where
                                 let worker_id = worker_id;
                                 async move {
                                     // TODO: Execute the batch of transactions
-                                    (worker_id, Changes::default(), coins_used)
+                                    (worker_id, Changes::default(), coins_used, SkippedTransactions::default())
                                 }
                             }));
                             self.workers_state[worker_id].executing_contracts = contracts_used;
@@ -256,7 +270,7 @@ where
         // We need to merge the states of all the workers
         for future in futures {
             match future.await {
-                Ok((_, changes, _)) => {
+                Ok((_, changes, _, _)) => {
                     // TODO: Be careful ordering
                     storage_changes.push(changes);
                 }
