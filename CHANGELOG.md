@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.43.2]
+
+### Fixed
+
+- [2978](https://github.com/FuelLabs/fuel-core/pull/2978): Add method to override starting syncing height for compression service if starting from scratch.
+
 ## [Version 0.43.1]
+
+### Fixed
 
 - [2964](https://github.com/FuelLabs/fuel-core/pull/2964): Ensure that vm heap memory is zeroed out on rellocation after `reset`. Adds support for `GM::GetGasPrice` Bumps `fuel-vm` to `0.60.2`.
 
