@@ -215,6 +215,29 @@ where
     }
 }
 
+#[derive(Debug)]
+enum SyncHeight {
+    StorageHeight(u32),
+    ConfiguredHeight(u32),
+    Genesis,
+}
+
+impl SyncHeight {
+    #[inline]
+    const fn value(&self) -> u32 {
+        match self {
+            SyncHeight::StorageHeight(height) => *height,
+            SyncHeight::ConfiguredHeight(height) => *height,
+            SyncHeight::Genesis => 0,
+        }
+    }
+
+    #[inline]
+    const fn is_from_storage(&self) -> bool {
+        matches!(self, SyncHeight::StorageHeight(_))
+    }
+}
+
 impl<B, S, CH> UninitializedCompressionService<B, S, CH>
 where
     B: BlockSource,
@@ -225,55 +248,53 @@ where
         &mut self,
         state_watcher: &StateWatcher,
     ) -> crate::Result<()> {
-        let mut overridden = false;
         loop {
             // allows early exit if the service is stopping
             let state = state_watcher.borrow();
-            if state.stopping() || state.stopped() {
+            if !state.starting() {
                 break;
             }
 
-            let canonical_height = self.canonical_height.get();
+            let canonical_height = match self.canonical_height.get() {
+                Some(height) => height,
+                None => {
+                    // fuel-core started for first time,
+                    // no need to backfill blocks
+                    break;
+                }
+            };
 
-            let storage_height =
-                match (self.config.override_starting_height(), overridden) {
-                    (Some(height), false) => {
-                        overridden = true;
-                        Some(height.saturating_sub(1))
-                    }
-                    (_, _) => self.storage.latest_height(),
+            let maybe_height =
+                match (self.storage.latest_height(), self.config.starting_height()) {
+                    (Some(height), _) => SyncHeight::StorageHeight(height),
+                    (None, Some(height)) => SyncHeight::ConfiguredHeight(height),
+                    (None, None) => SyncHeight::Genesis,
                 };
 
-            if storage_height.is_none() {
-                // if the storage height is unavailable, don't execute blocks from genesis
-                tracing::info!("Compression database started from scratch");
-                break;
-            }
-
-            if canonical_height < storage_height {
-                tracing::error!("Canonical height is less than storage height: Canonical height: {:?}, Storage height: {:?}", &canonical_height, &storage_height);
+            if canonical_height < maybe_height.value() {
+                tracing::error!("Canonical height is less than fetched height: Canonical height: {:?}, Fetched height: {:?}", &canonical_height, &maybe_height);
                 return Err(crate::errors::CompressionError::FailedToGetSyncStatus);
             }
 
-            if canonical_height == storage_height {
+            if canonical_height == maybe_height.value() && maybe_height.is_from_storage()
+            {
                 tracing::info!("Compression database is up to date");
                 break;
             }
 
-            let next_block_height = storage_height.map(|height| height.saturating_add(1));
-
-            let next_block_height = match next_block_height {
-                Some(block_height) => BlockAt::Specific(block_height),
-                None => BlockAt::Genesis,
+            let height_to_sync = match maybe_height {
+                SyncHeight::Genesis => BlockAt::Genesis,
+                SyncHeight::StorageHeight(height) => {
+                    BlockAt::Specific(height.saturating_add(1))
+                }
+                SyncHeight::ConfiguredHeight(height) => BlockAt::Specific(height),
             };
 
-            let block_with_metadata = self
-                .block_source
-                .get_block(next_block_height)
-                .map_err(|err| {
+            let block_with_metadata =
+                self.block_source.get_block(height_to_sync).map_err(|err| {
                     crate::errors::CompressionError::FailedToGetBlock(format!(
                         "during synchronization of canonical chain at height: {:?}: {}",
-                        next_block_height, err
+                        height_to_sync, err
                     ))
                 })?;
 
@@ -682,17 +703,17 @@ mod tests {
 
         // when: the syncing with canonical height provider occurs
         let service = uninit_service
-            .into_task(&Default::default(), ())
+            .into_task(&StateWatcher::starting(), ())
             .await
             .unwrap();
 
-        // then: it does not have a compressed block for the canonical height
+        // then: it has a compressed block for the canonical height
         let maybe_block = service
             .storage
             .storage_as_ref::<storage::CompressedBlocks>()
             .get(&canonical_height_provider.get().unwrap().into())
             .unwrap();
-        assert!(maybe_block.is_none());
+        assert!(maybe_block.is_some());
         service.shutdown().await.unwrap();
     }
 
@@ -725,7 +746,7 @@ mod tests {
 
         // when: the syncing with canonical height provider occurs
         let service = uninit_service
-            .into_task(&Default::default(), ())
+            .into_task(&StateWatcher::starting(), ())
             .await
             .unwrap();
 

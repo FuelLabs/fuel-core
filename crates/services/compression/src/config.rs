@@ -7,7 +7,7 @@ use std::{
 #[derive(Debug, Clone, Copy)]
 pub struct CompressionConfig {
     temporal_registry_retention: Duration,
-    override_starting_height: Option<NonZeroU32>,
+    starting_height: Option<NonZeroU32>,
     metrics: bool,
 }
 
@@ -15,12 +15,12 @@ impl CompressionConfig {
     /// Create a new compression configuration
     pub fn new(
         temporal_registry_retention: Duration,
-        override_starting_height: Option<NonZeroU32>,
+        starting_height: Option<NonZeroU32>,
         metrics: bool,
     ) -> Self {
         Self {
             temporal_registry_retention,
-            override_starting_height,
+            starting_height,
             metrics,
         }
     }
@@ -36,8 +36,8 @@ impl CompressionConfig {
     }
 
     /// Get the override starting height
-    pub fn override_starting_height(&self) -> Option<u32> {
-        self.override_starting_height.map(|height| height.get())
+    pub fn starting_height(&self) -> Option<u32> {
+        self.starting_height.map(|height| height.get())
     }
 }
 

@@ -363,7 +363,7 @@ impl GasPriceConfig {
 pub struct DaCompressionConfig {
     pub retention_duration: Duration,
     pub metrics: bool,
-    pub override_starting_height: Option<NonZeroU32>,
+    pub starting_height: Option<NonZeroU32>,
 }
 
 #[derive(Debug, Clone)]

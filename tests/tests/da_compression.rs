@@ -72,7 +72,7 @@ async fn can_fetch_da_compressed_block_from_graphql() {
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
     let compression_config = DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
-        override_starting_height: None,
+        starting_height: None,
         metrics: false,
     };
     config.da_compression = DaCompressionMode::Enabled(compression_config.clone());
@@ -165,7 +165,7 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     let mut config = Config::local_node();
     config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
-        override_starting_height: None,
+        starting_height: None,
         metrics: false,
     });
 
@@ -211,7 +211,7 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
 async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_database() {
     // given: the node starts without compression enabled, and produces blocks
     let db = CombinedDatabase::temp_database_with_state_rewind_policy(
-        StateRewindPolicy::NoRewind,
+        StateRewindPolicy::RewindFullRange,
         DatabaseConfig::config_for_tests(),
     )
     .unwrap();
@@ -239,7 +239,7 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
     // when: the node is restarted with compression enabled, and blocks are produced
     config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
-        override_starting_height: None,
+        starting_height: None,
         metrics: false,
     });
     let srv = FuelService::from_combined_database(db, config)
@@ -257,16 +257,14 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
         .await
         .unwrap();
 
-    // then: the da compressed blocks from height 1 to height blocks_to_produce don't exist
-    // and the da compressed blocks from height blocks_to_produce + 1 to height blocks_to_produce * 2 exist
+    // then: the da compressed blocks from genesis to height blocks_to_produce exist
     for height in 0..=blocks_to_produce {
         let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
-        assert!(compressed_block.is_none());
-    }
-
-    for height in blocks_to_produce + 1..=blocks_to_produce * 2 {
-        let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
-        assert!(compressed_block.is_some());
+        assert!(
+            compressed_block.is_some(),
+            "DA compressed block at height {} is missing",
+            height
+        );
     }
 }
 
@@ -303,9 +301,7 @@ async fn da_compression__starts_and_compresses_blocks_correctly_with_overridden_
     let override_starting_height = 10;
     config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
-        override_starting_height: Some(
-            NonZeroU32::new(override_starting_height).unwrap(),
-        ),
+        starting_height: Some(NonZeroU32::new(override_starting_height).unwrap()),
         metrics: false,
     });
     let srv = FuelService::from_combined_database(db, config)
@@ -323,15 +319,23 @@ async fn da_compression__starts_and_compresses_blocks_correctly_with_overridden_
         .await
         .unwrap();
 
-    // then: the da compressed blocks from height 1 to height override_starting_height
+    // then: the da compressed blocks from height 0 to height override_starting_height don't exist
     // and the da compressed blocks from height override_starting_height to height blocks_to_produce * 2 exist
     for height in 0..override_starting_height {
         let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
-        assert!(compressed_block.is_none());
+        assert!(
+            compressed_block.is_none(),
+            "DA compressed block at height {} is present",
+            height
+        );
     }
 
     for height in override_starting_height..=blocks_to_produce * 2 {
         let compressed_block = client.da_compressed_block(height.into()).await.unwrap();
-        assert!(compressed_block.is_some());
+        assert!(
+            compressed_block.is_some(),
+            "DA compressed block at height {} is missing",
+            height
+        );
     }
 }

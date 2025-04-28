@@ -72,7 +72,7 @@ impl configuration::CompressionConfigProvider
     fn config(&self) -> config::CompressionConfig {
         config::CompressionConfig::new(
             self.retention_duration,
-            self.override_starting_height,
+            self.starting_height,
             self.metrics,
         )
     }
