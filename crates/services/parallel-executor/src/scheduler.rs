@@ -157,7 +157,7 @@ where
             // TODO: Maybe it's the transaction source that should gather these infos and the full size
             let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
             self.tx_left -= batch.len() as u16;
-            self.tx_size_left -= batch.iter().map(|tx| tx.size()).sum::<u32>();
+            self.tx_size_left -= batch.iter().map(|tx| tx.size()).sum::<usize>() as u32;
 
             if batch.is_empty() {
                 // No more transactions to execute
