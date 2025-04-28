@@ -16,6 +16,7 @@ fuel-core-types = { workspace = true, features = ["std"] }
 fuel-core-upgradable-executor = { workspace = true, features = ["std"] }
 futures = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }

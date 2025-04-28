@@ -6,6 +6,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         self,
+        Chargeable,
         ConsensusParameters,
         Input,
         Output,
@@ -118,6 +119,51 @@ impl MaybeCheckedTransaction {
             }
             MaybeCheckedTransaction::Transaction(Transaction::Blob(tx)) => {
                 tx.expiration()
+            }
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Script(tx),
+                _,
+            ) => tx.transaction().metered_bytes_size(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Create(tx),
+                _,
+            ) => tx.transaction().metered_bytes_size(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Mint(_),
+                _,
+            ) => 0,
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Upgrade(tx),
+                _,
+            ) => tx.transaction().metered_bytes_size(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Upload(tx),
+                _,
+            ) => tx.transaction().metered_bytes_size(),
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Blob(tx),
+                _,
+            ) => tx.transaction().metered_bytes_size(),
+            MaybeCheckedTransaction::Transaction(Transaction::Script(tx)) => {
+                tx.metered_bytes_size()
+            }
+            MaybeCheckedTransaction::Transaction(Transaction::Create(tx)) => {
+                tx.metered_bytes_size()
+            }
+            MaybeCheckedTransaction::Transaction(Transaction::Mint(_)) => 0,
+            MaybeCheckedTransaction::Transaction(Transaction::Upgrade(tx)) => {
+                tx.metered_bytes_size()
+            }
+            MaybeCheckedTransaction::Transaction(Transaction::Upload(tx)) => {
+                tx.metered_bytes_size()
+            }
+            MaybeCheckedTransaction::Transaction(Transaction::Blob(tx)) => {
+                tx.metered_bytes_size()
             }
         }
     }

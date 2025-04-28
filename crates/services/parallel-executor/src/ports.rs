@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use fuel_core_types::fuel_tx::ContractId;
 use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionFiltered {
     /// Some transactions were filtered out and so could be fetched in the future
     Filtered,
@@ -25,4 +26,7 @@ pub trait TransactionsSource {
         block_transaction_size_limit: u32,
         filter: Filter,
     ) -> (Vec<MaybeCheckedTransaction>, TransactionFiltered);
+
+    /// Returns a notification receiver for new transactions
+    fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify;
 }

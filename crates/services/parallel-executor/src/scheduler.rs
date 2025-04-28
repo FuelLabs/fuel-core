@@ -7,12 +7,23 @@ use ::futures::{
     StreamExt,
     stream::FuturesUnordered,
 };
-use fuel_core_storage::transactional::StorageChanges;
-use fuel_core_types::fuel_tx::ContractId;
+use fuel_core_storage::transactional::{
+    Changes,
+    StorageChanges,
+};
+use fuel_core_types::{
+    blockchain::transaction::TransactionExt,
+    fuel_tx::{
+        ContractId,
+        UtxoId,
+    },
+};
+use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 use tokio::runtime::Runtime;
 
 use crate::ports::{
     Filter,
+    TransactionFiltered,
     TransactionsSource,
 };
 
@@ -39,7 +50,7 @@ use crate::ports::{
 
 pub struct Config {
     block_gas_limit: u64,
-    max_execution_time: Duration,
+    total_execution_time: Duration,
     block_transaction_size_limit: u32,
     block_transaction_count_limit: u16,
 }
@@ -49,14 +60,10 @@ pub struct Scheduler<TxSource> {
     config: Config,
     /// The state of each worker
     workers_state: Vec<WorkerState>,
-    /// The list of contracts that are currently being executed for each worker (useful to filter them when asking to transaction source)
-    executing_contracts: Vec<Vec<ContractId>>,
     /// Transaction source to ask for new transactions
     transaction_source: TxSource,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
-    /// Total execution time left (used to determine gas_left)
-    execution_time_left: u64,
     /// Total maximum of transactions left
     tx_left: u16,
     /// Total maximum of byte size left
@@ -65,7 +72,7 @@ pub struct Scheduler<TxSource> {
 
 pub struct WorkerState {
     pub status: WorkerStatus,
-    pub state: StorageChanges,
+    pub executing_contracts: Vec<ContractId>,
 }
 
 pub enum WorkerStatus {
@@ -100,7 +107,7 @@ where
         for _ in 0..number_of_worker {
             workers_state.push(WorkerState {
                 status: WorkerStatus::Idle,
-                state: StorageChanges::default(),
+                executing_contracts: vec![],
             });
         }
         let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -111,11 +118,8 @@ where
 
         Self {
             workers_state,
-            executing_contracts: vec![Vec::new(); number_of_worker],
             transaction_source,
             runtime: Some(runtime),
-            // TODO: change AS
-            execution_time_left: config.max_execution_time.as_millis() as u64,
             tx_left: config.block_transaction_count_limit,
             tx_size_left: config.block_transaction_size_limit,
             config,
@@ -123,9 +127,13 @@ where
     }
 
     // TODO: Error type
-    pub async fn run(&mut self) -> Result<(), String> {
+    pub async fn run(&mut self) -> Result<StorageChanges, String> {
         let runtime = self.runtime.as_ref().unwrap();
-        let mut spent_time = Duration::ZERO;
+        let now = tokio::time::Instant::now();
+        let mut transactions_left_to_fetch = true;
+        let new_tx_notifier = self.transaction_source.get_new_transactions_notifier();
+        let deadline = now + self.config.total_execution_time;
+        let mut storage_changes = vec![];
         // Store the futures of all the workers to be triggered when one of them finish
         let mut futures = FuturesUnordered::new();
 
@@ -145,30 +153,155 @@ where
                     excluded_contract_ids: HashSet::new(),
                 },
             );
+
+            // TODO: Maybe it's the transaction source that should gather these infos and the full size
+            let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
+            self.tx_left -= batch.len() as u16;
+            self.tx_size_left -= batch.iter().map(|tx| tx.size()).sum::<u32>();
+
+            if batch.is_empty() {
+                // No more transactions to execute
+                // (none can be filtered out because we are the first batch)
+                break;
+            }
+
             futures.push(runtime.spawn({
                 let worker_id = i;
                 async move {
                     // TODO: Execute the batch of transactions
-                    (worker_id, StorageChanges::default())
+                    (worker_id, Changes::default(), coins_used)
                 }
             }));
+            state.executing_contracts.extend(contracts_used);
+
+            state.status = WorkerStatus::Executing;
         }
         // Waiting for the workers to notify us
-        while !futures.is_empty() {
-            // Wait for the first worker to finish
-            let result = futures.next().await;
-            match result {
-                Some(Ok((worker_id, changes))) => {
-                    // Update the state of the worker
-                    self.workers_state[worker_id].status = WorkerStatus::Idle;
-                    self.workers_state[worker_id].state = changes;
+        'outer: loop {
+            tokio::select! {
+                // We have new transactions to execute
+                _ = new_tx_notifier.notified() => {
+                    transactions_left_to_fetch = true;
                 }
-                _ => {
+                result = futures.next() => {
+                    match result {
+                        Some(Ok((worker_id, changes, _))) => {
+                            // Update the state of the worker
+                            self.workers_state[worker_id].status = WorkerStatus::Idle;
+                            self.workers_state[worker_id].executing_contracts.clear();
+                            storage_changes.push(changes);
+                            if !transactions_left_to_fetch {
+                                // We have no more transactions to fetch
+                                continue 'outer;
+                            }
+                            // TODO: Avoid code duplication
+                            let contracts_currently_used = self
+                                .workers_state
+                                .iter()
+                                .flat_map(|state| state.executing_contracts.clone())
+                                .collect::<HashSet<_>>();
+                            let spent_time = now.elapsed();
+                            // Time left in percentage to have the gas percentage left
+                            // TODO: maybe try to remove "as"
+                            let current_gas = initial_gas * ((1u128 - spent_time.as_millis() / self.config.total_execution_time.as_millis()) as u64);
+                            let (batch, filtered) = self.transaction_source.get_executable_transactions(
+                                current_gas,
+                                self.tx_left,
+                                self.tx_size_left,
+                                Filter {
+                                    excluded_contract_ids: contracts_currently_used,
+                                },
+                            );
+
+                            let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
+
+                            if batch.is_empty() {
+                                if filtered == TransactionFiltered::Filtered {
+                                    // We have filtered out some transactions, they will need to be fetched
+                                    // by another worker
+                                    continue 'outer;
+                                } else {
+                                    // No more transactions in tx pool don't ask until the notifier tells us
+                                    transactions_left_to_fetch = false;
+                                    continue 'outer;
+                                }
+                            }
+
+                            futures.push(runtime.spawn({
+                                let worker_id = worker_id;
+                                async move {
+                                    // TODO: Execute the batch of transactions
+                                    (worker_id, Changes::default(), coins_used)
+                                }
+                            }));
+                            self.workers_state[worker_id].executing_contracts = contracts_used;
+                            self.workers_state[worker_id].status = WorkerStatus::Executing;
+                        }
+                        _ => {
+                            return Err("Worker failed".to_string());
+                        }
+                    }
+                }
+                // We have reached the deadline
+                _ = tokio::time::sleep_until(deadline) => {
+                    // We have reached the deadline
+                    break 'outer;
+                }
+            }
+        }
+        let tolerance_execution_time_overflow = self.config.total_execution_time / 10;
+        let now = tokio::time::Instant::now();
+
+        // We have reached the deadline
+        // We need to merge the states of all the workers
+        for future in futures {
+            match future.await {
+                Ok((_, changes, _)) => {
+                    // TODO: Be careful ordering
+                    storage_changes.push(changes);
+                }
+                Err(_) => {
                     return Err("Worker failed".to_string());
                 }
             }
-            // Ask for new transactions to the transaction source
         }
-        Ok(())
+
+        if now.elapsed() > tolerance_execution_time_overflow {
+            tracing::warn!(
+                "Execution time exceeded the limit by: {}ms",
+                now.elapsed().as_millis()
+            );
+        }
+
+        // TODO: Verify the coin dependency chain
+
+        Ok(StorageChanges::ChangesList(storage_changes))
     }
+}
+
+fn get_contracts_and_coins_used(
+    batch: &[MaybeCheckedTransaction],
+) -> (Vec<ContractId>, Vec<UtxoId>) {
+    let mut contracts_used = vec![];
+    let mut coins_used = vec![];
+
+    for tx in batch {
+        let inputs = tx.inputs();
+        for input in inputs.iter() {
+            match input {
+                fuel_core_types::fuel_tx::Input::Contract(contract) => {
+                    contracts_used.push(contract.contract_id);
+                }
+                fuel_core_types::fuel_tx::Input::CoinSigned(coin) => {
+                    coins_used.push(coin.utxo_id);
+                }
+                fuel_core_types::fuel_tx::Input::CoinPredicate(coin) => {
+                    coins_used.push(coin.utxo_id);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    (contracts_used, coins_used)
 }

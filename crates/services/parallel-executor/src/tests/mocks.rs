@@ -75,6 +75,11 @@ impl TransactionsSource for MockTxPool {
             .expect("Failed to send request");
         rx.recv().expect("Failed to receive response")
     }
+
+    fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify {
+        // This is a mock implementation, so we return a dummy Notify instance
+        tokio::sync::Notify::new()
+    }
 }
 
 pub struct Consumer {
