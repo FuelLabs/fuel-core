@@ -652,7 +652,7 @@ mod tests {
 
     #[cfg(feature = "fault-proving")]
     #[tokio::test]
-    async fn compression_service__merkleizes_registrations_per_table() {
+    async fn compression_service__writes_to_registrations_table() {
         // given: we create the compression service
         let block_with_metadata = BlockWithMetadata::default();
         let block_source = MockBlockSource::new(vec![block_with_metadata]);
