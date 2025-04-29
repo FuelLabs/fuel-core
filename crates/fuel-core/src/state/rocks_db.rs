@@ -816,7 +816,12 @@ where
             columns_policy: ColumnsPolicy::Lazy,
         };
 
-        let db = Self::default_open(db_dir, db_config)?;
+        let db = Self::open_read_only(
+            db_dir,
+            enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
+            false,
+            db_config
+        )?;
 
         backup_engine.create_new_backup(&db.db).map_err(|e| {
             DatabaseError::BackupError(anyhow::anyhow!(
