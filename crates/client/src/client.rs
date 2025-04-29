@@ -1486,10 +1486,7 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<types::Coin, String>> {
         let owner: schema::Address = (*owner).into();
-        let asset_id: schema::AssetId = match asset_id {
-            Some(asset_id) => (*asset_id).into(),
-            None => schema::AssetId::default(),
-        };
+        let asset_id = asset_id.map(|id| (*id).into());
         let args = CoinsConnectionArgs::from((owner, asset_id, request));
         let query = schema::coins::CoinsQuery::build(args);
 
