@@ -332,6 +332,10 @@ where
         block_opts.set_block_size(16 * 1024);
 
         let mut opts = Options::default();
+        opts.set_level_compaction_dynamic_level_bytes(true);
+        opts.set_level_zero_file_num_compaction_trigger(2);
+        opts.set_max_bytes_for_level_base(512 * 1024 * 1024);
+        opts.set_max_bytes_for_level_multiplier(8.0);
         opts.set_compression_type(DBCompressionType::Lz4);
         // TODO: Make it customizable https://github.com/FuelLabs/fuel-core/issues/1666
         opts.set_max_total_wal_size(64 * 1024 * 1024);
