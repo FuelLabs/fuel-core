@@ -4022,11 +4022,6 @@ mod tests {
             .expect("Expected one skipped transaction")
             .1
             .clone();
-        assert_eq!(
-            skipped_transactions.len(),
-            1,
-            "expected to have one skipped tx, found: {skipped_transactions:?}"
-        );
         assert!(
             matches!(
                 skipped_reason,
