@@ -176,3 +176,5 @@ url = "2.2"
 # add patch for fuel-vm
 [patch.crates-io]
 fuel-vm-private = { path = "../fuel-vm/fuel-vm", version = "0.60.0", package = "fuel-vm" }
+fuel-tx = { path = "../fuel-vm/fuel-tx", version = "0.60.0" }
+fuel-types = { path = "../fuel-vm/fuel-types", version = "0.60.0" }

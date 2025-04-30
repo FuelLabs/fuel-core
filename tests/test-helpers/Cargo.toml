@@ -38,4 +38,4 @@ reqwest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tempfile = { workspace = true }
-tracing = "0.1.41"
+tracing = "0.1"

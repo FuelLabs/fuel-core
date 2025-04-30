@@ -11,11 +11,12 @@ use async_graphql::{
     Enum,
     Object,
 };
+#[cfg(feature = "test-helpers")]
+use fuel_core_types::fuel_types::SubAssetId;
 use fuel_core_types::{
     fuel_asm::Word,
     fuel_tx,
     fuel_types,
-    fuel_types::SubAssetId,
 };
 
 #[derive(

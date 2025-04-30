@@ -16,6 +16,16 @@ use tracing::{
     warn,
 };
 
+use crate::{
+    ports::{
+        MaybeCheckedTransaction,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+        RelayerPort,
+        TransactionsSource,
+    },
+    refs::ContractRef,
+};
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -85,6 +95,8 @@ use fuel_core_types::{
                 CoinSigned,
                 DataCoinPredicate,
                 DataCoinSigned,
+                UnverifiedCoin,
+                UnverifiedDataCoin,
             },
             message::{
                 MessageCoinPredicate,
@@ -92,6 +104,7 @@ use fuel_core_types::{
                 MessageDataPredicate,
                 MessageDataSigned,
             },
+            ReadOnly,
         },
         output,
         Address,
@@ -112,7 +125,10 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::{
-        canonical::Deserialize,
+        canonical::{
+            Deserialize,
+            Serialize,
+        },
         BlockHeight,
         ContractId,
         MessageId,
@@ -160,17 +176,6 @@ use fuel_core_types::{
         },
         relayer::Event,
     },
-};
-
-use crate::{
-    ports::{
-        MaybeCheckedTransaction,
-        NewTxWaiterPort,
-        PreconfirmationSenderPort,
-        RelayerPort,
-        TransactionsSource,
-    },
-    refs::ContractRef,
 };
 
 /// The maximum amount of transactions that can be included in a block,
@@ -785,6 +790,7 @@ where
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
                 let tx_max_gas = transaction.max_gas(&self.consensus_params)?;
+                debug!("Processing transaction {:?}", tx_id.to_bytes());
                 if tx_max_gas > remaining_gas_limit {
                     data.skipped_transactions.push((
                         tx_id,
@@ -1759,6 +1765,17 @@ where
                     }) => {
                         *predicate_gas_used = gas_used;
                     }
+                    Input::ReadOnly(
+                        ReadOnly::CoinPredicate(CoinPredicate {
+                            predicate_gas_used, ..
+                        })
+                        | ReadOnly::DataCoinPredicate(DataCoinPredicate {
+                            predicate_gas_used,
+                            ..
+                        }),
+                    ) => {
+                        *predicate_gas_used = gas_used;
+                    }
                     _ => {
                         debug_assert!(false, "This error is not possible unless VM changes the order of inputs, \
                         or we added a new predicate inputs.");
@@ -1961,7 +1978,20 @@ where
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
                 | Input::DataCoinSigned(DataCoinSigned { utxo_id, .. })
                 | Input::CoinPredicate(CoinPredicate { utxo_id, .. })
-                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. }) => {
+                | Input::DataCoinPredicate(DataCoinPredicate { utxo_id, .. })
+                | Input::ReadOnly(ReadOnly::DataCoin(UnverifiedDataCoin {
+                    utxo_id,
+                    ..
+                }))
+                | Input::ReadOnly(ReadOnly::Coin(UnverifiedCoin { utxo_id, .. }))
+                | Input::ReadOnly(ReadOnly::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    ..
+                }))
+                | Input::ReadOnly(ReadOnly::DataCoinPredicate(DataCoinPredicate {
+                    utxo_id,
+                    ..
+                })) => {
                     if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         if !coin.matches_input(input).unwrap_or_default() {
                             return Err(
@@ -2035,6 +2065,20 @@ where
                     ..
                 })
                 | Input::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::DataCoinSigned(DataCoinSigned {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    ..
+                })
+                | Input::DataCoinPredicate(DataCoinPredicate {
                     utxo_id,
                     owner,
                     amount,

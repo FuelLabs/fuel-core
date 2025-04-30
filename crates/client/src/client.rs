@@ -79,6 +79,7 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         TxId,
+        UniqueIdentifier,
     },
     fuel_types::{
         self,
@@ -909,6 +910,8 @@ impl FuelClient {
         estimate_predicates: Option<bool>,
     ) -> io::Result<TransactionStatus> {
         use cynic::SubscriptionBuilder;
+        tracing::debug!("submitting tx: {:?}", tx.id(&Default::default()).to_bytes());
+        tracing::debug!("encoding tx: {:?}", tx);
         let tx = tx.clone().to_bytes();
         let s =
             schema::tx::SubmitAndAwaitSubscription::build(TxWithEstimatedPredicatesArg {

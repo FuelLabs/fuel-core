@@ -67,7 +67,10 @@ pub mod fault_proving {
 
 #[cfg(feature = "fault-proving")]
 use fault_proving::DecompressDb;
-
+use fuel_core_types::fuel_tx::input::coin::{
+    UnverifiedCoin,
+    UnverifiedDataCoin,
+};
 #[cfg(not(feature = "fault-proving"))]
 use not_fault_proving::DecompressDb;
 
@@ -249,6 +252,50 @@ where
             predicate_gas_used,
             predicate,
             predicate_data,
+            data,
+        })
+    }
+}
+
+impl<D> DecompressibleBy<DecompressCtx<D>> for UnverifiedCoin
+where
+    D: DecompressDb,
+{
+    async fn decompress_with(
+        c: <UnverifiedCoin as Compressible>::Compressed,
+        ctx: &DecompressCtx<D>,
+    ) -> anyhow::Result<UnverifiedCoin> {
+        let utxo_id = UtxoId::decompress_with(c.utxo_id, ctx).await?;
+        let coin_info = ctx.db.coin(utxo_id)?;
+        let tx_pointer = Default::default();
+        Ok(Self {
+            utxo_id,
+            owner: coin_info.owner,
+            amount: coin_info.amount,
+            asset_id: coin_info.asset_id,
+            tx_pointer,
+        })
+    }
+}
+
+impl<D> DecompressibleBy<DecompressCtx<D>> for UnverifiedDataCoin
+where
+    D: DecompressDb,
+{
+    async fn decompress_with(
+        c: <UnverifiedDataCoin as Compressible>::Compressed,
+        ctx: &DecompressCtx<D>,
+    ) -> anyhow::Result<UnverifiedDataCoin> {
+        let utxo_id = UtxoId::decompress_with(c.utxo_id, ctx).await?;
+        let coin_info = ctx.db.coin(utxo_id)?;
+        let tx_pointer = Default::default();
+        let data = c.data.decompress(ctx).await?;
+        Ok(Self {
+            utxo_id,
+            owner: coin_info.owner,
+            amount: coin_info.amount,
+            asset_id: coin_info.asset_id,
+            tx_pointer,
             data,
         })
     }
