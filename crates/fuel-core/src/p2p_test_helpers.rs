@@ -630,6 +630,12 @@ impl Node {
             .await;
     }
 
+    /// Wait for the node to reach consistency with the given transactions within 30 seconds.
+    pub async fn consistency_30s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
+        self.consistency_with_duration(txs, Duration::from_secs(30))
+            .await;
+    }
+
     /// Insert the test transactions into the node's transaction pool.
     pub async fn insert_txs(&self) -> HashMap<Bytes32, Transaction> {
         let mut expected = HashMap::new();
