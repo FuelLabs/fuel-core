@@ -400,7 +400,7 @@ pub async fn make_nodes(
 
             node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
 
-            if txs.len() > 0 {
+            if !txs.is_empty() {
                 node_config
                     .pre_confirmation_signature_service
                     .echo_delegation_interval = Duration::from_millis(200);
