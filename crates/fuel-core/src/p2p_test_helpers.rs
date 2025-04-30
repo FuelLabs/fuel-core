@@ -399,9 +399,12 @@ pub async fn make_nodes(
             update_signing_key(&mut node_config, Input::owner(&secret.public_key()));
 
             node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
-            node_config
-                .pre_confirmation_signature_service
-                .echo_delegation_interval = Duration::from_millis(200);
+
+            if txs.len() > 0 {
+                node_config
+                    .pre_confirmation_signature_service
+                    .echo_delegation_interval = Duration::from_millis(200);
+            }
 
             test_txs = txs;
         }

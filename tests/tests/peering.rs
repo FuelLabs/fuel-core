@@ -57,7 +57,7 @@ async fn max_discovery_peers_connected__node_will_not_discover_new_nodes_if_full
     assert!(actual <= expected);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn max_functional_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full()
  {
     let mut rng = StdRng::seed_from_u64(1234);
