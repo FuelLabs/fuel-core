@@ -33,14 +33,10 @@ use ::futures::{
     stream::FuturesUnordered,
 };
 use fuel_core_storage::{
-    StorageAsRef,
-    column::Column,
-    kv_store::KeyValueInspect,
-    tables::Coins,
+    Error as StorageError,
     transactional::{
         Changes,
         StorageChanges,
-        StorageTransaction,
     },
 };
 use fuel_core_types::{
@@ -49,12 +45,14 @@ use fuel_core_types::{
         ContractId,
         UtxoId,
     },
+    services::executor::Error as ExecutorError,
 };
 use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 use tokio::runtime::Runtime;
 
 use crate::ports::{
     Filter,
+    Storage,
     TransactionFiltered,
     TransactionsSource,
 };
@@ -75,7 +73,7 @@ pub struct Scheduler<TxSource, D> {
     /// Transaction source to ask for new transactions
     transaction_source: TxSource,
     /// Database transaction for the execution
-    storage_transaction: StorageTransaction<D>,
+    storage: D,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
     /// Total maximum of transactions left
@@ -100,7 +98,7 @@ pub enum WorkerStatus {
 
 type SkippedTransactions = Vec<MaybeCheckedTransaction>;
 
-struct WorkerExecutionResult {
+struct WorkSessionExecutionResult {
     /// The id of the worker
     worker_id: usize,
     /// The id of the batch of transactions
@@ -108,11 +106,40 @@ struct WorkerExecutionResult {
     /// The changes made by the worker used to commit them to the database at the end of execution
     changes: Changes,
     /// The coins created by the worker used to verify the coin dependency chain at the end of execution
-    coins_created: Vec<UtxoId>,
+    /// We also store the index of the transaction in the batch in case the usage is in the same batch
+    coins_created: Vec<(UtxoId, usize)>,
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
-    coins_used: Vec<UtxoId>,
+    /// We also store the index of the transaction in the batch in case the creation is in the same batch
+    coins_used: Vec<(UtxoId, usize)>,
+    /// Contracts used during the execution of the transactions to save the changes for future usage of
+    /// the contracts
+    contracts_used: Vec<ContractId>,
     /// The transactions that were skipped by the worker
     skipped_tx: SkippedTransactions,
+}
+
+struct WorkSessionSavedData {
+    /// The changes made by the worker used to commit them to the database at the end of execution
+    changes: Changes,
+    /// The coins created by the worker used to verify the coin dependency chain at the end of execution
+    /// We also store the index of the transaction in the batch in case the usage is in the same batch
+    coins_created: Vec<(UtxoId, usize)>,
+    /// The coins used by the worker used to verify the coin dependency chain at the end of execution
+    /// We also store the index of the transaction in the batch in case the creation is in the same batch
+    coins_used: Vec<(UtxoId, usize)>,
+}
+
+/// Error type for the scheduler
+#[derive(Debug)]
+pub enum SchedulerError {
+    /// Error while executing the transactions
+    ExecutionError(ExecutorError),
+    /// Error while getting the transactions from the transaction source
+    TransactionSourceError(String),
+    /// Error while getting the coins from the storage
+    StorageError(StorageError),
+    /// Internal error
+    InternalError(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,13 +165,13 @@ impl<TxSource, D> Drop for Scheduler<TxSource, D> {
 impl<TxSource, D> Scheduler<TxSource, D>
 where
     TxSource: TransactionsSource,
-    D: KeyValueInspect<Column = Column>,
+    D: Storage,
 {
     pub fn new(
         config: Config,
         number_of_worker: usize,
         transaction_source: TxSource,
-        storage_transaction: StorageTransaction<D>,
+        storage: D,
     ) -> Self {
         let mut workers_state = Vec::with_capacity(number_of_worker);
         for _ in 0..number_of_worker {
@@ -166,12 +193,11 @@ where
             tx_left: config.block_transaction_count_limit,
             tx_size_left: config.block_transaction_size_limit,
             config,
-            storage_transaction,
+            storage,
         }
     }
 
-    // TODO: Error type
-    pub async fn run(&mut self) -> Result<StorageChanges, String> {
+    pub async fn run(&mut self) -> Result<StorageChanges, SchedulerError> {
         let runtime = self.runtime.as_ref().unwrap();
         let now = tokio::time::Instant::now();
         let mut waiting_reason = WaitingReason::NoWaiting;
@@ -179,6 +205,8 @@ where
         let deadline = now + self.config.total_execution_time;
         // All executed transactions batch associated with their id
         let mut execution_results = HashMap::new();
+        // All contracts ids that have already been executed with their changes
+        let mut contracts_changes: HashMap<ContractId, Changes> = HashMap::new();
         let mut nb_batch_created = 0;
         let mut _current_nb_transactions = 0;
         // Store the futures of all the workers to be triggered when one of them finish
@@ -190,7 +218,9 @@ where
             .config
             .block_gas_limit
             .checked_div(number_of_workers as u64)
-            .ok_or("Invalid block gas limit")?;
+            .ok_or(SchedulerError::InternalError(
+                "Invalid block gas limit".to_string(),
+            ))?;
 
         'outer: loop {
             // Check if we have any free workers
@@ -206,7 +236,6 @@ where
                     .collect::<HashSet<_>>();
                 let spent_time = now.elapsed();
                 // Time left in percentage to have the gas percentage left
-                // TODO: maybe try to remove "as"
                 let current_gas = initial_gas
                     * ((1u128
                         - spent_time.as_millis()
@@ -243,14 +272,22 @@ where
 
                 futures.push(runtime.spawn({
                     let batch_id = nb_batch_created;
+                    let mut used_contracts_changes = vec![];
+                    for contract in contracts_used.iter() {
+                        if let Some(changes) = contracts_changes.remove(contract) {
+                            used_contracts_changes.push(changes);
+                        }
+                    }
+                    let contracts_used = contracts_used.clone();
                     async move {
                         // TODO: Execute the batch of transactions
-                        WorkerExecutionResult {
+                        WorkSessionExecutionResult {
                             worker_id,
                             batch_id,
                             changes: Changes::default(),
                             coins_created: vec![],
                             coins_used,
+                            contracts_used,
                             skipped_tx: vec![],
                         }
                     }
@@ -266,7 +303,7 @@ where
                     }
                     result = futures.next() => {
                         match result {
-                            Some(Ok(WorkerExecutionResult { worker_id, batch_id, changes, coins_created, coins_used, skipped_tx })) => {
+                            Some(Ok(WorkSessionExecutionResult { worker_id, batch_id, changes, coins_created, coins_used, contracts_used, skipped_tx })) => {
                                 if !skipped_tx.is_empty() {
                                     // TODO: Handle the skipped transactions
                                     // Wait for all the workers to finish gather all theirs transactions
@@ -280,22 +317,26 @@ where
                                 if waiting_reason == WaitingReason::WaitingForWorker {
                                     waiting_reason = WaitingReason::NoWaiting;
                                 }
-                                // TODO: Save changes with a way to fetch them by contract id so that we get them when we execute and if
-                                // no contract is used we don't need anything and it's faster
+
+                                // TODO: Save only the part that touch the contract to not clone everything
+                                contracts_changes.extend(
+                                    contracts_used
+                                        .iter()
+                                        .map(|contract| (*contract, changes.clone()))
+                                );
                                 execution_results.insert(
                                     batch_id,
-                                    WorkerExecutionResult {
-                                        worker_id,
-                                        batch_id,
+                                    WorkSessionSavedData {
                                         changes,
                                         coins_created,
                                         coins_used,
-                                        skipped_tx,
                                     }
                                 );
                             }
                             _ => {
-                                return Err("Worker failed".to_string());
+                                return Err(SchedulerError::InternalError(
+                                    "Worker execution failed".to_string(),
+                                ));
                             }
                         }
                     }
@@ -320,22 +361,21 @@ where
                         // Wait for all the workers to finish gather all theirs transactions
                         // re-execute them in one worker without skipped one.
                         // Tell the TransactionSource that this transaction is skipped
-                        // to avoid sending new transactions that depend on it
+                        // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
                     }
                     execution_results.insert(
                         res.batch_id,
-                        WorkerExecutionResult {
-                            worker_id: res.worker_id,
-                            batch_id: res.batch_id,
+                        WorkSessionSavedData {
                             changes: res.changes,
                             coins_created: res.coins_created,
                             coins_used: res.coins_used,
-                            skipped_tx: res.skipped_tx,
                         },
                     );
                 }
                 Err(_) => {
-                    return Err("Worker failed".to_string());
+                    return Err(SchedulerError::InternalError(
+                        "Worker execution failed".to_string(),
+                    ));
                 }
             }
         }
@@ -350,52 +390,54 @@ where
         // Verify the coin dependency chain
         let mut storage_changes = vec![];
         let mut compiled_created_coins = HashMap::new();
-        // TODO: Maybe verify the dependency chain inside of the batch also (which requires a bit of architectural changes)
         // TODO: Maybe we also want to verify the amount
         for batch_id in 0..nb_batch_created {
             if let Some(changes) = execution_results.remove(&batch_id) {
-                // TODO: extend all the changes together
-
-                for coin in changes.coins_created {
-                    compiled_created_coins.insert(coin, batch_id);
+                for (coin, idx) in changes.coins_created {
+                    compiled_created_coins.insert(coin, (batch_id, idx));
                 }
-                for coin in changes.coins_used {
-                    // TODO: Maybe in a port
-                    match self.storage_transaction.storage::<Coins>().get(&coin) {
+                for (coin, idx) in changes.coins_used {
+                    match self.storage.get_coin(&coin) {
                         Ok(Some(_)) => {
                             // Coin is in the database
                         }
                         Ok(None) => {
                             // Coin is not in the database
                             match compiled_created_coins.get(&coin) {
-                                Some(coin_creation_batch_id) => {
+                                Some((coin_creation_batch_id, coin_creation_tx_idx)) => {
                                     // Coin is in the block
-                                    if coin_creation_batch_id <= &batch_id {
+                                    if coin_creation_batch_id <= &batch_id
+                                        && coin_creation_tx_idx <= &idx
+                                    {
                                         // Coin is created in a batch that is before the current one
                                     } else {
                                         // Coin is created in a batch that is after the current one
-                                        return Err(format!(
-                                            "Coin {coin} is created in a batch that is after the current one"
+                                        return Err(SchedulerError::InternalError(
+                                            format!(
+                                                "Coin {coin} is created in a batch that is after the current one"
+                                            ),
                                         ));
                                     }
                                 }
                                 None => {
-                                    return Err(format!(
+                                    return Err(SchedulerError::InternalError(format!(
                                         "Coin {coin} is not in the database and not created in the block"
-                                    ));
+                                    )));
                                 }
                             }
                         }
                         Err(e) => {
-                            return Err(format!("Error while getting coin {coin}: {e}"));
+                            return Err(SchedulerError::InternalError(format!(
+                                "Error while getting coin {coin}: {e}"
+                            )));
                         }
                     }
                 }
                 storage_changes.push(changes.changes);
             } else {
-                return Err(format!(
+                return Err(SchedulerError::InternalError(format!(
                     "Batch {batch_id} not found in the execution results"
-                ));
+                )));
             }
         }
 
@@ -405,11 +447,11 @@ where
 
 fn get_contracts_and_coins_used(
     batch: &[MaybeCheckedTransaction],
-) -> (Vec<ContractId>, Vec<UtxoId>) {
+) -> (Vec<ContractId>, Vec<(UtxoId, usize)>) {
     let mut contracts_used = vec![];
     let mut coins_used = vec![];
 
-    for tx in batch {
+    for (idx, tx) in batch.iter().enumerate() {
         let inputs = tx.inputs();
         for input in inputs.iter() {
             match input {
@@ -417,10 +459,10 @@ fn get_contracts_and_coins_used(
                     contracts_used.push(contract.contract_id);
                 }
                 fuel_core_types::fuel_tx::Input::CoinSigned(coin) => {
-                    coins_used.push(coin.utxo_id);
+                    coins_used.push((coin.utxo_id, idx));
                 }
                 fuel_core_types::fuel_tx::Input::CoinPredicate(coin) => {
-                    coins_used.push(coin.utxo_id);
+                    coins_used.push((coin.utxo_id, idx));
                 }
                 _ => {}
             }
