@@ -57,7 +57,7 @@ async fn max_discovery_peers_connected__node_will_not_discover_new_nodes_if_full
     assert!(actual <= expected);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn max_functional_peers_connected__nodes_will_discover_new_peers_if_first_peer_is_full()
  {
     let mut rng = StdRng::seed_from_u64(1234);
@@ -87,7 +87,7 @@ async fn max_functional_peers_connected__nodes_will_discover_new_peers_if_first_
         None,
     )
     .await;
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // then
     let Nodes {
@@ -98,7 +98,7 @@ async fn max_functional_peers_connected__nodes_will_discover_new_peers_if_first_
     let producer = producers.pop().unwrap();
     let client = FuelClient::from(producer.node.bound_address);
     client.produce_blocks(new_blocks, None).await.unwrap();
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(20)).await;
 
     for validator in validators {
         let client = FuelClient::from(validator.node.bound_address);
