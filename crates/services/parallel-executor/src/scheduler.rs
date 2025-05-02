@@ -23,6 +23,7 @@ use std::{
     collections::{
         HashMap,
         HashSet,
+        VecDeque,
     },
     time::Duration,
 };
@@ -114,6 +115,16 @@ struct WorkerExecutionResult {
     skipped_tx: SkippedTransactions,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum WaitingReason {
+    /// Waiting for a worker to finish because we have filtered transactions
+    WaitingForWorker,
+    /// Waiting for a new transaction to be added to the transaction source
+    WaitingForNewTransaction,
+    /// No waiting reason
+    NoWaiting,
+}
+
 // Shutdown the tokio runtime to avoid panic if executor is already
 //   used from another tokio runtime
 impl<TxSource, D> Drop for Scheduler<TxSource, D> {
@@ -163,167 +174,136 @@ where
     pub async fn run(&mut self) -> Result<StorageChanges, String> {
         let runtime = self.runtime.as_ref().unwrap();
         let now = tokio::time::Instant::now();
-        let mut transactions_left_to_fetch = true;
+        let mut waiting_reason = WaitingReason::NoWaiting;
         let new_tx_notifier = self.transaction_source.get_new_transactions_notifier();
         let deadline = now + self.config.total_execution_time;
-        // All executed transactions associated with their batch id
+        // All executed transactions batch associated with their id
         let mut execution_results = HashMap::new();
         let mut nb_batch_created = 0;
         let mut _current_nb_transactions = 0;
         // Store the futures of all the workers to be triggered when one of them finish
         let mut futures = FuturesUnordered::new();
-
-        // All workers starts empty, so we fetch the first batch
+        let mut current_available_workers: VecDeque<usize> =
+            (0..self.workers_state.len()).collect();
         let number_of_workers = self.workers_state.len();
         let initial_gas = self
             .config
             .block_gas_limit
             .checked_div(number_of_workers as u64)
             .ok_or("Invalid block gas limit")?;
-        for (i, state) in self.workers_state.iter_mut().enumerate() {
-            let (batch, filtered) = self.transaction_source.get_executable_transactions(
-                initial_gas,
-                self.tx_left,
-                self.tx_size_left,
-                Filter {
-                    // TODO: take into account transaction of other workers
-                    excluded_contract_ids: HashSet::new(),
-                },
-            );
 
-            // TODO: Maybe it's the transaction source that should gather these infos and the full size
-            let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
-            self.tx_left -= batch.len() as u16;
-            // Useful to have a range of slots in the block to set tx pointers
-            _current_nb_transactions += batch.len() as u16;
-            self.tx_size_left -= batch.iter().map(|tx| tx.size()).sum::<usize>() as u32;
-
-            if batch.is_empty() && filtered == TransactionFiltered::NotFiltered {
-                // No more transactions to execute
-                // (none can be filtered out because we are the first batch)
-                // TODO: Wait for the notifier to tell us that we have new transactions
-                break;
-            }
-
-            futures.push(runtime.spawn({
-                let worker_id = i;
-                let batch_id = nb_batch_created;
-                async move {
-                    // TODO: Execute the batch of transactions
-                    WorkerExecutionResult {
-                        worker_id,
-                        batch_id,
-                        changes: Changes::default(),
-                        coins_created: vec![],
-                        coins_used,
-                        skipped_tx: vec![],
-                    }
-                }
-            }));
-            nb_batch_created += 1;
-            state.executing_contracts.extend(contracts_used);
-
-            state.status = WorkerStatus::Executing;
-        }
-        // Waiting for the workers to notify us
         'outer: loop {
-            tokio::select! {
-                // We have new transactions to execute
-                _ = new_tx_notifier.notified() => {
-                    transactions_left_to_fetch = true;
-                    // TODO: If a worker is idle, we can ask him to fetch new transactions
+            // Check if we have any free workers
+            if !current_available_workers.is_empty()
+                && waiting_reason == WaitingReason::NoWaiting
+            {
+                // SAFETY: We know that we have at least one worker available (checked line above)
+                let worker_id = current_available_workers.pop_front().unwrap();
+                let contracts_currently_used = self
+                    .workers_state
+                    .iter()
+                    .flat_map(|state| state.executing_contracts.clone())
+                    .collect::<HashSet<_>>();
+                let spent_time = now.elapsed();
+                // Time left in percentage to have the gas percentage left
+                // TODO: maybe try to remove "as"
+                let current_gas = initial_gas
+                    * ((1u128
+                        - spent_time.as_millis()
+                            / self.config.total_execution_time.as_millis())
+                        as u64);
+
+                let (batch, filtered) =
+                    self.transaction_source.get_executable_transactions(
+                        current_gas,
+                        self.tx_left,
+                        self.tx_size_left,
+                        Filter {
+                            excluded_contract_ids: contracts_currently_used,
+                        },
+                    );
+
+                if batch.is_empty() {
+                    if filtered == TransactionFiltered::Filtered {
+                        waiting_reason = WaitingReason::WaitingForWorker;
+                    } else {
+                        waiting_reason = WaitingReason::WaitingForNewTransaction;
+                    }
+                    current_available_workers.push_back(worker_id);
+                    continue 'outer;
                 }
-                result = futures.next() => {
-                    match result {
-                        Some(Ok(WorkerExecutionResult { worker_id, batch_id, changes, coins_created, coins_used, skipped_tx })) => {
-                            if !skipped_tx.is_empty() {
-                                // TODO: Handle the skipped transactions
-                                // Wait for all the workers to finish gather all theirs transactions
-                                // re-execute them in one worker without skipped one.
-                                // Tell the TransactionSource that this transaction is skipped
-                                // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
-                            }
-                            // Update the state of the worker
-                            self.workers_state[worker_id].status = WorkerStatus::Idle;
-                            self.workers_state[worker_id].executing_contracts.clear();
-                            // TODO: Save changes with a way to fetch them by contract id so that we get them when we execute and if
-                            // no contract is used we don't need anything and it's faster
-                            execution_results.insert(
-                                batch_id,
-                                WorkerExecutionResult {
-                                    worker_id,
+
+                self.tx_left -= batch.len() as u16;
+                // Useful to have a range of slots in the block to set tx pointers
+                _current_nb_transactions += batch.len() as u16;
+                self.tx_size_left -=
+                    batch.iter().map(|tx| tx.size()).sum::<usize>() as u32;
+
+                let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
+
+                futures.push(runtime.spawn({
+                    let batch_id = nb_batch_created;
+                    async move {
+                        // TODO: Execute the batch of transactions
+                        WorkerExecutionResult {
+                            worker_id,
+                            batch_id,
+                            changes: Changes::default(),
+                            coins_created: vec![],
+                            coins_used,
+                            skipped_tx: vec![],
+                        }
+                    }
+                }));
+                nb_batch_created += 1;
+                self.workers_state[worker_id].executing_contracts = contracts_used;
+                self.workers_state[worker_id].status = WorkerStatus::Executing;
+            } else {
+                tokio::select! {
+                    // We have new transactions to execute
+                    _ = new_tx_notifier.notified() => {
+                        waiting_reason = WaitingReason::NoWaiting;
+                    }
+                    result = futures.next() => {
+                        match result {
+                            Some(Ok(WorkerExecutionResult { worker_id, batch_id, changes, coins_created, coins_used, skipped_tx })) => {
+                                if !skipped_tx.is_empty() {
+                                    // TODO: Handle the skipped transactions
+                                    // Wait for all the workers to finish gather all theirs transactions
+                                    // re-execute them in one worker without skipped one.
+                                    // Tell the TransactionSource that this transaction is skipped
+                                    // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
+                                }
+                                // Update the state of the worker
+                                self.workers_state[worker_id].status = WorkerStatus::Idle;
+                                self.workers_state[worker_id].executing_contracts.clear();
+                                if waiting_reason == WaitingReason::WaitingForWorker {
+                                    waiting_reason = WaitingReason::NoWaiting;
+                                }
+                                // TODO: Save changes with a way to fetch them by contract id so that we get them when we execute and if
+                                // no contract is used we don't need anything and it's faster
+                                execution_results.insert(
                                     batch_id,
-                                    changes,
-                                    coins_created,
-                                    coins_used,
-                                    skipped_tx,
-                                }
-                            );
-                            if !transactions_left_to_fetch {
-                                // We have no more transactions to fetch
-                                continue 'outer;
-                            }
-                            // TODO: Avoid code duplication
-                            let contracts_currently_used = self
-                                .workers_state
-                                .iter()
-                                .flat_map(|state| state.executing_contracts.clone())
-                                .collect::<HashSet<_>>();
-                            let spent_time = now.elapsed();
-                            // Time left in percentage to have the gas percentage left
-                            // TODO: maybe try to remove "as"
-                            let current_gas = initial_gas * ((1u128 - spent_time.as_millis() / self.config.total_execution_time.as_millis()) as u64);
-
-                            let (batch, filtered) = self.transaction_source.get_executable_transactions(
-                                current_gas,
-                                self.tx_left,
-                                self.tx_size_left,
-                                Filter {
-                                    excluded_contract_ids: contracts_currently_used,
-                                },
-                            );
-
-                            if batch.is_empty() {
-                                if filtered == TransactionFiltered::Filtered {
-                                    // We have filtered out some transactions, they will need to be fetched
-                                    // by another worker
-                                    continue 'outer;
-                                } else {
-                                    // No more transactions in tx pool don't ask until the notifier tells us
-                                    transactions_left_to_fetch = false;
-                                    continue 'outer;
-                                }
-                            }
-
-                            let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
-
-                            futures.push(runtime.spawn({
-                                let batch_id = nb_batch_created;
-                                async move {
-                                    // TODO: Execute the batch of transactions
                                     WorkerExecutionResult {
                                         worker_id,
                                         batch_id,
-                                        changes: Changes::default(),
-                                        coins_created: vec![],
+                                        changes,
+                                        coins_created,
                                         coins_used,
-                                        skipped_tx: vec![],
+                                        skipped_tx,
                                     }
-                                }
-                            }));
-                            nb_batch_created += 1;
-                            self.workers_state[worker_id].executing_contracts = contracts_used;
-                            self.workers_state[worker_id].status = WorkerStatus::Executing;
-                        }
-                        _ => {
-                            return Err("Worker failed".to_string());
+                                );
+                            }
+                            _ => {
+                                return Err("Worker failed".to_string());
+                            }
                         }
                     }
-                }
-                // We have reached the deadline
-                _ = tokio::time::sleep_until(deadline) => {
                     // We have reached the deadline
-                    break 'outer;
+                    _ = tokio::time::sleep_until(deadline) => {
+                        // We have reached the deadline
+                        break 'outer;
+                    }
                 }
             }
         }
