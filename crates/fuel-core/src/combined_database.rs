@@ -711,7 +711,7 @@ mod tests {
     }
 
     #[test]
-    fn backup__cannot_backup_while_db_is_opened() {
+    fn backup__should_be_successful_if_db_is_already_opened() {
         // given
         let db_dir = TempDir::new().unwrap();
         let mut combined_db = CombinedDatabase::open(
@@ -734,8 +734,8 @@ mod tests {
         // no drop for combined_db
 
         // then
-        CombinedDatabase::backup(db_dir.path(), backup_dir.path())
-            .expect_err("Backup should fail");
+        let res = CombinedDatabase::backup(db_dir.path(), backup_dir.path());
+        assert!(res.is_ok());
 
         // cleanup
         std::fs::remove_dir_all(db_dir.path()).unwrap();
