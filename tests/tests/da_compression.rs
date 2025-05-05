@@ -324,4 +324,7 @@ async fn da_compression__starts_and_compresses_blocks_correctly_with_overridden_
             height
         );
     }
+
+    // teardown
+    driver.kill().await;
 }
