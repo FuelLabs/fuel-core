@@ -76,6 +76,11 @@ pub struct Scheduler<TxSource, D> {
     storage: D,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
+    /// Current execution tasks
+    current_execution_tasks:
+        FuturesUnordered<tokio::task::JoinHandle<WorkSessionExecutionResult>>,
+    // All executed transactions batch associated with their id
+    execution_results: HashMap<usize, WorkSessionSavedData>,
     /// Total maximum of transactions left
     tx_left: u16,
     /// Total maximum of byte size left
@@ -116,6 +121,8 @@ struct WorkSessionExecutionResult {
     contracts_used: Vec<ContractId>,
     /// The transactions that were skipped by the worker
     skipped_tx: SkippedTransactions,
+    /// Batch of transactions (included skipped ones) useful to re-execute them in case of fallback skipped
+    txs: Vec<MaybeCheckedTransaction>,
 }
 
 struct WorkSessionSavedData {
@@ -127,6 +134,8 @@ struct WorkSessionSavedData {
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
     coins_used: Vec<(UtxoId, usize)>,
+    /// The transactions of the batch
+    txs: Vec<MaybeCheckedTransaction>,
 }
 
 /// Error type for the scheduler
@@ -194,23 +203,20 @@ where
             tx_size_left: config.block_transaction_size_limit,
             config,
             storage,
+            current_execution_tasks: FuturesUnordered::new(),
+            execution_results: HashMap::new(),
         }
     }
 
     pub async fn run(&mut self) -> Result<StorageChanges, SchedulerError> {
-        let runtime = self.runtime.as_ref().unwrap();
         let now = tokio::time::Instant::now();
         let mut waiting_reason = WaitingReason::NoWaiting;
         let new_tx_notifier = self.transaction_source.get_new_transactions_notifier();
         let deadline = now + self.config.total_execution_time;
-        // All executed transactions batch associated with their id
-        let mut execution_results = HashMap::new();
         // All contracts ids that have already been executed with their changes
         let mut contracts_changes: HashMap<ContractId, Changes> = HashMap::new();
         let mut nb_batch_created = 0;
         let mut _current_nb_transactions = 0;
-        // Store the futures of all the workers to be triggered when one of them finish
-        let mut futures = FuturesUnordered::new();
         let mut current_available_workers: VecDeque<usize> =
             (0..self.workers_state.len()).collect();
         let number_of_workers = self.workers_state.len();
@@ -270,7 +276,8 @@ where
 
                 let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
 
-                futures.push(runtime.spawn({
+                let runtime = self.runtime.as_ref().unwrap();
+                self.current_execution_tasks.push(runtime.spawn({
                     let batch_id = nb_batch_created;
                     let mut used_contracts_changes = vec![];
                     for contract in contracts_used.iter() {
@@ -289,6 +296,7 @@ where
                             coins_used,
                             contracts_used,
                             skipped_tx: vec![],
+                            txs: batch,
                         }
                     }
                 }));
@@ -301,15 +309,12 @@ where
                     _ = new_tx_notifier.notified() => {
                         waiting_reason = WaitingReason::NoWaiting;
                     }
-                    result = futures.next() => {
+                    result = self.current_execution_tasks.next() => {
                         match result {
-                            Some(Ok(WorkSessionExecutionResult { worker_id, batch_id, changes, coins_created, coins_used, contracts_used, skipped_tx })) => {
+                            Some(Ok(WorkSessionExecutionResult { worker_id, batch_id, changes, coins_created, coins_used, contracts_used, skipped_tx, txs })) => {
                                 if !skipped_tx.is_empty() {
-                                    // TODO: Handle the skipped transactions
-                                    // Wait for all the workers to finish gather all theirs transactions
-                                    // re-execute them in one worker without skipped one.
-                                    // Tell the TransactionSource that this transaction is skipped
-                                    // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
+                                    self.sequential_fallback(batch_id, txs).await;
+                                    continue;
                                 }
                                 // Update the state of the worker
                                 self.workers_state[worker_id].status = WorkerStatus::Idle;
@@ -324,12 +329,13 @@ where
                                         .iter()
                                         .map(|contract| (*contract, changes.clone()))
                                 );
-                                execution_results.insert(
+                                self.execution_results.insert(
                                     batch_id,
                                     WorkSessionSavedData {
                                         changes,
                                         coins_created,
                                         coins_used,
+                                        txs,
                                     }
                                 );
                             }
@@ -353,30 +359,30 @@ where
 
         // We have reached the deadline
         // We need to merge the states of all the workers
-        for future in futures {
-            match future.await {
-                Ok(res) => {
+        while self.current_execution_tasks.len() > 0 {
+            match self.current_execution_tasks.next().await {
+                Some(Ok(res)) => {
                     if !res.skipped_tx.is_empty() {
-                        // TODO: Handle the skipped transactions
-                        // Wait for all the workers to finish gather all theirs transactions
-                        // re-execute them in one worker without skipped one.
-                        // Tell the TransactionSource that this transaction is skipped
-                        // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
+                        self.sequential_fallback(res.batch_id, res.txs).await;
+                        break;
+                    } else {
+                        self.execution_results.insert(
+                            res.batch_id,
+                            WorkSessionSavedData {
+                                changes: res.changes,
+                                coins_created: res.coins_created,
+                                coins_used: res.coins_used,
+                                txs: res.txs,
+                            },
+                        );
                     }
-                    execution_results.insert(
-                        res.batch_id,
-                        WorkSessionSavedData {
-                            changes: res.changes,
-                            coins_created: res.coins_created,
-                            coins_used: res.coins_used,
-                        },
-                    );
                 }
-                Err(_) => {
+                Some(Err(_)) => {
                     return Err(SchedulerError::InternalError(
                         "Worker execution failed".to_string(),
                     ));
                 }
+                None => {}
             }
         }
 
@@ -392,7 +398,7 @@ where
         let mut compiled_created_coins = HashMap::new();
         // TODO: Maybe we also want to verify the amount
         for batch_id in 0..nb_batch_created {
-            if let Some(changes) = execution_results.remove(&batch_id) {
+            if let Some(changes) = self.execution_results.remove(&batch_id) {
                 for (coin, idx) in changes.coins_created {
                     compiled_created_coins.insert(coin, (batch_id, idx));
                 }
@@ -442,6 +448,79 @@ where
         }
 
         Ok(StorageChanges::ChangesList(storage_changes))
+    }
+
+    // Wait for all the workers to finish gather all theirs transactions
+    // re-execute them in one worker without skipped one. We also need to
+    // fetch all the possible executed and stored batch after the lowest batch_id we gonna
+    // re-execute.
+    // Tell the TransactionSource that this transaction is skipped
+    // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
+    async fn sequential_fallback(
+        &mut self,
+        batch_id: usize,
+        mut txs: Vec<MaybeCheckedTransaction>,
+    ) {
+        let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
+        let mut lower_batch_id = batch_id;
+        let mut higher_batch_id = batch_id;
+        let mut all_txs_by_batch_id = HashMap::new();
+        for future in current_execution_tasks {
+            match future.await {
+                Ok(res) => {
+                    all_txs_by_batch_id.insert(res.batch_id, res.txs);
+                    if res.batch_id < lower_batch_id {
+                        lower_batch_id = res.batch_id;
+                    }
+                    if res.batch_id > higher_batch_id {
+                        higher_batch_id = res.batch_id;
+                    }
+                }
+                Err(_) => {
+                    tracing::error!("Worker execution failed");
+                }
+            }
+        }
+
+        let mut all_txs = vec![];
+        for id in lower_batch_id..higher_batch_id {
+            if let Some(txs) = all_txs_by_batch_id.remove(&id) {
+                all_txs.extend(txs);
+            } else if let Some(res) = self.execution_results.remove(&id) {
+                all_txs.extend(res.txs);
+            } else if id == batch_id {
+                // Ordering of transactions is important so we need to place this code here
+                // which avoid to just move, but it's fine because we should only trigger this once
+                all_txs.extend(std::mem::take(&mut txs));
+            } else {
+                tracing::error!("Batch {id} not found in the execution results");
+            }
+        }
+        // TODO: Execute the transactions sequentially
+
+        // Save execution results for all batch id with empty data
+        // to not break the batch chain
+        for id in lower_batch_id..higher_batch_id {
+            self.execution_results.insert(
+                id,
+                WorkSessionSavedData {
+                    changes: Changes::default(),
+                    coins_created: vec![],
+                    coins_used: vec![],
+                    txs: vec![],
+                },
+            );
+        }
+        // Save the execution results for the current batch
+        self.execution_results.insert(
+            batch_id,
+            WorkSessionSavedData {
+                changes: Changes::default(),
+                coins_created: vec![],
+                coins_used: vec![],
+                txs: all_txs,
+            },
+        );
     }
 }
 
