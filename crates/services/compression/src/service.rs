@@ -272,7 +272,11 @@ where
                 };
 
             if canonical_height < maybe_height.value() {
-                tracing::error!("Canonical height is less than fetched height: Canonical height: {:?}, Fetched height: {:?}", &canonical_height, &maybe_height);
+                tracing::error!(
+                    "Canonical height is less than fetched height: Canonical height: {:?}, Fetched height: {:?}",
+                    &canonical_height,
+                    &maybe_height
+                );
                 return Err(crate::errors::CompressionError::FailedToGetSyncStatus);
             }
 
