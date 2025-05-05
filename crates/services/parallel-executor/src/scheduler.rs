@@ -34,6 +34,7 @@ use ::futures::{
 };
 use fuel_core_storage::{
     Error as StorageError,
+    column::Column,
     transactional::{
         Changes,
         StorageChanges,
@@ -323,11 +324,32 @@ where
                                     waiting_reason = WaitingReason::NoWaiting;
                                 }
 
-                                // TODO: Save only the part that touch the contract to not clone everything
+                                // Is it useful ?
+                                // Did I listed all column ?
+                                // Need future proof
+                                let mut tmp_contracts_changes = HashMap::new();
+                                for column in [
+                                    Column::ContractsRawCode,
+                                    Column::ContractsState,
+                                    Column::ContractsLatestUtxo,
+                                    Column::ContractsAssets,
+                                    Column::ContractsAssetsMerkleData,
+                                    Column::ContractsAssetsMerkleMetadata,
+                                    Column::ContractsStateMerkleData,
+                                    Column::ContractsStateMerkleMetadata,
+                                ] {
+                                    let column = column.as_u32();
+                                    if let Some(changes) = changes.get(&column) {
+                                        tmp_contracts_changes.insert(
+                                            column,
+                                            changes.clone(),
+                                        );
+                                    }
+                                }
                                 contracts_changes.extend(
                                     contracts_used
                                         .iter()
-                                        .map(|contract| (*contract, changes.clone()))
+                                        .map(|contract| (*contract, tmp_contracts_changes.clone()))
                                 );
                                 self.execution_results.insert(
                                     batch_id,
