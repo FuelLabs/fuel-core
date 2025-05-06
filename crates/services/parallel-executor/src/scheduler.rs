@@ -66,7 +66,7 @@ pub struct Config {
     block_transaction_count_limit: u16,
 }
 
-pub struct Scheduler<TxSource, D> {
+pub struct Scheduler<TxSource, S> {
     /// Config
     config: Config,
     /// The state of each worker
@@ -74,11 +74,13 @@ pub struct Scheduler<TxSource, D> {
     /// Transaction source to ask for new transactions
     transaction_source: TxSource,
     /// Database transaction for the execution
-    storage: D,
+    storage: S,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
     /// List of available workers
     current_available_workers: VecDeque<usize>,
+    /// All contracts ids that have along with their changes
+    contracts_changes: HashMap<ContractId, Changes>,
     /// Current execution tasks
     current_execution_tasks:
         FuturesUnordered<tokio::task::JoinHandle<WorkSessionExecutionResult>>,
@@ -175,16 +177,16 @@ impl<TxSource, D> Drop for Scheduler<TxSource, D> {
     }
 }
 
-impl<TxSource, D> Scheduler<TxSource, D>
+impl<TxSource, S> Scheduler<TxSource, S>
 where
     TxSource: TransactionsSource,
-    D: Storage,
+    S: Storage,
 {
     pub fn new(
         config: Config,
         number_of_worker: usize,
         transaction_source: TxSource,
-        storage: D,
+        storage: S,
     ) -> Self {
         let mut workers_state = Vec::with_capacity(number_of_worker);
         for _ in 0..number_of_worker {
@@ -210,6 +212,7 @@ where
             execution_results: HashMap::new(),
             current_available_workers: (0..number_of_worker).collect(),
             state: SchedulerState::TransactionsReadyForPickup,
+            contracts_changes: HashMap::new(),
         }
     }
 
@@ -217,12 +220,9 @@ where
         let new_tx_notifier = self.transaction_source.get_new_transactions_notifier();
         let now = tokio::time::Instant::now();
         let deadline = now + self.config.total_execution_time;
-
-        // All contracts ids that have already been executed with their changes
-        let mut contracts_changes: HashMap<ContractId, Changes> = HashMap::new();
-        let mut nb_batch_created = 0;
-        let mut _current_nb_transactions = 0;
         let number_of_workers = self.workers_state.len();
+        let mut nb_batch_created = 0;
+        let mut nb_transactions = 0;
         let initial_gas = self
             .config
             .block_gas_limit
@@ -232,104 +232,32 @@ where
             ))?;
 
         'outer: loop {
-            // Check if we have any free workers
             if self.is_worker_idling() {
                 let (batch, worker_id) =
                     self.ask_new_transactions_batch(now, initial_gas)?;
+                let batch_len = batch.len() as u16;
 
                 if batch.is_empty() {
                     continue 'outer;
                 }
 
-                self.tx_left -= batch.len() as u16;
-                // Useful to have a range of slots in the block to set tx pointers
-                _current_nb_transactions += batch.len() as u16;
-                self.tx_size_left -=
-                    batch.iter().map(|tx| tx.size()).sum::<usize>() as u32;
+                self.execute_batch(batch, nb_batch_created, nb_transactions, worker_id)?;
 
-                let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
-
-                let runtime = self.runtime.as_ref().unwrap();
-                self.current_execution_tasks.push(runtime.spawn({
-                    let batch_id = nb_batch_created;
-                    let mut used_contracts_changes = vec![];
-                    for contract in contracts_used.iter() {
-                        if let Some(changes) = contracts_changes.remove(contract) {
-                            used_contracts_changes.push(changes);
-                        }
-                    }
-                    let contracts_used = contracts_used.clone();
-                    async move {
-                        // TODO: Execute the batch of transactions
-                        WorkSessionExecutionResult {
-                            worker_id,
-                            batch_id,
-                            changes: Changes::default(),
-                            coins_created: vec![],
-                            coins_used,
-                            contracts_used,
-                            skipped_tx: vec![],
-                            txs: batch,
-                        }
-                    }
-                }));
                 nb_batch_created += 1;
-                self.workers_state[worker_id].executing_contracts = contracts_used;
+                nb_transactions += batch_len;
             } else {
                 tokio::select! {
-                    // We have new transactions to execute
                     _ = new_tx_notifier.notified() => {
-                        self.state = SchedulerState::TransactionsReadyForPickup;
+                        self.new_executable_transactions();
                     }
                     result = self.current_execution_tasks.next() => {
                         match result {
-                            Some(Ok(WorkSessionExecutionResult { worker_id, batch_id, changes, coins_created, coins_used, contracts_used, skipped_tx, txs })) => {
-                                if !skipped_tx.is_empty() {
-                                    self.sequential_fallback(batch_id, txs).await;
+                            Some(Ok(res)) => {
+                                if !res.skipped_tx.is_empty() {
+                                    self.sequential_fallback(res.batch_id, res.txs).await;
                                     continue;
                                 }
-                                // Update the state of the worker
-                                self.workers_state[worker_id].executing_contracts.clear();
-                                if self.state == SchedulerState::WaitingForWorker {
-                                    self.state = SchedulerState::TransactionsReadyForPickup;
-                                }
-
-                                // Is it useful ?
-                                // Did I listed all column ?
-                                // Need future proof
-                                let mut tmp_contracts_changes = HashMap::new();
-                                for column in [
-                                    Column::ContractsRawCode,
-                                    Column::ContractsState,
-                                    Column::ContractsLatestUtxo,
-                                    Column::ContractsAssets,
-                                    Column::ContractsAssetsMerkleData,
-                                    Column::ContractsAssetsMerkleMetadata,
-                                    Column::ContractsStateMerkleData,
-                                    Column::ContractsStateMerkleMetadata,
-                                ] {
-                                    let column = column.as_u32();
-                                    if let Some(changes) = changes.get(&column) {
-                                        tmp_contracts_changes.insert(
-                                            column,
-                                            changes.clone(),
-                                        );
-                                    }
-                                }
-                                contracts_changes.extend(
-                                    contracts_used
-                                        .iter()
-                                        .map(|contract| (*contract, tmp_contracts_changes.clone()))
-                                );
-                                self.execution_results.insert(
-                                    batch_id,
-                                    WorkSessionSavedData {
-                                        changes,
-                                        coins_created,
-                                        coins_used,
-                                        txs,
-                                    }
-                                );
+                                self.register_execution_result(res);
                             }
                             _ => {
                                 return Err(SchedulerError::InternalError(
@@ -338,113 +266,25 @@ where
                             }
                         }
                     }
-                    // We have reached the deadline
                     _ = tokio::time::sleep_until(deadline) => {
-                        // We have reached the deadline
                         break 'outer;
                     }
                 }
             }
         }
-        let tolerance_execution_time_overflow = self.config.total_execution_time / 10;
-        let now = tokio::time::Instant::now();
 
-        // We have reached the deadline
-        // We need to merge the states of all the workers
-        while self.current_execution_tasks.len() > 0 {
-            match self.current_execution_tasks.next().await {
-                Some(Ok(res)) => {
-                    if !res.skipped_tx.is_empty() {
-                        self.sequential_fallback(res.batch_id, res.txs).await;
-                        break;
-                    } else {
-                        self.execution_results.insert(
-                            res.batch_id,
-                            WorkSessionSavedData {
-                                changes: res.changes,
-                                coins_created: res.coins_created,
-                                coins_used: res.coins_used,
-                                txs: res.txs,
-                            },
-                        );
-                    }
-                }
-                Some(Err(_)) => {
-                    return Err(SchedulerError::InternalError(
-                        "Worker execution failed".to_string(),
-                    ));
-                }
-                None => {}
-            }
-        }
+        self.wait_all_execution_tasks().await?;
 
-        if now.elapsed() > tolerance_execution_time_overflow {
-            tracing::warn!(
-                "Execution time exceeded the limit by: {}ms",
-                now.elapsed().as_millis()
-            );
-        }
-
-        // Verify the coin dependency chain
-        let mut storage_changes = vec![];
-        let mut compiled_created_coins = HashMap::new();
-        // TODO: Maybe we also want to verify the amount
-        for batch_id in 0..nb_batch_created {
-            if let Some(changes) = self.execution_results.remove(&batch_id) {
-                for (coin, idx) in changes.coins_created {
-                    compiled_created_coins.insert(coin, (batch_id, idx));
-                }
-                for (coin, idx) in changes.coins_used {
-                    match self.storage.get_coin(&coin) {
-                        Ok(Some(_)) => {
-                            // Coin is in the database
-                        }
-                        Ok(None) => {
-                            // Coin is not in the database
-                            match compiled_created_coins.get(&coin) {
-                                Some((coin_creation_batch_id, coin_creation_tx_idx)) => {
-                                    // Coin is in the block
-                                    if coin_creation_batch_id <= &batch_id
-                                        && coin_creation_tx_idx <= &idx
-                                    {
-                                        // Coin is created in a batch that is before the current one
-                                    } else {
-                                        // Coin is created in a batch that is after the current one
-                                        return Err(SchedulerError::InternalError(
-                                            format!(
-                                                "Coin {coin} is created in a batch that is after the current one"
-                                            ),
-                                        ));
-                                    }
-                                }
-                                None => {
-                                    return Err(SchedulerError::InternalError(format!(
-                                        "Coin {coin} is not in the database and not created in the block"
-                                    )));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            return Err(SchedulerError::InternalError(format!(
-                                "Error while getting coin {coin}: {e}"
-                            )));
-                        }
-                    }
-                }
-                storage_changes.push(changes.changes);
-            } else {
-                return Err(SchedulerError::InternalError(format!(
-                    "Batch {batch_id} not found in the execution results"
-                )));
-            }
-        }
-
-        Ok(StorageChanges::ChangesList(storage_changes))
+        self.verify_coherency_and_merge_results(nb_batch_created)
     }
 
     fn is_worker_idling(&self) -> bool {
         !self.current_available_workers.is_empty()
             && self.state == SchedulerState::TransactionsReadyForPickup
+    }
+
+    fn new_executable_transactions(&mut self) {
+        self.state = SchedulerState::TransactionsReadyForPickup;
     }
 
     fn ask_new_transactions_batch(
@@ -484,7 +324,157 @@ where
             }
             self.current_available_workers.push_back(worker_id);
         }
+
+        self.tx_size_left -= batch.iter().map(|tx| tx.size()).sum::<usize>() as u32;
+        self.tx_left -= batch.len() as u16;
         Ok((batch, worker_id))
+    }
+
+    fn execute_batch(
+        &mut self,
+        batch: Vec<MaybeCheckedTransaction>,
+        batch_id: usize,
+        _start_idx_txs: u16,
+        worker_id: usize,
+    ) -> Result<(), SchedulerError> {
+        let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
+        let runtime = self.runtime.as_ref().unwrap();
+        self.current_execution_tasks.push(runtime.spawn({
+            let mut used_contracts_changes = vec![];
+            for contract in contracts_used.iter() {
+                if let Some(changes) = self.contracts_changes.remove(contract) {
+                    used_contracts_changes.push(changes);
+                }
+            }
+            let contracts_used = contracts_used.clone();
+            async move {
+                // TODO: Execute the batch of transactions
+                WorkSessionExecutionResult {
+                    worker_id,
+                    batch_id,
+                    changes: Changes::default(),
+                    coins_created: vec![],
+                    coins_used,
+                    contracts_used,
+                    skipped_tx: vec![],
+                    txs: batch,
+                }
+            }
+        }));
+        self.workers_state[worker_id].executing_contracts = contracts_used;
+        Ok(())
+    }
+
+    fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
+        // Update the state of the worker
+        self.workers_state[res.worker_id]
+            .executing_contracts
+            .clear();
+        if self.state == SchedulerState::WaitingForWorker {
+            self.state = SchedulerState::TransactionsReadyForPickup;
+        }
+
+        // Is it useful ?
+        // Did I listed all column ?
+        // Need future proof
+        let mut tmp_contracts_changes = HashMap::new();
+        for column in [
+            Column::ContractsRawCode,
+            Column::ContractsState,
+            Column::ContractsLatestUtxo,
+            Column::ContractsAssets,
+            Column::ContractsAssetsMerkleData,
+            Column::ContractsAssetsMerkleMetadata,
+            Column::ContractsStateMerkleData,
+            Column::ContractsStateMerkleMetadata,
+        ] {
+            let column = column.as_u32();
+            if let Some(changes) = res.changes.get(&column) {
+                tmp_contracts_changes.insert(column, changes.clone());
+            }
+        }
+        self.contracts_changes.extend(
+            res.contracts_used
+                .iter()
+                .map(|contract| (*contract, tmp_contracts_changes.clone())),
+        );
+        self.execution_results.insert(
+            res.batch_id,
+            WorkSessionSavedData {
+                changes: res.changes,
+                coins_created: res.coins_created,
+                coins_used: res.coins_used,
+                txs: res.txs,
+            },
+        );
+    }
+
+    async fn wait_all_execution_tasks(&mut self) -> Result<(), SchedulerError> {
+        let tolerance_execution_time_overflow = self.config.total_execution_time / 10;
+        let now = tokio::time::Instant::now();
+
+        // We have reached the deadline
+        // We need to merge the states of all the workers
+        while !self.current_execution_tasks.is_empty() {
+            match self.current_execution_tasks.next().await {
+                Some(Ok(res)) => {
+                    if !res.skipped_tx.is_empty() {
+                        self.sequential_fallback(res.batch_id, res.txs).await;
+                        break;
+                    } else {
+                        self.execution_results.insert(
+                            res.batch_id,
+                            WorkSessionSavedData {
+                                changes: res.changes,
+                                coins_created: res.coins_created,
+                                coins_used: res.coins_used,
+                                txs: res.txs,
+                            },
+                        );
+                    }
+                }
+                Some(Err(_)) => {
+                    return Err(SchedulerError::InternalError(
+                        "Worker execution failed".to_string(),
+                    ));
+                }
+                None => {}
+            }
+        }
+
+        if now.elapsed() > tolerance_execution_time_overflow {
+            tracing::warn!(
+                "Execution time exceeded the limit by: {}ms",
+                now.elapsed().as_millis()
+            );
+        }
+        Ok(())
+    }
+
+    fn verify_coherency_and_merge_results(
+        &mut self,
+        nb_batch: usize,
+    ) -> Result<StorageChanges, SchedulerError> {
+        let mut storage_changes = vec![];
+
+        let mut compiled_created_coins = CoinDependencyChainVerifier::new();
+        for batch_id in 0..nb_batch {
+            if let Some(changes) = self.execution_results.remove(&batch_id) {
+                compiled_created_coins
+                    .register_coins_created(batch_id, changes.coins_created);
+                compiled_created_coins.verify_coins_used(
+                    batch_id,
+                    changes.coins_used,
+                    &self.storage,
+                )?;
+                storage_changes.push(changes.changes);
+            } else {
+                return Err(SchedulerError::InternalError(format!(
+                    "Batch {batch_id} not found in the execution results"
+                )));
+            }
+        }
+        Ok(StorageChanges::ChangesList(storage_changes))
     }
 
     // Wait for all the workers to finish gather all theirs transactions
@@ -558,6 +548,76 @@ where
                 txs: all_txs,
             },
         );
+    }
+}
+
+struct CoinDependencyChainVerifier {
+    coins_registered: HashMap<UtxoId, (usize, usize)>,
+}
+
+impl CoinDependencyChainVerifier {
+    fn new() -> Self {
+        Self {
+            coins_registered: HashMap::new(),
+        }
+    }
+
+    fn register_coins_created(
+        &mut self,
+        batch_id: usize,
+        coins_created: Vec<(UtxoId, usize)>,
+    ) {
+        for (coin, idx) in coins_created {
+            self.coins_registered.insert(coin, (batch_id, idx));
+        }
+    }
+
+    fn verify_coins_used<S>(
+        &self,
+        batch_id: usize,
+        coins_used: Vec<(UtxoId, usize)>,
+        storage: &S,
+    ) -> Result<(), SchedulerError>
+    where
+        S: Storage,
+    {
+        // TODO: Maybe we also want to verify the amount
+        for (coin, idx) in coins_used {
+            match storage.get_coin(&coin) {
+                Ok(Some(_)) => {
+                    // Coin is in the database
+                }
+                Ok(None) => {
+                    // Coin is not in the database
+                    match self.coins_registered.get(&coin) {
+                        Some((coin_creation_batch_id, coin_creation_tx_idx)) => {
+                            // Coin is in the block
+                            if coin_creation_batch_id <= &batch_id
+                                && coin_creation_tx_idx <= &idx
+                            {
+                                // Coin is created in a batch that is before the current one
+                            } else {
+                                // Coin is created in a batch that is after the current one
+                                return Err(SchedulerError::InternalError(format!(
+                                    "Coin {coin} is created in a batch that is after the current one"
+                                )));
+                            }
+                        }
+                        None => {
+                            return Err(SchedulerError::InternalError(format!(
+                                "Coin {coin} is not in the database and not created in the block"
+                            )));
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(SchedulerError::InternalError(format!(
+                        "Error while getting coin {coin}: {e}"
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 }
 
