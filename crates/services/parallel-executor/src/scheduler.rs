@@ -366,7 +366,6 @@ where
     }
 
     fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
-        // Update the state of the worker
         self.workers_state[res.worker_id]
             .executing_contracts
             .clear();
