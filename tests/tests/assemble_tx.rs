@@ -312,8 +312,9 @@ async fn assemble_transaction__finds_another_input_if_inputs_not_spendable() {
         .await;
 
     // then
-    let _status = client.submit_and_await_commit(&res.unwrap()).await.unwrap();
-    assert!(matches!(_status, TransactionStatus::Success { .. }));
+    let tx = res.unwrap();
+    let status = client.submit_and_await_commit(&tx).await.unwrap();
+    assert!(matches!(status, TransactionStatus::Success { .. }));
 }
 
 #[tokio::test]
