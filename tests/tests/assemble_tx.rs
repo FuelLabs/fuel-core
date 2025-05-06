@@ -45,17 +45,20 @@ use fuel_core_types::{
         Word,
         policies::Policies,
     },
-    fuel_types::canonical::Serialize,
+    fuel_types::{
+        Nonce,
+        canonical::Serialize,
+    },
     fuel_vm::consts::WORD_SIZE,
     services::executor::TransactionExecutionResult,
 };
-use std::str::FromStr;
 use test_helpers::{
     assemble_tx::{
         AssembleAndRunTx,
         SigningAccount,
     },
     config_with_fee,
+    default_signing_secret,
     default_signing_wallet,
 };
 
@@ -243,62 +246,106 @@ async fn assemble_transaction__user_provided_change_output() {
     ));
 }
 
-fn config_with_message_coin() -> Config {
-    let mut state_config = StateConfig::default();
-
-    TESTNET_WALLET_SECRETS
-        .iter()
-        .enumerate()
-        .for_each(|(nonce, secret_str)| {
-            let secret = SecretKey::from_str(secret_str).expect("Expected valid secret");
-            let address = Address::from(*secret.public_key().hash());
-            let message = MessageConfig {
-                recipient: address,
-                nonce: [nonce as u8; 32].into(), // careful that this isn't over 255 or it will rollover
-                amount: Word::MAX / 2,
-                ..Default::default()
-            };
-            state_config.messages.push(message);
-        });
-    let mut config = Config::local_node_with_state_config(state_config);
-    config.utxo_validation = true;
-    config.txpool.utxo_validation = true;
-    config.gas_price_config.min_exec_gas_price = 1000;
-    config
-}
+// fn config_with_message_coin(data: Vec<u8>) -> Config {
+//     let mut state_config = StateConfig::default();
+//
+//     TESTNET_WALLET_SECRETS
+//         .iter()
+//         .enumerate()
+//         .for_each(|(nonce, secret_str)| {
+//             let secret = SecretKey::from_str(secret_str).expect("Expected valid secret");
+//             let address = Address::from(*secret.public_key().hash());
+//             let message = MessageConfig {
+//                 recipient: address,
+//                 nonce: [nonce as u8; 32].into(), // careful that this isn't over 255 or it will rollover
+//                 amount: Word::MAX / 2,
+//                 data: data.clone(),
+//                 ..Default::default()
+//             };
+//             state_config.messages.push(message);
+//         });
+//     let mut config = Config::local_node_with_state_config(state_config);
+//     config.utxo_validation = true;
+//     config.txpool.utxo_validation = true;
+//     config.gas_price_config.min_exec_gas_price = 1000;
+//     config
+// }
 
 #[tokio::test]
 async fn assemble_transaction__fails_if_inputs_not_spendable() {
     let _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .try_init();
-    let config = config_with_message_coin();
+
+    // Given
+    let data = [5; 99].to_vec();
+
+    let mut state_config = StateConfig::default();
+    let secret = default_signing_secret();
+    let recipient = Address::from(*secret.public_key().hash());
+    let account = SigningAccount::Wallet(secret);
+    let nonce: Nonce = [1; 32].into();
+    let amount = Word::MAX / 2;
+    let sender = Address::default();
+    let message = MessageConfig {
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        nonce: nonce.clone(),
+        amount,
+        data: data.clone(),
+        ..Default::default()
+    };
+    let second_message = MessageConfig {
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        nonce: [2; 32].into(),
+        amount: 1,
+        data: vec![],
+        ..Default::default()
+    };
+    state_config.messages.push(message.clone());
+    state_config.messages.push(second_message.clone());
+    let mut config = Config::local_node_with_state_config(state_config);
+    config.utxo_validation = true;
+    config.txpool.utxo_validation = true;
+    config.gas_price_config.min_exec_gas_price = 1000;
+
     let base_asset_id = config.base_asset_id();
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);
-    let account = default_signing_wallet();
+    // let account = default_signing_wallet();
 
-    let CoinType::MessageCoin(coin) = client
-        .coins_to_spend(&account.owner(), vec![(base_asset_id, 100, None)], None)
-        .await
-        .unwrap()[0][0]
-    else {
-        panic!("Expected a message coin");
-    };
+    // let CoinType::MessageCoin(_coin) = client
+    //     .coins_to_spend(&account.owner(), vec![(base_asset_id, 100, None)], None)
+    //     .await
+    //     .unwrap()[0][0]
+    // else {
+    //     panic!("Expected a message coin");
+    // };
 
-    // Given
     let tx = Transaction::script(
         0,
         vec![],
         vec![],
         Policies::new(),
-        vec![Input::message_coin_signed(
-            coin.sender,
-            coin.recipient,
-            coin.amount,
-            coin.nonce,
-            0,
-        )],
+        vec![
+            Input::message_data_signed(
+                message.sender,
+                message.recipient,
+                message.amount,
+                message.nonce,
+                0,
+                message.data,
+            ),
+            Input::message_coin_signed(
+                second_message.sender,
+                second_message.recipient,
+                second_message.amount,
+                second_message.nonce,
+                // [55; 32].into(),
+                1,
+            ),
+        ],
         vec![Output::Change {
             asset_id: base_asset_id,
             to: account.owner(),
@@ -310,7 +357,7 @@ async fn assemble_transaction__fails_if_inputs_not_spendable() {
     tracing::debug!("Tx: {:?}", tx);
 
     // When
-    let tx = client
+    let res = client
         .assemble_transaction(
             &tx.into(),
             account.clone(),
@@ -321,17 +368,25 @@ async fn assemble_transaction__fails_if_inputs_not_spendable() {
                 change_policy: ChangePolicy::Change(account.owner()),
             }],
         )
-        .await
-        .unwrap();
-    let status = client.dry_run(&vec![tx]).await.unwrap();
+        .await;
+
+    // then
+    tracing::debug!("res: {:?}", res);
+    assert!(res.is_err());
+
+    // let status = client.dry_run(&vec![tx]).await.unwrap();
 
     // Then
-    let status = status.into_iter().next().unwrap();
-    tracing::debug!("{:?}", status);
-    assert!(matches!(
-        status.result,
-        TransactionExecutionResult::Failed { .. }
-    ));
+    // let status = status.into_iter().next().unwrap();
+    // tracing::debug!("{:?}", status);
+    // if let TransactionExecutionResult::Success { receipts, .. } = status {} else {
+    //     panic!("Expected a success");
+    // }
+    // assert!(
+    //     matches!(status.result, TransactionExecutionResult::Failed { .. },),
+    //     "expected failure, got: {:?}",
+    //     status.result
+    // );
 }
 
 #[tokio::test]

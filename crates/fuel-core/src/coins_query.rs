@@ -40,7 +40,7 @@ pub enum CoinsQueryError {
     #[error("store error occurred: {0}")]
     StorageError(StorageError),
     #[error(
-        "the target cannot be met due to no coins available or exceeding the {max} coin limit."
+        "the target cannot be met due to no coins available for {asset_id} or exceeding the {max} coin limit. Collected: {collected_amount}."
     )]
     InsufficientCoinsForTheMax {
         asset_id: AssetId,
