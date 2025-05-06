@@ -898,7 +898,6 @@ where
     }
 
     async fn cover_fee(mut self) -> anyhow::Result<Self> {
-        tracing::debug!("kkkkkkkk");
         let base_asset_id = *self.arguments.consensus_parameters.base_asset_id();
         let gas_costs = self.arguments.consensus_parameters.gas_costs().clone();
         let fee_params = *self.arguments.consensus_parameters.fee_params();
@@ -913,27 +912,25 @@ where
         let mut total_base_asset = 0u64;
 
         for input in self.tx.inputs() {
-            // if input.is_message_data_signed() || input.is_message_data_predicate() {
-            tracing::debug!("jjjjjjj input: {:?}", &input);
+            if !input.is_message_data_signed() && !input.is_message_data_predicate() {
+                let Some(amount) = input.amount() else {
+                    continue;
+                };
+                let Some(asset_id) = input.asset_id(&base_asset_id) else {
+                    continue;
+                };
+                let Some(owner) = input.input_owner() else {
+                    continue;
+                };
 
-            let Some(amount) = input.amount() else {
-                continue;
-            };
-            let Some(asset_id) = input.asset_id(&base_asset_id) else {
-                continue;
-            };
-            let Some(owner) = input.input_owner() else {
-                continue;
-            };
-
-            if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
-                total_base_asset =
+                if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
+                    total_base_asset =
                         total_base_asset.checked_add(amount).ok_or_else(|| {
                             anyhow::anyhow!(
                         "The total base asset amount used by the transaction is too big"
                     )
                         })?;
-                // }
+                }
             }
         }
 
