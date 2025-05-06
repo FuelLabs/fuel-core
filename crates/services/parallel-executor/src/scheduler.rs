@@ -15,7 +15,7 @@
 //! This new batch mustn't contain any transaction that use a contract used in a batch of any other worker.
 //!
 //! For transactions without contracts, they are treat them as independent transactions. A verification is done at the end for the coin dependency chain.
-//! This can be done because we assume that the transaction pool is sending us transactions that are already correctly verified.
+//! This can be done because we assume that the transaction pool is sending us transactions that are alTransactionsReadyForPickup correctly verified.
 //! If we have a transaction that end up being skipped (only possible cause if consensus parameters changes) then we will have to
 //! fallback a sequential execution of the transaction that used the skipped one as a dependency.
 
@@ -77,11 +77,15 @@ pub struct Scheduler<TxSource, D> {
     storage: D,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
+    /// List of available workers
+    current_available_workers: VecDeque<usize>,
     /// Current execution tasks
     current_execution_tasks:
         FuturesUnordered<tokio::task::JoinHandle<WorkSessionExecutionResult>>,
     // All executed transactions batch associated with their id
     execution_results: HashMap<usize, WorkSessionSavedData>,
+    /// Current scheduler state
+    state: SchedulerState,
     /// Total maximum of transactions left
     tx_left: u16,
     /// Total maximum of byte size left
@@ -89,7 +93,6 @@ pub struct Scheduler<TxSource, D> {
 }
 
 pub struct WorkerState {
-    pub status: WorkerStatus,
     pub executing_contracts: Vec<ContractId>,
 }
 
@@ -153,17 +156,17 @@ pub enum SchedulerError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum WaitingReason {
+enum SchedulerState {
     /// Waiting for a worker to finish because we have filtered transactions
     WaitingForWorker,
     /// Waiting for a new transaction to be added to the transaction source
     WaitingForNewTransaction,
-    /// No waiting reason
-    NoWaiting,
+    /// Ready for a new worker to get some transactions
+    TransactionsReadyForPickup,
 }
 
 // Shutdown the tokio runtime to avoid panic if executor is already
-//   used from another tokio runtime
+// used from another tokio runtime
 impl<TxSource, D> Drop for Scheduler<TxSource, D> {
     fn drop(&mut self) {
         if let Some(runtime) = self.runtime.take() {
@@ -186,7 +189,6 @@ where
         let mut workers_state = Vec::with_capacity(number_of_worker);
         for _ in 0..number_of_worker {
             workers_state.push(WorkerState {
-                status: WorkerStatus::Idle,
                 executing_contracts: vec![],
             });
         }
@@ -206,20 +208,20 @@ where
             storage,
             current_execution_tasks: FuturesUnordered::new(),
             execution_results: HashMap::new(),
+            current_available_workers: (0..number_of_worker).collect(),
+            state: SchedulerState::TransactionsReadyForPickup,
         }
     }
 
     pub async fn run(&mut self) -> Result<StorageChanges, SchedulerError> {
-        let now = tokio::time::Instant::now();
-        let mut waiting_reason = WaitingReason::NoWaiting;
         let new_tx_notifier = self.transaction_source.get_new_transactions_notifier();
+        let now = tokio::time::Instant::now();
         let deadline = now + self.config.total_execution_time;
+
         // All contracts ids that have already been executed with their changes
         let mut contracts_changes: HashMap<ContractId, Changes> = HashMap::new();
         let mut nb_batch_created = 0;
         let mut _current_nb_transactions = 0;
-        let mut current_available_workers: VecDeque<usize> =
-            (0..self.workers_state.len()).collect();
         let number_of_workers = self.workers_state.len();
         let initial_gas = self
             .config
@@ -231,41 +233,11 @@ where
 
         'outer: loop {
             // Check if we have any free workers
-            if !current_available_workers.is_empty()
-                && waiting_reason == WaitingReason::NoWaiting
-            {
-                // SAFETY: We know that we have at least one worker available (checked line above)
-                let worker_id = current_available_workers.pop_front().unwrap();
-                let contracts_currently_used = self
-                    .workers_state
-                    .iter()
-                    .flat_map(|state| state.executing_contracts.clone())
-                    .collect::<HashSet<_>>();
-                let spent_time = now.elapsed();
-                // Time left in percentage to have the gas percentage left
-                let current_gas = initial_gas
-                    * ((1u128
-                        - spent_time.as_millis()
-                            / self.config.total_execution_time.as_millis())
-                        as u64);
-
-                let (batch, filtered) =
-                    self.transaction_source.get_executable_transactions(
-                        current_gas,
-                        self.tx_left,
-                        self.tx_size_left,
-                        Filter {
-                            excluded_contract_ids: contracts_currently_used,
-                        },
-                    );
+            if self.is_worker_idling() {
+                let (batch, worker_id) =
+                    self.ask_new_transactions_batch(now, initial_gas)?;
 
                 if batch.is_empty() {
-                    if filtered == TransactionFiltered::Filtered {
-                        waiting_reason = WaitingReason::WaitingForWorker;
-                    } else {
-                        waiting_reason = WaitingReason::WaitingForNewTransaction;
-                    }
-                    current_available_workers.push_back(worker_id);
                     continue 'outer;
                 }
 
@@ -303,12 +275,11 @@ where
                 }));
                 nb_batch_created += 1;
                 self.workers_state[worker_id].executing_contracts = contracts_used;
-                self.workers_state[worker_id].status = WorkerStatus::Executing;
             } else {
                 tokio::select! {
                     // We have new transactions to execute
                     _ = new_tx_notifier.notified() => {
-                        waiting_reason = WaitingReason::NoWaiting;
+                        self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     result = self.current_execution_tasks.next() => {
                         match result {
@@ -318,10 +289,9 @@ where
                                     continue;
                                 }
                                 // Update the state of the worker
-                                self.workers_state[worker_id].status = WorkerStatus::Idle;
                                 self.workers_state[worker_id].executing_contracts.clear();
-                                if waiting_reason == WaitingReason::WaitingForWorker {
-                                    waiting_reason = WaitingReason::NoWaiting;
+                                if self.state == SchedulerState::WaitingForWorker {
+                                    self.state = SchedulerState::TransactionsReadyForPickup;
                                 }
 
                                 // Is it useful ?
@@ -470,6 +440,51 @@ where
         }
 
         Ok(StorageChanges::ChangesList(storage_changes))
+    }
+
+    fn is_worker_idling(&self) -> bool {
+        !self.current_available_workers.is_empty()
+            && self.state == SchedulerState::TransactionsReadyForPickup
+    }
+
+    fn ask_new_transactions_batch(
+        &mut self,
+        start_execution_time: tokio::time::Instant,
+        initial_gas: u64,
+    ) -> Result<(Vec<MaybeCheckedTransaction>, usize), SchedulerError> {
+        let worker_id = self.current_available_workers.pop_front().ok_or(
+            SchedulerError::InternalError("No available workers".to_string()),
+        )?;
+        let contracts_currently_used = self
+            .workers_state
+            .iter()
+            .flat_map(|state| state.executing_contracts.clone())
+            .collect::<HashSet<_>>();
+        let spent_time = start_execution_time.elapsed();
+        // Time left in percentage to have the gas percentage left
+        let current_gas = initial_gas
+            * ((1u128
+                - spent_time.as_millis() / self.config.total_execution_time.as_millis())
+                as u64);
+
+        let (batch, filtered) = self.transaction_source.get_executable_transactions(
+            current_gas,
+            self.tx_left,
+            self.tx_size_left,
+            Filter {
+                excluded_contract_ids: contracts_currently_used,
+            },
+        );
+
+        if batch.is_empty() {
+            if filtered == TransactionFiltered::Filtered {
+                self.state = SchedulerState::WaitingForWorker;
+            } else {
+                self.state = SchedulerState::WaitingForNewTransaction;
+            }
+            self.current_available_workers.push_back(worker_id);
+        }
+        Ok((batch, worker_id))
     }
 
     // Wait for all the workers to finish gather all theirs transactions
