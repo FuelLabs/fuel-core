@@ -40,7 +40,10 @@ use fuel_core_storage::{
         StorageChanges,
     },
 };
-use fuel_core_types::blockchain::consensus::Consensus;
+use fuel_core_types::{
+    blockchain::consensus::Consensus,
+    fuel_types::BlockHeight,
+};
 
 use crate::{
     combined_database::{
@@ -229,10 +232,14 @@ impl FuelService {
         Ok(())
     }
 
-    /// Wait for the compression service to be in sync with L2 height
-    pub async fn await_compression_synced(&self) -> anyhow::Result<()> {
+    /// Waits until the compression service has synced
+    /// with the given block height
+    pub async fn await_compression_synced_until(
+        &self,
+        block_height: &BlockHeight,
+    ) -> anyhow::Result<()> {
         if let Some(sync_observer) = &self.runner.shared.compression {
-            sync_observer.await_synced().await?;
+            sync_observer.await_synced_until(block_height).await?;
         }
         Ok(())
     }

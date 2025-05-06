@@ -68,6 +68,13 @@ impl StateWatcher {
         core::mem::forget(sender);
         Self(receiver)
     }
+
+    /// Create a new `StateWatcher` with the `State::Starting` state.
+    pub fn starting() -> Self {
+        let (sender, receiver) = watch::channel(State::Starting);
+        core::mem::forget(sender);
+        Self(receiver)
+    }
 }
 
 impl StateWatcher {

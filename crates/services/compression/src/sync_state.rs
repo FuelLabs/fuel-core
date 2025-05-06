@@ -12,8 +12,8 @@ pub enum SyncState {
 }
 
 impl SyncState {
-    pub(crate) fn is_synced(&self) -> bool {
-        matches!(self, Self::Synced(_))
+    pub(crate) fn is_synced_until(&self, height: &BlockHeight) -> bool {
+        matches!(self, Self::Synced(h) if h >= height)
     }
 }
 

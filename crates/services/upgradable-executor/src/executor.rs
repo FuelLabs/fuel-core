@@ -240,7 +240,8 @@ impl<S, R> Executor<S, R> {
         // this is fine because only devnet was upgraded to 0.42.0 before this.
         ("0-41-10", 25),
         ("0-43-0", 26),
-        ("0-43-1", LATEST_STATE_TRANSITION_VERSION),
+        ("0-43-1", 27),
+        ("0-43-2", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(

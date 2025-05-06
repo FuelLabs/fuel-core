@@ -1,6 +1,9 @@
 use clap::ValueEnum;
 use std::{
-    num::NonZeroU64,
+    num::{
+        NonZeroU32,
+        NonZeroU64,
+    },
     path::PathBuf,
     time::Duration,
 };
@@ -360,6 +363,7 @@ impl GasPriceConfig {
 pub struct DaCompressionConfig {
     pub retention_duration: Duration,
     pub metrics: bool,
+    pub starting_height: Option<NonZeroU32>,
 }
 
 #[derive(Debug, Clone)]

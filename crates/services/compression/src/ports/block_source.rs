@@ -73,5 +73,5 @@ pub trait BlockSource: Send + Sync {
     /// Should provide a stream of blocks with metadata
     fn subscribe(&self) -> BlockStream;
     /// Should provide the block at a given height
-    fn get_block(&self, height: BlockAt) -> Option<BlockWithMetadata>;
+    fn get_block(&self, height: BlockAt) -> anyhow::Result<BlockWithMetadata>;
 }

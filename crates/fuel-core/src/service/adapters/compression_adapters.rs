@@ -60,10 +60,9 @@ impl block_source::BlockSource for CompressionBlockImporterAdapter {
         self.block_importer.events_shared_result()
     }
 
-    fn get_block(&self, height: BlockAt) -> Option<SharedImportResult> {
+    fn get_block(&self, height: BlockAt) -> anyhow::Result<SharedImportResult> {
         self.import_result_provider_adapter
             .result_at_height(height.into())
-            .ok()
     }
 }
 
@@ -71,7 +70,11 @@ impl configuration::CompressionConfigProvider
     for crate::service::config::DaCompressionConfig
 {
     fn config(&self) -> config::CompressionConfig {
-        config::CompressionConfig::new(self.retention_duration, self.metrics)
+        config::CompressionConfig::new(
+            self.retention_duration,
+            self.starting_height,
+            self.metrics,
+        )
     }
 }
 
