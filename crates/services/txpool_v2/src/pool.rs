@@ -253,8 +253,10 @@ where
                 (removed_tx_id, status.clone())
             })
             .collect::<Vec<_>>();
-        self.tx_status_manager
-            .squeezed_out_txs(removed_transactions);
+        if !removed_transactions.is_empty() {
+            self.tx_status_manager
+                .squeezed_out_txs(removed_transactions);
+        }
 
         self.update_stats();
         Ok(())
@@ -637,9 +639,10 @@ where
                 }));
             }
         }
-
-        self.tx_status_manager
-            .squeezed_out_txs(removed_transactions);
+        if !removed_transactions.is_empty() {
+            self.tx_status_manager
+                .squeezed_out_txs(removed_transactions);
+        }
         self.update_stats();
     }
 
@@ -677,15 +680,16 @@ where
                 // It's not needed to inform the status manager about the skipped transaction herself
                 // because he give the information but we need to inform him about the dependents
                 // that will be deleted
-                let iter = removed
+                let removed_txs: Vec<_> = removed
                     .into_iter()
                     .map(|data| {
                         let tx_id = data.transaction.id();
-
                         (tx_id, tx_status.clone())
                     })
                     .collect();
-                self.tx_status_manager.squeezed_out_txs(iter);
+                if !removed_txs.is_empty() {
+                    self.tx_status_manager.squeezed_out_txs(removed_txs);
+                }
             }
         }
 
