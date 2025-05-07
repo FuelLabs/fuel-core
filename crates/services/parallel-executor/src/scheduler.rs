@@ -380,7 +380,6 @@ where
                     used_contracts_changes.push(changes);
                 }
             }
-            let contracts_used = contracts_used.clone();
             async move {
                 // TODO: Execute the batch of transactions
                 WorkSessionExecutionResult {
