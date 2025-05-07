@@ -194,12 +194,12 @@ pub enum SchedulerError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SchedulerState {
-    /// Waiting for a worker to finish because we have filtered transactions
-    WaitingForWorker,
-    /// Waiting for a new transaction to be added to the transaction source
-    WaitingForNewTransaction,
     /// Ready for a new worker to get some transactions
     TransactionsReadyForPickup,
+    /// Waiting for a new transaction to be added to the transaction source
+    WaitingForNewTransaction,
+    /// Waiting for a worker to finish because we have filtered transactions
+    WaitingForWorker,
 }
 
 // Shutdown the tokio runtime to avoid panic if executor is already
