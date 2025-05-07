@@ -912,7 +912,7 @@ where
         let mut total_base_asset = 0u64;
 
         for input in self.tx.inputs() {
-            if !input.is_message_data_signed() && !input.is_message_data_predicate() {
+            if input_is_spendable_as_fee(&input) {
                 let Some(amount) = input.amount() else {
                     continue;
                 };
@@ -998,6 +998,10 @@ where
 
         Ok(self)
     }
+}
+
+fn input_is_spendable_as_fee(input: &Input) -> bool {
+    !input.is_message_data_signed() && !input.is_message_data_predicate()
 }
 
 fn has_duplicates<T, F, K>(items: &[T], extractor: F) -> bool
