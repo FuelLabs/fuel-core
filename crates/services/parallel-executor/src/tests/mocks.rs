@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use fuel_core_types::{
     fuel_tx::{
         ConsensusParameters,
@@ -32,12 +34,12 @@ pub struct MockTxPool {
 
 pub type GetExecutableTransactionsSender = std::sync::mpsc::Sender<(
     PoolRequestParams,
-    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered)>,
+    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
 )>;
 
 pub type GetExecutableTransactionsReceiver = std::sync::mpsc::Receiver<(
     PoolRequestParams,
-    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered)>,
+    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
 )>;
 
 impl MockTxPool {
@@ -62,7 +64,7 @@ impl TransactionsSource for MockTxPool {
         tx_count_limit: u16,
         block_transaction_size_limit: u32,
         filter: Filter,
-    ) -> (Vec<CheckedTransaction>, TransactionFiltered) {
+    ) -> (Vec<CheckedTransaction>, TransactionFiltered, Filter) {
         let (tx, rx) = std::sync::mpsc::channel();
         self.get_executable_transactions_results_sender
             .send((
@@ -87,7 +89,7 @@ impl TransactionsSource for MockTxPool {
 pub struct Consumer {
     pool_request_params: PoolRequestParams,
     response_sender:
-        std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered)>,
+        std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
 }
 
 impl Consumer {
@@ -122,7 +124,7 @@ impl Consumer {
     ) -> &Self {
         let txs = into_checked_txs(txs);
 
-        self.response_sender.send((txs, filtered)).unwrap();
+        self.response_sender.send((txs, filtered, Filter { excluded_contract_ids: HashSet::default() })).unwrap();
         self
     }
 }

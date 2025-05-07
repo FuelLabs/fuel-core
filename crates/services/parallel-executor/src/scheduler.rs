@@ -340,15 +340,15 @@ where
                 - spent_time.as_millis() as u64)
             / self.config.total_execution_time.as_millis() as u64;
 
-        let (batch, filtered) = self.transaction_source.get_executable_transactions(
+        let (batch, filtered, filter) = self.transaction_source.get_executable_transactions(
             current_gas,
             self.tx_left,
             self.tx_size_left,
-            // TODO: Move and return the filter instead of cloning
             Filter {
-                excluded_contract_ids: self.current_executing_contracts.clone(),
+                excluded_contract_ids: std::mem::take(&mut self.current_executing_contracts),
             },
         );
+        self.current_executing_contracts = filter.excluded_contract_ids;
 
         if batch.is_empty() {
             if filtered == TransactionFiltered::Filtered {
@@ -359,6 +359,7 @@ where
             self.current_available_workers.push_back(worker_id);
         }
 
+        // TODO: Maybe should be returned by transaction source
         self.tx_size_left -= batch.iter().map(|tx| tx.size()).sum::<usize>() as u32;
         self.tx_left -= batch.len() as u16;
         Ok(batch)
@@ -370,6 +371,7 @@ where
         batch_id: usize,
         _start_idx_txs: u16,
     ) -> Result<(), SchedulerError> {
+        // TODO: Maybe should be returned by transaction source
         let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
         let runtime = self.runtime.as_ref().unwrap();
         self.current_execution_tasks.push(runtime.spawn({
