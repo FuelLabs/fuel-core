@@ -67,6 +67,55 @@ pub struct Config {
     number_of_workers: usize,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ContractsChanges {
+    contracts_changes: HashMap<ContractId, u64>,
+    latest_id: u64,
+    changes_storage: HashMap<u64, Changes>,
+}
+
+impl ContractsChanges {
+    pub fn new() -> Self {
+        Self {
+            contracts_changes: HashMap::new(),
+            changes_storage: HashMap::new(),
+            latest_id: 0,
+        }
+    }
+
+    pub fn add_changes(&mut self, contract_ids: Vec<ContractId>, changes: Changes) {
+        let id = self.latest_id;
+        self.latest_id += 1;
+        for contract_id in contract_ids {
+            self.contracts_changes.insert(contract_id, id);
+        }
+        self.changes_storage.insert(id, changes);
+    }
+
+    pub fn get_changes(&self, contract_id: &ContractId) -> Option<&Changes> {
+        self.contracts_changes
+            .get(contract_id)
+            .and_then(|id| self.changes_storage.get(id))
+    }
+
+    pub fn extract_all_contracts_changes(&mut self) -> Vec<Changes> {
+        let mut changes = vec![];
+        for id in 0..self.latest_id {
+            if let Some(change) = self.changes_storage.remove(&id) {
+                changes.push(change);
+            }
+        }
+        self.contracts_changes.clear();
+        changes
+    }
+
+    pub fn clear(&mut self) {
+        self.contracts_changes.clear();
+        self.changes_storage.clear();
+        self.latest_id = 0;
+    }
+}
+
 pub struct Scheduler<TxSource, S> {
     /// Config
     config: Config,
@@ -78,8 +127,8 @@ pub struct Scheduler<TxSource, S> {
     runtime: Option<Runtime>,
     /// List of available workers
     current_available_workers: VecDeque<usize>,
-    /// All contracts ids that have along with their changes
-    contracts_changes: HashMap<ContractId, Changes>,
+    /// All contracts changes
+    contracts_changes: ContractsChanges,
     /// Current contracts being executed
     current_executing_contracts: HashSet<ContractId>,
     /// Current execution tasks
@@ -186,7 +235,7 @@ where
             current_execution_tasks: FuturesUnordered::new(),
             execution_results: HashMap::new(),
             state: SchedulerState::TransactionsReadyForPickup,
-            contracts_changes: HashMap::new(),
+            contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
         }
     }
@@ -327,7 +376,7 @@ where
             let mut used_contracts_changes = vec![];
             for contract in contracts_used.iter() {
                 self.current_executing_contracts.insert(*contract);
-                if let Some(changes) = self.contracts_changes.remove(contract) {
+                if let Some(changes) = self.contracts_changes.get_changes(contract) {
                     used_contracts_changes.push(changes);
                 }
             }
@@ -348,7 +397,7 @@ where
         Ok(())
     }
 
-    fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
+    fn register_execution_result(&mut self, mut res: WorkSessionExecutionResult) {
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
         }
@@ -371,15 +420,12 @@ where
             Column::ContractsStateMerkleMetadata,
         ] {
             let column = column.as_u32();
-            if let Some(changes) = res.changes.get(&column) {
-                tmp_contracts_changes.insert(column, changes.clone());
+            if let Some(changes) = res.changes.remove(&column) {
+                tmp_contracts_changes.insert(column, changes);
             }
         }
-        self.contracts_changes.extend(
-            res.contracts_used
-                .iter()
-                .map(|contract| (*contract, tmp_contracts_changes.clone())),
-        );
+        self.contracts_changes
+            .add_changes(res.contracts_used, tmp_contracts_changes);
         self.execution_results.insert(
             res.batch_id,
             WorkSessionSavedData {
@@ -456,6 +502,7 @@ where
                 )));
             }
         }
+        storage_changes.extend(self.contracts_changes.extract_all_contracts_changes());
         Ok(StorageChanges::ChangesList(storage_changes))
     }
 
