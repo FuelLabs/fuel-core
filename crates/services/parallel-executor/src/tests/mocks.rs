@@ -124,7 +124,15 @@ impl Consumer {
     ) -> &Self {
         let txs = into_checked_txs(txs);
 
-        self.response_sender.send((txs, filtered, Filter { excluded_contract_ids: HashSet::default() })).unwrap();
+        self.response_sender
+            .send((
+                txs,
+                filtered,
+                Filter {
+                    excluded_contract_ids: HashSet::default(),
+                },
+            ))
+            .unwrap();
         self
     }
 }

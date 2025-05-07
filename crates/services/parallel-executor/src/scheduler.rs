@@ -340,14 +340,17 @@ where
                 - spent_time.as_millis() as u64)
             / self.config.total_execution_time.as_millis() as u64;
 
-        let (batch, filtered, filter) = self.transaction_source.get_executable_transactions(
-            current_gas,
-            self.tx_left,
-            self.tx_size_left,
-            Filter {
-                excluded_contract_ids: std::mem::take(&mut self.current_executing_contracts),
-            },
-        );
+        let (batch, filtered, filter) =
+            self.transaction_source.get_executable_transactions(
+                current_gas,
+                self.tx_left,
+                self.tx_size_left,
+                Filter {
+                    excluded_contract_ids: std::mem::take(
+                        &mut self.current_executing_contracts,
+                    ),
+                },
+            );
         self.current_executing_contracts = filter.excluded_contract_ids;
 
         if batch.is_empty() {
