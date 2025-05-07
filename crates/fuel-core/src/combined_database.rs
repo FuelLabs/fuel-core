@@ -6,6 +6,9 @@ use crate::state::{
 
 use crate::{
     database::{
+        Database,
+        GenesisDatabase,
+        Result as DatabaseResult,
         database_description::{
             compression::CompressionDatabase,
             gas_price::GasPriceDatabase,
@@ -13,9 +16,6 @@ use crate::{
             on_chain::OnChain,
             relayer::Relayer,
         },
-        Database,
-        GenesisDatabase,
-        Result as DatabaseResult,
     },
     service::DbType,
 };
@@ -26,6 +26,7 @@ use fuel_core_chain_config::{
 };
 #[cfg(feature = "backup")]
 use fuel_core_services::TraceErr;
+use fuel_core_storage::Result as StorageResult;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
     Coins,
@@ -35,8 +36,10 @@ use fuel_core_storage::tables::{
     ContractsState,
     Messages,
 };
-use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -468,6 +471,45 @@ impl CombinedDatabase {
                 if gas_price_chain_height > target_block_height {
                     self.gas_price().rollback_last_block()?;
                 }
+            }
+        }
+
+        if shutdown_listener.is_cancelled() {
+            return Err(anyhow::anyhow!(
+                "Stop the rollback due to shutdown signal received"
+            ));
+        }
+
+        Ok(())
+    }
+
+    pub fn rollback_relayer_to<S>(
+        &self,
+        target_block_height: DaBlockHeight,
+        shutdown_listener: &mut S,
+    ) -> anyhow::Result<()>
+    where
+        S: ShutdownListener,
+    {
+        while !shutdown_listener.is_cancelled() {
+            let relayer_height = self
+                .relayer()
+                .latest_height_from_metadata()?
+                .ok_or(anyhow::anyhow!("on-chain database doesn't have height"))?;
+
+            if relayer_height == target_block_height {
+                break;
+            }
+
+            if relayer_height < target_block_height {
+                return Err(anyhow::anyhow!(
+                    "realyer database height({relayer_height}) \
+                    is less than target height({target_block_height})"
+                ));
+            }
+
+            if relayer_height > target_block_height {
+                self.relayer().rollback_last_block()?;
             }
         }
 

@@ -12,8 +12,8 @@ use fuel_core::{
     },
 };
 use rlimit::{
-    getrlimit,
     Resource,
+    getrlimit,
 };
 use std::path::PathBuf;
 
@@ -42,7 +42,11 @@ pub struct Command {
 
     /// The path to the database.
     #[clap(long = "target-block-height")]
-    pub target_block_height: u32,
+    pub target_block_height: Option<u32>,
+
+    /// The relayer's height.
+    #[clap(long = "relayer-target-block-height")]
+    pub relayer_target_block_height: Option<u64>,
 }
 
 fn get_default_max_fds() -> i32 {
@@ -68,9 +72,14 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     .context(format!("failed to open combined database at path {path:?}"))?;
 
     let mut shutdown_listener = ShutdownListener::spawn();
-    let target_block_height = command.target_block_height.into();
 
-    db.rollback_to(target_block_height, &mut shutdown_listener)?;
+    if let Some(height) = command.target_block_height {
+        db.rollback_to(height.into(), &mut shutdown_listener)?;
+    }
+
+    if let Some(height) = command.relayer_target_block_height {
+        db.rollback_relayer_to(height.into(), &mut shutdown_listener)?;
+    }
 
     Ok(())
 }
