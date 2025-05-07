@@ -94,6 +94,7 @@ use fuel_core_types::{
     },
     services::executor::TransactionExecutionResult,
 };
+use fuel_types::SubAssetId;
 use rand::SeedableRng;
 use utils::{
     make_u128,
@@ -332,7 +333,7 @@ fn service_with_many_contracts(
             .unwrap();
 
         let mut storage_key = primitive_types::U256::zero();
-        let mut sub_id = Bytes32::zeroed();
+        let mut sub_id = SubAssetId::zeroed();
         database
             .init_contract_balances(
                 contract_id,

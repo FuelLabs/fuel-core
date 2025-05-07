@@ -18,6 +18,7 @@ use fuel_core_types::{
         Output,
         Receipt,
         StorageSlot,
+        SubAssetId,
         Transaction,
         TransactionBuilder,
         field::Outputs,
@@ -81,7 +82,7 @@ pub async fn deploy(
 pub fn mint_tx(
     rng: &mut rand::rngs::StdRng,
     contract_id: ContractId,
-    sub_asset_id: Bytes32,
+    sub_asset_id: SubAssetId,
     amount: u64,
 ) -> Transaction {
     let script = [
@@ -128,7 +129,7 @@ pub async fn mint(
     client: &FuelClient,
     rng: &mut rand::rngs::StdRng,
     contract_id: ContractId,
-    sub_asset_id: Bytes32,
+    sub_asset_id: SubAssetId,
     amount: u64,
 ) -> BlockHeight {
     let tx = mint_tx(rng, contract_id, sub_asset_id, amount);

@@ -97,7 +97,7 @@ where
         receipt => {
             return Err(IndexationError::UnexpectedReceipt {
                 receipt: receipt.to_string(),
-            })
+            });
         }
     };
     Ok(new_supply)
@@ -110,10 +110,10 @@ mod tests {
         transactional::WriteTransaction,
     };
     use fuel_core_types::fuel_tx::{
-        Bytes32,
         ContractId,
         ContractIdExt,
         Receipt,
+        SubAssetId,
     };
 
     use crate::{
@@ -145,7 +145,7 @@ mod tests {
 
         const ASSET_METADATA_IS_ENABLED: bool = true;
 
-        let sub_id: Bytes32 = Bytes32::from([1u8; 32]);
+        let sub_id = SubAssetId::from([1u8; 32]);
         let contract_id: ContractId = ContractId::from([2u8; 32]);
         let contract_asset_id = contract_id.asset_id(&sub_id);
         const MINT_AMOUNT: u64 = 3;
@@ -189,7 +189,7 @@ mod tests {
 
         const ASSET_METADATA_IS_DISABLED: bool = false;
 
-        let sub_id: Bytes32 = Bytes32::from([1u8; 32]);
+        let sub_id = SubAssetId::from([1u8; 32]);
         let contract_id: ContractId = ContractId::from([2u8; 32]);
         let contract_asset_id = contract_id.asset_id(&sub_id);
         const MINT_AMOUNT: u64 = 3;
