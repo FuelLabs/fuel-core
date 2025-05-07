@@ -46,9 +46,9 @@ use fuel_core_types::{
         ContractId,
         UtxoId,
     },
+    fuel_vm::checked_transaction::CheckedTransaction,
     services::executor::Error as ExecutorError,
 };
-use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 use tokio::runtime::Runtime;
 
 use crate::ports::{
@@ -64,13 +64,12 @@ pub struct Config {
     total_execution_time: Duration,
     block_transaction_size_limit: u32,
     block_transaction_count_limit: u16,
+    number_of_workers: usize,
 }
 
 pub struct Scheduler<TxSource, S> {
     /// Config
     config: Config,
-    /// The state of each worker
-    workers_state: Vec<WorkerState>,
     /// Transaction source to ask for new transactions
     transaction_source: TxSource,
     /// Database transaction for the execution
@@ -81,6 +80,8 @@ pub struct Scheduler<TxSource, S> {
     current_available_workers: VecDeque<usize>,
     /// All contracts ids that have along with their changes
     contracts_changes: HashMap<ContractId, Changes>,
+    /// Current contracts being executed
+    current_executing_contracts: HashSet<ContractId>,
     /// Current execution tasks
     current_execution_tasks:
         FuturesUnordered<tokio::task::JoinHandle<WorkSessionExecutionResult>>,
@@ -94,24 +95,9 @@ pub struct Scheduler<TxSource, S> {
     tx_size_left: u32,
 }
 
-pub struct WorkerState {
-    pub executing_contracts: Vec<ContractId>,
-}
-
-pub enum WorkerStatus {
-    /// The worker is waiting for a new batch of transactions
-    Idle,
-    /// The worker is currently executing a batch of transactions
-    Executing,
-    /// The worker is merging his state with another
-    Merging,
-}
-
-type SkippedTransactions = Vec<MaybeCheckedTransaction>;
+type SkippedTransactions = Vec<CheckedTransaction>;
 
 struct WorkSessionExecutionResult {
-    /// The id of the worker
-    worker_id: usize,
     /// The id of the batch of transactions
     batch_id: usize,
     /// The changes made by the worker used to commit them to the database at the end of execution
@@ -128,7 +114,7 @@ struct WorkSessionExecutionResult {
     /// The transactions that were skipped by the worker
     skipped_tx: SkippedTransactions,
     /// Batch of transactions (included skipped ones) useful to re-execute them in case of fallback skipped
-    txs: Vec<MaybeCheckedTransaction>,
+    txs: Vec<CheckedTransaction>,
 }
 
 struct WorkSessionSavedData {
@@ -141,7 +127,7 @@ struct WorkSessionSavedData {
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
     coins_used: Vec<(UtxoId, usize)>,
     /// The transactions of the batch
-    txs: Vec<MaybeCheckedTransaction>,
+    txs: Vec<CheckedTransaction>,
 }
 
 /// Error type for the scheduler
@@ -182,66 +168,65 @@ where
     TxSource: TransactionsSource,
     S: Storage,
 {
-    pub fn new(
-        config: Config,
-        number_of_worker: usize,
-        transaction_source: TxSource,
-        storage: S,
-    ) -> Self {
-        let mut workers_state = Vec::with_capacity(number_of_worker);
-        for _ in 0..number_of_worker {
-            workers_state.push(WorkerState {
-                executing_contracts: vec![],
-            });
-        }
+    pub fn new(config: Config, transaction_source: TxSource, storage: S) -> Self {
         let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(number_of_worker)
+            .worker_threads(config.number_of_workers)
             .enable_all()
             .build()
             .unwrap();
 
         Self {
-            workers_state,
             transaction_source,
             runtime: Some(runtime),
             tx_left: config.block_transaction_count_limit,
             tx_size_left: config.block_transaction_size_limit,
+            current_available_workers: (0..config.number_of_workers).collect(),
             config,
             storage,
             current_execution_tasks: FuturesUnordered::new(),
             execution_results: HashMap::new(),
-            current_available_workers: (0..number_of_worker).collect(),
             state: SchedulerState::TransactionsReadyForPickup,
             contracts_changes: HashMap::new(),
+            current_executing_contracts: HashSet::new(),
         }
+    }
+
+    fn reset(&mut self) {
+        self.tx_left = self.config.block_transaction_count_limit;
+        self.tx_size_left = self.config.block_transaction_size_limit;
+        self.current_available_workers = (0..self.config.number_of_workers).collect();
+        self.current_executing_contracts.clear();
+        self.execution_results.clear();
+        self.contracts_changes.clear();
+        self.current_execution_tasks = FuturesUnordered::new();
+        self.state = SchedulerState::TransactionsReadyForPickup;
     }
 
     pub async fn run(&mut self) -> Result<StorageChanges, SchedulerError> {
         let new_tx_notifier = self.transaction_source.get_new_transactions_notifier();
         let now = tokio::time::Instant::now();
         let deadline = now + self.config.total_execution_time;
-        let number_of_workers = self.workers_state.len();
         let mut nb_batch_created = 0;
         let mut nb_transactions = 0;
-        let initial_gas = self
+        let initial_gas_per_worker = self
             .config
             .block_gas_limit
-            .checked_div(number_of_workers as u64)
+            .checked_div(self.config.number_of_workers as u64)
             .ok_or(SchedulerError::InternalError(
                 "Invalid block gas limit".to_string(),
             ))?;
 
         'outer: loop {
             if self.is_worker_idling() {
-                let (batch, worker_id) =
-                    self.ask_new_transactions_batch(now, initial_gas)?;
+                let batch =
+                    self.ask_new_transactions_batch(now, initial_gas_per_worker)?;
                 let batch_len = batch.len() as u16;
 
                 if batch.is_empty() {
                     continue 'outer;
                 }
 
-                self.execute_batch(batch, nb_batch_created, nb_transactions, worker_id)?;
+                self.execute_batch(batch, nb_batch_created, nb_transactions)?;
 
                 nb_batch_created += 1;
                 nb_transactions += batch_len;
@@ -275,7 +260,10 @@ where
 
         self.wait_all_execution_tasks().await?;
 
-        self.verify_coherency_and_merge_results(nb_batch_created)
+        let res = self.verify_coherency_and_merge_results(nb_batch_created)?;
+
+        self.reset();
+        Ok(res)
     }
 
     fn is_worker_idling(&self) -> bool {
@@ -291,28 +279,25 @@ where
         &mut self,
         start_execution_time: tokio::time::Instant,
         initial_gas: u64,
-    ) -> Result<(Vec<MaybeCheckedTransaction>, usize), SchedulerError> {
+    ) -> Result<Vec<CheckedTransaction>, SchedulerError> {
         let worker_id = self.current_available_workers.pop_front().ok_or(
             SchedulerError::InternalError("No available workers".to_string()),
         )?;
-        let contracts_currently_used = self
-            .workers_state
-            .iter()
-            .flat_map(|state| state.executing_contracts.clone())
-            .collect::<HashSet<_>>();
         let spent_time = start_execution_time.elapsed();
         // Time left in percentage to have the gas percentage left
+        // TODO: Maybe avoid as u32
         let current_gas = initial_gas
-            * ((1u128
-                - spent_time.as_millis() / self.config.total_execution_time.as_millis())
-                as u64);
+            * (self.config.total_execution_time.as_millis() as u64
+                - spent_time.as_millis() as u64)
+            / self.config.total_execution_time.as_millis() as u64;
 
         let (batch, filtered) = self.transaction_source.get_executable_transactions(
             current_gas,
             self.tx_left,
             self.tx_size_left,
+            // TODO: Move and return the filter instead of cloning
             Filter {
-                excluded_contract_ids: contracts_currently_used,
+                excluded_contract_ids: self.current_executing_contracts.clone(),
             },
         );
 
@@ -327,21 +312,21 @@ where
 
         self.tx_size_left -= batch.iter().map(|tx| tx.size()).sum::<usize>() as u32;
         self.tx_left -= batch.len() as u16;
-        Ok((batch, worker_id))
+        Ok(batch)
     }
 
     fn execute_batch(
         &mut self,
-        batch: Vec<MaybeCheckedTransaction>,
+        batch: Vec<CheckedTransaction>,
         batch_id: usize,
         _start_idx_txs: u16,
-        worker_id: usize,
     ) -> Result<(), SchedulerError> {
         let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
         let runtime = self.runtime.as_ref().unwrap();
         self.current_execution_tasks.push(runtime.spawn({
             let mut used_contracts_changes = vec![];
             for contract in contracts_used.iter() {
+                self.current_executing_contracts.insert(*contract);
                 if let Some(changes) = self.contracts_changes.remove(contract) {
                     used_contracts_changes.push(changes);
                 }
@@ -350,7 +335,6 @@ where
             async move {
                 // TODO: Execute the batch of transactions
                 WorkSessionExecutionResult {
-                    worker_id,
                     batch_id,
                     changes: Changes::default(),
                     coins_created: vec![],
@@ -361,14 +345,13 @@ where
                 }
             }
         }));
-        self.workers_state[worker_id].executing_contracts = contracts_used;
         Ok(())
     }
 
     fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
-        self.workers_state[res.worker_id]
-            .executing_contracts
-            .clear();
+        for contract in res.contracts_used.iter() {
+            self.current_executing_contracts.remove(contract);
+        }
         if self.state == SchedulerState::WaitingForWorker {
             self.state = SchedulerState::TransactionsReadyForPickup;
         }
@@ -485,7 +468,7 @@ where
     async fn sequential_fallback(
         &mut self,
         batch_id: usize,
-        mut txs: Vec<MaybeCheckedTransaction>,
+        mut txs: Vec<CheckedTransaction>,
     ) {
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
@@ -621,7 +604,7 @@ impl CoinDependencyChainVerifier {
 }
 
 fn get_contracts_and_coins_used(
-    batch: &[MaybeCheckedTransaction],
+    batch: &[CheckedTransaction],
 ) -> (Vec<ContractId>, Vec<(UtxoId, usize)>) {
     let mut contracts_used = vec![];
     let mut coins_used = vec![];

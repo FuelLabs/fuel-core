@@ -3,9 +3,11 @@ use fuel_core_types::{
         ConsensusParameters,
         Transaction,
     },
-    fuel_vm::checked_transaction::IntoChecked,
+    fuel_vm::checked_transaction::{
+        CheckedTransaction,
+        IntoChecked,
+    },
 };
-use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 
 use crate::ports::{
     Filter,
@@ -30,12 +32,12 @@ pub struct MockTxPool {
 
 pub type GetExecutableTransactionsSender = std::sync::mpsc::Sender<(
     PoolRequestParams,
-    std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered)>,
 )>;
 
 pub type GetExecutableTransactionsReceiver = std::sync::mpsc::Receiver<(
     PoolRequestParams,
-    std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered)>,
 )>;
 
 impl MockTxPool {
@@ -60,7 +62,7 @@ impl TransactionsSource for MockTxPool {
         tx_count_limit: u16,
         block_transaction_size_limit: u32,
         filter: Filter,
-    ) -> (Vec<MaybeCheckedTransaction>, TransactionFiltered) {
+    ) -> (Vec<CheckedTransaction>, TransactionFiltered) {
         let (tx, rx) = std::sync::mpsc::channel();
         self.get_executable_transactions_results_sender
             .send((
@@ -85,7 +87,7 @@ impl TransactionsSource for MockTxPool {
 pub struct Consumer {
     pool_request_params: PoolRequestParams,
     response_sender:
-        std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+        std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered)>,
 }
 
 impl Consumer {
@@ -125,16 +127,13 @@ impl Consumer {
     }
 }
 
-fn into_checked_txs(txs: &[&Transaction]) -> Vec<MaybeCheckedTransaction> {
+fn into_checked_txs(txs: &[&Transaction]) -> Vec<CheckedTransaction> {
     txs.iter()
         .map(|&tx| {
-            MaybeCheckedTransaction::CheckedTransaction(
-                tx.clone()
-                    .into_checked_basic(0u32.into(), &ConsensusParameters::default())
-                    .unwrap()
-                    .into(),
-                0,
-            )
+            tx.clone()
+                .into_checked_basic(0u32.into(), &ConsensusParameters::default())
+                .unwrap()
+                .into()
         })
         .collect()
 }

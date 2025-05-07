@@ -7,8 +7,8 @@ use fuel_core_types::{
         ContractId,
         UtxoId,
     },
+    fuel_vm::checked_transaction::CheckedTransaction,
 };
-use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionFiltered {
@@ -32,7 +32,7 @@ pub trait TransactionsSource {
         tx_count_limit: u16,
         block_transaction_size_limit: u32,
         filter: Filter,
-    ) -> (Vec<MaybeCheckedTransaction>, TransactionFiltered);
+    ) -> (Vec<CheckedTransaction>, TransactionFiltered);
 
     /// Returns a notification receiver for new transactions
     fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify;
