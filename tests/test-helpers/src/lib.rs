@@ -144,10 +144,10 @@ pub fn config_with_fee() -> Config {
     config
 }
 
+pub fn default_signing_secret() -> SecretKey {
+    TESTNET_WALLET_SECRETS[1].parse().unwrap()
+}
 pub fn default_signing_wallet() -> SigningAccount {
-    let wallet_secret: SecretKey = TESTNET_WALLET_SECRETS[1]
-        .parse()
-        .expect("Expected valid secret");
-
+    let wallet_secret: SecretKey = default_signing_secret();
     SigningAccount::Wallet(wallet_secret)
 }
