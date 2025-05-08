@@ -11,11 +11,11 @@ help:
 
 .PHONY: build
 build:
-	cargo build --release -p fuel-core-bin --no-default-features --features production
+	cargo build-fuel-core-bin-release
 
 .PHONY: debug
 debug:
-	cargo build -p fuel-core-bin --no-default-features --features production
+	cargo build-fuel-core-bin
 
 .PHONY: fmt
 fmt:
