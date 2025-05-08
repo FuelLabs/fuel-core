@@ -3804,6 +3804,7 @@ dependencies = [
  "fuel-core-types 0.43.1",
  "fuel-core-upgradable-executor",
  "futures",
+ "fxhash",
  "rand 0.8.5",
  "tokio",
  "tracing",

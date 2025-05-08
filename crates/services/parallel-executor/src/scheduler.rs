@@ -18,13 +18,13 @@
 //! This can be done because we assume that the transaction pool is sending us transactions that are alTransactionsReadyForPickup correctly verified.
 //! If we have a transaction that end up being skipped (only possible cause if consensus parameters changes) then we will have to
 //! fallback a sequential execution of the transaction that used the skipped one as a dependency.
-
 use std::{
     collections::{
         HashMap,
         HashSet,
         VecDeque,
     },
+    sync::Arc,
     time::Duration,
 };
 
@@ -34,7 +34,6 @@ use ::futures::{
 };
 use fuel_core_storage::{
     Error as StorageError,
-    column::Column,
     transactional::{
         Changes,
         StorageChanges,
@@ -49,13 +48,17 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::CheckedTransaction,
     services::executor::Error as ExecutorError,
 };
+use fxhash::FxHashMap;
 use tokio::runtime::Runtime;
 
-use crate::ports::{
-    Filter,
-    Storage,
-    TransactionFiltered,
-    TransactionsSource,
+use crate::{
+    column_adapter::ContractColumnsIterator,
+    ports::{
+        Filter,
+        Storage,
+        TransactionFiltered,
+        TransactionsSource,
+    },
 };
 
 /// Config for the scheduler
@@ -69,25 +72,25 @@ pub struct Config {
 
 #[derive(Debug, Clone, Default)]
 pub struct ContractsChanges {
-    contracts_changes: HashMap<ContractId, u64>,
+    contracts_changes: FxHashMap<ContractId, u64>,
     latest_id: u64,
-    changes_storage: HashMap<u64, Changes>,
+    changes_storage: FxHashMap<u64, Changes>,
 }
 
 impl ContractsChanges {
     pub fn new() -> Self {
         Self {
-            contracts_changes: HashMap::new(),
-            changes_storage: HashMap::new(),
+            contracts_changes: FxHashMap::default(),
+            changes_storage: FxHashMap::default(),
             latest_id: 0,
         }
     }
 
-    pub fn add_changes(&mut self, contract_ids: Vec<ContractId>, changes: Changes) {
+    pub fn add_changes(&mut self, contract_ids: &[ContractId], changes: Changes) {
         let id = self.latest_id;
         self.latest_id += 1;
         for contract_id in contract_ids {
-            self.contracts_changes.insert(contract_id, id);
+            self.contracts_changes.insert(*contract_id, id);
         }
         self.changes_storage.insert(id, changes);
     }
@@ -135,7 +138,7 @@ pub struct Scheduler<TxSource, S> {
     current_execution_tasks:
         FuturesUnordered<tokio::task::JoinHandle<WorkSessionExecutionResult>>,
     // All executed transactions batch associated with their id
-    execution_results: HashMap<usize, WorkSessionSavedData>,
+    execution_results: FxHashMap<usize, WorkSessionSavedData>,
     /// Current scheduler state
     state: SchedulerState,
     /// Total maximum of transactions left
@@ -156,16 +159,17 @@ struct WorkSessionExecutionResult {
     coins_created: Vec<(UtxoId, usize)>,
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
-    coins_used: Vec<(UtxoId, usize)>,
+    coins_used: Arc<[(UtxoId, usize)]>,
     /// Contracts used during the execution of the transactions to save the changes for future usage of
     /// the contracts
-    contracts_used: Vec<ContractId>,
+    contracts_used: Arc<[ContractId]>,
     /// The transactions that were skipped by the worker
     skipped_tx: SkippedTransactions,
     /// Batch of transactions (included skipped ones) useful to re-execute them in case of fallback skipped
     txs: Vec<CheckedTransaction>,
 }
 
+#[derive(Default)]
 struct WorkSessionSavedData {
     /// The changes made by the worker used to commit them to the database at the end of execution
     changes: Changes,
@@ -174,7 +178,7 @@ struct WorkSessionSavedData {
     coins_created: Vec<(UtxoId, usize)>,
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
-    coins_used: Vec<(UtxoId, usize)>,
+    coins_used: Arc<[(UtxoId, usize)]>,
     /// The transactions of the batch
     txs: Vec<CheckedTransaction>,
 }
@@ -233,7 +237,7 @@ where
             config,
             storage,
             current_execution_tasks: FuturesUnordered::new(),
-            execution_results: HashMap::new(),
+            execution_results: FxHashMap::default(),
             state: SchedulerState::TransactionsReadyForPickup,
             contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
@@ -412,24 +416,15 @@ where
         // Is it useful ?
         // Did I listed all column ?
         // Need future proof
-        let mut tmp_contracts_changes = HashMap::new();
-        for column in [
-            Column::ContractsRawCode,
-            Column::ContractsState,
-            Column::ContractsLatestUtxo,
-            Column::ContractsAssets,
-            Column::ContractsAssetsMerkleData,
-            Column::ContractsAssetsMerkleMetadata,
-            Column::ContractsStateMerkleData,
-            Column::ContractsStateMerkleMetadata,
-        ] {
+        let mut tmp_contracts_changes = HashMap::default();
+        for column in ContractColumnsIterator::new() {
             let column = column.as_u32();
             if let Some(changes) = res.changes.remove(&column) {
                 tmp_contracts_changes.insert(column, changes);
             }
         }
         self.contracts_changes
-            .add_changes(res.contracts_used, tmp_contracts_changes);
+            .add_changes(res.contracts_used.as_ref(), tmp_contracts_changes);
         self.execution_results.insert(
             res.batch_id,
             WorkSessionSavedData {
@@ -496,7 +491,7 @@ where
                     .register_coins_created(batch_id, changes.coins_created);
                 compiled_created_coins.verify_coins_used(
                     batch_id,
-                    changes.coins_used,
+                    changes.coins_used.as_ref().iter(),
                     &self.storage,
                 )?;
                 storage_changes.push(changes.changes);
@@ -524,7 +519,7 @@ where
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
-        let mut all_txs_by_batch_id = HashMap::new();
+        let mut all_txs_by_batch_id = FxHashMap::default();
         for future in current_execution_tasks {
             match future.await {
                 Ok(res) => {
@@ -561,37 +556,23 @@ where
         // Save execution results for all batch id with empty data
         // to not break the batch chain
         for id in lower_batch_id..higher_batch_id {
-            self.execution_results.insert(
-                id,
-                WorkSessionSavedData {
-                    changes: Changes::default(),
-                    coins_created: vec![],
-                    coins_used: vec![],
-                    txs: vec![],
-                },
-            );
+            self.execution_results
+                .insert(id, WorkSessionSavedData::default());
         }
         // Save the execution results for the current batch
-        self.execution_results.insert(
-            batch_id,
-            WorkSessionSavedData {
-                changes: Changes::default(),
-                coins_created: vec![],
-                coins_used: vec![],
-                txs: all_txs,
-            },
-        );
+        self.execution_results
+            .insert(batch_id, WorkSessionSavedData::default());
     }
 }
 
 struct CoinDependencyChainVerifier {
-    coins_registered: HashMap<UtxoId, (usize, usize)>,
+    coins_registered: FxHashMap<UtxoId, (usize, usize)>,
 }
 
 impl CoinDependencyChainVerifier {
     fn new() -> Self {
         Self {
-            coins_registered: HashMap::new(),
+            coins_registered: FxHashMap::default(),
         }
     }
 
@@ -605,10 +586,10 @@ impl CoinDependencyChainVerifier {
         }
     }
 
-    fn verify_coins_used<S>(
+    fn verify_coins_used<'a, S>(
         &self,
         batch_id: usize,
-        coins_used: Vec<(UtxoId, usize)>,
+        coins_used: impl Iterator<Item = &'a (UtxoId, usize)>,
         storage: &S,
     ) -> Result<(), SchedulerError>
     where
@@ -616,17 +597,17 @@ impl CoinDependencyChainVerifier {
     {
         // TODO: Maybe we also want to verify the amount
         for (coin, idx) in coins_used {
-            match storage.get_coin(&coin) {
+            match storage.get_coin(coin) {
                 Ok(Some(_)) => {
                     // Coin is in the database
                 }
                 Ok(None) => {
                     // Coin is not in the database
-                    match self.coins_registered.get(&coin) {
+                    match self.coins_registered.get(coin) {
                         Some((coin_creation_batch_id, coin_creation_tx_idx)) => {
                             // Coin is in the block
                             if coin_creation_batch_id <= &batch_id
-                                && coin_creation_tx_idx <= &idx
+                                && coin_creation_tx_idx <= idx
                             {
                                 // Coin is created in a batch that is before the current one
                             } else {
@@ -654,9 +635,10 @@ impl CoinDependencyChainVerifier {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn get_contracts_and_coins_used(
     batch: &[CheckedTransaction],
-) -> (Vec<ContractId>, Vec<(UtxoId, usize)>) {
+) -> (Arc<[ContractId]>, Arc<[(UtxoId, usize)]>) {
     let mut contracts_used = vec![];
     let mut coins_used = vec![];
 
@@ -678,5 +660,5 @@ fn get_contracts_and_coins_used(
         }
     }
 
-    (contracts_used, coins_used)
+    (Arc::from(contracts_used), Arc::from(coins_used))
 }
