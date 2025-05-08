@@ -635,6 +635,7 @@ impl CoinDependencyChainVerifier {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn get_contracts_and_coins_used(
     batch: &[CheckedTransaction],
 ) -> (Arc<[ContractId]>, Arc<[(UtxoId, usize)]>) {
