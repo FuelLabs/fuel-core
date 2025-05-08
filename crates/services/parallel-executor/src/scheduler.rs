@@ -52,6 +52,7 @@ use fxhash::FxHashMap;
 use tokio::runtime::Runtime;
 
 use crate::{
+    coin::CoinInBatch,
     column_adapter::ContractColumnsIterator,
     ports::{
         Filter,
@@ -156,10 +157,10 @@ struct WorkSessionExecutionResult {
     changes: Changes,
     /// The coins created by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the usage is in the same batch
-    coins_created: Vec<(UtxoId, usize)>,
+    coins_created: Vec<CoinInBatch>,
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
-    coins_used: Arc<[(UtxoId, usize)]>,
+    coins_used: Arc<[CoinInBatch]>,
     /// Contracts used during the execution of the transactions to save the changes for future usage of
     /// the contracts
     contracts_used: Arc<[ContractId]>,
@@ -175,10 +176,10 @@ struct WorkSessionSavedData {
     changes: Changes,
     /// The coins created by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the usage is in the same batch
-    coins_created: Vec<(UtxoId, usize)>,
+    coins_created: Vec<CoinInBatch>,
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
-    coins_used: Arc<[(UtxoId, usize)]>,
+    coins_used: Arc<[CoinInBatch]>,
     /// The transactions of the batch
     txs: Vec<CheckedTransaction>,
 }
@@ -579,54 +580,73 @@ impl CoinDependencyChainVerifier {
     fn register_coins_created(
         &mut self,
         batch_id: usize,
-        coins_created: Vec<(UtxoId, usize)>,
+        coins_created: Vec<CoinInBatch>,
     ) {
-        for (coin, idx) in coins_created {
-            self.coins_registered.insert(coin, (batch_id, idx));
+        for coin in coins_created {
+            self.coins_registered
+                .insert(*coin.utxo(), (batch_id, coin.idx()));
         }
     }
 
     fn verify_coins_used<'a, S>(
         &self,
         batch_id: usize,
-        coins_used: impl Iterator<Item = &'a (UtxoId, usize)>,
+        coins_used: impl Iterator<Item = &'a CoinInBatch>,
         storage: &S,
     ) -> Result<(), SchedulerError>
     where
         S: Storage,
     {
         // TODO: Maybe we also want to verify the amount
-        for (coin, idx) in coins_used {
-            match storage.get_coin(coin) {
-                Ok(Some(_)) => {
+        for coin in coins_used {
+            match storage.get_coin(coin.utxo()) {
+                Ok(Some(db_coin)) => {
                     // Coin is in the database
+                    match db_coin.matches_input(&coin.into()) {
+                        Some(true) => return Ok(()),
+                        Some(false) => {
+                            return Err(SchedulerError::InternalError(format!(
+                                "coin is invalid: {}",
+                                coin.utxo(),
+                            )))
+                        }
+                        None => {
+                            return Err(SchedulerError::InternalError(format!(
+                                "not a coin: {}",
+                                coin.utxo(),
+                            )))
+                        }
+                    }
                 }
                 Ok(None) => {
                     // Coin is not in the database
-                    match self.coins_registered.get(coin) {
+                    match self.coins_registered.get(coin.utxo()) {
                         Some((coin_creation_batch_id, coin_creation_tx_idx)) => {
                             // Coin is in the block
                             if coin_creation_batch_id <= &batch_id
-                                && coin_creation_tx_idx <= idx
+                                && coin_creation_tx_idx <= &coin.idx()
                             {
                                 // Coin is created in a batch that is before the current one
                             } else {
                                 // Coin is created in a batch that is after the current one
                                 return Err(SchedulerError::InternalError(format!(
-                                    "Coin {coin} is created in a batch that is after the current one"
+                                    "Coin {} is created in a batch that is after the current one",
+                                    coin.utxo()
                                 )));
                             }
                         }
                         None => {
                             return Err(SchedulerError::InternalError(format!(
-                                "Coin {coin} is not in the database and not created in the block"
+                                "Coin {} is not in the database and not created in the block",
+                                coin.utxo(),
                             )));
                         }
                     }
                 }
                 Err(e) => {
                     return Err(SchedulerError::InternalError(format!(
-                        "Error while getting coin {coin}: {e}"
+                        "Error while getting coin {}: {e}",
+                        coin.utxo(),
                     )));
                 }
             }
@@ -638,7 +658,7 @@ impl CoinDependencyChainVerifier {
 #[allow(clippy::type_complexity)]
 fn get_contracts_and_coins_used(
     batch: &[CheckedTransaction],
-) -> (Arc<[ContractId]>, Arc<[(UtxoId, usize)]>) {
+) -> (Arc<[ContractId]>, Arc<[CoinInBatch]>) {
     let mut contracts_used = vec![];
     let mut coins_used = vec![];
 
@@ -650,10 +670,10 @@ fn get_contracts_and_coins_used(
                     contracts_used.push(contract.contract_id);
                 }
                 fuel_core_types::fuel_tx::Input::CoinSigned(coin) => {
-                    coins_used.push((coin.utxo_id, idx));
+                    coins_used.push(CoinInBatch::from_signed_coin(coin, idx));
                 }
                 fuel_core_types::fuel_tx::Input::CoinPredicate(coin) => {
-                    coins_used.push((coin.utxo_id, idx));
+                    coins_used.push(CoinInBatch::from_predicate_coin(coin, idx));
                 }
                 _ => {}
             }
