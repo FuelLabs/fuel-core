@@ -18,7 +18,6 @@
 //! This can be done because we assume that the transaction pool is sending us transactions that are alTransactionsReadyForPickup correctly verified.
 //! If we have a transaction that end up being skipped (only possible cause if consensus parameters changes) then we will have to
 //! fallback a sequential execution of the transaction that used the skipped one as a dependency.
-
 use std::{
     collections::{
         HashMap,
@@ -49,6 +48,7 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::CheckedTransaction,
     services::executor::Error as ExecutorError,
 };
+use fxhash::FxHashMap;
 use tokio::runtime::Runtime;
 
 use crate::{
@@ -72,16 +72,16 @@ pub struct Config {
 
 #[derive(Debug, Clone, Default)]
 pub struct ContractsChanges {
-    contracts_changes: HashMap<ContractId, u64>,
+    contracts_changes: FxHashMap<ContractId, u64>,
     latest_id: u64,
-    changes_storage: HashMap<u64, Changes>,
+    changes_storage: FxHashMap<u64, Changes>,
 }
 
 impl ContractsChanges {
     pub fn new() -> Self {
         Self {
-            contracts_changes: HashMap::new(),
-            changes_storage: HashMap::new(),
+            contracts_changes: FxHashMap::default(),
+            changes_storage: FxHashMap::default(),
             latest_id: 0,
         }
     }
@@ -138,7 +138,7 @@ pub struct Scheduler<TxSource, S> {
     current_execution_tasks:
         FuturesUnordered<tokio::task::JoinHandle<WorkSessionExecutionResult>>,
     // All executed transactions batch associated with their id
-    execution_results: HashMap<usize, WorkSessionSavedData>,
+    execution_results: FxHashMap<usize, WorkSessionSavedData>,
     /// Current scheduler state
     state: SchedulerState,
     /// Total maximum of transactions left
@@ -237,7 +237,7 @@ where
             config,
             storage,
             current_execution_tasks: FuturesUnordered::new(),
-            execution_results: HashMap::new(),
+            execution_results: FxHashMap::default(),
             state: SchedulerState::TransactionsReadyForPickup,
             contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
@@ -416,7 +416,7 @@ where
         // Is it useful ?
         // Did I listed all column ?
         // Need future proof
-        let mut tmp_contracts_changes = HashMap::new();
+        let mut tmp_contracts_changes = HashMap::default();
         for column in ContractColumnsIterator::new() {
             let column = column.as_u32();
             if let Some(changes) = res.changes.remove(&column) {
@@ -519,7 +519,7 @@ where
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
-        let mut all_txs_by_batch_id = HashMap::new();
+        let mut all_txs_by_batch_id = FxHashMap::default();
         for future in current_execution_tasks {
             match future.await {
                 Ok(res) => {
@@ -566,13 +566,13 @@ where
 }
 
 struct CoinDependencyChainVerifier {
-    coins_registered: HashMap<UtxoId, (usize, usize)>,
+    coins_registered: FxHashMap<UtxoId, (usize, usize)>,
 }
 
 impl CoinDependencyChainVerifier {
     fn new() -> Self {
         Self {
-            coins_registered: HashMap::new(),
+            coins_registered: FxHashMap::default(),
         }
     }
 
