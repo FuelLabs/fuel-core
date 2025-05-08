@@ -1,13 +1,13 @@
 use crate::client::schema;
 use fuel_core_types::{
-    fuel_tx::Bytes32,
+    fuel_tx::SubAssetId,
     fuel_types::ContractId,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AssetDetail {
     pub contract_id: ContractId,
-    pub sub_id: Bytes32,
+    pub sub_id: SubAssetId,
     pub total_supply: u128,
 }
 
