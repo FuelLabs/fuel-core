@@ -912,7 +912,7 @@ where
         let mut total_base_asset = 0u64;
 
         for input in self.tx.inputs() {
-            if input_is_spendable_as_fee(&input) {
+            if input_is_spendable_as_fee(input) {
                 let Some(amount) = input.amount() else {
                     continue;
                 };
