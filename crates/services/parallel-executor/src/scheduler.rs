@@ -35,7 +35,6 @@ use ::futures::{
 };
 use fuel_core_storage::{
     Error as StorageError,
-    column::Column,
     transactional::{
         Changes,
         StorageChanges,
@@ -52,11 +51,14 @@ use fuel_core_types::{
 };
 use tokio::runtime::Runtime;
 
-use crate::ports::{
-    Filter,
-    Storage,
-    TransactionFiltered,
-    TransactionsSource,
+use crate::{
+    column_adapter::ContractColumnsIterator,
+    ports::{
+        Filter,
+        Storage,
+        TransactionFiltered,
+        TransactionsSource,
+    },
 };
 
 /// Config for the scheduler
@@ -415,16 +417,7 @@ where
         // Did I listed all column ?
         // Need future proof
         let mut tmp_contracts_changes = HashMap::new();
-        for column in [
-            Column::ContractsRawCode,
-            Column::ContractsState,
-            Column::ContractsLatestUtxo,
-            Column::ContractsAssets,
-            Column::ContractsAssetsMerkleData,
-            Column::ContractsAssetsMerkleMetadata,
-            Column::ContractsStateMerkleData,
-            Column::ContractsStateMerkleMetadata,
-        ] {
+        for column in ContractColumnsIterator::new() {
             let column = column.as_u32();
             if let Some(changes) = res.changes.remove(&column) {
                 tmp_contracts_changes.insert(column, changes);
