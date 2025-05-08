@@ -567,7 +567,7 @@ where
 }
 
 struct CoinDependencyChainVerifier {
-    coins_registered: FxHashMap<UtxoId, (usize, usize)>,
+    coins_registered: FxHashMap<UtxoId, (usize, CoinInBatch)>,
 }
 
 impl CoinDependencyChainVerifier {
@@ -583,8 +583,7 @@ impl CoinDependencyChainVerifier {
         coins_created: Vec<CoinInBatch>,
     ) {
         for coin in coins_created {
-            self.coins_registered
-                .insert(*coin.utxo(), (batch_id, coin.idx()));
+            self.coins_registered.insert(*coin.utxo(), (batch_id, coin));
         }
     }
 
@@ -624,7 +623,7 @@ impl CoinDependencyChainVerifier {
                         Some((coin_creation_batch_id, coin_creation_tx_idx)) => {
                             // Coin is in the block
                             if coin_creation_batch_id <= &batch_id
-                                && coin_creation_tx_idx <= &coin.idx()
+                                && coin_creation_tx_idx.idx() <= coin.idx()
                             {
                                 // Coin is created in a batch that is before the current one
                             } else {
