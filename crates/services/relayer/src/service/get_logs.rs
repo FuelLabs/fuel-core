@@ -61,16 +61,22 @@ where
                         let page = page.reduce();
 
                         // Get the logs and return the reduced page.
-                        eth_node.get_logs(&filter).await.map(|logs| {
-                            Some((
-                                DownloadedLogs {
-                                    start_height: oldest_block,
-                                    last_height: latest_block,
-                                    logs,
-                                },
-                                page,
-                            ))
-                        })
+                        eth_node
+                            .get_logs(&filter)
+                            .await
+                            .inspect_err(|err| {
+                                tracing::error!(?err, "eth provider failed to get logs")
+                            })
+                            .map(|logs| {
+                                Some((
+                                    DownloadedLogs {
+                                        start_height: oldest_block,
+                                        last_height: latest_block,
+                                        logs,
+                                    },
+                                    page,
+                                ))
+                            })
                     }
                 }
             }
