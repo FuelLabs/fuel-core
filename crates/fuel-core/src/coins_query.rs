@@ -40,9 +40,16 @@ pub enum CoinsQueryError {
     #[error("store error occurred: {0}")]
     StorageError(StorageError),
     #[error(
-        "the target cannot be met due to no coins available or exceeding the {max} coin limit."
+        "the target cannot be met due to insufficient coins available for {asset_id}. Collected: {collected_amount}."
     )]
-    InsufficientCoinsForTheMax {
+    InsufficientCoins {
+        asset_id: AssetId,
+        collected_amount: u128,
+    },
+    #[error(
+        "the target for {asset_id} cannot be met due to exceeding the {max} coin limit. Collected: {collected_amount}."
+    )]
+    MaxCoinsReached {
         asset_id: AssetId,
         collected_amount: u128,
         max: u16,
@@ -158,7 +165,7 @@ pub async fn largest_first(
                 return Ok(coins)
             } else {
                 // Error if we can't fit more coins
-                return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                return Err(CoinsQueryError::MaxCoinsReached {
                     asset_id,
                     collected_amount,
                     max,
@@ -175,10 +182,9 @@ pub async fn largest_first(
         if allow_partial && collected_amount > 0 {
             return Ok(coins);
         } else {
-            return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+            return Err(CoinsQueryError::InsufficientCoins {
                 asset_id,
                 collected_amount,
-                max,
             })
         }
     }
@@ -292,10 +298,9 @@ pub async fn select_coins_to_spend(
     if selected_big_coins_total == 0
         || (selected_big_coins_total < total && !allow_partial)
     {
-        return Err(CoinsQueryError::InsufficientCoinsForTheMax {
+        return Err(CoinsQueryError::InsufficientCoins {
             asset_id: *asset_id,
             collected_amount: selected_big_coins_total,
-            max,
         })
     }
 
@@ -640,10 +645,9 @@ mod tests {
                     _ => {
                         assert_matches!(
                             coins,
-                            Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                            Err(CoinsQueryError::InsufficientCoins {
                                 asset_id: _,
                                 collected_amount: 15,
-                                max: u16::MAX
                             })
                         )
                     }
@@ -658,10 +662,7 @@ mod tests {
                 &db.service_database(),
             )
             .await;
-            assert_matches!(
-                coins,
-                Err(CoinsQueryError::InsufficientCoinsForTheMax { .. })
-            );
+            assert_matches!(coins, Err(CoinsQueryError::MaxCoinsReached { .. }));
         }
 
         #[tokio::test]
@@ -879,10 +880,9 @@ mod tests {
                     _ => {
                         assert_matches!(
                             coins,
-                            Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                            Err(CoinsQueryError::InsufficientCoins {
                                 asset_id: _,
                                 collected_amount: 15,
-                                max: u16::MAX
                             })
                         )
                     }
@@ -902,10 +902,7 @@ mod tests {
                 &db.service_database(),
             )
             .await;
-            assert_matches!(
-                coins,
-                Err(CoinsQueryError::InsufficientCoinsForTheMax { .. })
-            );
+            assert_matches!(coins, Err(CoinsQueryError::MaxCoinsReached { .. }));
         }
 
         #[tokio::test]
@@ -1083,10 +1080,9 @@ mod tests {
                     _ => {
                         assert_matches!(
                             coins,
-                            Err(CoinsQueryError::InsufficientCoinsForTheMax {
+                            Err(CoinsQueryError::InsufficientCoins {
                                 asset_id: _,
                                 collected_amount: 10,
-                                max: u16::MAX
                             })
                         )
                     }
@@ -1538,7 +1534,8 @@ mod tests {
 
             // Then
             assert!(matches!(result, Err(actual_error)
-                if CoinsQueryError::InsufficientCoinsForTheMax { asset_id, collected_amount: EXPECTED_COLLECTED_AMOUNT, max: MAX } == actual_error));
+                if CoinsQueryError::InsufficientCoins { asset_id, collected_amount: EXPECTED_COLLECTED_AMOUNT,
+                } == actual_error));
         }
 
         mod allow_partial {
@@ -1703,10 +1700,9 @@ mod tests {
         assert_eq!(coin_result, message_result);
         assert_matches!(
             coin_result,
-            Err(CoinsQueryError::InsufficientCoinsForTheMax {
+            Err(CoinsQueryError::InsufficientCoins {
                 asset_id: _base_asset_id,
                 collected_amount: 0,
-                max: u16::MAX
             })
         )
     }
@@ -1778,7 +1774,7 @@ mod tests {
         assert_eq!(coin_result, message_result);
         assert!(matches!(
             coin_result,
-            Err(CoinsQueryError::InsufficientCoinsForTheMax { .. })
+            Err(CoinsQueryError::MaxCoinsReached { .. })
         ));
     }
 

@@ -7,10 +7,12 @@ use fuel_core_storage::{
     },
     structured_storage::TableWithBlueprint,
 };
-use fuel_core_types::fuel_tx::{
-    AssetId,
-    Bytes32,
-    ContractId,
+use fuel_core_types::{
+    fuel_tx::{
+        AssetId,
+        ContractId,
+    },
+    fuel_types::SubAssetId,
 };
 
 /// Asset info table to store information about the asset like total minted amounts,
@@ -20,7 +22,7 @@ pub struct AssetsInfo;
 #[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AssetDetails {
     pub contract_id: ContractId,
-    pub sub_id: Bytes32,
+    pub sub_id: SubAssetId,
     pub total_supply: u128,
 }
 
