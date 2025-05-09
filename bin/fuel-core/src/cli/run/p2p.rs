@@ -209,6 +209,10 @@ pub struct P2PArgs {
     /// Subscribe to pre-confirmation gossip topic
     #[clap(long = "subscribe-to-pre-confirmations", env)]
     subscribe_to_pre_confirmations: bool,
+
+    /// Subscribe to transaction gossip topic
+    #[clap(long = "subscribe-to-transactions", env)]
+    subscribe_to_transactions: bool,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -350,6 +354,7 @@ impl P2PArgs {
             tx_pool_threads: self.tx_pool_threads,
             state: NotInitialized,
             subscribe_to_pre_confirmations: self.subscribe_to_pre_confirmations,
+            subscribe_to_transactions: self.subscribe_to_transactions,
         };
         Ok(Some(config))
     }
