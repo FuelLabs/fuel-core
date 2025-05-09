@@ -17,13 +17,13 @@ use fuel_core_types::{
 };
 
 /// can either be a predicate coin or a signed coin
-#[derive(Debug)]
-enum Variant {
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) enum Variant {
     Predicate,
     Signed,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq)]
 pub(crate) struct CoinInBatch {
     /// The utxo id
     utxo_id: UtxoId,
@@ -39,6 +39,17 @@ pub(crate) struct CoinInBatch {
     variant: Variant,
 }
 
+impl PartialEq for CoinInBatch {
+    fn eq(&self, other: &Self) -> bool {
+        self.utxo() == other.utxo()
+            && self.owner() == other.owner()
+            && self.amount() == other.amount()
+            && self.asset_id() == other.asset_id()
+            && self.variant() == other.variant()
+        // we don't include the idx here
+    }
+}
+
 impl CoinInBatch {
     pub(crate) fn utxo(&self) -> &UtxoId {
         &self.utxo_id
@@ -46,6 +57,22 @@ impl CoinInBatch {
 
     pub(crate) fn idx(&self) -> usize {
         self.idx
+    }
+
+    pub(crate) fn owner(&self) -> &Address {
+        &self.owner
+    }
+
+    pub(crate) fn amount(&self) -> &Word {
+        &self.amount
+    }
+
+    pub(crate) fn asset_id(&self) -> &AssetId {
+        &self.asset_id
+    }
+
+    pub(crate) fn variant(&self) -> Variant {
+        self.variant
     }
 
     pub(crate) fn from_signed_coin(signed_coin: &CoinSigned, idx: usize) -> Self {

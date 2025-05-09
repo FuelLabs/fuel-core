@@ -596,13 +596,12 @@ impl CoinDependencyChainVerifier {
     where
         S: Storage,
     {
-        // TODO: Maybe we also want to verify the amount
         for coin in coins_used {
             match storage.get_coin(coin.utxo()) {
                 Ok(Some(db_coin)) => {
                     // Coin is in the database
                     match db_coin.matches_input(&coin.into()) {
-                        Some(true) => return Ok(()),
+                        Some(true) => continue,
                         Some(false) => {
                             return Err(SchedulerError::InternalError(format!(
                                 "coin is invalid: {}",
@@ -620,12 +619,14 @@ impl CoinDependencyChainVerifier {
                 Ok(None) => {
                     // Coin is not in the database
                     match self.coins_registered.get(coin.utxo()) {
-                        Some((coin_creation_batch_id, coin_creation_tx_idx)) => {
+                        Some((coin_creation_batch_id, registered_coin)) => {
                             // Coin is in the block
                             if coin_creation_batch_id <= &batch_id
-                                && coin_creation_tx_idx.idx() <= coin.idx()
+                                && registered_coin.idx() <= coin.idx()
+                                && registered_coin == coin
                             {
                                 // Coin is created in a batch that is before the current one
+                                continue;
                             } else {
                                 // Coin is created in a batch that is after the current one
                                 return Err(SchedulerError::InternalError(format!(
