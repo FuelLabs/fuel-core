@@ -547,7 +547,11 @@ where
     N: NewTxWaiterPort,
     P: PreconfirmationSenderPort,
 {
-    async fn execute<TxSource, D>(
+    pub fn set_consensus_params(&mut self, consensus_params: ConsensusParameters) {
+        self.consensus_params = consensus_params;
+    }
+
+    pub async fn execute<TxSource, D>(
         self,
         components: Components<TxSource>,
         block_storage_tx: BlockStorageTransaction<D>,
