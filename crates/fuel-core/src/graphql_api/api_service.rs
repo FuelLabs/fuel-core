@@ -83,7 +83,10 @@ use std::{
         TcpListener,
     },
     pin::Pin,
-    sync::Arc,
+    sync::{
+        Arc,
+        OnceLock,
+    },
 };
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
@@ -373,17 +376,43 @@ where
     ))
 }
 
-async fn render_graphql_playground(
+/// Single initialization of the GraphQL playground HTML.
+/// This is because the rendering and replacing is expensive
+static GRAPHQL_PLAYGROUND_HTML: OnceLock<Arc<String>> = OnceLock::new();
+
+fn _render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
-) -> impl IntoResponse + use<> {
-    Html(
-        GraphiQLSource::build()
+) -> impl IntoResponse + Send + Sync {
+    let html = GRAPHQL_PLAYGROUND_HTML.get_or_init(|| {
+        let raw_html = GraphiQLSource::build()
             .endpoint(endpoint)
             .subscription_endpoint(subscription_endpoint)
             .title("Fuel Graphql Playground")
-            .finish(),
-    )
+            .finish();
+
+        // this may not be necessary in the future,
+        // but we need it to patch: https://github.com/async-graphql/async-graphql/issues/1703
+        let raw_html = raw_html.replace(
+            "https://unpkg.com/graphiql/graphiql.min.js",
+            "https://unpkg.com/graphiql@3/graphiql.min.js",
+        );
+        let raw_html = raw_html.replace(
+            "https://unpkg.com/graphiql/graphiql.min.css",
+            "https://unpkg.com/graphiql@3/graphiql.min.css",
+        );
+
+        Arc::new(raw_html)
+    });
+
+    Html(html.as_str())
+}
+
+async fn render_graphql_playground(
+    endpoint: &str,
+    subscription_endpoint: &str,
+) -> impl IntoResponse + Send + Sync {
+    _render_graphql_playground(endpoint, subscription_endpoint)
 }
 
 async fn health() -> Json<serde_json::Value> {
