@@ -4,6 +4,7 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
     fuel_tx::{
+        ConsensusParameters,
         ContractId,
         UtxoId,
     },
@@ -41,4 +42,10 @@ pub trait TransactionsSource {
 pub trait Storage {
     /// Get a coin by a UTXO
     fn get_coin(&self, utxo: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
+
+    /// Get consensus parameters based on a version
+    fn get_consensus_parameters(
+        &self,
+        consensus_parameters_version: u32,
+    ) -> StorageResult<ConsensusParameters>;
 }

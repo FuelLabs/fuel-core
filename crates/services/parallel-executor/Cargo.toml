@@ -13,6 +13,7 @@ description = "Fuel Block Parallel Executor"
 [dependencies]
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
+fuel-core-executor = { workspace = true, features = ["std"] }
 fuel-core-upgradable-executor = { workspace = true, features = ["std"] }
 futures = { workspace = true, features = ["std"] }
 fxhash = { version = "0.2.1", default-features = false }

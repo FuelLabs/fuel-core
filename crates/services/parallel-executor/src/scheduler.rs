@@ -32,6 +32,18 @@ use ::futures::{
     StreamExt,
     stream::FuturesUnordered,
 };
+use fuel_core_executor::{
+    executor::{
+        BlockExecutor,
+        ExecutionOptions,
+        WaitNewTransactionsResult,
+    },
+    ports::{
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+        RelayerPort,
+    },
+};
 use fuel_core_storage::{
     Error as StorageError,
     transactional::{
@@ -42,23 +54,29 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
     fuel_tx::{
+        ConsensusParameters,
         ContractId,
         UtxoId,
     },
     fuel_vm::checked_transaction::CheckedTransaction,
-    services::executor::Error as ExecutorError,
+    services::{
+        block_producer::Components,
+        executor::Error as ExecutorError,
+    },
 };
 use fxhash::FxHashMap;
 use tokio::runtime::Runtime;
 
 use crate::{
     column_adapter::ContractColumnsIterator,
+    once_transaction_source::OnceTransactionsSource,
     ports::{
         Filter,
         Storage,
         TransactionFiltered,
         TransactionsSource,
     },
+    tx_waiter::NoWaitTxs,
 };
 
 /// Config for the scheduler
@@ -119,15 +137,15 @@ impl ContractsChanges {
     }
 }
 
-pub struct Scheduler<TxSource, S> {
+pub struct Scheduler<S, R, PreconfirmationSender> {
     /// Config
     config: Config,
-    /// Transaction source to ask for new transactions
-    transaction_source: TxSource,
     /// Database transaction for the execution
     storage: S,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
+    /// Executor
+    executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
     /// List of available workers
     current_available_workers: VecDeque<usize>,
     /// All contracts changes
@@ -208,7 +226,7 @@ enum SchedulerState {
 
 // Shutdown the tokio runtime to avoid panic if executor is already
 // used from another tokio runtime
-impl<TxSource, D> Drop for Scheduler<TxSource, D> {
+impl<D, R, PreconfirmationSender> Drop for Scheduler<D, R, PreconfirmationSender> {
     fn drop(&mut self) {
         if let Some(runtime) = self.runtime.take() {
             runtime.shutdown_background();
@@ -216,21 +234,40 @@ impl<TxSource, D> Drop for Scheduler<TxSource, D> {
     }
 }
 
-impl<TxSource, S> Scheduler<TxSource, S>
+impl<S, R, PreconfirmationSender> Scheduler<S, R, PreconfirmationSender>
 where
-    TxSource: TransactionsSource,
     S: Storage,
+    R: RelayerPort + Clone,
+    PreconfirmationSender: PreconfirmationSenderPort + Clone,
 {
-    pub fn new(config: Config, transaction_source: TxSource, storage: S) -> Self {
+    pub fn new(
+        config: Config,
+        storage: S,
+        relayer: R,
+        preconfirmation_sender: PreconfirmationSender,
+    ) -> Self {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(config.number_of_workers)
             .enable_all()
             .build()
             .unwrap();
 
+        let executor = BlockExecutor::new(
+            relayer,
+            ExecutionOptions {
+                forbid_fake_coins: false,
+                backtrace: false,
+            },
+            ConsensusParameters::default(),
+            NoWaitTxs,
+            preconfirmation_sender,
+            true,
+        )
+        .unwrap();
+
         Self {
-            transaction_source,
             runtime: Some(runtime),
+            executor,
             tx_left: config.block_transaction_count_limit,
             tx_size_left: config.block_transaction_size_limit,
             current_available_workers: (0..config.number_of_workers).collect(),
@@ -255,8 +292,22 @@ where
         self.state = SchedulerState::TransactionsReadyForPickup;
     }
 
-    pub async fn run(&mut self) -> Result<StorageChanges, SchedulerError> {
-        let new_tx_notifier = self.transaction_source.get_new_transactions_notifier();
+    pub async fn run<TxSource: TransactionsSource>(
+        &mut self,
+        mut components: Components<TxSource>,
+    ) -> Result<StorageChanges, SchedulerError> {
+        let consensus_parameters_version =
+            components.header_to_produce.consensus_parameters_version;
+
+        let consensus_parameters = self
+            .storage
+            .get_consensus_parameters(consensus_parameters_version)
+            .map_err(|e| SchedulerError::StorageError(e))?;
+        self.executor.set_consensus_params(consensus_parameters);
+
+        let new_tx_notifier = components
+            .transactions_source
+            .get_new_transactions_notifier();
         let now = tokio::time::Instant::now();
         let deadline = now + self.config.total_execution_time;
         let mut nb_batch_created = 0;
@@ -271,15 +322,24 @@ where
 
         'outer: loop {
             if self.is_worker_idling() {
-                let batch =
-                    self.ask_new_transactions_batch(now, initial_gas_per_worker)?;
+                let batch = self.ask_new_transactions_batch(
+                    &mut components.transactions_source,
+                    now,
+                    initial_gas_per_worker,
+                )?;
                 let batch_len = batch.len() as u16;
 
                 if batch.is_empty() {
                     continue 'outer;
                 }
 
-                self.execute_batch(batch, nb_batch_created, nb_transactions)?;
+                self.execute_batch(
+                    consensus_parameters_version,
+                    &components,
+                    batch,
+                    nb_batch_created,
+                    nb_transactions,
+                )?;
 
                 nb_batch_created += 1;
                 nb_transactions += batch_len;
@@ -328,8 +388,9 @@ where
         self.state = SchedulerState::TransactionsReadyForPickup;
     }
 
-    fn ask_new_transactions_batch(
+    fn ask_new_transactions_batch<TxSource: TransactionsSource>(
         &mut self,
+        tx_source: &mut TxSource,
         start_execution_time: tokio::time::Instant,
         initial_gas: u64,
     ) -> Result<Vec<CheckedTransaction>, SchedulerError> {
@@ -344,17 +405,16 @@ where
                 - spent_time.as_millis() as u64)
             / self.config.total_execution_time.as_millis() as u64;
 
-        let (batch, filtered, filter) =
-            self.transaction_source.get_executable_transactions(
-                current_gas,
-                self.tx_left,
-                self.tx_size_left,
-                Filter {
-                    excluded_contract_ids: std::mem::take(
-                        &mut self.current_executing_contracts,
-                    ),
-                },
-            );
+        let (batch, filtered, filter) = tx_source.get_executable_transactions(
+            current_gas,
+            self.tx_left,
+            self.tx_size_left,
+            Filter {
+                excluded_contract_ids: std::mem::take(
+                    &mut self.current_executing_contracts,
+                ),
+            },
+        );
         self.current_executing_contracts = filter.excluded_contract_ids;
 
         if batch.is_empty() {
@@ -372,8 +432,10 @@ where
         Ok(batch)
     }
 
-    fn execute_batch(
+    fn execute_batch<TxSource>(
         &mut self,
+        consensus_parameters_version: u32,
+        components: &Components<TxSource>,
         batch: Vec<CheckedTransaction>,
         batch_id: usize,
         _start_idx_txs: u16,
@@ -389,7 +451,20 @@ where
                     used_contracts_changes.push(changes);
                 }
             }
+            let executor = self.executor.clone();
             async move {
+                executor.execute(
+                    Components {
+                        header_to_produce: components.header_to_produce.clone(),
+                        transactions_source: OnceTransactionsSource::new(
+                            batch,
+                            consensus_parameters_version,
+                        ),
+                        coinbase_recipient: components.coinbase_recipient.clone(),
+                        gas_price: components.gas_price.clone(),
+                    },
+                    block_storage_tx,
+                );
                 // TODO: Execute the batch of transactions
                 WorkSessionExecutionResult {
                     batch_id,
