@@ -175,3 +175,48 @@ async fn get_coins_forwards_backwards(
     assert!(!coins.results.is_empty());
     assert_eq!(coins.results.len(), 10);
 }
+
+#[tokio::test]
+async fn returns_all_assets_when_asset_id_is_none() {
+    let owner = Address::default();
+    let asset_id_a = AssetId::from([1u8; 32]);
+    let asset_id_b = AssetId::from([2u8; 32]);
+
+    // Generate coins with different assets—like 5 of asset A and 5 of asset B
+    let mut coin_generator = CoinConfigGenerator::new();
+    let coins: Vec<_> = (0..10usize)
+        .map(|i| CoinConfig {
+            owner,
+            amount: (i + 1) as Word,
+            asset_id: if i <= 5 { asset_id_a } else { asset_id_b },
+            ..coin_generator.generate()
+        })
+        .collect();
+
+    // setup server & client
+    let srv = setup_service(coins).await;
+    let client = FuelClient::from(srv.bound_address);
+
+    // Query coins where the `asset_id` is `None`.
+    let coins = client
+        .coins(
+            &owner,
+            None,
+            PaginationRequest {
+                cursor: None,
+                results: 10,
+                direction: PageDirection::Forward,
+            },
+        )
+        .await
+        .unwrap();
+
+    // Collect all the `asset_id`s.
+    let asset_ids: std::collections::HashSet<AssetId> =
+        coins.results.iter().map(|c| c.asset_id).collect();
+
+    // run test
+    assert!(asset_ids.contains(&asset_id_a));
+    assert!(asset_ids.contains(&asset_id_b));
+    assert_eq!(coins.results.len(), 10);
+}
