@@ -14,7 +14,15 @@ description = "Fuel Block Parallel Executor"
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 fuel-core-upgradable-executor = { workspace = true, features = ["std"] }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+futures = { workspace = true, features = ["std"] }
+fxhash = { version = "0.2.1", default-features = false }
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "time",
+] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
