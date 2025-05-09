@@ -500,3 +500,34 @@ async fn run__received_tx_will_be_broadcast_with_current_delegate_key_signature(
     };
     assert_eq!(expected, actual);
 }
+#[tokio::test]
+async fn run__received_empty_tx_will_not_be_broadcasted() {
+    // given
+    let current_delegate_key = "foobar delegate key";
+    let (mut task, mut handles) = TaskBuilder::new()
+        .with_current_delegate_key(current_delegate_key, Tai64::UNIX_EPOCH)
+        .build_with_handles();
+    let mut state_watcher = StateWatcher::started();
+
+    // when
+    let empyt_txs = vec![];
+
+    tokio::task::spawn(async move {
+        // run it on repeat so the receiver isn't dropped
+        loop {
+            let _ = task.run(&mut state_watcher).await;
+        }
+    });
+
+    handles
+        .tx_sender_handle
+        .send(empyt_txs.clone())
+        .await
+        .expect("Failed to send txs");
+
+    // then
+    let response = handles.broadcast_tx_handle.recv();
+    let _ = tokio::time::timeout(Duration::from_millis(100), response)
+        .await
+        .expect_err("should_not_receive_response");
+}

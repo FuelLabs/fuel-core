@@ -2,6 +2,7 @@ use fuel_core::{
     chain_config::{
         ChainConfig,
         ContractConfig,
+        MessageConfig,
         StateConfig,
         TESTNET_WALLET_SECRETS,
     },
@@ -44,7 +45,10 @@ use fuel_core_types::{
         Word,
         policies::Policies,
     },
-    fuel_types::canonical::Serialize,
+    fuel_types::{
+        Nonce,
+        canonical::Serialize,
+    },
     fuel_vm::consts::WORD_SIZE,
     services::executor::TransactionExecutionResult,
 };
@@ -54,6 +58,7 @@ use test_helpers::{
         SigningAccount,
     },
     config_with_fee,
+    default_signing_secret,
     default_signing_wallet,
 };
 
@@ -239,6 +244,77 @@ async fn assemble_transaction__user_provided_change_output() {
         status.result,
         TransactionExecutionResult::Success { .. }
     ));
+}
+
+#[tokio::test]
+async fn assemble_transaction__finds_another_input_if_inputs_not_spendable() {
+    // Given
+    let data = [5; 99].to_vec();
+
+    let mut state_config = StateConfig::default();
+    let secret = default_signing_secret();
+    let recipient = Address::from(*secret.public_key().hash());
+    let account = SigningAccount::Wallet(secret);
+    let nonce: Nonce = [1; 32].into();
+    let amount = Word::MAX / 2;
+    let sender = Address::default();
+    let message = MessageConfig {
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        nonce: nonce.clone(),
+        amount,
+        data: data.clone(),
+        ..Default::default()
+    };
+    let second_message = MessageConfig {
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        nonce: [2; 32].into(),
+        amount: Word::MAX / 2,
+        data: vec![],
+        ..Default::default()
+    };
+    state_config.messages.push(message.clone());
+    state_config.messages.push(second_message.clone());
+    let mut config = Config::local_node_with_state_config(state_config);
+    config.utxo_validation = true;
+    config.txpool.utxo_validation = true;
+    config.gas_price_config.min_exec_gas_price = 1000;
+
+    let base_asset_id = config.base_asset_id();
+    let service = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(service.bound_address);
+
+    let tx = Transaction::script(
+        0,
+        vec![],
+        vec![],
+        Policies::new(),
+        vec![Input::message_data_signed(
+            message.sender,
+            message.recipient,
+            message.amount,
+            message.nonce,
+            0,
+            message.data,
+        )],
+        vec![Output::Change {
+            asset_id: base_asset_id,
+            to: account.owner(),
+            amount: 0,
+        }],
+        vec![],
+    );
+
+    // When
+    let res = client
+        .assemble_transaction(&tx.into(), account.clone(), vec![])
+        .await;
+
+    // then
+    let tx = res.unwrap();
+    let status = client.submit_and_await_commit(&tx).await.unwrap();
+    assert!(matches!(status, TransactionStatus::Success { .. }));
 }
 
 #[tokio::test]

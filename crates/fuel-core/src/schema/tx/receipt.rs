@@ -5,6 +5,7 @@ use crate::schema::scalars::{
     ContractId,
     HexString,
     Nonce,
+    SubId,
     U64,
 };
 use async_graphql::{
@@ -142,7 +143,7 @@ impl Receipt {
     async fn contract_id(&self) -> Option<ContractId> {
         self.0.contract_id().map(|id| ContractId(*id))
     }
-    async fn sub_id(&self) -> Option<Bytes32> {
+    async fn sub_id(&self) -> Option<SubId> {
         self.0.sub_id().copied().map(Into::into)
     }
 }
@@ -246,14 +247,14 @@ pub fn all_receipts() -> Vec<fuel_tx::Receipt> {
                 vec![5; 30],
             ),
             ReceiptType::Mint => fuel_tx::Receipt::mint(
-                fuel_tx::Bytes32::from([1u8; 32]),
+                fuel_tx::SubAssetId::from([1u8; 32]),
                 fuel_tx::ContractId::from([2u8; 32]),
                 3,
                 4,
                 5,
             ),
             ReceiptType::Burn => fuel_tx::Receipt::burn(
-                fuel_tx::Bytes32::from([1u8; 32]),
+                fuel_tx::SubAssetId::from([1u8; 32]),
                 fuel_tx::ContractId::from([2u8; 32]),
                 3,
                 4,
