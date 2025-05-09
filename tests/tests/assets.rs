@@ -15,6 +15,7 @@ use fuel_core_types::{
         ContractIdExt,
         Input,
         Output,
+        SubAssetId,
         TransactionBuilder,
         TxPointer,
         UtxoId,
@@ -126,7 +127,7 @@ async fn asset_info_mint_burn() {
     // When
     // Query asset info before burn
     let initial_supply = client
-        .asset_info(&contract_id.asset_id(&Bytes32::zeroed()))
+        .asset_info(&contract_id.asset_id(&SubAssetId::zeroed()))
         .await
         .unwrap()
         .total_supply;
@@ -173,7 +174,7 @@ async fn asset_info_mint_burn() {
     // When
     // Query asset info after burn
     let final_supply = client
-        .asset_info(&contract_id.asset_id(&Bytes32::zeroed()))
+        .asset_info(&contract_id.asset_id(&SubAssetId::zeroed()))
         .await
         .unwrap()
         .total_supply;

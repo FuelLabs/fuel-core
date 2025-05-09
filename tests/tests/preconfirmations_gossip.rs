@@ -95,7 +95,6 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
-    // Given
     let tx = TransactionBuilder::script(script, vec![])
         .script_gas_limit(gas_limit)
         .add_unsigned_coin_input(
