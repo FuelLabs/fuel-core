@@ -960,9 +960,9 @@ where
                     }
                     Some(TaskRequest::BroadcastPreConfirmations(pre_confirmation_message)) => {
                         let broadcast = GossipsubBroadcastRequest::TxPreConfirmations(pre_confirmation_message);
-                        let result = self.p2p_service.publish_message(broadcast);
+                        let result = self.p2p_service.publish_message(broadcast.clone());
                         if let Err(e) = result {
-                            tracing::error!("Got an error during pre-confirmation message broadcasting {}", e);
+                            tracing::error!("Got an error during pre-confirmation message broadcasting {:?}: {}", broadcast, e);
                         }
                     }
                     Some(TaskRequest::GetSealedHeaders { block_height_range, channel}) => {

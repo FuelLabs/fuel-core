@@ -108,7 +108,7 @@ impl BenchDb {
         )?;
 
         let mut storage_key = primitive_types::U256::zero();
-        let mut sub_id = Bytes32::zeroed();
+        let mut sub_id = SubAssetId::zeroed();
         database.init_contract_balances(
             contract_id,
             (0..state_size).map(|k| {

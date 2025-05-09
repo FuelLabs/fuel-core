@@ -779,14 +779,19 @@ where
         let backup_dir = backup_dir.as_ref().join(Description::name());
         let backup_dir_path = backup_dir.as_path();
 
-        let backup_engine_options =
-            BackupEngineOptions::new(backup_dir_path).map_err(|e| {
+        let mut backup_engine_options = BackupEngineOptions::new(backup_dir_path)
+            .map_err(|e| {
                 DatabaseError::BackupEngineInitError(anyhow::anyhow!(
                     "Couldn't create backup engine options for path `{}`: {}",
                     backup_dir_path.display(),
                     e
                 ))
             })?;
+
+        let cpu_number =
+            i32::try_from(num_cpus::get()).expect("The number of CPU can't exceed `i32`");
+
+        backup_engine_options.set_max_background_operations(cmp::max(1, cpu_number / 4));
 
         let env = Env::new().map_err(|e| {
             DatabaseError::BackupEngineInitError(anyhow::anyhow!(
@@ -820,7 +825,12 @@ where
             columns_policy: ColumnsPolicy::Lazy,
         };
 
-        let db = Self::default_open(db_dir, db_config)?;
+        let db = Self::open_read_only(
+            db_dir,
+            enum_iterator::all::<Description::Column>().collect::<Vec<_>>(),
+            false,
+            db_config,
+        )?;
 
         backup_engine.create_new_backup(&db.db).map_err(|e| {
             DatabaseError::BackupError(anyhow::anyhow!(

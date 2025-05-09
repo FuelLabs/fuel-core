@@ -7,8 +7,10 @@ use async_graphql::{
     connection::CursorType,
 };
 use fuel_core_types::{
-    fuel_types,
-    fuel_types::BlockHeight,
+    fuel_types::{
+        self,
+        BlockHeight,
+    },
     tai64::Tai64,
 };
 use std::{
@@ -300,7 +302,7 @@ fuel_type_scalar!("BlockId", BlockId, Bytes32, 32);
 fuel_type_scalar!("AssetId", AssetId, AssetId, 32);
 fuel_type_scalar!("BlobId", BlobId, BlobId, 32);
 fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
-fuel_type_scalar!("SubId", SubId, Bytes32, 32);
+fuel_type_scalar!("SubId", SubId, SubAssetId, 32);
 fuel_type_scalar!("Salt", Salt, Salt, 32);
 fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);
 fuel_type_scalar!("RelayedTransactionId", RelayedTransactionId, Bytes32, 32);
