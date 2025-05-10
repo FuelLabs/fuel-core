@@ -12,6 +12,9 @@ pub enum CompressionError {
     /// Failed to read compressed block from storage
     #[error("failed to write compressed block to storage: `{0}`")]
     FailedToWriteCompressedBlock(StorageError),
+    /// Failed to write registrations to storage
+    #[error("failed to write registrations to storage: `{0}`")]
+    FailedToWriteRegistrations(StorageError),
     /// Failed to get the size of compressed block
     #[error("failed to get size of compressed block: `{0}`")]
     FailedToGetCompressedBlockSize(StorageError),

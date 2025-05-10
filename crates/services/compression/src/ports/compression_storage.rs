@@ -1,7 +1,9 @@
 use crate::{
     errors::CompressionError,
-    storage,
-    storage::CompressedBlocks,
+    storage::{
+        self,
+        CompressedBlocks,
+    },
 };
 use fuel_core_storage::{
     self,
@@ -64,6 +66,16 @@ where
         self.storage_as_mut::<CompressedBlocks>()
             .insert(&height, compressed_block)
             .map_err(CompressionError::FailedToWriteCompressedBlock)?;
+
+        #[cfg(feature = "fault-proving")]
+        self.storage_as_mut::<crate::storage::registrations::Registrations>()
+            .insert(
+                &height,
+                fuel_core_compression::VersionedBlockPayload::registrations(
+                    compressed_block,
+                ),
+            )
+            .map_err(CompressionError::FailedToWriteRegistrations)?;
 
         // this should not hit the db, we get it from the transaction
         let size = StorageSize::<CompressedBlocks>::size_of_value(self, &height)
