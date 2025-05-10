@@ -173,7 +173,9 @@ where
             let mut transactions_to_remove = Vec::new();
             let mut transactions_to_promote = Vec::new();
 
-            for (key, storage_id) in &self.executable_transactions_sorted_tip_gas_ratio {
+            'outer: for (key, storage_id) in
+                &self.executable_transactions_sorted_tip_gas_ratio
+            {
                 if nb_left == 0 || gas_left == 0 || space_left == 0 {
                     break;
                 }
@@ -189,6 +191,17 @@ where
                     transactions_to_remove.push(*key);
                     continue
                 };
+
+                for input in stored_transaction.transaction.inputs() {
+                    if let fuel_core_types::fuel_tx::Input::Contract(contract) = input {
+                        if constraints
+                            .excluded_contracts
+                            .contains(&contract.contract_id)
+                        {
+                            continue 'outer;
+                        }
+                    }
+                }
 
                 let less_price = stored_transaction.transaction.max_gas_price()
                     < constraints.minimal_gas_price;

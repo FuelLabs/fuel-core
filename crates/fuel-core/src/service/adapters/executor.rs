@@ -21,7 +21,10 @@ use fuel_core_types::{
         relayer::Event,
     },
 };
-use std::sync::Arc;
+use std::{
+    collections::HashSet,
+    sync::Arc,
+};
 use tokio::sync::mpsc::error::TrySendError;
 
 use super::PreconfirmationSender;
@@ -39,6 +42,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
                 max_gas: gas_limit,
                 maximum_txs: transactions_limit,
                 maximum_block_size: block_transaction_size_limit,
+                excluded_contracts: HashSet::default(),
             })
             .unwrap_or_default()
             .into_iter()
