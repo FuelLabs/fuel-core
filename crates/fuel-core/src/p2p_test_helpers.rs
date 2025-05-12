@@ -12,7 +12,6 @@ use crate::{
     },
     fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
-    schema::tx::types::TransactionStatus,
     service::{
         Config,
         FuelService,
@@ -401,6 +400,12 @@ pub async fn make_nodes(
 
             node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
 
+            if !txs.is_empty() {
+                node_config
+                    .pre_confirmation_signature_service
+                    .echo_delegation_interval = Duration::from_millis(200);
+            }
+
             test_txs = txs;
         }
 
@@ -507,7 +512,14 @@ pub fn make_config(
 }
 
 pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node {
+    #[cfg(feature = "default")]
+    let db = CombinedDatabase::from_config(&node_config.combined_db_config)
+        .unwrap()
+        .on_chain()
+        .clone();
+    #[cfg(not(feature = "default"))]
     let db = Database::in_memory();
+
     // Test coverage slows down the execution a lot, and while running all tests,
     // it may require a lot of time to start the node. We have a
     // timeout here to watch infinity loops, so it is okay to use 120 seconds.
@@ -573,55 +585,55 @@ impl Node {
     /// Wait for the node to reach consistency with the given transactions.
     pub async fn consistency(&mut self, txs: &HashMap<Bytes32, Transaction>) {
         let db = self.node.shared.database.off_chain();
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+
+        // first tick completes immediately
+        interval.tick().await;
+
         loop {
-            let not_found = not_found_txs(db, txs);
+            tokio::select! {
+                _ = interval.tick() => {
+                    let not_found = not_found_txs(db, txs);
 
-            if not_found.is_empty() {
-                break;
-            }
-
-            let tx_id = not_found[0];
-            let mut wait_transaction =
-                self.node.transaction_status_change(tx_id).await.unwrap();
-
-            loop {
-                tokio::select! {
-                    result = wait_transaction.next() => {
-                        let status = result.unwrap().unwrap();
-
-                        if matches!(status, TransactionStatus::Failure { .. })
-                            || matches!(status, TransactionStatus::Success { .. }) {
-                            break
-                        }
-
-                        if matches!(status, TransactionStatus::SqueezedOut(_)) {
-                            panic!("Transaction was squeezed out: {:?}", status);
-                        }
+                    if not_found.is_empty() {
+                        break;
                     }
-                    _ = self.node.await_shutdown() => {
-                        panic!("Got a stop signal")
-                    }
+                }
+                _ = self.node.await_shutdown() => {
+                    panic!("Got a stop signal")
                 }
             }
         }
     }
 
-    /// Wait for the node to reach consistency with the given transactions within 10 seconds.
-    pub async fn consistency_10s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        tokio::time::timeout(Duration::from_secs(10), self.consistency(txs))
+    pub async fn consistency_with_duration(
+        &mut self,
+        txs: &HashMap<Bytes32, Transaction>,
+        duration: Duration,
+    ) {
+        tokio::time::timeout(duration, self.consistency(txs))
             .await
             .unwrap_or_else(|_| {
                 panic!("Failed to reach consistency for {:?}", self.config.name)
             });
     }
 
+    /// Wait for the node to reach consistency with the given transactions within 10 seconds.
+    pub async fn consistency_10s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
+        self.consistency_with_duration(txs, Duration::from_secs(10))
+            .await;
+    }
+
     /// Wait for the node to reach consistency with the given transactions within 20 seconds.
     pub async fn consistency_20s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
-        tokio::time::timeout(Duration::from_secs(20), self.consistency(txs))
-            .await
-            .unwrap_or_else(|_| {
-                panic!("Failed to reach consistency for {:?}", self.config.name)
-            });
+        self.consistency_with_duration(txs, Duration::from_secs(20))
+            .await;
+    }
+
+    /// Wait for the node to reach consistency with the given transactions within 30 seconds.
+    pub async fn consistency_30s(&mut self, txs: &HashMap<Bytes32, Transaction>) {
+        self.consistency_with_duration(txs, Duration::from_secs(30))
+            .await;
     }
 
     /// Insert the test transactions into the node's transaction pool.
