@@ -46,13 +46,10 @@ where
 {
     match eth_node.syncing().await {
         Ok(s) => Ok(s),
-        Err(err) => {
-            tracing::error!(?err, "failed to check if DA layer is syncing");
-            Err(anyhow::anyhow!(
-                "Failed to check if DA layer is syncing {}",
-                err
-            ))
-        }
+        Err(err) => Err(anyhow::anyhow!(
+            "Failed to check if DA layer is syncing {:?}",
+            err
+        )),
     }
 }
 
