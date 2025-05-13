@@ -64,8 +64,15 @@ where
                         eth_node
                             .get_logs(&filter)
                             .await
-                            .inspect_err(|err| {
-                                tracing::error!(?err, "eth provider failed to get logs")
+                            .map_err(|err| {
+                                let ProviderError::JsonRpcClientError(err) = err else {
+                                    return err
+                                };
+
+                                // Workaround because `QuorumError` obfuscates useful information
+                                ProviderError::CustomError(format!(
+                                    "eth provider failed to get logs: {err:?}"
+                                ))
                             })
                             .map(|logs| {
                                 Some((
