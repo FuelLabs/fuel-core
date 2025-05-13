@@ -1,5 +1,7 @@
 [alias]
 xtask = "run --package xtask --"
+build-fuel-core-bin-release = "build --release -p fuel-core-bin --no-default-features --features production"
+build-fuel-core-bin-debug = "build -p fuel-core-bin --no-default-features --features production"
 
 [registries.crates-io]
 protocol = "sparse"
