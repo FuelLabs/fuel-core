@@ -223,19 +223,19 @@ async fn execute__simple_independent_transactions_sorted() {
         }
     });
 
-    let _result = future.await; //.unwrap().into_result();
+    let result = future.await.unwrap().into_result();
 
-    // let expected_ids = [tx2, tx1, tx4, tx3]
-    //     .map(|tx| tx.id(&ChainId::default()))
-    //     .to_vec();
-    // let actual_ids = result
-    //     .block
-    //     .transactions()
-    //     .iter()
-    //     .map(|tx| tx.id(&ChainId::default()))
-    //     .collect::<Vec<_>>();
+    let expected_ids = [tx2, tx1, tx4, tx3]
+        .map(|tx| tx.id(&ChainId::default()))
+        .to_vec();
+    let actual_ids = result
+        .block
+        .transactions()
+        .iter()
+        .map(|tx| tx.id(&ChainId::default()))
+        .collect::<Vec<_>>();
 
-    // assert_eq!(expected_ids, actual_ids);
+    assert_eq!(expected_ids, actual_ids);
 }
 
 #[tokio::test]
@@ -306,7 +306,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
         }
     });
 
-    let _ = future.await; //.unwrap().into_result();
+    let _ = future.await.unwrap().into_result();
     txpool.join().unwrap();
 }
 
@@ -379,16 +379,12 @@ async fn execute__gas_left_updated_when_state_merges() {
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
-    let _ = executor
-        .produce_without_commit_with_source(Components {
-            header_to_produce: Default::default(),
-            transactions_source,
-            coinbase_recipient: Default::default(),
-            gas_price: 0,
-        })
-        .await;
-    // .unwrap()
-    // .into_result();
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
 
     // Then
     // Request for thread 1
@@ -420,6 +416,8 @@ async fn execute__gas_left_updated_when_state_merges() {
                 .respond_with(&[&tx_both_contracts], TransactionFiltered::NotFiltered);
         }
     });
+
+    let _ = future.await.unwrap().into_result();
 }
 
 #[tokio::test]
@@ -466,16 +464,12 @@ async fn execute__utxo_ordering_kept() {
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
-    let _result = executor
-        .produce_without_commit_with_source(Components {
-            header_to_produce: Default::default(),
-            transactions_source,
-            coinbase_recipient: Default::default(),
-            gas_price: 0,
-        })
-        .await;
-    // .unwrap()
-    // .into_result();
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
 
     // Then
     std::thread::spawn({
@@ -494,14 +488,16 @@ async fn execute__utxo_ordering_kept() {
         }
     });
 
-    // let transactions = result.block.transactions();
-    // assert_eq!(transactions.len(), 2);
-    // assert_eq!(
-    //     transactions[0].id(&ChainId::default()),
-    //     tx1.id(&ChainId::default())
-    // );
-    // assert_eq!(
-    //     transactions[1].id(&ChainId::default()),
-    //     tx2.id(&ChainId::default())
-    // );
+    let result = future.await.unwrap().into_result();
+
+    let transactions = result.block.transactions();
+    assert_eq!(transactions.len(), 2);
+    assert_eq!(
+        transactions[0].id(&ChainId::default()),
+        tx1.id(&ChainId::default())
+    );
+    assert_eq!(
+        transactions[1].id(&ChainId::default()),
+        tx2.id(&ChainId::default())
+    );
 }

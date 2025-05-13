@@ -223,6 +223,7 @@ impl<Storage> From<StorageTransaction<Storage>> for Changes {
 }
 
 /// The type describing the list of changes to the storage.
+#[derive(Debug)]
 pub enum StorageChanges {
     /// A single batch of changes.
     Changes(Changes),

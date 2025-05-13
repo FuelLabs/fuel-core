@@ -7,6 +7,7 @@ use crate::{
     scheduler::{
         BlockConstraints,
         Scheduler,
+        SchedulerError,
     },
 };
 use fuel_core_executor::ports::{
@@ -23,13 +24,16 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::block::Block,
+    blockchain::block::{
+        Block,
+        PartialFuelBlock,
+    },
     fuel_tx::Transaction,
     services::{
         Uncommitted,
         block_producer::Components,
         executor::{
-            // ExecutionResult,
+            ExecutionResult,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             ValidationResult,
@@ -77,12 +81,15 @@ where
     pub async fn produce_without_commit_with_source<TxSource>(
         &mut self,
         components: Components<TxSource>,
-    )
-    // TODO : ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+        // TODO: More higher error type
+    ) -> Result<Uncommitted<ExecutionResult, StorageChanges>, SchedulerError>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        self.scheduler
+        // TODO: Manage DA
+
+        let res = self
+            .scheduler
             .run(
                 components,
                 StorageChanges::default(),
@@ -93,8 +100,25 @@ where
                     block_transaction_count_limit: u16::MAX,
                 },
             )
-            .await
+            .await?;
+
+        // TODO: Add mint TX
+        let block: PartialFuelBlock = PartialFuelBlock {
+            header: res.header,
+            transactions: res.transactions,
+        };
+        let block = block
+            .generate(&res.message_ids, Default::default())
             .unwrap();
+        Ok(Uncommitted::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: res.skipped_txs,
+                events: res.events,
+                tx_status: res.transactions_status,
+            },
+            res.changes,
+        ))
     }
 
     pub fn validate(

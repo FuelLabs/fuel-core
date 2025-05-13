@@ -54,10 +54,14 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::transaction::TransactionExt,
+    blockchain::{
+        header::PartialBlockHeader,
+        transaction::TransactionExt,
+    },
     fuel_tx::{
         ConsensusParameters,
         ContractId,
+        MessageId,
         Transaction,
         TxId,
         UtxoId,
@@ -65,7 +69,11 @@ use fuel_core_types::{
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
         block_producer::Components,
-        executor::Error as ExecutorError,
+        executor::{
+            Error as ExecutorError,
+            Event,
+            TransactionExecutionStatus,
+        },
     },
 };
 use fxhash::FxHashMap;
@@ -180,6 +188,12 @@ struct WorkSessionExecutionResult {
     skipped_tx: Vec<(TxId, ExecutorError)>,
     /// Batch of transactions (included skipped ones) useful to re-execute them in case of fallback skipped
     txs: Vec<Transaction>,
+    /// Message ids
+    message_ids: Vec<MessageId>,
+    /// Events
+    events: Vec<Event>,
+    /// tx statuses
+    tx_statuses: Vec<TransactionExecutionStatus>,
 }
 
 #[derive(Default)]
@@ -194,6 +208,14 @@ struct WorkSessionSavedData {
     coins_used: Arc<[CoinInBatch]>,
     /// The transactions of the batch
     txs: Vec<Transaction>,
+    /// Message ids
+    message_ids: Vec<MessageId>,
+    /// events
+    events: Vec<Event>,
+    /// tx statuses
+    tx_statuses: Vec<TransactionExecutionStatus>,
+    /// skipped tx
+    skipped_tx: Vec<(TxId, ExecutorError)>,
 }
 
 /// Error type for the scheduler
@@ -218,6 +240,17 @@ enum SchedulerState {
     WaitingForNewTransaction,
     /// Waiting for a worker to finish because we have filtered transactions
     WaitingForWorker,
+}
+
+#[derive(Default, Debug)]
+pub struct SchedulerExecutionResult {
+    pub header: PartialBlockHeader,
+    pub transactions: Vec<Transaction>,
+    pub events: Vec<Event>,
+    pub message_ids: Vec<MessageId>,
+    pub skipped_txs: Vec<(TxId, ExecutorError)>,
+    pub transactions_status: Vec<TransactionExecutionStatus>,
+    pub changes: StorageChanges,
 }
 
 pub struct BlockConstraints {
@@ -303,7 +336,7 @@ where
         mut components: Components<TxSource>,
         da_changes: StorageChanges,
         block_constraints: BlockConstraints,
-    ) -> Result<StorageChanges, SchedulerError> {
+    ) -> Result<SchedulerExecutionResult, SchedulerError> {
         self.tx_left = block_constraints.block_transaction_count_limit;
         self.tx_size_left = block_constraints.block_transaction_size_limit;
 
@@ -402,7 +435,10 @@ where
         self.wait_all_execution_tasks(block_constraints.total_execution_time)
             .await?;
 
-        let res = self.verify_coherency_and_merge_results(nb_batch_created)?;
+        let res = self.verify_coherency_and_merge_results(
+            nb_batch_created,
+            components.header_to_produce,
+        )?;
 
         self.reset();
         Ok(res)
@@ -534,6 +570,9 @@ where
                 contracts_used,
                 skipped_tx: execution_data.skipped_transactions,
                 txs: block.transactions,
+                message_ids: execution_data.message_ids,
+                events: execution_data.events,
+                tx_statuses: execution_data.tx_status,
             }
         }));
         Ok(())
@@ -566,6 +605,10 @@ where
                 coins_created: res.coins_created,
                 coins_used: res.coins_used,
                 txs: res.txs,
+                message_ids: res.message_ids,
+                events: res.events,
+                tx_statuses: res.tx_statuses,
+                skipped_tx: res.skipped_tx,
             },
         );
     }
@@ -593,6 +636,10 @@ where
                                 coins_created: res.coins_created,
                                 coins_used: res.coins_used,
                                 txs: res.txs,
+                                message_ids: res.message_ids,
+                                events: res.events,
+                                tx_statuses: res.tx_statuses,
+                                skipped_tx: res.skipped_tx,
                             },
                         );
                     }
@@ -618,12 +665,14 @@ where
     fn verify_coherency_and_merge_results(
         &mut self,
         nb_batch: usize,
-    ) -> Result<StorageChanges, SchedulerError> {
+        partial_block_header: PartialBlockHeader,
+    ) -> Result<SchedulerExecutionResult, SchedulerError> {
         let mut storage_changes = vec![];
         let latest_view = self
             .storage
             .latest_view()
             .map_err(|e| SchedulerError::StorageError(StorageError::from(e)))?;
+        let mut exec_result = SchedulerExecutionResult::default();
         let mut compiled_created_coins = CoinDependencyChainVerifier::new();
         for batch_id in 0..nb_batch {
             if let Some(changes) = self.execution_results.remove(&batch_id) {
@@ -635,14 +684,20 @@ where
                     &latest_view,
                 )?;
                 storage_changes.push(changes.changes);
+                exec_result.events.extend(changes.events);
+                exec_result.message_ids.extend(changes.message_ids);
+                exec_result.skipped_txs.extend(changes.skipped_tx);
+                exec_result.transactions_status.extend(changes.tx_statuses);
+                exec_result.transactions.extend(changes.txs);
             } else {
                 return Err(SchedulerError::InternalError(format!(
                     "Batch {batch_id} not found in the execution results"
                 )));
             }
         }
+        exec_result.header = partial_block_header;
         storage_changes.extend(self.contracts_changes.extract_all_contracts_changes());
-        Ok(StorageChanges::ChangesList(storage_changes))
+        Ok(exec_result)
     }
 
     // Wait for all the workers to finish gather all theirs transactions
