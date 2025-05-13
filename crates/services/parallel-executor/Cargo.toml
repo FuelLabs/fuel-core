@@ -27,6 +27,7 @@ tokio = { workspace = true, features = [
 tracing = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers", "serde"] }
 rand = { workspace = true }

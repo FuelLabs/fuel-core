@@ -300,17 +300,17 @@ pub fn convert_tx_execution_result_to_preconfirmation(
 /// Data that is generated after executing all transactions.
 #[derive(Default)]
 pub struct ExecutionData {
-    coinbase: u64,
-    used_gas: u64,
-    used_size: u32,
-    tx_count: u16,
-    found_mint: bool,
-    message_ids: Vec<MessageId>,
-    tx_status: Vec<TransactionExecutionStatus>,
-    events: Vec<ExecutorEvent>,
-    changes: Changes,
+    pub coinbase: u64,
+    pub used_gas: u64,
+    pub used_size: u32,
+    pub tx_count: u16,
+    pub found_mint: bool,
+    pub message_ids: Vec<MessageId>,
+    pub tx_status: Vec<TransactionExecutionStatus>,
+    pub events: Vec<ExecutorEvent>,
+    pub changes: Changes,
     pub skipped_transactions: Vec<(TxId, ExecutorError)>,
-    event_inbox_root: Bytes32,
+    pub event_inbox_root: Bytes32,
 }
 
 impl ExecutionData {

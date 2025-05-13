@@ -1,8 +1,27 @@
 use crate::{
     config::Config,
-    ports::TransactionsSource,
+    ports::{
+        Storage,
+        TransactionsSource,
+    },
+    scheduler::{
+        BlockConstraints,
+        Scheduler,
+    },
 };
-use fuel_core_storage::transactional::Changes;
+use fuel_core_executor::ports::{
+    PreconfirmationSenderPort,
+    RelayerPort,
+};
+use fuel_core_storage::{
+    column::Column,
+    kv_store::KeyValueInspect,
+    transactional::{
+        AtomicView,
+        Changes,
+        StorageChanges,
+    },
+};
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_tx::Transaction,
@@ -17,15 +36,7 @@ use fuel_core_types::{
         },
     },
 };
-use fuel_core_upgradable_executor::executor::Executor as UpgradableExecutor;
-use std::{
-    num::NonZeroUsize,
-    sync::{
-        Arc,
-        RwLock,
-    },
-};
-use tokio::runtime::Runtime;
+use std::time::Duration;
 
 #[cfg(feature = "wasm-executor")]
 use fuel_core_upgradable_executor::error::UpgradableError;
@@ -33,57 +44,56 @@ use fuel_core_upgradable_executor::error::UpgradableError;
 #[cfg(feature = "wasm-executor")]
 use fuel_core_types::fuel_merkle::common::Bytes32;
 
-pub struct Executor<S, R> {
-    _executor: Arc<RwLock<UpgradableExecutor<S, R>>>,
-    runtime: Option<Runtime>,
-    _number_of_cores: NonZeroUsize,
+pub struct Executor<S, R, P> {
+    scheduler: Scheduler<R, S, P>,
 }
 
-// Shutdown the tokio runtime to avoid panic if executor is already
-//   used from another tokio runtime
-impl<S, R> Drop for Executor<S, R> {
-    fn drop(&mut self) {
-        if let Some(runtime) = self.runtime.take() {
-            runtime.shutdown_background();
-        }
-    }
-}
-
-impl<S, R> Executor<S, R> {
+impl<S, R, P> Executor<S, R, P> {
     pub fn new(
         storage_view_provider: S,
         relayer_view_provider: R,
+        preconfirmation_sender: P,
         config: Config,
     ) -> Self {
-        let executor = UpgradableExecutor::new(
-            storage_view_provider,
+        let scheduler = Scheduler::new(
+            config,
             relayer_view_provider,
-            config.executor_config,
+            storage_view_provider,
+            preconfirmation_sender,
         );
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(config.number_of_cores.get())
-            .enable_all()
-            .build()
-            .unwrap();
-        let number_of_cores = config.number_of_cores;
 
-        Self {
-            _executor: Arc::new(RwLock::new(executor)),
-            runtime: Some(runtime),
-            _number_of_cores: number_of_cores,
-        }
+        Self { scheduler }
     }
 }
 
-impl<S, R> Executor<S, R> {
+impl<S, R, P, View> Executor<S, R, P>
+where
+    R: RelayerPort + Clone + Send + 'static,
+    P: PreconfirmationSenderPort + Clone + Send + 'static,
+    S: AtomicView<LatestView = View> + Clone + Send + 'static,
+    View: KeyValueInspect<Column = Column> + Storage + Send,
+{
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub fn produce_without_commit_with_source<TxSource>(
-        &self,
-        _components: Components<TxSource>,
+    pub async fn produce_without_commit_with_source<TxSource>(
+        &mut self,
+        components: Components<TxSource>,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
+        self.scheduler
+            .run(
+                components,
+                StorageChanges::default(),
+                BlockConstraints {
+                    block_gas_limit: u64::MAX,
+                    total_execution_time: Duration::from_secs(1),
+                    block_transaction_size_limit: u32::MAX,
+                    block_transaction_count_limit: u16::MAX,
+                },
+            )
+            .await
+            .unwrap();
         unimplemented!("Not implemented yet");
     }
 

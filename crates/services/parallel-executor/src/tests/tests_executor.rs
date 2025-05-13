@@ -1,11 +1,25 @@
 #![allow(non_snake_case)]
 
 use fuel_core_storage::{
+    Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
     column::Column,
+    kv_store::{
+        KeyValueInspect,
+        Value,
+    },
+    not_found,
     structured_storage::test::InMemoryStorage,
-    tables::ConsensusParametersVersions,
-    transactional::WriteTransaction,
+    tables::{
+        Coins,
+        ConsensusParametersVersions,
+    },
+    transactional::{
+        AtomicView,
+        ReadTransaction,
+        WriteTransaction,
+    },
 };
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
@@ -37,15 +51,64 @@ use crate::{
     executor::Executor,
     ports::{
         Filter,
+        Storage as StoragePort,
         TransactionFiltered,
     },
-    tests::mocks::Consumer,
+    tests::mocks::{
+        Consumer,
+        MockPreconfirmationSender,
+    },
 };
 
 use super::mocks::{
     MockRelayer,
     MockTxPool,
 };
+
+#[derive(Clone, Debug, Default)]
+struct Storage(pub InMemoryStorage<Column>);
+
+impl KeyValueInspect for Storage {
+    type Column = Column;
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        self.0.get(key, column)
+    }
+}
+
+impl AtomicView for Storage {
+    type LatestView = Storage;
+
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(self.clone())
+    }
+}
+
+impl StoragePort for Storage {
+    fn get_coin(
+        &self,
+        utxo: &UtxoId,
+    ) -> StorageResult<Option<fuel_core_types::entities::coins::coin::CompressedCoin>>
+    {
+        self.0
+            .read_transaction()
+            .storage_as_ref::<Coins>()
+            .get(utxo)
+            .map(|coin| coin.map(|c| c.into_owned()))
+    }
+
+    fn get_consensus_parameters(
+        &self,
+        consensus_parameters_version: u32,
+    ) -> StorageResult<ConsensusParameters> {
+        self.0
+            .read_transaction()
+            .storage_as_ref::<ConsensusParametersVersions>()
+            .get(&consensus_parameters_version)?
+            .map(|params| params.into_owned())
+            .ok_or(not_found!("Consensus parameters not found"))
+    }
+}
 
 fn basic_tx(rng: &mut StdRng) -> Transaction {
     TransactionBuilder::script(vec![], vec![])
@@ -75,11 +138,11 @@ fn given_coin_predicate(rng: &mut StdRng, amount: u64) -> Input {
 }
 
 fn _add_consensus_parameters(
-    mut database: InMemoryStorage<Column>,
+    mut database: Storage,
     consensus_parameters: &ConsensusParameters,
-) -> InMemoryStorage<Column> {
+) -> Storage {
     // Set the consensus parameters for the executor.
-    let mut tx = database.write_transaction();
+    let mut tx = database.0.write_transaction();
     tx.storage_as_mut::<ConsensusParametersVersions>()
         .insert(&0, consensus_parameters)
         .unwrap();
@@ -87,18 +150,19 @@ fn _add_consensus_parameters(
     database
 }
 
-#[test]
+#[tokio::test]
 #[ignore]
-fn execute__simple_independent_transactions_sorted() {
-    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
-        InMemoryStorage::default(),
-        MockRelayer,
-        Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-            executor_config: Default::default(),
-        },
-    );
+async fn execute__simple_independent_transactions_sorted() {
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            Storage::default(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
 
@@ -116,6 +180,7 @@ fn execute__simple_independent_transactions_sorted() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         })
+        .await
         .unwrap()
         .into_result();
 
@@ -150,18 +215,19 @@ fn execute__simple_independent_transactions_sorted() {
     assert_eq!(expected_ids, actual_ids);
 }
 
-#[test]
+#[tokio::test]
 #[ignore]
-fn execute__filter_contract_id_currently_executed_and_fetch_after() {
-    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
-        InMemoryStorage::default(),
-        MockRelayer,
-        Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-            executor_config: Default::default(),
-        },
-    );
+async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            Storage::default(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
 
@@ -192,6 +258,7 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         })
+        .await
         .unwrap()
         .into_result();
 
@@ -218,18 +285,19 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     });
 }
 
-#[test]
+#[tokio::test]
 #[ignore]
-fn execute__gas_left_updated_when_state_merges() {
-    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
-        InMemoryStorage::default(),
-        MockRelayer,
-        Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-            executor_config: Default::default(),
-        },
-    );
+async fn execute__gas_left_updated_when_state_merges() {
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            Storage::default(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
 
@@ -292,6 +360,7 @@ fn execute__gas_left_updated_when_state_merges() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         })
+        .await
         .unwrap()
         .into_result();
 
@@ -327,18 +396,19 @@ fn execute__gas_left_updated_when_state_merges() {
     });
 }
 
-#[test]
+#[tokio::test]
 #[ignore]
-fn execute__utxo_ordering_kept() {
-    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
-        InMemoryStorage::default(),
-        MockRelayer,
-        Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-            executor_config: Default::default(),
-        },
-    );
+async fn execute__utxo_ordering_kept() {
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            Storage::default(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
@@ -375,6 +445,7 @@ fn execute__utxo_ordering_kept() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         })
+        .await
         .unwrap()
         .into_result();
 
