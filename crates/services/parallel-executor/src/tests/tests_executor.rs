@@ -137,7 +137,7 @@ fn given_coin_predicate(rng: &mut StdRng, amount: u64) -> Input {
     )
 }
 
-fn _add_consensus_parameters(
+fn add_consensus_parameters(
     mut database: Storage,
     consensus_parameters: &ConsensusParameters,
 ) -> Storage {
@@ -153,9 +153,11 @@ fn _add_consensus_parameters(
 #[tokio::test]
 #[ignore]
 async fn execute__simple_independent_transactions_sorted() {
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
     let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
         Executor::new(
-            Storage::default(),
+            storage,
             MockRelayer,
             MockPreconfirmationSender,
             Config {
@@ -173,16 +175,12 @@ async fn execute__simple_independent_transactions_sorted() {
     let tx4: Transaction = basic_tx(&mut rng);
 
     // When
-    let result = executor
-        .produce_without_commit_with_source(Components {
-            header_to_produce: Default::default(),
-            transactions_source,
-            coinbase_recipient: Default::default(),
-            gas_price: 0,
-        })
-        .await
-        .unwrap()
-        .into_result();
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
 
     // Then
     std::thread::spawn({
@@ -201,6 +199,8 @@ async fn execute__simple_independent_transactions_sorted() {
                 .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
+
+    let result = future.await.unwrap().into_result();
 
     let expected_ids = [tx2, tx1, tx4, tx3]
         .map(|tx| tx.id(&ChainId::default()))

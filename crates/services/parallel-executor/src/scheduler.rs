@@ -361,28 +361,39 @@ where
                 nb_batch_created += 1;
                 nb_transactions += batch_len;
             } else {
-                tokio::select! {
-                    _ = new_tx_notifier.notified() => {
-                        self.new_executable_transactions();
-                    }
-                    result = self.current_execution_tasks.next() => {
-                        match result {
-                            Some(Ok(res)) => {
-                                if !res.skipped_tx.is_empty() {
-                                    self.sequential_fallback(res.batch_id, res.txs).await;
-                                    continue;
-                                }
-                                self.register_execution_result(res);
-                            }
-                            _ => {
-                                return Err(SchedulerError::InternalError(
-                                    "Worker execution failed".to_string(),
-                                ));
-                            }
+                if self.current_execution_tasks.is_empty() {
+                    tokio::select! {
+                        _ = new_tx_notifier.notified() => {
+                            self.new_executable_transactions();
+                        }
+                        _ = tokio::time::sleep_until(deadline) => {
+                            break 'outer;
                         }
                     }
-                    _ = tokio::time::sleep_until(deadline) => {
-                        break 'outer;
+                } else {
+                    tokio::select! {
+                        _ = new_tx_notifier.notified() => {
+                            self.new_executable_transactions();
+                        }
+                        result = self.current_execution_tasks.select_next_some() => {
+                            match result {
+                                Ok(res) => {
+                                    if !res.skipped_tx.is_empty() {
+                                        self.sequential_fallback(res.batch_id, res.txs).await;
+                                        continue;
+                                    }
+                                    self.register_execution_result(res);
+                                }
+                                _ => {
+                                    return Err(SchedulerError::InternalError(
+                                        "Worker execution failed".to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                        _ = tokio::time::sleep_until(deadline) => {
+                            break 'outer;
+                        }
                     }
                 }
             }
@@ -420,9 +431,13 @@ where
         // Time left in percentage to have the gas percentage left
         // TODO: Maybe avoid as u32
         let current_gas = initial_gas
-            * (total_execution_time.as_millis() as u64 - spent_time.as_millis() as u64)
-            / total_execution_time.as_millis() as u64;
+            .saturating_mul(
+                (total_execution_time.as_millis() as u64)
+                    .saturating_sub(spent_time.as_millis() as u64),
+            )
+            .saturating_div(total_execution_time.as_millis() as u64);
 
+        dbg!(current_gas);
         let (batch, filtered, filter) = tx_source.get_executable_transactions(
             current_gas,
             self.tx_left,
@@ -433,6 +448,7 @@ where
                 ),
             },
         );
+        dbg!(batch.len());
         self.current_executing_contracts = filter.excluded_contract_ids;
 
         if batch.is_empty() {
@@ -492,21 +508,23 @@ where
                 .unwrap();
             let storage_tx = view.write_transaction().with_changes(required_changes);
             // TODO: Error management
-            let (block, execution_data) = executor
-                .execute(
-                    Components {
-                        header_to_produce,
-                        transactions_source: OnceTransactionsSource::new(
-                            batch,
-                            consensus_parameters_version,
-                        ),
-                        coinbase_recipient,
-                        gas_price,
-                    },
-                    storage_tx,
-                )
-                .await
-                .unwrap();
+            let (block, execution_data) = dbg!(
+                executor
+                    .execute(
+                        Components {
+                            header_to_produce,
+                            transactions_source: OnceTransactionsSource::new(
+                                batch,
+                                consensus_parameters_version,
+                            ),
+                            coinbase_recipient,
+                            gas_price,
+                        },
+                        storage_tx,
+                    )
+                    .await
+            )
+            .unwrap();
             // TODO: Get coins created
             WorkSessionExecutionResult {
                 batch_id,

@@ -298,7 +298,7 @@ pub fn convert_tx_execution_result_to_preconfirmation(
 }
 
 /// Data that is generated after executing all transactions.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ExecutionData {
     pub coinbase: u64,
     pub used_gas: u64,
