@@ -29,7 +29,7 @@ use fuel_core_types::{
         Uncommitted,
         block_producer::Components,
         executor::{
-            ExecutionResult,
+            // ExecutionResult,
             Result as ExecutorResult,
             TransactionExecutionStatus,
             ValidationResult,
@@ -77,7 +77,8 @@ where
     pub async fn produce_without_commit_with_source<TxSource>(
         &mut self,
         components: Components<TxSource>,
-    ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
+    )
+    // TODO : ExecutorResult<Uncommitted<ExecutionResult, Changes>>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
@@ -94,7 +95,6 @@ where
             )
             .await
             .unwrap();
-        unimplemented!("Not implemented yet");
     }
 
     pub fn validate(
