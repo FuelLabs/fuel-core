@@ -36,19 +36,22 @@ use fuel_core_executor::{
     executor::{
         BlockExecutor,
         ExecutionOptions,
-        WaitNewTransactionsResult,
     },
     ports::{
-        NewTxWaiterPort,
         PreconfirmationSenderPort,
         RelayerPort,
     },
 };
 use fuel_core_storage::{
     Error as StorageError,
+    column::Column,
+    kv_store::KeyValueInspect,
     transactional::{
         Changes,
+        ConflictPolicy,
         StorageChanges,
+        StorageTransaction,
+        WriteTransaction,
     },
 };
 use fuel_core_types::{
@@ -56,6 +59,7 @@ use fuel_core_types::{
     fuel_tx::{
         ConsensusParameters,
         ContractId,
+        Transaction,
         UtxoId,
     },
     fuel_vm::checked_transaction::CheckedTransaction,
@@ -73,9 +77,12 @@ use crate::{
     once_transaction_source::OnceTransactionsSource,
     ports::{
         Filter,
-        Storage,
         TransactionFiltered,
         TransactionsSource,
+    },
+    storage_adapter::{
+        GetCoin,
+        GetConsensusParameters,
     },
     tx_waiter::NoWaitTxs,
 };
@@ -138,11 +145,9 @@ impl ContractsChanges {
     }
 }
 
-pub struct Scheduler<S, R, PreconfirmationSender> {
+pub struct Scheduler<R, PreconfirmationSender> {
     /// Config
     config: Config,
-    /// Database transaction for the execution
-    storage: S,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
     /// Executor
@@ -185,7 +190,7 @@ struct WorkSessionExecutionResult {
     /// The transactions that were skipped by the worker
     skipped_tx: SkippedTransactions,
     /// Batch of transactions (included skipped ones) useful to re-execute them in case of fallback skipped
-    txs: Vec<CheckedTransaction>,
+    txs: Vec<Transaction>,
 }
 
 #[derive(Default)]
@@ -199,11 +204,12 @@ struct WorkSessionSavedData {
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
     coins_used: Arc<[CoinInBatch]>,
     /// The transactions of the batch
-    txs: Vec<CheckedTransaction>,
+    txs: Vec<Transaction>,
 }
 
 /// Error type for the scheduler
-#[derive(Debug)]
+#[derive(Debug, derive_more::Display)]
+
 pub enum SchedulerError {
     /// Error while executing the transactions
     ExecutionError(ExecutorError),
@@ -227,7 +233,7 @@ enum SchedulerState {
 
 // Shutdown the tokio runtime to avoid panic if executor is already
 // used from another tokio runtime
-impl<D, R, PreconfirmationSender> Drop for Scheduler<D, R, PreconfirmationSender> {
+impl<R, PreconfirmationSender> Drop for Scheduler<R, PreconfirmationSender> {
     fn drop(&mut self) {
         if let Some(runtime) = self.runtime.take() {
             runtime.shutdown_background();
@@ -235,15 +241,13 @@ impl<D, R, PreconfirmationSender> Drop for Scheduler<D, R, PreconfirmationSender
     }
 }
 
-impl<S, R, PreconfirmationSender> Scheduler<S, R, PreconfirmationSender>
+impl<R, PreconfirmationSender> Scheduler<R, PreconfirmationSender>
 where
-    S: Storage,
-    R: RelayerPort + Clone,
-    PreconfirmationSender: PreconfirmationSenderPort + Clone,
+    R: RelayerPort + Clone + Send + 'static,
+    PreconfirmationSender: PreconfirmationSenderPort + Clone + Send + 'static,
 {
     pub fn new(
         config: Config,
-        storage: S,
         relayer: R,
         preconfirmation_sender: PreconfirmationSender,
     ) -> Self {
@@ -273,7 +277,6 @@ where
             tx_size_left: config.block_transaction_size_limit,
             current_available_workers: (0..config.number_of_workers).collect(),
             config,
-            storage,
             current_execution_tasks: FuturesUnordered::new(),
             execution_results: FxHashMap::default(),
             state: SchedulerState::TransactionsReadyForPickup,
@@ -293,17 +296,20 @@ where
         self.state = SchedulerState::TransactionsReadyForPickup;
     }
 
-    pub async fn run<TxSource: TransactionsSource>(
+    pub async fn run<TxSource: TransactionsSource, D>(
         &mut self,
         mut components: Components<TxSource>,
-    ) -> Result<StorageChanges, SchedulerError> {
+        block_storage_tx: &mut StorageTransaction<D>,
+    ) -> Result<StorageChanges, SchedulerError>
+    where
+        D: KeyValueInspect<Column = Column> + Send,
+    {
         let consensus_parameters_version =
             components.header_to_produce.consensus_parameters_version;
 
-        let consensus_parameters = self
-            .storage
-            .get_consensus_parameters(consensus_parameters_version)
-            .map_err(|e| SchedulerError::StorageError(e))?;
+        // TODO: Extension trait
+        let consensus_parameters =
+            block_storage_tx.get_consensus_parameters(consensus_parameters_version)?;
         self.executor.set_consensus_params(consensus_parameters);
 
         let new_tx_notifier = components
@@ -340,6 +346,7 @@ where
                     batch,
                     nb_batch_created,
                     nb_transactions,
+                    block_storage_tx,
                 )?;
 
                 nb_batch_created += 1;
@@ -374,7 +381,8 @@ where
 
         self.wait_all_execution_tasks().await?;
 
-        let res = self.verify_coherency_and_merge_results(nb_batch_created)?;
+        let res =
+            self.verify_coherency_and_merge_results(nb_batch_created, block_storage_tx)?;
 
         self.reset();
         Ok(res)
@@ -433,49 +441,61 @@ where
         Ok(batch)
     }
 
-    fn execute_batch<TxSource>(
+    fn execute_batch<TxSource, D>(
         &mut self,
         consensus_parameters_version: u32,
         components: &Components<TxSource>,
         batch: Vec<CheckedTransaction>,
         batch_id: usize,
         _start_idx_txs: u16,
-    ) -> Result<(), SchedulerError> {
+        block_storage_tx: &mut StorageTransaction<D>,
+    ) -> Result<(), SchedulerError>
+    where
+        D: KeyValueInspect<Column = Column> + Send,
+    {
         // TODO: Maybe should be returned by transaction source
         let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
         let runtime = self.runtime.as_ref().unwrap();
-        self.current_execution_tasks.push(runtime.spawn({
-            let mut used_contracts_changes = vec![];
-            for contract in contracts_used.iter() {
-                self.current_executing_contracts.insert(*contract);
-                if let Some(changes) = self.contracts_changes.get_changes(contract) {
-                    used_contracts_changes.push(changes);
-                }
+        let transaction = block_storage_tx
+            .write_transaction()
+            .with_policy(ConflictPolicy::Overwrite);
+        let mut used_contracts_changes = vec![];
+        for contract in contracts_used.iter() {
+            self.current_executing_contracts.insert(*contract);
+            if let Some(changes) = self.contracts_changes.get_changes(contract) {
+                used_contracts_changes.push(changes);
             }
-            let executor = self.executor.clone();
-            async move {
-                executor.execute(
+        }
+        let executor = self.executor.clone();
+        let coinbase_recipient = components.coinbase_recipient.clone();
+        let gas_price = components.gas_price.clone();
+        let header_to_produce = components.header_to_produce.clone();
+        self.current_execution_tasks.push(runtime.spawn(async move {
+            // TODO: Error management
+            let (block, execution_data) = executor
+                .execute(
                     Components {
-                        header_to_produce: components.header_to_produce.clone(),
+                        header_to_produce,
                         transactions_source: OnceTransactionsSource::new(
                             batch,
                             consensus_parameters_version,
                         ),
-                        coinbase_recipient: components.coinbase_recipient.clone(),
-                        gas_price: components.gas_price.clone(),
+                        coinbase_recipient,
+                        gas_price,
                     },
-                    block_storage_tx,
-                );
-                // TODO: Execute the batch of transactions
-                WorkSessionExecutionResult {
-                    batch_id,
-                    changes: Changes::default(),
-                    coins_created: vec![],
-                    coins_used,
-                    contracts_used,
-                    skipped_tx: vec![],
-                    txs: batch,
-                }
+                    transaction,
+                )
+                .await
+                .unwrap();
+            // TODO: Execute the batch of transactions
+            WorkSessionExecutionResult {
+                batch_id,
+                changes: Changes::default(),
+                coins_created: vec![],
+                coins_used,
+                contracts_used,
+                skipped_tx: vec![],
+                txs: block.transactions,
             }
         }));
         Ok(())
@@ -554,10 +574,14 @@ where
         Ok(())
     }
 
-    fn verify_coherency_and_merge_results(
+    fn verify_coherency_and_merge_results<D>(
         &mut self,
         nb_batch: usize,
-    ) -> Result<StorageChanges, SchedulerError> {
+        block_storage_tx: &StorageTransaction<D>,
+    ) -> Result<StorageChanges, SchedulerError>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let mut storage_changes = vec![];
 
         let mut compiled_created_coins = CoinDependencyChainVerifier::new();
@@ -568,7 +592,7 @@ where
                 compiled_created_coins.verify_coins_used(
                     batch_id,
                     changes.coins_used.as_ref().iter(),
-                    &self.storage,
+                    &block_storage_tx,
                 )?;
                 storage_changes.push(changes.changes);
             } else {
@@ -587,11 +611,7 @@ where
     // re-execute.
     // Tell the TransactionSource that this transaction is skipped
     // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
-    async fn sequential_fallback(
-        &mut self,
-        batch_id: usize,
-        mut txs: Vec<CheckedTransaction>,
-    ) {
+    async fn sequential_fallback(&mut self, batch_id: usize, mut txs: Vec<Transaction>) {
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
@@ -662,17 +682,17 @@ impl CoinDependencyChainVerifier {
         }
     }
 
-    fn verify_coins_used<'a, S>(
+    fn verify_coins_used<'a, D>(
         &self,
         batch_id: usize,
         coins_used: impl Iterator<Item = &'a CoinInBatch>,
-        storage: &S,
+        block_storage_tx: &StorageTransaction<D>,
     ) -> Result<(), SchedulerError>
     where
-        S: Storage,
+        D: KeyValueInspect<Column = Column>,
     {
         for coin in coins_used {
-            match storage.get_coin(coin.utxo()) {
+            match block_storage_tx.get_coin(coin.utxo()) {
                 Ok(Some(db_coin)) => {
                     // Coin is in the database
                     match db_coin.matches_input(&coin.into()) {
