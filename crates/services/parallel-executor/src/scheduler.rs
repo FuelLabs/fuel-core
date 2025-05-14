@@ -62,6 +62,7 @@ use fuel_core_types::{
         ConsensusParameters,
         ContractId,
         MessageId,
+        Output,
         Transaction,
         TxId,
         UtxoId,
@@ -171,6 +172,8 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
 }
 
 struct WorkSessionExecutionResult {
+    /// Worker id
+    worker_id: usize,
     /// The id of the batch of transactions
     batch_id: usize,
     /// The changes made by the worker used to commit them to the database at the end of execution
@@ -346,11 +349,11 @@ where
             let latest_view = self
                 .storage
                 .latest_view()
-                .map_err(|e| SchedulerError::StorageError(StorageError::from(e)))?;
+                .map_err(SchedulerError::StorageError)?;
 
             let consensus_parameters = latest_view
                 .get_consensus_parameters(consensus_parameters_version)
-                .map_err(|e| SchedulerError::StorageError(StorageError::from(e)))?;
+                .map_err(SchedulerError::StorageError)?;
             self.executor.set_consensus_params(consensus_parameters);
         }
 
@@ -393,40 +396,38 @@ where
 
                 nb_batch_created += 1;
                 nb_transactions += batch_len;
-            } else {
-                if self.current_execution_tasks.is_empty() {
-                    tokio::select! {
-                        _ = new_tx_notifier.notified() => {
-                            self.new_executable_transactions();
-                        }
-                        _ = tokio::time::sleep_until(deadline) => {
-                            break 'outer;
-                        }
+            } else if self.current_execution_tasks.is_empty() {
+                tokio::select! {
+                    _ = new_tx_notifier.notified() => {
+                        self.new_executable_transactions();
                     }
-                } else {
-                    tokio::select! {
-                        _ = new_tx_notifier.notified() => {
-                            self.new_executable_transactions();
-                        }
-                        result = self.current_execution_tasks.select_next_some() => {
-                            match result {
-                                Ok(res) => {
-                                    if !res.skipped_tx.is_empty() {
-                                        self.sequential_fallback(res.batch_id, res.txs).await;
-                                        continue;
-                                    }
-                                    self.register_execution_result(res);
+                    _ = tokio::time::sleep_until(deadline) => {
+                        break 'outer;
+                    }
+                }
+            } else {
+                tokio::select! {
+                    _ = new_tx_notifier.notified() => {
+                        self.new_executable_transactions();
+                    }
+                    result = self.current_execution_tasks.select_next_some() => {
+                        match result {
+                            Ok(res) => {
+                                if !res.skipped_tx.is_empty() {
+                                    self.sequential_fallback(res.batch_id, res.txs).await;
+                                    continue;
                                 }
-                                _ => {
-                                    return Err(SchedulerError::InternalError(
-                                        "Worker execution failed".to_string(),
-                                    ));
-                                }
+                                self.register_execution_result(res);
+                            }
+                            _ => {
+                                return Err(SchedulerError::InternalError(
+                                    "Worker execution failed".to_string(),
+                                ));
                             }
                         }
-                        _ = tokio::time::sleep_until(deadline) => {
-                            break 'outer;
-                        }
+                    }
+                    _ = tokio::time::sleep_until(deadline) => {
+                        break 'outer;
                     }
                 }
             }
@@ -460,9 +461,6 @@ where
         initial_gas: u64,
         total_execution_time: Duration,
     ) -> Result<Vec<CheckedTransaction>, SchedulerError> {
-        let worker_id = self.current_available_workers.pop_front().ok_or(
-            SchedulerError::InternalError("No available workers".to_string()),
-        )?;
         let spent_time = start_execution_time.elapsed();
         // Time left in percentage to have the gas percentage left
         // TODO: Maybe avoid as u32
@@ -473,7 +471,6 @@ where
             )
             .saturating_div(total_execution_time.as_millis() as u64);
 
-        dbg!(current_gas);
         let (batch, filtered, filter) = tx_source.get_executable_transactions(
             current_gas,
             self.tx_left,
@@ -484,7 +481,6 @@ where
                 ),
             },
         );
-        dbg!(batch.len());
         self.current_executing_contracts = filter.excluded_contract_ids;
 
         if batch.is_empty() {
@@ -493,7 +489,6 @@ where
             } else {
                 self.state = SchedulerState::WaitingForNewTransaction;
             }
-            self.current_available_workers.push_back(worker_id);
         }
 
         // TODO: Maybe should be returned by transaction source
@@ -511,6 +506,9 @@ where
         _start_idx_txs: u16,
         da_changes: &StorageChanges,
     ) -> Result<(), SchedulerError> {
+        let worker_id = self.current_available_workers.pop_front().ok_or(
+            SchedulerError::InternalError("No available workers".to_string()),
+        )?;
         // TODO: Maybe should be returned by transaction source
         let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
         let runtime = self.runtime.as_ref().unwrap();
@@ -533,39 +531,46 @@ where
             }
         }
         let executor = self.executor.clone();
-        let coinbase_recipient = components.coinbase_recipient.clone();
-        let gas_price = components.gas_price.clone();
-        let header_to_produce = components.header_to_produce.clone();
+        let coinbase_recipient = components.coinbase_recipient;
+        let gas_price = components.gas_price;
+        let header_to_produce = components.header_to_produce;
         let storage = self.storage.clone();
         self.current_execution_tasks.push(runtime.spawn(async move {
             let mut view = storage
                 .latest_view()
-                .map_err(|e| SchedulerError::StorageError(StorageError::from(e)))
+                .map_err(SchedulerError::StorageError)
                 .unwrap();
             let storage_tx = view.write_transaction().with_changes(required_changes);
             // TODO: Error management
-            let (block, execution_data) = dbg!(
-                executor
-                    .execute(
-                        Components {
-                            header_to_produce,
-                            transactions_source: OnceTransactionsSource::new(
-                                batch,
-                                consensus_parameters_version,
-                            ),
-                            coinbase_recipient,
-                            gas_price,
-                        },
-                        storage_tx,
-                    )
-                    .await
-            )
-            .unwrap();
-            // TODO: Get coins created
+            let (block, execution_data) = executor
+                .execute(
+                    Components {
+                        header_to_produce,
+                        transactions_source: OnceTransactionsSource::new(
+                            batch,
+                            consensus_parameters_version,
+                        ),
+                        coinbase_recipient,
+                        gas_price,
+                    },
+                    storage_tx,
+                )
+                .await
+                .unwrap();
+            // TODO: Outputs seems to not be resolved here, why?
+            let coins_created = get_coins_outputs(
+                block.transactions.iter().zip(
+                    execution_data
+                        .tx_status
+                        .iter()
+                        .map(|tx_status| tx_status.id),
+                ),
+            );
             WorkSessionExecutionResult {
+                worker_id,
                 batch_id,
                 changes: execution_data.changes,
-                coins_created: vec![],
+                coins_created,
                 coins_used,
                 contracts_used,
                 skipped_tx: execution_data.skipped_transactions,
@@ -611,6 +616,7 @@ where
                 skipped_tx: res.skipped_tx,
             },
         );
+        self.current_available_workers.push_back(res.worker_id);
     }
 
     async fn wait_all_execution_tasks(
@@ -671,7 +677,7 @@ where
         let latest_view = self
             .storage
             .latest_view()
-            .map_err(|e| SchedulerError::StorageError(StorageError::from(e)))?;
+            .map_err(SchedulerError::StorageError)?;
         let mut exec_result = SchedulerExecutionResult::default();
         let mut compiled_created_coins = CoinDependencyChainVerifier::new();
         for batch_id in 0..nb_batch {
@@ -697,6 +703,7 @@ where
         }
         exec_result.header = partial_block_header;
         storage_changes.extend(self.contracts_changes.extract_all_contracts_changes());
+        exec_result.changes = StorageChanges::ChangesList(storage_changes);
         Ok(exec_result)
     }
 
@@ -790,17 +797,11 @@ impl CoinDependencyChainVerifier {
             match storage.get_coin(coin.utxo()) {
                 Ok(Some(db_coin)) => {
                     // Coin is in the database
-                    match db_coin.matches_input(&coin.into()) {
-                        Some(true) => continue,
-                        Some(false) => {
+                    match coin.equal_compressed_coin(&db_coin) {
+                        true => continue,
+                        false => {
                             return Err(SchedulerError::InternalError(format!(
                                 "coin is invalid: {}",
-                                coin.utxo(),
-                            )))
-                        }
-                        None => {
-                            return Err(SchedulerError::InternalError(format!(
-                                "not a coin: {}",
                                 coin.utxo(),
                             )))
                         }
@@ -845,6 +846,8 @@ impl CoinDependencyChainVerifier {
     }
 }
 
+// TODO: Manage contract created also because they can't be fetched while being
+// created by another transaction
 #[allow(clippy::type_complexity)]
 fn get_contracts_and_coins_used(
     batch: &[CheckedTransaction],
@@ -871,4 +874,57 @@ fn get_contracts_and_coins_used(
     }
 
     (Arc::from(contracts_used), Arc::from(coins_used))
+}
+
+fn get_coins_outputs<'a>(
+    transactions: impl Iterator<Item = (&'a Transaction, TxId)>,
+) -> Vec<CoinInBatch> {
+    let mut coins = vec![];
+    for (idx, (tx, tx_id)) in transactions.enumerate() {
+        for output in tx.outputs().iter() {
+            match output {
+                Output::Coin {
+                    to,
+                    amount,
+                    asset_id,
+                } => {
+                    coins.push(CoinInBatch {
+                        utxo_id: UtxoId::new(tx_id, idx as u16),
+                        idx,
+                        owner: *to,
+                        amount: *amount,
+                        asset_id: *asset_id,
+                    });
+                }
+                Output::Change {
+                    to,
+                    amount,
+                    asset_id,
+                } => {
+                    coins.push(CoinInBatch {
+                        utxo_id: UtxoId::new(tx_id, idx as u16),
+                        idx,
+                        owner: *to,
+                        amount: *amount,
+                        asset_id: *asset_id,
+                    });
+                }
+                Output::Variable {
+                    to,
+                    amount,
+                    asset_id,
+                } => {
+                    coins.push(CoinInBatch {
+                        utxo_id: UtxoId::new(tx_id, idx as u16),
+                        idx,
+                        owner: *to,
+                        amount: *amount,
+                        asset_id: *asset_id,
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    coins
 }

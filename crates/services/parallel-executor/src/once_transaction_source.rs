@@ -2,9 +2,11 @@ use std::sync::Mutex;
 
 use fuel_core_executor::ports::{
     MaybeCheckedTransaction,
-    TransactionsSource,
+    TransactionsSource as ExecutorTransactionsSource,
 };
 use fuel_core_types::fuel_vm::checked_transaction::CheckedTransaction;
+
+use crate::ports::TransactionsSource;
 
 pub struct OnceTransactionsSource {
     transactions: Mutex<Vec<CheckedTransaction>>,
@@ -23,7 +25,7 @@ impl OnceTransactionsSource {
     }
 }
 
-impl TransactionsSource for OnceTransactionsSource {
+impl ExecutorTransactionsSource for OnceTransactionsSource {
     fn next(
         &self,
         _gas_limit: u64,
@@ -42,5 +44,29 @@ impl TransactionsSource for OnceTransactionsSource {
                 )
             })
             .collect()
+    }
+}
+
+impl TransactionsSource for OnceTransactionsSource {
+    fn get_executable_transactions(
+        &mut self,
+        _gas_limit: u64,
+        tx_count_limit: u16,
+        _block_transaction_size_limit: u32,
+        filter: crate::ports::Filter,
+    ) -> (
+        Vec<CheckedTransaction>,
+        crate::ports::TransactionFiltered,
+        crate::ports::Filter,
+    ) {
+        let mut transactions = self.transactions.lock().expect("Mutex poisoned");
+        // Avoid panicking if we request more transactions than there are in the vector
+        let transactions_limit = (tx_count_limit as usize).min(transactions.len());
+        let txs = transactions.drain(..transactions_limit).collect();
+        (txs, crate::ports::TransactionFiltered::NotFiltered, filter)
+    }
+    fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify {
+        // This is a one-time source, so we don't need to notify about new transactions
+        tokio::sync::Notify::new()
     }
 }

@@ -94,8 +94,8 @@ where
                 components,
                 StorageChanges::default(),
                 BlockConstraints {
-                    block_gas_limit: u64::MAX,
-                    total_execution_time: Duration::from_secs(1),
+                    block_gas_limit: 30_000_000,
+                    total_execution_time: Duration::from_millis(300),
                     block_transaction_size_limit: u32::MAX,
                     block_transaction_count_limit: u16::MAX,
                 },
