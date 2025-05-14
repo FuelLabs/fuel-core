@@ -10,9 +10,12 @@ use crate::{
         SchedulerError,
     },
 };
-use fuel_core_executor::ports::{
-    PreconfirmationSenderPort,
-    RelayerPort,
+use fuel_core_executor::{
+    executor::ExecutionData,
+    ports::{
+        PreconfirmationSenderPort,
+        RelayerPort,
+    },
 };
 use fuel_core_storage::{
     column::Column,
@@ -20,7 +23,9 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Changes,
+        ConflictPolicy,
         StorageChanges,
+        StorageTransaction,
     },
 };
 use fuel_core_types::{
@@ -29,6 +34,7 @@ use fuel_core_types::{
         PartialFuelBlock,
     },
     fuel_tx::Transaction,
+    fuel_vm::interpreter::MemoryInstance,
     services::{
         Uncommitted,
         block_producer::Components,
@@ -87,11 +93,11 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         // TODO: Manage DA
-
+        let mut components = components;
         let res = self
             .scheduler
             .run(
-                components,
+                &mut components,
                 StorageChanges::default(),
                 BlockConstraints {
                     block_gas_limit: u64::MAX,
@@ -102,22 +108,64 @@ where
             )
             .await?;
 
-        // TODO: Add mint TX
-        let block: PartialFuelBlock = PartialFuelBlock {
+        let mut block: PartialFuelBlock = PartialFuelBlock {
             header: res.header,
             transactions: res.transactions,
         };
+
+        let mut memory = MemoryInstance::new();
+        let view = self
+            .scheduler
+            .storage
+            .latest_view()
+            .map_err(SchedulerError::StorageError)?;
+        let mut tx_changes = StorageTransaction::transaction(
+            view,
+            ConflictPolicy::Fail,
+            Default::default(),
+        );
+        let mut execution_data = ExecutionData {
+            coinbase: res.coinbase,
+            skipped_transactions: res.skipped_txs,
+            events: res.events,
+            changes: res.changes.try_into().unwrap(),
+            message_ids: res.message_ids,
+            tx_count: u16::try_from(block.transactions.len())
+                .expect("previously checked; qed"),
+            tx_status: res.transactions_status,
+            found_mint: false,
+            event_inbox_root: Default::default(),
+            used_gas: res.used_gas,
+            used_size: res.used_size,
+        };
+
+        self.scheduler
+            .executor
+            .produce_mint_tx(
+                &mut block,
+                &components,
+                &mut tx_changes,
+                &mut execution_data,
+                &mut memory,
+            )
+            .map_err(SchedulerError::ExecutionError)?;
+
         let block = block
-            .generate(&res.message_ids, Default::default())
+            .generate(&execution_data.message_ids, Default::default())
             .unwrap();
+
+        for (_, v) in tx_changes.into_changes().iter().enumerate() {
+            execution_data.changes.insert(*v.0, v.1.clone());
+        }
+
         Ok(Uncommitted::new(
             ExecutionResult {
                 block,
-                skipped_transactions: res.skipped_txs,
-                events: res.events,
-                tx_status: res.transactions_status,
+                skipped_transactions: execution_data.skipped_transactions,
+                events: execution_data.events,
+                tx_status: execution_data.tx_status,
             },
-            res.changes,
+            execution_data.changes.into(),
         ))
     }
 

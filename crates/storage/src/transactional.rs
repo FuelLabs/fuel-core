@@ -243,6 +243,19 @@ impl From<Changes> for StorageChanges {
     }
 }
 
+impl TryFrom<StorageChanges> for Changes {
+    type Error = crate::Error;
+
+    fn try_from(value: StorageChanges) -> Result<Self, Self::Error> {
+        match value {
+            StorageChanges::Changes(changes) => Ok(changes),
+            StorageChanges::ChangesList(_) => Err(crate::Error::Other(anyhow::anyhow!(
+                "Cannot convert changes list into a single change"
+            ))),
+        }
+    }
+}
+
 /// The trait to convert the type into the storage transaction.
 pub trait IntoTransaction: Sized {
     /// Converts the type into the storage transaction consuming it.

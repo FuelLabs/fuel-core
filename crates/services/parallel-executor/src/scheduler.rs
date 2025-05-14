@@ -146,11 +146,11 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     /// Config
     config: Config,
     /// Storage
-    storage: S,
+    pub(crate) storage: S,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
     /// Executor
-    executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
+    pub(crate) executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
     /// List of available workers
     current_available_workers: VecDeque<usize>,
     /// All contracts changes
@@ -194,6 +194,12 @@ struct WorkSessionExecutionResult {
     events: Vec<Event>,
     /// tx statuses
     tx_statuses: Vec<TransactionExecutionStatus>,
+    /// used gas
+    used_gas: u64,
+    /// used tx size
+    used_size: u32,
+    /// coinbase
+    coinbase: u64,
 }
 
 #[derive(Default)]
@@ -216,6 +222,12 @@ struct WorkSessionSavedData {
     tx_statuses: Vec<TransactionExecutionStatus>,
     /// skipped tx
     skipped_tx: Vec<(TxId, ExecutorError)>,
+    /// used gas
+    used_gas: u64,
+    /// used tx size
+    used_size: u32,
+    /// coinbase
+    coinbase: u64,
 }
 
 /// Error type for the scheduler
@@ -251,6 +263,9 @@ pub struct SchedulerExecutionResult {
     pub skipped_txs: Vec<(TxId, ExecutorError)>,
     pub transactions_status: Vec<TransactionExecutionStatus>,
     pub changes: StorageChanges,
+    pub used_gas: u64,
+    pub used_size: u32,
+    pub coinbase: u64,
 }
 
 pub struct BlockConstraints {
@@ -333,7 +348,7 @@ where
 {
     pub async fn run<TxSource: TransactionsSource>(
         &mut self,
-        mut components: Components<TxSource>,
+        components: &mut Components<TxSource>,
         da_changes: StorageChanges,
         block_constraints: BlockConstraints,
     ) -> Result<SchedulerExecutionResult, SchedulerError> {
@@ -573,6 +588,9 @@ where
                 message_ids: execution_data.message_ids,
                 events: execution_data.events,
                 tx_statuses: execution_data.tx_status,
+                used_gas: execution_data.used_gas,
+                used_size: execution_data.used_size,
+                coinbase: execution_data.coinbase,
             }
         }));
         Ok(())
@@ -609,6 +627,9 @@ where
                 events: res.events,
                 tx_statuses: res.tx_statuses,
                 skipped_tx: res.skipped_tx,
+                used_gas: res.used_gas,
+                used_size: res.used_size,
+                coinbase: res.coinbase,
             },
         );
     }
@@ -640,6 +661,9 @@ where
                                 events: res.events,
                                 tx_statuses: res.tx_statuses,
                                 skipped_tx: res.skipped_tx,
+                                used_gas: res.used_gas,
+                                used_size: res.used_size,
+                                coinbase: res.coinbase,
                             },
                         );
                     }
@@ -689,6 +713,30 @@ where
                 exec_result.skipped_txs.extend(changes.skipped_tx);
                 exec_result.transactions_status.extend(changes.tx_statuses);
                 exec_result.transactions.extend(changes.txs);
+                exec_result.used_gas = exec_result
+                    .used_gas
+                    .checked_add(changes.used_gas)
+                    .ok_or_else(|| {
+                        SchedulerError::InternalError(
+                            "used gas has overflowed u64".to_string(),
+                        )
+                    })?;
+                exec_result.used_size = exec_result
+                    .used_size
+                    .checked_add(changes.used_size)
+                    .ok_or_else(|| {
+                        SchedulerError::InternalError(
+                            "used size has overflowed u32".to_string(),
+                        )
+                    })?;
+                exec_result.coinbase = exec_result
+                    .coinbase
+                    .checked_add(changes.coinbase)
+                    .ok_or_else(|| {
+                        SchedulerError::InternalError(
+                            "coinbase has overflowed u64".to_string(),
+                        )
+                    })?;
             } else {
                 return Err(SchedulerError::InternalError(format!(
                     "Batch {batch_id} not found in the execution results"
