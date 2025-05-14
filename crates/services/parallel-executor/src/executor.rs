@@ -154,10 +154,6 @@ where
             .generate(&execution_data.message_ids, Default::default())
             .unwrap();
 
-        for (_, v) in tx_changes.into_changes().iter().enumerate() {
-            execution_data.changes.insert(*v.0, v.1.clone());
-        }
-
         Ok(Uncommitted::new(
             ExecutionResult {
                 block,
@@ -165,7 +161,10 @@ where
                 events: execution_data.events,
                 tx_status: execution_data.tx_status,
             },
-            execution_data.changes.into(),
+            StorageChanges::ChangesList(vec![
+                execution_data.changes,
+                tx_changes.into_changes(),
+            ]),
         ))
     }
 
