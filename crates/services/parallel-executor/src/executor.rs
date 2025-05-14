@@ -107,6 +107,10 @@ where
             header: res.header,
             transactions: res.transactions,
         };
+        #[cfg(feature = "fault-proving")]
+        let block = block
+            .generate(&res.message_ids, Default::default(), &Default::default())
+            .unwrap();
         let block = block
             .generate(&res.message_ids, Default::default())
             .unwrap();
