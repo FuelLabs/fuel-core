@@ -169,6 +169,8 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     tx_left: u16,
     /// Total maximum of byte size left
     tx_size_left: u32,
+    /// Total remaining gas
+    gas_left: u64,
 }
 
 struct WorkSessionExecutionResult {
@@ -305,6 +307,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             storage,
             tx_left: 0,
             tx_size_left: 0,
+            gas_left: 0,
             current_available_workers: (0..config.number_of_cores.get()).collect(),
             config,
             current_execution_tasks: FuturesUnordered::new(),
@@ -318,6 +321,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
     fn reset(&mut self) {
         self.tx_left = 0;
         self.tx_size_left = 0;
+        self.gas_left = 0;
         self.current_available_workers = (0..self.config.number_of_cores.get()).collect();
         self.current_executing_contracts.clear();
         self.execution_results.clear();
@@ -464,12 +468,16 @@ where
         let spent_time = start_execution_time.elapsed();
         // Time left in percentage to have the gas percentage left
         // TODO: Maybe avoid as u32
-        let current_gas = initial_gas
-            .saturating_mul(
-                (total_execution_time.as_millis() as u64)
-                    .saturating_sub(spent_time.as_millis() as u64),
-            )
-            .saturating_div(total_execution_time.as_millis() as u64);
+        let current_gas = std::cmp::min(
+            initial_gas
+                .saturating_mul(
+                    (total_execution_time.as_millis() as u64)
+                        .saturating_sub(spent_time.as_millis() as u64),
+                )
+                .saturating_div(total_execution_time.as_millis() as u64),
+            self.gas_left
+                .saturating_div(self.config.number_of_cores.get() as u64),
+        );
 
         let (batch, filtered, filter) = tx_source.get_executable_transactions(
             current_gas,
@@ -493,6 +501,13 @@ where
 
         // TODO: Maybe should be returned by transaction source
         self.tx_size_left -= batch.iter().map(|tx| tx.size()).sum::<usize>() as u32;
+        // TODO: error management
+        self.gas_left = self.gas_left.saturating_sub(
+            batch
+                .iter()
+                .map(|tx| tx.max_gas(&ConsensusParameters::default()).unwrap())
+                .sum::<u64>(),
+        );
         self.tx_left -= batch.len() as u16;
         Ok(batch)
     }
@@ -512,6 +527,11 @@ where
         // TODO: Maybe should be returned by transaction source
         let (contracts_used, coins_used) = get_contracts_and_coins_used(&batch);
         let runtime = self.runtime.as_ref().unwrap();
+        // 0. Make a transaction with the DA changes in a Arc used by everyone afterwards
+        // 1. All contract changes in 1 changes
+        // 2. Create a storage transaction on top of the storage transaction that have the DA Changes
+        // (created at the start of run function and re-used by all executions)
+        // 3. Execute the transactions on top of this storage transaction
         // TODO: Optimize
         let mut required_changes: Changes = Changes::default();
         match da_changes {
@@ -526,6 +546,7 @@ where
         }
         for contract in contracts_used.iter() {
             self.current_executing_contracts.insert(*contract);
+            // TODO: Remove reference
             if let Some(changes) = self.contracts_changes.get_changes(contract) {
                 required_changes.extend(changes.clone());
             }
@@ -557,7 +578,7 @@ where
                 )
                 .await
                 .unwrap();
-            // TODO: Outputs seems to not be resolved here, why?
+            // TODO: Outputs seems to not be resolved here, why? It should be the case need to investigate
             let coins_created = get_coins_outputs(
                 block.transactions.iter().zip(
                     execution_data
