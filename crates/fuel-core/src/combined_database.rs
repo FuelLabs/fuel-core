@@ -111,20 +111,63 @@ impl CombinedDatabase {
         db_dir: &std::path::Path,
         temp_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
-        crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup on-chain database")?;
+        use std::{
+            sync::{
+                Arc,
+                Mutex,
+            },
+            thread,
+        };
 
-        crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup off-chain database")?;
+        let mut handles = vec![];
+        let errors = Arc::new(Mutex::new(Vec::new()));
 
-        crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup relayer database")?;
+        macro_rules! spawn_backup_thread {
+            ($db_type:ty, $error_message:expr) => {{
+                let db_dir = db_dir.to_path_buf();
+                let temp_dir = temp_dir.to_path_buf();
+                let errors = Arc::clone(&errors);
 
-        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup gas-price database")?;
+                let handle = thread::spawn(move || {
+                    if let Err(e) = crate::state::rocks_db::RocksDb::<$db_type>::backup(
+                        &db_dir, &temp_dir,
+                    )
+                    .trace_err($error_message)
+                    {
+                        let mut errors = errors.lock().unwrap();
+                        errors.push(e);
+                    }
+                });
+                handles.push(handle);
+            }};
+        }
 
-        crate::state::rocks_db::RocksDb::<CompressionDatabase>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup compression database")?;
+        spawn_backup_thread!(OnChain, "Failed to backup on-chain database");
+        spawn_backup_thread!(OffChain, "Failed to backup off-chain database");
+        spawn_backup_thread!(Relayer, "Failed to backup relayer database");
+        spawn_backup_thread!(GasPriceDatabase, "Failed to backup gas-price database");
+        spawn_backup_thread!(
+            CompressionDatabase,
+            "Failed to backup compression database"
+        );
+
+        for handle in handles {
+            let _ = handle.join();
+        }
+
+        {
+            let errors = errors.lock().unwrap();
+            if !errors.is_empty() {
+                return Err(crate::database::Error::Other(anyhow::anyhow!(
+                    "Failed to backup databases: {}",
+                    errors
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )));
+            }
+        }
 
         Ok(())
     }
@@ -140,7 +183,7 @@ impl CombinedDatabase {
             .trace_err("Failed to create temporary restore directory")
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        Self::restore_database(backup_dir, temp_restore_dir.path())?;
+        Self::restore_databases(backup_dir, temp_restore_dir.path())?;
 
         std::fs::rename(temp_restore_dir.path(), restore_to)
             .trace_err("Failed to move temporary restore directory")
@@ -152,33 +195,68 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "backup")]
-    fn restore_database(
+    fn restore_databases(
         backup_dir: &std::path::Path,
         temp_restore_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
-        crate::state::rocks_db::RocksDb::<OnChain>::restore(temp_restore_dir, backup_dir)
-            .trace_err("Failed to restore on-chain database")?;
+        use std::{
+            sync::{
+                Arc,
+                Mutex,
+            },
+            thread,
+        };
 
-        crate::state::rocks_db::RocksDb::<OffChain>::restore(
-            temp_restore_dir,
-            backup_dir,
-        )
-        .trace_err("Failed to restore off-chain database")?;
+        let mut handles = vec![];
+        let errors = Arc::new(Mutex::new(Vec::new()));
 
-        crate::state::rocks_db::RocksDb::<Relayer>::restore(temp_restore_dir, backup_dir)
-            .trace_err("Failed to restore relayer database")?;
+        macro_rules! spawn_restore_thread {
+            ($db_type:ty, $error_message:expr) => {{
+                let backup_dir = backup_dir.to_path_buf();
+                let temp_restore_dir = temp_restore_dir.to_path_buf();
+                let errors = Arc::clone(&errors);
 
-        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::restore(
-            temp_restore_dir,
-            backup_dir,
-        )
-        .trace_err("Failed to restore gas-price database")?;
+                let handle = thread::spawn(move || {
+                    if let Err(e) = crate::state::rocks_db::RocksDb::<$db_type>::restore(
+                        &temp_restore_dir,
+                        &backup_dir,
+                    )
+                    .trace_err($error_message)
+                    {
+                        let mut errors = errors.lock().unwrap();
+                        errors.push(e);
+                    }
+                });
+                handles.push(handle);
+            }};
+        }
 
-        crate::state::rocks_db::RocksDb::<CompressionDatabase>::restore(
-            temp_restore_dir,
-            backup_dir,
-        )
-        .trace_err("Failed to restore compression database")?;
+        spawn_restore_thread!(OnChain, "Failed to restore on-chain database");
+        spawn_restore_thread!(OffChain, "Failed to restore off-chain database");
+        spawn_restore_thread!(Relayer, "Failed to restore relayer database");
+        spawn_restore_thread!(GasPriceDatabase, "Failed to restore gas-price database");
+        spawn_restore_thread!(
+            CompressionDatabase,
+            "Failed to restore compression database"
+        );
+
+        for handle in handles {
+            let _ = handle.join();
+        }
+
+        {
+            let errors = errors.lock().unwrap();
+            if !errors.is_empty() {
+                return Err(crate::database::Error::Other(anyhow::anyhow!(
+                    "Failed to restore databases: {}",
+                    errors
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )));
+            }
+        }
 
         Ok(())
     }
