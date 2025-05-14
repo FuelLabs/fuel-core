@@ -8,6 +8,7 @@ use crate::{
         BlockConstraints,
         Scheduler,
         SchedulerError,
+        SchedulerExecutionResult,
     },
 };
 use fuel_core_executor::{
@@ -108,9 +109,34 @@ where
             )
             .await?;
 
+        let (partial_block, execution_data, mint_changes) =
+            self.produce_mint_tx(&mut components, res)?;
+
+        let block = partial_block
+            .generate(&execution_data.message_ids, Default::default())
+            .unwrap();
+
+        Ok(Uncommitted::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: execution_data.skipped_transactions,
+                events: execution_data.events,
+                tx_status: execution_data.tx_status,
+            },
+            StorageChanges::ChangesList(vec![execution_data.changes, mint_changes]),
+        ))
+    }
+
+    fn produce_mint_tx<TxSource>(
+        &mut self,
+        components: &mut Components<TxSource>,
+        scheduler_res: SchedulerExecutionResult,
+    ) -> Result<(PartialFuelBlock, ExecutionData, Changes), SchedulerError> {
+        let tx_count = u16::try_from(scheduler_res.transactions.len())
+            .expect("previously checked; qed");
         let mut block: PartialFuelBlock = PartialFuelBlock {
-            header: res.header,
-            transactions: res.transactions,
+            header: scheduler_res.header,
+            transactions: scheduler_res.transactions,
         };
 
         let mut memory = MemoryInstance::new();
@@ -125,18 +151,17 @@ where
             Default::default(),
         );
         let mut execution_data = ExecutionData {
-            coinbase: res.coinbase,
-            skipped_transactions: res.skipped_txs,
-            events: res.events,
-            changes: res.changes.try_into().unwrap(),
-            message_ids: res.message_ids,
-            tx_count: u16::try_from(block.transactions.len())
-                .expect("previously checked; qed"),
-            tx_status: res.transactions_status,
+            coinbase: scheduler_res.coinbase,
+            skipped_transactions: scheduler_res.skipped_txs,
+            events: scheduler_res.events,
+            changes: scheduler_res.changes.try_into().unwrap(),
+            message_ids: scheduler_res.message_ids,
+            tx_count,
+            tx_status: scheduler_res.transactions_status,
             found_mint: false,
             event_inbox_root: Default::default(),
-            used_gas: res.used_gas,
-            used_size: res.used_size,
+            used_gas: scheduler_res.used_gas,
+            used_size: scheduler_res.used_size,
         };
 
         self.scheduler
@@ -150,22 +175,7 @@ where
             )
             .map_err(SchedulerError::ExecutionError)?;
 
-        let block = block
-            .generate(&execution_data.message_ids, Default::default())
-            .unwrap();
-
-        Ok(Uncommitted::new(
-            ExecutionResult {
-                block,
-                skipped_transactions: execution_data.skipped_transactions,
-                events: execution_data.events,
-                tx_status: execution_data.tx_status,
-            },
-            StorageChanges::ChangesList(vec![
-                execution_data.changes,
-                tx_changes.into_changes(),
-            ]),
-        ))
+        Ok((block, execution_data, tx_changes.into_changes()))
     }
 
     pub fn validate(
