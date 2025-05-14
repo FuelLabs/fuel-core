@@ -1,8 +1,16 @@
 use std::collections::HashSet;
 
-use fuel_core_types::fuel_tx::ContractId;
-use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
+use fuel_core_storage::Result as StorageResult;
+use fuel_core_types::{
+    entities::coins::coin::CompressedCoin,
+    fuel_tx::{
+        ContractId,
+        UtxoId,
+    },
+    fuel_vm::checked_transaction::CheckedTransaction,
+};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionFiltered {
     /// Some transactions were filtered out and so could be fetched in the future
     Filtered,
@@ -24,5 +32,13 @@ pub trait TransactionsSource {
         tx_count_limit: u16,
         block_transaction_size_limit: u32,
         filter: Filter,
-    ) -> (Vec<MaybeCheckedTransaction>, TransactionFiltered);
+    ) -> (Vec<CheckedTransaction>, TransactionFiltered, Filter);
+
+    /// Returns a notification receiver for new transactions
+    fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify;
+}
+
+pub trait Storage {
+    /// Get a coin by a UTXO
+    fn get_coin(&self, utxo: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
 }
