@@ -1127,7 +1127,7 @@ fn insert__tx_with_predicate_without_enough_gas() {
     assert!(matches!(
         err,
         Error::ConsensusValidity(CheckError::PredicateVerificationFailed(
-            PredicateVerificationFailed::OutOfGas
+            PredicateVerificationFailed::OutOfGas { index: 0 }
         ))
     ));
     universe.assert_pool_integrity(&[]);
@@ -1161,7 +1161,10 @@ fn insert__tx_with_predicate_that_returns_false() {
     assert!(matches!(
         err,
         Error::ConsensusValidity(CheckError::PredicateVerificationFailed(
-            PredicateVerificationFailed::Panic(PanicReason::PredicateReturnedNonOne)
+            PredicateVerificationFailed::Panic {
+                index: 0,
+                reason: PanicReason::PredicateReturnedNonOne
+            }
         ))
     ));
     universe.assert_pool_integrity(&[]);

@@ -1201,7 +1201,7 @@ type Receipt {
 	Set in the case of a Panic receipt to indicate a missing contract input id
 	"""
 	contractId: ContractId
-	subId: Bytes32
+	subId: SubId
 }
 
 enum ReceiptType {
