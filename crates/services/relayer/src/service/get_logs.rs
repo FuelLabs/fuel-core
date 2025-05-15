@@ -61,16 +61,29 @@ where
                         let page = page.reduce();
 
                         // Get the logs and return the reduced page.
-                        eth_node.get_logs(&filter).await.map(|logs| {
-                            Some((
-                                DownloadedLogs {
-                                    start_height: oldest_block,
-                                    last_height: latest_block,
-                                    logs,
-                                },
-                                page,
-                            ))
-                        })
+                        eth_node
+                            .get_logs(&filter)
+                            .await
+                            .map_err(|err| {
+                                let ProviderError::JsonRpcClientError(err) = err else {
+                                    return err
+                                };
+
+                                // Workaround because `QuorumError` obfuscates useful information
+                                ProviderError::CustomError(format!(
+                                    "eth provider failed to get logs: {err:?}"
+                                ))
+                            })
+                            .map(|logs| {
+                                Some((
+                                    DownloadedLogs {
+                                        start_height: oldest_block,
+                                        last_height: latest_block,
+                                        logs,
+                                    },
+                                    page,
+                                ))
+                            })
                     }
                 }
             }
