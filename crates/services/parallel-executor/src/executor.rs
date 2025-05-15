@@ -109,7 +109,7 @@ where
             )
             .await?;
 
-        let (partial_block, execution_data, mint_changes) =
+        let (partial_block, execution_data, storage_changes) =
             self.produce_mint_tx(&mut components, res)?;
 
         let block = partial_block
@@ -128,15 +128,15 @@ where
                 events: execution_data.events,
                 tx_status: execution_data.tx_status,
             },
-            StorageChanges::ChangesList(vec![execution_data.changes, mint_changes]),
+            storage_changes,
         ))
     }
 
     fn produce_mint_tx<TxSource>(
         &mut self,
         components: &mut Components<TxSource>,
-        scheduler_res: SchedulerExecutionResult,
-    ) -> Result<(PartialFuelBlock, ExecutionData, Changes), SchedulerError> {
+        mut scheduler_res: SchedulerExecutionResult,
+    ) -> Result<(PartialFuelBlock, ExecutionData, StorageChanges), SchedulerError> {
         let tx_count = u16::try_from(scheduler_res.transactions.len())
             .expect("previously checked; qed");
         let mut block: PartialFuelBlock = PartialFuelBlock {
@@ -155,11 +155,12 @@ where
             ConflictPolicy::Fail,
             Default::default(),
         );
+
         let mut execution_data = ExecutionData {
             coinbase: scheduler_res.coinbase,
             skipped_transactions: scheduler_res.skipped_txs,
             events: scheduler_res.events,
-            changes: scheduler_res.changes.try_into().unwrap(),
+            changes: Default::default(),
             message_ids: scheduler_res.message_ids,
             tx_count,
             tx_status: scheduler_res.transactions_status,
@@ -180,7 +181,17 @@ where
             )
             .map_err(SchedulerError::ExecutionError)?;
 
-        Ok((block, execution_data, tx_changes.into_changes()))
+        let storage_changes = match scheduler_res.changes {
+            StorageChanges::Changes(changes) => {
+                StorageChanges::ChangesList(vec![changes, tx_changes.into_changes()])
+            }
+            StorageChanges::ChangesList(ref mut changes_list) => {
+                changes_list.push(tx_changes.into_changes());
+                scheduler_res.changes
+            }
+        };
+
+        Ok((block, execution_data, storage_changes))
     }
 
     pub fn validate(
