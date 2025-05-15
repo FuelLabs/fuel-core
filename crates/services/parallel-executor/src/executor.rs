@@ -34,7 +34,10 @@ use fuel_core_types::{
         Block,
         PartialFuelBlock,
     },
-    fuel_tx::Transaction,
+    fuel_tx::{
+        ContractId,
+        Transaction,
+    },
     fuel_vm::interpreter::MemoryInstance,
     services::{
         Uncommitted,
@@ -94,14 +97,32 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         // TODO: Manage DA
+        let mut partial_block =
+            PartialFuelBlock::new(components.header_to_produce, vec![]);
+        let mut data = ExecutionData::new();
+        let mut memory = MemoryInstance::new();
+        let mut view = self
+            .scheduler
+            .storage
+            .latest_view()
+            .map_err(SchedulerError::StorageError)?;
+
+        let da_changes = self.process_l1_txs(
+            &mut partial_block,
+            components.coinbase_recipient,
+            &mut data,
+            &mut memory,
+            &mut view,
+        )?;
+
         let mut components = components;
         let res = self
             .scheduler
             .run(
                 &mut components,
-                StorageChanges::default(),
+                da_changes,
                 BlockConstraints {
-                    block_gas_limit: 30_000_000,
+                    block_gas_limit: 30_000_000 - data.used_gas, // Aurelien: idk if this is right
                     total_execution_time: Duration::from_millis(300),
                     block_transaction_size_limit: u32::MAX,
                     block_transaction_count_limit: u16::MAX,
@@ -109,8 +130,13 @@ where
             )
             .await?;
 
-        let (partial_block, execution_data, storage_changes) =
-            self.produce_mint_tx(&mut components, res)?;
+        let (execution_data, storage_changes) = self.produce_mint_tx(
+            &mut components,
+            &mut partial_block,
+            res,
+            &mut memory,
+            &mut view,
+        )?;
 
         let block = partial_block
             .generate(
@@ -132,24 +158,46 @@ where
         ))
     }
 
+    fn process_l1_txs(
+        &mut self,
+        partial_block: &mut PartialFuelBlock,
+        coinbase_contract_id: ContractId,
+        execution_data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
+        view: &mut View,
+    ) -> Result<StorageChanges, SchedulerError> {
+        let mut storage_tx = StorageTransaction::transaction(
+            view,
+            ConflictPolicy::Fail,
+            Default::default(),
+        );
+        self.scheduler
+            .executor
+            .process_l1_txs(
+                partial_block,
+                coinbase_contract_id,
+                &mut storage_tx,
+                execution_data,
+                memory,
+            )
+            .map_err(SchedulerError::ExecutionError)?;
+        Ok(StorageChanges::Changes(storage_tx.into_changes()))
+    }
+
     fn produce_mint_tx<TxSource>(
         &mut self,
         components: &mut Components<TxSource>,
+        partial_block: &mut PartialFuelBlock,
         mut scheduler_res: SchedulerExecutionResult,
-    ) -> Result<(PartialFuelBlock, ExecutionData, StorageChanges), SchedulerError> {
+        memory: &mut MemoryInstance,
+        view: &mut View,
+    ) -> Result<(ExecutionData, StorageChanges), SchedulerError> {
         let tx_count = u16::try_from(scheduler_res.transactions.len())
             .expect("previously checked; qed");
-        let mut block: PartialFuelBlock = PartialFuelBlock {
-            header: scheduler_res.header,
-            transactions: scheduler_res.transactions,
-        };
 
-        let mut memory = MemoryInstance::new();
-        let view = self
-            .scheduler
-            .storage
-            .latest_view()
-            .map_err(SchedulerError::StorageError)?;
+        partial_block.header = scheduler_res.header;
+        partial_block.transactions = scheduler_res.transactions;
+
         let mut tx_changes = StorageTransaction::transaction(
             view,
             ConflictPolicy::Fail,
@@ -173,11 +221,11 @@ where
         self.scheduler
             .executor
             .produce_mint_tx(
-                &mut block,
+                partial_block,
                 components,
                 &mut tx_changes,
                 &mut execution_data,
-                &mut memory,
+                memory,
             )
             .map_err(SchedulerError::ExecutionError)?;
 
@@ -191,7 +239,7 @@ where
             }
         };
 
-        Ok((block, execution_data, storage_changes))
+        Ok((execution_data, storage_changes))
     }
 
     pub fn validate(
