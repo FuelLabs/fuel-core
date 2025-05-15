@@ -114,11 +114,12 @@ where
 
         let block = partial_block
             .generate(
-              &res.message_ids, 
-              Default::default(), 
-              #[cfg(feature = "fault-proving")]
-              &Default::default()
-        ).unwrap();
+                &execution_data.message_ids,
+                Default::default(),
+                #[cfg(feature = "fault-proving")]
+                &Default::default(),
+            )
+            .unwrap();
 
         Ok(Uncommitted::new(
             ExecutionResult {
