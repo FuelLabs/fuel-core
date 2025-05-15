@@ -173,7 +173,7 @@ where
             .executor
             .produce_mint_tx(
                 &mut block,
-                &components,
+                components,
                 &mut tx_changes,
                 &mut execution_data,
                 &mut memory,

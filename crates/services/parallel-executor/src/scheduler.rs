@@ -406,7 +406,7 @@ where
 
                 self.execute_batch(
                     consensus_parameters_version,
-                    &components,
+                    components,
                     batch,
                     nb_batch_created,
                     nb_transactions,
