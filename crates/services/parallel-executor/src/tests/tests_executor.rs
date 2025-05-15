@@ -303,6 +303,9 @@ async fn execute__simple_independent_transactions_sorted() {
         .transactions()
         .iter()
         .map(|tx| tx.id(&ChainId::default()))
+        .rev()
+        .skip(1)
+        .rev()
         .collect::<Vec<_>>();
 
     assert_eq!(expected_ids, actual_ids);
@@ -581,7 +584,7 @@ async fn execute__utxo_ordering_kept() {
     response_thread.join().unwrap();
 
     let transactions = result.block.transactions();
-    assert_eq!(transactions.len(), 2);
+    assert_eq!(transactions.len(), 3);
     assert_eq!(
         transactions[0].id(&ChainId::default()),
         tx1.id(&ChainId::default())

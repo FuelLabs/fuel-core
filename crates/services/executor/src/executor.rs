@@ -621,7 +621,8 @@ where
         Ok((partial_block, data))
     }
 
-    fn produce_mint_tx<TxSource, T>(
+    /// Produce the mint transaction
+    pub fn produce_mint_tx<TxSource, T>(
         &self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,

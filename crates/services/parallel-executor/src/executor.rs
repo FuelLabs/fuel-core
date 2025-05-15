@@ -8,11 +8,15 @@ use crate::{
         BlockConstraints,
         Scheduler,
         SchedulerError,
+        SchedulerExecutionResult,
     },
 };
-use fuel_core_executor::ports::{
-    PreconfirmationSenderPort,
-    RelayerPort,
+use fuel_core_executor::{
+    executor::ExecutionData,
+    ports::{
+        PreconfirmationSenderPort,
+        RelayerPort,
+    },
 };
 use fuel_core_storage::{
     column::Column,
@@ -20,7 +24,9 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Changes,
+        ConflictPolicy,
         StorageChanges,
+        StorageTransaction,
     },
 };
 use fuel_core_types::{
@@ -29,6 +35,7 @@ use fuel_core_types::{
         PartialFuelBlock,
     },
     fuel_tx::Transaction,
+    fuel_vm::interpreter::MemoryInstance,
     services::{
         Uncommitted,
         block_producer::Components,
@@ -87,11 +94,11 @@ where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         // TODO: Manage DA
-
+        let mut components = components;
         let res = self
             .scheduler
             .run(
-                components,
+                &mut components,
                 StorageChanges::default(),
                 BlockConstraints {
                     block_gas_limit: 30_000_000,
@@ -102,27 +109,89 @@ where
             )
             .await?;
 
-        // TODO: Add mint TX
-        let block: PartialFuelBlock = PartialFuelBlock {
-            header: res.header,
-            transactions: res.transactions,
-        };
-        #[cfg(feature = "fault-proving")]
-        let block = block
-            .generate(&res.message_ids, Default::default(), &Default::default())
+        let (partial_block, execution_data, storage_changes) =
+            self.produce_mint_tx(&mut components, res)?;
+
+        let block = partial_block
+            .generate(
+                &execution_data.message_ids,
+                Default::default(),
+                #[cfg(feature = "fault-proving")]
+                &Default::default(),
+            )
             .unwrap();
-        let block = block
-            .generate(&res.message_ids, Default::default())
-            .unwrap();
+
         Ok(Uncommitted::new(
             ExecutionResult {
                 block,
-                skipped_transactions: res.skipped_txs,
-                events: res.events,
-                tx_status: res.transactions_status,
+                skipped_transactions: execution_data.skipped_transactions,
+                events: execution_data.events,
+                tx_status: execution_data.tx_status,
             },
-            res.changes,
+            storage_changes,
         ))
+    }
+
+    fn produce_mint_tx<TxSource>(
+        &mut self,
+        components: &mut Components<TxSource>,
+        mut scheduler_res: SchedulerExecutionResult,
+    ) -> Result<(PartialFuelBlock, ExecutionData, StorageChanges), SchedulerError> {
+        let tx_count = u16::try_from(scheduler_res.transactions.len())
+            .expect("previously checked; qed");
+        let mut block: PartialFuelBlock = PartialFuelBlock {
+            header: scheduler_res.header,
+            transactions: scheduler_res.transactions,
+        };
+
+        let mut memory = MemoryInstance::new();
+        let view = self
+            .scheduler
+            .storage
+            .latest_view()
+            .map_err(SchedulerError::StorageError)?;
+        let mut tx_changes = StorageTransaction::transaction(
+            view,
+            ConflictPolicy::Fail,
+            Default::default(),
+        );
+
+        let mut execution_data = ExecutionData {
+            coinbase: scheduler_res.coinbase,
+            skipped_transactions: scheduler_res.skipped_txs,
+            events: scheduler_res.events,
+            changes: Default::default(),
+            message_ids: scheduler_res.message_ids,
+            tx_count,
+            tx_status: scheduler_res.transactions_status,
+            found_mint: false,
+            event_inbox_root: Default::default(),
+            used_gas: scheduler_res.used_gas,
+            used_size: scheduler_res.used_size,
+        };
+
+        self.scheduler
+            .executor
+            .produce_mint_tx(
+                &mut block,
+                components,
+                &mut tx_changes,
+                &mut execution_data,
+                &mut memory,
+            )
+            .map_err(SchedulerError::ExecutionError)?;
+
+        let storage_changes = match scheduler_res.changes {
+            StorageChanges::Changes(changes) => {
+                StorageChanges::ChangesList(vec![changes, tx_changes.into_changes()])
+            }
+            StorageChanges::ChangesList(ref mut changes_list) => {
+                changes_list.push(tx_changes.into_changes());
+                scheduler_res.changes
+            }
+        };
+
+        Ok((block, execution_data, storage_changes))
     }
 
     pub fn validate(
