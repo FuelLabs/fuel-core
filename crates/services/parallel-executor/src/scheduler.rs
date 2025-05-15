@@ -83,6 +83,7 @@ use crate::{
     coin::CoinInBatch,
     column_adapter::ContractColumnsIterator,
     config::Config,
+    l1_execution_data::L1ExecutionData,
     once_transaction_source::OnceTransactionsSource,
     ports::{
         Filter,
@@ -326,7 +327,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             ConsensusParameters::default(),
             NoWaitTxs,
             preconfirmation_sender,
-            true,
+            true, // dry run
         )
         .unwrap();
 
@@ -373,9 +374,20 @@ where
         components: &mut Components<TxSource>,
         da_changes: StorageChanges,
         block_constraints: BlockConstraints,
+        l1_execution_data: L1ExecutionData,
     ) -> Result<SchedulerExecutionResult, SchedulerError> {
-        self.tx_left = block_constraints.block_transaction_count_limit;
-        self.tx_size_left = block_constraints.block_transaction_size_limit;
+        self.tx_left = block_constraints
+            .block_transaction_count_limit
+            .checked_sub(l1_execution_data.tx_count)
+            .ok_or(SchedulerError::InternalError(
+                "Cannot insert more transactions: tx_count full".to_string(),
+            ))?;
+        self.tx_size_left = block_constraints
+            .block_transaction_size_limit
+            .checked_sub(l1_execution_data.used_size)
+            .ok_or(SchedulerError::InternalError(
+                "Cannot insert more transactions: tx_size full".to_string(),
+            ))?;
 
         let consensus_parameters_version =
             components.header_to_produce.consensus_parameters_version;
@@ -400,6 +412,10 @@ where
         let mut nb_transactions = 0;
         let initial_gas_per_worker = block_constraints
             .block_gas_limit
+            .checked_sub(l1_execution_data.used_gas)
+            .ok_or(SchedulerError::InternalError(
+                "L1 transactions consumed all the gas".to_string(),
+            ))?
             .checked_div(self.config.number_of_cores.get() as u64)
             .ok_or(SchedulerError::InternalError(
                 "Invalid block gas limit".to_string(),
@@ -475,6 +491,7 @@ where
         let mut res = self.verify_coherency_and_merge_results(
             nb_batch_created,
             components.header_to_produce,
+            l1_execution_data,
         )?;
 
         let blob_changes = self
@@ -753,13 +770,36 @@ where
         &mut self,
         nb_batch: usize,
         partial_block_header: PartialBlockHeader,
+        l1_execution_data: L1ExecutionData,
     ) -> Result<SchedulerExecutionResult, SchedulerError> {
+        let L1ExecutionData {
+            coinbase,
+            used_gas,
+            used_size,
+            message_ids,
+            transactions_status,
+            events,
+            skipped_txs,
+            ..
+        } = l1_execution_data;
+        let mut exec_result = SchedulerExecutionResult {
+            header: partial_block_header,
+            transactions: vec![],
+            events,
+            message_ids,
+            skipped_txs,
+            transactions_status,
+            changes: StorageChanges::default(),
+            used_gas,
+            used_size,
+            coinbase,
+        };
+
         let mut storage_changes = vec![];
         let latest_view = self
             .storage
             .latest_view()
             .map_err(SchedulerError::StorageError)?;
-        let mut exec_result = SchedulerExecutionResult::default();
         let mut compiled_created_coins = CoinDependencyChainVerifier::new();
         for batch_id in 0..nb_batch {
             if let Some(changes) = self.execution_results.remove(&batch_id) {
@@ -940,7 +980,7 @@ impl CoinDependencyChainVerifier {
                             return Err(SchedulerError::InternalError(format!(
                                 "coin is invalid: {}",
                                 coin.utxo(),
-                            )))
+                            )));
                         }
                     }
                 }

@@ -99,6 +99,8 @@ where
         // TODO: Manage DA
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
+        let prev_height = components.header_to_produce.height().pred();
+
         let mut data = ExecutionData::new();
         let mut memory = MemoryInstance::new();
         let mut view = self
@@ -107,13 +109,26 @@ where
             .latest_view()
             .map_err(SchedulerError::StorageError)?;
 
-        let da_changes = self.process_l1_txs(
-            &mut partial_block,
-            components.coinbase_recipient,
-            &mut data,
-            &mut memory,
-            &mut view,
-        )?;
+        let da_changes = if prev_height
+            .and_then(|height| {
+                view.get_da_height_by_l2_height(&height)
+                    .map_err(SchedulerError::StorageError)
+                    .ok()
+            })
+            .flatten()
+            .filter(|&da_height| da_height != components.header_to_produce.da_height)
+            .is_some()
+        {
+            self.process_l1_txs(
+                &mut partial_block,
+                components.coinbase_recipient,
+                &mut data,
+                &mut memory,
+                &mut view,
+            )?
+        } else {
+            StorageChanges::default()
+        };
 
         let mut components = components;
         let res = self
@@ -122,11 +137,12 @@ where
                 &mut components,
                 da_changes,
                 BlockConstraints {
-                    block_gas_limit: 30_000_000 - data.used_gas, // Aurelien: idk if this is right
+                    block_gas_limit: 30_000_000 - data.used_gas,
                     total_execution_time: Duration::from_millis(300),
-                    block_transaction_size_limit: u32::MAX,
-                    block_transaction_count_limit: u16::MAX,
+                    block_transaction_size_limit: u32::MAX - data.used_size,
+                    block_transaction_count_limit: u16::MAX - data.tx_count,
                 },
+                data.into(),
             )
             .await?;
 
