@@ -1009,10 +1009,7 @@ fn prepare_transactions_batch(batch: Vec<CheckedTransaction>) -> PreparedBatch {
                 _ => {}
             }
         }
-        let is_blob = match &tx {
-            CheckedTransaction::Blob(_) => true,
-            _ => false,
-        };
+        let is_blob = matches!(&tx, CheckedTransaction::Blob(_));
         prepared_batch.total_size += tx.size() as u32;
         prepared_batch.number_of_transactions += 1;
         if is_blob {
