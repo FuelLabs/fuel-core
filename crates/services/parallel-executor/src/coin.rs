@@ -6,7 +6,6 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         AssetId,
-        Input,
         UtxoId,
         Word,
         input::coin::{
@@ -16,27 +15,18 @@ use fuel_core_types::{
     },
 };
 
-/// can either be a predicate coin or a signed coin
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum Variant {
-    Predicate,
-    Signed,
-}
-
 #[derive(Debug, Eq)]
 pub(crate) struct CoinInBatch {
     /// The utxo id
-    utxo_id: UtxoId,
+    pub utxo_id: UtxoId,
     /// The index of the transaction using this coin in the batch
-    idx: usize,
+    pub idx: usize,
     /// the owner of the coin
-    owner: Address,
+    pub owner: Address,
     /// the amount stored in the coin
-    amount: Word,
+    pub amount: Word,
     /// the asset the coin stores
-    asset_id: AssetId,
-    /// variant
-    variant: Variant,
+    pub asset_id: AssetId,
 }
 
 impl PartialEq for CoinInBatch {
@@ -45,7 +35,6 @@ impl PartialEq for CoinInBatch {
             && self.owner() == other.owner()
             && self.amount() == other.amount()
             && self.asset_id() == other.asset_id()
-            && self.variant() == other.variant()
         // we don't include the idx here
     }
 }
@@ -71,10 +60,6 @@ impl CoinInBatch {
         &self.asset_id
     }
 
-    pub(crate) fn variant(&self) -> Variant {
-        self.variant
-    }
-
     pub(crate) fn from_signed_coin(signed_coin: &CoinSigned, idx: usize) -> Self {
         let CoinSigned {
             utxo_id,
@@ -90,7 +75,6 @@ impl CoinInBatch {
             owner: *owner,
             amount: *amount,
             asset_id: *asset_id,
-            variant: Variant::Signed,
         }
     }
 
@@ -112,7 +96,19 @@ impl CoinInBatch {
             owner: *owner,
             amount: *amount,
             asset_id: *asset_id,
-            variant: Variant::Predicate,
+        }
+    }
+
+    pub(crate) fn equal_compressed_coin(&self, compressed_coin: &CompressedCoin) -> bool {
+        match compressed_coin {
+            CompressedCoin::V1(coin) => {
+                self.owner() == &coin.owner
+                    && self.amount() == &coin.amount
+                    && self.asset_id() == &coin.asset_id
+            }
+            _ => {
+                panic!("Unsupported compressed coin version");
+            }
         }
     }
 }
@@ -132,34 +128,5 @@ impl From<CoinInBatch> for CompressedCoin {
             asset_id,
             tx_pointer: Default::default(), // purposely left blank
         })
-    }
-}
-
-impl From<&CoinInBatch> for Input {
-    fn from(value: &CoinInBatch) -> Self {
-        let CoinInBatch {
-            utxo_id,
-            owner,
-            amount,
-            asset_id,
-            ..
-        } = value;
-
-        match value.variant {
-            Variant::Signed => Input::CoinSigned(CoinSigned {
-                utxo_id: *utxo_id,
-                owner: *owner,
-                amount: *amount,
-                asset_id: *asset_id,
-                ..Default::default()
-            }),
-            Variant::Predicate => Input::CoinPredicate(CoinPredicate {
-                utxo_id: *utxo_id,
-                owner: *owner,
-                amount: *amount,
-                asset_id: *asset_id,
-                ..Default::default()
-            }),
-        }
     }
 }

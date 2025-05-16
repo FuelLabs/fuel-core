@@ -1,6 +1,11 @@
 use std::collections::HashSet;
 
+use fuel_core_executor::ports::{
+    PreconfirmationSenderPort,
+    RelayerPort,
+};
 use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
     fuel_tx::{
         ConsensusParameters,
         Transaction,
@@ -9,6 +14,7 @@ use fuel_core_types::{
         CheckedTransaction,
         IntoChecked,
     },
+    services::preconfirmation::Preconfirmation,
 };
 
 use crate::ports::{
@@ -17,7 +23,21 @@ use crate::ports::{
     TransactionsSource,
 };
 
+#[derive(Debug, Clone)]
 pub struct MockRelayer;
+
+impl RelayerPort for MockRelayer {
+    fn enabled(&self) -> bool {
+        true
+    }
+
+    fn get_events(
+        &self,
+        _da_height: &DaBlockHeight,
+    ) -> anyhow::Result<Vec<fuel_core_types::services::relayer::Event>> {
+        Ok(vec![])
+    }
+}
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -146,4 +166,22 @@ fn into_checked_txs(txs: &[&Transaction]) -> Vec<CheckedTransaction> {
                 .into()
         })
         .collect()
+}
+
+#[derive(Clone, Debug)]
+pub struct MockPreconfirmationSender;
+
+impl PreconfirmationSenderPort for MockPreconfirmationSender {
+    fn send(
+        &self,
+        _preconfirmations: Vec<
+            fuel_core_types::services::preconfirmation::Preconfirmation,
+        >,
+    ) -> impl Future<Output = ()> + Send {
+        futures::future::ready(())
+    }
+
+    fn try_send(&self, preconfirmations: Vec<Preconfirmation>) -> Vec<Preconfirmation> {
+        preconfirmations
+    }
 }
