@@ -1,3 +1,4 @@
+pub(crate) mod checked_transaction_ext;
 pub(crate) mod coin;
 pub(crate) mod column_adapter;
 pub mod config;
