@@ -116,6 +116,14 @@ impl StoragePort for Storage {
             .map(|params| params.into_owned())
             .ok_or(not_found!("Consensus parameters not found"))
     }
+
+    fn get_da_height_by_l2_height(
+        &self,
+        _: &fuel_core_types::fuel_types::BlockHeight,
+    ) -> StorageResult<Option<fuel_core_types::blockchain::primitives::DaBlockHeight>>
+    {
+        Ok(None)
+    }
 }
 
 impl Storage {

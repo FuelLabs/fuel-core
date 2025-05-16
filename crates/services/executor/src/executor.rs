@@ -705,7 +705,8 @@ where
         Ok((partial_block, data))
     }
 
-    fn process_l1_txs<T>(
+    /// Process transactions coming from the underlying L1
+    pub fn process_l1_txs<T>(
         &mut self,
         block: &mut PartialFuelBlock,
         coinbase_contract_id: ContractId,
