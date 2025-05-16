@@ -80,6 +80,7 @@ use fxhash::FxHashMap;
 use tokio::runtime::Runtime;
 
 use crate::{
+    checked_transaction_ext::CheckedTransactionExt,
     coin::CoinInBatch,
     column_adapter::ContractColumnsIterator,
     config::Config,
@@ -548,7 +549,7 @@ where
             }
         }
 
-        let prepared_batch = prepare_transactions_batch(batch);
+        let prepared_batch = prepare_transactions_batch(batch)?;
         self.tx_size_left = self.tx_size_left.saturating_sub(prepared_batch.total_size);
         self.gas_left = self
             .gas_left
@@ -986,7 +987,9 @@ impl CoinDependencyChainVerifier {
 // TODO: Manage contract created also because they can't be fetched while being
 // created by another transaction
 #[allow(clippy::type_complexity)]
-fn prepare_transactions_batch(batch: Vec<CheckedTransaction>) -> PreparedBatch {
+fn prepare_transactions_batch(
+    batch: Vec<CheckedTransaction>,
+) -> Result<PreparedBatch, SchedulerError> {
     let mut prepared_batch = PreparedBatch::default();
 
     for (idx, tx) in batch.into_iter().enumerate() {
@@ -1013,15 +1016,14 @@ fn prepare_transactions_batch(batch: Vec<CheckedTransaction>) -> PreparedBatch {
         prepared_batch.total_size += tx.size() as u32;
         prepared_batch.number_of_transactions += 1;
         if is_blob {
-            prepared_batch.blob_gas +=
-                tx.max_gas(&ConsensusParameters::default()).unwrap();
+            prepared_batch.blob_gas += CheckedTransactionExt::max_gas(&tx)?;
             prepared_batch.blob_transactions.push(tx);
         } else {
-            prepared_batch.gas += tx.max_gas(&ConsensusParameters::default()).unwrap();
+            prepared_batch.gas += CheckedTransactionExt::max_gas(&tx)?;
             prepared_batch.transactions.push(tx);
         }
     }
-    prepared_batch
+    Ok(prepared_batch)
 }
 
 fn get_coins_outputs<'a>(
