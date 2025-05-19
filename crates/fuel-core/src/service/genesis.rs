@@ -469,12 +469,12 @@ mod tests {
                     output_index: alice_output_index,
                     tx_pointer_block_height: alice_block_created,
                     tx_pointer_tx_idx: alice_block_created_tx_idx,
-                    owner: alice,
+                    owner: alice.into(),
                     amount: alice_value,
                     asset_id: asset_id_alice,
                 },
                 CoinConfig {
-                    owner: bob,
+                    owner: bob.into(),
                     amount: bob_value,
                     asset_id: asset_id_bob,
                     ..Default::default()
