@@ -4,7 +4,10 @@ use fuel_core::{
     upgradable_executor,
 };
 use fuel_core_chain_config::{
-    ChainConfig, Owner, SnapshotReader, StateConfig
+    ChainConfig,
+    Owner,
+    SnapshotReader,
+    StateConfig,
 };
 use fuel_core_types::fuel_tx::Address;
 use std::{
@@ -170,7 +173,10 @@ pub fn local_testnet_reader() -> SnapshotReader {
         let amount = coin.amount;
         let (address, secret) = match coin.owner {
             Owner::Address(address) => (address.to_string(), "not provided".to_string()),
-            Owner::SecretKey(secret) => (Address::from(coin.owner.clone()).to_string(), secret.to_string()),
+            Owner::SecretKey(secret) => (
+                Address::from(coin.owner.clone()).to_string(),
+                secret.to_string(),
+            ),
         };
 
         tracing::info!(amount, address, secret, "Reading genesis coin");
