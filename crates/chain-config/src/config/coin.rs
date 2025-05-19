@@ -1,13 +1,31 @@
 use crate::GenesisCommitment;
-use fuel_core_storage::{MerkleRoot, tables::Coins};
+use fuel_core_storage::{
+    MerkleRoot,
+    tables::Coins,
+};
 use fuel_core_types::{
-    entities::coins::coin::{Coin, CompressedCoin, CompressedCoinV1},
+    entities::coins::coin::{
+        Coin,
+        CompressedCoin,
+        CompressedCoinV1,
+    },
     fuel_crypto::Hasher,
-    fuel_tx::{TxPointer, UtxoId},
-    fuel_types::{Address, AssetId, BlockHeight, Bytes32},
+    fuel_tx::{
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        BlockHeight,
+        Bytes32,
+    },
     fuel_vm::SecretKey,
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 use super::table_entry::TableEntry;
 
@@ -152,7 +170,10 @@ impl crate::Randomize for Owner {
 #[cfg(feature = "test-helpers")]
 pub mod coin_config_helpers {
     use crate::CoinConfig;
-    use fuel_core_types::{fuel_types::Bytes32, fuel_vm::SecretKey};
+    use fuel_core_types::{
+        fuel_types::Bytes32,
+        fuel_vm::SecretKey,
+    };
 
     type CoinCount = u16;
 
