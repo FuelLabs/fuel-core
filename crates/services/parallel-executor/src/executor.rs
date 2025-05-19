@@ -85,7 +85,7 @@ where
     R: RelayerPort + Clone + Send + 'static,
     P: PreconfirmationSenderPort + Clone + Send + 'static,
     S: AtomicView<LatestView = View> + Clone + Send + 'static,
-    View: KeyValueInspect<Column = Column> + Storage + Send,
+    View: KeyValueInspect<Column = Column> + Storage + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
     pub async fn produce_without_commit_with_source<TxSource>(
@@ -109,7 +109,7 @@ where
             .latest_view()
             .map_err(SchedulerError::StorageError)?;
 
-        let da_changes = if prev_height
+        let da_changes: Changes = if prev_height
             .and_then(|height| {
                 view.get_da_height_by_l2_height(&height)
                     .map_err(SchedulerError::StorageError)
@@ -126,12 +126,9 @@ where
                 &mut memory,
                 view,
             )?
+            .into_changes()
         } else {
-            StorageTransaction::transaction(
-                view,
-                ConflictPolicy::Fail,
-                Default::default(),
-            )
+            Changes::default()
         };
 
         let mut components = components;

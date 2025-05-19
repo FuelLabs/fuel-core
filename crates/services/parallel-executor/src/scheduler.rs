@@ -50,7 +50,9 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Changes,
+        IntoTransaction,
         StorageChanges,
+        StorageTransaction,
         WriteTransaction,
     },
 };
@@ -62,7 +64,6 @@ use fuel_core_types::{
     fuel_tx::{
         ConsensusParameters,
         ContractId,
-        Input,
         MessageId,
         Output,
         Transaction,
@@ -130,6 +131,7 @@ impl ContractsChanges {
     // Problem: we need to keep the changes in the storage for the other contracts
     // and so this requires a clone instead of a remove
     // (I think this is why we spoke about using references)
+    // Solution: Filter the tx source to not give transaction with all the contracts specified on this change batch.
     pub fn extract_changes(&mut self, contract_id: &ContractId) -> Option<Changes> {
         self.contracts_changes
             .remove(contract_id)
@@ -403,11 +405,15 @@ where
     pub async fn run<TxSource: TransactionsSource>(
         &mut self,
         components: &mut Components<TxSource>,
-        storage_with_da: View,
+        da_changes: Changes,
         block_constraints: BlockConstraints,
         l1_execution_data: L1ExecutionData,
     ) -> Result<SchedulerExecutionResult, SchedulerError> {
-        let storage_with_da = Arc::new(storage_with_da);
+        let view = self
+            .storage
+            .latest_view()
+            .map_err(SchedulerError::StorageError)?;
+        let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.tx_left = block_constraints
             .block_transaction_count_limit
             .checked_sub(l1_execution_data.tx_count)
@@ -502,7 +508,7 @@ where
                         match result {
                             Ok(res) => {
                                 if !res.skipped_tx.is_empty() {
-                                    self.sequential_fallback(block_height, &consensus_parameters, res.batch_id, res.txs, res.coins_used, res.coins_created).await;
+                                    self.sequential_fallback(block_height, &consensus_parameters, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
@@ -617,18 +623,12 @@ where
         batch: PreparedBatch,
         batch_id: usize,
         _start_idx_txs: u16,
-        storage_with_da: Arc<View>,
+        storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
         let worker_id = self.current_available_workers.pop_front().ok_or(
             SchedulerError::InternalError("No available workers".to_string()),
         )?;
         let runtime = self.runtime.as_ref().unwrap();
-        // 0. Make a transaction with the DA changes in a Arc used by everyone afterwards
-        // 1. All contract changes in 1 changes
-        // 2. Create a storage transaction on top of the storage transaction that have the DA Changes
-        // (created at the start of run function and re-used by all executions)
-        // 3. Execute the transactions on top of this storage transaction
-        // TODO: Optimize
         let mut required_changes: Changes = Changes::default();
         for contract in batch.contracts_used.iter() {
             self.current_executing_contracts.insert(*contract);
@@ -641,12 +641,13 @@ where
         let gas_price = components.gas_price;
         let header_to_produce = components.header_to_produce;
         self.current_execution_tasks.push(runtime.spawn({
-            let mut storage_with_da = storage_with_da.clone();
+            let storage_with_da = storage_with_da.clone();
             async move {
                 let storage_tx = storage_with_da
-                    .write_transaction()
+                    .into_transaction()
                     .with_changes(required_changes);
                 // TODO: Update tx pointers on batch.transactions
+                // Solution : We function in executor to give the tx_count
                 // TODO: Error management
                 let (block, execution_data) = executor
                     .execute(
@@ -673,9 +674,7 @@ where
                     ),
                 );
                 // TODO: Remove coins used by this transactions from `coins_used`
-                if !execution_data.skipped_transactions.is_empty() {
-
-                }
+                if !execution_data.skipped_transactions.is_empty() {}
                 WorkSessionExecutionResult {
                     worker_id,
                     batch_id,
@@ -760,7 +759,7 @@ where
                             res.coins_used,
                             res.coins_created,
                         )
-                        .await;
+                        .await?;
                         break;
                     } else {
                         self.execution_results.insert(
@@ -890,6 +889,7 @@ where
         components: &Components<TxSource>,
         consensus_parameters_version: u32,
     ) -> Result<(ExecutionData, Vec<Transaction>), SchedulerError> {
+        // TODO: Need to have the storage from before
         let mut latest_view = self
             .storage
             .latest_view()
@@ -922,6 +922,8 @@ where
     // re-execute.
     // Tell the TransactionSource that this transaction is skipped
     // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
+    //
+    // Can be replaced by a mechanism that replace the skipped_tx by a dummy transaction to not shift everything
     async fn sequential_fallback(
         &mut self,
         block_height: BlockHeight,
@@ -1230,23 +1232,3 @@ fn get_coins_outputs<'a>(
     }
     coins
 }
-
-// Can't use modify `CheckedTransaction` :/
-// fn update_input_tx_pointers(
-//     txs: &mut Vec<CheckedTransaction>,
-//     block_height: BlockHeight
-// ) -> Result<(), SchedulerError> {
-//     for tx in txs.iter_mut() {
-//         for input in tx.inputs() {
-//             match input {
-//                 Input::CoinSigned(c) {
-//                     if block_height == c.tx_pointer.block_height() {
-
-//                     }
-//                 }
-//                 _ => {}
-//             }
-//         }
-//     }
-//     Ok(())
-// }
