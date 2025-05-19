@@ -1,30 +1,13 @@
 use crate::GenesisCommitment;
-use fuel_core_storage::{
-    MerkleRoot,
-    tables::Coins,
-};
+use fuel_core_storage::{MerkleRoot, tables::Coins};
 use fuel_core_types::{
-    entities::coins::coin::{
-        Coin,
-        CompressedCoin,
-        CompressedCoinV1,
-    },
+    entities::coins::coin::{Coin, CompressedCoin, CompressedCoinV1},
     fuel_crypto::Hasher,
-    fuel_tx::{
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        Address,
-        AssetId,
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_tx::{TxPointer, UtxoId},
+    fuel_types::{Address, AssetId, BlockHeight, Bytes32},
+    fuel_vm::SecretKey,
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 use super::table_entry::TableEntry;
 
@@ -38,7 +21,8 @@ pub struct CoinConfig {
     /// used if coin is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
     pub tx_pointer_tx_idx: u16,
-    pub owner: Address,
+    #[serde(flatten)]
+    pub owner: Owner,
     pub amount: u64,
     pub asset_id: AssetId,
 }
@@ -50,7 +34,7 @@ impl From<TableEntry<Coins>> for CoinConfig {
             output_index: value.key.output_index(),
             tx_pointer_block_height: value.value.tx_pointer().block_height(),
             tx_pointer_tx_idx: value.value.tx_pointer().tx_index(),
-            owner: *value.value.owner(),
+            owner: (*value.value.owner()).into(),
             amount: *value.value.amount(),
             asset_id: *value.value.asset_id(),
         }
@@ -62,7 +46,7 @@ impl From<CoinConfig> for TableEntry<Coins> {
         Self {
             key: UtxoId::new(config.tx_id, config.output_index),
             value: CompressedCoin::V1(CompressedCoinV1 {
-                owner: config.owner,
+                owner: config.owner.into(),
                 amount: config.amount,
                 asset_id: config.asset_id,
                 tx_pointer: TxPointer::new(
@@ -121,16 +105,54 @@ impl GenesisCommitment for Coin {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub enum Owner {
+    #[serde(rename = "owner")]
+    Address(Address),
+    #[serde(rename = "owner_secret")]
+    SecretKey(SecretKey),
+}
+
+impl Default for Owner {
+    fn default() -> Self {
+        Self::Address(Address::default())
+    }
+}
+
+impl From<Owner> for Address {
+    fn from(owner: Owner) -> Self {
+        match owner {
+            Owner::Address(address) => address,
+            Owner::SecretKey(secret_key) => {
+                Address::from(<[u8; Address::LEN]>::from(secret_key.public_key().hash()))
+            }
+        }
+    }
+}
+
+impl From<Address> for Owner {
+    fn from(address: Address) -> Self {
+        Self::Address(address)
+    }
+}
+
+impl From<SecretKey> for Owner {
+    fn from(secret: SecretKey) -> Self {
+        Self::SecretKey(secret)
+    }
+}
+
+#[cfg(feature = "test-helpers")]
+impl crate::Randomize for Owner {
+    fn randomize(rng: impl rand::Rng) -> Self {
+        Self::Address(Address::randomize(rng))
+    }
+}
+
 #[cfg(feature = "test-helpers")]
 pub mod coin_config_helpers {
     use crate::CoinConfig;
-    use fuel_core_types::{
-        fuel_types::{
-            Address,
-            Bytes32,
-        },
-        fuel_vm::SecretKey,
-    };
+    use fuel_core_types::{fuel_types::Bytes32, fuel_vm::SecretKey};
 
     type CoinCount = u16;
 
@@ -166,11 +188,9 @@ pub mod coin_config_helpers {
         }
 
         pub fn generate_with(&mut self, secret: SecretKey, amount: u64) -> CoinConfig {
-            let owner = Address::from(*secret.public_key().hash());
-
             CoinConfig {
                 amount,
-                owner,
+                owner: secret.into(),
                 ..self.generate()
             }
         }
@@ -180,10 +200,7 @@ pub mod coin_config_helpers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_types::{
-        fuel_types::Address,
-        fuel_vm::SecretKey,
-    };
+    use fuel_core_types::fuel_vm::SecretKey;
 
     #[test]
     fn test_generate_unique_utxo_id() {
@@ -203,7 +220,7 @@ mod tests {
         let mut generator = coin_config_helpers::CoinConfigGenerator::new();
         let config = generator.generate_with(secret, amount);
 
-        assert_eq!(config.owner, Address::from(*secret.public_key().hash()));
+        assert_eq!(config.owner, secret.into());
         assert_eq!(config.amount, amount);
     }
 }

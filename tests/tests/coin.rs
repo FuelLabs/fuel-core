@@ -73,7 +73,7 @@ async fn first_5_coins(
     let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (1..10usize)
         .map(|i| CoinConfig {
-            owner,
+            owner: owner.into(),
             amount: i as Word,
             ..coin_generator.generate()
         })
@@ -109,7 +109,7 @@ async fn only_asset_id_filtered_coins() {
     let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (1..10usize)
         .map(|i| CoinConfig {
-            owner,
+            owner: owner.into(),
             amount: i as Word,
             asset_id: if i <= 5 { asset_id } else { Default::default() },
             ..coin_generator.generate()
@@ -147,7 +147,7 @@ async fn get_coins_forwards_backwards(
     // setup test data in the node
     let coins: Vec<_> = (1..11usize)
         .map(|i| CoinConfig {
-            owner,
+            owner: owner.into(),
             amount: i as Word,
             asset_id,
             output_index: i as u16,
