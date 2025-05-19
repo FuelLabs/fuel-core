@@ -103,7 +103,7 @@ where
 
         let mut data = ExecutionData::new();
         let mut memory = MemoryInstance::new();
-        let mut view = self
+        let view = self
             .scheduler
             .storage
             .latest_view()
@@ -124,10 +124,14 @@ where
                 components.coinbase_recipient,
                 &mut data,
                 &mut memory,
-                &mut view,
+                view,
             )?
         } else {
-            StorageChanges::default()
+            StorageTransaction::transaction(
+                view,
+                ConflictPolicy::Fail,
+                Default::default(),
+            )
         };
 
         let mut components = components;
@@ -146,12 +150,17 @@ where
             )
             .await?;
 
+        let view = self
+            .scheduler
+            .storage
+            .latest_view()
+            .map_err(SchedulerError::StorageError)?;
         let (execution_data, storage_changes) = self.produce_mint_tx(
             &mut components,
             &mut partial_block,
             res,
             &mut memory,
-            &mut view,
+            view,
         )?;
 
         let block = partial_block
@@ -180,8 +189,8 @@ where
         coinbase_contract_id: ContractId,
         execution_data: &mut ExecutionData,
         memory: &mut MemoryInstance,
-        view: &mut View,
-    ) -> Result<StorageChanges, SchedulerError> {
+        view: View,
+    ) -> Result<StorageTransaction<View>, SchedulerError> {
         let mut storage_tx = StorageTransaction::transaction(
             view,
             ConflictPolicy::Fail,
@@ -197,7 +206,7 @@ where
                 memory,
             )
             .map_err(SchedulerError::ExecutionError)?;
-        Ok(StorageChanges::Changes(storage_tx.into_changes()))
+        Ok(storage_tx)
     }
 
     fn produce_mint_tx<TxSource>(
@@ -206,7 +215,7 @@ where
         partial_block: &mut PartialFuelBlock,
         mut scheduler_res: SchedulerExecutionResult,
         memory: &mut MemoryInstance,
-        view: &mut View,
+        view: View,
     ) -> Result<(ExecutionData, StorageChanges), SchedulerError> {
         let tx_count = u16::try_from(scheduler_res.transactions.len())
             .expect("previously checked; qed");

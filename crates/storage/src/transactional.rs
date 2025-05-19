@@ -243,6 +243,23 @@ impl From<Changes> for StorageChanges {
     }
 }
 
+impl StorageChanges {
+    /// Returns a new instance of the storage changes with the given changes added.
+    pub fn merge_changes(&mut self, changes: Changes) {
+        match self {
+            StorageChanges::Changes(existing_changes) => {
+                let mut changes_list = Vec::with_capacity(2);
+                changes_list.push(core::mem::take(existing_changes));
+                changes_list.push(changes);
+                *self = StorageChanges::ChangesList(changes_list);
+            }
+            StorageChanges::ChangesList(changes_list) => {
+                changes_list.push(changes);
+            }
+        }
+    }
+}
+
 impl TryFrom<StorageChanges> for Changes {
     type Error = crate::Error;
 
