@@ -1,6 +1,7 @@
 use fuel_core_client::client::types::TransactionStatus;
 use fuel_core_types::{
     fuel_tx::{
+        policies::Policies,
         AssetId,
         Bytes32,
         GasCosts,
@@ -9,15 +10,14 @@ use fuel_core_types::{
         Transaction,
         UpgradePurpose,
         UploadSubsection,
-        policies::Policies,
     },
     fuel_vm::UploadedBytecode,
 };
 use fuel_core_upgradable_executor::WASM_BYTECODE;
 use itertools::Itertools;
 use rand::{
-    Rng,
     rngs::StdRng,
+    Rng,
 };
 use test_helpers::{
     builder::{
@@ -569,6 +569,6 @@ async fn state_transition_bytecode_should_be_queryable_by_its_root_and_version()
     );
     match state_transition_bytecode_by_root.bytecode {
         UploadedBytecode::Completed(bytecode) => assert_eq!(bytecode, WASM_BYTECODE),
-        _ => panic!("bytecode uploade incomplete"),
+        _ => panic!("bytecode uploaded incomplete"),
     };
 }

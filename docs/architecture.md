@@ -13,7 +13,7 @@ about unrelated components, and refactors can easily control their blast radius.
 In a system of shared global traits between modules, any updates to an interface will cause breaking changes
 to the mocks and test harnesses for all consuming modules. This is less than ideal when these domain modules
 don't need to use the new changes. However, in a system where each domain controls its ports, adjusting an
-interface will only affect the port owner and the implementor.
+interface will only affect the port owner and the implementer.
 
 The implementation of "Ports" (aka adapters) referring to other domain modules, should reside in the main fuel-core
 crate. This way, domain modules should never need to take a dependency on each other. This helps to avoid circular
