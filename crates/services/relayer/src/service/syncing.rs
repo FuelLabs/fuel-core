@@ -47,7 +47,7 @@ where
     match eth_node.syncing().await {
         Ok(s) => Ok(s),
         Err(err) => Err(anyhow::anyhow!(
-            "Failed to check if DA layer is syncing {}",
+            "Failed to check if DA layer is syncing {:?}",
             err
         )),
     }
