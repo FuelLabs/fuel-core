@@ -1,7 +1,6 @@
 use fuel_core_client::client::types::TransactionStatus;
 use fuel_core_types::{
     fuel_tx::{
-        policies::Policies,
         AssetId,
         Bytes32,
         GasCosts,
@@ -10,14 +9,15 @@ use fuel_core_types::{
         Transaction,
         UpgradePurpose,
         UploadSubsection,
+        policies::Policies,
     },
     fuel_vm::UploadedBytecode,
 };
 use fuel_core_upgradable_executor::WASM_BYTECODE;
 use itertools::Itertools;
 use rand::{
-    rngs::StdRng,
     Rng,
+    rngs::StdRng,
 };
 use test_helpers::{
     builder::{
