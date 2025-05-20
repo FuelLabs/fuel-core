@@ -912,23 +912,25 @@ where
         let mut total_base_asset = 0u64;
 
         for input in self.tx.inputs() {
-            let Some(amount) = input.amount() else {
-                continue;
-            };
-            let Some(asset_id) = input.asset_id(&base_asset_id) else {
-                continue;
-            };
-            let Some(owner) = input.input_owner() else {
-                continue;
-            };
+            if input_is_spendable_as_fee(input) {
+                let Some(amount) = input.amount() else {
+                    continue;
+                };
+                let Some(asset_id) = input.asset_id(&base_asset_id) else {
+                    continue;
+                };
+                let Some(owner) = input.input_owner() else {
+                    continue;
+                };
 
-            if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
-                total_base_asset =
-                    total_base_asset.checked_add(amount).ok_or_else(|| {
-                        anyhow::anyhow!(
+                if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
+                    total_base_asset =
+                        total_base_asset.checked_add(amount).ok_or_else(|| {
+                            anyhow::anyhow!(
                         "The total base asset amount used by the transaction is too big"
                     )
-                    })?;
+                        })?;
+                }
             }
         }
 
@@ -996,6 +998,10 @@ where
 
         Ok(self)
     }
+}
+
+fn input_is_spendable_as_fee(input: &Input) -> bool {
+    !input.is_message_data_signed() && !input.is_message_data_predicate()
 }
 
 fn has_duplicates<T, F, K>(items: &[T], extractor: F) -> bool

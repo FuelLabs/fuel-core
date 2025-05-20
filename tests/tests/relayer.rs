@@ -7,6 +7,10 @@ use ethers::{
     },
 };
 use fuel_core::{
+    coins_query::{
+        CoinsQueryError,
+        CoinsQueryError::InsufficientCoins,
+    },
     combined_database::CombinedDatabase,
     database::Database,
     fuel_core_graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
@@ -489,6 +493,16 @@ async fn handle(
     Ok(Response::new(Body::from(r)))
 }
 
+trait ToStdErrorString {
+    fn to_str_error_string(self) -> String;
+}
+impl ToStdErrorString for CoinsQueryError {
+    fn to_str_error_string(self) -> String {
+        fuel_core_client::client::from_strings_errors_to_std_error(vec![self.to_string()])
+            .to_string()
+    }
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let mut rng = StdRng::seed_from_u64(1234);
@@ -680,7 +694,11 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
         .unwrap_err();
     assert_eq!(
         query.to_string(),
-        "Response errors; the target cannot be met due to no coins available or exceeding the 255 coin limit."
+        InsufficientCoins {
+            asset_id: base_asset_id,
+            collected_amount: 100,
+        }
+        .to_str_error_string()
     );
 
     srv.send_stop_signal_and_await_shutdown().await.unwrap();
