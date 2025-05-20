@@ -649,15 +649,21 @@ where
             SchedulerError::InternalError("No available workers".to_string()),
         )?;
         let runtime = self.runtime.as_ref().unwrap();
+
         let mut required_changes: Changes = Changes::default();
+        let mut new_contracts_used = vec![];
         for contract in batch.contracts_used.iter() {
             if let Some((contract_ids, changes)) =
                 self.contracts_changes.extract_changes(contract)
             {
-                self.current_executing_contracts.extend(contract_ids);
+                self.current_executing_contracts
+                    .extend(contract_ids.clone());
+                new_contracts_used.extend(contract_ids);
                 required_changes.extend(changes);
             }
         }
+        batch.contracts_used.extend(new_contracts_used);
+
         let executor = self.executor.clone();
         let coinbase_recipient = components.coinbase_recipient;
         let gas_price = components.gas_price;
@@ -1169,8 +1175,6 @@ impl CoinDependencyChainVerifier {
     }
 }
 
-// TODO: Manage contract created also because they can't be fetched while being
-// created by another transaction
 #[allow(clippy::type_complexity)]
 fn prepare_transactions_batch(
     batch: Vec<CheckedTransaction>,
@@ -1198,6 +1202,16 @@ fn prepare_transactions_batch(
                 _ => {}
             }
         }
+
+        for output in tx.outputs().iter() {
+            match output {
+                Output::ContractCreated { contract_id, .. } => {
+                    prepared_batch.contracts_used.push(*contract_id);
+                }
+                _ => {}
+            }
+        }
+
         let is_blob = matches!(&tx, CheckedTransaction::Blob(_));
         prepared_batch.total_size += tx.size() as u32;
         prepared_batch.number_of_transactions += 1;
