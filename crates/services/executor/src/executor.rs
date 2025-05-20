@@ -705,6 +705,32 @@ where
         Ok((partial_block, data))
     }
 
+    pub async fn execute_l2_transactions<TxSource, D>(
+        mut self,
+        transactions: Components<TxSource>,
+        mut block_storage_tx: BlockStorageTransaction<D>,
+        execution_data: &mut ExecutionData,
+    ) -> ExecutorResult<PartialFuelBlock>
+    where
+        TxSource: TransactionsSource,
+        D: KeyValueInspect<Column = Column>,
+    {
+        let mut partial_block =
+            PartialFuelBlock::new(transactions.header_to_produce, vec![]);
+        let mut memory = MemoryInstance::new();
+
+        self.process_l2_txs(
+            &mut partial_block,
+            &transactions,
+            &mut block_storage_tx,
+            execution_data,
+            &mut memory,
+        )
+        .await?;
+
+        Ok(partial_block)
+    }
+
     /// Process transactions coming from the underlying L1
     pub fn process_l1_txs<T>(
         &mut self,

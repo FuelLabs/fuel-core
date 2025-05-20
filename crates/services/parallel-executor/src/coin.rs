@@ -6,6 +6,7 @@ use fuel_core_types::{
     fuel_tx::{
         Address,
         AssetId,
+        TxId,
         UtxoId,
         Word,
         input::coin::{
@@ -21,6 +22,8 @@ pub(crate) struct CoinInBatch {
     pub utxo_id: UtxoId,
     /// The index of the transaction using this coin in the batch
     pub idx: usize,
+    /// The TxId that use this coin (useful to remove them from the batch in case of skipped tx)
+    pub tx_id: TxId,
     /// the owner of the coin
     pub owner: Address,
     /// the amount stored in the coin
@@ -60,7 +63,11 @@ impl CoinInBatch {
         &self.asset_id
     }
 
-    pub(crate) fn from_signed_coin(signed_coin: &CoinSigned, idx: usize) -> Self {
+    pub(crate) fn from_signed_coin(
+        signed_coin: &CoinSigned,
+        idx: usize,
+        tx_id: TxId,
+    ) -> Self {
         let CoinSigned {
             utxo_id,
             owner,
@@ -72,6 +79,7 @@ impl CoinInBatch {
         CoinInBatch {
             utxo_id: *utxo_id,
             idx,
+            tx_id,
             owner: *owner,
             amount: *amount,
             asset_id: *asset_id,
@@ -81,6 +89,7 @@ impl CoinInBatch {
     pub(crate) fn from_predicate_coin(
         predicate_coin: &CoinPredicate,
         idx: usize,
+        tx_id: TxId,
     ) -> Self {
         let CoinPredicate {
             utxo_id,
@@ -93,6 +102,7 @@ impl CoinInBatch {
         CoinInBatch {
             utxo_id: *utxo_id,
             idx,
+            tx_id,
             owner: *owner,
             amount: *amount,
             asset_id: *asset_id,

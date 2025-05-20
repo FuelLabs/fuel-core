@@ -128,10 +128,6 @@ impl ContractsChanges {
         self.changes_storage.insert(id, changes);
     }
 
-    // Problem: we need to keep the changes in the storage for the other contracts
-    // and so this requires a clone instead of a remove
-    // (I think this is why we spoke about using references)
-    // Solution: Filter the tx source to not give transaction with all the contracts specified on this change batch.
     pub fn extract_changes(&mut self, contract_id: &ContractId) -> Option<Changes> {
         self.contracts_changes
             .remove(contract_id)
@@ -301,7 +297,8 @@ impl SchedulerExecutionResult {
             .extend(blob_execution_data.skipped_transactions);
         self.transactions_status
             .extend(blob_execution_data.tx_status);
-        self.changes.merge_changes(blob_execution_data.changes);
+        // Should contains all the changes from all executions
+        self.changes = StorageChanges::Changes(blob_execution_data.changes);
         self.used_gas = self.used_gas.saturating_add(blob_execution_data.used_gas);
         self.used_size = self.used_size.saturating_add(blob_execution_data.used_size);
         self.coinbase = self.coinbase.saturating_add(blob_execution_data.coinbase);
@@ -540,11 +537,27 @@ where
             l1_execution_data,
         )?;
 
-        let (blob_execution_data, blob_txs) = self
-            .execute_blob_transactions(components, consensus_parameters_version)
-            .await?;
-
-        res.add_blob_execution_data(blob_execution_data, blob_txs);
+        if self.blob_transactions.is_empty() {
+            let mut merged: Changes = Changes::default();
+            for changes in res.changes.extract_list_of_changes() {
+                merged.extend(changes);
+            }
+            let storage_with_res = self
+                .storage
+                .latest_view()
+                .map_err(SchedulerError::StorageError)?
+                .into_transaction()
+                .with_changes(merged);
+            let (blob_execution_data, blob_txs) = self
+                .execute_blob_transactions(
+                    components,
+                    storage_with_res,
+                    nb_transactions,
+                    consensus_parameters_version,
+                )
+                .await?;
+            res.add_blob_execution_data(blob_execution_data, blob_txs);
+        }
 
         self.reset();
         Ok(res)
@@ -620,9 +633,9 @@ where
         &mut self,
         consensus_parameters_version: u32,
         components: &Components<TxSource>,
-        batch: PreparedBatch,
+        mut batch: PreparedBatch,
         batch_id: usize,
-        _start_idx_txs: u16,
+        start_idx_txs: u16,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
         let worker_id = self.current_available_workers.pop_front().ok_or(
@@ -643,14 +656,14 @@ where
         self.current_execution_tasks.push(runtime.spawn({
             let storage_with_da = storage_with_da.clone();
             async move {
+                let mut execution_data = ExecutionData::default();
+                execution_data.tx_count = start_idx_txs;
                 let storage_tx = storage_with_da
                     .into_transaction()
                     .with_changes(required_changes);
-                // TODO: Update tx pointers on batch.transactions
-                // Solution : We function in executor to give the tx_count
                 // TODO: Error management
-                let (block, execution_data) = executor
-                    .execute(
+                let block = executor
+                    .execute_l2_transactions(
                         Components {
                             header_to_produce,
                             transactions_source: OnceTransactionsSource::new(
@@ -661,6 +674,7 @@ where
                             gas_price,
                         },
                         storage_tx,
+                        &mut execution_data,
                     )
                     .await
                     .unwrap();
@@ -673,8 +687,18 @@ where
                             .map(|tx_status| tx_status.id),
                     ),
                 );
-                // TODO: Remove coins used by this transactions from `coins_used`
-                if !execution_data.skipped_transactions.is_empty() {}
+                if !execution_data.skipped_transactions.is_empty() {
+                    for (tx_id, error) in execution_data.skipped_transactions.iter() {
+                        batch.coins_used.retain(|coin| {
+                            if coin.tx_id == *tx_id {
+                                tracing::warn!("Transaction {tx_id} skipped: {error}");
+                                false
+                            } else {
+                                true
+                            }
+                        });
+                    }
+                }
                 WorkSessionExecutionResult {
                     worker_id,
                     batch_id,
@@ -887,19 +911,16 @@ where
     async fn execute_blob_transactions<TxSource>(
         &mut self,
         components: &Components<TxSource>,
+        storage: StorageTransaction<View>,
+        start_idx_txs: u16,
         consensus_parameters_version: u32,
     ) -> Result<(ExecutionData, Vec<Transaction>), SchedulerError> {
-        // TODO: Need to have the storage from before
-        let mut latest_view = self
-            .storage
-            .latest_view()
-            .map_err(SchedulerError::StorageError)?;
-        let block_storage_tx = latest_view.write_transaction();
-        // TODO: Modify the transactions tx pointers https://github.com/FuelLabs/fuel-core/blob/7fccb06d6a5c971fc3f649ed1e509e13e57eb9ca/crates/services/parallel-executor/src/executor.rs#L833
-        let (block, execution_data) = self
+        let mut execution_data = ExecutionData::default();
+        execution_data.tx_count = start_idx_txs;
+        let block = self
             .executor
             .clone()
-            .execute(
+            .execute_l2_transactions(
                 Components {
                     header_to_produce: components.header_to_produce,
                     transactions_source: OnceTransactionsSource::new(
@@ -909,7 +930,8 @@ where
                     coinbase_recipient: components.coinbase_recipient,
                     gas_price: components.gas_price,
                 },
-                block_storage_tx,
+                storage,
+                &mut execution_data,
             )
             .await
             .map_err(SchedulerError::ExecutionError)?;
@@ -1147,6 +1169,7 @@ fn prepare_transactions_batch(
     let mut prepared_batch = PreparedBatch::default();
 
     for (idx, tx) in batch.into_iter().enumerate() {
+        let tx_id = tx.id();
         let inputs = tx.inputs();
         for input in inputs.iter() {
             match input {
@@ -1156,12 +1179,12 @@ fn prepare_transactions_batch(
                 fuel_core_types::fuel_tx::Input::CoinSigned(coin) => {
                     prepared_batch
                         .coins_used
-                        .push(CoinInBatch::from_signed_coin(coin, idx));
+                        .push(CoinInBatch::from_signed_coin(coin, idx, tx_id));
                 }
                 fuel_core_types::fuel_tx::Input::CoinPredicate(coin) => {
                     prepared_batch
                         .coins_used
-                        .push(CoinInBatch::from_predicate_coin(coin, idx));
+                        .push(CoinInBatch::from_predicate_coin(coin, idx, tx_id));
                 }
                 _ => {}
             }
@@ -1195,6 +1218,7 @@ fn get_coins_outputs<'a>(
                     coins.push(CoinInBatch {
                         utxo_id: UtxoId::new(tx_id, idx as u16),
                         idx,
+                        tx_id,
                         owner: *to,
                         amount: *amount,
                         asset_id: *asset_id,
@@ -1208,6 +1232,7 @@ fn get_coins_outputs<'a>(
                     coins.push(CoinInBatch {
                         utxo_id: UtxoId::new(tx_id, idx as u16),
                         idx,
+                        tx_id,
                         owner: *to,
                         amount: *amount,
                         asset_id: *asset_id,
@@ -1221,6 +1246,7 @@ fn get_coins_outputs<'a>(
                     coins.push(CoinInBatch {
                         utxo_id: UtxoId::new(tx_id, idx as u16),
                         idx,
+                        tx_id,
                         owner: *to,
                         amount: *amount,
                         asset_id: *asset_id,
