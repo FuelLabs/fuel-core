@@ -110,7 +110,7 @@ where
         let mut tree: MerkleTree<Nodes, _> = MerkleTree::load(storage, &root)
             .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
-        tree.update(MerkleTreeKey::new(key_bytes), value_bytes)
+        tree.insert(MerkleTreeKey::new(key_bytes), value_bytes)
             .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
 
         // Generate new metadata for the updated tree
@@ -322,7 +322,7 @@ where
                 "The {} is already initialized",
                 M::column().name()
             )
-            .into())
+            .into());
         }
 
         let encoded_set = set
@@ -398,7 +398,7 @@ where
             .collect_vec();
 
         for (key_bytes, value_bytes) in encoded_set.iter() {
-            tree.update(MerkleTreeKey::new(key_bytes), value_bytes)
+            tree.insert(MerkleTreeKey::new(key_bytes), value_bytes)
                 .map_err(|err| StorageError::Other(anyhow::anyhow!("{err:?}")))?;
         }
         let root = tree.root();

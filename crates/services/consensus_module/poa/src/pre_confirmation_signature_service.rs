@@ -239,16 +239,20 @@ where
             res = self.tx_receiver.receive() => {
                 tracing::debug!("Received transactions");
                 let preconfirmations = try_or_stop!(res);
-                let expiration = self.current_delegate_key.expiration();
-                let pre_confirmations = Preconfirmations {
-                    expiration,
-                    preconfirmations,
-                };
-                let signature = try_or_stop!(self.current_delegate_key.sign(&pre_confirmations));
-                try_or_continue!(
-                    self.broadcast.broadcast_preconfirmations(pre_confirmations, signature).await,
-                    |err| tracing::error!("Failed to broadcast pre-confirmations: {:?}", err)
-                );
+                if preconfirmations.is_empty() {
+                    tracing::debug!("No pre-confirmations received");
+                } else {
+                    let expiration = self.current_delegate_key.expiration();
+                    let pre_confirmations = Preconfirmations {
+                        expiration,
+                        preconfirmations,
+                    };
+                    let signature = try_or_stop!(self.current_delegate_key.sign(&pre_confirmations));
+                    try_or_continue!(
+                        self.broadcast.broadcast_preconfirmations(pre_confirmations, signature).await,
+                        |err| tracing::error!("Failed to broadcast pre-confirmations: {:?}", err)
+                    );
+                }
                 TaskNextAction::Continue
             }
             res = self.key_rotation_trigger.next_rotation() => {

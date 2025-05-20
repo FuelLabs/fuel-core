@@ -777,7 +777,7 @@ where
             .into_iter()
             .take(remaining_tx_count as usize)
             .peekable();
-        let mut status = vec![];
+        let mut statuses = vec![];
         while regular_tx_iter.peek().is_some() {
             for transaction in regular_tx_iter {
                 let tx_id = transaction.id(&self.consensus_params.chain_id());
@@ -818,10 +818,10 @@ where
                                 *block.header.height(),
                                 data.tx_count,
                             );
-                        status.push(preconfirmation_status);
+                        statuses.push(preconfirmation_status);
                     }
                     Err(err) => {
-                        status.push(Preconfirmation {
+                        statuses.push(Preconfirmation {
                             tx_id,
                             status: PreconfirmationStatus::SqueezedOut {
                                 reason: err.to_string(),
@@ -830,7 +830,7 @@ where
                         data.skipped_transactions.push((tx_id, err));
                     }
                 }
-                status = self.preconfirmation_sender.try_send(status);
+                statuses = self.preconfirmation_sender.try_send(statuses);
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
                     block_transaction_size_limit.saturating_sub(data.used_size);
@@ -847,8 +847,8 @@ where
                 .take(remaining_tx_count as usize)
                 .peekable();
         }
-        if !status.is_empty() {
-            self.preconfirmation_sender.send(status).await;
+        if !statuses.is_empty() {
+            self.preconfirmation_sender.send(statuses).await;
         }
 
         Ok(())

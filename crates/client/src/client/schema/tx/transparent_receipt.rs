@@ -3,10 +3,13 @@ use crate::client::schema::{
     AssetId,
     Bytes32,
     ContractId,
-    ConversionError,
-    ConversionError::MissingField,
+    ConversionError::{
+        self,
+        MissingField,
+    },
     HexString,
     Nonce,
+    SubId,
     U64,
     schema,
 };
@@ -45,7 +48,7 @@ pub struct Receipt {
     pub recipient: Option<Address>,
     pub nonce: Option<Nonce>,
     pub contract_id: Option<ContractId>,
-    pub sub_id: Option<Bytes32>,
+    pub sub_id: Option<SubId>,
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug)]
