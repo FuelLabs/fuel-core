@@ -1,3 +1,7 @@
+use std::collections::HashSet;
+
+use fuel_core_types::fuel_tx::ContractId;
+
 use crate::storage::{
     RemovedTransactions,
     StorageData,
@@ -15,6 +19,8 @@ pub struct Constraints {
     pub maximum_txs: u16,
     /// Maximum size of the block.
     pub maximum_block_size: u32,
+    /// List of excluded contracts.
+    pub excluded_contracts: HashSet<ContractId>,
 }
 
 /// The selection algorithm is responsible for selecting the best transactions to include in a block.
