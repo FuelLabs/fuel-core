@@ -236,10 +236,9 @@ mod coin {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
                 collected_amount: 0,
-                max: MAX_INPUTS
             }
             .to_str_error_string()
         );
@@ -266,10 +265,9 @@ mod coin {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
                 collected_amount: 300,
-                max: MAX_INPUTS
             }
             .to_str_error_string()
         );
@@ -293,10 +291,9 @@ mod coin {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
-                collected_amount: 0,
-                max: MAX
+                collected_amount: 250,
             }
             .to_str_error_string()
         );
@@ -430,7 +427,7 @@ mod message_coin {
     }
 
     async fn exclude_all(owner: Address) {
-        let (base_asset_id, context, max_inputs) = setup(owner).await;
+        let (base_asset_id, context, _max_inputs) = setup(owner).await;
 
         // query for 300 base assets
         let coins_per_asset = context
@@ -461,17 +458,16 @@ mod message_coin {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: base_asset_id,
                 collected_amount: 0,
-                max: max_inputs
             }
             .to_str_error_string()
         );
     }
 
     async fn query_more_than_we_have(owner: Address) {
-        let (base_asset_id, context, max_inputs) = setup(owner).await;
+        let (base_asset_id, context, _max_inputs) = setup(owner).await;
 
         // max coins reached
         let coins_per_asset = context
@@ -481,10 +477,9 @@ mod message_coin {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: base_asset_id,
                 collected_amount: 300,
-                max: max_inputs
             }
             .to_str_error_string()
         );
@@ -503,10 +498,9 @@ mod message_coin {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: base_asset_id,
-                collected_amount: 0,
-                max: MAX
+                collected_amount: 250,
             }
             .to_str_error_string()
         );
@@ -629,7 +623,7 @@ mod all_coins {
     }
 
     async fn exclude_all(owner: Address, asset_id_b: AssetId) {
-        let (asset_id_a, context, max_inputs) = setup(owner, asset_id_b).await;
+        let (asset_id_a, context, _max_inputs) = setup(owner, asset_id_b).await;
 
         // query for 300 base assets
         let coins_per_asset = context
@@ -679,17 +673,16 @@ mod all_coins {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
                 collected_amount: 0,
-                max: max_inputs
             }
             .to_str_error_string()
         );
     }
 
     async fn query_more_than_we_have(owner: Address, asset_id_b: AssetId) {
-        let (asset_id_a, context, max_inputs) = setup(owner, asset_id_b).await;
+        let (asset_id_a, context, _max_inputs) = setup(owner, asset_id_b).await;
 
         // max coins reached
         let coins_per_asset = context
@@ -703,10 +696,9 @@ mod all_coins {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
                 collected_amount: 300,
-                max: max_inputs
             }
             .to_str_error_string()
         );
@@ -729,10 +721,9 @@ mod all_coins {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoinsForTheMax {
+            CoinsQueryError::InsufficientCoins {
                 asset_id: asset_id_a,
-                collected_amount: 0,
-                max: MAX
+                collected_amount: 250,
             }
             .to_str_error_string()
         );
