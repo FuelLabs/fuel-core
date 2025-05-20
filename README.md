@@ -11,9 +11,9 @@ Fuel client implementation.
 
 | Network  | Version |
 |----------|---------|
-| Fuel Ignition | 0.41.9 |
-| Testnet | 0.41.10 |
-| Devnet | 0.43.1 |
+| Fuel Ignition | 0.43.2 |
+| Testnet | 0.43.2 |
+| Devnet | 0.43.2 |
 
 ## Contributing
 
@@ -80,7 +80,7 @@ git checkout v0.42.0
 
 Build your node binary:
 ```bash
-cargo build --release --bin fuel-core --no-default-features --features production
+make build
 ```
 
 To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignition/mainnet-node/
@@ -94,7 +94,7 @@ git clone https://github.com/FuelLabs/fuel-core.git
 
 Build your node binary:
 ```bash
-cargo build --release --bin fuel-core --no-default-features --features production
+make build
 ```
 
 To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignition/local-node/
@@ -103,7 +103,7 @@ To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignit
 
 ### Compiling
 
-We recommend using `xtask` to build fuel-core:
+We recommend using `xtask` to build fuel-core for development:
 
 ```sh
 cargo xtask build

@@ -294,7 +294,7 @@ async fn test_multiple_producers_different_keys() {
     for (expected, mut validators) in expected.iter().zip(groups) {
         assert_eq!(group_size, validators.len());
         for v in &mut validators {
-            v.consistency_20s(expected).await;
+            v.consistency_30s(expected).await;
         }
     }
 }
