@@ -42,7 +42,6 @@ use fuel_core_types::{
         Chargeable,
         ConsensusParameters,
         Contract,
-        ContractId,
         Input,
         Output,
         PanicReason,
@@ -1424,8 +1423,10 @@ fn extract__tx_with_excluded_contract() {
     universe.build_pool();
 
     // Given
-    let excluded_contract = ContractId::new([1; 32]);
-    let authorized_contract = ContractId::new([2; 32]);
+    let (create_tx_1, excluded_contract) =
+        universe.build_create_contract_transaction(vec![1, 2, 3]);
+    let (create_tx_2, authorized_contract) =
+        universe.build_create_contract_transaction(vec![4, 5, 6]);
     let tx1 = universe.build_script_transaction(
         Some(vec![Input::contract(
             Default::default(),
@@ -1461,6 +1462,8 @@ fn extract__tx_with_excluded_contract() {
 
     let tx2_id = tx2.id(&ChainId::default());
 
+    universe.verify_and_insert(create_tx_1).unwrap();
+    universe.verify_and_insert(create_tx_2).unwrap();
     let tx1 = universe.verify_and_insert(tx1).unwrap();
     universe.verify_and_insert(tx2).unwrap();
 
@@ -1477,7 +1480,7 @@ fn extract__tx_with_excluded_contract() {
         });
 
     // Then
-    assert_eq!(txs.len(), 1, "Should have 1 txs");
-    assert_eq!(txs[0].id(), tx2_id, "First should be tx2");
+    assert_eq!(txs.len(), 3, "Should have 1 txs");
+    assert_eq!(txs[2].id(), tx2_id, "First should be tx2");
     universe.assert_pool_integrity(&[tx1]);
 }
