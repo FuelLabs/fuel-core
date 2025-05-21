@@ -82,7 +82,10 @@ use rlimit::{
 use std::{
     env,
     net,
-    num::NonZeroU64,
+    num::{
+        NonZeroU32,
+        NonZeroU64,
+    },
     path::PathBuf,
     str::FromStr,
     time::Duration,
@@ -238,6 +241,10 @@ pub struct Command {
     #[arg(long = "da-compression", env)]
     pub da_compression: Option<humantime::Duration>,
 
+    /// The starting height of the compression service.
+    #[arg(long = "da-compression-starting-height", env)]
+    pub da_compression_starting_height: Option<NonZeroU32>,
+
     /// A new block is produced instantly when transactions are available.
     #[clap(flatten)]
     pub poa_trigger: PoATriggerArgs,
@@ -341,6 +348,7 @@ impl Command {
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
             da_compression,
+            da_compression_starting_height,
             poa_trigger,
             predefined_blocks_path,
             coinbase_recipient,
@@ -556,6 +564,7 @@ impl Command {
             Some(retention_duration) => DaCompressionMode::Enabled(
                 fuel_core::service::config::DaCompressionConfig {
                     retention_duration: retention_duration.into(),
+                    starting_height: da_compression_starting_height,
                     metrics: metrics.is_enabled(Module::Compression),
                 },
             ),

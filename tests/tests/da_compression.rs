@@ -38,6 +38,7 @@ use fuel_core_types::{
         Input,
         UniqueIdentifier,
     },
+    fuel_types::BlockHeight,
     secrecy::Secret,
     signer::SignMode,
 };
@@ -52,6 +53,7 @@ use test_helpers::{
         SigningAccount,
     },
     config_with_fee,
+    fuel_core_driver::FuelCoreDriver,
 };
 
 #[tokio::test]
@@ -63,6 +65,7 @@ async fn can_fetch_da_compressed_block_from_graphql() {
     config.consensus_signer = SignMode::Key(Secret::new(poa_secret.into()));
     let compression_config = DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
+        starting_height: None,
         metrics: false,
     };
     config.da_compression = DaCompressionMode::Enabled(compression_config.clone());
@@ -92,7 +95,9 @@ async fn can_fetch_da_compressed_block_from_graphql() {
             panic!("unexpected result {other:?}")
         }
     };
-    srv.await_compression_synced().await.unwrap();
+    srv.await_compression_synced_until(&block_height)
+        .await
+        .unwrap();
 
     let block = client
         .da_compressed_block(block_height)
@@ -153,6 +158,7 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     let mut config = Config::local_node();
     config.da_compression = DaCompressionMode::Enabled(DaCompressionConfig {
         retention_duration: Duration::from_secs(3600),
+        starting_height: None,
         metrics: false,
     });
 
@@ -178,7 +184,11 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
     // Insert some txs
     let expected = producer.insert_txs().await;
     validator.consistency_20s(&expected).await;
-    validator.node.await_compression_synced().await.unwrap();
+    validator
+        .node
+        .await_compression_synced_until(&1u32.into())
+        .await
+        .unwrap();
 
     let block_height = 1u32.into();
 
@@ -188,4 +198,133 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
         .unwrap()
         .expect("Compressed block not available from validator");
     let _: VersionedCompressedBlock = postcard::from_bytes(&compressed_block).unwrap();
+}
+
+#[tokio::test]
+async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_database() {
+    // given: the node starts without compression enabled, and produces blocks
+    let args = vec!["--state-rewind-duration", "7d", "--debug"];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+
+    let blocks_to_produce = 10;
+    let current_height = driver
+        .client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, blocks_to_produce.into());
+
+    let db = driver.kill().await;
+
+    // when: the node is restarted with compression enabled, and blocks are produced
+    let args = vec!["--da-compression", "7d", "--debug"];
+    let driver = FuelCoreDriver::spawn_with_directory(db, &args)
+        .await
+        .unwrap();
+
+    let current_height = driver
+        .client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, BlockHeight::from(blocks_to_produce * 2));
+
+    driver
+        .node
+        .await_compression_synced_until(&current_height)
+        .await
+        .unwrap();
+
+    // then: the da compressed blocks from genesis to height blocks_to_produce exist
+    for height in 0..=blocks_to_produce {
+        let compressed_block = driver
+            .client
+            .da_compressed_block(height.into())
+            .await
+            .unwrap();
+        assert!(
+            compressed_block.is_some(),
+            "DA compressed block at height {} is missing",
+            height
+        );
+    }
+
+    // teardown
+    driver.kill().await;
+}
+
+#[tokio::test]
+async fn da_compression__starts_and_compresses_blocks_correctly_with_overridden_height() {
+    // given: the node starts without compression enabled, and produces blocks
+    let args = vec!["--state-rewind-duration", "7d", "--debug"];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+
+    let blocks_to_produce = 10;
+
+    let current_height = driver
+        .client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, blocks_to_produce.into());
+
+    let db = driver.kill().await;
+
+    // when: the node is restarted with compression enabled, starting height overridden, blocks are produced
+    let override_starting_height = 10;
+    let override_starting_height_str = format!("{}", override_starting_height);
+    let args = vec![
+        "--da-compression",
+        "7d",
+        "--da-compression-starting-height",
+        &override_starting_height_str,
+        "--debug",
+    ];
+    let driver = FuelCoreDriver::spawn_with_directory(db, &args)
+        .await
+        .unwrap();
+
+    let current_height = driver
+        .client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, BlockHeight::from(blocks_to_produce * 2));
+
+    driver
+        .node
+        .await_compression_synced_until(&current_height)
+        .await
+        .unwrap();
+
+    // then: the da compressed blocks from height 0 to height override_starting_height don't exist
+    // and the da compressed blocks from height override_starting_height to height blocks_to_produce * 2 exist
+    for height in 0..override_starting_height {
+        let compressed_block = driver
+            .client
+            .da_compressed_block(height.into())
+            .await
+            .unwrap();
+        assert!(
+            compressed_block.is_none(),
+            "DA compressed block at height {} is present",
+            height
+        );
+    }
+
+    for height in override_starting_height..=blocks_to_produce * 2 {
+        let compressed_block = driver
+            .client
+            .da_compressed_block(height.into())
+            .await
+            .unwrap();
+        assert!(
+            compressed_block.is_some(),
+            "DA compressed block at height {} is missing",
+            height
+        );
+    }
+
+    // teardown
+    driver.kill().await;
 }

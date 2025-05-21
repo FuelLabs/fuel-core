@@ -260,6 +260,26 @@ impl TestPoolUniverse {
         tx_builder.finalize().into()
     }
 
+    pub fn build_create_contract_transaction(
+        &mut self,
+        code: Vec<u8>,
+    ) -> (Transaction, ContractId) {
+        let (_, gas_coin) = self.setup_coin();
+        let contract: Contract = code.clone().into();
+        let id = contract.id(&Default::default(), &contract.root(), &Default::default());
+        let mut tx_builder = TransactionBuilder::create(
+            code.into(),
+            Default::default(),
+            Default::default(),
+        );
+        tx_builder.add_input(gas_coin);
+        tx_builder.add_output(Output::ContractCreated {
+            contract_id: id,
+            state_root: Default::default(),
+        });
+        (tx_builder.finalize().into(), id)
+    }
+
     pub fn build_mint_transaction(&mut self) -> Transaction {
         let tx_builder = TransactionBuilder::mint(
             0u32.into(),
