@@ -728,6 +728,7 @@ where
         )
         .await?;
 
+        execution_data.changes = block_storage_tx.into_changes();
         Ok(partial_block)
     }
 

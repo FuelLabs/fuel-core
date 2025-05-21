@@ -653,6 +653,7 @@ where
         let mut required_changes: Changes = Changes::default();
         let mut new_contracts_used = vec![];
         for contract in batch.contracts_used.iter() {
+            self.current_executing_contracts.insert(*contract);
             if let Some((contract_ids, changes)) =
                 self.contracts_changes.extract_changes(contract)
             {

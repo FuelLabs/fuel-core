@@ -500,6 +500,7 @@ async fn execute__gas_left_updated_when_state_merges() {
                     excluded_contract_ids: vec![contract_id_2].into_iter().collect(),
                 })
                 .respond_with(&[], TransactionFiltered::Filtered);
+
             // Request for thread 1 or 2 again
             Consumer::receive(&tx_pool_requests_receiver)
                 .assert_filter(&empty_filter())
@@ -507,6 +508,7 @@ async fn execute__gas_left_updated_when_state_merges() {
                     ConsensusParameters::default().block_gas_limit() - max_gas,
                 )
                 .respond_with(&[&tx_both_contracts], TransactionFiltered::NotFiltered);
+
             // Request for thread 1 or 2 again
             Consumer::receive(&tx_pool_requests_receiver)
                 .respond_with(&[], TransactionFiltered::NotFiltered);
