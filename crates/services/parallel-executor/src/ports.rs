@@ -2,11 +2,14 @@ use std::collections::HashSet;
 
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
     entities::coins::coin::CompressedCoin,
     fuel_tx::{
+        ConsensusParameters,
         ContractId,
         UtxoId,
     },
+    fuel_types::BlockHeight,
     fuel_vm::checked_transaction::CheckedTransaction,
 };
 
@@ -41,4 +44,16 @@ pub trait TransactionsSource {
 pub trait Storage {
     /// Get a coin by a UTXO
     fn get_coin(&self, utxo: &UtxoId) -> StorageResult<Option<CompressedCoin>>;
+
+    /// Get the DA block height based on provided height
+    fn get_da_height_by_l2_height(
+        &self,
+        block_height: &BlockHeight,
+    ) -> StorageResult<Option<DaBlockHeight>>;
+
+    /// Get consensus parameters based on a version
+    fn get_consensus_parameters(
+        &self,
+        consensus_parameters_version: u32,
+    ) -> StorageResult<ConsensusParameters>;
 }

@@ -298,19 +298,19 @@ pub fn convert_tx_execution_result_to_preconfirmation(
 }
 
 /// Data that is generated after executing all transactions.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ExecutionData {
-    coinbase: u64,
-    used_gas: u64,
-    used_size: u32,
-    tx_count: u16,
-    found_mint: bool,
-    message_ids: Vec<MessageId>,
-    tx_status: Vec<TransactionExecutionStatus>,
-    events: Vec<ExecutorEvent>,
-    changes: Changes,
+    pub coinbase: u64,
+    pub used_gas: u64,
+    pub used_size: u32,
+    pub tx_count: u16,
+    pub found_mint: bool,
+    pub message_ids: Vec<MessageId>,
+    pub tx_status: Vec<TransactionExecutionStatus>,
+    pub events: Vec<ExecutorEvent>,
+    pub changes: Changes,
     pub skipped_transactions: Vec<(TxId, ExecutorError)>,
-    event_inbox_root: Bytes32,
+    pub event_inbox_root: Bytes32,
 }
 
 impl ExecutionData {
@@ -547,7 +547,11 @@ where
     N: NewTxWaiterPort,
     P: PreconfirmationSenderPort,
 {
-    async fn execute<TxSource, D>(
+    pub fn set_consensus_params(&mut self, consensus_params: ConsensusParameters) {
+        self.consensus_params = consensus_params;
+    }
+
+    pub async fn execute<TxSource, D>(
         self,
         components: Components<TxSource>,
         block_storage_tx: BlockStorageTransaction<D>,
@@ -617,7 +621,8 @@ where
         Ok((partial_block, data))
     }
 
-    fn produce_mint_tx<TxSource, T>(
+    /// Produce the mint transaction
+    pub fn produce_mint_tx<TxSource, T>(
         &self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
@@ -700,7 +705,35 @@ where
         Ok((partial_block, data))
     }
 
-    fn process_l1_txs<T>(
+    pub async fn execute_l2_transactions<TxSource, D>(
+        mut self,
+        transactions: Components<TxSource>,
+        mut block_storage_tx: BlockStorageTransaction<D>,
+        execution_data: &mut ExecutionData,
+    ) -> ExecutorResult<PartialFuelBlock>
+    where
+        TxSource: TransactionsSource,
+        D: KeyValueInspect<Column = Column>,
+    {
+        let mut partial_block =
+            PartialFuelBlock::new(transactions.header_to_produce, vec![]);
+        let mut memory = MemoryInstance::new();
+
+        self.process_l2_txs(
+            &mut partial_block,
+            &transactions,
+            &mut block_storage_tx,
+            execution_data,
+            &mut memory,
+        )
+        .await?;
+
+        execution_data.changes = block_storage_tx.into_changes();
+        Ok(partial_block)
+    }
+
+    /// Process transactions coming from the underlying L1
+    pub fn process_l1_txs<T>(
         &mut self,
         block: &mut PartialFuelBlock,
         coinbase_contract_id: ContractId,
