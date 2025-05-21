@@ -1,14 +1,31 @@
 #![allow(non_snake_case)]
 
 use fuel_core_storage::{
+    Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
     column::Column,
+    kv_store::{
+        KeyValueInspect,
+        Value,
+    },
+    not_found,
     structured_storage::test::InMemoryStorage,
-    tables::ConsensusParametersVersions,
-    transactional::WriteTransaction,
+    tables::{
+        Coins,
+        ConsensusParametersVersions,
+    },
+    transactional::{
+        AtomicView,
+        Modifiable,
+        ReadTransaction,
+        StorageChanges,
+        WriteTransaction,
+    },
 };
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
+    entities::coins::coin::Coin,
     fuel_asm::{
         RegId,
         op,
@@ -28,6 +45,10 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::ChainId,
+    fuel_vm::{
+        Salt,
+        checked_transaction::IntoChecked,
+    },
     services::block_producer::Components,
 };
 use rand::SeedableRng;
@@ -35,8 +56,10 @@ use rand::SeedableRng;
 use crate::{
     config::Config,
     executor::Executor,
+    once_transaction_source::OnceTransactionsSource,
     ports::{
         Filter,
+        Storage as StoragePort,
         TransactionFiltered,
     },
     tests::mocks::Consumer,
@@ -47,9 +70,79 @@ use super::mocks::{
     MockTxPool,
 };
 
-fn basic_tx(rng: &mut StdRng) -> Transaction {
+#[derive(Clone, Debug, Default)]
+struct Storage(pub InMemoryStorage<Column>);
+
+impl KeyValueInspect for Storage {
+    type Column = Column;
+
+    fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
+        self.0.get(key, column)
+    }
+}
+
+impl AtomicView for Storage {
+    type LatestView = Storage;
+
+    fn latest_view(&self) -> StorageResult<Self::LatestView> {
+        Ok(self.clone())
+    }
+}
+
+impl StoragePort for Storage {
+    fn get_coin(
+        &self,
+        utxo: &UtxoId,
+    ) -> StorageResult<Option<fuel_core_types::entities::coins::coin::CompressedCoin>>
+    {
+        self.0
+            .read_transaction()
+            .storage_as_ref::<Coins>()
+            .get(utxo)
+            .map(|coin| coin.map(|c| c.into_owned()))
+    }
+
+    fn get_consensus_parameters(
+        &self,
+        consensus_parameters_version: u32,
+    ) -> StorageResult<ConsensusParameters> {
+        self.0
+            .read_transaction()
+            .storage_as_ref::<ConsensusParametersVersions>()
+            .get(&consensus_parameters_version)?
+            .map(|params| params.into_owned())
+            .ok_or(not_found!("Consensus parameters not found"))
+    }
+
+    fn get_da_height_by_l2_height(
+        &self,
+        _: &fuel_core_types::fuel_types::BlockHeight,
+    ) -> StorageResult<Option<fuel_core_types::blockchain::primitives::DaBlockHeight>>
+    {
+        Ok(None)
+    }
+}
+
+impl Storage {
+    fn merge_changes(&mut self, changes: StorageChanges) -> StorageResult<()> {
+        match changes {
+            StorageChanges::Changes(changes) => {
+                self.0.commit_changes(changes)?;
+            }
+            StorageChanges::ChangesList(list) => {
+                for change in list {
+                    self.0.commit_changes(change)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn basic_tx(rng: &mut StdRng, database: &mut Storage) -> Transaction {
+    let input = given_stored_coin_predicate(rng, 1000, database);
     TransactionBuilder::script(vec![], vec![])
-        .add_input(given_coin_predicate(rng, 1000))
+        .add_input(input)
         .finalize_as_transaction()
 }
 
@@ -59,11 +152,31 @@ fn empty_filter() -> Filter {
     }
 }
 
-fn given_coin_predicate(rng: &mut StdRng, amount: u64) -> Input {
+fn given_stored_coin_predicate(
+    rng: &mut StdRng,
+    amount: u64,
+    database: &mut Storage,
+) -> Input {
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
+    let utxo_id: UtxoId = rng.r#gen();
+    let mut tx = database.0.write_transaction();
+    tx.storage_as_mut::<Coins>()
+        .insert(
+            &utxo_id,
+            &(Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id: Default::default(),
+                tx_pointer: Default::default(),
+            }
+            .compress()),
+        )
+        .unwrap();
+    tx.commit().unwrap();
     Input::coin_predicate(
-        rng.r#gen(),
+        utxo_id,
         owner,
         amount,
         Default::default(),
@@ -74,12 +187,12 @@ fn given_coin_predicate(rng: &mut StdRng, amount: u64) -> Input {
     )
 }
 
-fn _add_consensus_parameters(
-    mut database: InMemoryStorage<Column>,
+fn add_consensus_parameters(
+    mut database: Storage,
     consensus_parameters: &ConsensusParameters,
-) -> InMemoryStorage<Column> {
+) -> Storage {
     // Set the consensus parameters for the executor.
-    let mut tx = database.write_transaction();
+    let mut tx = database.0.write_transaction();
     tx.storage_as_mut::<ConsensusParametersVersions>()
         .insert(&0, consensus_parameters)
         .unwrap();
@@ -87,37 +200,84 @@ fn _add_consensus_parameters(
     database
 }
 
-#[test]
-#[ignore]
-fn execute__simple_independent_transactions_sorted() {
-    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
-        InMemoryStorage::default(),
+async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChanges) {
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    let tx_creation = TransactionBuilder::create(
+        Default::default(),
+        Salt::new(rng.r#gen()),
+        Default::default(),
+    )
+    .add_input(given_stored_coin_predicate(rng, 1000, &mut storage))
+    .add_contract_created()
+    .finalize_as_transaction();
+    let contract_id = tx_creation
+        .outputs()
+        .first()
+        .expect("Expected contract id")
+        .contract_id()
+        .cloned()
+        .expect("Expected contract id");
+    let executor: Executor<Storage, MockRelayer> = Executor::new(
+        storage,
         MockRelayer,
         Config {
+            executor_config: Default::default(),
             number_of_cores: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
-            executor_config: Default::default(),
         },
     );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
-
-    // Given
-    let tx1: Transaction = basic_tx(&mut rng);
-    let tx2: Transaction = basic_tx(&mut rng);
-    let tx3: Transaction = basic_tx(&mut rng);
-    let tx4: Transaction = basic_tx(&mut rng);
-
-    // When
-    let result = executor
+    let res = executor
         .produce_without_commit_with_source(Components {
             header_to_produce: Default::default(),
-            transactions_source,
+            transactions_source: OnceTransactionsSource::new(
+                vec![
+                    tx_creation
+                        .into_checked_basic(0u32.into(), &ConsensusParameters::default())
+                        .unwrap()
+                        .into(),
+                ],
+                0,
+            ),
             coinbase_recipient: Default::default(),
             gas_price: 0,
         })
+        .await
         .unwrap()
-        .into_result();
+        .into_changes();
+    (contract_id, StorageChanges::Changes(res))
+}
+
+#[tokio::test]
+async fn execute__simple_independent_transactions_sorted() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    // Given
+    let tx1: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx2: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx3: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx4: Transaction = basic_tx(&mut rng, &mut storage);
+
+    let executor: Executor<Storage, MockRelayer> = Executor::new(
+        storage,
+        MockRelayer,
+        Config {
+            executor_config: Default::default(),
+            number_of_cores: std::num::NonZeroUsize::new(2)
+                .expect("The value is not zero; qed"),
+        },
+    );
+    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+
+    // When
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
 
     // Then
     std::thread::spawn({
@@ -137,6 +297,8 @@ fn execute__simple_independent_transactions_sorted() {
         }
     });
 
+    let result = future.await.unwrap().into_result();
+
     let expected_ids = [tx2, tx1, tx4, tx3]
         .map(|tx| tx.id(&ChainId::default()))
         .to_vec();
@@ -145,28 +307,23 @@ fn execute__simple_independent_transactions_sorted() {
         .transactions()
         .iter()
         .map(|tx| tx.id(&ChainId::default()))
+        .rev()
+        .skip(1)
+        .rev()
         .collect::<Vec<_>>();
 
     assert_eq!(expected_ids, actual_ids);
 }
 
-#[test]
-#[ignore]
-fn execute__filter_contract_id_currently_executed_and_fetch_after() {
-    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
-        InMemoryStorage::default(),
-        MockRelayer,
-        Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-            executor_config: Default::default(),
-        },
-    );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+#[tokio::test]
+async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let (contract_id, changes) = contract_creation_changes(&mut rng).await;
+    let mut storage = Storage::default();
+    storage.merge_changes(changes).unwrap();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
 
     // Given
-    let contract_id = ContractId::new([1; 32]);
     let script = [op::jmp(RegId::ZERO)];
     let script_bytes: Vec<u8> = script.iter().flat_map(|op| op.to_bytes()).collect();
     let long_tx: Transaction = TransactionBuilder::script(script_bytes.clone(), vec![])
@@ -177,26 +334,34 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             Default::default(),
             contract_id,
         ))
-        .add_input(given_coin_predicate(&mut rng, 1000))
+        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
         .add_output(Output::contract(0, Default::default(), Default::default()))
         .finalize_as_transaction();
     let short_tx: Transaction = TransactionBuilder::script(vec![], vec![])
-        .add_input(given_coin_predicate(&mut rng, 1000))
+        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
         .finalize_as_transaction();
 
+    let executor: Executor<Storage, MockRelayer> = Executor::new(
+        storage,
+        MockRelayer,
+        Config {
+            executor_config: Default::default(),
+            number_of_cores: std::num::NonZeroUsize::new(2)
+                .expect("The value is not zero; qed"),
+        },
+    );
+    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+
     // When
-    let _ = executor
-        .produce_without_commit_with_source(Components {
-            header_to_produce: Default::default(),
-            transactions_source,
-            coinbase_recipient: Default::default(),
-            gas_price: 0,
-        })
-        .unwrap()
-        .into_result();
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
 
     // Then
-    std::thread::spawn({
+    let txpool = std::thread::spawn({
         move || {
             // Request for thread 1
             Consumer::receive(&tx_pool_requests_receiver)
@@ -214,91 +379,104 @@ fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             Consumer::receive(&tx_pool_requests_receiver)
                 .assert_filter(&empty_filter())
                 .respond_with(&[&short_tx], TransactionFiltered::NotFiltered);
+
+            // Request for thread 2 again
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
+
+    let _ = future.await.unwrap().into_result();
+    txpool.join().unwrap();
 }
 
-#[test]
-#[ignore]
-fn execute__gas_left_updated_when_state_merges() {
-    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
-        InMemoryStorage::default(),
-        MockRelayer,
-        Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-            executor_config: Default::default(),
-        },
-    );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+#[tokio::test]
+async fn execute__gas_left_updated_when_state_merges() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let (contract_id_1, changes_1) = contract_creation_changes(&mut rng).await;
+    let (contract_id_2, changes_2) = contract_creation_changes(&mut rng).await;
+    let mut storage = Storage::default();
+    storage.merge_changes(changes_1).unwrap();
+    storage.merge_changes(changes_2).unwrap();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
 
     // Given
-    let contract_id_1 = ContractId::new([1; 32]);
-    let contract_id_2 = ContractId::new([2; 32]);
-    let tx_contract_1: Transaction =
-        TransactionBuilder::script(op::ret(RegId::ONE).to_bytes().to_vec(), vec![])
-            .add_input(Input::contract(
-                rng.r#gen(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                contract_id_1,
-            ))
-            .add_input(given_coin_predicate(&mut rng, 1000))
-            .add_output(Output::contract(0, Default::default(), Default::default()))
-            .finalize_as_transaction();
+    let tx_contract_1: Transaction = TransactionBuilder::script(vec![], vec![])
+        .add_input(Input::contract(
+            rng.r#gen(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            contract_id_1,
+        ))
+        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_output(Output::contract(0, Default::default(), Default::default()))
+        .finalize_as_transaction();
     let max_gas = tx_contract_1
         .max_gas(&ConsensusParameters::default())
         .unwrap();
-    let tx_contract_2: Transaction =
-        TransactionBuilder::script(op::ret(RegId::ONE).to_bytes().to_vec(), vec![])
-            .add_input(Input::contract(
-                rng.r#gen(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                contract_id_2,
-            ))
-            .add_input(given_coin_predicate(&mut rng, 1000))
-            .add_output(Output::contract(0, Default::default(), Default::default()))
-            .finalize_as_transaction();
-    let tx_both_contracts: Transaction =
-        TransactionBuilder::script(op::ret(RegId::ONE).to_bytes().to_vec(), vec![])
-            .add_input(Input::contract(
-                rng.r#gen(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                contract_id_1,
-            ))
-            .add_input(Input::contract(
-                rng.r#gen(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                contract_id_2,
-            ))
-            .add_input(given_coin_predicate(&mut rng, 1000))
-            .add_output(Output::contract(0, Default::default(), Default::default()))
-            .add_output(Output::contract(1, Default::default(), Default::default()))
-            .finalize_as_transaction();
+    let script = [
+        op::movi(0x11, 32),
+        op::aloc(0x11),
+        op::movi(0x10, 0x00),
+        op::cfe(0x10),
+        op::k256(RegId::HP, RegId::ZERO, 0x10),
+    ];
+    let script_bytes: Vec<u8> = script.iter().flat_map(|op| op.to_bytes()).collect();
+    let tx_contract_2: Transaction = TransactionBuilder::script(script_bytes, vec![])
+        .add_input(Input::contract(
+            rng.r#gen(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            contract_id_2,
+        ))
+        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_output(Output::contract(0, Default::default(), Default::default()))
+        .finalize_as_transaction();
+    let tx_both_contracts: Transaction = TransactionBuilder::script(vec![], vec![])
+        .add_input(Input::contract(
+            rng.r#gen(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            contract_id_1,
+        ))
+        .add_input(Input::contract(
+            rng.r#gen(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            contract_id_2,
+        ))
+        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_output(Output::contract(0, Default::default(), Default::default()))
+        .add_output(Output::contract(1, Default::default(), Default::default()))
+        .finalize_as_transaction();
+
+    let executor: Executor<Storage, MockRelayer> = Executor::new(
+        storage,
+        MockRelayer,
+        Config {
+            executor_config: Default::default(),
+            number_of_cores: std::num::NonZeroUsize::new(2)
+                .expect("The value is not zero; qed"),
+        },
+    );
+    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
-    let _ = executor
-        .produce_without_commit_with_source(Components {
-            header_to_produce: Default::default(),
-            transactions_source,
-            coinbase_recipient: Default::default(),
-            gas_price: 0,
-        })
-        .unwrap()
-        .into_result();
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
 
     // Then
-    // Request for thread 1
-    std::thread::spawn({
+    let response_thread = std::thread::spawn({
         move || {
+            // Request for thread 1
             Consumer::receive(&tx_pool_requests_receiver)
                 .assert_filter(&empty_filter())
                 .respond_with(&[&tx_contract_1], TransactionFiltered::NotFiltered);
@@ -316,6 +494,7 @@ fn execute__gas_left_updated_when_state_merges() {
                     excluded_contract_ids: vec![contract_id_2].into_iter().collect(),
                 })
                 .respond_with(&[], TransactionFiltered::Filtered);
+
             // Request for thread 1 or 2 again
             Consumer::receive(&tx_pool_requests_receiver)
                 .assert_filter(&empty_filter())
@@ -323,33 +502,30 @@ fn execute__gas_left_updated_when_state_merges() {
                     ConsensusParameters::default().block_gas_limit() - max_gas,
                 )
                 .respond_with(&[&tx_both_contracts], TransactionFiltered::NotFiltered);
+
+            // Request for thread 1 or 2 again
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
+
+    let _ = future.await.unwrap().into_result();
+    response_thread.join().unwrap();
 }
 
-#[test]
-#[ignore]
-fn execute__utxo_ordering_kept() {
-    let executor: Executor<InMemoryStorage<Column>, MockRelayer> = Executor::new(
-        InMemoryStorage::default(),
-        MockRelayer,
-        Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-            executor_config: Default::default(),
-        },
-    );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+#[tokio::test]
+async fn execute__utxo_ordering_kept() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
     let owner = Input::predicate_owner(&predicate);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
 
     // Given
-    // TODO: Maybe need to make it last a bit longer to be sure it ends after second one
     let script = [op::add(RegId::ONE, 0x02, 0x03)];
     let script_bytes: Vec<u8> = script.iter().flat_map(|op| op.to_bytes()).collect();
     let tx1 = TransactionBuilder::script(script_bytes, vec![])
-        .add_input(given_coin_predicate(&mut rng, 1000))
+        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
         .add_output(Output::coin(owner, 1000, Default::default()))
         .finalize_as_transaction();
     let coin_utxo = UtxoId::new(tx1.id(&ChainId::default()), 0);
@@ -367,19 +543,27 @@ fn execute__utxo_ordering_kept() {
         .add_output(Output::coin(owner, 1000, Default::default()))
         .finalize_as_transaction();
 
+    let executor: Executor<Storage, MockRelayer> = Executor::new(
+        storage,
+        MockRelayer,
+        Config {
+            executor_config: Default::default(),
+            number_of_cores: std::num::NonZeroUsize::new(2)
+                .expect("The value is not zero; qed"),
+        },
+    );
+    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+
     // When
-    let result = executor
-        .produce_without_commit_with_source(Components {
-            header_to_produce: Default::default(),
-            transactions_source,
-            coinbase_recipient: Default::default(),
-            gas_price: 0,
-        })
-        .unwrap()
-        .into_result();
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
 
     // Then
-    std::thread::spawn({
+    let response_thread = std::thread::spawn({
         let tx1 = tx1.clone();
         let tx2 = tx2.clone();
         move || {
@@ -392,11 +576,18 @@ fn execute__utxo_ordering_kept() {
             Consumer::receive(&tx_pool_requests_receiver)
                 .assert_filter(&empty_filter())
                 .respond_with(&[&tx2], TransactionFiltered::NotFiltered);
+
+            // Request for thread 1 again
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
 
+    let result = future.await.unwrap().into_result();
+    response_thread.join().unwrap();
+
     let transactions = result.block.transactions();
-    assert_eq!(transactions.len(), 2);
+    assert_eq!(transactions.len(), 3);
     assert_eq!(
         transactions[0].id(&ChainId::default()),
         tx1.id(&ChainId::default())

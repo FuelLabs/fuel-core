@@ -11,12 +11,15 @@ rust-version = { workspace = true }
 description = "Fuel Block Parallel Executor"
 
 [dependencies]
+fuel-core-executor = { workspace = true, features = ["std"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 fuel-core-upgradable-executor = { workspace = true, features = ["std"] }
+futures = { workspace = true, features = ["std"] }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers", "serde"] }
 rand = { workspace = true }

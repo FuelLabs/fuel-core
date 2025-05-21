@@ -1,11 +1,21 @@
+use std::collections::HashSet;
+
+use fuel_core_executor::ports::{
+    PreconfirmationSenderPort,
+    RelayerPort,
+};
 use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
     fuel_tx::{
         ConsensusParameters,
         Transaction,
     },
-    fuel_vm::checked_transaction::IntoChecked,
+    fuel_vm::checked_transaction::{
+        CheckedTransaction,
+        IntoChecked,
+    },
+    services::preconfirmation::Preconfirmation,
 };
-use fuel_core_upgradable_executor::native_executor::ports::MaybeCheckedTransaction;
 
 use crate::ports::{
     Filter,
@@ -13,7 +23,21 @@ use crate::ports::{
     TransactionsSource,
 };
 
+#[derive(Debug, Clone)]
 pub struct MockRelayer;
+
+impl RelayerPort for MockRelayer {
+    fn enabled(&self) -> bool {
+        true
+    }
+
+    fn get_events(
+        &self,
+        _da_height: &DaBlockHeight,
+    ) -> anyhow::Result<Vec<fuel_core_types::services::relayer::Event>> {
+        Ok(vec![])
+    }
+}
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -30,12 +54,12 @@ pub struct MockTxPool {
 
 pub type GetExecutableTransactionsSender = std::sync::mpsc::Sender<(
     PoolRequestParams,
-    std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
 )>;
 
 pub type GetExecutableTransactionsReceiver = std::sync::mpsc::Receiver<(
     PoolRequestParams,
-    std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
 )>;
 
 impl MockTxPool {
@@ -60,7 +84,7 @@ impl TransactionsSource for MockTxPool {
         tx_count_limit: u16,
         block_transaction_size_limit: u32,
         filter: Filter,
-    ) -> (Vec<MaybeCheckedTransaction>, TransactionFiltered) {
+    ) -> (Vec<CheckedTransaction>, TransactionFiltered, Filter) {
         let (tx, rx) = std::sync::mpsc::channel();
         self.get_executable_transactions_results_sender
             .send((
@@ -75,12 +99,17 @@ impl TransactionsSource for MockTxPool {
             .expect("Failed to send request");
         rx.recv().expect("Failed to receive response")
     }
+
+    fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify {
+        // This is a mock implementation, so we return a dummy Notify instance
+        tokio::sync::Notify::new()
+    }
 }
 
 pub struct Consumer {
     pool_request_params: PoolRequestParams,
     response_sender:
-        std::sync::mpsc::Sender<(Vec<MaybeCheckedTransaction>, TransactionFiltered)>,
+        std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
 }
 
 impl Consumer {
@@ -115,21 +144,44 @@ impl Consumer {
     ) -> &Self {
         let txs = into_checked_txs(txs);
 
-        self.response_sender.send((txs, filtered)).unwrap();
+        self.response_sender
+            .send((
+                txs,
+                filtered,
+                Filter {
+                    excluded_contract_ids: HashSet::default(),
+                },
+            ))
+            .unwrap();
         self
     }
 }
 
-fn into_checked_txs(txs: &[&Transaction]) -> Vec<MaybeCheckedTransaction> {
+fn into_checked_txs(txs: &[&Transaction]) -> Vec<CheckedTransaction> {
     txs.iter()
         .map(|&tx| {
-            MaybeCheckedTransaction::CheckedTransaction(
-                tx.clone()
-                    .into_checked_basic(0u32.into(), &ConsensusParameters::default())
-                    .unwrap()
-                    .into(),
-                0,
-            )
+            tx.clone()
+                .into_checked_basic(0u32.into(), &ConsensusParameters::default())
+                .unwrap()
+                .into()
         })
         .collect()
+}
+
+#[derive(Clone, Debug)]
+pub struct MockPreconfirmationSender;
+
+impl PreconfirmationSenderPort for MockPreconfirmationSender {
+    fn send(
+        &self,
+        _preconfirmations: Vec<
+            fuel_core_types::services::preconfirmation::Preconfirmation,
+        >,
+    ) -> impl Future<Output = ()> + Send {
+        futures::future::ready(())
+    }
+
+    fn try_send(&self, preconfirmations: Vec<Preconfirmation>) -> Vec<Preconfirmation> {
+        preconfirmations
+    }
 }

@@ -77,7 +77,7 @@ impl<S, R> Executor<S, R> {
 
 impl<S, R> Executor<S, R> {
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub fn produce_without_commit_with_source<TxSource>(
+    pub async fn produce_without_commit_with_source<TxSource>(
         &self,
         _components: Components<TxSource>,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
