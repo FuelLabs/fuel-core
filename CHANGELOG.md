@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.43.2]
+
+### Fixed
+
+- [2978](https://github.com/FuelLabs/fuel-core/pull/2978): Add method to override starting syncing height for compression service if starting from scratch.
+
 ## [Version 0.43.1]
 
 ### Fixed
