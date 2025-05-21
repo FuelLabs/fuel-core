@@ -18,6 +18,9 @@
 //! This can be done because we assume that the transaction pool is sending us transactions that are alTransactionsReadyForPickup correctly verified.
 //! If we have a transaction that end up being skipped (only possible cause if consensus parameters changes) then we will have to
 //! fallback a sequential execution of the transaction that used the skipped one as a dependency.
+mod coin;
+mod contracts_changes;
+
 use std::{
     collections::{
         HashMap,
@@ -32,6 +35,7 @@ use ::futures::{
     StreamExt,
     stream::FuturesUnordered,
 };
+use contracts_changes::ContractsChanges;
 use fuel_core_executor::{
     executor::{
         BlockExecutor,
@@ -89,7 +93,6 @@ use tokio::runtime::Runtime;
 
 use crate::{
     checked_transaction_ext::CheckedTransactionExt,
-    coin::CoinInBatch,
     column_adapter::ContractColumnsIterator,
     config::Config,
     l1_execution_data::L1ExecutionData,
@@ -102,62 +105,10 @@ use crate::{
     },
     tx_waiter::NoWaitTxs,
 };
-
-#[derive(Debug, Clone, Default)]
-pub struct ContractsChanges {
-    contracts_changes: FxHashMap<ContractId, u64>,
-    latest_id: u64,
-    changes_storage: FxHashMap<u64, (Vec<ContractId>, Changes)>,
-}
-
-impl ContractsChanges {
-    pub fn new() -> Self {
-        Self {
-            contracts_changes: FxHashMap::default(),
-            changes_storage: FxHashMap::default(),
-            latest_id: 0,
-        }
-    }
-
-    pub fn add_changes(&mut self, contract_ids: &[ContractId], changes: Changes) {
-        let id = self.latest_id;
-        self.latest_id += 1;
-        for contract_id in contract_ids {
-            self.contracts_changes.insert(*contract_id, id);
-        }
-        self.changes_storage
-            .insert(id, (contract_ids.to_vec(), changes));
-    }
-
-    pub fn extract_changes(
-        &mut self,
-        contract_id: &ContractId,
-    ) -> Option<(Vec<ContractId>, Changes)> {
-        let id = self.contracts_changes.remove(contract_id)?;
-        let (contract_ids, changes) = self.changes_storage.remove(&id)?;
-        for contract_id in contract_ids.iter() {
-            self.contracts_changes.remove(contract_id);
-        }
-        Some((contract_ids, changes))
-    }
-
-    pub fn extract_all_contracts_changes(&mut self) -> Vec<Changes> {
-        let mut changes = vec![];
-        for id in 0..self.latest_id {
-            if let Some((_, change)) = self.changes_storage.remove(&id) {
-                changes.push(change);
-            }
-        }
-        self.contracts_changes.clear();
-        changes
-    }
-
-    pub fn clear(&mut self) {
-        self.contracts_changes.clear();
-        self.changes_storage.clear();
-        self.latest_id = 0;
-    }
-}
+use coin::{
+    CoinDependencyChainVerifier,
+    CoinInBatch,
+};
 
 pub struct Scheduler<R, S, PreconfirmationSender> {
     /// Config
@@ -1093,89 +1044,6 @@ where
                 coinbase: execution_data.coinbase,
             },
         );
-        Ok(())
-    }
-}
-
-struct CoinDependencyChainVerifier {
-    coins_registered: FxHashMap<UtxoId, (usize, CoinInBatch)>,
-}
-
-impl CoinDependencyChainVerifier {
-    fn new() -> Self {
-        Self {
-            coins_registered: FxHashMap::default(),
-        }
-    }
-
-    fn register_coins_created(
-        &mut self,
-        batch_id: usize,
-        coins_created: Vec<CoinInBatch>,
-    ) {
-        for coin in coins_created {
-            self.coins_registered.insert(*coin.utxo(), (batch_id, coin));
-        }
-    }
-
-    fn verify_coins_used<'a, S>(
-        &self,
-        batch_id: usize,
-        coins_used: impl Iterator<Item = &'a CoinInBatch>,
-        storage: &S,
-    ) -> Result<(), SchedulerError>
-    where
-        S: Storage + Send,
-    {
-        for coin in coins_used {
-            match storage.get_coin(coin.utxo()) {
-                Ok(Some(db_coin)) => {
-                    // Coin is in the database
-                    match coin.equal_compressed_coin(&db_coin) {
-                        true => continue,
-                        false => {
-                            return Err(SchedulerError::InternalError(format!(
-                                "coin is invalid: {}",
-                                coin.utxo(),
-                            )));
-                        }
-                    }
-                }
-                Ok(None) => {
-                    // Coin is not in the database
-                    match self.coins_registered.get(coin.utxo()) {
-                        Some((coin_creation_batch_id, registered_coin)) => {
-                            // Coin is in the block
-                            if coin_creation_batch_id <= &batch_id
-                                && registered_coin.idx() <= coin.idx()
-                                && registered_coin == coin
-                            {
-                                // Coin is created in a batch that is before the current one
-                                continue;
-                            } else {
-                                // Coin is created in a batch that is after the current one
-                                return Err(SchedulerError::InternalError(format!(
-                                    "Coin {} is created in a batch that is after the current one",
-                                    coin.utxo()
-                                )));
-                            }
-                        }
-                        None => {
-                            return Err(SchedulerError::InternalError(format!(
-                                "Coin {} is not in the database and not created in the block",
-                                coin.utxo(),
-                            )));
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(SchedulerError::InternalError(format!(
-                        "Error while getting coin {}: {e}",
-                        coin.utxo(),
-                    )));
-                }
-            }
-        }
         Ok(())
     }
 }

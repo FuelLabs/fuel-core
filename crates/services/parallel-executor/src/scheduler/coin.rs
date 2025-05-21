@@ -15,6 +15,11 @@ use fuel_core_types::{
         },
     },
 };
+use fxhash::FxHashMap;
+
+use crate::ports::Storage;
+
+use super::SchedulerError;
 
 #[derive(Debug, Eq)]
 pub(crate) struct CoinInBatch {
@@ -138,5 +143,88 @@ impl From<CoinInBatch> for CompressedCoin {
             asset_id,
             tx_pointer: Default::default(), // purposely left blank
         })
+    }
+}
+
+pub struct CoinDependencyChainVerifier {
+    coins_registered: FxHashMap<UtxoId, (usize, CoinInBatch)>,
+}
+
+impl CoinDependencyChainVerifier {
+    pub fn new() -> Self {
+        Self {
+            coins_registered: FxHashMap::default(),
+        }
+    }
+
+    pub fn register_coins_created(
+        &mut self,
+        batch_id: usize,
+        coins_created: Vec<CoinInBatch>,
+    ) {
+        for coin in coins_created {
+            self.coins_registered.insert(*coin.utxo(), (batch_id, coin));
+        }
+    }
+
+    pub fn verify_coins_used<'a, S>(
+        &self,
+        batch_id: usize,
+        coins_used: impl Iterator<Item = &'a CoinInBatch>,
+        storage: &S,
+    ) -> Result<(), SchedulerError>
+    where
+        S: Storage + Send,
+    {
+        for coin in coins_used {
+            match storage.get_coin(coin.utxo()) {
+                Ok(Some(db_coin)) => {
+                    // Coin is in the database
+                    match coin.equal_compressed_coin(&db_coin) {
+                        true => continue,
+                        false => {
+                            return Err(SchedulerError::InternalError(format!(
+                                "coin is invalid: {}",
+                                coin.utxo(),
+                            )));
+                        }
+                    }
+                }
+                Ok(None) => {
+                    // Coin is not in the database
+                    match self.coins_registered.get(coin.utxo()) {
+                        Some((coin_creation_batch_id, registered_coin)) => {
+                            // Coin is in the block
+                            if coin_creation_batch_id <= &batch_id
+                                && registered_coin.idx() <= coin.idx()
+                                && registered_coin == coin
+                            {
+                                // Coin is created in a batch that is before the current one
+                                continue;
+                            } else {
+                                // Coin is created in a batch that is after the current one
+                                return Err(SchedulerError::InternalError(format!(
+                                    "Coin {} is created in a batch that is after the current one",
+                                    coin.utxo()
+                                )));
+                            }
+                        }
+                        None => {
+                            return Err(SchedulerError::InternalError(format!(
+                                "Coin {} is not in the database and not created in the block",
+                                coin.utxo(),
+                            )));
+                        }
+                    }
+                }
+                Err(e) => {
+                    return Err(SchedulerError::InternalError(format!(
+                        "Error while getting coin {}: {e}",
+                        coin.utxo(),
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 }
