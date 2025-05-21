@@ -62,7 +62,10 @@ use crate::{
         Storage as StoragePort,
         TransactionFiltered,
     },
-    tests::mocks::Consumer,
+    tests::mocks::{
+        Consumer,
+        MockPreconfirmationSender,
+    },
 };
 
 use super::mocks::{
@@ -218,11 +221,11 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
         .contract_id()
         .cloned()
         .expect("Expected contract id");
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
+    let mut executor = Executor::new(
         storage,
         MockRelayer,
+        MockPreconfirmationSender,
         Config {
-            executor_config: Default::default(),
             number_of_cores: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
         },
@@ -245,10 +248,9 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
         .await
         .unwrap()
         .into_changes();
-    (contract_id, StorageChanges::Changes(res))
+    (contract_id, res)
 }
 
-#[ignore]
 #[tokio::test]
 async fn execute__simple_independent_transactions_sorted() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -261,15 +263,16 @@ async fn execute__simple_independent_transactions_sorted() {
     let tx3: Transaction = basic_tx(&mut rng, &mut storage);
     let tx4: Transaction = basic_tx(&mut rng, &mut storage);
 
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
-        storage,
-        MockRelayer,
-        Config {
-            executor_config: Default::default(),
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-        },
-    );
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
@@ -316,7 +319,6 @@ async fn execute__simple_independent_transactions_sorted() {
     assert_eq!(expected_ids, actual_ids);
 }
 
-#[ignore]
 #[tokio::test]
 async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -343,15 +345,16 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
         .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
         .finalize_as_transaction();
 
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
-        storage,
-        MockRelayer,
-        Config {
-            executor_config: Default::default(),
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-        },
-    );
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
@@ -392,7 +395,6 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     txpool.join().unwrap();
 }
 
-#[ignore]
 #[tokio::test]
 async fn execute__gas_left_updated_when_state_merges() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -457,15 +459,16 @@ async fn execute__gas_left_updated_when_state_merges() {
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize_as_transaction();
 
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
-        storage,
-        MockRelayer,
-        Config {
-            executor_config: Default::default(),
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-        },
-    );
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
@@ -516,7 +519,6 @@ async fn execute__gas_left_updated_when_state_merges() {
     response_thread.join().unwrap();
 }
 
-#[ignore]
 #[tokio::test]
 async fn execute__utxo_ordering_kept() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -547,15 +549,16 @@ async fn execute__utxo_ordering_kept() {
         .add_output(Output::coin(owner, 1000, Default::default()))
         .finalize_as_transaction();
 
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
-        storage,
-        MockRelayer,
-        Config {
-            executor_config: Default::default(),
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-        },
-    );
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
