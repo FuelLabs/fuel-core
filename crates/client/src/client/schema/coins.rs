@@ -59,13 +59,13 @@ pub struct CoinsConnectionArgs {
     pub last: Option<i32>,
 }
 
-impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs {
-    fn from(r: (Address, AssetId, PaginationRequest<String>)) -> Self {
+impl From<(Address, Option<AssetId>, PaginationRequest<String>)> for CoinsConnectionArgs {
+    fn from(r: (Address, Option<AssetId>, PaginationRequest<String>)) -> Self {
         match r.2.direction {
             PageDirection::Forward => CoinsConnectionArgs {
                 filter: CoinFilterInput {
                     owner: r.0,
-                    asset_id: Some(r.1),
+                    asset_id: r.1,
                 },
                 after: r.2.cursor,
                 before: None,
@@ -75,7 +75,7 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
             PageDirection::Backward => CoinsConnectionArgs {
                 filter: CoinFilterInput {
                     owner: r.0,
-                    asset_id: Some(r.1),
+                    asset_id: r.1,
                 },
                 after: None,
                 before: r.2.cursor,
