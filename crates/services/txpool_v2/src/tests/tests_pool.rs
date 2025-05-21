@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::{
     config::{
         Config,
@@ -643,6 +645,7 @@ fn get_sorted_out_tx1_2_3() {
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         });
 
     // Then
@@ -700,6 +703,7 @@ fn get_sorted_out_tx_same_tips() {
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         });
 
     // Then
@@ -757,6 +761,7 @@ fn get_sorted_out_zero_tip() {
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         });
 
     // Then
@@ -814,6 +819,7 @@ fn get_sorted_out_tx_profitable_ratios() {
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         });
 
     // Then
@@ -853,6 +859,7 @@ fn get_sorted_out_tx_by_creation_instant() {
             max_gas: u64::MAX,
             maximum_txs: u16::MAX,
             maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
         });
 
     // Then
@@ -1292,6 +1299,7 @@ fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
                     max_gas: u64::MAX,
                     maximum_txs: u16::MAX,
                     maximum_block_size: u32::MAX,
+                    excluded_contracts: Default::default(),
                 });
         assert_eq!(txs.len(), 1);
         assert_eq!(pool_dependency_tx.id(), txs[0].id());
@@ -1404,4 +1412,75 @@ fn insert__tx_upgrade_with_invalid_wasm() {
         Error::WasmValidity(WasmValidityError::NotEnabled)
     ));
     universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn extract__tx_with_excluded_contract() {
+    let mut universe = TestPoolUniverse::default().config(Config {
+        utxo_validation: false,
+        ..Default::default()
+    });
+    universe.build_pool();
+
+    // Given
+    let (create_tx_1, excluded_contract) =
+        universe.build_create_contract_transaction(vec![1, 2, 3]);
+    let (create_tx_2, authorized_contract) =
+        universe.build_create_contract_transaction(vec![4, 5, 6]);
+    let tx1 = universe.build_script_transaction(
+        Some(vec![Input::contract(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            excluded_contract,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        0,
+    );
+    let tx2 = universe.build_script_transaction(
+        Some(vec![Input::contract(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            authorized_contract,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        0,
+    );
+    let mut excluded_contracts = HashSet::default();
+    excluded_contracts.insert(excluded_contract);
+
+    let tx2_id = tx2.id(&ChainId::default());
+
+    universe.verify_and_insert(create_tx_1).unwrap();
+    universe.verify_and_insert(create_tx_2).unwrap();
+    let tx1 = universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+
+    // When
+    let txs = universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u16::MAX,
+            maximum_block_size: u32::MAX,
+            excluded_contracts,
+        });
+
+    // Then
+    assert_eq!(txs.len(), 3, "Should have 1 txs");
+    assert_eq!(txs[2].id(), tx2_id, "First should be tx2");
+    universe.assert_pool_integrity(&[tx1]);
 }
