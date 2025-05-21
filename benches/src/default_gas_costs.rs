@@ -1,7 +1,7 @@
 use super::*;
-use fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV5;
+use fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV6;
 pub fn default_gas_costs() -> GasCostsValues {
-    GasCostsValuesV5 {
+    GasCostsValuesV6 {
         add: 2,
         addi: 2,
         and: 2,
@@ -51,6 +51,7 @@ pub fn default_gas_costs() -> GasCostsValues {
         mul: 2,
         muli: 2,
         mldv: 3,
+        niop: 2,
         noop: 1,
         not: 2,
         or: 1,
