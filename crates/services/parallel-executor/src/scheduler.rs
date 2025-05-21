@@ -672,8 +672,10 @@ where
         self.current_execution_tasks.push(runtime.spawn({
             let storage_with_da = storage_with_da.clone();
             async move {
-                let mut execution_data = ExecutionData::default();
-                execution_data.tx_count = start_idx_txs;
+                let mut execution_data = ExecutionData {
+                    tx_count: start_idx_txs,
+                    ..Default::default()
+                };
                 let storage_tx = storage_with_da
                     .into_transaction()
                     .with_changes(required_changes);
@@ -931,8 +933,10 @@ where
         start_idx_txs: u16,
         consensus_parameters_version: u32,
     ) -> Result<(ExecutionData, Vec<Transaction>), SchedulerError> {
-        let mut execution_data = ExecutionData::default();
-        execution_data.tx_count = start_idx_txs;
+        let mut execution_data = ExecutionData {
+            tx_count: start_idx_txs,
+            ..Default::default()
+        };
         let block = self
             .executor
             .clone()
@@ -1205,11 +1209,8 @@ fn prepare_transactions_batch(
         }
 
         for output in tx.outputs().iter() {
-            match output {
-                Output::ContractCreated { contract_id, .. } => {
-                    prepared_batch.contracts_used.push(*contract_id);
-                }
-                _ => {}
+            if let Output::ContractCreated { contract_id, .. } = output {
+                prepared_batch.contracts_used.push(*contract_id);
             }
         }
 

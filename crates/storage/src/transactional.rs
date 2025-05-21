@@ -21,6 +21,7 @@ use alloc::{
         BTreeMap,
         btree_map,
     },
+    vec,
     vec::Vec,
 };
 
@@ -248,8 +249,7 @@ impl StorageChanges {
     pub fn extract_list_of_changes(&mut self) -> Vec<Changes> {
         match self {
             StorageChanges::Changes(changes) => {
-                let mut changes_list = Vec::with_capacity(1);
-                changes_list.push(core::mem::take(changes));
+                let changes_list = vec![core::mem::take(changes)];
                 *self = StorageChanges::ChangesList(Vec::new());
                 changes_list
             }
