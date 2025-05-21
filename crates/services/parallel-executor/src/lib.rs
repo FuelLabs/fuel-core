@@ -4,7 +4,6 @@ pub(crate) mod column_adapter;
 pub mod config;
 pub mod executor;
 pub(crate) mod l1_execution_data;
-pub mod once_transaction_source;
 pub mod ports;
 
 mod once_transaction_source;
