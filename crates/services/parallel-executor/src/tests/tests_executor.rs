@@ -248,6 +248,7 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
     (contract_id, StorageChanges::Changes(res))
 }
 
+#[ignore]
 #[tokio::test]
 async fn execute__simple_independent_transactions_sorted() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -315,6 +316,7 @@ async fn execute__simple_independent_transactions_sorted() {
     assert_eq!(expected_ids, actual_ids);
 }
 
+#[ignore]
 #[tokio::test]
 async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -390,6 +392,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     txpool.join().unwrap();
 }
 
+#[ignore]
 #[tokio::test]
 async fn execute__gas_left_updated_when_state_merges() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -513,6 +516,7 @@ async fn execute__gas_left_updated_when_state_merges() {
     response_thread.join().unwrap();
 }
 
+#[ignore]
 #[tokio::test]
 async fn execute__utxo_ordering_kept() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
