@@ -26,7 +26,6 @@ use fuel_core_chain_config::{
 };
 #[cfg(feature = "backup")]
 use fuel_core_services::TraceErr;
-use fuel_core_storage::Result as StorageResult;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
     Coins,
@@ -35,6 +34,11 @@ use fuel_core_storage::tables::{
     ContractsRawCode,
     ContractsState,
     Messages,
+};
+use fuel_core_storage::{
+    Result as StorageResult,
+    StorageAsRef,
+    tables::FuelBlocks,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::path::PathBuf;
@@ -215,7 +219,7 @@ impl CombinedDatabase {
         )?;
         let relayer = Database::open_rocksdb(
             path,
-            StateRewindPolicy::NoRewind,
+            state_rewind_policy,
             DatabaseConfig {
                 max_fds,
                 ..database_config
@@ -408,6 +412,13 @@ impl CombinedDatabase {
     where
         S: ShutdownListener,
     {
+        let target_block = self
+            .on_chain()
+            .storage::<FuelBlocks>()
+            .get(&target_block_height)?
+            .ok_or(anyhow::anyhow!("block at target height doesn't exist"))?;
+        let target_da_height = target_block.header().da_height();
+
         while !shutdown_listener.is_cancelled() {
             let on_chain_height = self
                 .on_chain()
@@ -419,16 +430,19 @@ impl CombinedDatabase {
                 .latest_height_from_metadata()?
                 .ok_or(anyhow::anyhow!("off-chain database doesn't have height"))?;
 
+            let relayer_db_height = self.relayer().latest_height_from_metadata()?;
+            let relayer_db_rolled_back =
+                is_equal_or_none(relayer_db_height, target_da_height);
+
             let gas_price_chain_height =
                 self.gas_price().latest_height_from_metadata()?;
-
-            let gas_price_rolled_back = gas_price_chain_height.is_none()
-                || gas_price_chain_height.expect("We checked height before")
-                    == target_block_height;
+            let gas_price_rolled_back =
+                is_equal_or_none(gas_price_chain_height, target_block_height);
 
             if on_chain_height == target_block_height
                 && off_chain_height == target_block_height
                 && gas_price_rolled_back
+                && relayer_db_rolled_back
             {
                 break;
             }
@@ -447,6 +461,15 @@ impl CombinedDatabase {
                 ));
             }
 
+            if let Some(relayer_db_height) = relayer_db_height {
+                if relayer_db_height < target_da_height {
+                    return Err(anyhow::anyhow!(
+                        "gas-price-chain database height({relayer_db_height}) \
+                        is less than target height({target_da_height})"
+                    ));
+                }
+            }
+
             if let Some(gas_price_chain_height) = gas_price_chain_height {
                 if gas_price_chain_height < target_block_height {
                     return Err(anyhow::anyhow!(
@@ -462,6 +485,12 @@ impl CombinedDatabase {
 
             if off_chain_height > target_block_height {
                 self.off_chain().rollback_last_block()?;
+            }
+
+            if let Some(relayer_db_height) = relayer_db_height {
+                if relayer_db_height > target_da_height {
+                    self.relayer().rollback_last_block()?;
+                }
             }
 
             if let Some(gas_price_chain_height) = gas_price_chain_height {
@@ -557,6 +586,10 @@ impl CombinedGenesisDatabase {
     }
 }
 
+fn is_equal_or_none<T: PartialEq>(maybe_left: Option<T>, right: T) -> bool {
+    maybe_left.map(|left| left == right).unwrap_or(true)
+}
+
 #[allow(non_snake_case)]
 #[cfg(feature = "backup")]
 #[cfg(test)]
@@ -603,7 +636,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut restored_on_chain_db = restored_db.on_chain();
+        let restored_on_chain_db = restored_db.on_chain();
         let restored_value = restored_on_chain_db
             .storage::<Coins>()
             .get(&key)
