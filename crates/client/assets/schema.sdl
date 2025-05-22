@@ -442,6 +442,7 @@ type GasCosts {
 	mul: U64!
 	muli: U64!
 	mldv: U64!
+	niop: U64
 	noop: U64!
 	not: U64!
 	or: U64!

@@ -281,7 +281,8 @@ impl GasCosts {
             | GasCostsValues::V2(_)
             | GasCostsValues::V3(_)
             | GasCostsValues::V4(_)
-            | GasCostsValues::V5(_) => GasCostsVersion::V1,
+            | GasCostsValues::V5(_)
+            | GasCostsValues::V6(_) => GasCostsVersion::V1,
         }
     }
 
@@ -479,6 +480,10 @@ impl GasCosts {
 
     async fn mldv(&self) -> U64 {
         self.0.mldv().into()
+    }
+
+    async fn niop(&self) -> Option<U64> {
+        self.0.niop().ok().map(Into::into)
     }
 
     async fn noop(&self) -> U64 {

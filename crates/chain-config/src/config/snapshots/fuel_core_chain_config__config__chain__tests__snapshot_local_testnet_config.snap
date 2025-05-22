@@ -44,7 +44,7 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V5": {
+        "V6": {
           "add": 1,
           "addi": 1,
           "and": 1,
@@ -91,6 +91,7 @@ expression: json
           "mul": 1,
           "muli": 1,
           "mldv": 1,
+          "niop": 1,
           "noop": 1,
           "not": 1,
           "or": 1,

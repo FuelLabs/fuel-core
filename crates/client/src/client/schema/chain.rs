@@ -264,6 +264,7 @@ pub struct GasCosts {
     pub mul: U64,
     pub muli: U64,
     pub mldv: U64,
+    pub niop: Option<U64>,
     pub noop: U64,
     pub not: U64,
     pub or: U64,
@@ -352,7 +353,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
     fn try_from(value: GasCosts) -> Result<Self, Self::Error> {
         match value.version {
             GasCostsVersion::V1 => Ok(fuel_core_types::fuel_tx::GasCosts::new(
-                fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV5 {
+                fuel_core_types::fuel_tx::consensus_parameters::gas::GasCostsValuesV6 {
                     add: value.add.into(),
                     addi: value.addi.into(),
                     and: value.and.into(),
@@ -399,6 +400,7 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     mul: value.mul.into(),
                     muli: value.muli.into(),
                     mldv: value.mldv.into(),
+                    niop: value.niop.map(Into::into).unwrap_or(0),
                     noop: value.noop.into(),
                     not: value.not.into(),
                     or: value.or.into(),
