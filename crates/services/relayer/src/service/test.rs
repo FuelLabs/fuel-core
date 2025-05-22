@@ -147,8 +147,8 @@ async fn quorum__disagree_on_logs() {
     // Then
 
     match provider_error {
-        Err(ProviderError::JsonRpcClientError(e)) => {
-            assert_eq!(format!("{e}"), "No Quorum reached.");
+        Err(ProviderError::CustomError(e)) => {
+            assert!(e.contains("eth provider failed to get logs: NoQuorumReached"));
         }
         _ => {
             panic!("Expected a JsonRpcClientError")

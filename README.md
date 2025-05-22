@@ -4,6 +4,7 @@
 [![crates.io](https://img.shields.io/crates/v/fuel-core?label=latest)](https://crates.io/crates/fuel-core)
 [![docs](https://docs.rs/fuel-core/badge.svg)](https://docs.rs/fuel-core/)
 [![discord](https://img.shields.io/badge/chat%20on-discord-orange?&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/xfpK4Pe)
+[![twitter](https://img.shields.io/twitter/follow/fuel_network)](https://x.com/fuel_network)
 
 Fuel client implementation.
 
@@ -23,7 +24,7 @@ Before pushing any changes or creating pull request please run `source ci_checks
 
 ## Building
 
-If you plan to use already pre-compiled binairies you can directly go to [Running a Ignition node](#running-a-ignition-node).
+If you plan to use already pre-compiled binaries you can directly go to [Running a Ignition node](#running-a-ignition-node).
 
 ### System Requirements
 
@@ -80,7 +81,7 @@ git checkout v0.42.0
 
 Build your node binary:
 ```bash
-cargo build --release --bin fuel-core --no-default-features --features production
+make build
 ```
 
 To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignition/mainnet-node/
@@ -94,7 +95,7 @@ git clone https://github.com/FuelLabs/fuel-core.git
 
 Build your node binary:
 ```bash
-cargo build --release --bin fuel-core --no-default-features --features production
+make build
 ```
 
 To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignition/local-node/
@@ -103,7 +104,7 @@ To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignit
 
 ### Compiling
 
-We recommend using `xtask` to build fuel-core:
+We recommend using `xtask` to build fuel-core for development:
 
 ```sh
 cargo xtask build
