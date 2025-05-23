@@ -16,6 +16,7 @@ use crate::{
         SetMetadataStorage,
     },
     v0::metadata::V0Metadata,
+    sync_state:: {SyncStateNotifier, SyncStateObserver},
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -73,7 +74,7 @@ use std::{
         },
     },
 };
-use tokio::sync::broadcast::Receiver;
+use tokio::sync::{broadcast::Receiver, watch};
 
 #[derive(Debug)]
 pub struct LatestGasPrice<Height, GasPrice> {
@@ -133,6 +134,8 @@ where
     initial_recorded_height: Option<BlockHeight>,
     /// Metrics will be recorded if true
     record_metrics: bool,
+    /// Synced state notifier
+    sync_notifier: SyncStateNotifier,
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -173,6 +176,8 @@ where
         &mut self,
         l2_block_res: GasPriceResult<BlockInfo>,
     ) -> anyhow::Result<()> {
+        // set the status to not synced
+        self.sync_notifier.send(crate::sync_state::SyncState::NotSynced).ok();
         tracing::debug!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
@@ -181,6 +186,10 @@ where
         self.apply_block_info_to_gas_algorithm(block).await?;
 
         self.notify_da_source_service_l2_block(block);
+        // set the status to synced
+        if let BlockInfo::Block { height, .. } = block {
+            self.sync_notifier.send(crate::sync_state::SyncState::Synced(height)).ok();
+        }
         Ok(())
     }
 
@@ -213,6 +222,7 @@ where
         record_metrics: bool,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
+        let (synced_tx, _) = watch::channel(crate::sync_state::SyncState::NotSynced);
         Self {
             shared_algo,
             latest_gas_price,
@@ -225,6 +235,7 @@ where
             latest_l2_block,
             initial_recorded_height,
             record_metrics,
+            sync_notifier: synced_tx,
         }
     }
 
@@ -404,6 +415,36 @@ where
 
         Ok(())
     }
+
+    pub fn shared_data(&self) -> SharedData {
+        SharedData {
+            sync_observer: self.sync_notifier.subscribe(),
+        }
+    }
+}
+
+/// Shared data for the gas price service.
+#[derive(Debug, Clone)]
+pub struct SharedData {
+    /// Allows to observe the sync state.
+    sync_observer: SyncStateObserver,
+}
+
+impl SharedData {
+    /// Waits until the gas price service has synced
+    /// with current l2 block height
+    pub async fn await_synced(&self) -> anyhow::Result<()> {
+        let mut observer = self.sync_observer.clone();
+        loop {
+            if observer.borrow_and_update().is_synced() {
+                break;
+            }
+
+            observer.changed().await?;
+        }
+
+        Ok(())
+    }
 }
 
 impl<L2, DA, AtomicStorage> RunnableTask for GasPriceServiceV1<L2, DA, AtomicStorage>
@@ -417,11 +458,13 @@ where
             biased;
             _ = watcher.while_started() => {
                 tracing::debug!("Stopping gas price service");
+                // println!("Stopping gas price service");
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
                 tracing::debug!("Received L2 block result: {:?}", l2_block_res);
                 let res = self.commit_block_data_to_algorithm(l2_block_res).await;
+                // println!("Received L2 block result: {:?}", res);
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
@@ -429,10 +472,12 @@ where
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);
+                        // println!("Received DA block costs:");
                         TaskNextAction::Continue
                     },
                     Err(err) => {
                         let err = anyhow!("Error receiving DA block costs: {:?}", err);
+                        // println!("Error receiving DA block costs: {:?}", err);
                         TaskNextAction::ErrorContinue(err)
                     }
                 }
@@ -703,12 +748,25 @@ mod tests {
         let initial_price = read_algo.next_gas_price();
 
         // when
+        // let observer = service.shared_data();
         service.run(&mut watcher).await;
+        // observer.await_synced().await.unwrap();
         l2_block_sender.send(l2_block).await.unwrap();
+        // tokio::time::timeout(
+        //     Duration::from_secs(5),
+        //     service.await_synced()
+        // ).await.unwrap().unwrap();
+        // service
+        //     .await_synced()
+        //     .await
+        //     .unwrap();
+        println!("Received L2 block result");
         service.shutdown().await.unwrap();
 
         // then
         let actual_price = read_algo.next_gas_price();
+        println!("initial_price: {:?}", initial_price);
+        println!("actual_price: {:?}", actual_price);
         assert_ne!(initial_price, actual_price);
     }
 
