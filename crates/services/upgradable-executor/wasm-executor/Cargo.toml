@@ -10,12 +10,22 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Block WASM version of the Executor"
 
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "fuel-core-wasm-executor"
 path = "src/main.rs"
 
-[lib]
-path = "src/lib.rs"
+[features]
+default = ["std"]
+std = ["fuel-core-types-v0"]
+smt = ["fuel-core-storage/smt", "fuel-core-executor/smt"]
+fault-proving = [
+    "fuel-core-storage/fault-proving",
+    "fuel-core-types/fault-proving",
+    "fuel-core-executor/fault-proving",
+]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -41,13 +51,3 @@ serde_json = { workspace = true, default-features = false, features = [
 
 [dev-dependencies]
 proptest = { workspace = true }
-
-[features]
-default = ["std"]
-std = ["fuel-core-types-v0"]
-smt = ["fuel-core-storage/smt", "fuel-core-executor/smt"]
-fault-proving = [
-  "fuel-core-storage/fault-proving",
-  "fuel-core-types/fault-proving",
-  "fuel-core-executor/fault-proving",
-]

@@ -9,6 +9,9 @@ license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
 
+[features]
+test-helpers = ["dep:mockito"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -39,6 +42,3 @@ fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
 mockito = { version = "1.6.1" }
 serde_json = { workspace = true }
-
-[features]
-test-helpers = ["dep:mockito"]
