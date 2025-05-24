@@ -10,6 +10,15 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Block Executor"
 
+[features]
+default = ["std"]
+std = ["fuel-core-types/std", "fuel-core-storage/std"]
+alloc = ["fuel-core-types/alloc", "fuel-core-storage/alloc"]
+smt = ["fuel-core-storage/smt"]
+test-helpers = ["fuel-core-types/test-helpers", "fuel-core-storage/test-helpers"]
+limited-tx-count = []
+fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-proving"]
+
 [dependencies]
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, default-features = false, features = [
@@ -26,18 +35,3 @@ tracing = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-
-[features]
-default = ["std"]
-std = ["fuel-core-types/std", "fuel-core-storage/std"]
-alloc = ["fuel-core-types/alloc", "fuel-core-storage/alloc"]
-smt = ["fuel-core-storage/smt"]
-test-helpers = [
-  "fuel-core-types/test-helpers",
-  "fuel-core-storage/test-helpers",
-]
-limited-tx-count = []
-fault-proving = [
-  "fuel-core-types/fault-proving",
-  "fuel-core-storage/fault-proving",
-]

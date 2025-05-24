@@ -10,6 +10,10 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 
+[features]
+test-helpers = []
+sync-processor = ["dep:rayon"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -25,7 +29,3 @@ tracing = { workspace = true }
 fuel-core-services = { path = ".", features = ["sync-processor"] }
 futures = { workspace = true }
 mockall = { workspace = true }
-
-[features]
-test-helpers = []
-sync-processor = ["dep:rayon"]

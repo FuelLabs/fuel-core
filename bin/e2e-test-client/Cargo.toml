@@ -11,6 +11,9 @@ rust-version = { workspace = true }
 version = { workspace = true }
 name = "fuel-core-e2e-client"
 publish = false
+
+[features]
+default = []
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -41,6 +44,3 @@ fuel-core = { workspace = true, features = [
 fuel-core-trace = { path = "../../crates/trace" }
 insta = { workspace = true }
 tempfile = { workspace = true }
-
-[features]
-default = []
