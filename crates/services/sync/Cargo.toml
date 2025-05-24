@@ -10,6 +10,10 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 
+[features]
+benchmarking = ["dep:mockall", "fuel-core-types/test-helpers"]
+fault-proving = ["fuel-core-types/fault-proving"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -28,7 +32,3 @@ fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 mockall = { workspace = true }
 test-case = { workspace = true }
 tracing-subscriber = { workspace = true }
-
-[features]
-benchmarking = ["dep:mockall", "fuel-core-types/test-helpers"]
-fault-proving = ["fuel-core-types/fault-proving"]

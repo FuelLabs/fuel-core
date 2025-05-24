@@ -1,56 +1,46 @@
 [workspace]
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
 members = [
-  "benches",
-  "bin/e2e-test-client",
-  "bin/fuel-core",
-  "bin/fuel-core-client",
-  "bin/keygen",
-  "crates/chain-config",
-  "crates/client",
-  "crates/compression",
-  "crates/database",
-  "crates/fuel-core",
-  "crates/fuel-gas-price-algorithm",
-  "crates/keygen",
-  "crates/metrics",
-  "crates/services",
-  "crates/services/compression",
-  "crates/services/consensus_module",
-  "crates/services/consensus_module/bft",
-  "crates/services/consensus_module/poa",
-  "crates/services/executor",
-  "crates/services/gas_price_service",
-  "crates/services/importer",
-  "crates/services/p2p",
-  "crates/services/parallel-executor",
-  "crates/services/producer",
-  "crates/services/relayer",
-  "crates/services/shared-sequencer",
-  "crates/services/sync",
-  "crates/services/tx_status_manager",
-  "crates/services/txpool_v2",
-  "crates/services/upgradable-executor",
-  "crates/services/upgradable-executor/wasm-executor",
-  "crates/storage",
-  "crates/trace",
-  "crates/types",
-  "tests",
-  "xtask",
+    "benches",
+    "bin/e2e-test-client",
+    "bin/fuel-core",
+    "bin/fuel-core-client",
+    "bin/keygen",
+    "crates/chain-config",
+    "crates/client",
+    "crates/compression",
+    "crates/database",
+    "crates/fuel-core",
+    "crates/fuel-gas-price-algorithm",
+    "crates/keygen",
+    "crates/metrics",
+    "crates/services",
+    "crates/services/compression",
+    "crates/services/consensus_module",
+    "crates/services/consensus_module/bft",
+    "crates/services/consensus_module/poa",
+    "crates/services/executor",
+    "crates/services/gas_price_service",
+    "crates/services/importer",
+    "crates/services/p2p",
+    "crates/services/parallel-executor",
+    "crates/services/producer",
+    "crates/services/relayer",
+    "crates/services/shared-sequencer",
+    "crates/services/sync",
+    "crates/services/tx_status_manager",
+    "crates/services/txpool_v2",
+    "crates/services/upgradable-executor",
+    "crates/services/upgradable-executor/wasm-executor",
+    "crates/storage",
+    "crates/trace",
+    "crates/types",
+    "tests",
+    "xtask",
 ]
 resolver = "2"
 
 exclude = ["version-compatibility"]
-
-[profile.release]
-codegen-units = 1
-lto = "fat"
-# The difference in performance for "fat" and "thin" is small,
-# but "thin" LTO is much faster to compile.
-# If you play with benchmarks or flamegraphs, it is better to use "thin"
-# To speedup iterations between compilation.
-#lto = "thin"
-panic = "unwind"
 
 [workspace.package]
 authors = ["Fuel Labs <contact@fuel.sh>"]
@@ -64,44 +54,6 @@ rust-version = "1.85.0"
 version = "0.43.2"
 
 [workspace.dependencies]
-# Workspace members
-fuel-core = { version = "0.43.2", path = "./crates/fuel-core", default-features = false }
-fuel-core-client-bin = { version = "0.43.2", path = "./bin/fuel-core-client" }
-fuel-core-bin = { version = "0.43.2", path = "./bin/fuel-core" }
-fuel-core-keygen = { version = "0.43.2", path = "./crates/keygen" }
-fuel-core-keygen-bin = { version = "0.43.2", path = "./bin/keygen" }
-fuel-core-chain-config = { version = "0.43.2", path = "./crates/chain-config", default-features = false }
-fuel-core-client = { version = "0.43.2", path = "./crates/client" }
-fuel-core-compression = { version = "0.43.2", path = "./crates/compression" }
-fuel-core-compression-service = { version = "0.43.2", path = "./crates/services/compression" }
-fuel-core-database = { version = "0.43.2", path = "./crates/database" }
-fuel-core-metrics = { version = "0.43.2", path = "./crates/metrics" }
-fuel-core-services = { version = "0.43.2", path = "./crates/services" }
-fuel-core-consensus-module = { version = "0.43.2", path = "./crates/services/consensus_module" }
-fuel-core-bft = { version = "0.43.2", path = "./crates/services/consensus_module/bft" }
-fuel-core-poa = { version = "0.43.2", path = "./crates/services/consensus_module/poa" }
-fuel-core-shared-sequencer = { version = "0.43.2", path = "crates/services/shared-sequencer" }
-fuel-core-executor = { version = "0.43.2", path = "./crates/services/executor", default-features = false }
-fuel-core-importer = { version = "0.43.2", path = "./crates/services/importer" }
-fuel-core-gas-price-service = { version = "0.43.2", path = "crates/services/gas_price_service" }
-fuel-core-p2p = { version = "0.43.2", path = "./crates/services/p2p" }
-fuel-core-parallel-executor = { version = "0.43.2", path = "./crates/services/parallel-executor" }
-fuel-core-producer = { version = "0.43.2", path = "./crates/services/producer" }
-fuel-core-relayer = { version = "0.43.2", path = "./crates/services/relayer" }
-fuel-core-sync = { version = "0.43.2", path = "./crates/services/sync" }
-fuel-core-txpool = { version = "0.43.2", path = "./crates/services/txpool_v2" }
-fuel-core-tx-status-manager = { version = "0.43.2", path = "./crates/services/tx_status_manager" }
-fuel-core-storage = { version = "0.43.2", path = "./crates/storage", default-features = false }
-fuel-core-trace = { version = "0.43.2", path = "./crates/trace" }
-fuel-core-types = { version = "0.43.2", path = "./crates/types", default-features = false }
-fuel-core-tests = { version = "0.0.0", path = "./tests" }
-fuel-core-upgradable-executor = { version = "0.43.2", path = "./crates/services/upgradable-executor" }
-fuel-core-wasm-executor = { version = "0.43.2", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
-fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
-fuel-gas-price-algorithm = { version = "0.43.2", path = "crates/fuel-gas-price-algorithm" }
-
-# Fuel dependencies
-fuel-vm-private = { version = "0.62.0", package = "fuel-vm", default-features = false }
 
 # Common dependencies
 anyhow = "1.0"
@@ -111,64 +63,112 @@ async-graphql = { version = "=7.0.15", features = [
 ], default-features = false }
 async-trait = "0.1"
 aws-sdk-kms = "1.37"
-cynic = { version = "3.1.0", features = ["http-reqwest"] }
+axum = "0.5"
+bytes = "1.5.0"
 clap = "4.4"
+cynic = { version = "3.1.0", features = ["http-reqwest"] }
+derive_more = { version = "0.99" }
+ed25519 = { version = "2.2.3", default-features = false }
+ed25519-dalek = { version = "2.1.1", default-features = false }
 educe = { version = "0.6", default-features = false, features = [
   "Eq",
   "PartialEq",
   "Hash",
   "Debug",
 ] }
-ed25519 = { version = "2.2.3", default-features = false }
-ed25519-dalek = { version = "2.1.1", default-features = false }
-derive_more = { version = "0.99" }
-enum_dispatch = "0.3.13"
 enum-iterator = "1.2"
+enum_dispatch = "0.3.13"
+# Workspace members
+fuel-core = { version = "0.43.2", path = "./crates/fuel-core", default-features = false }
+fuel-core-bft = { version = "0.43.2", path = "./crates/services/consensus_module/bft" }
+fuel-core-bin = { version = "0.43.2", path = "./bin/fuel-core" }
+fuel-core-chain-config = { version = "0.43.2", path = "./crates/chain-config", default-features = false }
+fuel-core-client = { version = "0.43.2", path = "./crates/client" }
+fuel-core-client-bin = { version = "0.43.2", path = "./bin/fuel-core-client" }
+fuel-core-compression = { version = "0.43.2", path = "./crates/compression" }
+fuel-core-compression-service = { version = "0.43.2", path = "./crates/services/compression" }
+fuel-core-consensus-module = { version = "0.43.2", path = "./crates/services/consensus_module" }
+fuel-core-database = { version = "0.43.2", path = "./crates/database" }
+fuel-core-executor = { version = "0.43.2", path = "./crates/services/executor", default-features = false }
+fuel-core-gas-price-service = { version = "0.43.2", path = "crates/services/gas_price_service" }
+fuel-core-importer = { version = "0.43.2", path = "./crates/services/importer" }
+fuel-core-keygen = { version = "0.43.2", path = "./crates/keygen" }
+fuel-core-keygen-bin = { version = "0.43.2", path = "./bin/keygen" }
+fuel-core-metrics = { version = "0.43.2", path = "./crates/metrics" }
+fuel-core-p2p = { version = "0.43.2", path = "./crates/services/p2p" }
+fuel-core-parallel-executor = { version = "0.43.2", path = "./crates/services/parallel-executor" }
+fuel-core-poa = { version = "0.43.2", path = "./crates/services/consensus_module/poa" }
+fuel-core-producer = { version = "0.43.2", path = "./crates/services/producer" }
+fuel-core-relayer = { version = "0.43.2", path = "./crates/services/relayer" }
+fuel-core-services = { version = "0.43.2", path = "./crates/services" }
+fuel-core-shared-sequencer = { version = "0.43.2", path = "crates/services/shared-sequencer" }
+fuel-core-storage = { version = "0.43.2", path = "./crates/storage", default-features = false }
+fuel-core-sync = { version = "0.43.2", path = "./crates/services/sync" }
+fuel-core-tests = { version = "0.0.0", path = "./tests" }
+fuel-core-trace = { version = "0.43.2", path = "./crates/trace" }
+fuel-core-tx-status-manager = { version = "0.43.2", path = "./crates/services/tx_status_manager" }
+fuel-core-txpool = { version = "0.43.2", path = "./crates/services/txpool_v2" }
+fuel-core-types = { version = "0.43.2", path = "./crates/types", default-features = false }
+fuel-core-upgradable-executor = { version = "0.43.2", path = "./crates/services/upgradable-executor" }
+fuel-core-wasm-executor = { version = "0.43.2", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
+fuel-core-xtask = { version = "0.0.0", path = "./xtask" }
+fuel-gas-price-algorithm = { version = "0.43.2", path = "crates/fuel-gas-price-algorithm" }
+
+# Fuel dependencies
+fuel-vm-private = { version = "0.62.0", package = "fuel-vm", default-features = false }
+futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14.26" }
+impl-tools = "0.10"
+indicatif = { version = "0.17", default-features = false }
+insta = "1.8"
+itertools = { version = "0.12", default-features = false }
+mockall = "0.11"
 num-rational = "0.4.2"
-primitive-types = { version = "0.12", default-features = false }
-rand = "0.8"
+num_enum = "0.7"
+once_cell = "1.16"
 parking_lot = "0.12"
-tokio = { version = "1.27", default-features = false }
-tokio-rayon = "2.1.0"
-tokio-stream = "0.1"
-tokio-util = { version = "0.7", default-features = false }
-tracing = "0.1"
-thiserror = "1.0"
-futures = "0.3"
+parquet = { version = "49.0", default-features = false }
+paste = "1.0"
+pin-project-lite = "0.2"
 postcard = "1.0"
-tracing-attributes = "0.1"
-tracing-subscriber = "0.3"
+pretty_assertions = "1.4.0"
+primitive-types = { version = "0.12", default-features = false }
+prometheus-client = "0.22.0"
+proptest = "1.1"
+rand = "0.8"
+rayon = "1.10.0"
+# enable cookie store to support L7 sticky sessions
+reqwest = { version = "0.12.0", default-features = false, features = [
+  "rustls-tls",
+  "cookies",
+] }
 serde = "1.0"
 serde-big-array = { version = "0.5", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
 strum = { version = "0.25" }
 strum_macros = "0.25"
-# enable cookie store to support L7 sticky sessions
-reqwest = { version = "0.12.0", default-features = false, features = [
-  "rustls-tls",
-  "cookies",
-] }
-mockall = "0.11"
-num_enum = "0.7"
-test-case = "3.3"
-impl-tools = "0.10"
-test-strategy = "0.3"
-parquet = { version = "49.0", default-features = false }
-rayon = "1.10.0"
-bytes = "1.5.0"
-paste = "1.0"
-pretty_assertions = "1.4.0"
-proptest = "1.1"
-pin-project-lite = "0.2"
-axum = "0.5"
-once_cell = "1.16"
-prometheus-client = "0.22.0"
-indicatif = { version = "0.17", default-features = false }
-itertools = { version = "0.12", default-features = false }
-insta = "1.8"
 tempfile = "3.4"
+test-case = "3.3"
+test-strategy = "0.3"
+thiserror = "1.0"
 tikv-jemallocator = "0.5"
+tokio = { version = "1.27", default-features = false }
+tokio-rayon = "2.1.0"
+tokio-stream = "0.1"
+tokio-util = { version = "0.7", default-features = false }
+tracing = "0.1"
+tracing-attributes = "0.1"
+tracing-subscriber = "0.3"
 url = "2.2"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+# The difference in performance for "fat" and "thin" is small,
+# but "thin" LTO is much faster to compile.
+# If you play with benchmarks or flamegraphs, it is better to use "thin"
+# To speedup iterations between compilation.
+#lto = "thin"
+panic = "unwind"

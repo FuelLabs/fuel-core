@@ -11,6 +11,31 @@ rust-version = { workspace = true }
 description = "Fuel Block Upgradable Executor"
 build = "build.rs"
 
+[features]
+default = ["std"]
+std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
+smt = [
+    "fuel-core-storage/smt",
+    "fuel-core-executor/smt",
+    "fuel-core-wasm-executor?/smt",
+]
+wasm-executor = [
+    "dep:anyhow",
+    "dep:derive_more",
+    "dep:postcard",
+    "dep:tracing",
+    "dep:fuel-core-wasm-executor",
+    "dep:wasmtime",
+]
+test-helpers = ["fuel-core-storage/test-helpers", "fuel-core-types/test-helpers"]
+limited-tx-count = ["fuel-core-executor/limited-tx-count"]
+fault-proving = [
+    "fuel-core-executor/fault-proving",
+    "fuel-core-storage/fault-proving",
+    "fuel-core-types/fault-proving",
+    "fuel-core-wasm-executor?/fault-proving",
+]
+
 [dependencies]
 anyhow = { workspace = true, optional = true }
 derive_more = { workspace = true, optional = true }
@@ -32,38 +57,10 @@ wasmtime = { version = "31.0.0", default-features = false, features = [
   "runtime",
 ], optional = true }
 
+[build-dependencies]
+fuel-core-wasm-executor = { workspace = true, optional = true, default-features = false }
+
 [dev-dependencies]
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-
-[build-dependencies]
-fuel-core-wasm-executor = { workspace = true, optional = true, default-features = false }
-
-[features]
-default = ["std"]
-std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
-smt = [
-  "fuel-core-storage/smt",
-  "fuel-core-executor/smt",
-  "fuel-core-wasm-executor?/smt",
-]
-wasm-executor = [
-  "dep:anyhow",
-  "dep:derive_more",
-  "dep:postcard",
-  "dep:tracing",
-  "dep:fuel-core-wasm-executor",
-  "dep:wasmtime",
-]
-test-helpers = [
-  "fuel-core-storage/test-helpers",
-  "fuel-core-types/test-helpers",
-]
-limited-tx-count = ["fuel-core-executor/limited-tx-count"]
-fault-proving = [
-  "fuel-core-executor/fault-proving",
-  "fuel-core-storage/fault-proving",
-  "fuel-core-types/fault-proving",
-  "fuel-core-wasm-executor?/fault-proving",
-]
