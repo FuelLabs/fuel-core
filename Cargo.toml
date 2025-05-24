@@ -61,6 +61,7 @@ async-graphql = { version = "=7.0.15", features = [
   "graphiql",
   "tracing",
 ], default-features = false }
+async-graphql-value = { version = "=7.0.15" }
 async-trait = "0.1"
 aws-sdk-kms = "1.37"
 axum = "0.5"
