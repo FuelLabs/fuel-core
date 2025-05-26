@@ -99,6 +99,7 @@ use test_helpers::{
     },
     config_with_fee,
     default_signing_wallet,
+    fuel_core_driver::FuelCoreDriver,
 };
 use tokio::sync::oneshot::Sender;
 
@@ -749,12 +750,7 @@ async fn relayer_db_can_be_rewinded() {
 
     let eth_node_handle = spawn_eth_node(Arc::new(eth_node)).await;
 
-    relayer_config.relayer = Some(vec![
-        format!("http://{}", eth_node_handle.address)
-            .as_str()
-            .try_into()
-            .unwrap(),
-    ]);
+    let relayer_url = format!("http://{}", eth_node_handle.address);
 
     let tmp_dir = TempDir::new().unwrap();
     let open_db = |tmp_dir: &TempDir| {
@@ -769,11 +765,23 @@ async fn relayer_db_can_be_rewinded() {
         )
         .expect("Failed to create database")
     };
-    let db = open_db(&tmp_dir);
 
-    let srv = FuelService::from_combined_database(db.clone(), config)
-        .await
-        .unwrap();
+    let driver = FuelCoreDriver::spawn_feeless_with_directory(
+        tmp_dir,
+        &[
+            "--debug",
+            "--poa-instant",
+            "true",
+            "--state-rewind-duration",
+            "7d",
+            "--enable-relayer",
+            "--relayer",
+            &relayer_url,
+        ],
+    )
+    .await
+    .unwrap();
+    let srv = &driver.node;
 
     let client = FuelClient::from(srv.bound_address);
 
@@ -784,9 +792,11 @@ async fn relayer_db_can_be_rewinded() {
     eth_node_handle.shutdown.send(()).unwrap();
 
     // When
+    let tmp_dir = driver.kill().await;
+
+    let db = open_db(&tmp_dir);
     let relayer_block_height_before_rollback = db.relayer().latest_da_height();
     db.shutdown();
-    drop(srv);
 
     let target_block_height = rollback_target_height.to_string();
     let args = [
