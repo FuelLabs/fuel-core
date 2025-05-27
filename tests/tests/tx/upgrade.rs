@@ -569,6 +569,6 @@ async fn state_transition_bytecode_should_be_queryable_by_its_root_and_version()
     );
     match state_transition_bytecode_by_root.bytecode {
         UploadedBytecode::Completed(bytecode) => assert_eq!(bytecode, WASM_BYTECODE),
-        _ => panic!("bytecode uploade incomplete"),
+        _ => panic!("bytecode uploaded incomplete"),
     };
 }

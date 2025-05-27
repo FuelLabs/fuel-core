@@ -6,6 +6,17 @@ publish = false
 rust-version = { workspace = true }
 version = "0.0.0"
 
+[features]
+default = ["fuel-core/rocksdb", "fuel-core/rocksdb-production"]
+fault-proving = [
+    "fuel-core-types/fault-proving",
+    "fuel-core-chain-config/fault-proving",
+    "fuel-core/fault-proving",
+    "fuel-core-storage/fault-proving",
+    "fuel-core-database/fault-proving",
+    "fuel-core-sync/fault-proving",
+]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -65,17 +76,6 @@ name = "state"
 [[bench]]
 harness = false
 name = "vm"
-
-[features]
-default = ["fuel-core/rocksdb", "fuel-core/rocksdb-production"]
-fault-proving = [
-  "fuel-core-types/fault-proving",
-  "fuel-core-chain-config/fault-proving",
-  "fuel-core/fault-proving",
-  "fuel-core-storage/fault-proving",
-  "fuel-core-database/fault-proving",
-  "fuel-core-sync/fault-proving",
-]
 
 [[bench]]
 harness = false

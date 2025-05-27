@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.44.0]
+
+### Breaking
+- [2887](https://github.com/FuelLabs/fuel-core/pull/2887): Bump Rust version to `1.85.0`.
+  Starting with this release, newly generated WASM state transition functions are no longer compatible with old versions of the `fuel-core`. So, the change breaks forward compatibility for the network and each node should start to use a new `fuel-core` release.
+- [2943](https://github.com/FuelLabs/fuel-core/pull/2943): Registry root calculation for compression tables no longer accounts for the evictor cache.
+- [2947](https://github.com/FuelLabs/fuel-core/pull/2947): Upgrade to 2024 Rust edition.
+- [2958](https://github.com/FuelLabs/fuel-core/pull/2958): Changed return type of `balance` endpoint from `u64` to `u128`
+- [3002](https://github.com/FuelLabs/fuel-core/pull/3002): Update `fuel-vm` to `0.61.1`. In doing this, we've changed Receipts to use the `SubId` scalar type for sub asset IDs.
+
+### Added
+- [2954](https://github.com/FuelLabs/fuel-core/pull/2954): Made `registry` mod public in `fuel-core-compression`
+- [2956](https://github.com/FuelLabs/fuel-core/pull/2956): Add excluded_contract filter to extract of transaction from TxPool.
+- [2994](https://github.com/FuelLabs/fuel-core/pull/2994): Simple makefile with basic commands.
+- [3004](https://github.com/FuelLabs/fuel-core/pull/3004): Additional error logs for Ethereum provider failures.
+
+### Changed
+- [3021](https://github.com/FuelLabs/fuel-core/pull/3021): Updated fuel-vm to 0.62.0, see https://github.com/fuelLabs/fuel-vm/releases/v0.62.0
+
+### Fixed
+- [2969](https://github.com/FuelLabs/fuel-core/pull/2969): Ensure that vm heap memory is zeroed out on rellocation after `reset`. Adds support for `GM::GetGasPrice` Bumps `fuel-vm` to `0.60.2`.
+- [2984](https://github.com/FuelLabs/fuel-core/pull/2984): Fix client coins endpoint so that passing `None` for `asset_id` no longer defaults to `AssetId::default()` but correctly returns all asset types.
+- [2987](https://github.com/FuelLabs/fuel-core/pull/2987): Make txpool pre-conf broadcast conditional on there being some txs in the list
+- [2989](https://github.com/FuelLabs/fuel-core/pull/2989): Prevent syncing compression database from genesis if override cli arg `--da-compression-starting-height` is provided.
+- [2992](https://github.com/FuelLabs/fuel-core/pull/2992): Make sure assemble tx doesn't count message data inputs as spendable inputs for covering fee
+- [2993](https://github.com/FuelLabs/fuel-core/pull/2993): Pin the graphiql playground to v3, and cache the result to be reused across multiple calls to render the playground.
+
+### Removed
+- [2955](https://github.com/FuelLabs/fuel-core/pull/2955): Remove unnecessary lifetime constraints on fuel-core-client.
+
 ## [Version 0.43.2]
 
 ### Fixed

@@ -5,17 +5,39 @@ description = "The primitives and types use by Fuel core protocol."
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = [
-  "blockchain",
-  "cryptocurrencies",
-  "fuel-client",
-  "fuel-core",
-  "fuel-types",
+    "blockchain",
+    "cryptocurrencies",
+    "fuel-client",
+    "fuel-core",
+    "fuel-types",
 ]
 license = { workspace = true }
 name = "fuel-core-types"
 repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = ["fuel-vm-private/alloc", "educe"]
+serde = [
+    "dep:serde",
+    "fuel-vm-private/serde",
+    "ed25519/serde",
+    "ed25519-dalek/serde",
+]
+da-compression = ["fuel-vm-private/da-compression"]
+std = [
+    "alloc",
+    "fuel-vm-private/std",
+    "bs58",
+    "ed25519/std",
+    "ed25519-dalek/std",
+]
+random = ["dep:rand", "fuel-vm-private/random"]
+test-helpers = ["random", "fuel-vm-private/test-helpers"]
+aws-kms = ["dep:aws-sdk-kms"]
+fault-proving = []
 
 [dependencies]
 anyhow = { workspace = true }
@@ -42,25 +64,3 @@ aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 fuel-core-types = { path = ".", features = ["test-helpers", "serde"] }
 postcard = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
-
-[features]
-default = ["std"]
-alloc = ["fuel-vm-private/alloc", "educe"]
-serde = [
-  "dep:serde",
-  "fuel-vm-private/serde",
-  "ed25519/serde",
-  "ed25519-dalek/serde",
-]
-da-compression = ["fuel-vm-private/da-compression"]
-std = [
-  "alloc",
-  "fuel-vm-private/std",
-  "bs58",
-  "ed25519/std",
-  "ed25519-dalek/std",
-]
-random = ["dep:rand", "fuel-vm-private/random"]
-test-helpers = ["random", "fuel-vm-private/test-helpers"]
-aws-kms = ["dep:aws-sdk-kms"]
-fault-proving = []
