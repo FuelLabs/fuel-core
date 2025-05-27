@@ -186,7 +186,7 @@ async fn returns_all_assets_when_asset_id_is_none() {
     let mut coin_generator = CoinConfigGenerator::new();
     let coins: Vec<_> = (0..10usize)
         .map(|i| CoinConfig {
-            owner,
+            owner: owner.into(),
             amount: (i + 1) as Word,
             asset_id: if i <= 5 { asset_id_a } else { asset_id_b },
             ..coin_generator.generate()
