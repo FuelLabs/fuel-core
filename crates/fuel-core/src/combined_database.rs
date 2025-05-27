@@ -464,7 +464,7 @@ impl CombinedDatabase {
             if let Some(relayer_db_height) = relayer_db_height {
                 if relayer_db_height < target_da_height {
                     return Err(anyhow::anyhow!(
-                        "gas-price-chain database height({relayer_db_height}) \
+                        "relayer database height({relayer_db_height}) \
                         is less than target height({target_da_height})"
                     ));
                 }
