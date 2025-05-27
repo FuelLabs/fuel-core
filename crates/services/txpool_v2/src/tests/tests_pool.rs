@@ -1370,8 +1370,7 @@ fn insert__dependent_on_blob() {
     let dependent_tx = universe.build_script_transaction(Some(vec![input_a]), None, 1);
 
     // When
-    universe.verify_and_insert(dependent_tx)
-        .unwrap_err();
+    universe.verify_and_insert(dependent_tx).unwrap_err();
     // Then
     universe.assert_pool_integrity(&[tx]);
 }
