@@ -458,13 +458,11 @@ where
             biased;
             _ = watcher.while_started() => {
                 tracing::debug!("Stopping gas price service");
-                // println!("Stopping gas price service");
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
                 tracing::debug!("Received L2 block result: {:?}", l2_block_res);
                 let res = self.commit_block_data_to_algorithm(l2_block_res).await;
-                // println!("Received L2 block result: {:?}", res);
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
@@ -472,12 +470,10 @@ where
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
                         self.da_block_costs_buffer.push(da_block_costs);
-                        // println!("Received DA block costs:");
                         TaskNextAction::Continue
                     },
                     Err(err) => {
                         let err = anyhow!("Error receiving DA block costs: {:?}", err);
-                        // println!("Error receiving DA block costs: {:?}", err);
                         TaskNextAction::ErrorContinue(err)
                     }
                 }
@@ -744,29 +740,18 @@ mod tests {
             false,
         );
         let read_algo = service.next_block_algorithm();
-        let mut watcher = StateWatcher::default();
+        let mut watcher = StateWatcher::started();
+        let observer = service.shared_data();
         let initial_price = read_algo.next_gas_price();
 
         // when
-        // let observer = service.shared_data();
-        service.run(&mut watcher).await;
-        // observer.await_synced().await.unwrap();
         l2_block_sender.send(l2_block).await.unwrap();
-        // tokio::time::timeout(
-        //     Duration::from_secs(5),
-        //     service.await_synced()
-        // ).await.unwrap().unwrap();
-        // service
-        //     .await_synced()
-        //     .await
-        //     .unwrap();
-        println!("Received L2 block result");
+        service.run(&mut watcher).await;
+        observer.await_synced().await.unwrap();
         service.shutdown().await.unwrap();
 
         // then
         let actual_price = read_algo.next_gas_price();
-        println!("initial_price: {:?}", initial_price);
-        println!("actual_price: {:?}", actual_price);
         assert_ne!(initial_price, actual_price);
     }
 
@@ -857,6 +842,7 @@ mod tests {
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
+        let observer = service.shared_data();
 
         let next = service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(3)).await;
@@ -864,7 +850,10 @@ mod tests {
 
         // when
         let next = service.run(&mut watcher).await;
-        tokio::time::sleep(Duration::from_millis(3)).await;
+        tokio::time::timeout(
+            Duration::from_millis(3), 
+            observer.await_synced()
+        ).await.unwrap().unwrap();
         service.shutdown().await.unwrap();
 
         // then
