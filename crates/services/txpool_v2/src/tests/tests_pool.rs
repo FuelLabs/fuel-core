@@ -1371,8 +1371,8 @@ fn insert__dependent_on_blob() {
 
     // When
     universe.verify_and_insert(dependent_tx)
-        // Then
         .unwrap_err();
+    // Then
     universe.assert_pool_integrity(&[tx]);
 }
 
