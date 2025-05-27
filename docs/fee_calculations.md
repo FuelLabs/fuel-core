@@ -9,7 +9,7 @@ to include an additional cost to op codes that write new data to storage or to
 transactions that add new contracts to the chain.
 
 There are a number of ways we might calculate this value; we have decided to go 
-with a simple calculatoin based on our target storage growth and working
+with a simple calculation based on our target storage growth and working
 backward from there.
 
 #### Pessimistic Estimate

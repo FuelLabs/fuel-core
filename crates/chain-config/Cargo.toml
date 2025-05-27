@@ -11,6 +11,27 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Chain config types"
 
+[features]
+std = [
+    "itertools/use_std",
+    "serde_json/std",
+    "fuel-core-types/std",
+    "anyhow/std",
+    "tracing?/std",
+    "bech32?/std",
+]
+default = ["std"]
+parquet = ["std", "dep:parquet", "postcard/use-std"]
+random = ["dep:rand", "fuel-core-types/random"]
+test-helpers = [
+    "dep:bech32",
+    "dep:rand",
+    "dep:tracing",
+    "fuel-core-types/random",
+    "fuel-core-types/test-helpers",
+]
+fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-proving"]
+
 [dependencies]
 anyhow = { workspace = true }
 bech32 = { version = "0.9.0", default-features = false, optional = true }
@@ -44,27 +65,3 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 strum = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
 test-case = { workspace = true }
-
-[features]
-std = [
-  "itertools/use_std",
-  "serde_json/std",
-  "fuel-core-types/std",
-  "anyhow/std",
-  "tracing?/std",
-  "bech32?/std",
-]
-default = ["std"]
-parquet = ["std", "dep:parquet", "postcard/use-std"]
-random = ["dep:rand", "fuel-core-types/random"]
-test-helpers = [
-  "dep:bech32",
-  "dep:rand",
-  "dep:tracing",
-  "fuel-core-types/random",
-  "fuel-core-types/test-helpers",
-]
-fault-proving = [
-  "fuel-core-types/fault-proving",
-  "fuel-core-storage/fault-proving",
-]

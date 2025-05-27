@@ -44,7 +44,7 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V5": {
+        "V6": {
           "add": 1,
           "addi": 1,
           "and": 1,
@@ -91,6 +91,7 @@ expression: json
           "mul": 1,
           "muli": 1,
           "mldv": 1,
+          "niop": 1,
           "noop": 1,
           "not": 1,
           "or": 1,
@@ -308,7 +309,7 @@ expression: json
       "privileged_address": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   },
-  "genesis_state_transition_version": 28,
+  "genesis_state_transition_version": 29,
   "consensus": {
     "PoAV2": {
       "genesis_signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb",
