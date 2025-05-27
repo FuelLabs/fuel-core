@@ -1,6 +1,11 @@
 use std::collections::HashSet;
 
-use fuel_core_storage::Result as StorageResult;
+use fuel_core_storage::{
+    Result as StorageResult,
+    column::Column,
+    kv_store::KeyValueInspect,
+    transactional::AtomicView,
+};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::coins::coin::CompressedCoin,
@@ -56,4 +61,17 @@ pub trait Storage {
         &self,
         consensus_parameters_version: u32,
     ) -> StorageResult<ConsensusParameters>;
+}
+
+/// Extension trait for simple trait bounds
+pub trait ExecutorStorage: AtomicView + Clone + Send + 'static {
+    type View: KeyValueInspect<Column = Column> + Storage + Send + Sync + 'static;
+}
+
+impl<S, V> ExecutorStorage for S
+where
+    S: AtomicView<LatestView = V> + Clone + Send + 'static,
+    V: KeyValueInspect<Column = Column> + Storage + Send + Sync + 'static,
+{
+    type View = V;
 }
