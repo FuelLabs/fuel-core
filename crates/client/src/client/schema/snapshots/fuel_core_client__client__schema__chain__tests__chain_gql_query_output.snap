@@ -1,7 +1,6 @@
 ---
 source: crates/client/src/client/schema/chain.rs
 expression: operation.query
-snapshot_kind: text
 ---
 query ChainQuery {
   chain {
@@ -127,6 +126,7 @@ query ChainQuery {
         mul
         muli
         mldv
+        niop
         noop
         not
         or

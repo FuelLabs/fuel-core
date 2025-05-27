@@ -6,16 +6,21 @@ categories = ["cryptography::cryptocurrencies"]
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = [
-  "blockchain",
-  "cryptocurrencies",
-  "fuel-core",
-  "fuel-client",
-  "fuel-database",
+    "blockchain",
+    "cryptocurrencies",
+    "fuel-core",
+    "fuel-client",
+    "fuel-database",
 ]
 license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
 description = "The crates contains databases used by Fuel core protocol."
+
+[features]
+test-helpers = []
+backup = []
+fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-proving"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -25,11 +30,3 @@ fuel-core-types = { workspace = true, features = ["std"] }
 
 [dev-dependencies]
 fuel-core-trace = { path = "../trace" }
-
-[features]
-test-helpers = []
-backup = []
-fault-proving = [
-  "fuel-core-types/fault-proving",
-  "fuel-core-storage/fault-proving",
-]

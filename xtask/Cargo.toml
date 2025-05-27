@@ -5,6 +5,9 @@ rust-version = { workspace = true }
 version = "0.0.0"
 license = { workspace = true }
 publish = false
+
+[features]
+default = ["fuel-core/default"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -12,6 +15,3 @@ clap = { workspace = true, features = ["env", "derive"] }
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
   "test-helpers",
 ] }
-
-[features]
-default = ["fuel-core/default"]

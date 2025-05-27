@@ -11,6 +11,14 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel client networking"
 
+[features]
+test-helpers = ["fuel-core-types/test-helpers"]
+fault-proving = [
+    "fuel-core-types/fault-proving",
+    "fuel-core-storage/fault-proving",
+    "fuel-core-chain-config/fault-proving",
+]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -62,11 +70,3 @@ tracing-attributes = { workspace = true }
 
 [dev-dependencies.libp2p-swarm-test]
 version = "0.4.0"
-
-[features]
-test-helpers = ["fuel-core-types/test-helpers"]
-fault-proving = [
-  "fuel-core-types/fault-proving",
-  "fuel-core-storage/fault-proving",
-  "fuel-core-chain-config/fault-proving",
-]
