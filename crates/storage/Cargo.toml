@@ -5,17 +5,25 @@ description = "Storage types and primitives used by Fuel core protocol."
 edition = { workspace = true }
 homepage = { workspace = true }
 keywords = [
-  "blockchain",
-  "cryptocurrencies",
-  "fuel-client",
-  "fuel-core",
-  "fuel-storage",
+    "blockchain",
+    "cryptocurrencies",
+    "fuel-client",
+    "fuel-core",
+    "fuel-storage",
 ]
 license = { workspace = true }
 name = "fuel-core-storage"
 repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = ["fuel-vm-private/alloc", "fuel-core-types/alloc"]
+std = ["alloc", "fuel-vm-private/std", "fuel-core-types/std"]
+smt = []
+test-helpers = ["dep:mockall", "dep:rand"]
+fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -45,11 +53,3 @@ fuel-core-types = { workspace = true, default-features = false, features = [
   "test-helpers",
 ] }
 test-case = { workspace = true }
-
-[features]
-default = ["std"]
-alloc = ["fuel-vm-private/alloc", "fuel-core-types/alloc"]
-std = ["alloc", "fuel-vm-private/std", "fuel-core-types/std"]
-smt = []
-test-helpers = ["dep:mockall", "dep:rand"]
-fault-proving = ["fuel-core-types/fault-proving"]
