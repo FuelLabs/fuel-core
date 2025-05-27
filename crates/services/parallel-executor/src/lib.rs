@@ -7,6 +7,7 @@ pub mod ports;
 
 mod once_transaction_source;
 mod tx_waiter;
+mod validator;
 
 #[cfg(test)]
 mod tests;
