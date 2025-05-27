@@ -10,6 +10,7 @@ use crate::{
         SchedulerError,
         SchedulerExecutionResult,
     },
+    txs_ext::TxCoinbaseExt,
     validator::{
         self,
         Validator,
@@ -159,8 +160,7 @@ where
         let transactions = block.transactions();
         let mut memory = MemoryInstance::new();
 
-        let (gas_price, coinbase_contract_id) =
-            Self::get_coinbase_info_from_mint_tx(transactions)?;
+        let (gas_price, coinbase_contract_id) = transactions.coinbase()?;
 
         let block_storage_tx = self.process_l1_txs(
             &mut partial_block,
@@ -173,38 +173,17 @@ where
 
         let components = Components {
             header_to_produce: partial_block.header,
-            transactions_source: transactions
-                .to_vec()
-                .into_iter()
-                .skip(processed_l1_tx_count),
+            transactions_source: transactions.iter().cloned().skip(processed_l1_tx_count),
             coinbase_recipient: coinbase_contract_id,
             gas_price,
         };
 
         let executed_block_result = self
             .validator
-            .recreate_block(components, block_storage_tx)
+            .validate_block(components, block_storage_tx, block)
             .await?;
 
-        if let Some((_, error)) = executed_block_result.skipped_transactions.first() {
-            return Err(SchedulerError::SkippedTransaction(error.clone()));
-        }
-
-        if executed_block_result.block_id == block.header().id() {
-            Ok(executed_block_result)
-        } else {
-            Err(SchedulerError::BlockMismatch)
-        }
-    }
-
-    fn get_coinbase_info_from_mint_tx(
-        transactions: &[Transaction],
-    ) -> Result<(u64, ContractId), SchedulerError> {
-        if let Some(Transaction::Mint(mint)) = transactions.last() {
-            Ok((*mint.gas_price(), mint.input_contract().contract_id))
-        } else {
-            Err(SchedulerError::MintMissing)
-        }
+        Ok(executed_block_result)
     }
 
     /// Process DA changes if the DA height has changed

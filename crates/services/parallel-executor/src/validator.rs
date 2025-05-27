@@ -53,7 +53,33 @@ impl Validator {
         Self { config }
     }
 
-    pub async fn recreate_block<S, D>(
+    pub async fn validate_block<S, D>(
+        &self,
+        components: Components<S>,
+        block_storage_tx: StorageTransaction<D>,
+        block: &fuel_core_types::blockchain::block::Block,
+    ) -> Result<ValidationResult, SchedulerError>
+    where
+        D: KeyValueInspect<Column = Column>,
+        S: Iterator<Item = Transaction>,
+    {
+        let executed_block_result =
+            self.recreate_block(components, block_storage_tx).await?;
+
+        // validation 1: ensure that there are no skipped transactions
+        if let Some((_, error)) = executed_block_result.skipped_transactions.first() {
+            return Err(SchedulerError::SkippedTransaction(error.clone()));
+        }
+
+        // validation 2: ensure that the block id is valid
+        if executed_block_result.block_id != block.header().id() {
+            return Err(SchedulerError::BlockMismatch)
+        }
+
+        Ok(executed_block_result)
+    }
+
+    async fn recreate_block<S, D>(
         &self,
         components: Components<S>,
         block_storage_tx: StorageTransaction<D>,
