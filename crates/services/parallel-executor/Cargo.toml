@@ -11,6 +11,7 @@ rust-version = { workspace = true }
 description = "Fuel Block Parallel Executor"
 
 [features]
+fault-proving = ["fuel-core-types/fault-proving"]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
 
 [dependencies]
@@ -34,7 +35,3 @@ anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers", "serde"] }
 rand = { workspace = true }
-
-[features]
-wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
-fault-proving = ["fuel-core-types/fault-proving"]
