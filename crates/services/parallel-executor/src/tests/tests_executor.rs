@@ -656,7 +656,7 @@ async fn test_skipped_txs_fallback_mechanism() {
             Consumer::receive(&tx_pool_requests_receiver)
                 .respond_with(&[&tx1], TransactionFiltered::NotFiltered);
 
-            // Request for thread 2
+            // Request for thread 2 ( the second transaction is too large to fit in the block and will be skipped )
             Consumer::receive(&tx_pool_requests_receiver)
                 .respond_with(&[&tx2, &tx3], TransactionFiltered::NotFiltered);
 
@@ -672,5 +672,6 @@ async fn test_skipped_txs_fallback_mechanism() {
 
     let result = future.await.unwrap().into_result();
 
+    // 3 txs + mint tx (because tx2 has been skipped)
     assert_eq!(result.block.transactions().len(), 4);
 }
