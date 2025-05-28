@@ -922,14 +922,15 @@ where
         block_height: BlockHeight,
         consensus_params: &ConsensusParameters,
         batch_id: usize,
-        mut txs: Vec<Transaction>,
-        mut coins_used: Vec<CoinInBatch>,
-        mut coins_created: Vec<CoinInBatch>,
+        txs: Vec<Transaction>,
+        coins_used: Vec<CoinInBatch>,
+        coins_created: Vec<CoinInBatch>,
     ) -> Result<(), SchedulerError> {
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
         let mut all_txs_by_batch_id = FxHashMap::default();
+        all_txs_by_batch_id.insert(batch_id, (txs, coins_created, coins_used));
         for future in current_execution_tasks {
             match future.await {
                 Ok(res) => {
@@ -953,13 +954,13 @@ where
         let mut all_txs: Vec<CheckedTransaction> = vec![];
         let mut all_coins_created: Vec<CoinInBatch> = vec![];
         let mut all_coins_used: Vec<CoinInBatch> = vec![];
-        for id in lower_batch_id..higher_batch_id {
+        for id in lower_batch_id..=higher_batch_id {
             if let Some((txs, coins_created, coins_used)) =
                 all_txs_by_batch_id.remove(&id)
             {
                 for tx in txs {
                     all_txs.push(
-                        tx.into_checked(block_height, consensus_params)
+                        tx.into_checked_basic(block_height, consensus_params)
                             .map_err(|e| {
                                 SchedulerError::InternalError(format!(
                                     "Failed to convert transaction to checked: {e:?}"
@@ -984,32 +985,16 @@ where
                 }
                 all_coins_created.extend(res.coins_created);
                 all_coins_used.extend(res.coins_used);
-            } else if id == batch_id {
-                // Ordering of transactions is important so we need to place this code here
-                // which avoid to just move, but it's fine because we should only trigger this once
-                let txs = std::mem::take(&mut txs);
-                for tx in txs {
-                    all_txs.push(
-                        tx.into_checked(block_height, consensus_params)
-                            .map_err(|e| {
-                                SchedulerError::InternalError(format!(
-                                    "Failed to convert transaction to checked: {e:?}"
-                                ))
-                            })?
-                            .into(),
-                    );
-                }
-                all_coins_created.extend(std::mem::take(&mut coins_created));
-                all_coins_used.extend(std::mem::take(&mut coins_used));
             } else {
                 tracing::error!("Batch {id} not found in the execution results");
             }
         }
 
-        let (block, execution_data) = self
+        let mut execution_data = ExecutionData::default();
+        let block = self
             .executor
             .clone()
-            .execute(
+            .execute_l2_transactions(
                 Components {
                     header_to_produce: PartialBlockHeader::default(),
                     transactions_source: OnceTransactionsSource::new(all_txs, 0),
@@ -1017,13 +1002,14 @@ where
                     gas_price: Default::default(),
                 },
                 self.storage.latest_view().unwrap().write_transaction(),
+                &mut execution_data,
             )
             .await
             .map_err(SchedulerError::ExecutionError)?;
 
         // Save execution results for all batch id with empty data
         // to not break the batch chain
-        for id in lower_batch_id..higher_batch_id {
+        for id in lower_batch_id..=higher_batch_id {
             self.execution_results
                 .insert(id, WorkSessionSavedData::default());
         }

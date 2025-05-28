@@ -142,11 +142,18 @@ impl Storage {
     }
 }
 
-fn basic_tx(rng: &mut StdRng, database: &mut Storage) -> Transaction {
+fn basic_tx(
+    rng: &mut StdRng,
+    database: &mut Storage,
+    max_gas: Option<u64>,
+) -> Transaction {
     let input = given_stored_coin_predicate(rng, 1000, database);
-    TransactionBuilder::script(vec![], vec![])
-        .add_input(input)
-        .finalize_as_transaction()
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_input(input);
+    if let Some(gas) = max_gas {
+        builder.script_gas_limit(gas);
+    }
+    builder.finalize_as_transaction()
 }
 
 fn empty_filter() -> Filter {
@@ -184,7 +191,7 @@ fn given_stored_coin_predicate(
         amount,
         Default::default(),
         Default::default(),
-        Default::default(),
+        10000,
         predicate,
         vec![],
     )
@@ -258,10 +265,10 @@ async fn execute__simple_independent_transactions_sorted() {
     storage = add_consensus_parameters(storage, &ConsensusParameters::default());
 
     // Given
-    let tx1: Transaction = basic_tx(&mut rng, &mut storage);
-    let tx2: Transaction = basic_tx(&mut rng, &mut storage);
-    let tx3: Transaction = basic_tx(&mut rng, &mut storage);
-    let tx4: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx1: Transaction = basic_tx(&mut rng, &mut storage, None);
+    let tx2: Transaction = basic_tx(&mut rng, &mut storage, None);
+    let tx3: Transaction = basic_tx(&mut rng, &mut storage, None);
+    let tx4: Transaction = basic_tx(&mut rng, &mut storage, None);
 
     let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
         Executor::new(
@@ -603,4 +610,67 @@ async fn execute__utxo_ordering_kept() {
         transactions[1].id(&ChainId::default()),
         tx2.id(&ChainId::default())
     );
+}
+
+// We use the overflow of gas to skip the transactions.
+#[tokio::test]
+async fn test_skipped_txs_fallback_mechanism() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    let mut consensus_parameters = ConsensusParameters::default();
+    consensus_parameters.set_block_gas_limit(100000);
+    storage = add_consensus_parameters(storage, &consensus_parameters);
+
+    // Given
+    let tx1: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
+    let tx2: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
+    let tx3: Transaction = basic_tx(&mut rng, &mut storage, Some(90000));
+    let tx4: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
+
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(3)
+                    .expect("The value is not zero; qed"),
+            },
+        );
+    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+
+    // When
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
+
+    // Then
+    std::thread::spawn({
+        let tx1 = tx1.clone();
+        let tx2 = tx2.clone();
+        move || {
+            // Request for thread 1
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[&tx1], TransactionFiltered::NotFiltered);
+
+            // Request for thread 2
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[&tx2, &tx3], TransactionFiltered::NotFiltered);
+
+            // Request for thread 3
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[&tx4], TransactionFiltered::NotFiltered);
+
+            // Request for thread 1 again
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[], TransactionFiltered::NotFiltered);
+        }
+    });
+
+    let result = future.await.unwrap().into_result();
+
+    assert_eq!(result.block.transactions().len(), 4);
 }

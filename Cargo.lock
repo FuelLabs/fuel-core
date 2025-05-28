@@ -3875,7 +3875,7 @@ name = "fuel-core-parallel-executor"
 version = "0.44.0"
 dependencies = [
  "anyhow",
- "derive_more 0.99.19",
+ "derive_more 0.99.20",
  "fuel-core-executor",
  "fuel-core-storage",
  "fuel-core-types 0.44.0",
