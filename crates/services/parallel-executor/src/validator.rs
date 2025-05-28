@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use dependency_graph::DependencyGraph;
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
@@ -25,6 +26,8 @@ use fuel_core_types::{
         },
     },
 };
+
+pub(crate) mod dependency_graph;
 
 use crate::{
     config::Config,
@@ -88,6 +91,8 @@ impl Validator {
         D: KeyValueInspect<Column = Column>,
         S: Iterator<Item = Transaction>,
     {
+        let mut _dependency_graph =
+            DependencyGraph::new(components.transactions_source.size_hint().0);
         let mut tx_batches = vec![vec![]; self.config.number_of_cores.get()];
         let mut all_batches_results: Arc<RwLock<HashMap<u64, ()>>> =
             Arc::new(RwLock::new(HashMap::default()));
