@@ -141,9 +141,29 @@ impl DependencyGraph {
                         if other_contracts.contains(&contract_id) {
                             *remaining_deps -= 1;
                             if *remaining_deps == 0 {
+                                // mark as independent
                                 self.independent_transactions.insert(other_tx_idx);
                                 self.newly_independent_queue.push_back(other_tx_idx);
                                 newly_independent.push(other_tx_idx);
+
+                                // clean up dependency tracking for this now-independent transaction
+                                if let Some(contracts) =
+                                    self.transaction_to_contracts.remove(&other_tx_idx)
+                                {
+                                    for contract in contracts {
+                                        if let Some(tx_set) = self
+                                            .contract_to_transactions
+                                            .get_mut(&contract)
+                                        {
+                                            tx_set.remove(&other_tx_idx);
+                                            if tx_set.is_empty() {
+                                                self.contract_to_transactions
+                                                    .remove(&contract);
+                                            }
+                                        }
+                                    }
+                                }
+                                self.remaining_dependencies.remove(&other_tx_idx);
                             }
                         }
                     }
