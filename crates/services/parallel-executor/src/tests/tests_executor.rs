@@ -62,7 +62,10 @@ use crate::{
         Storage as StoragePort,
         TransactionFiltered,
     },
-    tests::mocks::Consumer,
+    tests::mocks::{
+        Consumer,
+        MockPreconfirmationSender,
+    },
 };
 
 use super::mocks::{
@@ -139,11 +142,18 @@ impl Storage {
     }
 }
 
-fn basic_tx(rng: &mut StdRng, database: &mut Storage) -> Transaction {
+fn basic_tx(
+    rng: &mut StdRng,
+    database: &mut Storage,
+    max_gas: Option<u64>,
+) -> Transaction {
     let input = given_stored_coin_predicate(rng, 1000, database);
-    TransactionBuilder::script(vec![], vec![])
-        .add_input(input)
-        .finalize_as_transaction()
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_input(input);
+    if let Some(gas) = max_gas {
+        builder.script_gas_limit(gas);
+    }
+    builder.finalize_as_transaction()
 }
 
 fn empty_filter() -> Filter {
@@ -181,7 +191,7 @@ fn given_stored_coin_predicate(
         amount,
         Default::default(),
         Default::default(),
-        Default::default(),
+        10000,
         predicate,
         vec![],
     )
@@ -218,11 +228,11 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
         .contract_id()
         .cloned()
         .expect("Expected contract id");
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
+    let mut executor = Executor::new(
         storage,
         MockRelayer,
+        MockPreconfirmationSender,
         Config {
-            executor_config: Default::default(),
             number_of_cores: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
         },
@@ -245,10 +255,9 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
         .await
         .unwrap()
         .into_changes();
-    (contract_id, StorageChanges::Changes(res))
+    (contract_id, res)
 }
 
-#[ignore]
 #[tokio::test]
 async fn execute__simple_independent_transactions_sorted() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -256,20 +265,21 @@ async fn execute__simple_independent_transactions_sorted() {
     storage = add_consensus_parameters(storage, &ConsensusParameters::default());
 
     // Given
-    let tx1: Transaction = basic_tx(&mut rng, &mut storage);
-    let tx2: Transaction = basic_tx(&mut rng, &mut storage);
-    let tx3: Transaction = basic_tx(&mut rng, &mut storage);
-    let tx4: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx1: Transaction = basic_tx(&mut rng, &mut storage, None);
+    let tx2: Transaction = basic_tx(&mut rng, &mut storage, None);
+    let tx3: Transaction = basic_tx(&mut rng, &mut storage, None);
+    let tx4: Transaction = basic_tx(&mut rng, &mut storage, None);
 
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
-        storage,
-        MockRelayer,
-        Config {
-            executor_config: Default::default(),
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-        },
-    );
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
@@ -316,7 +326,6 @@ async fn execute__simple_independent_transactions_sorted() {
     assert_eq!(expected_ids, actual_ids);
 }
 
-#[ignore]
 #[tokio::test]
 async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -343,15 +352,16 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
         .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
         .finalize_as_transaction();
 
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
-        storage,
-        MockRelayer,
-        Config {
-            executor_config: Default::default(),
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-        },
-    );
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
@@ -392,7 +402,6 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     txpool.join().unwrap();
 }
 
-#[ignore]
 #[tokio::test]
 async fn execute__gas_left_updated_when_state_merges() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -457,15 +466,16 @@ async fn execute__gas_left_updated_when_state_merges() {
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize_as_transaction();
 
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
-        storage,
-        MockRelayer,
-        Config {
-            executor_config: Default::default(),
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-        },
-    );
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
@@ -516,7 +526,6 @@ async fn execute__gas_left_updated_when_state_merges() {
     response_thread.join().unwrap();
 }
 
-#[ignore]
 #[tokio::test]
 async fn execute__utxo_ordering_kept() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -547,15 +556,16 @@ async fn execute__utxo_ordering_kept() {
         .add_output(Output::coin(owner, 1000, Default::default()))
         .finalize_as_transaction();
 
-    let executor: Executor<Storage, MockRelayer> = Executor::new(
-        storage,
-        MockRelayer,
-        Config {
-            executor_config: Default::default(),
-            number_of_cores: std::num::NonZeroUsize::new(2)
-                .expect("The value is not zero; qed"),
-        },
-    );
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+            },
+        );
     let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
 
     // When
@@ -600,4 +610,68 @@ async fn execute__utxo_ordering_kept() {
         transactions[1].id(&ChainId::default()),
         tx2.id(&ChainId::default())
     );
+}
+
+// We use the overflow of gas to skip the transactions.
+#[tokio::test]
+async fn test_skipped_txs_fallback_mechanism() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    let mut consensus_parameters = ConsensusParameters::default();
+    consensus_parameters.set_block_gas_limit(100000);
+    storage = add_consensus_parameters(storage, &consensus_parameters);
+
+    // Given
+    let tx1: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
+    let tx2: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
+    let tx3: Transaction = basic_tx(&mut rng, &mut storage, Some(90000));
+    let tx4: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
+
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                number_of_cores: std::num::NonZeroUsize::new(3)
+                    .expect("The value is not zero; qed"),
+            },
+        );
+    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+
+    // When
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
+
+    // Then
+    std::thread::spawn({
+        let tx1 = tx1.clone();
+        let tx2 = tx2.clone();
+        move || {
+            // Request for thread 1
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[&tx1], TransactionFiltered::NotFiltered);
+
+            // Request for thread 2 ( the second transaction is too large to fit in the block and will be skipped )
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[&tx2, &tx3], TransactionFiltered::NotFiltered);
+
+            // Request for thread 3
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[&tx4], TransactionFiltered::NotFiltered);
+
+            // Request for thread 1 again
+            Consumer::receive(&tx_pool_requests_receiver)
+                .respond_with(&[], TransactionFiltered::NotFiltered);
+        }
+    });
+
+    let result = future.await.unwrap().into_result();
+
+    // 3 txs + mint tx (because tx2 has been skipped)
+    assert_eq!(result.block.transactions().len(), 4);
 }
