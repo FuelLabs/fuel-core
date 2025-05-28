@@ -1,9 +1,3 @@
-use std::collections::{
-    HashMap,
-    HashSet,
-    VecDeque,
-};
-
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
     fuel_tx::{
@@ -12,22 +6,31 @@ use fuel_core_types::{
         Transaction,
     },
 };
+use std::collections::{
+    HashMap,
+    HashSet,
+    VecDeque,
+};
 
 /// Dependency graph for contract-based transactions
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct DependencyGraph {
-    /// Contract ID -> Set of transaction indices that use this contract
-    contract_to_transactions: HashMap<ContractId, HashSet<usize>>,
+    /// Contract ID -> Ordered list of transaction indices that use this contract (first is ready)
+    contract_to_transactions: HashMap<ContractId, VecDeque<usize>>,
     /// Transaction index -> Set of contract IDs it depends on
     transaction_to_contracts: HashMap<usize, HashSet<ContractId>>,
     /// Transaction index -> Transaction
     transactions: HashMap<usize, Transaction>,
-    /// Tracks remaining dependencies for each transaction
-    remaining_dependencies: HashMap<usize, usize>,
-    /// Cache of currently independent transactions
-    independent_transactions: HashSet<usize>,
-    /// Queue for newly independent transactions
-    newly_independent_queue: VecDeque<usize>,
+    /// Cache of currently ready transactions
+    ready_transactions: HashSet<usize>,
+    /// Queue for newly ready transactions
+    newly_ready_queue: VecDeque<usize>,
+}
+
+impl Default for DependencyGraph {
+    fn default() -> Self {
+        Self::new(0)
+    }
 }
 
 impl DependencyGraph {
@@ -36,38 +39,43 @@ impl DependencyGraph {
             contract_to_transactions: HashMap::new(),
             transaction_to_contracts: HashMap::with_capacity(capacity),
             transactions: HashMap::with_capacity(capacity),
-            remaining_dependencies: HashMap::with_capacity(capacity),
-            independent_transactions: HashSet::with_capacity(capacity),
-            newly_independent_queue: VecDeque::with_capacity(capacity),
+            ready_transactions: HashSet::with_capacity(capacity),
+            newly_ready_queue: VecDeque::with_capacity(capacity),
         }
     }
 
     pub fn add_transaction(&mut self, index: usize, transaction: Transaction) {
         let mut contract_deps = HashSet::new();
+        let mut is_ready = true;
 
-        // extract contract dependencies
+        // Extract contract dependencies
         for input in transaction.inputs().iter() {
             if let Input::Contract(contract_input) = input {
                 let contract_id = contract_input.contract_id;
                 contract_deps.insert(contract_id);
 
-                // add to contract -> transactions mapping
-                self.contract_to_transactions
+                // add to contract -> transactions mapping (ordered by insertion)
+                let tx_queue = self
+                    .contract_to_transactions
                     .entry(contract_id)
-                    .or_default()
-                    .insert(index);
+                    .or_insert_with(VecDeque::new);
+
+                // if this is not the first transaction for this contract, it's not ready
+                if !tx_queue.is_empty() {
+                    is_ready = false;
+                }
+
+                tx_queue.push_back(index);
             }
         }
 
-        let dep_count = contract_deps.len();
         self.transaction_to_contracts.insert(index, contract_deps);
         self.transactions.insert(index, transaction);
-        self.remaining_dependencies.insert(index, dep_count);
 
-        // if no dependencies, immediately mark as independent
-        if dep_count == 0 {
-            self.independent_transactions.insert(index);
-            self.newly_independent_queue.push_back(index);
+        // if no contracts or first to use all contracts, mark as ready
+        if is_ready {
+            self.ready_transactions.insert(index);
+            self.newly_ready_queue.push_back(index);
         }
     }
 
@@ -81,19 +89,19 @@ impl DependencyGraph {
         }
     }
 
-    /// Get transactions that are currently independent
-    pub fn get_independent_transactions(&self) -> Vec<usize> {
-        self.independent_transactions.iter().copied().collect()
+    /// Get transactions that are currently ready
+    pub fn get_ready_transactions(&self) -> Vec<usize> {
+        self.ready_transactions.iter().copied().collect()
     }
 
-    /// Pop next independent transaction from queue
-    pub fn pop_independent_transaction(&mut self) -> Option<usize> {
-        self.newly_independent_queue.pop_front()
+    /// Pop next ready transaction from queue
+    pub fn pop_ready_transaction(&mut self) -> Option<usize> {
+        self.newly_ready_queue.pop_front()
     }
 
-    /// Check if there are any independent transactions ready
-    pub fn has_independent_transactions(&self) -> bool {
-        !self.independent_transactions.is_empty()
+    /// Check if there are any ready transactions
+    pub fn has_ready_transactions(&self) -> bool {
+        !self.ready_transactions.is_empty()
     }
 
     /// Remove a transaction and update dependencies
@@ -101,90 +109,72 @@ impl DependencyGraph {
         // remove the transaction from our tracking
         self.transactions.remove(&tx_index)?;
         let contracts = self.transaction_to_contracts.remove(&tx_index)?;
-        self.remaining_dependencies.remove(&tx_index);
 
-        // remove from independent set if it was there
-        self.independent_transactions.remove(&tx_index);
+        // remove from ready set if it was there
+        self.ready_transactions.remove(&tx_index);
 
-        let mut newly_independent = Vec::new();
+        let mut newly_ready = Vec::new();
+        let mut contracts_to_clean = Vec::new();
 
-        // pre-collect transactions that might be affected
-        let mut potentially_affected = HashSet::new();
-        for &contract_id in &contracts {
-            if let Some(tx_set) = self.contract_to_transactions.get(&contract_id) {
-                potentially_affected.extend(tx_set.iter().copied());
-            }
-        }
-
-        // remove this transaction from affected contracts
+        // for each contract this transaction used
         for contract_id in contracts {
-            if let Some(tx_set) = self.contract_to_transactions.get_mut(&contract_id) {
-                tx_set.remove(&tx_index);
+            if let Some(tx_queue) = self.contract_to_transactions.get_mut(&contract_id) {
+                // find and remove this transaction from the queue
+                if let Some(pos) = tx_queue.iter().position(|&x| x == tx_index) {
+                    tx_queue.remove(pos);
 
-                if tx_set.is_empty() {
-                    self.contract_to_transactions.remove(&contract_id);
-                }
-            }
-
-            // only check potentially affected transactions
-            for &other_tx_idx in &potentially_affected {
-                if other_tx_idx == tx_index {
-                    continue; // skip the removed transaction
-                }
-
-                if let Some(remaining_deps) =
-                    self.remaining_dependencies.get_mut(&other_tx_idx)
-                {
-                    if let Some(other_contracts) =
-                        self.transaction_to_contracts.get(&other_tx_idx)
-                    {
-                        if other_contracts.contains(&contract_id) {
-                            *remaining_deps -= 1;
-                            if *remaining_deps == 0 {
-                                // mark as independent
-                                self.independent_transactions.insert(other_tx_idx);
-                                self.newly_independent_queue.push_back(other_tx_idx);
-                                newly_independent.push(other_tx_idx);
-
-                                // clean up dependency tracking for this now-independent transaction
-                                if let Some(contracts) =
-                                    self.transaction_to_contracts.remove(&other_tx_idx)
-                                {
-                                    for contract in contracts {
-                                        if let Some(tx_set) = self
-                                            .contract_to_transactions
-                                            .get_mut(&contract)
-                                        {
-                                            tx_set.remove(&other_tx_idx);
-                                            if tx_set.is_empty() {
-                                                self.contract_to_transactions
-                                                    .remove(&contract);
-                                            }
-                                        }
-                                    }
-                                }
-                                self.remaining_dependencies.remove(&other_tx_idx);
-                            }
-                        }
+                    // if this was the first (ready) transaction, make the next one ready
+                    if pos == 0 && !tx_queue.is_empty() {
+                        let next_tx = tx_queue[0];
+                        newly_ready.push(next_tx);
                     }
                 }
+
+                // mark empty contract queues for cleanup
+                if tx_queue.is_empty() {
+                    contracts_to_clean.push(contract_id);
+                }
             }
         }
 
-        Some(newly_independent)
+        // clean up empty contract queues
+        for contract_id in contracts_to_clean {
+            self.contract_to_transactions.remove(&contract_id);
+        }
+
+        // now check which of the newly ready candidates are actually ready for ALL their contracts
+        let mut actually_ready = Vec::new();
+        for &next_tx in &newly_ready {
+            if let Some(next_contracts) = self.transaction_to_contracts.get(&next_tx) {
+                let is_now_ready = next_contracts.iter().all(|&contract| {
+                    self.contract_to_transactions
+                        .get(&contract)
+                        .map(|queue| queue.front() == Some(&next_tx))
+                        .unwrap_or(false)
+                });
+
+                if is_now_ready && !self.ready_transactions.contains(&next_tx) {
+                    self.ready_transactions.insert(next_tx);
+                    self.newly_ready_queue.push_back(next_tx);
+                    actually_ready.push(next_tx);
+                }
+            }
+        }
+
+        Some(actually_ready)
     }
 
     /// Batch remove multiple transactions
     pub fn remove_transactions(&mut self, tx_indices: &[usize]) -> Vec<usize> {
-        let mut all_newly_independent = Vec::new();
+        let mut all_newly_ready = Vec::new();
 
         for &tx_index in tx_indices {
-            if let Some(newly_independent) = self.remove_transaction(tx_index) {
-                all_newly_independent.extend(newly_independent);
+            if let Some(newly_ready) = self.remove_transaction(tx_index) {
+                all_newly_ready.extend(newly_ready);
             }
         }
 
-        all_newly_independent
+        all_newly_ready
     }
 
     pub fn get_transaction(&self, index: usize) -> Option<&Transaction> {
@@ -193,6 +183,15 @@ impl DependencyGraph {
 
     pub fn is_empty(&self) -> bool {
         self.transactions.is_empty()
+    }
+
+    /// Clear all data and reset to empty state
+    pub fn clear(&mut self) {
+        self.contract_to_transactions.clear();
+        self.transaction_to_contracts.clear();
+        self.transactions.clear();
+        self.ready_transactions.clear();
+        self.newly_ready_queue.clear();
     }
 }
 
@@ -236,268 +235,309 @@ mod tests {
 
     #[test]
     fn new__creates_empty_graph() {
+        // given
         let graph = DependencyGraph::new(0);
 
+        // then
         assert!(graph.is_empty());
-        assert!(graph.get_independent_transactions().is_empty());
+        assert!(graph.get_ready_transactions().is_empty());
     }
 
     #[test]
     fn add_transaction__with_no_contracts__creates_independent_transaction() {
+        // given
         let mut graph = DependencyGraph::new(1);
         let tx = create_simple_transaction();
 
+        // when
         graph.add_transaction(0, tx);
 
+        // then
         assert!(!graph.is_empty());
-        assert_eq!(graph.get_independent_transactions(), vec![0]);
+        assert_eq!(graph.get_ready_transactions(), vec![0]);
         assert!(graph.get_transaction(0).is_some());
     }
 
     #[test]
     fn add_transaction__with_single_contract__creates_dependent_transaction() {
+        // given
         let mut graph = DependencyGraph::new(1);
         let contract_id = ContractId::from([1u8; 32]);
         let tx = create_transaction_with_contracts(vec![contract_id]);
 
+        // when
         graph.add_transaction(0, tx);
 
+        // then
         assert!(!graph.is_empty());
-        assert!(graph.get_independent_transactions().is_empty()); // Should be dependent
+        assert_eq!(graph.get_ready_transactions(), vec![0]); // First to use contract is ready
         assert!(graph.get_transaction(0).is_some());
     }
 
     #[test]
     fn add_transaction__with_multiple_contracts__tracks_all_dependencies() {
+        // given
         let mut graph = DependencyGraph::new(1);
         let contract_id1 = ContractId::from([1u8; 32]);
         let contract_id2 = ContractId::from([2u8; 32]);
         let tx = create_transaction_with_contracts(vec![contract_id1, contract_id2]);
 
+        // when
         graph.add_transaction(0, tx);
 
+        // then
         assert!(!graph.is_empty());
-        assert!(graph.get_independent_transactions().is_empty()); // Should have 2 dependencies
+        assert_eq!(graph.get_ready_transactions(), vec![0]); // First to use both contracts is ready
 
-        // Check internal state
-        assert_eq!(graph.remaining_dependencies.get(&0), Some(&2));
-        assert!(
+        // Check internal state - both contracts should have this transaction as first
+        assert_eq!(
             graph
                 .contract_to_transactions
                 .get(&contract_id1)
                 .unwrap()
-                .contains(&0)
+                .front(),
+            Some(&0)
         );
-        assert!(
+        assert_eq!(
             graph
                 .contract_to_transactions
                 .get(&contract_id2)
                 .unwrap()
-                .contains(&0)
+                .front(),
+            Some(&0)
         );
     }
 
     #[test]
     fn multiple_transactions__same_contract__both_tracked() {
+        // given
         let mut graph = DependencyGraph::new(2);
         let contract_id = ContractId::from([1u8; 32]);
         let tx1 = create_transaction_with_contracts(vec![contract_id]);
         let tx2 = create_transaction_with_contracts(vec![contract_id]);
 
+        // when
         graph.add_transaction(0, tx1);
         graph.add_transaction(1, tx2);
 
         assert!(!graph.is_empty());
-        assert!(graph.get_independent_transactions().is_empty());
+        assert_eq!(graph.get_ready_transactions(), vec![0]); // Only first is ready
 
-        // Both transactions should be tracked under the same contract
-        let tx_set = graph.contract_to_transactions.get(&contract_id).unwrap();
-        assert!(tx_set.contains(&0));
-        assert!(tx_set.contains(&1));
+        // then: both transactions should be tracked under the same contract
+        let tx_queue = graph.contract_to_transactions.get(&contract_id).unwrap();
+        assert_eq!(tx_queue.len(), 2);
+        assert_eq!(tx_queue.front(), Some(&0)); // First transaction
+        assert_eq!(tx_queue.back(), Some(&1)); // Second transaction
     }
 
     #[test]
     fn remove_transaction__nonexistent__returns_none() {
+        // given
         let mut graph = DependencyGraph::new(0);
 
+        // when
         let result = graph.remove_transaction(999);
 
+        // then
         assert!(result.is_none());
     }
 
     #[test]
     fn remove_transaction__independent__removes_successfully() {
+        // given
         let mut graph = DependencyGraph::new(1);
         let tx = create_simple_transaction();
         graph.add_transaction(0, tx);
 
-        let newly_independent = graph.remove_transaction(0).unwrap();
+        // when
+        let newly_ready = graph.remove_transaction(0).unwrap();
 
+        // then
         assert!(graph.is_empty());
-        assert!(newly_independent.is_empty());
+        assert!(newly_ready.is_empty());
         assert!(graph.get_transaction(0).is_none());
     }
 
     #[test]
     fn remove_transaction__with_contract__makes_dependent_independent() {
+        // given
         let mut graph = DependencyGraph::new(2);
         let contract_id = ContractId::from([1u8; 32]);
 
-        // Create two transactions both using the same contract (competing for it)
+        // Create two transactions both using the same contract
         let tx1 = create_transaction_with_contracts(vec![contract_id]);
         let tx2 = create_transaction_with_contracts(vec![contract_id]);
 
+        // when
         graph.add_transaction(0, tx1);
         graph.add_transaction(1, tx2);
 
-        // Initially both are dependent (both waiting for the contract)
-        assert!(graph.get_independent_transactions().is_empty());
+        // Initially only first transaction is ready
+        assert_eq!(graph.get_ready_transactions(), vec![0]);
 
-        // Remove the first transaction - this should free up the contract
-        let newly_independent = graph.remove_transaction(0).unwrap();
+        // Remove the first transaction - this should make the second one ready
+        let newly_ready = graph.remove_transaction(0).unwrap();
 
-        // The second transaction should now be independent since the contract is no longer contested
-        assert_eq!(newly_independent, vec![1]);
-        assert_eq!(graph.get_independent_transactions(), vec![1]);
+        // then: the second transaction should now be ready
+        assert_eq!(newly_ready, vec![1]);
+        assert_eq!(graph.get_ready_transactions(), vec![1]);
     }
 
     #[test]
     fn remove_transaction__complex_dependency_chain__updates_correctly() {
+        // given
         let mut graph = DependencyGraph::new(3);
         let contract_id1 = ContractId::from([1u8; 32]);
         let contract_id2 = ContractId::from([2u8; 32]);
 
-        // TX0: Uses contract1
-        // TX1: Uses contract1 and contract2
-        // TX2: Uses contract2
+        // TX0: Uses contract1 (ready - first to use contract1)
+        // TX1: Uses contract1 and contract2 (not ready - second to use contract1, first to use contract2 but needs both)
+        // TX2: Uses contract2 (ready - first to use contract2)
         let tx0 = create_transaction_with_contracts(vec![contract_id1]);
         let tx1 = create_transaction_with_contracts(vec![contract_id1, contract_id2]);
         let tx2 = create_transaction_with_contracts(vec![contract_id2]);
 
+        // when
         graph.add_transaction(0, tx0);
         graph.add_transaction(1, tx1);
         graph.add_transaction(2, tx2);
 
-        // All should be dependent initially
-        assert!(graph.get_independent_transactions().is_empty());
+        // TX0 should be ready (first to use contract1)
+        let mut ready = graph.get_ready_transactions();
+        ready.sort();
+        assert_eq!(ready, vec![0]);
 
         // Remove TX0 (uses contract1)
-        let newly_independent = graph.remove_transaction(0).unwrap();
+        let newly_ready = graph.remove_transaction(0).unwrap();
 
-        // TX1 should have one less dependency but still be dependent
-        // TX2 should be unaffected
-        // No one should become independent yet
-        assert!(newly_independent.is_empty());
-        assert!(graph.get_independent_transactions().is_empty());
+        // TX1 is ready now
+        assert_eq!(newly_ready, vec![1]);
 
         // Remove TX2 (uses contract2)
-        let newly_independent = graph.remove_transaction(2).unwrap();
+        let _ = graph.remove_transaction(2).unwrap();
 
-        // Now TX1 should become independent (no more dependencies)
-        assert_eq!(newly_independent, vec![1]);
-        assert_eq!(graph.get_independent_transactions(), vec![1]);
+        // then: TX1 should become ready (first in line for both contracts)
+        assert_eq!(graph.get_ready_transactions(), vec![1]);
     }
 
     #[test]
     fn remove_transaction__multiple_contracts_same_transaction__handles_correctly() {
+        // given
         let mut graph = DependencyGraph::new(1);
         let contract_id1 = ContractId::from([1u8; 32]);
         let contract_id2 = ContractId::from([2u8; 32]);
 
-        // One transaction uses multiple contracts
+        // when: One transaction uses multiple contracts (ready - first to use both)
         let tx = create_transaction_with_contracts(vec![contract_id1, contract_id2]);
         graph.add_transaction(0, tx);
 
-        assert_eq!(graph.remaining_dependencies.get(&0), Some(&2));
+        assert_eq!(graph.get_ready_transactions(), vec![0]);
 
         // Remove the transaction
-        let newly_independent = graph.remove_transaction(0).unwrap();
+        let newly_ready = graph.remove_transaction(0).unwrap();
 
+        // then: graph should be empty, no newly ready transactions
         assert!(graph.is_empty());
-        assert!(newly_independent.is_empty());
+        assert!(newly_ready.is_empty());
         assert!(!graph.contract_to_transactions.contains_key(&contract_id1));
         assert!(!graph.contract_to_transactions.contains_key(&contract_id2));
     }
 
     #[test]
     fn get_transaction__existing__returns_transaction() {
+        // given
         let mut graph = DependencyGraph::new(1);
         let tx = create_simple_transaction();
         let tx_id = tx.id(&ChainId::default());
 
+        // when
         graph.add_transaction(0, tx);
 
         let retrieved_tx = graph.get_transaction(0).unwrap();
+        // then
         assert_eq!(retrieved_tx.id(&ChainId::default()), tx_id);
     }
 
     #[test]
     fn get_transaction__nonexistent__returns_none() {
+        // given
         let graph = DependencyGraph::new(0);
 
+        // then
         assert!(graph.get_transaction(0).is_none());
     }
 
     #[test]
     fn is_empty__empty_graph__returns_true() {
+        // given
         let graph = DependencyGraph::new(0);
+        // then
         assert!(graph.is_empty());
     }
 
     #[test]
     fn is_empty__with_transactions__returns_false() {
+        // given
         let mut graph = DependencyGraph::new(1);
         let tx = create_simple_transaction();
 
+        // when
         graph.add_transaction(0, tx);
 
+        // then
         assert!(!graph.is_empty());
     }
 
     #[test]
     fn is_empty__after_removing_all_transactions__returns_true() {
+        // given
         let mut graph = DependencyGraph::new(1);
         let tx = create_simple_transaction();
 
+        // when
         graph.add_transaction(0, tx);
         assert!(!graph.is_empty());
 
         graph.remove_transaction(0);
+        // then
         assert!(graph.is_empty());
     }
 
     #[test]
     fn get_independent_transactions__mixed_dependencies__returns_only_independent() {
+        // given
         let mut graph = DependencyGraph::new(2);
         let contract_id = ContractId::from([1u8; 32]);
 
-        // Add independent transaction
+        // Add transaction without contracts (ready)
         let independent_tx = create_simple_transaction();
         graph.add_transaction(0, independent_tx);
 
-        // Add dependent transaction
+        // when: Add transaction with contract (ready - first to use contract)
         let dependent_tx = create_transaction_with_contracts(vec![contract_id]);
         graph.add_transaction(1, dependent_tx);
 
-        let independent = graph.get_independent_transactions();
-        assert_eq!(independent.len(), 1);
-        assert!(independent.contains(&0));
-        assert!(!independent.contains(&1));
+        // then: Only independent transactions should be ready
+        let ready = graph.get_ready_transactions();
+        assert_eq!(ready.len(), 2);
+        assert!(ready.contains(&0));
+        assert!(ready.contains(&1)); // Both are ready now
     }
 
     #[test]
     fn dependency_resolution__realistic_scenario() {
+        // given
         let mut graph = DependencyGraph::new(5);
         let contract_a = ContractId::from([1u8; 32]);
         let contract_b = ContractId::from([2u8; 32]);
         let contract_c = ContractId::from([3u8; 32]);
 
-        // Create a realistic dependency scenario:
-        // TX0: Independent (no contracts)
-        // TX1: Uses contract A
-        // TX2: Uses contract A and B
-        // TX3: Uses contract B and C
-        // TX4: Uses contract C
+        // when: Create a realistic dependency scenario:
+        // TX0: No contracts (ready)
+        // TX1: Uses contract A (ready - first to use A)
+        // TX2: Uses contract A and B (not ready - second to use A, first to use B but needs both)
+        // TX3: Uses contract B and C (not ready - second to use B, first to use C but needs both)
+        // TX4: Uses contract C (ready - first to use C)
 
         graph.add_transaction(0, create_simple_transaction());
         graph.add_transaction(1, create_transaction_with_contracts(vec![contract_a]));
@@ -511,32 +551,37 @@ mod tests {
         );
         graph.add_transaction(4, create_transaction_with_contracts(vec![contract_c]));
 
-        // Initially only TX0 should be independent
-        assert_eq!(graph.get_independent_transactions(), vec![0]);
+        // Initially TX0 and TX1 should be ready
+        let mut ready = graph.get_ready_transactions();
+        ready.sort();
+        assert_eq!(ready, vec![0, 1]);
 
         // Remove TX0
         graph.remove_transaction(0);
 
-        // Still no new independent transactions
-        assert!(graph.get_independent_transactions().is_empty());
+        // then
+        // Still TX1 ready
+        let mut ready = graph.get_ready_transactions();
+        ready.sort();
+        assert_eq!(ready, vec![1]);
 
         // Remove TX1 (contract A)
-        graph.remove_transaction(1);
+        let newly_ready = graph.remove_transaction(1).unwrap();
 
-        // TX2 should have one less dependency but still not independent
-        assert!(graph.get_independent_transactions().is_empty());
+        // TX2 should now be ready (first in line for contract A, and contract B is free)
+        assert_eq!(newly_ready, vec![2]);
 
         // Remove TX4 (contract C)
-        graph.remove_transaction(4);
+        let newly_ready = graph.remove_transaction(4).unwrap();
 
-        // TX3 should have one less dependency but still not independent
-        assert!(graph.get_independent_transactions().is_empty());
+        // TX3 still can't be ready because it needs contract B and there's TX2 ahead in line for B
+        assert!(newly_ready.is_empty());
 
         // Remove TX2 (contracts A and B)
-        let newly_independent = graph.remove_transaction(2).unwrap();
+        let newly_ready = graph.remove_transaction(2).unwrap();
 
-        // TX3 should now be independent (only had contract B and C dependencies)
-        assert_eq!(newly_independent, vec![3]);
-        assert_eq!(graph.get_independent_transactions(), vec![3]);
+        // TX3 should now be ready (first in line for contract B, and contract C is free)
+        assert_eq!(newly_ready, vec![3]);
+        assert_eq!(graph.get_ready_transactions(), vec![3]);
     }
 }
