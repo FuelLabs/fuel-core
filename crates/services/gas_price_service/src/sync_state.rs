@@ -2,12 +2,12 @@
 
 pub(crate) type BlockHeight = u32;
 
-/// The synchronization state of the gas price.
+/// The synchronization state of the gas price service.
 #[derive(Debug, Clone)]
 pub enum SyncState {
-    /// The gas price are not synchronized.
+    /// The gas price service is not synchronized.
     NotSynced,
-    /// The gas price are synchronized to the given height.
+    /// The gas price service is synchronized to the given height.
     Synced(BlockHeight),
 }
 
