@@ -368,7 +368,7 @@ fn gas_price_database_with_metadata(
 }
 
 #[tokio::test]
-async fn next_gas_price__affected_by_new_l2_block() {
+async fn next_gas_price_affected_by_new_l2_block() {
     // given
     let l2_block = BlockInfo::Block {
         height: 1,
@@ -417,11 +417,15 @@ async fn next_gas_price__affected_by_new_l2_block() {
     let read_algo = service.next_block_algorithm();
     let initial = read_algo.next_gas_price();
     let mut watcher = StateWatcher::started();
+    let observer = service.shared_data();
     tokio::spawn(async move { service.run(&mut watcher).await });
 
     // when
     l2_block_sender.send(l2_block).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    tokio::time::timeout(
+        Duration::from_millis(10),
+        observer.await_synced()
+    ).await.unwrap().unwrap();
 
     // then
     let new = read_algo.next_gas_price();
