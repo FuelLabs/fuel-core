@@ -1,6 +1,4 @@
-FROM ubuntu:latest
+FROM ubuntu:24.04
 
 RUN apt-get update && \
-    apt-get install --assume-yes clang libclang-dev binutils-aarch64-linux-gnu gcc-12 && \
-    ln -s -f /usr/bin/gcc-12 /usr/bin/gcc
-
+    apt-get install --assume-yes clang libclang-dev binutils-aarch64-linux-gnu
