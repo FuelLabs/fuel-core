@@ -75,10 +75,14 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/fuellabs/${{ matrix.job.cross_image }}-build-cache:latest
           cache-to: type=registry,ref=ghcr.io/fuellabs/${{ matrix.job.cross_image }}-build-cache:latest,mode=max
 
-      - name: Install packages (macOS)
-        if: matrix.job.os == 'macos-latest'
+      - name: Run test commands
         run: |
-          ci/macos-install-packages.sh
+          cc --version
+          gcc --version
+          apt install --reinstall gcc-12
+          ln -s -f /usr/bin/gcc-12 /usr/bin/gcc
+          cc --version
+          gcc --version
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
