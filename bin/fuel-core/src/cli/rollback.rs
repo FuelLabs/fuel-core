@@ -43,6 +43,10 @@ pub struct Command {
     /// The path to the database.
     #[clap(long = "target-block-height")]
     pub target_block_height: u32,
+
+    /// The path to the database.
+    #[clap(long = "target-da-block-height")]
+    pub target_da_block_height: Option<u64>,
 }
 
 fn get_default_max_fds() -> i32 {
@@ -71,6 +75,10 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let target_block_height = command.target_block_height.into();
 
     db.rollback_to(target_block_height, &mut shutdown_listener)?;
+
+    if let Some(target_da_height) = command.target_da_block_height {
+        db.rollback_relayer_to(target_da_height.into(), &mut shutdown_listener)?;
+    }
 
     Ok(())
 }

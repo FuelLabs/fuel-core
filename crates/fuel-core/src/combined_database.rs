@@ -26,6 +26,7 @@ use fuel_core_chain_config::{
 };
 #[cfg(feature = "backup")]
 use fuel_core_services::TraceErr;
+use fuel_core_storage::Result as StorageResult;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
     Coins,
@@ -35,12 +36,10 @@ use fuel_core_storage::tables::{
     ContractsState,
     Messages,
 };
-use fuel_core_storage::{
-    Result as StorageResult,
-    StorageAsRef,
-    tables::FuelBlocks,
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
 };
-use fuel_core_types::fuel_types::BlockHeight;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -412,13 +411,6 @@ impl CombinedDatabase {
     where
         S: ShutdownListener,
     {
-        let target_block = self
-            .on_chain()
-            .storage::<FuelBlocks>()
-            .get(&target_block_height)?
-            .ok_or(anyhow::anyhow!("block at target height doesn't exist"))?;
-        let target_da_height = target_block.header().da_height();
-
         while !shutdown_listener.is_cancelled() {
             let on_chain_height = self
                 .on_chain()
@@ -430,10 +422,6 @@ impl CombinedDatabase {
                 .latest_height_from_metadata()?
                 .ok_or(anyhow::anyhow!("off-chain database doesn't have height"))?;
 
-            let relayer_db_height = self.relayer().latest_height_from_metadata()?;
-            let relayer_db_rolled_back =
-                is_equal_or_none(relayer_db_height, target_da_height);
-
             let gas_price_chain_height =
                 self.gas_price().latest_height_from_metadata()?;
             let gas_price_rolled_back =
@@ -442,7 +430,6 @@ impl CombinedDatabase {
             if on_chain_height == target_block_height
                 && off_chain_height == target_block_height
                 && gas_price_rolled_back
-                && relayer_db_rolled_back
             {
                 break;
             }
@@ -459,15 +446,6 @@ impl CombinedDatabase {
                     "off-chain database height({off_chain_height}) \
                     is less than target height({target_block_height})"
                 ));
-            }
-
-            if let Some(relayer_db_height) = relayer_db_height {
-                if relayer_db_height < target_da_height {
-                    return Err(anyhow::anyhow!(
-                        "relayer database height({relayer_db_height}) \
-                        is less than target height({target_da_height})"
-                    ));
-                }
             }
 
             if let Some(gas_price_chain_height) = gas_price_chain_height {
@@ -487,15 +465,52 @@ impl CombinedDatabase {
                 self.off_chain().rollback_last_block()?;
             }
 
-            if let Some(relayer_db_height) = relayer_db_height {
-                if relayer_db_height > target_da_height {
-                    self.relayer().rollback_last_block()?;
-                }
-            }
-
             if let Some(gas_price_chain_height) = gas_price_chain_height {
                 if gas_price_chain_height > target_block_height {
                     self.gas_price().rollback_last_block()?;
+                }
+            }
+        }
+
+        if shutdown_listener.is_cancelled() {
+            return Err(anyhow::anyhow!(
+                "Stop the rollback due to shutdown signal received"
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Rollbacks the state of the relayer to a specific block height.
+    pub fn rollback_relayer_to<S>(
+        &self,
+        target_da_height: DaBlockHeight,
+        shutdown_listener: &mut S,
+    ) -> anyhow::Result<()>
+    where
+        S: ShutdownListener,
+    {
+        while !shutdown_listener.is_cancelled() {
+            let relayer_db_height = self.relayer().latest_height_from_metadata()?;
+            let relayer_db_rolled_back =
+                is_equal_or_none(relayer_db_height, target_da_height);
+
+            if relayer_db_rolled_back {
+                break;
+            }
+
+            if let Some(relayer_db_height) = relayer_db_height {
+                if relayer_db_height < target_da_height {
+                    return Err(anyhow::anyhow!(
+                        "relayer database height({relayer_db_height}) \
+                        is less than target height({target_da_height})"
+                    ));
+                }
+            }
+
+            if let Some(relayer_db_height) = relayer_db_height {
+                if relayer_db_height > target_da_height {
+                    self.relayer().rollback_last_block()?;
                 }
             }
         }
@@ -595,7 +610,10 @@ fn is_equal_or_none<T: PartialEq>(maybe_left: Option<T>, right: T) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::StorageAsMut;
+    use fuel_core_storage::{
+        StorageAsMut,
+        StorageAsRef,
+    };
     use fuel_core_types::{
         entities::coins::coin::CompressedCoin,
         fuel_tx::UtxoId,

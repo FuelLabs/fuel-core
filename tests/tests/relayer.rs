@@ -799,12 +799,15 @@ async fn relayer_db_can_be_rewinded() {
     db.shutdown();
 
     let target_block_height = rollback_target_height.to_string();
+    let target_da_block_height = rollback_target_height.to_string();
     let args = [
         "_IGNORED_",
         "--db-path",
         tmp_dir.path().to_str().unwrap(),
         "--target-block-height",
         target_block_height.as_str(),
+        "--target-da-block-height",
+        target_da_block_height.as_str(),
     ];
 
     let command = fuel_core_bin::cli::rollback::Command::parse_from(args);
