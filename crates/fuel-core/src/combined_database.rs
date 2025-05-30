@@ -427,9 +427,15 @@ impl CombinedDatabase {
             let gas_price_rolled_back =
                 is_equal_or_none(gas_price_chain_height, target_block_height);
 
+            let compression_db_height =
+                self.compression().latest_height_from_metadata()?;
+            let compression_db_rolled_back =
+                is_equal_or_none(compression_db_height, target_block_height);
+
             if on_chain_height == target_block_height
                 && off_chain_height == target_block_height
                 && gas_price_rolled_back
+                && compression_db_rolled_back
             {
                 break;
             }
@@ -451,7 +457,16 @@ impl CombinedDatabase {
             if let Some(gas_price_chain_height) = gas_price_chain_height {
                 if gas_price_chain_height < target_block_height {
                     return Err(anyhow::anyhow!(
-                        "gas-price-chain database height({gas_price_chain_height}) \
+                        "gas-price database height({gas_price_chain_height}) \
+                        is less than target height({target_block_height})"
+                    ));
+                }
+            }
+
+            if let Some(compression_db_height) = compression_db_height {
+                if compression_db_height < target_block_height {
+                    return Err(anyhow::anyhow!(
+                        "compression database height({compression_db_height}) \
                         is less than target height({target_block_height})"
                     ));
                 }
@@ -468,6 +483,12 @@ impl CombinedDatabase {
             if let Some(gas_price_chain_height) = gas_price_chain_height {
                 if gas_price_chain_height > target_block_height {
                     self.gas_price().rollback_last_block()?;
+                }
+            }
+
+            if let Some(compression_db_height) = compression_db_height {
+                if compression_db_height > target_block_height {
+                    self.compression().rollback_last_block()?;
                 }
             }
         }
