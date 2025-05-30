@@ -57,7 +57,7 @@ async fn tx_pointer_set_from_genesis_for_coin_and_contract_inputs() {
         output_index: coin_utxo_id.output_index(),
         tx_pointer_block_height: coin_tx_pointer.block_height(),
         tx_pointer_tx_idx: coin_tx_pointer.tx_index(),
-        owner,
+        owner: owner.into(),
         amount,
         asset_id: Default::default(),
     });
