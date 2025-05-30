@@ -79,8 +79,8 @@ jobs:
         run: |
           cc --version
           gcc --version
-          apt install --reinstall gcc-12
-          ln -s -f /usr/bin/gcc-12 /usr/bin/gcc
+          sudo apt install --reinstall gcc-12
+          sudo ln -s -f /usr/bin/gcc-12 /usr/bin/gcc
           cc --version
           gcc --version
 
