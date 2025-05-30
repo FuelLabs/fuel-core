@@ -107,6 +107,8 @@ pub enum DependencyError {
     #[display(fmt = "The dependent transaction creates a diamond problem, \
     causing cycles in the dependency graph.")]
     DependentTransactionIsADiamondDeath,
+    #[display(fmt = "The transaction depends on a blob transaction")]
+    NotInsertedDependentOnBlob,
 }
 
 #[derive(Clone, Debug)]

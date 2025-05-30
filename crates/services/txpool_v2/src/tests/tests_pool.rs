@@ -1343,6 +1343,39 @@ fn insert__tx_blob_already_in_db() {
 }
 
 #[test]
+fn insert__dependent_on_blob() {
+    let mut universe = TestPoolUniverse::default().config(Config {
+        utxo_validation: false,
+        ..Default::default()
+    });
+    universe.build_pool();
+    let (output_a, unset_input) = universe.create_output_and_input();
+
+    // Given
+    let program = vec![123; 123];
+    let blob_id = BlobId::compute(program.as_slice());
+    let tx = TransactionBuilder::blob(BlobBody {
+        id: blob_id,
+        witness_index: 0,
+    })
+    .add_witness(program.clone().into())
+    .add_fee_input()
+    .add_output(output_a)
+    .finalize_as_transaction();
+    let tx_id = tx.id(&ChainId::default());
+
+    let tx = universe.verify_and_insert(tx).unwrap();
+
+    let input_a = unset_input.into_input(UtxoId::new(tx_id, 0));
+    let dependent_tx = universe.build_script_transaction(Some(vec![input_a]), None, 1);
+
+    // When
+    universe.verify_and_insert(dependent_tx).unwrap_err();
+    // Then
+    universe.assert_pool_integrity(&[tx]);
+}
+
+#[test]
 fn insert__if_tx3_depends_and_collides_with_tx2() {
     let mut universe = TestPoolUniverse::default();
     universe.build_pool();
