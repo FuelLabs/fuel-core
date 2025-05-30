@@ -10,6 +10,11 @@ use crate::{
         SchedulerError,
         SchedulerExecutionResult,
     },
+    txs_ext::TxCoinbaseExt,
+    validator::{
+        self,
+        Validator,
+    },
 };
 use fuel_core_executor::{
     executor::ExecutionData,
@@ -30,13 +35,20 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::block::{
-        Block,
-        PartialFuelBlock,
+    blockchain::{
+        block::{
+            Block,
+            PartialFuelBlock,
+        },
+        header::PartialBlockHeader,
     },
     fuel_tx::{
         ContractId,
         Transaction,
+        field::{
+            InputContract,
+            MintGasPrice,
+        },
     },
     fuel_vm::interpreter::MemoryInstance,
     services::{
@@ -70,6 +82,7 @@ mod defaults {
 
 pub struct Executor<S, R, P> {
     scheduler: Scheduler<R, S, P>,
+    validator: Validator,
 }
 
 impl<S, R, P> Executor<S, R, P> {
@@ -80,13 +93,18 @@ impl<S, R, P> Executor<S, R, P> {
         config: Config,
     ) -> Self {
         let scheduler = Scheduler::new(
-            config,
+            config.clone(),
             relayer_view_provider,
             storage_view_provider,
             preconfirmation_sender,
         );
 
-        Self { scheduler }
+        let validator = Validator::new(config);
+
+        Self {
+            scheduler,
+            validator,
+        }
     }
 }
 
@@ -130,6 +148,44 @@ where
         self.finalize_block(&mut components, scheduler_result, &mut memory)
     }
 
+    async fn validate_block(
+        mut self,
+        block: &Block,
+        block_storage_tx: StorageTransaction<View>,
+    ) -> Result<validator::ValidationResult, SchedulerError> {
+        let mut data = ExecutionData::new();
+
+        let partial_header = PartialBlockHeader::from(block.header());
+        let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
+        let transactions = block.transactions();
+        let mut memory = MemoryInstance::new();
+
+        let (gas_price, coinbase_contract_id) = transactions.coinbase()?;
+
+        let block_storage_tx = self.process_l1_txs(
+            &mut partial_block,
+            coinbase_contract_id,
+            &mut data,
+            &mut memory,
+            block_storage_tx,
+        )?;
+        let processed_l1_tx_count = partial_block.transactions.len();
+
+        let components = Components {
+            header_to_produce: partial_block.header,
+            transactions_source: transactions.iter().cloned().skip(processed_l1_tx_count),
+            coinbase_recipient: coinbase_contract_id,
+            gas_price,
+        };
+
+        let executed_block_result = self
+            .validator
+            .validate_block(components, block_storage_tx, block)
+            .await?;
+
+        Ok(executed_block_result)
+    }
+
     /// Process DA changes if the DA height has changed
     async fn process_da_if_needed(
         &mut self,
@@ -156,12 +212,17 @@ where
             .is_some();
 
         if should_process_da {
+            let storage_tx = StorageTransaction::transaction(
+                view,
+                ConflictPolicy::Fail,
+                Default::default(),
+            );
             let storage_tx = self.process_l1_txs(
                 partial_block,
                 components.coinbase_recipient,
                 execution_data,
                 memory,
-                view,
+                storage_tx,
             )?;
             Ok(storage_tx.into_changes())
         } else {
@@ -176,14 +237,8 @@ where
         coinbase_contract_id: ContractId,
         execution_data: &mut ExecutionData,
         memory: &mut MemoryInstance,
-        view: View,
+        mut storage_tx: StorageTransaction<View>,
     ) -> Result<StorageTransaction<View>, SchedulerError> {
-        let mut storage_tx = StorageTransaction::transaction(
-            view,
-            ConflictPolicy::Fail,
-            Default::default(),
-        );
-
         self.scheduler
             .executor
             .process_l1_txs(

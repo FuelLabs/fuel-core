@@ -216,6 +216,12 @@ pub enum SchedulerError {
     StorageError(StorageError),
     /// Internal error
     InternalError(String),
+    /// Mint missing error
+    MintMissing,
+    /// Skipped transaction error
+    SkippedTransaction(String),
+    /// Block mismatch
+    BlockMismatch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
