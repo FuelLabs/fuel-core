@@ -1,4 +1,4 @@
-FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main@sha256:9e5b39c09874bc1816c675ed11afca2c2ed6cee0c4ed2b3c1d5763c346c9ae3f 
+FROM ubuntu:latest
 
 RUN apt-get update && \
     apt-get install --assume-yes clang libclang-dev binutils-aarch64-linux-gnu gcc-12 && \
