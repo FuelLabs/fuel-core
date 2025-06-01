@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use crate::{
     graphql_api::{
         IntoApiResult,
@@ -70,7 +71,7 @@ pub struct StateTransitionBytecode {
 #[Object]
 impl StateTransitionBytecode {
     async fn root(&self) -> HexString {
-        HexString(self.root.to_vec())
+        HexString(self.root.to_vec().into())
     }
 
     #[graphql(complexity = "query_costs().state_transition_bytecode_read")]
@@ -96,7 +97,7 @@ impl TryFrom<HexString> for StateTransitionBytecode {
     type Error = async_graphql::Error;
 
     fn try_from(root: HexString) -> Result<Self, Self::Error> {
-        let root = root.0.as_slice().try_into()?;
+        let root = root.0.deref().try_into()?;
         Ok(Self { root })
     }
 }
@@ -118,12 +119,12 @@ impl From<StorageUploadedBytecode> for UploadedBytecode {
                 bytecode,
                 uploaded_subsections_number,
             } => Self {
-                bytecode: HexString(bytecode),
+                bytecode: HexString(bytecode.into()),
                 uploaded_subsections_number: Some(uploaded_subsections_number),
                 completed: false,
             },
             StorageUploadedBytecode::Completed(bytecode) => Self {
-                bytecode: HexString(bytecode),
+                bytecode: HexString(bytecode.into()),
                 uploaded_subsections_number: None,
                 completed: true,
             },

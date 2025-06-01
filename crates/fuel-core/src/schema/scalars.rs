@@ -22,6 +22,7 @@ use std::{
     },
     str::FromStr,
 };
+use std::borrow::Cow;
 pub use tx_pointer::TxPointer;
 pub use utxo_id::UtxoId;
 
@@ -161,7 +162,19 @@ impl CursorType for SortedTxCursor {
 }
 
 #[derive(Clone, Debug, derive_more::Into, derive_more::From, PartialEq, Eq)]
-pub struct HexString(pub(crate) Vec<u8>);
+pub struct HexString(pub(crate) Cow<'static, [u8]>);
+
+impl From<Vec<u8>> for HexString {
+    fn from(vec: Vec<u8>) -> Self {
+        HexString(Cow::Owned(vec))
+    }
+}
+
+impl From<HexString> for Vec<u8> {
+    fn from(hex: HexString) -> Self {
+        hex.0.into_owned()
+    }
+}
 
 #[Scalar(name = "HexString")]
 impl ScalarType for HexString {
@@ -181,7 +194,7 @@ impl ScalarType for HexString {
 
 impl Display for HexString {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = format!("0x{}", hex::encode(&self.0));
+        let s = format!("0x{}", hex::encode(&self.0.as_ref()));
         s.fmt(f)
     }
 }
@@ -205,13 +218,13 @@ impl FromStr for HexString {
         let value = s.strip_prefix("0x").unwrap_or(s);
         // decode into bytes
         let bytes = hex::decode(value).map_err(|e| e.to_string())?;
-        Ok(HexString(bytes))
+        Ok(HexString(Cow::Owned(bytes)))
     }
 }
 
 impl From<fuel_types::Nonce> for HexString {
     fn from(n: fuel_types::Nonce) -> Self {
-        HexString(n.to_vec())
+        HexString(Cow::Owned(n.to_vec()))
     }
 }
 
@@ -219,7 +232,7 @@ impl TryInto<fuel_types::Nonce> for HexString {
     type Error = TryFromSliceError;
 
     fn try_into(self) -> Result<fuel_types::Nonce, Self::Error> {
-        let bytes: [u8; 32] = self.0.as_slice().try_into()?;
+        let bytes: [u8; 32] = self.0.as_ref().try_into()?;
         Ok(fuel_types::Nonce::from(bytes))
     }
 }
