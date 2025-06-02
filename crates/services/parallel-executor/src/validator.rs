@@ -91,63 +91,41 @@ impl Validator {
         D: KeyValueInspect<Column = Column>,
         S: Iterator<Item = Transaction>,
     {
-        let mut _dependency_graph =
+        let mut dependency_graph =
             DependencyGraph::new(components.transactions_source.size_hint().0);
-        let mut tx_batches = vec![vec![]; self.config.number_of_cores.get()];
-        let mut all_batches_results: Arc<RwLock<HashMap<u64, ()>>> =
-            Arc::new(RwLock::new(HashMap::default()));
-        let mut max_batch_id = 0;
-        // Splitting tx into batches for now it's a single tx batch.
-        // This will not work because of the possible usage of the same contract in multiple parallel transactions.
-        for (batch_id, tx) in components.transactions_source.enumerate() {
-            let batch_index = batch_id % self.config.number_of_cores.get();
-            tx_batches[batch_index].push((batch_id, vec![tx]));
-            max_batch_id = batch_id;
-        }
 
-        // Execute each batch in parallel.
-        let mut handles = vec![];
-        for (batch_id, batches) in tx_batches.into_iter().enumerate() {
-            let all_batches_results = Arc::clone(&all_batches_results);
+        // add all transactions to the dependency graph
+        dependency_graph.add_transactions(components.transactions_source.enumerate());
 
-            let handle = tokio::spawn(async move {
-                // Verify and executes each transaction in the batch.
-                all_batches_results
-                    .write()
-                    .unwrap()
-                    .insert(batch_id as u64, ());
-            });
+        // create execution batches
+        let execution_batches =
+            self.create_execution_batches(&mut dependency_graph).await?;
 
-            handles.push(handle);
-        }
+        // execute batches in parallel
+        let batch_results = self.execute_batches_parallel(execution_batches).await?;
 
-        // Consolidate results from all batches.
-        for handle in handles {
-            handle.await.map_err(|_| {
-                SchedulerError::InternalError("Failed to join batch execution".into())
-            })?;
-        }
+        // merge results and return final validation result
+        self.merge_batch_results(batch_results).await
+    }
 
-        let mut validation_result = ValidationResult {
-            tx_status: vec![],
-            events: vec![],
-            block_id: BlockId::default(),
-            skipped_transactions: vec![],
-        };
-        for i in 0..=max_batch_id {
-            let batch_result =
-                all_batches_results.read().unwrap().get(&(i as u64)).ok_or(
-                    SchedulerError::InternalError(format!(
-                        "Batch result for batch {} not found",
-                        i
-                    )),
-                )?;
+    async fn create_execution_batches(
+        &self,
+        _dependency_graph: &mut DependencyGraph,
+    ) -> Result<Vec<()>, SchedulerError> {
+        todo!()
+    }
 
-            // Populate validation result
-        }
+    async fn execute_batches_parallel(
+        &self,
+        _execution_batches: Vec<()>,
+    ) -> Result<Vec<()>, SchedulerError> {
+        todo!()
+    }
 
-        // Generate block id
-
-        Ok(validation_result)
+    async fn merge_batch_results(
+        &self,
+        _batch_results: Vec<()>,
+    ) -> Result<ValidationResult, SchedulerError> {
+        todo!()
     }
 }
