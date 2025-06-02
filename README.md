@@ -227,7 +227,7 @@ kubectl delete -f deployment/fuel-core.yml
 
 ## GraphQL service
 
-The client functionality is available through a service endpoint that expect GraphQL queries.
+The client functionality is available through a service endpoint that expects GraphQL queries.
 
 ### Transaction executor
 
