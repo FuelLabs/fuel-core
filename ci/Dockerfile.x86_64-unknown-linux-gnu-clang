@@ -1,4 +1,4 @@
 FROM ubuntu:24.04
 
 RUN apt-get update && \
-    apt-get install --assume-yes clang libclang-dev
+    apt-get install --assume-yes make clang libclang-dev
