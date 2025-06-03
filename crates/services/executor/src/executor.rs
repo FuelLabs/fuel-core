@@ -1229,6 +1229,8 @@ where
             | Transaction::Upgrade(_)
             | Transaction::Upload(_)
             | Transaction::Blob(_) => Ok(()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            Transaction::ScriptV2(_) => Ok(()),
         }
     }
 
@@ -1315,6 +1317,16 @@ where
                 memory,
             ),
             CheckedTransaction::Blob(tx) => self.execute_chargeable_transaction(
+                tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                execution_data,
+                storage_tx,
+                memory,
+            ),
+            #[cfg(feature = "chargeable-tx-v2")]
+            CheckedTransaction::ScriptV2(tx) => self.execute_chargeable_transaction(
                 tx,
                 header,
                 coinbase_contract_id,
