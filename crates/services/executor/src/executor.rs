@@ -2014,6 +2014,10 @@ where
                         }
                     }
                 }
+                #[cfg(feature = "chargeable-tx-v2")]
+                Input::InputV2(_) => {
+                    todo!()
+                }
             }
         }
 

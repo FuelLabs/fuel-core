@@ -233,6 +233,10 @@ fn calculate_metadata(
         CheckedTransaction::Upgrade(tx) => metadata_for_tx(tx, consensus_params, version),
         CheckedTransaction::Upload(tx) => metadata_for_tx(tx, consensus_params, version),
         CheckedTransaction::Blob(tx) => metadata_for_tx(tx, consensus_params, version),
+        #[cfg(feature = "chargeable-tx-v2")]
+        CheckedTransaction::ScriptV2(tx) => {
+            metadata_for_tx(tx, consensus_params, version)
+        }
     };
 
     Ok(metadata)
@@ -288,5 +292,7 @@ pub fn checked_tx_into_pool(
         CheckedTransaction::Upgrade(tx) => Ok(PoolTransaction::Upgrade(tx, metadata)),
         CheckedTransaction::Upload(tx) => Ok(PoolTransaction::Upload(tx, metadata)),
         CheckedTransaction::Blob(tx) => Ok(PoolTransaction::Blob(tx, metadata)),
+        #[cfg(feature = "chargeable-tx-v2")]
+        CheckedTransaction::ScriptV2(tx) => Ok(PoolTransaction::ScriptV2(tx, metadata)),
     }
 }

@@ -13,6 +13,7 @@ description = "Transaction pool that manages transactions and their dependencies
 
 [features]
 test-helpers = ["fuel-core-types/test-helpers", "fuel-core-storage/test-helpers"]
+chargeable-tx-v2 = ["fuel-core-types/chargeable-tx-v2"]
 
 [dependencies]
 anyhow = { workspace = true }
