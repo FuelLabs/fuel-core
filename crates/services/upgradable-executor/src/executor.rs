@@ -243,7 +243,7 @@ impl<S, R> Executor<S, R> {
         ("0-43-1", 27),
         ("0-43-2", 28),
         // No networks were updated to 0.44.0, so that version is not used.
-        // 0.44.1 doens't include any changes to the state transition bytecode,
+        // 0.44.1 doesn't include any changes to the state transition bytecode,
         ("0-44-1", LATEST_STATE_TRANSITION_VERSION),
     ];
 
