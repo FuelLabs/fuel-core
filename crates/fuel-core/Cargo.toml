@@ -53,6 +53,17 @@ fault-proving = [
     "fuel-core-compression-service/fault-proving",
     "fuel-core-upgradable-executor/fault-proving",
 ]
+chargeable-tx-v2 = [
+    "fuel-core-types/chargeable-tx-v2",
+    "fuel-core-types/da-compression",
+    "fuel-core-executor/chargeable-tx-v2",
+]
+#    "fuel-core-storage/chargeable-tx-v2",
+#    "fuel-core-chain-config/chargeable-tx-v2",
+#    "fuel-core-database/chargeable-tx-v2",
+#    "fuel-core-sync?/chargeable-tx-v2",
+#    "fuel-core-importer/chargeable-tx-v2",
+#    "fuel-core-poa/chargeable-tx-v2",
 
 [dependencies]
 anyhow = { workspace = true }
