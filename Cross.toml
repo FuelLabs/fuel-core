@@ -9,6 +9,3 @@ image = "x86_64-linux-gnu"
 
 [target.x86_64-unknown-linux-musl]
 image = "x86_64-linux-musl"
-
-[build]
-zig = "2.17"
