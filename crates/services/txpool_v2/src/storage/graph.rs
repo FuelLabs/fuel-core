@@ -591,6 +591,12 @@ impl Storage for GraphStorage {
                 ));
             }
 
+            if dependency_node.transaction.is_blob() {
+                return Err(Error::Dependency(
+                    DependencyError::NotInsertedDependentOnBlob,
+                ));
+            }
+
             to_check.extend(self.get_direct_dependencies(node_id));
         }
 
