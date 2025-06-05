@@ -148,3 +148,9 @@ jobs:
           cp "target/${{ matrix.job.target }}/release/fuel-core-keygen" "$ARTIFACT"
           cp "target/${{ matrix.job.target }}/release/fuel-core-upgradable-executor-cache/wasm32-unknown-unknown/release/fuel-core-wasm-executor.wasm" "$ARTIFACT"
           tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
+      - uses: actions/upload-artifact@v4
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          name: ${{ env.ZIP_FILE_NAME }}
+          path: ./${{ env.ZIP_FILE_NAME }}
