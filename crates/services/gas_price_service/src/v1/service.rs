@@ -445,6 +445,21 @@ impl SharedData {
 
         Ok(())
     }
+
+    /// Waits until the gas price service has synced
+    /// with the given block height
+    pub async fn await_synced_until(&self, block_height: &u32) -> anyhow::Result<()> {
+        let mut observer = self.sync_observer.clone();
+        loop {
+            if observer.borrow_and_update().is_synced_until(block_height) {
+                break;
+            }
+
+            observer.changed().await?;
+        }
+
+        Ok(())
+    }
 }
 
 impl<L2, DA, AtomicStorage> RunnableTask for GasPriceServiceV1<L2, DA, AtomicStorage>
