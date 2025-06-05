@@ -366,6 +366,10 @@ impl GraphStorage {
                         }
                     }
                 }
+                #[cfg(feature = "chargeable-tx-v2")]
+                Input::InputV2(_) => {
+                    todo!()
+                }
             }
         }
         Ok(direct_dependencies)
@@ -758,6 +762,10 @@ impl Storage for GraphStorage {
                             }
                         };
                     }
+                }
+                #[cfg(feature = "chargeable-tx-v2")]
+                Input::InputV2(_) => {
+                    todo!()
                 }
             }
         }

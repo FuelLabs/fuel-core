@@ -18,6 +18,7 @@ smt = ["fuel-core-storage/smt"]
 test-helpers = ["fuel-core-types/test-helpers", "fuel-core-storage/test-helpers"]
 limited-tx-count = []
 fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-proving"]
+chargeable-tx-v2 = ["fuel-core-types/chargeable-tx-v2"]
 
 [dependencies]
 anyhow = { workspace = true }
