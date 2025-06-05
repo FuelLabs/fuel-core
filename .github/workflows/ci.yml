@@ -152,5 +152,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          name: ${{ env.ZIP_FILE_NAME }}
+          name: ${{ matrix.job.target }}
           path: ./${{ env.ZIP_FILE_NAME }}
