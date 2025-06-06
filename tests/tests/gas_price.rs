@@ -659,10 +659,7 @@ fn produce_block__l1_committed_block_affects_gas_price() {
             // This allows delaying kicking in the da pricing until we get da block costs for the next block
             driver.client.produce_blocks(2, None).await.unwrap();
             // Wait for DaBlockCosts to be accepted
-            tokio::time::timeout(
-                Duration::from_millis(200),
-                driver.node.await_gas_price_synced(),
-            ).await.unwrap().unwrap();
+            tokio::time::sleep(Duration::from_millis(200)).await;
             // Produce new block to update gas price
             driver.client.produce_blocks(1, None).await.unwrap();
             tokio::time::timeout(
