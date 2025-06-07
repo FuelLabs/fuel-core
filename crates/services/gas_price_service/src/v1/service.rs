@@ -16,7 +16,11 @@ use crate::{
         SetMetadataStorage,
     },
     v0::metadata::V0Metadata,
-    sync_state:: {SyncStateNotifier, SyncStateObserver},
+    sync_state::{
+        SyncStateNotifier,
+        SyncStateObserver,
+        new_sync_state_channel
+    },
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -74,7 +78,7 @@ use std::{
         },
     },
 };
-use tokio::sync::{broadcast::Receiver, watch};
+use tokio::sync::broadcast::Receiver;
 
 #[derive(Debug)]
 pub struct LatestGasPrice<Height, GasPrice> {
@@ -222,7 +226,7 @@ where
         record_metrics: bool,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
-        let (synced_tx, _) = watch::channel(crate::sync_state::SyncState::NotSynced);
+        let (synced_tx, _) = new_sync_state_channel();
         Self {
             shared_algo,
             latest_gas_price,
@@ -418,6 +422,8 @@ where
 
     pub fn shared_data(&self) -> SharedData {
         SharedData {
+            gas_price_algo: self.shared_algo.clone(),
+            latest_gas_price: self.latest_gas_price.clone(),
             sync_observer: self.sync_notifier.subscribe(),
         }
     }
@@ -426,8 +432,10 @@ where
 /// Shared data for the gas price service.
 #[derive(Debug, Clone)]
 pub struct SharedData {
+    pub gas_price_algo: SharedV1Algorithm,
+    pub latest_gas_price: LatestGasPrice<u32, u64>,
     /// Allows to observe the sync state.
-    sync_observer: SyncStateObserver,
+    pub sync_observer: SyncStateObserver,
 }
 
 impl SharedData {

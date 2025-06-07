@@ -26,3 +26,7 @@ pub(crate) type SyncStateNotifier = tokio::sync::watch::Sender<SyncState>;
 
 /// A receiver for the synchronization state.
 pub type SyncStateObserver = tokio::sync::watch::Receiver<SyncState>;
+
+pub(crate) fn new_sync_state_channel() -> (SyncStateNotifier, SyncStateObserver) {
+    tokio::sync::watch::channel(SyncState::NotSynced)
+}
