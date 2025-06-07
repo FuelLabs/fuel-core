@@ -16,6 +16,11 @@ use crate::{
         SetMetadataStorage,
     },
     v0::metadata::V0Metadata,
+    sync_state::{
+        SyncStateNotifier,
+        SyncStateObserver,
+        new_sync_state_channel
+    },
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -133,6 +138,8 @@ where
     initial_recorded_height: Option<BlockHeight>,
     /// Metrics will be recorded if true
     record_metrics: bool,
+    /// Synced state notifier
+    sync_notifier: SyncStateNotifier,
 }
 
 impl<L2, DA, StorageTxProvider> GasPriceServiceV1<L2, DA, StorageTxProvider>
@@ -173,6 +180,8 @@ where
         &mut self,
         l2_block_res: GasPriceResult<BlockInfo>,
     ) -> anyhow::Result<()> {
+        // set the status to not synced
+        self.sync_notifier.send(crate::sync_state::SyncState::NotSynced).ok();
         tracing::debug!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
@@ -181,6 +190,10 @@ where
         self.apply_block_info_to_gas_algorithm(block).await?;
 
         self.notify_da_source_service_l2_block(block);
+        // set the status to synced
+        if let BlockInfo::Block { height, .. } = block {
+            self.sync_notifier.send(crate::sync_state::SyncState::Synced(height)).ok();
+        }
         Ok(())
     }
 
@@ -213,6 +226,7 @@ where
         record_metrics: bool,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
+        let (synced_tx, _) = new_sync_state_channel();
         Self {
             shared_algo,
             latest_gas_price,
@@ -225,6 +239,7 @@ where
             latest_l2_block,
             initial_recorded_height,
             record_metrics,
+            sync_notifier: synced_tx,
         }
     }
 
@@ -400,6 +415,55 @@ where
                 )
                 .await?;
             }
+        }
+
+        Ok(())
+    }
+
+    pub fn shared_data(&self) -> SharedData {
+        SharedData {
+            gas_price_algo: self.shared_algo.clone(),
+            latest_gas_price: self.latest_gas_price.clone(),
+            sync_observer: self.sync_notifier.subscribe(),
+        }
+    }
+}
+
+/// Shared data for the gas price service.
+#[derive(Debug, Clone)]
+pub struct SharedData {
+    pub gas_price_algo: SharedV1Algorithm,
+    pub latest_gas_price: LatestGasPrice<u32, u64>,
+    /// Allows to observe the sync state.
+    pub sync_observer: SyncStateObserver,
+}
+
+impl SharedData {
+    /// Waits until the gas price service has synced
+    /// with current l2 block height
+    pub async fn await_synced(&self) -> anyhow::Result<()> {
+        let mut observer = self.sync_observer.clone();
+        loop {
+            if observer.borrow_and_update().is_synced() {
+                break;
+            }
+
+            observer.changed().await?;
+        }
+
+        Ok(())
+    }
+
+    /// Waits until the gas price service has synced
+    /// with the given block height
+    pub async fn await_synced_until(&self, block_height: &u32) -> anyhow::Result<()> {
+        let mut observer = self.sync_observer.clone();
+        loop {
+            if observer.borrow_and_update().is_synced_until(block_height) {
+                break;
+            }
+
+            observer.changed().await?;
         }
 
         Ok(())
@@ -699,12 +763,14 @@ mod tests {
             false,
         );
         let read_algo = service.next_block_algorithm();
-        let mut watcher = StateWatcher::default();
+        let mut watcher = StateWatcher::started();
+        let observer = service.shared_data();
         let initial_price = read_algo.next_gas_price();
 
         // when
-        service.run(&mut watcher).await;
         l2_block_sender.send(l2_block).await.unwrap();
+        service.run(&mut watcher).await;
+        observer.await_synced().await.unwrap();
         service.shutdown().await.unwrap();
 
         // then
@@ -799,6 +865,7 @@ mod tests {
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
+        let observer = service.shared_data();
 
         let next = service.run(&mut watcher).await;
         tokio::time::sleep(Duration::from_millis(3)).await;
@@ -806,7 +873,10 @@ mod tests {
 
         // when
         let next = service.run(&mut watcher).await;
-        tokio::time::sleep(Duration::from_millis(3)).await;
+        tokio::time::timeout(
+            Duration::from_millis(3), 
+            observer.await_synced()
+        ).await.unwrap().unwrap();
         service.shutdown().await.unwrap();
 
         // then
