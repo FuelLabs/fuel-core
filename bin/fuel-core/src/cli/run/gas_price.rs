@@ -82,4 +82,8 @@ pub struct GasPriceArgs {
     /// i.e. If you want the Gas Price Service to look for the costs of block 1000, set to 999
     #[arg(long = "da-starting-recorded-height", env)]
     pub da_starting_recorded_height: Option<u32>,
+
+    /// The height from with it will start updating the DA gas price
+    #[arg(long = "da-start-da-price-from", default_value = "0", env)]
+    pub da_start_da_price_from: u32,
 }

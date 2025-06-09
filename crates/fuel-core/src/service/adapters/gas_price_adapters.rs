@@ -86,6 +86,7 @@ impl From<Config> for V1AlgorithmConfig {
             activity_capped_range_size,
             activity_decrease_range_size,
             block_activity_threshold,
+            start_da_price_from,
         } = value.gas_price_config;
         V1AlgorithmConfig {
             new_exec_gas_price: starting_exec_gas_price.max(min_exec_gas_price),
@@ -105,6 +106,7 @@ impl From<Config> for V1AlgorithmConfig {
             gas_price_factor: da_gas_price_factor,
             starting_recorded_height: starting_recorded_height.map(BlockHeight::from),
             record_metrics: gas_price_metrics,
+            start_da_price_from: BlockHeight::from(start_da_price_from),
         }
     }
 }
