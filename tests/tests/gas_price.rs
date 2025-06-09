@@ -717,6 +717,98 @@ fn run__if_metadata_is_behind_l2_then_will_catch_up() {
     });
 }
 
+#[test]
+fn run__if_no_gas_price_db_then_create_one_at_current_height() {
+    // given
+    // produce 100 blocks
+    let old_gas_price = 100;
+    let old_gas_price_str = format!("{}", old_gas_price.clone());
+    let args = vec![
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--min-da-gas-price",
+        &old_gas_price_str,
+    ];
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let temp_dir = rt.block_on(async {
+        let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+        driver.client.produce_blocks(100, None).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let actual_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
+        // has old gas price
+        assert_eq!(
+            old_gas_price, actual_gas_price,
+            "Expected gas price: {}, got: {}",
+            old_gas_price, actual_gas_price
+        );
+        driver.kill().await
+    });
+
+    // delete gas price db
+    let path_to_gas_price_db = temp_dir.path().join("gas_price");
+    let paths: Vec<_> = std::fs::read_dir(&temp_dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    for path in &paths {
+        tracing::info!("Path: {:?}", path);
+    }
+    if path_to_gas_price_db.exists() {
+        std::fs::remove_dir_all(&path_to_gas_price_db).unwrap();
+    } else {
+        // list all paths in the directory
+        panic!(
+            "Gas price db path does not exist: {:?}. Paths: {:?}",
+            path_to_gas_price_db, &paths
+        );
+    }
+
+    // when
+    // restart node
+    rt.block_on(async {
+        let new_gas_price = 1000;
+        let new_gas_price_str = format!("{}", new_gas_price.clone());
+        let new_args = vec![
+            "--debug",
+            "--poa-instant",
+            "true",
+            "--min-da-gas-price",
+            &new_gas_price_str,
+        ];
+        let driver = FuelCoreDriver::spawn_with_directory(temp_dir, &new_args)
+            .await
+            .unwrap();
+        // produce more blocks
+        driver.client.produce_blocks(1, None).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let onchain_db_height = driver
+            .node
+            .shared
+            .database
+            .on_chain()
+            .latest_height_from_metadata()
+            .unwrap()
+            .unwrap();
+        let gas_price_db_height = driver
+            .node
+            .shared
+            .database
+            .gas_price()
+            .latest_height()
+            .unwrap();
+        assert_eq!(onchain_db_height, gas_price_db_height);
+        let actual_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
+        // has new gas price
+        assert_eq!(
+            new_gas_price, actual_gas_price,
+            "Expected gas price: {}, got: {}",
+            new_gas_price, actual_gas_price
+        );
+    });
+}
+
 fn node_config_with_da_committer_url(url: url::Url) -> Config {
     let block_gas_limit = 3_000_000;
     let chain_config = ChainConfig {
