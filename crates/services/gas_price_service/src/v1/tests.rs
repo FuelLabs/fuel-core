@@ -26,6 +26,7 @@ use crate::{
         SetLatestRecordedHeight,
         SetMetadataStorage,
     },
+    sync_state::new_sync_state_channel,
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -49,9 +50,6 @@ use crate::{
             UninitializedTask,
             fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
         },
-    },
-    sync_state::{
-        new_sync_state_channel,
     },
 };
 use anyhow::{
@@ -427,10 +425,10 @@ async fn next_gas_price_affected_by_new_l2_block() {
 
     // when
     l2_block_sender.send(l2_block).await.unwrap();
-    tokio::time::timeout(
-        Duration::from_millis(10),
-        observer.await_synced()
-    ).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_millis(10), observer.await_synced())
+        .await
+        .unwrap()
+        .unwrap();
 
     // then
     let new = read_algo.next_gas_price();

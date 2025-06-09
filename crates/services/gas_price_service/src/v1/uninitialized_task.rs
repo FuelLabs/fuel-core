@@ -29,6 +29,11 @@ use crate::{
         SetLatestRecordedHeight,
         SetMetadataStorage,
     },
+    sync_state::{
+        SyncStateNotifier,
+        SyncStateObserver,
+        new_sync_state_channel,
+    },
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -53,11 +58,6 @@ use crate::{
             AsUnrecordedBlocks,
             FuelStorageUnrecordedBlocks,
         },
-    },
-    sync_state::{
-        SyncStateNotifier,
-        SyncStateObserver,
-        new_sync_state_channel
     },
 };
 use anyhow::Error;

@@ -15,12 +15,12 @@ use crate::{
         SetLatestRecordedHeight,
         SetMetadataStorage,
     },
-    v0::metadata::V0Metadata,
     sync_state::{
         SyncStateNotifier,
         SyncStateObserver,
-        new_sync_state_channel
+        new_sync_state_channel,
     },
+    v0::metadata::V0Metadata,
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -181,7 +181,9 @@ where
         l2_block_res: GasPriceResult<BlockInfo>,
     ) -> anyhow::Result<()> {
         // set the status to not synced
-        self.sync_notifier.send(crate::sync_state::SyncState::NotSynced).ok();
+        self.sync_notifier
+            .send(crate::sync_state::SyncState::NotSynced)
+            .ok();
         tracing::debug!("Received L2 block result: {:?}", l2_block_res);
         let block = l2_block_res?;
 
@@ -192,7 +194,9 @@ where
         self.notify_da_source_service_l2_block(block);
         // set the status to synced
         if let BlockInfo::Block { height, .. } = block {
-            self.sync_notifier.send(crate::sync_state::SyncState::Synced(height)).ok();
+            self.sync_notifier
+                .send(crate::sync_state::SyncState::Synced(height))
+                .ok();
         }
         Ok(())
     }
@@ -877,10 +881,10 @@ mod tests {
 
         // when
         let next = service.run(&mut watcher).await;
-        tokio::time::timeout(
-            Duration::from_millis(3), 
-            observer.await_synced()
-        ).await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_millis(3), observer.await_synced())
+            .await
+            .unwrap()
+            .unwrap();
         service.shutdown().await.unwrap();
 
         // then

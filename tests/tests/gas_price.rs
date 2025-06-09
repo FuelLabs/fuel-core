@@ -239,16 +239,16 @@ async fn produce_block__raises_gas_price() {
     }
     // starting gas price
     let _ = client.produce_blocks(1, None).await.unwrap();
-    tokio::time::timeout(
-        Duration::from_millis(10), 
-        srv.await_gas_price_synced(),
-    ).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_millis(10), srv.await_gas_price_synced())
+        .await
+        .unwrap()
+        .unwrap();
     // updated gas price
     let _ = client.produce_blocks(1, None).await.unwrap();
-    tokio::time::timeout(
-        Duration::from_millis(10), 
-        srv.await_gas_price_synced(),
-    ).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_millis(10), srv.await_gas_price_synced())
+        .await
+        .unwrap()
+        .unwrap();
 
     // then
     let change = starting_gas_price * percent as u64 / 100;
@@ -299,16 +299,16 @@ async fn produce_block__lowers_gas_price() {
     }
     // starting gas price
     let _ = client.produce_blocks(1, None).await.unwrap();
-    tokio::time::timeout(
-        Duration::from_millis(10), 
-        srv.await_gas_price_synced(),
-    ).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_millis(10), srv.await_gas_price_synced())
+        .await
+        .unwrap()
+        .unwrap();
     // updated gas price
     let _ = client.produce_blocks(1, None).await.unwrap();
-    tokio::time::timeout(
-        Duration::from_millis(10), 
-        srv.await_gas_price_synced(),
-    ).await.unwrap().unwrap();
+    tokio::time::timeout(Duration::from_millis(10), srv.await_gas_price_synced())
+        .await
+        .unwrap()
+        .unwrap();
 
     // then
     let change = starting_gas_price * percent as u64 / 100;
@@ -354,16 +354,22 @@ async fn produce_block__dont_raises_gas_price_with_default_parameters() {
     // starting gas price
     let _ = driver.client.produce_blocks(1, None).await.unwrap();
     tokio::time::timeout(
-        Duration::from_millis(10), 
+        Duration::from_millis(10),
         driver.node.await_gas_price_synced(),
-    ).await.unwrap().unwrap();
+    )
+    .await
+    .unwrap()
+    .unwrap();
 
     // updated gas price
     let _ = driver.client.produce_blocks(1, None).await.unwrap();
     tokio::time::timeout(
-        Duration::from_millis(10), 
+        Duration::from_millis(10),
         driver.node.await_gas_price_synced(),
-    ).await.unwrap().unwrap();
+    )
+    .await
+    .unwrap()
+    .unwrap();
     let latest_gas_price = driver.client.latest_gas_price().await.unwrap().gas_price;
 
     assert_eq!(expected_gas_price, latest_gas_price);
@@ -393,10 +399,10 @@ async fn estimate_gas_price__is_greater_than_actual_price_at_desired_height() {
     let _ = client.produce_blocks(1, None).await.unwrap();
     for _ in 0..arbitrary_horizon {
         let _ = client.produce_blocks(1, None).await.unwrap();
-        tokio::time::timeout(
-            Duration::from_millis(10),
-            srv.await_gas_price_synced(),
-        ).await.unwrap().unwrap();
+        tokio::time::timeout(Duration::from_millis(10), srv.await_gas_price_synced())
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     // then
@@ -438,7 +444,10 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
         tokio::time::timeout(
             Duration::from_millis(10),
             driver.node.await_gas_price_synced(),
-        ).await.unwrap().unwrap();
+        )
+        .await
+        .unwrap()
+        .unwrap();
     }
     let latest_gas_price = driver.client.latest_gas_price().await.unwrap();
     let LatestGasPrice { gas_price, .. } = latest_gas_price;
@@ -560,7 +569,10 @@ async fn startup__can_override_gas_price_values_by_changing_config() {
     tokio::time::timeout(
         Duration::from_millis(100),
         recovered_driver.node.await_gas_price_synced(),
-    ).await.unwrap().unwrap();
+    )
+    .await
+    .unwrap()
+    .unwrap();
     let new_height = 2;
 
     let recovered_database = &recovered_driver.node.shared.database;
@@ -619,7 +631,10 @@ fn produce_block__l1_committed_block_affects_gas_price() {
         tokio::time::timeout(
             Duration::from_millis(100),
             driver.node.await_gas_price_synced(),
-        ).await.unwrap().unwrap();
+        )
+        .await
+        .unwrap()
+        .unwrap();
         let temp_dir = driver.kill().await;
         (first_gas_price, temp_dir)
     });
@@ -665,14 +680,20 @@ fn produce_block__l1_committed_block_affects_gas_price() {
             tokio::time::timeout(
                 Duration::from_millis(50),
                 driver.node.await_gas_price_synced(),
-            ).await.unwrap().unwrap();
+            )
+            .await
+            .unwrap()
+            .unwrap();
             // Produce new block to _use_ the updated gas price
             driver.client.produce_blocks(1, None).await.unwrap();
             // Wait for that block to be picked up by the gas price service and communicated to GraphQL
             tokio::time::timeout(
                 Duration::from_millis(50),
                 driver.node.await_gas_price_synced(),
-            ).await.unwrap().unwrap();
+            )
+            .await
+            .unwrap()
+            .unwrap();
             let gas_price = driver.client.estimate_gas_price(0).await.unwrap().gas_price;
             // cleanup
             driver.kill().await;
