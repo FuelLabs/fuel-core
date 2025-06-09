@@ -224,9 +224,9 @@ where
         latest_l2_block: Arc<AtomicU32>,
         initial_recorded_height: Option<BlockHeight>,
         record_metrics: bool,
+        sync_notifier: SyncStateNotifier,
     ) -> Self {
         let da_source_channel = da_source_adapter_handle.shared.clone().subscribe();
-        let (synced_tx, _) = new_sync_state_channel();
         Self {
             shared_algo,
             latest_gas_price,
@@ -239,7 +239,7 @@ where
             latest_l2_block,
             initial_recorded_height,
             record_metrics,
-            sync_notifier: synced_tx,
+            sync_notifier,
         }
     }
 
@@ -750,6 +750,7 @@ mod tests {
         let da_service_runner = ServiceRunner::new(dummy_da_source);
         da_service_runner.start_and_await().await.unwrap();
         let latest_gas_price = LatestGasPrice::new(0, 0);
+        let (sync_notifier, _) = new_sync_state_channel();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -761,6 +762,7 @@ mod tests {
             latest_l2_height,
             None,
             false,
+            sync_notifier,
         );
         let read_algo = service.next_block_algorithm();
         let mut watcher = StateWatcher::started();
@@ -851,6 +853,7 @@ mod tests {
         let da_service_runner = ServiceRunner::new(da_source);
         da_service_runner.start_and_await().await.unwrap();
         let latest_gas_price = LatestGasPrice::new(0, 0);
+        let (sync_notifier, _) = new_sync_state_channel();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -862,6 +865,7 @@ mod tests {
             latest_l2_block,
             None,
             false,
+            sync_notifier,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -962,6 +966,7 @@ mod tests {
         let da_service_runner = ServiceRunner::new(da_source);
         da_service_runner.start_and_await().await.unwrap();
         let latest_gas_price = LatestGasPrice::new(0, 0);
+        let (sync_notifier, _) = new_sync_state_channel();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -973,6 +978,7 @@ mod tests {
             latest_l2_height,
             None,
             false,
+            sync_notifier,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -1056,6 +1062,7 @@ mod tests {
         let da_service_runner = ServiceRunner::new(da_source);
         da_service_runner.start_and_await().await.unwrap();
         let latest_gas_price = LatestGasPrice::new(0, 0);
+        let (sync_notifier, _) = new_sync_state_channel();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -1067,6 +1074,7 @@ mod tests {
             latest_l2_height,
             None,
             false,
+            sync_notifier,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();
@@ -1240,6 +1248,7 @@ mod tests {
         let da_service_runner = ServiceRunner::new(dummy_da_source);
         da_service_runner.start_and_await().await.unwrap();
         let latest_gas_price = LatestGasPrice::new(0, 0);
+        let (sync_notifier, _) = new_sync_state_channel();
 
         let mut service = GasPriceServiceV1::new(
             l2_block_source,
@@ -1251,6 +1260,7 @@ mod tests {
             latest_l2_height,
             Some(expected_recorded_height),
             false,
+            sync_notifier,
         );
         let read_algo = service.next_block_algorithm();
         let initial_price = read_algo.next_gas_price();

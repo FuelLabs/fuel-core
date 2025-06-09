@@ -245,6 +245,7 @@ where
                 Arc::clone(&latest_l2_height),
                 Some(starting_recorded_height),
                 record_metrics,
+                self.sync_notifier,
             );
             Ok(service)
         } else {
@@ -274,6 +275,7 @@ where
                 Arc::clone(&latest_l2_height),
                 Some(starting_recorded_height),
                 record_metrics,
+                self.sync_notifier,
             );
             Ok(service)
         }

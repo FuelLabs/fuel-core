@@ -50,6 +50,9 @@ use crate::{
             fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
         },
     },
+    sync_state::{
+        new_sync_state_channel,
+    },
 };
 use anyhow::{
     Result,
@@ -402,6 +405,7 @@ async fn next_gas_price_affected_by_new_l2_block() {
     da_service_runner.start_and_await().await.unwrap();
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
+    let (sync_notifier, _) = new_sync_state_channel();
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -412,6 +416,7 @@ async fn next_gas_price_affected_by_new_l2_block() {
         latest_l2_height,
         None,
         false,
+        sync_notifier,
     );
 
     let read_algo = service.next_block_algorithm();
@@ -466,6 +471,7 @@ async fn run__new_l2_block_saves_old_metadata() {
     da_service_runner.start_and_await().await.unwrap();
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
+    let (sync_notifier, _) = new_sync_state_channel();
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -476,6 +482,7 @@ async fn run__new_l2_block_saves_old_metadata() {
         latest_l2_height,
         None,
         false,
+        sync_notifier,
     );
     let mut watcher = StateWatcher::started();
 
@@ -528,6 +535,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
     );
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
+    let (sync_notifier, _) = new_sync_state_channel();
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -538,6 +546,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
         latest_l2_height,
         None,
         false,
+        sync_notifier,
     );
     let mut watcher = StateWatcher::started();
 
@@ -588,6 +597,7 @@ async fn run__updates_da_service_latest_l2_height() {
     );
 
     da_service_runner.start_and_await().await.unwrap();
+    let (sync_notifier, _) = new_sync_state_channel();
 
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -599,6 +609,7 @@ async fn run__updates_da_service_latest_l2_height() {
         latest_l2_height,
         None,
         false,
+        sync_notifier,
     );
     let mut watcher = StateWatcher::started();
 
