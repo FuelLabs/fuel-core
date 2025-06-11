@@ -222,6 +222,8 @@ pub enum SchedulerError {
     SkippedTransaction(String),
     /// Block mismatch
     BlockMismatch,
+    /// Consensus parameters not found
+    ConsensusParametersNotFound(u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
