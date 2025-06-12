@@ -155,6 +155,8 @@ impl AssembleAndRunTx for FuelClient {
                     Transaction::Upgrade(tx) => tx.sign_inputs(&secret_key, &chain_id),
                     Transaction::Upload(tx) => tx.sign_inputs(&secret_key, &chain_id),
                     Transaction::Blob(tx) => tx.sign_inputs(&secret_key, &chain_id),
+                    #[cfg(feature = "chargeable-tx-v2")]
+                    Transaction::ScriptV2(tx) => tx.sign_inputs(&secret_key, &chain_id),
                 };
             }
             SigningAccount::Predicate { .. } => {
