@@ -698,7 +698,7 @@ where
         Ok(())
     }
 
-    fn register_execution_result(&mut self, mut res: WorkSessionExecutionResult) {
+    fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
         }
@@ -706,22 +706,15 @@ where
             self.state = SchedulerState::TransactionsReadyForPickup;
         }
 
-        // Is it useful ?
-        // Did I listed all column ?
-        // Need future proof
-        let mut tmp_contracts_changes = HashMap::default();
-        for column in ContractColumnsIterator::new() {
-            let column = column.as_u32();
-            if let Some(changes) = res.changes.remove(&column) {
-                tmp_contracts_changes.insert(column, changes);
-            }
-        }
-        self.contracts_changes
-            .add_changes(res.contracts_used.as_ref(), tmp_contracts_changes);
+        let changes = self.store_any_contract_changes(
+            res.changes,
+            res.contracts_used.as_ref(),
+        );
+        
         self.execution_results.insert(
             res.batch_id,
             WorkSessionSavedData {
-                changes: res.changes,
+                changes,
                 coins_created: res.coins_created,
                 coins_used: res.coins_used,
                 txs: res.txs,
@@ -735,6 +728,22 @@ where
             },
         );
         self.current_available_workers.push_back(res.worker_id);
+    }
+
+    fn store_any_contract_changes(&mut self, mut changes: Changes, contracts_used: &[ContractId]) -> Changes {
+        // Is it useful ?
+        // Did I listed all column ?
+        // Need future proof
+        let mut tmp_contracts_changes = HashMap::default();
+        for column in ContractColumnsIterator::new() {
+            let column = column.as_u32();
+            if let Some(changes) = changes.remove(&column) {
+                tmp_contracts_changes.insert(column, changes);
+            }
+        }
+        self.contracts_changes
+            .add_changes(contracts_used.as_ref(), tmp_contracts_changes);
+        changes
     }
 
     async fn wait_all_execution_tasks(
