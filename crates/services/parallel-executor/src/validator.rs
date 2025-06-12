@@ -51,6 +51,8 @@ pub struct Validator {
 pub struct TransactionExecutionResult {
     pub changes: Changes,
     pub tx_index: usize,
+    pub events: Vec<Event>,
+    // pub status: TransactionExecutionStatus,
     // TODO: Add coins to verify their dependency
 }
 
@@ -179,6 +181,7 @@ impl Validator {
             }
         }
 
+        /// merging step
         todo!()
     }
 
@@ -202,7 +205,7 @@ impl Validator {
 
             Ok(TransactionExecutionResult {
                 changes: Changes::default(), // Replace with actual changes
-
+                events: vec![],              // Replace with actual events
                 tx_index: tx_idx,
             })
         })
