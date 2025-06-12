@@ -628,7 +628,7 @@ async fn execute__utxo_ordering_kept() {
 
 // We use the overflow of gas to skip the transactions.
 #[tokio::test]
-async fn test_skipped_txs_fallback_mechanism() {
+async fn execute__trigger_skipped_txs_fallback_mechanism() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
     let mut storage = Storage::default();
     let mut consensus_parameters = ConsensusParameters::default();
