@@ -49,18 +49,20 @@ pub struct PoolRequestParams {
 }
 
 pub struct MockTransactionsSource {
-    pub get_executable_transactions_results_sender: std::sync::mpsc::Sender<(
-        PoolRequestParams,
-        std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
-    )>,
+    pub request_sender: MockTransactionsSourcesRequestSender,
 }
 
-pub struct MockTxPool(
-    std::sync::mpsc::Receiver<(
-        PoolRequestParams,
-        std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
-    )>,
-);
+pub type MockTransactionsSourcesRequestReceiver = std::sync::mpsc::Receiver<(
+    PoolRequestParams,
+    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
+)>;
+
+pub type MockTransactionsSourcesRequestSender = std::sync::mpsc::Sender<(
+    PoolRequestParams,
+    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
+)>;
+
+pub struct MockTxPool(MockTransactionsSourcesRequestReceiver);
 
 impl MockTxPool {
     pub fn waiting_for_request_to_tx_pool(&self) -> Consumer {
@@ -76,7 +78,7 @@ impl MockTransactionsSource {
         ) = std::sync::mpsc::channel();
         (
             Self {
-                get_executable_transactions_results_sender,
+                request_sender: get_executable_transactions_results_sender,
             },
             MockTxPool(get_executable_transactions_results_receiver),
         )
@@ -92,7 +94,7 @@ impl TransactionsSource for MockTransactionsSource {
         filter: Filter,
     ) -> (Vec<CheckedTransaction>, TransactionFiltered, Filter) {
         let (tx, rx) = std::sync::mpsc::channel();
-        self.get_executable_transactions_results_sender
+        self.request_sender
             .send((
                 PoolRequestParams {
                     gas_limit,
