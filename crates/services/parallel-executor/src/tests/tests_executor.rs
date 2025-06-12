@@ -62,12 +62,10 @@ use crate::{
         Storage as StoragePort,
         TransactionFiltered,
     },
-    tests::mocks::Consumer,
-};
-
-use super::mocks::{
-    MockRelayer,
-    MockTxPool,
+    tests::mocks::{
+        MockRelayer,
+        MockTransactionsSource,
+    },
 };
 
 #[derive(Clone, Debug, Default)]
@@ -270,7 +268,7 @@ async fn execute__simple_independent_transactions_sorted() {
                 .expect("The value is not zero; qed"),
         },
     );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
     let future = executor.produce_without_commit_with_source(Components {
@@ -287,13 +285,14 @@ async fn execute__simple_independent_transactions_sorted() {
         let tx3 = tx3.clone();
         let tx4 = tx4.clone();
         move || {
-            // Request for thread 1
-            Consumer::receive(&tx_pool_requests_receiver).respond_with(
+            // Request for a thread
+            mock_tx_pool.waiting_for_request_to_tx_pool().respond_with(
                 &[&tx2, &tx1, &tx4, &tx3],
                 TransactionFiltered::NotFiltered,
             );
-            // Request for thread 2
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for a second thread
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
@@ -352,7 +351,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
                 .expect("The value is not zero; qed"),
         },
     );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
     let future = executor.produce_without_commit_with_source(Components {
@@ -365,25 +364,29 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     // Then
     let txpool = std::thread::spawn({
         move || {
-            // Request for thread 1
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for a thread
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&empty_filter())
                 .respond_with(&[&long_tx], TransactionFiltered::NotFiltered);
 
-            // Request for thread 2
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for a second thread
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&Filter {
                     excluded_contract_ids: vec![contract_id].into_iter().collect(),
                 })
                 .respond_with(&[], TransactionFiltered::Filtered);
 
-            // Request for thread 1 again
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for one of the threads again that asked before
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&empty_filter())
                 .respond_with(&[&short_tx], TransactionFiltered::NotFiltered);
 
-            // Request for thread 2 again
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for the other one of the threads again that asked before
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
@@ -466,7 +469,7 @@ async fn execute__gas_left_updated_when_state_merges() {
                 .expect("The value is not zero; qed"),
         },
     );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
     let future = executor.produce_without_commit_with_source(Components {
@@ -479,35 +482,40 @@ async fn execute__gas_left_updated_when_state_merges() {
     // Then
     let response_thread = std::thread::spawn({
         move || {
-            // Request for thread 1
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for one of the threads
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&empty_filter())
                 .respond_with(&[&tx_contract_1], TransactionFiltered::NotFiltered);
 
-            // Request for thread 2
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for the other thread
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&Filter {
                     excluded_contract_ids: vec![contract_id_1].into_iter().collect(),
                 })
                 .respond_with(&[&tx_contract_2], TransactionFiltered::NotFiltered);
 
-            // Request for thread 1 again
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for one of the threads again that asked before
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&Filter {
                     excluded_contract_ids: vec![contract_id_2].into_iter().collect(),
                 })
                 .respond_with(&[], TransactionFiltered::Filtered);
 
-            // Request for thread 1 or 2 again
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for the other one of the threads again that asked before
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&empty_filter())
                 .assert_gas_limit_lt(
                     ConsensusParameters::default().block_gas_limit() - max_gas,
                 )
                 .respond_with(&[&tx_both_contracts], TransactionFiltered::NotFiltered);
 
-            // Request for thread 1 or 2 again
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for one of the threads again that asked before
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
@@ -556,7 +564,7 @@ async fn execute__utxo_ordering_kept() {
                 .expect("The value is not zero; qed"),
         },
     );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
     let future = executor.produce_without_commit_with_source(Components {
@@ -571,18 +579,21 @@ async fn execute__utxo_ordering_kept() {
         let tx1 = tx1.clone();
         let tx2 = tx2.clone();
         move || {
-            // Request for thread 1
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for one of the threads
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&empty_filter())
                 .respond_with(&[&tx1], TransactionFiltered::NotFiltered);
 
-            // Request for thread 2
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for the other thread
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .assert_filter(&empty_filter())
                 .respond_with(&[&tx2], TransactionFiltered::NotFiltered);
 
-            // Request for thread 1 again
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for one of the threads again that asked before
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
