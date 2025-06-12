@@ -48,36 +48,44 @@ pub struct PoolRequestParams {
     pub filter: Filter,
 }
 
-pub struct MockTxPool {
-    pub get_executable_transactions_results_sender: GetExecutableTransactionsSender,
+pub struct MockTransactionsSource {
+    pub request_sender: MockTransactionsSourcesRequestSender,
 }
 
-pub type GetExecutableTransactionsSender = std::sync::mpsc::Sender<(
+pub type MockTransactionsSourcesRequestReceiver = std::sync::mpsc::Receiver<(
     PoolRequestParams,
     std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
 )>;
 
-pub type GetExecutableTransactionsReceiver = std::sync::mpsc::Receiver<(
+pub type MockTransactionsSourcesRequestSender = std::sync::mpsc::Sender<(
     PoolRequestParams,
     std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
 )>;
+
+pub struct MockTxPool(MockTransactionsSourcesRequestReceiver);
 
 impl MockTxPool {
-    pub fn new() -> (Self, GetExecutableTransactionsReceiver) {
+    pub fn waiting_for_request_to_tx_pool(&self) -> Consumer {
+        Consumer::receive(self)
+    }
+}
+
+impl MockTransactionsSource {
+    pub fn new() -> (Self, MockTxPool) {
         let (
             get_executable_transactions_results_sender,
             get_executable_transactions_results_receiver,
         ) = std::sync::mpsc::channel();
         (
             Self {
-                get_executable_transactions_results_sender,
+                request_sender: get_executable_transactions_results_sender,
             },
-            get_executable_transactions_results_receiver,
+            MockTxPool(get_executable_transactions_results_receiver),
         )
     }
 }
 
-impl TransactionsSource for MockTxPool {
+impl TransactionsSource for MockTransactionsSource {
     fn get_executable_transactions(
         &mut self,
         gas_limit: u64,
@@ -86,7 +94,7 @@ impl TransactionsSource for MockTxPool {
         filter: Filter,
     ) -> (Vec<CheckedTransaction>, TransactionFiltered, Filter) {
         let (tx, rx) = std::sync::mpsc::channel();
-        self.get_executable_transactions_results_sender
+        self.request_sender
             .send((
                 PoolRequestParams {
                     gas_limit,
@@ -113,8 +121,8 @@ pub struct Consumer {
 }
 
 impl Consumer {
-    pub fn receive(receiver: &GetExecutableTransactionsReceiver) -> Self {
-        let (pool_request_params, response_sender) = receiver.recv().unwrap();
+    fn receive(receiver: &MockTxPool) -> Self {
+        let (pool_request_params, response_sender) = receiver.0.recv().unwrap();
 
         Self {
             pool_request_params,

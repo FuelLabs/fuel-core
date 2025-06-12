@@ -91,20 +91,20 @@ impl<S, R, P> Executor<S, R, P> {
         relayer_view_provider: R,
         preconfirmation_sender: P,
         config: Config,
-    ) -> Self {
+    ) -> Result<Self, SchedulerError> {
         let scheduler = Scheduler::new(
             config.clone(),
             relayer_view_provider,
             storage_view_provider,
             preconfirmation_sender,
-        );
+        )?;
 
         let validator = Validator::new(config);
 
-        Self {
+        Ok(Self {
             scheduler,
             validator,
-        }
+        })
     }
 }
 
@@ -275,7 +275,7 @@ where
             .await
     }
 
-    /// Calculate remaining block constraints after L1 execution
+    /// Calculate block constraints remaining after executing a partial block execution captured in `ExecutionData`
     fn calculate_block_constraints(
         &self,
         execution_data: &ExecutionData,
