@@ -220,7 +220,7 @@ where
             .await
     }
 
-    /// Calculate remaining block constraints after L1 execution
+    /// Calculate block constraints remaining after executing a partial block execution captured in `ExecutionData`
     fn calculate_block_constraints(
         &self,
         execution_data: &ExecutionData,
