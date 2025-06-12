@@ -371,18 +371,11 @@ where
             .latest_view()
             .map_err(SchedulerError::StorageError)?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
-        self.tx_left = block_constraints
-            .block_transaction_count_limit
-            .checked_sub(l1_execution_data.tx_count)
-            .ok_or(SchedulerError::InternalError(
-                "Cannot insert more transactions: tx_count full".to_string(),
-            ))?;
-        self.tx_size_left = block_constraints
-            .block_transaction_size_limit
-            .checked_sub(l1_execution_data.used_size)
-            .ok_or(SchedulerError::InternalError(
-                "Cannot insert more transactions: tx_size full".to_string(),
-            ))?;
+        self.update_constraints(
+            l1_execution_data.tx_count,
+            l1_execution_data.used_size,
+            l1_execution_data.used_gas,
+        )?;
 
         let consensus_parameters_version =
             components.header_to_produce.consensus_parameters_version;
@@ -531,6 +524,30 @@ where
         Ok(res)
     }
 
+    fn update_constraints(
+        &mut self,
+        tx_number_to_add: u16,
+        tx_size_to_add: u32,
+        gas_to_add: u64,
+    ) -> Result<(), SchedulerError> {
+        self.tx_left = self.tx_left.checked_sub(tx_number_to_add).ok_or(
+            SchedulerError::InternalError(
+                "Cannot add more transactions: tx_left underflow".to_string(),
+            ),
+        )?;
+        self.tx_size_left = self.tx_size_left.checked_sub(tx_size_to_add).ok_or(
+            SchedulerError::InternalError(
+                "Cannot add more transactions: tx_size_left underflow".to_string(),
+            ),
+        )?;
+        self.gas_left = self.gas_left.checked_sub(gas_to_add).ok_or(
+            SchedulerError::InternalError(
+                "Cannot add more transactions: gas_left underflow".to_string(),
+            ),
+        )?;
+        Ok(())
+    }
+
     fn is_worker_idling(&self) -> bool {
         !self.current_available_workers.is_empty()
             && self.state == SchedulerState::TransactionsReadyForPickup
@@ -582,18 +599,14 @@ where
         }
 
         let prepared_batch = prepare_transactions_batch(batch)?;
-        self.tx_size_left = self.tx_size_left.saturating_sub(prepared_batch.total_size);
-        self.gas_left = self
-            .gas_left
-            .saturating_sub(
-                prepared_batch
-                    .gas
-                    .saturating_div(self.config.number_of_cores.get() as u64),
-            )
-            .saturating_sub(prepared_batch.blob_gas);
-        self.tx_left = self
-            .tx_left
-            .saturating_sub(prepared_batch.number_of_transactions);
+        self.update_constraints(
+            prepared_batch.number_of_transactions,
+            prepared_batch.total_size,
+            prepared_batch
+                .gas
+                .saturating_div(self.config.number_of_cores.get() as u64)
+                .saturating_add(prepared_batch.blob_gas),
+        )?;
         Ok(prepared_batch)
     }
 
@@ -706,11 +719,9 @@ where
             self.state = SchedulerState::TransactionsReadyForPickup;
         }
 
-        let changes = self.store_any_contract_changes(
-            res.changes,
-            res.contracts_used.as_ref(),
-        );
-        
+        let changes =
+            self.store_any_contract_changes(res.changes, res.contracts_used.as_ref());
+
         self.execution_results.insert(
             res.batch_id,
             WorkSessionSavedData {
@@ -730,7 +741,11 @@ where
         self.current_available_workers.push_back(res.worker_id);
     }
 
-    fn store_any_contract_changes(&mut self, mut changes: Changes, contracts_used: &[ContractId]) -> Changes {
+    fn store_any_contract_changes(
+        &mut self,
+        mut changes: Changes,
+        contracts_used: &[ContractId],
+    ) -> Changes {
         // Is it useful ?
         // Did I listed all column ?
         // Need future proof
