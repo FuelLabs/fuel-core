@@ -246,6 +246,7 @@ where
                 | Input::MessageDataPredicate(_) => {
                     has_predicates = true;
                 }
+                #[cfg(feature = "chargeable-tx-v2")]
                 Input::InputV2(_) => {
                     todo!()
                 }
