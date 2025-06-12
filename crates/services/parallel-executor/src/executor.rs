@@ -78,15 +78,15 @@ impl<S, R, P> Executor<S, R, P> {
         relayer_view_provider: R,
         preconfirmation_sender: P,
         config: Config,
-    ) -> Self {
+    ) -> Result<Self, SchedulerError> {
         let scheduler = Scheduler::new(
             config,
             relayer_view_provider,
             storage_view_provider,
             preconfirmation_sender,
-        );
+        )?;
 
-        Self { scheduler }
+        Ok(Self { scheduler })
     }
 }
 

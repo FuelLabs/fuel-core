@@ -126,8 +126,9 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     /// Current contracts being executed
     current_executing_contracts: HashSet<ContractId>,
     /// Current execution tasks
-    current_execution_tasks:
-        FuturesUnordered<tokio::task::JoinHandle<WorkSessionExecutionResult>>,
+    current_execution_tasks: FuturesUnordered<
+        tokio::task::JoinHandle<Result<WorkSessionExecutionResult, ExecutorError>>,
+    >,
     // All executed transactions batch associated with their id
     execution_results: FxHashMap<usize, WorkSessionSavedData>,
     /// Blobs transactions to be executed at the end
@@ -298,12 +299,12 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
         relayer: R,
         storage: S,
         preconfirmation_sender: PreconfirmationSender,
-    ) -> Self {
+    ) -> Result<Self, SchedulerError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(config.number_of_cores.get())
             .enable_all()
             .build()
-            .unwrap();
+            .expect("Failed to create tokio runtime");
 
         let executor = BlockExecutor::new(
             relayer,
@@ -316,9 +317,11 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             preconfirmation_sender,
             true, // dry run
         )
-        .unwrap();
+        .map_err(|e| {
+            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
+        })?;
 
-        Self {
+        Ok(Self {
             runtime: Some(runtime),
             executor,
             storage,
@@ -333,7 +336,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             state: SchedulerState::TransactionsReadyForPickup,
             contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
-        }
+        })
     }
 
     fn reset(&mut self) {
@@ -461,11 +464,19 @@ where
                     result = self.current_execution_tasks.select_next_some() => {
                         match result {
                             Ok(res) => {
-                                if !res.skipped_tx.is_empty() {
+                                match res {
+                                    Ok(res) => {
+                                        if !res.skipped_tx.is_empty() {
                                     self.sequential_fallback(block_height, &consensus_parameters, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
+                                    },
+                                    Err(e) => {
+                                        return Err(SchedulerError::ExecutionError(e));
+                                    }
+                                }
+
                             }
                             _ => {
                                 return Err(SchedulerError::InternalError(
@@ -629,7 +640,6 @@ where
                 let storage_tx = storage_with_da
                     .into_transaction()
                     .with_changes(required_changes);
-                // TODO: Error management
                 let block = executor
                     .execute_l2_transactions(
                         Components {
@@ -644,8 +654,7 @@ where
                         storage_tx,
                         &mut execution_data,
                     )
-                    .await
-                    .unwrap();
+                    .await?;
                 // TODO: Outputs seems to not be resolved here, why? It should be the case need to investigate
                 let coins_created = get_coins_outputs(
                     block.transactions.iter().zip(
@@ -667,7 +676,7 @@ where
                         });
                     }
                 }
-                WorkSessionExecutionResult {
+                Ok(WorkSessionExecutionResult {
                     worker_id,
                     batch_id,
                     changes: execution_data.changes,
@@ -682,7 +691,7 @@ where
                     used_gas: execution_data.used_gas,
                     used_size: execution_data.used_size,
                     coinbase: execution_data.coinbase,
-                }
+                })
             }
         }));
         self.blob_transactions.extend(batch.blob_transactions);
@@ -741,7 +750,7 @@ where
         // We need to merge the states of all the workers
         while !self.current_execution_tasks.is_empty() {
             match self.current_execution_tasks.next().await {
-                Some(Ok(res)) => {
+                Some(Ok(Ok(res))) => {
                     if !res.skipped_tx.is_empty() {
                         self.sequential_fallback(
                             block_height,
@@ -771,6 +780,10 @@ where
                             },
                         );
                     }
+                }
+                Some(Ok(Err(e))) => {
+                    tracing::error!("Worker execution failed: {e}");
+                    return Err(SchedulerError::ExecutionError(e));
                 }
                 Some(Err(_)) => {
                     return Err(SchedulerError::InternalError(
@@ -932,7 +945,7 @@ where
         all_txs_by_batch_id.insert(batch_id, (txs, coins_created, coins_used));
         for future in current_execution_tasks {
             match future.await {
-                Ok(res) => {
+                Ok(Ok(res)) => {
                     all_txs_by_batch_id.insert(
                         res.batch_id,
                         (res.txs, res.coins_created, res.coins_used),
@@ -946,6 +959,10 @@ where
                 }
                 Err(_) => {
                     tracing::error!("Worker execution failed");
+                }
+                Ok(Err(e)) => {
+                    tracing::error!("Worker execution failed: {e}");
+                    return Err(SchedulerError::ExecutionError(e));
                 }
             }
         }

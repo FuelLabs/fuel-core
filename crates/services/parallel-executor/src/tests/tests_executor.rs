@@ -65,7 +65,7 @@ use crate::{
     tests::mocks::{
         MockPreconfirmationSender,
         MockRelayer,
-        MockTxPool,
+        MockTransactionsSource,
     },
 };
 
@@ -232,7 +232,8 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
             number_of_cores: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
         },
-    );
+    )
+    .unwrap();
     let res = executor
         .produce_without_commit_with_source(Components {
             header_to_produce: Default::default(),
@@ -275,7 +276,8 @@ async fn execute__simple_independent_transactions_sorted() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        );
+        )
+        .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -358,7 +360,8 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        );
+        )
+        .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -476,7 +479,8 @@ async fn execute__gas_left_updated_when_state_merges() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        );
+        )
+        .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -571,8 +575,9 @@ async fn execute__utxo_ordering_kept() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+        )
+        .unwrap();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
     let future = executor.produce_without_commit_with_source(Components {
@@ -645,8 +650,9 @@ async fn test_skipped_txs_fallback_mechanism() {
                 number_of_cores: std::num::NonZeroUsize::new(3)
                     .expect("The value is not zero; qed"),
             },
-        );
-    let (transactions_source, tx_pool_requests_receiver) = MockTxPool::new();
+        )
+        .unwrap();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
     let future = executor.produce_without_commit_with_source(Components {
@@ -661,20 +667,24 @@ async fn test_skipped_txs_fallback_mechanism() {
         let tx1 = tx1.clone();
         let tx2 = tx2.clone();
         move || {
-            // Request for thread 1
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for a thread
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .respond_with(&[&tx1], TransactionFiltered::NotFiltered);
 
-            // Request for thread 2 ( the second transaction is too large to fit in the block and will be skipped )
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for an other thread ( the second transaction is too large to fit in the block and will be skipped )
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .respond_with(&[&tx2, &tx3], TransactionFiltered::NotFiltered);
 
-            // Request for thread 3
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for an other thread
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .respond_with(&[&tx4], TransactionFiltered::NotFiltered);
 
-            // Request for thread 1 again
-            Consumer::receive(&tx_pool_requests_receiver)
+            // Request for one of the threads again that asked before
+            mock_tx_pool
+                .waiting_for_request_to_tx_pool()
                 .respond_with(&[], TransactionFiltered::NotFiltered);
         }
     });
