@@ -206,7 +206,6 @@ struct WorkSessionSavedData {
 
 /// Error type for the scheduler
 #[derive(Debug, derive_more::Display)]
-
 pub enum SchedulerError {
     /// Error while executing the transactions
     ExecutionError(ExecutorError),
