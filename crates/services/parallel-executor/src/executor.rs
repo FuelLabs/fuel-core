@@ -1,4 +1,7 @@
-use crate::config::Config;
+use crate::{
+    config::Config,
+    ports::TransactionsSource,
+};
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
@@ -14,10 +17,7 @@ use fuel_core_types::{
         },
     },
 };
-use fuel_core_upgradable_executor::{
-    executor::Executor as UpgradableExecutor,
-    native_executor::ports::TransactionsSource,
-};
+use fuel_core_upgradable_executor::executor::Executor as UpgradableExecutor;
 use std::{
     num::NonZeroUsize,
     sync::{
@@ -77,7 +77,7 @@ impl<S, R> Executor<S, R> {
 
 impl<S, R> Executor<S, R> {
     /// Produces the block and returns the result of the execution without committing the changes.
-    pub fn produce_without_commit_with_source<TxSource>(
+    pub async fn produce_without_commit_with_source<TxSource>(
         &self,
         _components: Components<TxSource>,
     ) -> ExecutorResult<Uncommitted<ExecutionResult, Changes>>
