@@ -1,6 +1,9 @@
+use clap::Parser;
 use core::time::Duration;
 use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
+    combined_database::CombinedDatabase,
+    database::database_description::DatabaseHeight,
     p2p_test_helpers::*,
     service::{
         Config,
@@ -8,6 +11,13 @@ use fuel_core::{
         config::{
             DaCompressionConfig,
             DaCompressionMode,
+        },
+    },
+    state::{
+        historical_rocksdb::StateRewindPolicy,
+        rocks_db::{
+            ColumnsPolicy,
+            DatabaseConfig,
         },
     },
 };
@@ -251,6 +261,57 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
 
     // teardown
     driver.kill().await;
+}
+
+#[tokio::test]
+async fn da_compression__db_can_be_rewinded() {
+    // given
+    let rollback_target_height = 0;
+    let blocks_to_produce = 10;
+
+    let args = vec!["--da-compression", "7d", "--debug"];
+    let driver = FuelCoreDriver::spawn(&args).await.unwrap();
+    let current_height = driver
+        .client
+        .produce_blocks(blocks_to_produce, None)
+        .await
+        .unwrap();
+    assert_eq!(current_height, blocks_to_produce.into());
+
+    let db_dir = driver.kill().await;
+
+    // when
+    let target_block_height = rollback_target_height.to_string();
+    let args = [
+        "_IGNORED_",
+        "--db-path",
+        db_dir.path().to_str().unwrap(),
+        "--target-block-height",
+        target_block_height.as_str(),
+    ];
+
+    let command = fuel_core_bin::cli::rollback::Command::parse_from(args);
+    fuel_core_bin::cli::rollback::exec(command).await.unwrap();
+
+    let db = CombinedDatabase::open(
+        db_dir.path(),
+        StateRewindPolicy::RewindFullRange,
+        DatabaseConfig {
+            cache_capacity: Some(16 * 1024 * 1024 * 1024),
+            max_fds: -1,
+            columns_policy: ColumnsPolicy::Lazy,
+        },
+    )
+    .expect("Failed to create database");
+
+    let compression_db_block_height_after_rollback =
+        db.compression().latest_height_from_metadata().unwrap();
+
+    // then
+    assert_eq!(
+        compression_db_block_height_after_rollback.unwrap().as_u64(),
+        rollback_target_height
+    );
 }
 
 #[tokio::test]
