@@ -289,8 +289,8 @@ async fn predicate_can_load_blob() {
 
     let mut state = StateConfig::local_testnet();
 
-    state.coins[0].owner = blob_owner;
-    state.coins[1].owner = predicate_with_blob_owner;
+    state.coins[0].owner = blob_owner.into();
+    state.coins[1].owner = predicate_with_blob_owner.into();
 
     let blob_predicate_account = SigningAccount::Predicate {
         predicate: blob_predicate,

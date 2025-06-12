@@ -58,7 +58,7 @@ mod coin {
             ]
             .into_iter()
             .map(|(owner, amount, asset_id)| CoinConfig {
-                owner,
+                owner: owner.into(),
                 amount,
                 asset_id,
                 ..coin_generator.generate()
@@ -530,7 +530,7 @@ mod all_coins {
             ]
             .into_iter()
             .map(|(owner, amount, asset_id)| CoinConfig {
-                owner,
+                owner: owner.into(),
                 amount,
                 asset_id,
                 ..coin_generator.generate()

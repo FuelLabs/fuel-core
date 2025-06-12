@@ -5,9 +5,11 @@ use fuel_core::{
 };
 use fuel_core_chain_config::{
     ChainConfig,
+    Owner,
     SnapshotReader,
     StateConfig,
 };
+use fuel_core_types::fuel_tx::Address;
 use std::{
     env,
     path::PathBuf,
@@ -166,6 +168,19 @@ pub fn local_testnet_reader() -> SnapshotReader {
         include_bytes!("../chainspec/local-testnet/state_config.json");
 
     let state_config: StateConfig = serde_json::from_slice(TESTNET_STATE_CONFIG).unwrap();
+
+    for coin in &state_config.coins {
+        let amount = coin.amount;
+        let (address, secret) = match coin.owner {
+            Owner::Address(address) => (address.to_string(), "not provided".to_string()),
+            Owner::SecretKey(secret) => (
+                Address::from(coin.owner.clone()).to_string(),
+                secret.to_string(),
+            ),
+        };
+
+        tracing::info!(amount, address, secret, "Reading genesis coin");
+    }
 
     SnapshotReader::new_in_memory(local_testnet_chain_config(), state_config)
 }
