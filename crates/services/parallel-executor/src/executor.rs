@@ -45,10 +45,6 @@ use fuel_core_types::{
     fuel_tx::{
         ContractId,
         Transaction,
-        field::{
-            InputContract,
-            MintGasPrice,
-        },
     },
     fuel_vm::interpreter::MemoryInstance,
     services::{
@@ -82,19 +78,23 @@ mod defaults {
 
 pub struct Executor<S, R, P> {
     scheduler: Scheduler<R, S, P>,
+    relayer: R,
     validator: Validator,
 }
 
-impl<S, R, P> Executor<S, R, P> {
+impl<S, R, P> Executor<S, R, P>
+where
+    R: Clone,
+{
     pub fn new(
         storage_view_provider: S,
-        relayer_view_provider: R,
+        relayer: R,
         preconfirmation_sender: P,
         config: Config,
     ) -> Result<Self, SchedulerError> {
         let scheduler = Scheduler::new(
             config.clone(),
-            relayer_view_provider,
+            relayer.clone(),
             storage_view_provider,
             preconfirmation_sender,
         )?;
@@ -103,6 +103,7 @@ impl<S, R, P> Executor<S, R, P> {
 
         Ok(Self {
             scheduler,
+            relayer,
             validator,
         })
     }
@@ -180,7 +181,7 @@ where
 
         let executed_block_result = self
             .validator
-            .validate_block(components, block_storage_tx, block)
+            .validate_block(self.relayer.clone(), components, block_storage_tx, block)
             .await?;
 
         Ok(executed_block_result)

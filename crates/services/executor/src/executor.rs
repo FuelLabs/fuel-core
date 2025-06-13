@@ -888,7 +888,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn execute_transaction_and_commit<'a, W>(
+    pub fn execute_transaction_and_commit<'a, W>(
         &'a self,
         block: &'a mut PartialFuelBlock,
         storage_tx: &mut BlockStorageTransaction<W>,
