@@ -284,6 +284,7 @@ impl Validator {
         };
         let mut transactions = Vec::with_capacity(highest_id as usize);
         let mut message_ids = Vec::new();
+        // TODO: Use coin dependency checker from scheduler
         // Collect the results from the executed transactions
 
         for tx_idx in 0..highest_id {
