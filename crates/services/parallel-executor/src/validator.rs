@@ -40,6 +40,7 @@ use fuel_core_types::{
     fuel_tx::{
         ConsensusParameters,
         ContractId,
+        MessageId,
         Transaction,
         TxId,
     },
@@ -105,6 +106,8 @@ pub struct TransactionExecutionResult {
     pub events: Vec<Event>,
     pub status: TransactionExecutionStatus,
     pub skipped_transactions: Vec<(TxId, ExecutionError)>,
+    pub transaction: Transaction,
+    pub message_ids: Vec<MessageId>,
     // TODO: Add coins to verify their dependency
 }
 
@@ -273,14 +276,14 @@ impl Validator {
             }
         }
 
-        // TODO : Generate block
-
         let mut validation_result = ValidationResult {
             tx_status: Vec::new(),
             events: Vec::new(),
             block_id: Default::default(),
             skipped_transactions: Vec::new(),
         };
+        let mut transactions = Vec::with_capacity(highest_id as usize);
+        let mut message_ids = Vec::new();
         // Collect the results from the executed transactions
 
         for tx_idx in 0..highest_id {
@@ -290,8 +293,25 @@ impl Validator {
                 validation_result
                     .skipped_transactions
                     .extend(result.skipped_transactions);
+                transactions.push(result.transaction);
+                message_ids.extend(result.message_ids);
             }
         }
+
+        let block = components
+            .header_to_produce
+            .generate(
+                &transactions,
+                &message_ids,
+                Default::default(),
+                #[cfg(feature = "fault-proving")]
+                &Default::default(),
+            )
+            .map_err(|e| {
+                SchedulerError::InternalError(format!("Failed to generate block: {e}"))
+            })?;
+
+        validation_result.block_id = block.id();
         Ok(validation_result)
     }
 
@@ -334,6 +354,11 @@ impl Validator {
                     .pop()
                     .expect("At least one transaction status should be present"),
                 skipped_transactions: execution_data.skipped_transactions,
+                transaction: partial_block
+                    .transactions
+                    .pop()
+                    .expect("Transaction should be present"),
+                message_ids: execution_data.message_ids,
                 tx_index: tx_idx,
             })
         })

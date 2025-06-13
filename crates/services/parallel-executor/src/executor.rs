@@ -337,6 +337,7 @@ where
         let block = partial_block
             .generate(
                 &execution_data.message_ids,
+                // TODO:
                 Default::default(),
                 #[cfg(feature = "fault-proving")]
                 &Default::default(),
