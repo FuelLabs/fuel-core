@@ -219,7 +219,7 @@ pub enum SchedulerError {
     /// Mint missing error
     MintMissing,
     /// Skipped transaction error
-    SkippedTransaction(String),
+    SkippedTransaction(ExecutorError),
     /// Block mismatch
     BlockMismatch,
     /// Consensus parameters not found

@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 
 use dependency_graph::DependencyGraph;
 use fuel_core_executor::{
@@ -101,6 +104,7 @@ pub struct TransactionExecutionResult {
     pub tx_index: u16,
     pub events: Vec<Event>,
     pub status: TransactionExecutionStatus,
+    pub skipped_transactions: Vec<(TxId, ExecutionError)>,
     // TODO: Add coins to verify their dependency
 }
 
@@ -114,7 +118,7 @@ pub struct ValidationResult {
     /// Block id
     pub block_id: BlockId,
     /// Skipped transactions
-    pub skipped_transactions: Vec<(TxId, String)>,
+    pub skipped_transactions: Vec<(TxId, ExecutionError)>,
 }
 
 impl Validator {
@@ -162,6 +166,7 @@ impl Validator {
         S: Iterator<Item = Transaction>,
         R: RelayerPort + Clone + Send + 'static,
     {
+        let mut execution_results = HashMap::new();
         let consensus_parameters = block_storage_tx
             .storage::<ConsensusParametersVersions>()
             .get(&components.consensus_parameters_version())
@@ -184,6 +189,7 @@ impl Validator {
         .map_err(|e| {
             SchedulerError::InternalError(format!("Failed to create executor: {e}"))
         })?;
+        let mut highest_id: u16 = 0;
         let storage_tx = Arc::new(block_storage_tx);
         let mut workers_running = 0;
         let mut dependency_graph =
@@ -203,6 +209,11 @@ impl Validator {
                     let (transaction, changes) = dependency_graph
                         .extract_transaction_object(tx_id)
                         .expect("Transaction should exist in the graph");
+                    let tx_id = tx_id.try_into().map_err(|_| {
+                        SchedulerError::InternalError(
+                            "Transaction index out of bounds".to_string(),
+                        )
+                    })?;
                     let storage_tx = storage_tx
                         .clone()
                         .into_transaction()
@@ -214,15 +225,14 @@ impl Validator {
                         components.header_to_produce.clone(),
                         components.gas_price,
                         components.coinbase_recipient,
-                        tx_id.try_into().map_err(|_| {
-                            SchedulerError::InternalError(
-                                "Transaction index out of bounds".to_string(),
-                            )
-                        })?,
+                        tx_id,
                         transaction,
                         storage_tx,
                     );
                     workers_running += 1;
+                    if highest_id < tx_id {
+                        highest_id = tx_id;
+                    }
                     continue;
                 }
             }
@@ -232,6 +242,11 @@ impl Validator {
                 match res {
                     Ok(result) => {
                         // Process the result of the executed transaction
+                        dependency_graph.mark_tx_as_executed(
+                            result.tx_index as usize,
+                            result.changes.clone(),
+                        );
+                        execution_results.insert(result.tx_index, result);
                     }
                     Err(e) => {
                         // Handle the error from the execution task
@@ -245,7 +260,11 @@ impl Validator {
         while let Some(res) = current_execution_tasks.next().await {
             match res {
                 Ok(result) => {
-                    // Process the result of the executed transaction
+                    dependency_graph.mark_tx_as_executed(
+                        result.tx_index as usize,
+                        result.changes.clone(),
+                    );
+                    execution_results.insert(result.tx_index, result);
                 }
                 Err(e) => {
                     // Handle the error from the execution task
@@ -254,8 +273,26 @@ impl Validator {
             }
         }
 
-        /// merging step
-        todo!()
+        // TODO : Generate block
+
+        let mut validation_result = ValidationResult {
+            tx_status: Vec::new(),
+            events: Vec::new(),
+            block_id: Default::default(),
+            skipped_transactions: Vec::new(),
+        };
+        // Collect the results from the executed transactions
+
+        for tx_idx in 0..highest_id {
+            if let Some(result) = execution_results.remove(&tx_idx) {
+                validation_result.tx_status.push(result.status);
+                validation_result.events.extend(result.events);
+                validation_result
+                    .skipped_transactions
+                    .extend(result.skipped_transactions);
+            }
+        }
+        Ok(validation_result)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -289,11 +326,6 @@ impl Validator {
                 coinbase_recipient,
                 &mut MemoryInstance::new(),
             )?;
-            if let Some((tx_id, error)) = execution_data.skipped_transactions.first() {
-                return Err(ExecutionError::Other(format!(
-                    "Transaction {tx_id} skipped: {error}"
-                )));
-            }
             Ok(TransactionExecutionResult {
                 changes: execution_data.changes,
                 events: execution_data.events,
@@ -301,6 +333,7 @@ impl Validator {
                     .tx_status
                     .pop()
                     .expect("At least one transaction status should be present"),
+                skipped_transactions: execution_data.skipped_transactions,
                 tx_index: tx_idx,
             })
         })
