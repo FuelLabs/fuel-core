@@ -790,11 +790,15 @@ mod tests {
         let _ = service.run(&mut StateWatcher::started()).await;
 
         // then: we ensure we can get the registrations per block + root of that table
-        sync_observer.await_synced().await.unwrap();
+        let target_block_height = 0;
+        sync_observer
+            .await_synced_until(target_block_height)
+            .await
+            .unwrap();
         let maybe_registrations = service
             .storage
             .storage_as_ref::<storage::registrations::Registrations>()
-            .get(&0.into())
+            .get(&target_block_height.into())
             .unwrap();
         assert!(maybe_registrations.is_some());
     }
