@@ -792,7 +792,7 @@ mod tests {
         // then: we ensure we can get the registrations per block + root of that table
         let target_block_height = 0;
         sync_observer
-            .await_synced_until(target_block_height)
+            .await_synced_until(&target_block_height)
             .await
             .unwrap();
         let maybe_registrations = service
