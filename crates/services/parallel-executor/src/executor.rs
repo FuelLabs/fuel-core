@@ -1,23 +1,19 @@
 use crate::{
-    config::Config,
-    ports::{
+    config::Config, ports::{
         Storage,
         TransactionsSource,
-    },
-    scheduler::{
+    }, scheduler::{
         BlockConstraints,
         Scheduler,
         SchedulerError,
         SchedulerExecutionResult,
-    },
-    txs_ext::TxCoinbaseExt,
-    validator::{
-        self,
-        Validator,
-    },
+    }, tx_waiter::NoWaitTxs, txs_ext::TxCoinbaseExt, validator::{self, Validator}
 };
 use fuel_core_executor::{
-    executor::ExecutionData,
+    executor::{
+        BlockExecutor,
+        ExecutionData,
+    },
     ports::{
         PreconfirmationSenderPort,
         RelayerPort,
@@ -77,9 +73,10 @@ mod defaults {
 }
 
 pub struct Executor<S, R, P> {
-    scheduler: Scheduler<R, S, P>,
+    config: Config,
     relayer: R,
-    validator: Validator,
+    storage: S,
+    preconfirmation_sender: P,
 }
 
 impl<S, R, P> Executor<S, R, P>
@@ -91,21 +88,13 @@ where
         relayer: R,
         preconfirmation_sender: P,
         config: Config,
-    ) -> Result<Self, SchedulerError> {
-        let scheduler = Scheduler::new(
-            config.clone(),
-            relayer.clone(),
-            storage_view_provider,
-            preconfirmation_sender,
-        )?;
-
-        let validator = Validator::new(config);
-
-        Ok(Self {
-            scheduler,
+    ) -> Self {
+        Self {
+            config,
             relayer,
-            validator,
-        })
+            storage: storage_view_provider,
+            preconfirmation_sender,
+        }
     }
 }
 
@@ -129,6 +118,26 @@ where
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut execution_data = ExecutionData::new();
         let mut memory = MemoryInstance::new();
+        let consensus_parameters = {
+            let latest_view = self
+                .storage
+                .latest_view()
+                .map_err(SchedulerError::StorageError)?;
+
+            latest_view
+                .get_consensus_parameters(components.consensus_parameters_version())
+                .map_err(SchedulerError::StorageError)?
+        };
+        let scheduler = Scheduler::new(
+            self.config.clone(),
+            self.relayer.clone(),
+            self.storage.clone(),
+            self.preconfirmation_sender.clone(),
+            consensus_parameters,
+            memory.clone(),
+        )?;
+
+        let mut executor = scheduler.create_executor()?;
 
         // Process L1 transactions if needed
         let da_changes = self
@@ -137,16 +146,22 @@ where
                 &mut execution_data,
                 &mut memory,
                 &components,
+                &mut executor,
             )
             .await?;
 
         // Run parallel scheduler for L2 transactions
         let scheduler_result = self
-            .run_scheduler(&mut components, da_changes, execution_data)
+            .run_scheduler(&mut components, da_changes, execution_data, scheduler)
             .await?;
 
         // Finalize block with mint transaction
-        self.finalize_block(&mut components, scheduler_result, &mut memory)
+        self.finalize_block(
+            &mut components,
+            scheduler_result,
+            &mut memory,
+            &mut executor,
+        )
     }
 
     async fn validate_block(
@@ -160,6 +175,19 @@ where
         let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
         let transactions = block.transactions();
         let mut memory = MemoryInstance::new();
+        let consensus_parameters = {
+            let latest_view = self
+                .storage
+                .latest_view()
+                .map_err(SchedulerError::StorageError)?;
+
+            latest_view
+                .get_consensus_parameters(block.header().consensus_parameters_version())
+                .map_err(SchedulerError::StorageError)?
+        };
+        let scheduler = Validator::new(
+            self.config.clone(),
+        );
 
         let (gas_price, coinbase_contract_id) = transactions.coinbase()?;
 
@@ -194,10 +222,10 @@ where
         execution_data: &mut ExecutionData,
         memory: &mut MemoryInstance,
         components: &Components<impl TransactionsSource>,
+        executor: &mut BlockExecutor<R, NoWaitTxs, P>,
     ) -> Result<Changes, SchedulerError> {
         let prev_height = components.header_to_produce.height().pred();
         let view = self
-            .scheduler
             .storage
             .latest_view()
             .map_err(SchedulerError::StorageError)?;
@@ -223,7 +251,8 @@ where
                 components.coinbase_recipient,
                 execution_data,
                 memory,
-                storage_tx,
+                view,
+                executor,
             )?;
             Ok(storage_tx.into_changes())
         } else {
@@ -238,10 +267,16 @@ where
         coinbase_contract_id: ContractId,
         execution_data: &mut ExecutionData,
         memory: &mut MemoryInstance,
-        mut storage_tx: StorageTransaction<View>,
+        view: View,
+        executor: &mut BlockExecutor<R, NoWaitTxs, P>,
     ) -> Result<StorageTransaction<View>, SchedulerError> {
-        self.scheduler
-            .executor
+        let mut storage_tx = StorageTransaction::transaction(
+            view,
+            ConflictPolicy::Fail,
+            Default::default(),
+        );
+
+        executor
             .process_l1_txs(
                 partial_block,
                 coinbase_contract_id,
@@ -260,13 +295,14 @@ where
         components: &mut Components<TxSource>,
         da_changes: Changes,
         execution_data: ExecutionData,
+        scheduler: Scheduler<R, S, P>,
     ) -> Result<SchedulerExecutionResult, SchedulerError>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
         let block_constraints = self.calculate_block_constraints(&execution_data)?;
 
-        self.scheduler
+        scheduler
             .run(
                 components,
                 da_changes,
@@ -319,19 +355,19 @@ where
         components: &mut Components<TxSource>,
         scheduler_result: SchedulerExecutionResult,
         memory: &mut MemoryInstance,
+        executor: &mut BlockExecutor<R, NoWaitTxs, P>,
     ) -> Result<Uncommitted<ExecutionResult, StorageChanges>, SchedulerError>
     where
         TxSource: TransactionsSource,
     {
         let view = self
-            .scheduler
             .storage
             .latest_view()
             .map_err(SchedulerError::StorageError)?;
 
         // Produce mint transaction (pass the entire scheduler_result)
         let (execution_data, storage_changes, partial_block) =
-            self.produce_mint_tx(components, scheduler_result, memory, view)?;
+            self.produce_mint_tx(components, scheduler_result, memory, view, executor)?;
 
         // Generate final block
         let block = partial_block
@@ -364,6 +400,7 @@ where
         scheduler_res: SchedulerExecutionResult,
         memory: &mut MemoryInstance,
         view: View,
+        executor: &mut BlockExecutor<R, NoWaitTxs, P>,
     ) -> Result<(ExecutionData, StorageChanges, PartialFuelBlock), SchedulerError> {
         // needed to avoid partial move
         let SchedulerExecutionResult {
@@ -406,8 +443,7 @@ where
             used_size,
         };
 
-        self.scheduler
-            .executor
+        executor
             .produce_mint_tx(
                 &mut partial_block,
                 components,

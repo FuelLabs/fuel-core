@@ -47,7 +47,7 @@ impl ContractsChanges {
                 changes.push(change);
             }
         }
-        self.contracts_changes.clear();
+        self.clear();
         changes
     }
 

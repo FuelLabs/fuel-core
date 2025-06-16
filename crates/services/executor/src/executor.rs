@@ -547,10 +547,6 @@ where
     N: NewTxWaiterPort,
     P: PreconfirmationSenderPort,
 {
-    pub fn set_consensus_params(&mut self, consensus_params: ConsensusParameters) {
-        self.consensus_params = consensus_params;
-    }
-
     pub async fn execute<TxSource, D>(
         self,
         components: Components<TxSource>,
@@ -710,6 +706,7 @@ where
         transactions: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
         execution_data: &mut ExecutionData,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<PartialFuelBlock>
     where
         TxSource: TransactionsSource,
@@ -717,14 +714,13 @@ where
     {
         let mut partial_block =
             PartialFuelBlock::new(transactions.header_to_produce, vec![]);
-        let mut memory = MemoryInstance::new();
 
         self.process_l2_txs(
             &mut partial_block,
             &transactions,
             &mut block_storage_tx,
             execution_data,
-            &mut memory,
+            memory,
         )
         .await?;
 
