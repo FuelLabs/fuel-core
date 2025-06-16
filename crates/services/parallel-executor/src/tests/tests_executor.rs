@@ -232,8 +232,7 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
             number_of_cores: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
         },
-    )
-    .unwrap();
+    );
     let res = executor
         .produce_without_commit_with_source(Components {
             header_to_produce: Default::default(),
@@ -276,8 +275,7 @@ async fn execute__simple_independent_transactions_sorted() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        )
-        .unwrap();
+        );
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -360,8 +358,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        )
-        .unwrap();
+        );
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -479,8 +476,7 @@ async fn execute__gas_left_updated_when_state_merges() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        )
-        .unwrap();
+        );
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -575,8 +571,7 @@ async fn execute__utxo_ordering_kept() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        )
-        .unwrap();
+        );
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -650,8 +645,7 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
                 number_of_cores: std::num::NonZeroUsize::new(3)
                     .expect("The value is not zero; qed"),
             },
-        )
-        .unwrap();
+        );
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When

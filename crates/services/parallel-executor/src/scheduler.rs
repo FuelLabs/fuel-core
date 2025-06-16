@@ -115,10 +115,14 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     config: Config,
     /// Storage
     pub(crate) storage: S,
+    /// Relayer
+    relayer: R,
+    /// Consensus parameters
+    consensus_parameters: ConsensusParameters,
+    /// Preconfirmation sender
+    preconfirmation_sender: PreconfirmationSender,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
-    /// Executor
-    pub(crate) executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
     /// List of available workers
     current_available_workers: VecDeque<usize>,
     /// All contracts changes
@@ -299,6 +303,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
         relayer: R,
         storage: S,
         preconfirmation_sender: PreconfirmationSender,
+        consensus_parameters: ConsensusParameters,
     ) -> Result<Self, SchedulerError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(config.number_of_cores.get())
@@ -306,24 +311,10 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             .build()
             .expect("Failed to create tokio runtime");
 
-        let executor = BlockExecutor::new(
-            relayer,
-            ExecutionOptions {
-                forbid_fake_coins: false,
-                backtrace: false,
-            },
-            ConsensusParameters::default(),
-            NoWaitTxs,
-            preconfirmation_sender,
-            true, // dry run
-        )
-        .map_err(|e| {
-            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
-        })?;
-
         Ok(Self {
             runtime: Some(runtime),
-            executor,
+            relayer,
+            preconfirmation_sender,
             storage,
             tx_left: 0,
             tx_size_left: 0,
@@ -336,19 +327,8 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             state: SchedulerState::TransactionsReadyForPickup,
             contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
+            consensus_parameters,
         })
-    }
-
-    fn reset(&mut self) {
-        self.tx_left = 0;
-        self.tx_size_left = 0;
-        self.gas_left = 0;
-        self.current_available_workers = (0..self.config.number_of_cores.get()).collect();
-        self.current_executing_contracts.clear();
-        self.execution_results.clear();
-        self.contracts_changes.clear();
-        self.current_execution_tasks = FuturesUnordered::new();
-        self.state = SchedulerState::TransactionsReadyForPickup;
     }
 }
 
@@ -360,7 +340,7 @@ where
     View: Storage + KeyValueInspect<Column = Column> + Send + Sync + 'static,
 {
     pub async fn run<TxSource: TransactionsSource>(
-        &mut self,
+        mut self,
         components: &mut Components<TxSource>,
         da_changes: Changes,
         block_constraints: BlockConstraints,
@@ -380,20 +360,6 @@ where
         let consensus_parameters_version =
             components.header_to_produce.consensus_parameters_version;
         let block_height = *components.header_to_produce.height();
-
-        let consensus_parameters = {
-            let latest_view = self
-                .storage
-                .latest_view()
-                .map_err(SchedulerError::StorageError)?;
-
-            let consensus_parameters = latest_view
-                .get_consensus_parameters(consensus_parameters_version)
-                .map_err(SchedulerError::StorageError)?;
-            self.executor
-                .set_consensus_params(consensus_parameters.clone());
-            consensus_parameters
-        };
 
         let new_tx_notifier = components
             .transactions_source
@@ -460,7 +426,7 @@ where
                                 match res {
                                     Ok(res) => {
                                         if !res.skipped_tx.is_empty() {
-                                    self.sequential_fallback(block_height, &consensus_parameters, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
+                                    self.sequential_fallback(block_height, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
@@ -487,7 +453,6 @@ where
 
         self.wait_all_execution_tasks(
             block_height,
-            &consensus_parameters,
             block_constraints.total_execution_time,
         )
         .await?;
@@ -520,7 +485,6 @@ where
             res.add_blob_execution_data(blob_execution_data, blob_txs);
         }
 
-        self.reset();
         Ok(res)
     }
 
@@ -610,6 +574,25 @@ where
         Ok(prepared_batch)
     }
 
+    pub fn create_executor(
+        &self,
+    ) -> Result<BlockExecutor<R, NoWaitTxs, PreconfirmationSender>, SchedulerError> {
+        BlockExecutor::new(
+            self.relayer.clone(),
+            ExecutionOptions {
+                forbid_fake_coins: false,
+                backtrace: false,
+            },
+            self.consensus_parameters.clone(),
+            NoWaitTxs,
+            self.preconfirmation_sender.clone(),
+            true, // dry run
+        )
+        .map_err(|e| {
+            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
+        })
+    }
+
     fn execute_batch<TxSource>(
         &mut self,
         consensus_parameters_version: u32,
@@ -639,7 +622,7 @@ where
         }
         batch.contracts_used.extend(new_contracts_used);
 
-        let executor = self.executor.clone();
+        let executor = self.create_executor()?;
         let coinbase_recipient = components.coinbase_recipient;
         let gas_price = components.gas_price;
         let header_to_produce = components.header_to_produce;
@@ -747,7 +730,6 @@ where
         contracts_used: &[ContractId],
     ) -> Changes {
         // Is it useful ?
-        // Did I listed all column ?
         // Need future proof
         let mut tmp_contracts_changes = HashMap::default();
         for column in ContractColumnsIterator::new() {
@@ -764,7 +746,6 @@ where
     async fn wait_all_execution_tasks(
         &mut self,
         block_height: BlockHeight,
-        consensus_params: &ConsensusParameters,
         total_execution_time: Duration,
     ) -> Result<(), SchedulerError> {
         let tolerance_execution_time_overflow = total_execution_time / 10;
@@ -778,7 +759,6 @@ where
                     if !res.skipped_tx.is_empty() {
                         self.sequential_fallback(
                             block_height,
-                            consensus_params,
                             res.batch_id,
                             res.txs,
                             res.coins_used,
@@ -924,9 +904,8 @@ where
             tx_count: start_idx_txs,
             ..Default::default()
         };
-        let block = self
-            .executor
-            .clone()
+        let executor = self.create_executor()?;
+        let block = executor
             .execute_l2_transactions(
                 Components {
                     header_to_produce: components.header_to_produce,
@@ -956,7 +935,6 @@ where
     async fn sequential_fallback(
         &mut self,
         block_height: BlockHeight,
-        consensus_params: &ConsensusParameters,
         batch_id: usize,
         txs: Vec<Transaction>,
         coins_used: Vec<CoinInBatch>,
@@ -1000,13 +978,16 @@ where
             {
                 for tx in txs {
                     all_txs.push(
-                        tx.into_checked_basic(block_height, consensus_params)
-                            .map_err(|e| {
-                                SchedulerError::InternalError(format!(
-                                    "Failed to convert transaction to checked: {e:?}"
-                                ))
-                            })?
-                            .into(),
+                        tx.into_checked_basic(
+                            block_height,
+                            &self.consensus_parameters.clone(),
+                        )
+                        .map_err(|e| {
+                            SchedulerError::InternalError(format!(
+                                "Failed to convert transaction to checked: {e:?}"
+                            ))
+                        })?
+                        .into(),
                     );
                 }
                 all_coins_created.extend(coins_created);
@@ -1014,7 +995,7 @@ where
             } else if let Some(res) = self.execution_results.remove(&id) {
                 for tx in res.txs {
                     all_txs.push(
-                        tx.into_checked(block_height, consensus_params)
+                        tx.into_checked(block_height, &self.consensus_parameters.clone())
                             .map_err(|e| {
                                 SchedulerError::InternalError(format!(
                                     "Failed to convert transaction to checked: {e:?}"
@@ -1031,9 +1012,8 @@ where
         }
 
         let mut execution_data = ExecutionData::default();
-        let block = self
-            .executor
-            .clone()
+        let executor = self.create_executor()?;
+        let block = executor
             .execute_l2_transactions(
                 Components {
                     header_to_produce: PartialBlockHeader::default(),
