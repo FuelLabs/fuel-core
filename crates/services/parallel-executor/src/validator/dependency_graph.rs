@@ -14,6 +14,8 @@ use std::collections::{
     VecDeque,
 };
 
+use crate::coin::CoinInBatch;
+
 /// Dependency graph for contract-based transactions
 #[derive(Debug)]
 pub struct DependencyGraph {
@@ -23,7 +25,7 @@ pub struct DependencyGraph {
     /// Transaction index -> Set of contract IDs it depends on
     transaction_to_contracts: HashMap<usize, HashSet<ContractId>>,
     /// Transaction index -> Transaction
-    transactions: HashMap<usize, Transaction>,
+    transactions: HashMap<usize, (Transaction, Vec<CoinInBatch>)>,
     /// Cache of currently ready transactions
     ready_transactions: HashSet<usize>,
     /// Queue for newly ready transactions
@@ -50,6 +52,7 @@ impl DependencyGraph {
 
     pub fn add_transaction(&mut self, index: usize, transaction: Transaction) {
         let mut contract_deps = HashSet::new();
+        let mut coins_used = Vec::new();
         let mut is_ready = true;
 
         let mut handle_contract = |contract_id: ContractId| {
@@ -74,8 +77,25 @@ impl DependencyGraph {
 
         // Extract contract dependencies
         for input in transaction.inputs().iter() {
-            if let Input::Contract(contract_input) = input {
-                handle_contract(contract_input.contract_id);
+            match input {
+                Input::Contract(contract_input) => {
+                    handle_contract(contract_input.contract_id);
+                }
+                fuel_core_types::fuel_tx::Input::CoinSigned(coin) => {
+                    coins_used.push(CoinInBatch::from_signed_coin(
+                        coin,
+                        index,
+                        Default::default(),
+                    ));
+                }
+                fuel_core_types::fuel_tx::Input::CoinPredicate(coin) => {
+                    coins_used.push(CoinInBatch::from_predicate_coin(
+                        coin,
+                        index,
+                        Default::default(),
+                    ));
+                }
+                _ => {}
             }
         }
 
@@ -86,7 +106,7 @@ impl DependencyGraph {
         }
 
         self.transaction_to_contracts.insert(index, contract_deps);
-        self.transactions.insert(index, transaction);
+        self.transactions.insert(index, (transaction, coins_used));
 
         // if no contracts or first to use all contracts, mark as ready
         if is_ready {
@@ -189,7 +209,7 @@ impl DependencyGraph {
     pub fn extract_transaction_object(
         &mut self,
         index: usize,
-    ) -> Option<(Transaction, Changes)> {
+    ) -> Option<((Transaction, Vec<CoinInBatch>), Changes)> {
         let mut changes = Changes::default();
         if let Some(transaction) = self.transactions.remove(&index) {
             let contracts = self
@@ -211,7 +231,10 @@ impl DependencyGraph {
         }
     }
 
-    pub fn get_transaction(&self, index: usize) -> Option<&Transaction> {
+    pub fn get_transaction(
+        &self,
+        index: usize,
+    ) -> Option<&(Transaction, Vec<CoinInBatch>)> {
         self.transactions.get(&index)
     }
 
@@ -487,7 +510,7 @@ mod tests {
         // when
         graph.add_transaction(0, tx);
 
-        let retrieved_tx = graph.get_transaction(0).unwrap();
+        let (retrieved_tx, _) = graph.get_transaction(0).unwrap();
         // then
         assert_eq!(retrieved_tx.id(&ChainId::default()), tx_id);
     }

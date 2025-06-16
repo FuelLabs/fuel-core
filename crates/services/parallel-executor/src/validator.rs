@@ -36,13 +36,16 @@ use fuel_core_types::{
             PartialBlockHeader,
         },
         primitives::BlockId,
+        transaction::TransactionExt,
     },
     fuel_tx::{
         ConsensusParameters,
         ContractId,
         MessageId,
+        Output,
         Transaction,
         TxId,
+        UtxoId,
     },
     fuel_types::BlockHeight,
     fuel_vm::{
@@ -67,6 +70,10 @@ use futures::{
 pub(crate) mod dependency_graph;
 
 use crate::{
+    coin::{
+        CoinDependencyChainVerifier,
+        CoinInBatch,
+    },
     config::Config,
     ports::Storage,
     scheduler::SchedulerError,
@@ -108,6 +115,8 @@ pub struct TransactionExecutionResult {
     pub skipped_transactions: Vec<(TxId, ExecutionError)>,
     pub transaction: Transaction,
     pub message_ids: Vec<MessageId>,
+    pub coins_used: Vec<CoinInBatch>,
+    pub coins_created: Vec<CoinInBatch>,
     // TODO: Add coins to verify their dependency
 }
 
@@ -209,7 +218,7 @@ impl Validator {
             // Check if we can spawn more tasks
             if workers_running < self.config.number_of_cores.get() {
                 if let Some(tx_id) = dependency_graph.pop_ready_transaction() {
-                    let (transaction, changes) = dependency_graph
+                    let ((transaction, coins_used), changes) = dependency_graph
                         .extract_transaction_object(tx_id)
                         .expect("Transaction should exist in the graph");
                     let tx_id = tx_id.try_into().map_err(|_| {
@@ -230,6 +239,7 @@ impl Validator {
                         components.coinbase_recipient,
                         tx_id,
                         transaction,
+                        coins_used,
                         storage_tx,
                     );
                     workers_running += 1;
@@ -284,11 +294,18 @@ impl Validator {
         };
         let mut transactions = Vec::with_capacity(highest_id as usize);
         let mut message_ids = Vec::new();
-        // TODO: Use coin dependency checker from scheduler
-        // Collect the results from the executed transactions
+        let mut coin_dependency_verifier = CoinDependencyChainVerifier::new();
 
         for tx_idx in 0..highest_id {
             if let Some(result) = execution_results.remove(&tx_idx) {
+                coin_dependency_verifier
+                    .register_coins_created(tx_idx as usize, result.coins_created);
+                // TODO: Fix this
+                coin_dependency_verifier.verify_coins_used(
+                    tx_idx as usize,
+                    result.coins_used.iter(),
+                    &block_storage_tx,
+                )?;
                 validation_result.tx_status.push(result.status);
                 validation_result.events.extend(result.events);
                 validation_result
@@ -325,6 +342,7 @@ impl Validator {
         coinbase_recipient: ContractId,
         tx_idx: u16,
         transaction: Transaction,
+        coins_used: Vec<CoinInBatch>,
         mut storage_tx: StorageTransaction<D>,
     ) -> tokio::task::JoinHandle<Result<TransactionExecutionResult, ExecutionError>>
     where
@@ -347,6 +365,17 @@ impl Validator {
                 coinbase_recipient,
                 &mut MemoryInstance::new(),
             )?;
+
+            let transaction = partial_block
+                .transactions
+                .pop()
+                .expect("Transaction should be present");
+            let status = execution_data
+                .tx_status
+                .pop()
+                .expect("At least one transaction status should be present");
+
+            let coins_created = get_coins_outputs(&transaction, status.id);
             Ok(TransactionExecutionResult {
                 changes: execution_data.changes,
                 events: execution_data.events,
@@ -361,7 +390,61 @@ impl Validator {
                     .expect("Transaction should be present"),
                 message_ids: execution_data.message_ids,
                 tx_index: tx_idx,
+                coins_used,
+                coins_created,
             })
         })
     }
+}
+
+fn get_coins_outputs(tx: &Transaction, tx_id: TxId) -> Vec<CoinInBatch> {
+    let mut coins = vec![];
+    for (idx, output) in tx.outputs().iter().enumerate() {
+        match output {
+            Output::Coin {
+                to,
+                amount,
+                asset_id,
+            } => {
+                coins.push(CoinInBatch {
+                    utxo_id: UtxoId::new(tx_id, idx as u16),
+                    idx,
+                    tx_id,
+                    owner: *to,
+                    amount: *amount,
+                    asset_id: *asset_id,
+                });
+            }
+            Output::Change {
+                to,
+                amount,
+                asset_id,
+            } => {
+                coins.push(CoinInBatch {
+                    utxo_id: UtxoId::new(tx_id, idx as u16),
+                    idx,
+                    tx_id,
+                    owner: *to,
+                    amount: *amount,
+                    asset_id: *asset_id,
+                });
+            }
+            Output::Variable {
+                to,
+                amount,
+                asset_id,
+            } => {
+                coins.push(CoinInBatch {
+                    utxo_id: UtxoId::new(tx_id, idx as u16),
+                    idx,
+                    tx_id,
+                    owner: *to,
+                    amount: *amount,
+                    asset_id: *asset_id,
+                });
+            }
+            _ => {}
+        }
+    }
+    coins
 }

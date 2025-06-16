@@ -18,7 +18,6 @@
 //! This can be done because we assume that the transaction pool is sending us transactions that are alTransactionsReadyForPickup correctly verified.
 //! If we have a transaction that end up being skipped (only possible cause if consensus parameters changes) then we will have to
 //! fallback a sequential execution of the transaction that used the skipped one as a dependency.
-mod coin;
 mod contracts_changes;
 
 use std::{
@@ -93,6 +92,10 @@ use tokio::runtime::Runtime;
 
 use crate::{
     checked_transaction_ext::CheckedTransactionExt,
+    coin::{
+        CoinDependencyChainVerifier,
+        CoinInBatch,
+    },
     column_adapter::ContractColumnsIterator,
     config::Config,
     l1_execution_data::L1ExecutionData,
@@ -104,10 +107,6 @@ use crate::{
         TransactionsSource,
     },
     tx_waiter::NoWaitTxs,
-};
-use coin::{
-    CoinDependencyChainVerifier,
-    CoinInBatch,
 };
 
 pub struct Scheduler<R, S, PreconfirmationSender> {
