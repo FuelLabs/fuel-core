@@ -6,7 +6,11 @@ use fuel_core_executor::ports::{
 };
 use fuel_core_types::fuel_vm::checked_transaction::CheckedTransaction;
 
-use crate::ports::TransactionsSource;
+use crate::ports::{
+    TransactionFiltered,
+    TransactionSourceExecutableTransactions,
+    TransactionsSource,
+};
 
 pub struct OnceTransactionsSource {
     transactions: Mutex<Vec<CheckedTransaction>>,
@@ -54,16 +58,16 @@ impl TransactionsSource for OnceTransactionsSource {
         tx_count_limit: u16,
         _block_transaction_size_limit: u32,
         filter: crate::ports::Filter,
-    ) -> (
-        Vec<CheckedTransaction>,
-        crate::ports::TransactionFiltered,
-        crate::ports::Filter,
-    ) {
+    ) -> TransactionSourceExecutableTransactions {
         let mut transactions = self.transactions.lock().expect("Mutex poisoned");
         // Avoid panicking if we request more transactions than there are in the vector
         let transactions_limit = (tx_count_limit as usize).min(transactions.len());
         let txs = transactions.drain(..transactions_limit).collect();
-        (txs, crate::ports::TransactionFiltered::NotFiltered, filter)
+        TransactionSourceExecutableTransactions {
+            transactions: txs,
+            filtered: TransactionFiltered::NotFiltered,
+            filter,
+        }
     }
     fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify {
         // This is a one-time source, so we don't need to notify about new transactions

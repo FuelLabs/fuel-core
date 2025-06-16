@@ -27,6 +27,23 @@ pub struct Filter {
     pub excluded_contract_ids: HashSet<ContractId>,
 }
 
+impl Filter {
+    pub fn new(excluded_contract_ids: HashSet<ContractId>) -> Self {
+        Self {
+            excluded_contract_ids,
+        }
+    }
+}
+
+pub struct TransactionSourceExecutableTransactions {
+    /// The transactions that can be executed
+    pub transactions: Vec<CheckedTransaction>,
+    /// Indicates whether some transactions were filtered out based on the filter
+    pub filtered: TransactionFiltered,
+    /// The filter used to fetch these transactions
+    pub filter: Filter,
+}
+
 pub trait TransactionsSource {
     /// Returns the a batch of transactions to satisfy the given parameters
     fn get_executable_transactions(
@@ -35,7 +52,7 @@ pub trait TransactionsSource {
         tx_count_limit: u16,
         block_transaction_size_limit: u32,
         filter: Filter,
-    ) -> (Vec<CheckedTransaction>, TransactionFiltered, Filter);
+    ) -> TransactionSourceExecutableTransactions;
 
     /// Returns a notification receiver for new transactions
     fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify;
