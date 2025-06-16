@@ -549,7 +549,7 @@ where
                 .saturating_div(self.config.number_of_cores.get() as u64),
         );
 
-        let (batch, filtered, filter) = tx_source.get_executable_transactions(
+        let executable_transactions = tx_source.get_executable_transactions(
             current_gas,
             self.tx_left,
             self.tx_size_left,
@@ -559,17 +559,19 @@ where
                 ),
             },
         );
-        self.current_executing_contracts = filter.excluded_contract_ids;
+        self.current_executing_contracts =
+            executable_transactions.filter.excluded_contract_ids;
 
-        if batch.is_empty() {
-            if filtered == TransactionFiltered::Filtered {
+        if executable_transactions.transactions.is_empty() {
+            if executable_transactions.filtered == TransactionFiltered::Filtered {
                 self.state = SchedulerState::WaitingForWorker;
             } else {
                 self.state = SchedulerState::WaitingForNewTransaction;
             }
         }
 
-        let prepared_batch = prepare_transactions_batch(batch)?;
+        let prepared_batch =
+            prepare_transactions_batch(executable_transactions.transactions)?;
         self.update_constraints(
             prepared_batch.number_of_transactions,
             prepared_batch.total_size,
