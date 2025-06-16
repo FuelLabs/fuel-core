@@ -121,7 +121,6 @@ where
                 .latest_view()
                 .map_err(SchedulerError::StorageError)?;
 
-            
             latest_view
                 .get_consensus_parameters(components.consensus_parameters_version())
                 .map_err(SchedulerError::StorageError)?
@@ -132,6 +131,7 @@ where
             self.storage.clone(),
             self.preconfirmation_sender.clone(),
             consensus_parameters,
+            memory.clone(),
         )?;
 
         let mut executor = scheduler.create_executor()?;

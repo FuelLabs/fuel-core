@@ -75,9 +75,12 @@ use fuel_core_types::{
         UtxoId,
     },
     fuel_types::BlockHeight,
-    fuel_vm::checked_transaction::{
-        CheckedTransaction,
-        IntoChecked,
+    fuel_vm::{
+        checked_transaction::{
+            CheckedTransaction,
+            IntoChecked,
+        },
+        interpreter::MemoryInstance,
     },
     services::{
         block_producer::Components,
@@ -121,6 +124,8 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     consensus_parameters: ConsensusParameters,
     /// Preconfirmation sender
     preconfirmation_sender: PreconfirmationSender,
+    /// Memory instance
+    memory: MemoryInstance,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
     /// List of available workers
@@ -304,6 +309,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
         storage: S,
         preconfirmation_sender: PreconfirmationSender,
         consensus_parameters: ConsensusParameters,
+        memory: MemoryInstance,
     ) -> Result<Self, SchedulerError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(config.number_of_cores.get())
@@ -328,6 +334,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
             consensus_parameters,
+            memory,
         })
     }
 }
@@ -626,6 +633,7 @@ where
         let coinbase_recipient = components.coinbase_recipient;
         let gas_price = components.gas_price;
         let header_to_produce = components.header_to_produce;
+        let mut memory = self.memory.clone();
         self.current_execution_tasks.push(runtime.spawn({
             let storage_with_da = storage_with_da.clone();
             async move {
@@ -649,6 +657,7 @@ where
                         },
                         storage_tx,
                         &mut execution_data,
+                        &mut memory,
                     )
                     .await?;
                 // TODO: Outputs seems to not be resolved here, why? It should be the case need to investigate
@@ -918,6 +927,7 @@ where
                 },
                 storage,
                 &mut execution_data,
+                &mut self.memory,
             )
             .await
             .map_err(SchedulerError::ExecutionError)?;
@@ -1023,6 +1033,7 @@ where
                 },
                 self.storage.latest_view().unwrap().write_transaction(),
                 &mut execution_data,
+                &mut self.memory,
             )
             .await
             .map_err(SchedulerError::ExecutionError)?;
