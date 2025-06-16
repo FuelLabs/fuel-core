@@ -505,7 +505,7 @@ where
             l1_execution_data,
         )?;
 
-        if self.blob_transactions.is_empty() {
+        if !self.blob_transactions.is_empty() {
             let mut merged: Changes = Changes::default();
             for changes in res.changes.extract_list_of_changes() {
                 merged.extend(changes);
@@ -687,7 +687,7 @@ where
                 if !execution_data.skipped_transactions.is_empty() {
                     for (tx_id, error) in execution_data.skipped_transactions.iter() {
                         batch.coins_used.retain(|coin| {
-                            if coin.tx_id == *tx_id {
+                            if coin.tx_id() == tx_id {
                                 tracing::warn!("Transaction {tx_id} skipped: {error}");
                                 false
                             } else {
@@ -1134,49 +1134,49 @@ fn get_coins_outputs<'a>(
 ) -> Vec<CoinInBatch> {
     let mut coins = vec![];
     for (idx, (tx, tx_id)) in transactions.enumerate() {
-        for output in tx.outputs().iter() {
+        for (output_idx, output) in tx.outputs().iter().enumerate() {
             match output {
                 Output::Coin {
                     to,
                     amount,
                     asset_id,
                 } => {
-                    coins.push(CoinInBatch {
-                        utxo_id: UtxoId::new(tx_id, idx as u16),
+                    coins.push(CoinInBatch::from_output(
+                        UtxoId::new(tx_id, output_idx as u16),
                         idx,
                         tx_id,
-                        owner: *to,
-                        amount: *amount,
-                        asset_id: *asset_id,
-                    });
+                        *to,
+                        *amount,
+                        *asset_id,
+                    ));
                 }
                 Output::Change {
                     to,
                     amount,
                     asset_id,
                 } => {
-                    coins.push(CoinInBatch {
-                        utxo_id: UtxoId::new(tx_id, idx as u16),
+                    coins.push(CoinInBatch::from_output(
+                        UtxoId::new(tx_id, output_idx as u16),
                         idx,
                         tx_id,
-                        owner: *to,
-                        amount: *amount,
-                        asset_id: *asset_id,
-                    });
+                        *to,
+                        *amount,
+                        *asset_id,
+                    ));
                 }
                 Output::Variable {
                     to,
                     amount,
                     asset_id,
                 } => {
-                    coins.push(CoinInBatch {
-                        utxo_id: UtxoId::new(tx_id, idx as u16),
+                    coins.push(CoinInBatch::from_output(
+                        UtxoId::new(tx_id, output_idx as u16),
                         idx,
                         tx_id,
-                        owner: *to,
-                        amount: *amount,
-                        asset_id: *asset_id,
-                    });
+                        *to,
+                        *amount,
+                        *asset_id,
+                    ));
                 }
                 _ => {}
             }
