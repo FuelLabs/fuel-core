@@ -54,7 +54,9 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Changes,
+        ConflictPolicy,
         IntoTransaction,
+        Modifiable,
         StorageChanges,
         StorageTransaction,
         WriteTransaction,
@@ -81,6 +83,7 @@ use fuel_core_types::{
             IntoChecked,
         },
         interpreter::MemoryInstance,
+        predicate::EmptyStorage,
     },
     services::{
         block_producer::Components,
@@ -471,20 +474,22 @@ where
         )?;
 
         if !self.blob_transactions.is_empty() {
-            let mut merged: Changes = Changes::default();
+            let mut tx = StorageTransaction::transaction(
+                storage_with_da.clone(),
+                ConflictPolicy::Fail,
+                Default::default(),
+            );
+
             for changes in res.changes.extract_list_of_changes() {
-                merged.extend(changes);
+                if let Err(e) = tx.commit_changes(changes) {
+                    return Err(SchedulerError::StorageError(e));
+                }
             }
-            let storage_with_res = self
-                .storage
-                .latest_view()
-                .map_err(SchedulerError::StorageError)?
-                .into_transaction()
-                .with_changes(merged);
+
             let (blob_execution_data, blob_txs) = self
                 .execute_blob_transactions(
                     components,
-                    storage_with_res,
+                    tx,
                     nb_transactions,
                     consensus_parameters_version,
                 )
@@ -617,8 +622,12 @@ where
         )?;
         let runtime = self.runtime.as_ref().unwrap();
 
-        let mut required_changes: Changes = Changes::default();
         let mut new_contracts_used = vec![];
+        let mut tx = StorageTransaction::transaction(
+            EmptyStorage,
+            ConflictPolicy::Fail,
+            Default::default(),
+        );
         for contract in batch.contracts_used.iter() {
             self.current_executing_contracts.insert(*contract);
             if let Some((contract_ids, changes)) =
@@ -627,9 +636,14 @@ where
                 self.current_executing_contracts
                     .extend(contract_ids.clone());
                 new_contracts_used.extend(contract_ids);
-                required_changes.extend(changes);
+                tx.commit_changes(changes).map_err(|e| {
+                    SchedulerError::InternalError(format!(
+                        "Failed to commit changes: {e}"
+                    ))
+                })?;
             }
         }
+        let required_changes = tx.into_changes();
         batch.contracts_used.extend(new_contracts_used);
 
         let executor = self.create_executor()?;
@@ -901,13 +915,16 @@ where
         Ok(exec_result)
     }
 
-    async fn execute_blob_transactions<TxSource>(
+    async fn execute_blob_transactions<TxSource, D>(
         &mut self,
         components: &Components<TxSource>,
-        storage: StorageTransaction<View>,
+        storage: StorageTransaction<D>,
         start_idx_txs: u16,
         consensus_parameters_version: u32,
-    ) -> Result<(ExecutionData, Vec<Transaction>), SchedulerError> {
+    ) -> Result<(ExecutionData, Vec<Transaction>), SchedulerError>
+    where
+        D: KeyValueInspect<Column = Column>,
+    {
         let mut execution_data = ExecutionData {
             tx_count: start_idx_txs,
             ..Default::default()
