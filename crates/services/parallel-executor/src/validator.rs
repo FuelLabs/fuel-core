@@ -406,42 +406,42 @@ fn get_coins_outputs(tx: &Transaction, tx_id: TxId) -> Vec<CoinInBatch> {
                 amount,
                 asset_id,
             } => {
-                coins.push(CoinInBatch {
-                    utxo_id: UtxoId::new(tx_id, idx as u16),
+                coins.push(CoinInBatch::from_output(
+                    UtxoId::new(tx_id, idx as u16),
                     idx,
                     tx_id,
-                    owner: *to,
-                    amount: *amount,
-                    asset_id: *asset_id,
-                });
+                    *to,
+                    *amount,
+                    *asset_id,
+                ));
             }
             Output::Change {
                 to,
                 amount,
                 asset_id,
             } => {
-                coins.push(CoinInBatch {
-                    utxo_id: UtxoId::new(tx_id, idx as u16),
+                coins.push(CoinInBatch::from_output(
+                    UtxoId::new(tx_id, idx as u16),
                     idx,
                     tx_id,
-                    owner: *to,
-                    amount: *amount,
-                    asset_id: *asset_id,
-                });
+                    *to,
+                    *amount,
+                    *asset_id,
+                ));
             }
             Output::Variable {
                 to,
                 amount,
                 asset_id,
             } => {
-                coins.push(CoinInBatch {
-                    utxo_id: UtxoId::new(tx_id, idx as u16),
+                coins.push(CoinInBatch::from_output(
+                    UtxoId::new(tx_id, idx as u16),
                     idx,
                     tx_id,
-                    owner: *to,
-                    amount: *amount,
-                    asset_id: *asset_id,
-                });
+                    *to,
+                    *amount,
+                    *asset_id,
+                ));
             }
             _ => {}
         }

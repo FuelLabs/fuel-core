@@ -19,7 +19,7 @@ use fxhash::FxHashMap;
 
 use crate::ports::Storage;
 
-use super::SchedulerError;
+use crate::scheduler::SchedulerError;
 
 #[derive(Debug, Eq)]
 pub(crate) struct CoinInBatch {
