@@ -395,6 +395,25 @@ impl Validator {
             })
         })
     }
+
+    pub fn create_executor(
+        &self,
+    ) -> Result<BlockExecutor<R, NoWaitTxs, PreconfirmationSender>, SchedulerError> {
+        BlockExecutor::new(
+            self.relayer.clone(),
+            ExecutionOptions {
+                forbid_fake_coins: false,
+                backtrace: false,
+            },
+            self.consensus_parameters.clone(),
+            NoWaitTxs,
+            NoPreconfirmationSender,
+            true, // dry run
+        )
+        .map_err(|e| {
+            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
+        })
+    }
 }
 
 fn get_coins_outputs(tx: &Transaction, tx_id: TxId) -> Vec<CoinInBatch> {
