@@ -573,10 +573,11 @@ where
         self.update_constraints(
             prepared_batch.number_of_transactions,
             prepared_batch.total_size,
-            prepared_batch
-                .gas
-                .saturating_div(self.config.number_of_cores.get() as u64)
-                .saturating_add(prepared_batch.blob_gas),
+            prepared_batch.gas.saturating_add(
+                prepared_batch
+                    .blob_gas
+                    .saturating_mul(self.config.number_of_cores.get() as u64),
+            ),
         )?;
         Ok(prepared_batch)
     }
