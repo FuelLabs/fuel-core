@@ -24,17 +24,17 @@ use super::SchedulerError;
 #[derive(Debug, Eq)]
 pub(crate) struct CoinInBatch {
     /// The utxo id
-    pub utxo_id: UtxoId,
+    utxo_id: UtxoId,
     /// The index of the transaction using this coin in the batch
-    pub idx: usize,
+    idx: usize,
     /// The TxId that use this coin (useful to remove them from the batch in case of skipped tx)
-    pub tx_id: TxId,
+    tx_id: TxId,
     /// the owner of the coin
-    pub owner: Address,
+    owner: Address,
     /// the amount stored in the coin
-    pub amount: Word,
+    amount: Word,
     /// the asset the coin stores
-    pub asset_id: AssetId,
+    asset_id: AssetId,
 }
 
 impl PartialEq for CoinInBatch {
@@ -50,6 +50,10 @@ impl PartialEq for CoinInBatch {
 impl CoinInBatch {
     pub(crate) fn utxo(&self) -> &UtxoId {
         &self.utxo_id
+    }
+
+    pub(crate) fn tx_id(&self) -> &TxId {
+        &self.tx_id
     }
 
     pub(crate) fn idx(&self) -> usize {
@@ -124,6 +128,24 @@ impl CoinInBatch {
             _ => {
                 panic!("Unsupported compressed coin version");
             }
+        }
+    }
+
+    pub(crate) fn from_output(
+        utxo_id: UtxoId,
+        idx: usize,
+        tx_id: TxId,
+        owner: Address,
+        amount: Word,
+        asset_id: AssetId,
+    ) -> Self {
+        CoinInBatch {
+            utxo_id,
+            idx,
+            tx_id,
+            owner,
+            amount,
+            asset_id,
         }
     }
 }
