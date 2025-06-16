@@ -153,9 +153,7 @@ fn basic_tx(
 }
 
 fn empty_filter() -> Filter {
-    Filter {
-        excluded_contract_ids: Default::default(),
-    }
+    Filter::new(Default::default())
 }
 
 fn given_stored_coin_predicate(
@@ -381,9 +379,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             // Request for a second thread
             mock_tx_pool
                 .waiting_for_request_to_tx_pool()
-                .assert_filter(&Filter {
-                    excluded_contract_ids: vec![contract_id].into_iter().collect(),
-                })
+                .assert_filter(&Filter::new(vec![contract_id].into_iter().collect()))
                 .respond_with(&[], TransactionFiltered::Filtered);
 
             // Request for one of the threads again that asked before
@@ -499,17 +495,13 @@ async fn execute__gas_left_updated_when_state_merges() {
             // Request for the other thread
             mock_tx_pool
                 .waiting_for_request_to_tx_pool()
-                .assert_filter(&Filter {
-                    excluded_contract_ids: vec![contract_id_1].into_iter().collect(),
-                })
+                .assert_filter(&Filter::new(vec![contract_id_1].into_iter().collect()))
                 .respond_with(&[&tx_contract_2], TransactionFiltered::NotFiltered);
 
             // Request for one of the threads again that asked before
             mock_tx_pool
                 .waiting_for_request_to_tx_pool()
-                .assert_filter(&Filter {
-                    excluded_contract_ids: vec![contract_id_2].into_iter().collect(),
-                })
+                .assert_filter(&Filter::new(vec![contract_id_2].into_iter().collect()))
                 .respond_with(&[], TransactionFiltered::Filtered);
 
             // Request for the other one of the threads again that asked before

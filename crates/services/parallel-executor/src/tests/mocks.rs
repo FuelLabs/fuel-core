@@ -20,6 +20,7 @@ use fuel_core_types::{
 use crate::ports::{
     Filter,
     TransactionFiltered,
+    TransactionSourceExecutableTransactions,
     TransactionsSource,
 };
 
@@ -54,12 +55,12 @@ pub struct MockTransactionsSource {
 
 pub type MockTransactionsSourcesRequestReceiver = std::sync::mpsc::Receiver<(
     PoolRequestParams,
-    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
+    std::sync::mpsc::Sender<TransactionSourceExecutableTransactions>,
 )>;
 
 pub type MockTransactionsSourcesRequestSender = std::sync::mpsc::Sender<(
     PoolRequestParams,
-    std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
+    std::sync::mpsc::Sender<TransactionSourceExecutableTransactions>,
 )>;
 
 pub struct MockTxPool(MockTransactionsSourcesRequestReceiver);
@@ -92,7 +93,7 @@ impl TransactionsSource for MockTransactionsSource {
         tx_count_limit: u16,
         block_transaction_size_limit: u32,
         filter: Filter,
-    ) -> (Vec<CheckedTransaction>, TransactionFiltered, Filter) {
+    ) -> TransactionSourceExecutableTransactions {
         let (tx, rx) = std::sync::mpsc::channel();
         self.request_sender
             .send((
@@ -116,8 +117,7 @@ impl TransactionsSource for MockTransactionsSource {
 
 pub struct Consumer {
     pool_request_params: PoolRequestParams,
-    response_sender:
-        std::sync::mpsc::Sender<(Vec<CheckedTransaction>, TransactionFiltered, Filter)>,
+    response_sender: std::sync::mpsc::Sender<TransactionSourceExecutableTransactions>,
 }
 
 impl Consumer {
@@ -153,13 +153,11 @@ impl Consumer {
         let txs = into_checked_txs(txs);
 
         self.response_sender
-            .send((
-                txs,
+            .send(TransactionSourceExecutableTransactions {
+                transactions: txs.to_vec(),
                 filtered,
-                Filter {
-                    excluded_contract_ids: HashSet::default(),
-                },
-            ))
+                filter: Filter::new(HashSet::default()),
+            })
             .unwrap();
         self
     }
