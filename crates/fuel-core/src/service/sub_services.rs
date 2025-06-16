@@ -193,6 +193,7 @@ pub fn init_sub_services(
         native_executor_version: config.native_executor_version,
         allow_historical_execution: config.historical_execution,
     };
+    #[cfg(not(feature = "parallel-executor"))]
     let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
@@ -200,6 +201,15 @@ pub fn init_sub_services(
         new_txs_watcher,
         preconfirmation_sender.clone(),
     );
+    #[cfg(feature = "parallel-executor")]
+    let executor = ExecutorAdapter::new_parallel(
+        database.on_chain().clone(),
+        database.relayer().clone(),
+        upgradable_executor_config,
+        new_txs_watcher,
+        preconfirmation_sender.clone(),
+    );
+
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());
 

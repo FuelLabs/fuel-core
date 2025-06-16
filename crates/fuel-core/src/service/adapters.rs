@@ -17,6 +17,8 @@ use fuel_core_gas_price_service::{
     v1::service::LatestGasPrice,
 };
 use fuel_core_importer::ImporterResult;
+#[cfg(feature = "parallel-executor")]
+use fuel_core_parallel_executor::executor::Executor as ParallelExecutor;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
@@ -402,6 +404,38 @@ impl ExecutorAdapter {
 
         self.executor
             .produce_without_commit_with_source_direct_resolve(new_components)
+    }
+}
+
+#[cfg(feature = "parallel-executor")]
+#[derive(Clone)]
+pub struct ParallelExecutorAdapter {
+    pub executor:
+        Arc<ParallelExecutor<Database, Database<Relayer>, PreconfirmationSender>>,
+    pub new_txs_watcher: watch::Receiver<()>,
+    pub preconfirmation_sender: PreconfirmationSender,
+}
+
+#[cfg(feature = "parallel-executor")]
+impl ParallelExecutorAdapter {
+    pub fn new(
+        database: Database,
+        relayer_database: Database<Relayer>,
+        config: fuel_core_parallel_executor::config::Config,
+        new_txs_watcher: watch::Receiver<()>,
+        preconfirmation_sender: PreconfirmationSender,
+    ) -> Self {
+        let executor = ParallelExecutor::new(
+            database,
+            relayer_database,
+            preconfirmation_sender.clone(),
+            config,
+        );
+        Self {
+            executor: Arc::new(executor),
+            new_txs_watcher,
+            preconfirmation_sender,
+        }
     }
 }
 
