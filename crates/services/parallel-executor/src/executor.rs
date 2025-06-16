@@ -1,9 +1,6 @@
 use crate::{
     config::Config,
-    ports::{
-        Storage,
-        TransactionsSource,
-    },
+    ports::TransactionsSource,
     scheduler::{
         BlockConstraints,
         Scheduler,
@@ -23,8 +20,14 @@ use fuel_core_executor::{
     },
 };
 use fuel_core_storage::{
+    StorageAsRef,
     column::Column,
     kv_store::KeyValueInspect,
+    structured_storage::StructuredStorage,
+    tables::{
+        ConsensusParametersVersions,
+        FuelBlocks,
+    },
     transactional::{
         AtomicView,
         Changes,
@@ -100,7 +103,7 @@ where
     R: RelayerPort + Clone + Send + 'static,
     P: PreconfirmationSenderPort + Clone + Send + 'static,
     S: AtomicView<LatestView = View> + Clone + Send + 'static,
-    View: KeyValueInspect<Column = Column> + Storage + Send + Sync + 'static,
+    View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
 {
     /// Produces the block and returns the result of the execution without committing the changes.
     pub async fn produce_without_commit_with_source<TxSource>(
@@ -115,15 +118,22 @@ where
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut execution_data = ExecutionData::new();
         let mut memory = MemoryInstance::new();
+        let view = self
+            .storage
+            .latest_view()
+            .map_err(SchedulerError::StorageError)?;
+        let structured_storage = StructuredStorage::new(view);
         let consensus_parameters = {
-            let latest_view = self
-                .storage
-                .latest_view()
-                .map_err(SchedulerError::StorageError)?;
-
-            latest_view
-                .get_consensus_parameters(components.consensus_parameters_version())
+            structured_storage
+                .storage::<ConsensusParametersVersions>()
+                .get(&components.header_to_produce.consensus_parameters_version)
                 .map_err(SchedulerError::StorageError)?
+                .ok_or_else(|| {
+                    SchedulerError::InternalError(
+                        "Consensus parameters not found".to_string(),
+                    )
+                })?
+                .into_owned()
         };
         let scheduler = Scheduler::new(
             self.config.clone(),
@@ -144,6 +154,7 @@ where
                 &mut memory,
                 &components,
                 &mut executor,
+                structured_storage,
             )
             .await?;
 
@@ -169,30 +180,27 @@ where
         memory: &mut MemoryInstance,
         components: &Components<impl TransactionsSource>,
         executor: &mut BlockExecutor<R, NoWaitTxs, P>,
+        structured_storage: StructuredStorage<View>,
     ) -> Result<Changes, SchedulerError> {
-        let prev_height = components.header_to_produce.height().pred();
-        let view = self
-            .storage
-            .latest_view()
-            .map_err(SchedulerError::StorageError)?;
+        let Some(prev_height) = components.header_to_produce.height().pred() else {
+            return Ok(Changes::default());
+        };
 
-        let should_process_da = prev_height
-            .and_then(|height| {
-                view.get_da_height_by_l2_height(&height)
-                    .map_err(SchedulerError::StorageError)
-                    .ok()
-            })
-            .flatten()
-            .filter(|&da_height| da_height != components.header_to_produce.da_height)
-            .is_some();
+        let prev_block = structured_storage
+            .storage::<FuelBlocks>()
+            .get(&prev_height)
+            .map_err(SchedulerError::StorageError)?
+            .ok_or_else(|| {
+                SchedulerError::InternalError("Previous block not found".to_string())
+            })?;
 
-        if should_process_da {
+        if prev_block.header().da_height() != components.header_to_produce.da_height {
             let storage_tx = self.process_l1_txs(
                 partial_block,
                 components.coinbase_recipient,
                 execution_data,
                 memory,
-                view,
+                structured_storage.into_storage(),
                 executor,
             )?;
             Ok(storage_tx.into_changes())

@@ -3,13 +3,11 @@
 use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
-    StorageAsRef,
     column::Column,
     kv_store::{
         KeyValueInspect,
         Value,
     },
-    not_found,
     structured_storage::test::InMemoryStorage,
     tables::{
         Coins,
@@ -18,7 +16,6 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Modifiable,
-        ReadTransaction,
         StorageChanges,
         WriteTransaction,
     },
@@ -59,7 +56,6 @@ use crate::{
     once_transaction_source::OnceTransactionsSource,
     ports::{
         Filter,
-        Storage as StoragePort,
         TransactionFiltered,
     },
     tests::mocks::{
@@ -85,40 +81,6 @@ impl AtomicView for Storage {
 
     fn latest_view(&self) -> StorageResult<Self::LatestView> {
         Ok(self.clone())
-    }
-}
-
-impl StoragePort for Storage {
-    fn get_coin(
-        &self,
-        utxo: &UtxoId,
-    ) -> StorageResult<Option<fuel_core_types::entities::coins::coin::CompressedCoin>>
-    {
-        self.0
-            .read_transaction()
-            .storage_as_ref::<Coins>()
-            .get(utxo)
-            .map(|coin| coin.map(|c| c.into_owned()))
-    }
-
-    fn get_consensus_parameters(
-        &self,
-        consensus_parameters_version: u32,
-    ) -> StorageResult<ConsensusParameters> {
-        self.0
-            .read_transaction()
-            .storage_as_ref::<ConsensusParametersVersions>()
-            .get(&consensus_parameters_version)?
-            .map(|params| params.into_owned())
-            .ok_or(not_found!("Consensus parameters not found"))
-    }
-
-    fn get_da_height_by_l2_height(
-        &self,
-        _: &fuel_core_types::fuel_types::BlockHeight,
-    ) -> StorageResult<Option<fuel_core_types::blockchain::primitives::DaBlockHeight>>
-    {
-        Ok(None)
     }
 }
 

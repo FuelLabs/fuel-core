@@ -102,7 +102,6 @@ use crate::{
     once_transaction_source::OnceTransactionsSource,
     ports::{
         Filter,
-        Storage,
         TransactionFiltered,
         TransactionsSource,
     },
@@ -344,7 +343,7 @@ where
     R: RelayerPort + Clone + Send + 'static,
     PreconfirmationSender: PreconfirmationSenderPort + Clone + Send + 'static,
     S: AtomicView<LatestView = View> + Clone + Send + 'static,
-    View: Storage + KeyValueInspect<Column = Column> + Send + Sync + 'static,
+    View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
 {
     pub async fn run<TxSource: TransactionsSource>(
         mut self,
@@ -468,6 +467,7 @@ where
             nb_batch_created,
             components.header_to_produce,
             l1_execution_data,
+            storage_with_da.clone(),
         )?;
 
         if !self.blob_transactions.is_empty() {
@@ -824,6 +824,7 @@ where
         nb_batch: usize,
         partial_block_header: PartialBlockHeader,
         l1_execution_data: L1ExecutionData,
+        block_transaction: Arc<StorageTransaction<View>>,
     ) -> Result<SchedulerExecutionResult, SchedulerError> {
         let L1ExecutionData {
             coinbase,
@@ -847,12 +848,7 @@ where
             used_size,
             coinbase,
         };
-
         let mut storage_changes = vec![];
-        let latest_view = self
-            .storage
-            .latest_view()
-            .map_err(SchedulerError::StorageError)?;
         let mut compiled_created_coins = CoinDependencyChainVerifier::new();
         for batch_id in 0..nb_batch {
             if let Some(changes) = self.execution_results.remove(&batch_id) {
@@ -861,7 +857,7 @@ where
                 compiled_created_coins.verify_coins_used(
                     batch_id,
                     changes.coins_used.iter(),
-                    &latest_view,
+                    &block_transaction,
                 )?;
                 storage_changes.push(changes.changes);
                 exec_result.events.extend(changes.events);
