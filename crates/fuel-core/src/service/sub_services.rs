@@ -202,7 +202,7 @@ pub fn init_sub_services(
         preconfirmation_sender.clone(),
     );
     #[cfg(feature = "parallel-executor")]
-    let executor = ExecutorAdapter::new_parallel(
+    let executor = ExecutorAdapter::new(
         database.on_chain().clone(),
         database.relayer().clone(),
         upgradable_executor_config,
