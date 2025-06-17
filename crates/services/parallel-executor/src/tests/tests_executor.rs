@@ -555,6 +555,61 @@ async fn execute__utxo_ordering_kept() {
     );
 }
 
+#[tokio::test]
+async fn execute__utxo_resolved() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+    let owner = Input::predicate_owner(&predicate);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    // Given
+    let script = [op::add(RegId::ONE, 0x02, 0x03)];
+    let script_bytes: Vec<u8> = script.iter().flat_map(|op| op.to_bytes()).collect();
+    let tx1 = TransactionBuilder::script(script_bytes, vec![])
+        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_output(Output::change(owner, 0, Default::default()))
+        .finalize_as_transaction();
+
+    let mut executor = Executor::new(
+        storage,
+        MockRelayer,
+        MockPreconfirmationSender,
+        Config {
+            number_of_cores: std::num::NonZeroUsize::new(2)
+                .expect("The value is not zero; qed"),
+        },
+    );
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
+
+    // When
+    let future = executor.produce_without_commit_with_source(Components {
+        header_to_produce: Default::default(),
+        transactions_source,
+        coinbase_recipient: Default::default(),
+        gas_price: 0,
+    });
+
+    // Request for one of the threads
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&tx1], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    // Request for the other thread
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    // Then
+    let result = future.await.unwrap().into_result();
+    let transactions = result.block.transactions();
+    assert_eq!(transactions.len(), 2);
+    let output = transactions[0].outputs().into_owned()[0];
+    assert_eq!(output.amount(), Some(1000));
+}
+
 // We use the overflow of gas to skip the transactions.
 // TODO: This test can't be performed anymore now that we lower the gas ourself in the scheduler and so
 // scheduler fails before the executor can skip the transaction.

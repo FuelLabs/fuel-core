@@ -681,7 +681,6 @@ where
                         &mut memory_instance,
                     )
                     .await?;
-                // TODO: Outputs seems to not be resolved here, why? It should be the case need to investigate
                 let coins_created = get_coins_outputs(
                     block.transactions.iter().zip(
                         execution_data
