@@ -335,8 +335,8 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             relayer,
             preconfirmation_sender,
             storage,
-            // TODO: Find this number
-            tx_left: 2000,
+            // TODO: Use consensus parameters after https://github.com/FuelLabs/fuel-vm/pull/905 is merged
+            tx_left: u16::MAX,
             tx_size_left: consensus_parameters.block_transaction_size_limit(),
             gas_left: consensus_parameters.block_gas_limit(),
             current_available_workers: ((0..config.number_of_cores.get())
