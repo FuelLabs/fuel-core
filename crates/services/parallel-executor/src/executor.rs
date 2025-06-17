@@ -117,16 +117,12 @@ where
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut execution_data = ExecutionData::new();
-        let view = self
-            .storage
-            .latest_view()
-            .map_err(SchedulerError::StorageError)?;
+        let view = self.storage.latest_view()?;
         let structured_storage = StructuredStorage::new(view);
         let consensus_parameters = {
             structured_storage
                 .storage::<ConsensusParametersVersions>()
-                .get(&components.header_to_produce.consensus_parameters_version)
-                .map_err(SchedulerError::StorageError)?
+                .get(&components.header_to_produce.consensus_parameters_version)?
                 .ok_or_else(|| {
                     SchedulerError::InternalError(
                         "Consensus parameters not found".to_string(),
@@ -186,8 +182,7 @@ where
 
         let prev_block = structured_storage
             .storage::<FuelBlocks>()
-            .get(&prev_height)
-            .map_err(SchedulerError::StorageError)?
+            .get(&prev_height)?
             .ok_or_else(|| {
                 SchedulerError::InternalError("Previous block not found".to_string())
             })?;
@@ -223,15 +218,13 @@ where
             Default::default(),
         );
 
-        executor
-            .process_l1_txs(
-                partial_block,
-                coinbase_contract_id,
-                &mut storage_tx,
-                execution_data,
-                memory,
-            )
-            .map_err(SchedulerError::ExecutionError)?;
+        executor.process_l1_txs(
+            partial_block,
+            coinbase_contract_id,
+            &mut storage_tx,
+            execution_data,
+            memory,
+        )?;
 
         Ok(storage_tx)
     }
@@ -307,10 +300,7 @@ where
     where
         TxSource: TransactionsSource,
     {
-        let view = self
-            .storage
-            .latest_view()
-            .map_err(SchedulerError::StorageError)?;
+        let view = self.storage.latest_view()?;
 
         // Produce mint transaction (pass the entire scheduler_result)
         let (execution_data, storage_changes, partial_block) =
@@ -389,15 +379,13 @@ where
             used_size,
         };
 
-        executor
-            .produce_mint_tx(
-                &mut partial_block,
-                components,
-                &mut tx_changes,
-                &mut execution_data,
-                memory,
-            )
-            .map_err(SchedulerError::ExecutionError)?;
+        executor.produce_mint_tx(
+            &mut partial_block,
+            components,
+            &mut tx_changes,
+            &mut execution_data,
+            memory,
+        )?;
 
         let storage_changes = match changes {
             StorageChanges::Changes(changes) => {

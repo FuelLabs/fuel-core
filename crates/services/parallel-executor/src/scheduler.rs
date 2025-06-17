@@ -229,6 +229,18 @@ pub enum SchedulerError {
     InternalError(String),
 }
 
+impl From<StorageError> for SchedulerError {
+    fn from(error: StorageError) -> Self {
+        SchedulerError::StorageError(error)
+    }
+}
+
+impl From<ExecutorError> for SchedulerError {
+    fn from(error: ExecutorError) -> Self {
+        SchedulerError::ExecutionError(error)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum SchedulerState {
     /// Ready for a new worker to get some transactions
@@ -356,10 +368,7 @@ where
         block_constraints: BlockConstraints,
         l1_execution_data: L1ExecutionData,
     ) -> Result<SchedulerExecutionResult, SchedulerError> {
-        let view = self
-            .storage
-            .latest_view()
-            .map_err(SchedulerError::StorageError)?;
+        let view = self.storage.latest_view()?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
             l1_execution_data.tx_count,
@@ -433,18 +442,12 @@ where
                     result = self.current_execution_tasks.select_next_some() => {
                         match result {
                             Ok(res) => {
-                                match res {
-                                    Ok(res) => {
-                                        if !res.skipped_tx.is_empty() {
+                                let res = res?;
+                                if !res.skipped_tx.is_empty() {
                                     self.sequential_fallback(block_height, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
-                                    },
-                                    Err(e) => {
-                                        return Err(SchedulerError::ExecutionError(e));
-                                    }
-                                }
 
                             }
                             _ => {
@@ -784,7 +787,8 @@ where
         // We need to merge the states of all the workers
         while !self.current_execution_tasks.is_empty() {
             match self.current_execution_tasks.next().await {
-                Some(Ok(Ok(res))) => {
+                Some(Ok(res)) => {
+                    let res = res?;
                     if !res.skipped_tx.is_empty() {
                         self.sequential_fallback(
                             block_height,
@@ -813,10 +817,6 @@ where
                             },
                         );
                     }
-                }
-                Some(Ok(Err(e))) => {
-                    tracing::error!("Worker execution failed: {e}");
-                    return Err(SchedulerError::ExecutionError(e));
                 }
                 Some(Err(_)) => {
                     return Err(SchedulerError::InternalError(
@@ -953,8 +953,7 @@ where
                 &mut execution_data,
                 &mut memory_instance,
             )
-            .await
-            .map_err(SchedulerError::ExecutionError)?;
+            .await?;
         // Register the worker back to the available workers
         self.current_available_workers
             .push_back((worker_id, memory_instance));
@@ -984,7 +983,8 @@ where
         all_txs_by_batch_id.insert(batch_id, (txs, coins_created, coins_used));
         for future in current_execution_tasks {
             match future.await {
-                Ok(Ok(res)) => {
+                Ok(res) => {
+                    let res = res?;
                     all_txs_by_batch_id.insert(
                         res.batch_id,
                         (res.txs, res.coins_created, res.coins_used),
@@ -998,10 +998,6 @@ where
                 }
                 Err(_) => {
                     tracing::error!("Worker execution failed");
-                }
-                Ok(Err(e)) => {
-                    tracing::error!("Worker execution failed: {e}");
-                    return Err(SchedulerError::ExecutionError(e));
                 }
             }
         }
@@ -1067,8 +1063,7 @@ where
                 &mut execution_data,
                 &mut memory_instance,
             )
-            .await
-            .map_err(SchedulerError::ExecutionError)?;
+            .await?;
 
         // Save execution results for all batch id with empty data
         // to not break the batch chain
