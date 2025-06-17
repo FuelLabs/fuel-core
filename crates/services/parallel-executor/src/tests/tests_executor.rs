@@ -62,6 +62,7 @@ use crate::{
         MockPreconfirmationSender,
         MockRelayer,
         MockTransactionsSource,
+        MockTxPoolResponse,
     },
 };
 
@@ -246,25 +247,18 @@ async fn execute__simple_independent_transactions_sorted() {
         gas_price: 0,
     });
 
-    // Then
-    std::thread::spawn({
-        let tx1 = tx1.clone();
-        let tx2 = tx2.clone();
-        let tx3 = tx3.clone();
-        let tx4 = tx4.clone();
-        move || {
-            // Request for a thread
-            mock_tx_pool.waiting_for_request_to_tx_pool().respond_with(
-                &[&tx2, &tx1, &tx4, &tx3],
-                TransactionFiltered::NotFiltered,
-            );
-            // Request for a second thread
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .respond_with(&[], TransactionFiltered::NotFiltered);
-        }
-    });
+    // Request for a thread
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx2, &tx1, &tx4, &tx3],
+        TransactionFiltered::NotFiltered,
+    ));
+    // Request for a second thread
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[],
+        TransactionFiltered::NotFiltered,
+    ));
 
+    // Then
     let result = future.await.unwrap().into_result();
 
     let expected_ids = [tx2, tx1, tx4, tx3]
@@ -329,36 +323,32 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
         gas_price: 0,
     });
 
+    // Request for a thread
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&long_tx], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    // Request for a second thread
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[], TransactionFiltered::Filtered)
+            .assert_filter(Filter::new(vec![contract_id].into_iter().collect())),
+    );
+
+    // Request for one of the threads again that asked before
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&short_tx], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    // Request for the other one of the threads again that asked before
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[],
+        TransactionFiltered::NotFiltered,
+    ));
+
     // Then
-    let txpool = std::thread::spawn({
-        move || {
-            // Request for a thread
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&empty_filter())
-                .respond_with(&[&long_tx], TransactionFiltered::NotFiltered);
-
-            // Request for a second thread
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&Filter::new(vec![contract_id].into_iter().collect()))
-                .respond_with(&[], TransactionFiltered::Filtered);
-
-            // Request for one of the threads again that asked before
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&empty_filter())
-                .respond_with(&[&short_tx], TransactionFiltered::NotFiltered);
-
-            // Request for the other one of the threads again that asked before
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .respond_with(&[], TransactionFiltered::NotFiltered);
-        }
-    });
-
     let _ = future.await.unwrap().into_result();
-    txpool.join().unwrap();
 }
 
 #[tokio::test]
@@ -445,45 +435,41 @@ async fn execute__gas_left_updated_when_state_merges() {
         gas_price: 0,
     });
 
+    // Request for one of the threads
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&tx_contract_1], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    // Request for the other thread
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&tx_contract_2], TransactionFiltered::NotFiltered)
+            .assert_filter(Filter::new(vec![contract_id_1].into_iter().collect())),
+    );
+
+    // Request for one of the threads again that asked before
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[], TransactionFiltered::Filtered)
+            .assert_filter(Filter::new(vec![contract_id_2].into_iter().collect())),
+    );
+
+    // Request for the other one of the threads again that asked before
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&tx_both_contracts], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter())
+            .assert_gas_limit_lt(
+                ConsensusParameters::default().block_gas_limit() - max_gas,
+            ),
+    );
+
+    // Request for one of the threads again that asked before
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[],
+        TransactionFiltered::NotFiltered,
+    ));
+
     // Then
-    let response_thread = std::thread::spawn({
-        move || {
-            // Request for one of the threads
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&empty_filter())
-                .respond_with(&[&tx_contract_1], TransactionFiltered::NotFiltered);
-
-            // Request for the other thread
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&Filter::new(vec![contract_id_1].into_iter().collect()))
-                .respond_with(&[&tx_contract_2], TransactionFiltered::NotFiltered);
-
-            // Request for one of the threads again that asked before
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&Filter::new(vec![contract_id_2].into_iter().collect()))
-                .respond_with(&[], TransactionFiltered::Filtered);
-
-            // Request for the other one of the threads again that asked before
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&empty_filter())
-                .assert_gas_limit_lt(
-                    ConsensusParameters::default().block_gas_limit() - max_gas,
-                )
-                .respond_with(&[&tx_both_contracts], TransactionFiltered::NotFiltered);
-
-            // Request for one of the threads again that asked before
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .respond_with(&[], TransactionFiltered::NotFiltered);
-        }
-    });
-
     let _ = future.await.unwrap().into_result();
-    response_thread.join().unwrap();
 }
 
 #[tokio::test]
@@ -536,32 +522,26 @@ async fn execute__utxo_ordering_kept() {
         gas_price: 0,
     });
 
+    // Request for one of the threads
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&tx1], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    // Request for the other thread
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&tx2], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    // Request for one of the threads again that asked before
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
     // Then
-    let response_thread = std::thread::spawn({
-        let tx1 = tx1.clone();
-        let tx2 = tx2.clone();
-        move || {
-            // Request for one of the threads
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&empty_filter())
-                .respond_with(&[&tx1], TransactionFiltered::NotFiltered);
-
-            // Request for the other thread
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .assert_filter(&empty_filter())
-                .respond_with(&[&tx2], TransactionFiltered::NotFiltered);
-
-            // Request for one of the threads again that asked before
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .respond_with(&[], TransactionFiltered::NotFiltered);
-        }
-    });
-
     let result = future.await.unwrap().into_result();
-    response_thread.join().unwrap();
 
     let transactions = result.block.transactions();
     assert_eq!(transactions.len(), 3);
@@ -576,6 +556,8 @@ async fn execute__utxo_ordering_kept() {
 }
 
 // We use the overflow of gas to skip the transactions.
+// TODO: This test can't be performed anymore now that we lower the gas ourself in the scheduler and so
+// scheduler fails before the executor can skip the transaction.
 #[tokio::test]
 async fn execute__trigger_skipped_txs_fallback_mechanism() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -610,33 +592,31 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
         gas_price: 0,
     });
 
+    // Request for a thread
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&tx1], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    // Request for an other thread ( the second transaction is too large to fit in the block and will be skipped )
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx2, &tx3],
+        TransactionFiltered::NotFiltered,
+    ));
+
+    // Request for an other thread
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx4],
+        TransactionFiltered::NotFiltered,
+    ));
+
+    // Request for one of the threads again that asked before
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[],
+        TransactionFiltered::NotFiltered,
+    ));
+
     // Then
-    std::thread::spawn({
-        let tx1 = tx1.clone();
-        let tx2 = tx2.clone();
-        move || {
-            // Request for a thread
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .respond_with(&[&tx1], TransactionFiltered::NotFiltered);
-
-            // Request for an other thread ( the second transaction is too large to fit in the block and will be skipped )
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .respond_with(&[&tx2, &tx3], TransactionFiltered::NotFiltered);
-
-            // Request for an other thread
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .respond_with(&[&tx4], TransactionFiltered::NotFiltered);
-
-            // Request for one of the threads again that asked before
-            mock_tx_pool
-                .waiting_for_request_to_tx_pool()
-                .respond_with(&[], TransactionFiltered::NotFiltered);
-        }
-    });
-
     let result = future.await.unwrap().into_result();
 
     // 3 txs + mint tx (because tx2 has been skipped)

@@ -149,7 +149,7 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     /// Total maximum of transactions left
     tx_left: u16,
     /// Total maximum of byte size left
-    tx_size_left: u32,
+    tx_size_left: u64,
     /// Total remaining gas
     gas_left: u64,
 }
@@ -281,7 +281,7 @@ pub(crate) struct PreparedBatch {
     pub blob_transactions: Vec<CheckedTransaction>,
     // Separated from the other gas because this need to be deduced to the global one and not a core one
     pub blob_gas: u64,
-    pub total_size: u32,
+    pub total_size: u64,
     pub contracts_used: Vec<ContractId>,
     pub coins_used: Vec<CoinInBatch>,
     pub number_of_transactions: u16,
@@ -324,9 +324,10 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             relayer,
             preconfirmation_sender,
             storage,
-            tx_left: 0,
-            tx_size_left: 0,
-            gas_left: 0,
+            // TODO: Find this number
+            tx_left: 2000,
+            tx_size_left: consensus_parameters.block_transaction_size_limit(),
+            gas_left: consensus_parameters.block_gas_limit(),
             current_available_workers: (0..config.number_of_cores.get()).collect(),
             config,
             current_execution_tasks: FuturesUnordered::new(),
@@ -362,7 +363,7 @@ where
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
             l1_execution_data.tx_count,
-            l1_execution_data.used_size,
+            l1_execution_data.used_size as u64,
             l1_execution_data.used_gas,
         )?;
 
@@ -503,7 +504,7 @@ where
     fn update_constraints(
         &mut self,
         tx_number_to_add: u16,
-        tx_size_to_add: u32,
+        tx_size_to_add: u64,
         gas_to_add: u64,
     ) -> Result<(), SchedulerError> {
         self.tx_left = self.tx_left.checked_sub(tx_number_to_add).ok_or(
@@ -1116,7 +1117,7 @@ fn prepare_transactions_batch(
         }
 
         let is_blob = matches!(&tx, CheckedTransaction::Blob(_));
-        prepared_batch.total_size += tx.size() as u32;
+        prepared_batch.total_size += tx.size() as u64;
         prepared_batch.number_of_transactions += 1;
         if is_blob {
             prepared_batch.blob_gas += CheckedTransactionExt::max_gas(&tx)?;

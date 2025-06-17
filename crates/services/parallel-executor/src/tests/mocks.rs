@@ -1,4 +1,10 @@
-use std::collections::HashSet;
+use std::{
+    collections::VecDeque,
+    sync::{
+        Arc,
+        Mutex,
+    },
+};
 
 use fuel_core_executor::ports::{
     PreconfirmationSenderPort,
@@ -45,43 +51,71 @@ impl RelayerPort for MockRelayer {
 pub struct PoolRequestParams {
     pub gas_limit: u64,
     pub tx_count_limit: u16,
-    pub block_transaction_size_limit: u32,
+    pub block_transaction_size_limit: u64,
     pub filter: Filter,
 }
 
 pub struct MockTransactionsSource {
-    pub request_sender: MockTransactionsSourcesRequestSender,
+    response_queue: Arc<Mutex<VecDeque<MockTxPoolResponse>>>,
 }
 
-pub type MockTransactionsSourcesRequestReceiver = std::sync::mpsc::Receiver<(
-    PoolRequestParams,
-    std::sync::mpsc::Sender<TransactionSourceExecutableTransactions>,
-)>;
+#[derive(Debug, Clone)]
+pub struct MockTxPoolResponse {
+    pub transactions: Vec<CheckedTransaction>,
+    pub filtered: TransactionFiltered,
+    pub filter: Option<Filter>,
+    pub gas_limit_lt: Option<u64>,
+}
 
-pub type MockTransactionsSourcesRequestSender = std::sync::mpsc::Sender<(
-    PoolRequestParams,
-    std::sync::mpsc::Sender<TransactionSourceExecutableTransactions>,
-)>;
+impl MockTxPoolResponse {
+    pub fn new(transactions: &[&Transaction], filtered: TransactionFiltered) -> Self {
+        Self {
+            transactions: into_checked_txs(transactions),
+            filtered,
+            filter: None,
+            gas_limit_lt: None,
+        }
+    }
 
-pub struct MockTxPool(MockTransactionsSourcesRequestReceiver);
+    pub fn assert_filter(self, filter: Filter) -> Self {
+        Self {
+            transactions: self.transactions,
+            filtered: self.filtered,
+            filter: Some(filter),
+            gas_limit_lt: self.gas_limit_lt,
+        }
+    }
+
+    pub fn assert_gas_limit_lt(self, gas_limit: u64) -> Self {
+        Self {
+            transactions: self.transactions,
+            filtered: self.filtered,
+            filter: self.filter,
+            gas_limit_lt: Some(gas_limit),
+        }
+    }
+}
+
+pub struct MockTxPool {
+    response_queue: Arc<Mutex<VecDeque<MockTxPoolResponse>>>,
+}
 
 impl MockTxPool {
-    pub fn waiting_for_request_to_tx_pool(&self) -> Consumer {
-        Consumer::receive(self)
+    pub fn push_response(&self, response: MockTxPoolResponse) {
+        let response_queue = self.response_queue.clone();
+        let mut response_queue = response_queue.lock().expect("Mutex poisoned");
+        response_queue.push_back(response);
     }
 }
 
 impl MockTransactionsSource {
     pub fn new() -> (Self, MockTxPool) {
-        let (
-            get_executable_transactions_results_sender,
-            get_executable_transactions_results_receiver,
-        ) = std::sync::mpsc::channel();
+        let response_queue = Arc::new(Mutex::new(VecDeque::new()));
         (
             Self {
-                request_sender: get_executable_transactions_results_sender,
+                response_queue: response_queue.clone(),
             },
-            MockTxPool(get_executable_transactions_results_receiver),
+            MockTxPool { response_queue },
         )
     }
 }
@@ -91,75 +125,38 @@ impl TransactionsSource for MockTransactionsSource {
         &mut self,
         gas_limit: u64,
         tx_count_limit: u16,
-        block_transaction_size_limit: u32,
+        _block_transaction_size_limit: u64,
         filter: Filter,
     ) -> TransactionSourceExecutableTransactions {
-        let (tx, rx) = std::sync::mpsc::channel();
-        self.request_sender
-            .send((
-                PoolRequestParams {
-                    gas_limit,
-                    tx_count_limit,
-                    block_transaction_size_limit,
-                    filter,
-                },
-                tx,
-            ))
-            .expect("Failed to send request");
-        rx.recv().expect("Failed to receive response")
+        loop {
+            let mut response_queue = self.response_queue.lock().expect("Mutex poisoned");
+            if let Some(response) = response_queue.pop_front() {
+                assert!(response.transactions.len() <= tx_count_limit as usize);
+                if let Some(expected_filter) = &response.filter {
+                    assert_eq!(expected_filter, &filter);
+                }
+                if let Some(expected_gas_limit) = &response.gas_limit_lt {
+                    assert!(
+                        expected_gas_limit >= &gas_limit,
+                        "Expected gas limit to be less than or equal to {}, but got {}",
+                        expected_gas_limit,
+                        gas_limit,
+                    );
+                }
+                return TransactionSourceExecutableTransactions {
+                    transactions: response.transactions,
+                    filtered: response.filtered,
+                    filter: response.filter.unwrap_or(filter),
+                };
+            } else {
+                continue;
+            }
+        }
     }
 
     fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify {
         // This is a mock implementation, so we return a dummy Notify instance
         tokio::sync::Notify::new()
-    }
-}
-
-pub struct Consumer {
-    pool_request_params: PoolRequestParams,
-    response_sender: std::sync::mpsc::Sender<TransactionSourceExecutableTransactions>,
-}
-
-impl Consumer {
-    fn receive(receiver: &MockTxPool) -> Self {
-        let (pool_request_params, response_sender) = receiver.0.recv().unwrap();
-
-        Self {
-            pool_request_params,
-            response_sender,
-        }
-    }
-
-    pub fn assert_filter(&self, filter: &Filter) -> &Self {
-        assert_eq!(&self.pool_request_params.filter, filter);
-        self
-    }
-
-    pub fn assert_gas_limit_lt(&self, gas_limit: u64) -> &Self {
-        assert!(
-            self.pool_request_params.gas_limit < gas_limit,
-            "Expected gas limit to be less than {}, but got {}",
-            gas_limit,
-            self.pool_request_params.gas_limit
-        );
-        self
-    }
-
-    pub fn respond_with(
-        &self,
-        txs: &[&Transaction],
-        filtered: TransactionFiltered,
-    ) -> &Self {
-        let txs = into_checked_txs(txs);
-
-        self.response_sender
-            .send(TransactionSourceExecutableTransactions {
-                transactions: txs.to_vec(),
-                filtered,
-                filter: Filter::new(HashSet::default()),
-            })
-            .unwrap();
-        self
     }
 }
 
