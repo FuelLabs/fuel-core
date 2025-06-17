@@ -45,6 +45,11 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
+use self::adapters::BlockImporterAdapter;
+#[cfg(not(feature = "parallel-executor"))]
+use crate::service::adapters::ExecutorAdapter;
+#[cfg(feature = "parallel-executor")]
+use crate::service::adapters::ParallelExecutorAdapter;
 use crate::{
     combined_database::{
         CombinedDatabase,
@@ -52,15 +57,10 @@ use crate::{
     },
     database::Database,
     service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
+        adapters::PoAAdapter,
         sub_services::TxPoolSharedState,
     },
 };
-
-use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -90,8 +90,14 @@ pub struct SharedState {
     pub database: CombinedDatabase,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
+    #[cfg(not(feature = "parallel-executor"))]
     /// The executor to validate blocks.
     pub executor: ExecutorAdapter,
+
+    #[cfg(feature = "parallel-executor")]
+    /// The executor to validate blocks.
+    pub executor: ParallelExecutorAdapter,
+
     /// The config of the service.
     pub config: Config,
     /// The compression service shared data.

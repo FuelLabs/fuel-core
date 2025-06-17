@@ -6,6 +6,7 @@ use crate::{
     service::adapters::{
         BlockImporterAdapter,
         ExecutorAdapter,
+        ParallelExecutorAdapter,
         VerifierAdapter,
     },
 };
@@ -66,7 +67,8 @@ impl BlockImporterAdapter {
         chain_id: ChainId,
         config: Config,
         database: Database,
-        executor: ExecutorAdapter,
+        #[cfg(not(feature = "parallel-executor"))] executor: ExecutorAdapter,
+        #[cfg(feature = "parallel-executor")] executor: ParallelExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
         let importer = Importer::new(chain_id, config, database, executor, verifier);
@@ -125,6 +127,15 @@ impl Validator for ExecutorAdapter {
     }
 }
 
+impl Validator for ParallelExecutorAdapter {
+    fn validate(
+        &self,
+        _block: &Block,
+    ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
+        unimplemented!("no validation yet")
+    }
+}
+
 #[cfg(feature = "wasm-executor")]
 impl WasmChecker for ExecutorAdapter {
     fn validate_uploaded_wasm(
@@ -142,8 +153,28 @@ impl WasmChecker for ExecutorAdapter {
     }
 }
 
+#[cfg(feature = "wasm-executor")]
+impl WasmChecker for ParallelExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        unimplemented!("no validation yet")
+    }
+}
+
 #[cfg(not(feature = "wasm-executor"))]
 impl WasmChecker for ExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        Err(WasmValidityError::NotEnabled)
+    }
+}
+
+#[cfg(not(feature = "wasm-executor"))]
+impl WasmChecker for ParallelExecutorAdapter {
     fn validate_uploaded_wasm(
         &self,
         _wasm_root: &Bytes32,

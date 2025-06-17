@@ -18,7 +18,6 @@ fault-proving = [
 ]
 parallel-executor = [
     "fuel-core/parallel-executor",
-    "fuel-core",
     "test-helpers/parallel-executor"
 ]
 

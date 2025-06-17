@@ -1,6 +1,9 @@
 #![allow(clippy::let_unit_value)]
 
-use std::sync::Arc;
+use std::{
+    num::NonZeroUsize,
+    sync::Arc,
+};
 
 use tokio::sync::Mutex;
 
@@ -49,6 +52,8 @@ use super::{
     config::DaCompressionMode,
     genesis::create_genesis_block,
 };
+#[cfg(not(feature = "parallel-executor"))]
+use crate::service::adapters::ExecutorAdapter;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -68,8 +73,8 @@ use crate::{
             BlockImporterAdapter,
             BlockProducerAdapter,
             ChainStateInfoProvider,
-            ExecutorAdapter,
             MaybeRelayerAdapter,
+            ParallelExecutorAdapter,
             PoAAdapter,
             PreconfirmationSender,
             SharedMemoryPool,
@@ -99,6 +104,8 @@ pub type PoAService = fuel_core_poa::Service<
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
 pub type TxPoolSharedState = fuel_core_txpool::SharedState;
+
+#[cfg(not(feature = "parallel-executor"))]
 pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
@@ -106,6 +113,15 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     FuelGasPriceProvider<AlgorithmV1, u32, u64>,
     ChainStateInfoProvider,
 >;
+#[cfg(feature = "parallel-executor")]
+pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
+    Database,
+    TxPoolAdapter,
+    ParallelExecutorAdapter,
+    FuelGasPriceProvider<AlgorithmV1, u32, u64>,
+    ChainStateInfoProvider,
+>;
+
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
 
 // TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
@@ -188,27 +204,35 @@ pub fn init_sub_services(
         tx_status_manager_adapter.clone(),
     );
 
-    let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
-        forbid_fake_coins_default: config.utxo_validation,
-        native_executor_version: config.native_executor_version,
-        allow_historical_execution: config.historical_execution,
-    };
     #[cfg(not(feature = "parallel-executor"))]
-    let executor = ExecutorAdapter::new(
-        database.on_chain().clone(),
-        database.relayer().clone(),
-        upgradable_executor_config,
-        new_txs_watcher,
-        preconfirmation_sender.clone(),
-    );
+    let executor = {
+        let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
+            forbid_fake_coins_default: config.utxo_validation,
+            native_executor_version: config.native_executor_version,
+            allow_historical_execution: config.historical_execution,
+        };
+        ExecutorAdapter::new(
+            database.on_chain().clone(),
+            database.relayer().clone(),
+            upgradable_executor_config,
+            new_txs_watcher,
+            preconfirmation_sender.clone(),
+        )
+    };
     #[cfg(feature = "parallel-executor")]
-    let executor = ExecutorAdapter::new(
-        database.on_chain().clone(),
-        database.relayer().clone(),
-        upgradable_executor_config,
-        new_txs_watcher,
-        preconfirmation_sender.clone(),
-    );
+    let executor = {
+        // todo: pass this value
+        let parallel_executor_config = fuel_core_parallel_executor::config::Config {
+            number_of_cores: NonZeroUsize::try_from(16).unwrap(),
+        };
+        ParallelExecutorAdapter::new(
+            database.on_chain().clone(),
+            database.relayer().clone(),
+            parallel_executor_config,
+            new_txs_watcher,
+            preconfirmation_sender.clone(),
+        )
+    };
 
     let import_result_provider =
         ImportResultProvider::new(database.on_chain().clone(), executor.clone());

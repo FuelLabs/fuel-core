@@ -7,6 +7,7 @@ use crate::{
             ExecutorAdapter,
             MaybeRelayerAdapter,
             NewTxWaiter,
+            ParallelExecutorAdapter,
             StaticGasPrice,
             TransactionsSource,
             TxPoolAdapter,
@@ -114,6 +115,27 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
     }
 }
 
+impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
+    for ParallelExecutorAdapter
+{
+    type Deadline = Instant;
+    async fn produce_without_commit(
+        &self,
+        _component: Components<TransactionsSource>,
+        _deadline: Instant,
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        // let new_tx_waiter = NewTxWaiter::new(self.new_txs_watcher.clone(), deadline);
+        // self.executor
+        //     .produce_without_commit_with_source(
+        //         component,
+        //         new_tx_waiter,
+        //         self.preconfirmation_sender.clone(),
+        //     )
+        //     .await
+        unimplemented!("ParallelExecutorAdapter does not support produce_without_commit");
+    }
+}
+
 impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdapter {
     type Deadline = ();
     async fn produce_without_commit(
@@ -122,6 +144,20 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
         _: (),
     ) -> ExecutorResult<UncommittedResult<Changes>> {
         self.produce_without_commit_from_vector(component)
+    }
+}
+
+impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>>
+    for ParallelExecutorAdapter
+{
+    type Deadline = ();
+    async fn produce_without_commit(
+        &self,
+        _component: Components<Vec<Transaction>>,
+        _: (),
+    ) -> ExecutorResult<UncommittedResult<Changes>> {
+        unimplemented!("ParallelExecutorAdapter does not support produce_without_commit");
+        // self.produce_without_commit_from_vector(component)
     }
 }
 
@@ -141,6 +177,17 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         )
     }
 }
+impl fuel_core_producer::ports::DryRunner for ParallelExecutorAdapter {
+    fn dry_run(
+        &self,
+        _block: Components<Vec<Transaction>>,
+        _forbid_fake_coins: Option<bool>,
+        _at_height: Option<BlockHeight>,
+        _record_storage_read_replay: bool,
+    ) -> ExecutorResult<DryRunResult> {
+        unimplemented!("ParallelExecutorAdapter does not support dry run");
+    }
+}
 
 impl fuel_core_producer::ports::StorageReadReplayRecorder for ExecutorAdapter {
     fn storage_read_replay(
@@ -148,6 +195,15 @@ impl fuel_core_producer::ports::StorageReadReplayRecorder for ExecutorAdapter {
         block: &Block,
     ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
         self.executor.storage_read_replay(block)
+    }
+}
+
+impl fuel_core_producer::ports::StorageReadReplayRecorder for ParallelExecutorAdapter {
+    fn storage_read_replay(
+        &self,
+        _block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
+        unimplemented!("ParallelExecutorAdapter does not support storage read replay");
     }
 }
 
