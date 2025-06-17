@@ -117,7 +117,6 @@ where
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut execution_data = ExecutionData::new();
-        let mut memory = MemoryInstance::new();
         let view = self
             .storage
             .latest_view()
@@ -141,7 +140,6 @@ where
             self.storage.clone(),
             self.preconfirmation_sender.clone(),
             consensus_parameters,
-            memory.clone(),
         )?;
 
         let mut executor = scheduler.create_executor()?;
@@ -151,7 +149,7 @@ where
             .process_da_if_needed(
                 &mut partial_block,
                 &mut execution_data,
-                &mut memory,
+                &mut MemoryInstance::new(),
                 &components,
                 &mut executor,
                 structured_storage,
@@ -167,7 +165,7 @@ where
         self.finalize_block(
             &mut components,
             scheduler_result,
-            &mut memory,
+            &mut MemoryInstance::new(),
             &mut executor,
         )
     }
