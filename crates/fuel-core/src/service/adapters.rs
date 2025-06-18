@@ -2,7 +2,9 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
+
 use tokio::sync::{
+    Mutex,
     mpsc,
     watch,
 };
@@ -411,7 +413,7 @@ impl ExecutorAdapter {
 #[derive(Clone)]
 pub struct ParallelExecutorAdapter {
     pub executor:
-        Arc<ParallelExecutor<Database, Database<Relayer>, PreconfirmationSender>>,
+        Arc<Mutex<ParallelExecutor<Database, Database<Relayer>, PreconfirmationSender>>>,
     pub new_txs_watcher: watch::Receiver<()>,
     pub preconfirmation_sender: PreconfirmationSender,
 }
@@ -432,7 +434,7 @@ impl ParallelExecutorAdapter {
             config,
         );
         Self {
-            executor: Arc::new(executor),
+            executor: Arc::new(Mutex::new(executor)),
             new_txs_watcher,
             preconfirmation_sender,
         }

@@ -344,7 +344,7 @@ pub fn init_sub_services(
         config: config.block_producer.clone(),
         view_provider: database.on_chain().clone(),
         txpool: tx_pool_adapter.clone(),
-        executor: Arc::new(executor.clone()),
+        executor: Arc::new(Mutex::new(executor.clone())),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
         gas_price_provider: producer_gas_price_provider.clone(),

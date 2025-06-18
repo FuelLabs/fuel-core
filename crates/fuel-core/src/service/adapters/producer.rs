@@ -39,7 +39,7 @@ use fuel_core_storage::{
         StateTransitionBytecodeVersions,
         Transactions,
     },
-    transactional::Changes,
+    transactional::StorageChanges,
 };
 use fuel_core_types::{
     blockchain::{
@@ -62,9 +62,11 @@ use fuel_core_types::{
         Bytes32,
     },
     services::{
+        Uncommitted,
         block_producer::Components,
         executor::{
             DryRunResult,
+            Error as ExecutorError,
             Result as ExecutorResult,
             StorageReadReplayEvent,
             UncommittedResult,
@@ -103,7 +105,7 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
         &self,
         component: Components<TransactionsSource>,
         deadline: Instant,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let new_tx_waiter = NewTxWaiter::new(self.new_txs_watcher.clone(), deadline);
         self.executor
             .produce_without_commit_with_source(
@@ -112,6 +114,10 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
                 self.preconfirmation_sender.clone(),
             )
             .await
+            .map(|u| {
+                let (result, changes) = u.into();
+                Uncommitted::new(result, StorageChanges::Changes(changes))
+            })
     }
 }
 
@@ -121,18 +127,25 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
     type Deadline = Instant;
     async fn produce_without_commit(
         &self,
-        _component: Components<TransactionsSource>,
+        component: Components<TransactionsSource>,
         _deadline: Instant,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
-        // let new_tx_waiter = NewTxWaiter::new(self.new_txs_watcher.clone(), deadline);
-        // self.executor
-        //     .produce_without_commit_with_source(
-        //         component,
-        //         new_tx_waiter,
-        //         self.preconfirmation_sender.clone(),
-        //     )
-        //     .await
-        unimplemented!("ParallelExecutorAdapter does not support produce_without_commit");
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
+        self.executor
+            .lock()
+            .await
+            .produce_without_commit_with_source(component)
+            .await
+            .map_err(|e| ExecutorError::Other(format!("{:?}", e)))
+        // let (result, changes) = res.into();
+        // match changes {
+        //     StorageChanges::Changes(changes) => {
+        //         Ok(UncommittedResult::new(result, changes))
+        //     }
+        //     StorageChanges::ChangesList(changes_list) => {
+        //
+        //
+        //     }
+        // }
     }
 }
 
@@ -142,8 +155,11 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
         &self,
         component: Components<Vec<Transaction>>,
         _: (),
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
-        self.produce_without_commit_from_vector(component)
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
+        self.produce_without_commit_from_vector(component).map(|u| {
+            let (result, changes) = u.into();
+            Uncommitted::new(result, StorageChanges::Changes(changes))
+        })
     }
 }
 
@@ -155,7 +171,7 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>>
         &self,
         _component: Components<Vec<Transaction>>,
         _: (),
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         unimplemented!("ParallelExecutorAdapter does not support produce_without_commit");
         // self.produce_without_commit_from_vector(component)
     }

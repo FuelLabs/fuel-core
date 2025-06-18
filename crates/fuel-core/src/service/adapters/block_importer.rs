@@ -57,6 +57,7 @@ use fuel_core_types::{
     services::executor::{
         Result as ExecutorResult,
         UncommittedValidationResult,
+        ValidationResult,
     },
 };
 use itertools::Itertools;
@@ -132,7 +133,12 @@ impl Validator for ParallelExecutorAdapter {
         &self,
         _block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
-        unimplemented!("no validation yet")
+        // TODO
+        let result = ValidationResult {
+            tx_status: vec![],
+            events: vec![],
+        };
+        Ok(UncommittedValidationResult::new(result, Changes::default()))
     }
 }
 

@@ -1,7 +1,10 @@
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     Result as StorageResult,
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
 };
 use fuel_core_types::{
     blockchain::{
@@ -49,12 +52,12 @@ pub trait BlockProducer: Send + Sync {
         block_time: Tai64,
         source: TransactionsSource,
         deadline: Instant,
-    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
+    ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>>;
 
     async fn produce_predefined_block(
         &self,
         block: &Block,
-    ) -> anyhow::Result<UncommittedExecutionResult<Changes>>;
+    ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>>;
 }
 
 #[cfg_attr(test, mockall::automock)]

@@ -232,15 +232,15 @@ pub enum StorageChanges {
     ChangesList(Vec<Changes>),
 }
 
-impl Default for StorageChanges {
-    fn default() -> Self {
-        StorageChanges::Changes(Default::default())
-    }
-}
-
 impl From<Changes> for StorageChanges {
     fn from(value: Changes) -> Self {
         StorageChanges::Changes(value)
+    }
+}
+
+impl Default for StorageChanges {
+    fn default() -> Self {
+        StorageChanges::Changes(Default::default())
     }
 }
 

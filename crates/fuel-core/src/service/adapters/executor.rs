@@ -1,8 +1,17 @@
+use super::PreconfirmationSender;
 use crate::{
-    database::RelayerIterableKeyValueView,
+    database::{
+        RegularStage,
+        RelayerIterableKeyValueView,
+        database_description::relayer::Relayer,
+    },
     service::adapters::{
         NewTxWaiter,
         TransactionsSource,
+    },
+    state::{
+        data_source::DataSource,
+        generic_database::GenericDatabase,
     },
 };
 use fuel_core_executor::{
@@ -12,6 +21,11 @@ use fuel_core_executor::{
         NewTxWaiterPort,
         PreconfirmationSenderPort,
     },
+};
+use fuel_core_parallel_executor::ports::{
+    Filter,
+    TransactionFiltered,
+    TransactionSourceExecutableTransactions,
 };
 use fuel_core_txpool::Constraints;
 use fuel_core_types::{
@@ -25,9 +39,10 @@ use std::{
     collections::HashSet,
     sync::Arc,
 };
-use tokio::sync::mpsc::error::TrySendError;
-
-use super::PreconfirmationSender;
+use tokio::sync::{
+    Notify,
+    mpsc::error::TrySendError,
+};
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
@@ -52,6 +67,43 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
                 MaybeCheckedTransaction::CheckedTransaction(transaction.into(), version)
             })
             .collect()
+    }
+}
+
+impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSource {
+    fn get_executable_transactions(
+        &mut self,
+        gas_limit: u64,
+        tx_count_limit: u16,
+        block_transaction_size_limit: u32,
+        filter: Filter,
+    ) -> TransactionSourceExecutableTransactions {
+        let transactions = self
+            .tx_pool
+            .extract_transactions_for_block(Constraints {
+                minimal_gas_price: self.minimum_gas_price,
+                max_gas: gas_limit,
+                maximum_txs: tx_count_limit,
+                maximum_block_size: block_transaction_size_limit,
+                excluded_contracts: HashSet::default(),
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .map(|tx| {
+                let transaction = Arc::unwrap_or_clone(tx);
+                transaction.into()
+            })
+            .collect();
+        TransactionSourceExecutableTransactions {
+            transactions,
+            filtered: TransactionFiltered::Filtered,
+            filter,
+        }
+    }
+
+    fn get_new_transactions_notifier(&mut self) -> Notify {
+        // TODO: implement a proper notifier for new transactions
+        Notify::default()
     }
 }
 
@@ -83,6 +135,18 @@ impl fuel_core_executor::ports::RelayerPort for RelayerIterableKeyValueView {
             let _ = da_height;
             Ok(vec![])
         }
+    }
+}
+
+impl fuel_core_executor::ports::RelayerPort
+    for GenericDatabase<DataSource<Relayer, RegularStage<Relayer>>, std::io::Empty>
+{
+    fn enabled(&self) -> bool {
+        todo!()
+    }
+
+    fn get_events(&self, _da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>> {
+        todo!()
     }
 }
 
