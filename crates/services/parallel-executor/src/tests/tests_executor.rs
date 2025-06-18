@@ -35,6 +35,8 @@ use fuel_core_types::{
         rngs::StdRng,
     },
     fuel_tx::{
+        Buildable,
+        Chargeable,
         ConsensusParameters,
         ContractId,
         Input,
@@ -122,6 +124,57 @@ impl StoragePort for Storage {
     }
 }
 
+trait TransactionBuilderExt {
+    fn add_stored_coin_input(
+        &mut self,
+        rng: &mut StdRng,
+        storage: &mut Storage,
+        amount: u64,
+    ) -> &mut Self;
+}
+
+impl<Tx> TransactionBuilderExt for TransactionBuilder<Tx>
+where
+    Tx: Clone + Default + Chargeable + Buildable,
+{
+    fn add_stored_coin_input(
+        &mut self,
+        rng: &mut StdRng,
+        storage: &mut Storage,
+        amount: u64,
+    ) -> &mut Self {
+        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
+        let owner = Input::predicate_owner(&predicate);
+        let utxo_id: UtxoId = rng.r#gen();
+        let mut tx = storage.0.write_transaction();
+        tx.storage_as_mut::<Coins>()
+            .insert(
+                &utxo_id,
+                &(Coin {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                }
+                .compress()),
+            )
+            .unwrap();
+        tx.commit().unwrap();
+        self.add_input(Input::coin_predicate(
+            utxo_id,
+            owner,
+            amount,
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            predicate,
+            vec![],
+        ));
+        self
+    }
+}
+
 impl Storage {
     fn merge_changes(&mut self, changes: StorageChanges) -> StorageResult<()> {
         match changes {
@@ -139,49 +192,13 @@ impl Storage {
 }
 
 fn basic_tx(rng: &mut StdRng, database: &mut Storage) -> Transaction {
-    let input = given_stored_coin_predicate(rng, 1000, database);
     TransactionBuilder::script(vec![], vec![])
-        .add_input(input)
+        .add_stored_coin_input(rng, database, 1000)
         .finalize_as_transaction()
 }
 
 fn empty_filter() -> Filter {
     Filter::new(Default::default())
-}
-
-fn given_stored_coin_predicate(
-    rng: &mut StdRng,
-    amount: u64,
-    database: &mut Storage,
-) -> Input {
-    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate);
-    let utxo_id: UtxoId = rng.r#gen();
-    let mut tx = database.0.write_transaction();
-    tx.storage_as_mut::<Coins>()
-        .insert(
-            &utxo_id,
-            &(Coin {
-                utxo_id,
-                owner,
-                amount,
-                asset_id: Default::default(),
-                tx_pointer: Default::default(),
-            }
-            .compress()),
-        )
-        .unwrap();
-    tx.commit().unwrap();
-    Input::coin_predicate(
-        utxo_id,
-        owner,
-        amount,
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        predicate,
-        vec![],
-    )
 }
 
 fn add_consensus_parameters(
@@ -205,7 +222,7 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
         Salt::new(rng.r#gen()),
         Default::default(),
     )
-    .add_input(given_stored_coin_predicate(rng, 1000, &mut storage))
+    .add_stored_coin_input(rng, &mut storage, 1000)
     .add_contract_created()
     .finalize_as_transaction();
     let contract_id = tx_creation
@@ -327,11 +344,11 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             Default::default(),
             contract_id,
         ))
-        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_stored_coin_input(&mut rng, &mut storage, 1000)
         .add_output(Output::contract(0, Default::default(), Default::default()))
         .finalize_as_transaction();
     let short_tx: Transaction = TransactionBuilder::script(vec![], vec![])
-        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_stored_coin_input(&mut rng, &mut storage, 1000)
         .finalize_as_transaction();
 
     let executor: Executor<Storage, MockRelayer> = Executor::new(
@@ -401,7 +418,7 @@ async fn execute__gas_left_updated_when_state_merges() {
             Default::default(),
             contract_id_1,
         ))
-        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_stored_coin_input(&mut rng, &mut storage, 1000)
         .add_output(Output::contract(0, Default::default(), Default::default()))
         .finalize_as_transaction();
     let max_gas = tx_contract_1
@@ -423,7 +440,7 @@ async fn execute__gas_left_updated_when_state_merges() {
             Default::default(),
             contract_id_2,
         ))
-        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_stored_coin_input(&mut rng, &mut storage, 1000)
         .add_output(Output::contract(0, Default::default(), Default::default()))
         .finalize_as_transaction();
     let tx_both_contracts: Transaction = TransactionBuilder::script(vec![], vec![])
@@ -441,7 +458,7 @@ async fn execute__gas_left_updated_when_state_merges() {
             Default::default(),
             contract_id_2,
         ))
-        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_stored_coin_input(&mut rng, &mut storage, 1000)
         .add_output(Output::contract(0, Default::default(), Default::default()))
         .add_output(Output::contract(1, Default::default(), Default::default()))
         .finalize_as_transaction();
@@ -515,7 +532,7 @@ async fn execute__utxo_ordering_kept() {
     let script = [op::add(RegId::ONE, 0x02, 0x03)];
     let script_bytes: Vec<u8> = script.iter().flat_map(|op| op.to_bytes()).collect();
     let tx1 = TransactionBuilder::script(script_bytes, vec![])
-        .add_input(given_stored_coin_predicate(&mut rng, 1000, &mut storage))
+        .add_stored_coin_input(&mut rng, &mut storage, 1000)
         .add_output(Output::coin(owner, 1000, Default::default()))
         .finalize_as_transaction();
     let coin_utxo = UtxoId::new(tx1.id(&ChainId::default()), 0);
