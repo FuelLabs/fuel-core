@@ -598,7 +598,8 @@ where
         BlockExecutor::new(
             self.relayer.clone(),
             ExecutionOptions {
-                forbid_fake_coins: false,
+                forbid_fake_signature: true,
+                forbid_fake_utxo: false,
                 backtrace: false,
             },
             self.consensus_parameters.clone(),

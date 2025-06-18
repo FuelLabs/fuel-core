@@ -336,8 +336,11 @@ impl ExecutionData {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
-    /// When `false` the executor skips signature and UTXO existence checks.
-    pub forbid_fake_coins: bool,
+    /// When `false` the executor skips signature.
+    pub forbid_fake_signature: bool,
+    /// The flag allows the usage of fake coins in the inputs of the transaction.
+    /// When `false` the executor skips UTXO existence checks.
+    pub forbid_fake_utxo: bool,
     /// Print execution backtraces if transaction execution reverts.
     ///
     /// Deprecated field. Do nothing. This fields exists for serialization and
@@ -349,8 +352,11 @@ pub struct ExecutionOptions {
 #[derive(Clone, Default, Debug)]
 struct ExecutionOptionsInner {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
-    /// When `false` the executor skips signature and UTXO existence checks.
-    pub forbid_fake_coins: bool,
+    /// When `false` the executor skips signature.
+    pub forbid_fake_signature: bool,
+    /// The flag allows the usage of fake coins in the inputs of the transaction.
+    /// When `false` the executor skips UTXO existence checks.
+    pub forbid_fake_utxo: bool,
     pub dry_run: bool,
 }
 
@@ -532,7 +538,8 @@ impl<R, TxWaiter, PreconfirmationSender>
             relayer,
             consensus_params,
             options: ExecutionOptionsInner {
-                forbid_fake_coins: options.forbid_fake_coins,
+                forbid_fake_signature: options.forbid_fake_signature,
+                forbid_fake_utxo: options.forbid_fake_utxo,
                 dry_run,
             },
             new_tx_waiter,
@@ -1441,7 +1448,7 @@ where
             let input = mint.input_contract().clone();
             let mut input = Input::Contract(input);
 
-            if self.options.forbid_fake_coins {
+            if self.options.forbid_fake_utxo {
                 self.verify_inputs_exist_and_values_match(
                     storage_tx,
                     core::slice::from_ref(&input),
@@ -1486,7 +1493,7 @@ where
     {
         let tx_id = checked_tx.id();
 
-        if self.options.forbid_fake_coins {
+        if self.options.forbid_fake_signature || self.options.forbid_fake_utxo {
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
@@ -1822,15 +1829,21 @@ where
             })?;
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
 
-        self.verify_inputs_exist_and_values_match(
-            storage_tx,
-            checked_tx.transaction().inputs(),
-            header.da_height,
-        )?;
-        checked_tx = checked_tx
-            .check_signatures(&self.consensus_params.chain_id())
-            .map_err(TransactionValidityError::from)?;
-        debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+        if self.options.forbid_fake_utxo {
+            self.verify_inputs_exist_and_values_match(
+                storage_tx,
+                checked_tx.transaction().inputs(),
+                header.da_height,
+            )?;
+        }
+
+        if self.options.forbid_fake_signature {
+            checked_tx = checked_tx
+                .check_signatures(&self.consensus_params.chain_id())
+                .map_err(TransactionValidityError::from)?;
+            debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+        }
+
         Ok(checked_tx)
     }
 
@@ -2202,7 +2215,7 @@ where
                 }) => {
                     let contract = ContractRef::new(db, *contract_id);
                     let utxo_info =
-                        contract.validated_utxo(self.options.forbid_fake_coins)?;
+                        contract.validated_utxo(self.options.forbid_fake_utxo)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
                     *balance_root = contract.balance_root()?;
@@ -2264,7 +2277,7 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if self.options.forbid_fake_coins {
+        if self.options.forbid_fake_utxo {
             db.storage::<Coins>()
                 .get(&utxo_id)?
                 .ok_or(ExecutorError::TransactionValidity(
