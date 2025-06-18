@@ -49,6 +49,7 @@ use fuel_core_types::{
     fuel_types::ChainId,
     fuel_vm::{
         Salt,
+        SecretKey,
         checked_transaction::IntoChecked,
     },
     services::block_producer::Components,
