@@ -2,7 +2,6 @@ use crate::{
     config::Config,
     ports::TransactionsSource,
     scheduler::{
-        BlockConstraints,
         Scheduler,
         SchedulerError,
         SchedulerExecutionResult,
@@ -65,16 +64,6 @@ use fuel_core_upgradable_executor::error::UpgradableError;
 #[cfg(feature = "wasm-executor")]
 use fuel_core_types::fuel_merkle::common::Bytes32;
 
-/// Default block execution constraints
-mod defaults {
-    use super::*;
-
-    pub const BLOCK_GAS_LIMIT: u64 = 30_000_000;
-    pub const EXECUTION_TIME_LIMIT: Duration = Duration::from_millis(300);
-    pub const BLOCK_TX_SIZE_LIMIT: u32 = u32::MAX;
-    pub const BLOCK_TX_COUNT_LIMIT: u16 = u16::MAX;
-}
-
 pub struct Executor<S, R, P> {
     config: Config,
     relayer: R,
@@ -136,6 +125,7 @@ where
             self.storage.clone(),
             self.preconfirmation_sender.clone(),
             consensus_parameters,
+            Duration::from_millis(300),
         )?;
 
         let mut executor = scheduler.create_executor()?;
@@ -240,53 +230,9 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
-        let block_constraints = self.calculate_block_constraints(&execution_data)?;
-
         scheduler
-            .run(
-                components,
-                da_changes,
-                block_constraints,
-                execution_data.into(),
-            )
+            .run(components, da_changes, execution_data.into())
             .await
-    }
-
-    /// Calculate block constraints remaining after executing a partial block execution captured in `ExecutionData`
-    fn calculate_block_constraints(
-        &self,
-        execution_data: &ExecutionData,
-    ) -> Result<BlockConstraints, SchedulerError> {
-        let gas_limit = defaults::BLOCK_GAS_LIMIT
-            .checked_sub(execution_data.used_gas)
-            .ok_or_else(|| {
-                SchedulerError::InternalError(
-                    "L1 transactions exhausted block gas limit".to_string(),
-                )
-            })?;
-
-        let tx_size_limit = defaults::BLOCK_TX_SIZE_LIMIT
-            .checked_sub(execution_data.used_size)
-            .ok_or_else(|| {
-                SchedulerError::InternalError(
-                    "L1 transactions exhausted block size limit".to_string(),
-                )
-            })?;
-
-        let tx_count_limit = defaults::BLOCK_TX_COUNT_LIMIT
-            .checked_sub(execution_data.tx_count)
-            .ok_or_else(|| {
-                SchedulerError::InternalError(
-                    "L1 transactions exhausted block transaction count".to_string(),
-                )
-            })?;
-
-        Ok(BlockConstraints {
-            block_gas_limit: gas_limit,
-            total_execution_time: defaults::EXECUTION_TIME_LIMIT,
-            block_transaction_size_limit: tx_size_limit,
-            block_transaction_count_limit: tx_count_limit,
-        })
     }
 
     /// Finalize the block by adding mint transaction and generating the final block

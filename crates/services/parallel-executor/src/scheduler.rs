@@ -150,6 +150,8 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     tx_size_left: u64,
     /// Total remaining gas
     gas_left: u64,
+    /// Total time allowed for the block execution
+    maximum_time_per_block: Duration,
 }
 
 struct WorkSessionExecutionResult {
@@ -323,6 +325,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
         storage: S,
         preconfirmation_sender: PreconfirmationSender,
         consensus_parameters: ConsensusParameters,
+        maximum_time_per_block: Duration,
     ) -> Result<Self, SchedulerError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(config.number_of_cores.get())
@@ -350,6 +353,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
             consensus_parameters,
+            maximum_time_per_block,
         })
     }
 }
@@ -365,7 +369,6 @@ where
         mut self,
         components: &mut Components<TxSource>,
         da_changes: Changes,
-        block_constraints: BlockConstraints,
         l1_execution_data: L1ExecutionData,
     ) -> Result<SchedulerExecutionResult, SchedulerError> {
         let view = self.storage.latest_view()?;
@@ -384,18 +387,19 @@ where
             .transactions_source
             .get_new_transactions_notifier();
         let now = tokio::time::Instant::now();
-        let deadline = now + block_constraints.total_execution_time;
+        let deadline = now + self.maximum_time_per_block;
         let mut nb_batch_created = 0;
         let mut nb_transactions = 0;
-        let initial_gas_per_worker = block_constraints
-            .block_gas_limit
-            .checked_sub(l1_execution_data.used_gas)
-            .ok_or(SchedulerError::InternalError(
-                "L1 transactions consumed all the gas".to_string(),
-            ))?
+        let initial_gas_per_worker = self
+            .consensus_parameters
+            .block_gas_limit()
             .checked_div(self.config.number_of_cores.get() as u64)
             .ok_or(SchedulerError::InternalError(
                 "Invalid block gas limit".to_string(),
+            ))?
+            .checked_sub(l1_execution_data.used_gas)
+            .ok_or(SchedulerError::InternalError(
+                "L1 transactions consumed all the gas".to_string(),
             ))?;
 
         'outer: loop {
@@ -404,7 +408,7 @@ where
                     &mut components.transactions_source,
                     now,
                     initial_gas_per_worker,
-                    block_constraints.total_execution_time,
+                    self.maximum_time_per_block,
                 )?;
                 let batch_len = batch.number_of_transactions;
 
@@ -464,11 +468,8 @@ where
             }
         }
 
-        self.wait_all_execution_tasks(
-            block_height,
-            block_constraints.total_execution_time,
-        )
-        .await?;
+        self.wait_all_execution_tasks(block_height, self.maximum_time_per_block)
+            .await?;
 
         let mut res = self.verify_coherency_and_merge_results(
             nb_batch_created,
@@ -546,14 +547,16 @@ where
     ) -> Result<PreparedBatch, SchedulerError> {
         let spent_time = start_execution_time.elapsed();
         // Time left in percentage to have the gas percentage left
-        // TODO: Maybe avoid as u32
+        // TODO: Maybe avoid as u64
         let current_gas = std::cmp::min(
+            // TODO: Need to have the blob gas removed
             initial_gas
                 .saturating_mul(
                     (total_execution_time.as_millis() as u64)
                         .saturating_sub(spent_time.as_millis() as u64),
                 )
                 .saturating_div(total_execution_time.as_millis() as u64),
+            // TODO: avoid always divide because if there is only one worker left he can use it all
             self.gas_left
                 .saturating_div(self.config.number_of_cores.get() as u64),
         );
@@ -584,11 +587,7 @@ where
         self.update_constraints(
             prepared_batch.number_of_transactions,
             prepared_batch.total_size,
-            prepared_batch.gas.saturating_add(
-                prepared_batch
-                    .blob_gas
-                    .saturating_mul(self.config.number_of_cores.get() as u64),
-            ),
+            prepared_batch.gas.saturating_add(prepared_batch.blob_gas),
         )?;
         Ok(prepared_batch)
     }
@@ -701,6 +700,7 @@ where
                         });
                     }
                 }
+                // TODO: Re-add unused gas
                 Ok(WorkSessionExecutionResult {
                     worker_id,
                     memory_instance,
