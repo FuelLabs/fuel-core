@@ -152,6 +152,8 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     gas_left: u64,
     /// Total time allowed for the block execution
     maximum_time_per_block: Duration,
+    /// Gas used by blob transactions
+    blob_gas: u64,
 }
 
 struct WorkSessionExecutionResult {
@@ -184,6 +186,8 @@ struct WorkSessionExecutionResult {
     tx_statuses: Vec<TransactionExecutionStatus>,
     /// used gas
     used_gas: u64,
+    /// Difference between gas expected and gas used by the transactions
+    gas_diff: u64,
     /// used tx size
     used_size: u32,
     /// coinbase
@@ -353,6 +357,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
             consensus_parameters,
+            blob_gas: 0,
             maximum_time_per_block,
         })
     }
@@ -549,16 +554,17 @@ where
         // Time left in percentage to have the gas percentage left
         // TODO: Maybe avoid as u64
         let current_gas = std::cmp::min(
-            // TODO: Need to have the blob gas removed
-            initial_gas
+            (initial_gas
                 .saturating_mul(
                     (total_execution_time.as_millis() as u64)
                         .saturating_sub(spent_time.as_millis() as u64),
                 )
-                .saturating_div(total_execution_time.as_millis() as u64),
+                .saturating_div(total_execution_time.as_millis() as u64))
+            .saturating_sub(self.blob_gas),
             // TODO: avoid always divide because if there is only one worker left he can use it all
             self.gas_left
-                .saturating_div(self.config.number_of_cores.get() as u64),
+                .saturating_div(self.config.number_of_cores.get() as u64)
+                .saturating_sub(self.blob_gas),
         );
 
         let executable_transactions = tx_source.get_executable_transactions(
@@ -587,8 +593,9 @@ where
         self.update_constraints(
             prepared_batch.number_of_transactions,
             prepared_batch.total_size,
-            prepared_batch.gas.saturating_add(prepared_batch.blob_gas),
+            prepared_batch.gas,
         )?;
+        self.blob_gas = self.blob_gas.saturating_add(prepared_batch.blob_gas);
         Ok(prepared_batch)
     }
 
@@ -716,6 +723,7 @@ where
                     events: execution_data.events,
                     tx_statuses: execution_data.tx_status,
                     used_gas: execution_data.used_gas,
+                    gas_diff: batch.gas.saturating_sub(execution_data.used_gas),
                     used_size: execution_data.used_size,
                     coinbase: execution_data.coinbase,
                 })
@@ -735,6 +743,8 @@ where
 
         let changes =
             self.store_any_contract_changes(res.changes, res.contracts_used.as_ref());
+
+        self.gas_left = self.gas_left.saturating_add(res.gas_diff);
 
         self.execution_results.insert(
             res.batch_id,
