@@ -143,9 +143,10 @@ where
         storage: &mut Storage,
         amount: u64,
     ) -> &mut Self {
-        let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-        let owner = Input::predicate_owner(&predicate);
         let utxo_id: UtxoId = rng.r#gen();
+        let secret_key = SecretKey::default();
+        let public_key = secret_key.public_key();
+        let owner = Input::owner(&public_key);
         let mut tx = storage.0.write_transaction();
         tx.storage_as_mut::<Coins>()
             .insert(
@@ -161,16 +162,13 @@ where
             )
             .unwrap();
         tx.commit().unwrap();
-        self.add_input(Input::coin_predicate(
+        self.add_unsigned_coin_input(
+            secret_key,
             utxo_id,
-            owner,
             amount,
             Default::default(),
             Default::default(),
-            Default::default(),
-            predicate,
-            vec![],
-        ));
+        );
         self
     }
 }
