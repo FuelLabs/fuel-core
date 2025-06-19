@@ -325,6 +325,8 @@ pub struct GasPriceConfig {
     pub activity_capped_range_size: u16,
     pub activity_decrease_range_size: u16,
     pub block_activity_threshold: u8,
+    /// Don't update the DA gas price until this height is reached.
+    pub start_da_price_from: u32,
 }
 
 impl GasPriceConfig {
@@ -355,6 +357,7 @@ impl GasPriceConfig {
             da_committer_url: None,
             block_activity_threshold: 0,
             da_poll_interval: Some(Duration::from_secs(1)),
+            start_da_price_from: 0,
         }
     }
 }
