@@ -172,7 +172,7 @@ async fn test_tx_gossiping_invalid_txs(
         let invalid_tx = TransactionBuilder::script(vec![], vec![])
             .add_input(Input::CoinSigned(CoinSigned {
                 utxo_id: coin.utxo_id(),
-                owner: coin.owner,
+                owner: coin.owner.clone().into(),
                 amount: coin.amount,
                 asset_id: coin.asset_id,
                 tx_pointer: Default::default(),
