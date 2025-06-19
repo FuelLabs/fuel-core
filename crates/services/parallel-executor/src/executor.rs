@@ -7,6 +7,11 @@ use crate::{
         SchedulerExecutionResult,
     },
     tx_waiter::NoWaitTxs,
+    txs_ext::TxCoinbaseExt,
+    validator::{
+        self,
+        Validator,
+    },
 };
 use fuel_core_executor::{
     executor::{
@@ -37,9 +42,12 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::block::{
-        Block,
-        PartialFuelBlock,
+    blockchain::{
+        block::{
+            Block,
+            PartialFuelBlock,
+        },
+        header::PartialBlockHeader,
     },
     fuel_tx::{
         Bytes32,
@@ -75,7 +83,10 @@ pub struct Executor<S, R, P> {
     memory_pool: Option<Vec<MemoryInstance>>,
 }
 
-impl<S, R, P> Executor<S, R, P> {
+impl<S, R, P> Executor<S, R, P>
+where
+    R: Clone,
+{
     pub fn new(
         storage_view_provider: S,
         relayer: R,
@@ -181,6 +192,55 @@ where
             event_inbox_root,
             &mut executor,
         )
+    }
+
+    async fn validate_block(
+        mut self,
+        block: &Block,
+        block_storage_tx: StorageTransaction<View>,
+    ) -> Result<validator::ValidationResult, SchedulerError> {
+        let mut data = ExecutionData::new();
+
+        let partial_header = PartialBlockHeader::from(block.header());
+        let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
+        let transactions = block.transactions();
+        let mut memory = MemoryInstance::new();
+        let consensus_parameters = {
+            let latest_view = self
+                .storage
+                .latest_view()
+                .map_err(SchedulerError::StorageError)?;
+
+            latest_view
+                .get_consensus_parameters(block.header().consensus_parameters_version())
+                .map_err(SchedulerError::StorageError)?
+        };
+        let scheduler = Validator::new(self.config.clone());
+
+        let (gas_price, coinbase_contract_id) = transactions.coinbase()?;
+
+        let block_storage_tx = self.process_l1_txs(
+            &mut partial_block,
+            coinbase_contract_id,
+            &mut data,
+            &mut memory,
+            block_storage_tx,
+        )?;
+        let processed_l1_tx_count = partial_block.transactions.len();
+
+        let components = Components {
+            header_to_produce: partial_block.header,
+            transactions_source: transactions.iter().cloned().skip(processed_l1_tx_count),
+            coinbase_recipient: coinbase_contract_id,
+            gas_price,
+        };
+
+        let executed_block_result = self
+            .validator
+            .validate_block(self.relayer.clone(), components, block_storage_tx, block)
+            .await?;
+
+        Ok(executed_block_result)
     }
 
     /// Process DA changes if the DA height has changed
