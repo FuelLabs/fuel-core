@@ -42,6 +42,7 @@ use fuel_core_types::{
         PartialFuelBlock,
     },
     fuel_tx::{
+        Bytes32,
         ConsensusParameters,
         ContractId,
         Transaction,
@@ -141,7 +142,7 @@ where
         })?;
 
         // Process L1 transactions if needed
-        let da_changes = self
+        let (da_changes, event_inbox_root) = self
             .process_da_if_needed(
                 &mut partial_block,
                 &mut execution_data,
@@ -165,7 +166,12 @@ where
             .await?;
 
         // Finalize block with mint transaction
-        self.finalize_block(&mut components, scheduler_result, &mut executor)
+        self.finalize_block(
+            &mut components,
+            scheduler_result,
+            event_inbox_root,
+            &mut executor,
+        )
     }
 
     /// Process DA changes if the DA height has changed
@@ -177,9 +183,9 @@ where
         components: &Components<impl TransactionsSource>,
         executor: &mut BlockExecutor<R, NoWaitTxs, P>,
         structured_storage: StructuredStorage<View>,
-    ) -> Result<Changes, SchedulerError> {
+    ) -> Result<(Changes, Bytes32), SchedulerError> {
         let Some(prev_height) = components.header_to_produce.height().pred() else {
-            return Ok(Changes::default());
+            return Ok(Default::default());
         };
 
         let prev_block = structured_storage
@@ -190,7 +196,7 @@ where
             })?;
 
         if prev_block.header().da_height() != components.header_to_produce.da_height {
-            let storage_tx = self.process_l1_txs(
+            let (storage_tx, event_inbox_root) = self.process_l1_txs(
                 partial_block,
                 components.coinbase_recipient,
                 execution_data,
@@ -198,9 +204,9 @@ where
                 structured_storage.into_storage(),
                 executor,
             )?;
-            Ok(storage_tx.into_changes())
+            Ok((storage_tx.into_changes(), event_inbox_root))
         } else {
-            Ok(Changes::default())
+            Ok(Default::default())
         }
     }
 
@@ -213,7 +219,7 @@ where
         memory: &mut MemoryInstance,
         view: View,
         executor: &mut BlockExecutor<R, NoWaitTxs, P>,
-    ) -> Result<StorageTransaction<View>, SchedulerError> {
+    ) -> Result<(StorageTransaction<View>, Bytes32), SchedulerError> {
         let mut storage_tx = StorageTransaction::transaction(
             view,
             ConflictPolicy::Fail,
@@ -228,7 +234,7 @@ where
             memory,
         )?;
 
-        Ok(storage_tx)
+        Ok((storage_tx, execution_data.event_inbox_root))
     }
 
     /// Run the parallel executor for L2 transactions
@@ -262,6 +268,7 @@ where
         &mut self,
         components: &mut Components<TxSource>,
         scheduler_result: SchedulerExecutionResult,
+        event_inbox_root: Bytes32,
         executor: &mut BlockExecutor<R, NoWaitTxs, P>,
     ) -> Result<Uncommitted<ExecutionResult, StorageChanges>, SchedulerError>
     where
@@ -270,14 +277,19 @@ where
         let view = self.storage.latest_view()?;
 
         // Produce mint transaction (pass the entire scheduler_result)
-        let (execution_data, storage_changes, partial_block) =
-            self.produce_mint_tx(components, scheduler_result, view, executor)?;
+        let (execution_data, storage_changes, partial_block) = self.produce_mint_tx(
+            components,
+            scheduler_result,
+            event_inbox_root,
+            view,
+            executor,
+        )?;
 
         // Generate final block
         let block = partial_block
             .generate(
                 &execution_data.message_ids,
-                Default::default(),
+                event_inbox_root,
                 #[cfg(feature = "fault-proving")]
                 &Default::default(),
             )
@@ -301,6 +313,7 @@ where
         &mut self,
         components: &mut Components<TxSource>,
         scheduler_res: SchedulerExecutionResult,
+        event_inbox_root: Bytes32,
         view: View,
         executor: &mut BlockExecutor<R, NoWaitTxs, P>,
     ) -> Result<(ExecutionData, StorageChanges, PartialFuelBlock), SchedulerError> {
@@ -340,7 +353,7 @@ where
             tx_count,
             tx_status: transactions_status,
             found_mint: false,
-            event_inbox_root: Default::default(),
+            event_inbox_root,
             used_gas,
             used_size,
         };
