@@ -12,6 +12,7 @@ use fuel_core_executor::{
     executor::{
         BlockExecutor,
         ExecutionData,
+        ExecutionOptions,
     },
     ports::{
         PreconfirmationSenderPort,
@@ -41,6 +42,7 @@ use fuel_core_types::{
         PartialFuelBlock,
     },
     fuel_tx::{
+        ConsensusParameters,
         ContractId,
         Transaction,
     },
@@ -120,16 +122,23 @@ where
                 })?
                 .into_owned()
         };
-        let scheduler = Scheduler::new(
-            self.config.clone(),
-            self.relayer.clone(),
-            self.storage.clone(),
-            self.preconfirmation_sender.clone(),
-            consensus_parameters,
-            maximum_execution_time,
-        )?;
 
-        let mut executor = scheduler.create_executor()?;
+        // Initialize block executor
+        let mut executor = BlockExecutor::new(
+            self.relayer.clone(),
+            ExecutionOptions {
+                forbid_unauthorized_inputs: true,
+                forbid_fake_utxo: false,
+                backtrace: false,
+            },
+            consensus_parameters.clone(),
+            NoWaitTxs,
+            self.preconfirmation_sender.clone(),
+            true, // dry run
+        )
+        .map_err(|e| {
+            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
+        })?;
 
         // Process L1 transactions if needed
         let da_changes = self
@@ -145,7 +154,14 @@ where
 
         // Run parallel scheduler for L2 transactions
         let scheduler_result = self
-            .run_scheduler(&mut components, da_changes, execution_data, scheduler)
+            .run_scheduler(
+                &mut components,
+                da_changes,
+                execution_data,
+                executor.clone(),
+                consensus_parameters,
+                maximum_execution_time,
+            )
             .await?;
 
         // Finalize block with mint transaction
@@ -221,11 +237,21 @@ where
         components: &mut Components<TxSource>,
         da_changes: Changes,
         execution_data: ExecutionData,
-        scheduler: Scheduler<R, S, P>,
+        executor: BlockExecutor<R, NoWaitTxs, P>,
+        consensus_parameters: ConsensusParameters,
+        maximum_execution_time: Duration,
     ) -> Result<SchedulerExecutionResult, SchedulerError>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
+        let scheduler = Scheduler::new(
+            self.config.clone(),
+            self.storage.clone(),
+            executor,
+            consensus_parameters,
+            maximum_execution_time,
+        )?;
+
         scheduler
             .run(components, da_changes, execution_data.into())
             .await

@@ -40,7 +40,6 @@ use fuel_core_executor::{
     executor::{
         BlockExecutor,
         ExecutionData,
-        ExecutionOptions,
     },
     ports::{
         PreconfirmationSenderPort,
@@ -120,12 +119,10 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     config: Config,
     /// Storage
     pub(crate) storage: S,
-    /// Relayer
-    relayer: R,
+    /// Executor to execute the transactions
+    executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
     /// Consensus parameters
     consensus_parameters: ConsensusParameters,
-    /// Preconfirmation sender
-    preconfirmation_sender: PreconfirmationSender,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
     /// List of available workers
@@ -329,9 +326,8 @@ impl<R, S, PreconfirmationSender> Drop for Scheduler<R, S, PreconfirmationSender
 impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
     pub fn new(
         config: Config,
-        relayer: R,
         storage: S,
-        preconfirmation_sender: PreconfirmationSender,
+        executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
         consensus_parameters: ConsensusParameters,
         maximum_time_per_block: Duration,
     ) -> Result<Self, SchedulerError> {
@@ -343,8 +339,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
 
         Ok(Self {
             runtime: Some(runtime),
-            relayer,
-            preconfirmation_sender,
+            executor,
             storage,
             // TODO: Use consensus parameters after https://github.com/FuelLabs/fuel-vm/pull/905 is merged
             tx_left: u16::MAX,
@@ -603,26 +598,6 @@ where
         Ok(prepared_batch)
     }
 
-    pub fn create_executor(
-        &self,
-    ) -> Result<BlockExecutor<R, NoWaitTxs, PreconfirmationSender>, SchedulerError> {
-        BlockExecutor::new(
-            self.relayer.clone(),
-            ExecutionOptions {
-                forbid_unauthorized_inputs: true,
-                forbid_fake_utxo: false,
-                backtrace: false,
-            },
-            self.consensus_parameters.clone(),
-            NoWaitTxs,
-            self.preconfirmation_sender.clone(),
-            true, // dry run
-        )
-        .map_err(|e| {
-            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
-        })
-    }
-
     fn execute_batch<TxSource>(
         &mut self,
         consensus_parameters_version: u32,
@@ -662,7 +637,7 @@ where
         let required_changes = tx.into_changes();
         batch.contracts_used.extend(new_contracts_used);
 
-        let executor = self.create_executor()?;
+        let executor = self.executor.clone();
         let coinbase_recipient = components.coinbase_recipient;
         let gas_price = components.gas_price;
         let header_to_produce = components.header_to_produce;
@@ -951,7 +926,7 @@ where
             self.current_available_workers.pop_front().ok_or(
                 SchedulerError::InternalError("No available workers".to_string()),
             )?;
-        let executor = self.create_executor()?;
+        let executor = self.executor.clone();
         let block = executor
             .execute_l2_transactions(
                 Components {
@@ -1059,7 +1034,7 @@ where
         }
 
         let mut execution_data = ExecutionData::default();
-        let executor = self.create_executor()?;
+        let executor = self.executor.clone();
         // Get a memory instance for the blob transactions execution (all workers should be available)
         let (worker_id, mut memory_instance) =
             self.current_available_workers.pop_front().ok_or(
