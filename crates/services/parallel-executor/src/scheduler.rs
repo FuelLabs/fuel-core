@@ -695,7 +695,6 @@ where
                         });
                     }
                 }
-                // TODO: Re-add unused gas
                 Ok(WorkSessionExecutionResult {
                     worker_id,
                     memory_instance,
