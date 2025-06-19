@@ -256,6 +256,14 @@ impl StorageChanges {
             StorageChanges::ChangesList(changes_list) => core::mem::take(changes_list),
         }
     }
+
+    /// Checks if the changes are empty.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            StorageChanges::Changes(changes) => changes.is_empty(),
+            StorageChanges::ChangesList(changes_list) => changes_list.is_empty(),
+        }
+    }
 }
 
 impl TryFrom<StorageChanges> for Changes {

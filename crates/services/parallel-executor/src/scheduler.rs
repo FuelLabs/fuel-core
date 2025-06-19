@@ -286,6 +286,10 @@ impl SchedulerExecutionResult {
             .extend(blob_execution_data.tx_status);
         // Should contains all the changes from all executions
         self.changes = StorageChanges::Changes(blob_execution_data.changes);
+        debug_assert!(
+            self.changes.is_empty(),
+            "Changes should be empty after blob merging"
+        );
         self.used_gas = self.used_gas.saturating_add(blob_execution_data.used_gas);
         self.used_size = self.used_size.saturating_add(blob_execution_data.used_size);
         self.coinbase = self.coinbase.saturating_add(blob_execution_data.coinbase);
