@@ -32,7 +32,7 @@ impl Blob {
         let query = ctx.read_view()?;
         query
             .blob_bytecode(self.0)
-            .map(HexString)
+            .map(|bytes| HexString(bytes.into()))
             .map_err(async_graphql::Error::from)
     }
 }
