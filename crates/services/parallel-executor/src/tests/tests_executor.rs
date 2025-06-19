@@ -408,6 +408,7 @@ async fn execute__gas_left_updated_when_state_merges() {
     ];
     let script_bytes: Vec<u8> = script.iter().flat_map(|op| op.to_bytes()).collect();
     let tx_contract_2: Transaction = TransactionBuilder::script(script_bytes, vec![])
+        .script_gas_limit(100_000)
         .add_input(Input::contract(
             rng.r#gen(),
             Default::default(),
@@ -473,6 +474,8 @@ async fn execute__gas_left_updated_when_state_merges() {
             .assert_filter(Filter::new(vec![contract_id_1].into_iter().collect())),
     );
 
+    std::thread::sleep(Duration::from_millis(100));
+
     // Request for one of the threads again that asked before
     mock_tx_pool.push_response(
         MockTxPoolResponse::new(&[], TransactionFiltered::Filtered)
@@ -501,10 +504,11 @@ async fn execute__gas_left_updated_when_state_merges() {
 #[tokio::test]
 async fn execute__utxo_ordering_kept() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
-    let predicate = op::ret(RegId::ONE).to_bytes().to_vec();
-    let owner = Input::predicate_owner(&predicate);
     let mut storage = Storage::default();
     storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    let recipient_private_key = SecretKey::random(&mut rng);
+    let recipient_public_key = recipient_private_key.public_key();
+    let owner = Input::owner(&recipient_public_key);
 
     // Given
     let script = [op::add(RegId::ONE, 0x02, 0x03)];
@@ -513,18 +517,16 @@ async fn execute__utxo_ordering_kept() {
         .add_stored_coin_input(&mut rng, &mut storage, 1000)
         .add_output(Output::coin(owner, 1000, Default::default()))
         .finalize_as_transaction();
+
     let coin_utxo = UtxoId::new(tx1.id(&ChainId::default()), 0);
     let tx2 = TransactionBuilder::script(vec![], vec![])
-        .add_input(Input::coin_predicate(
+        .add_unsigned_coin_input(
+            recipient_private_key,
             coin_utxo,
-            owner,
             1000,
             Default::default(),
             Default::default(),
-            Default::default(),
-            predicate.clone(),
-            vec![],
-        ))
+        )
         .add_output(Output::coin(owner, 1000, Default::default()))
         .finalize_as_transaction();
 

@@ -458,7 +458,7 @@ where
                             Ok(res) => {
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
-                                    self.sequential_fallback(block_height, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
+                                    self.sequential_fallback(block_height, res.worker_id, res.memory_instance, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
@@ -793,6 +793,8 @@ where
                     if !res.skipped_tx.is_empty() {
                         self.sequential_fallback(
                             block_height,
+                            res.worker_id,
+                            res.memory_instance,
                             res.batch_id,
                             res.txs,
                             res.coins_used,
@@ -969,14 +971,19 @@ where
     // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
     //
     // Can be replaced by a mechanism that replace the skipped_tx by a dummy transaction to not shift everything
+    #[allow(clippy::too_many_arguments)]
     async fn sequential_fallback(
         &mut self,
         block_height: BlockHeight,
+        worker_id: usize,
+        memory_instance: MemoryInstance,
         batch_id: usize,
         txs: Vec<Transaction>,
         coins_used: Vec<CoinInBatch>,
         coins_created: Vec<CoinInBatch>,
     ) -> Result<(), SchedulerError> {
+        self.current_available_workers
+            .push_back((worker_id, memory_instance));
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
@@ -996,6 +1003,8 @@ where
                     if res.batch_id > higher_batch_id {
                         higher_batch_id = res.batch_id;
                     }
+                    self.current_available_workers
+                        .push_back((res.worker_id, res.memory_instance));
                 }
                 Err(_) => {
                     tracing::error!("Worker execution failed");
