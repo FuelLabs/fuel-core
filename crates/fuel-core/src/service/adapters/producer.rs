@@ -136,6 +136,7 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         self.executor.dry_run(
             block,
             forbid_fake_coins,
+            forbid_fake_coins,
             at_height,
             record_storage_read_replay,
         )

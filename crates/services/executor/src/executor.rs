@@ -298,19 +298,19 @@ pub fn convert_tx_execution_result_to_preconfirmation(
 }
 
 /// Data that is generated after executing all transactions.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ExecutionData {
-    coinbase: u64,
-    used_gas: u64,
-    used_size: u32,
-    tx_count: u16,
-    found_mint: bool,
-    message_ids: Vec<MessageId>,
-    tx_status: Vec<TransactionExecutionStatus>,
-    events: Vec<ExecutorEvent>,
-    changes: Changes,
+    pub coinbase: u64,
+    pub used_gas: u64,
+    pub used_size: u32,
+    pub tx_count: u16,
+    pub found_mint: bool,
+    pub message_ids: Vec<MessageId>,
+    pub tx_status: Vec<TransactionExecutionStatus>,
+    pub events: Vec<ExecutorEvent>,
+    pub changes: Changes,
     pub skipped_transactions: Vec<(TxId, ExecutorError)>,
-    event_inbox_root: Bytes32,
+    pub event_inbox_root: Bytes32,
 }
 
 impl ExecutionData {
@@ -335,9 +335,12 @@ impl ExecutionData {
 /// These are passed to the executor.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
+    /// The flag allows the usage of fake signatures in the transaction.
+    /// When `false` the executor skips signature and predicate checks.
+    pub forbid_unauthorized_inputs: bool,
     /// The flag allows the usage of fake coins in the inputs of the transaction.
-    /// When `false` the executor skips signature and UTXO existence checks.
-    pub forbid_fake_coins: bool,
+    /// When `false` the executor skips UTXO existence checks.
+    pub forbid_fake_utxo: bool,
     /// Print execution backtraces if transaction execution reverts.
     ///
     /// Deprecated field. Do nothing. This fields exists for serialization and
@@ -348,9 +351,12 @@ pub struct ExecutionOptions {
 /// Per-block execution options
 #[derive(Clone, Default, Debug)]
 struct ExecutionOptionsInner {
+    /// The flag allows the usage of fake signatures in the transaction.
+    /// When `false` the executor skips signature and predicate checks.
+    pub forbid_unauthorized_inputs: bool,
     /// The flag allows the usage of fake coins in the inputs of the transaction.
-    /// When `false` the executor skips signature and UTXO existence checks.
-    pub forbid_fake_coins: bool,
+    /// When `false` the executor skips UTXO existence checks.
+    pub forbid_fake_utxo: bool,
     pub dry_run: bool,
 }
 
@@ -532,7 +538,8 @@ impl<R, TxWaiter, PreconfirmationSender>
             relayer,
             consensus_params,
             options: ExecutionOptionsInner {
-                forbid_fake_coins: options.forbid_fake_coins,
+                forbid_unauthorized_inputs: options.forbid_unauthorized_inputs,
+                forbid_fake_utxo: options.forbid_fake_utxo,
                 dry_run,
             },
             new_tx_waiter,
@@ -547,7 +554,7 @@ where
     N: NewTxWaiterPort,
     P: PreconfirmationSenderPort,
 {
-    async fn execute<TxSource, D>(
+    pub async fn execute<TxSource, D>(
         self,
         components: Components<TxSource>,
         block_storage_tx: BlockStorageTransaction<D>,
@@ -617,7 +624,8 @@ where
         Ok((partial_block, data))
     }
 
-    fn produce_mint_tx<TxSource, T>(
+    /// Produce the mint transaction
+    pub fn produce_mint_tx<TxSource, T>(
         &self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
@@ -700,7 +708,40 @@ where
         Ok((partial_block, data))
     }
 
-    fn process_l1_txs<T>(
+    pub async fn execute_l2_transactions<TxSource, D>(
+        mut self,
+        transactions: Components<TxSource>,
+        mut block_storage_tx: BlockStorageTransaction<D>,
+        start_idx: u16,
+        memory: &mut MemoryInstance,
+    ) -> ExecutorResult<(Vec<Transaction>, ExecutionData)>
+    where
+        TxSource: TransactionsSource,
+        D: KeyValueInspect<Column = Column>,
+    {
+        let mut partial_block =
+            PartialFuelBlock::new(transactions.header_to_produce, vec![]);
+
+        let mut execution_data = ExecutionData {
+            tx_count: start_idx,
+            ..Default::default()
+        };
+
+        self.process_l2_txs(
+            &mut partial_block,
+            &transactions,
+            &mut block_storage_tx,
+            &mut execution_data,
+            memory,
+        )
+        .await?;
+
+        execution_data.changes = block_storage_tx.into_changes();
+        Ok((partial_block.transactions, execution_data))
+    }
+
+    /// Process transactions coming from the underlying L1
+    pub fn process_l1_txs<T>(
         &mut self,
         block: &mut PartialFuelBlock,
         coinbase_contract_id: ContractId,
@@ -1412,7 +1453,7 @@ where
             let input = mint.input_contract().clone();
             let mut input = Input::Contract(input);
 
-            if self.options.forbid_fake_coins {
+            if self.options.forbid_fake_utxo {
                 self.verify_inputs_exist_and_values_match(
                     storage_tx,
                     core::slice::from_ref(&input),
@@ -1457,7 +1498,7 @@ where
     {
         let tx_id = checked_tx.id();
 
-        if self.options.forbid_fake_coins {
+        if self.options.forbid_unauthorized_inputs || self.options.forbid_fake_utxo {
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
@@ -1780,28 +1821,36 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
-        checked_tx = checked_tx
-            .check_predicates(
-                &CheckPredicateParams::from(&self.consensus_params),
-                memory,
-                storage_tx,
-            )
-            .map_err(|e| {
-                ExecutorError::TransactionValidity(TransactionValidityError::Validation(
-                    e,
-                ))
-            })?;
-        debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+        if self.options.forbid_unauthorized_inputs {
+            checked_tx = checked_tx
+                .check_predicates(
+                    &CheckPredicateParams::from(&self.consensus_params),
+                    memory,
+                    storage_tx,
+                )
+                .map_err(|e| {
+                    ExecutorError::TransactionValidity(
+                        TransactionValidityError::Validation(e),
+                    )
+                })?;
+            debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+        }
 
-        self.verify_inputs_exist_and_values_match(
-            storage_tx,
-            checked_tx.transaction().inputs(),
-            header.da_height,
-        )?;
-        checked_tx = checked_tx
-            .check_signatures(&self.consensus_params.chain_id())
-            .map_err(TransactionValidityError::from)?;
-        debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+        if self.options.forbid_fake_utxo {
+            self.verify_inputs_exist_and_values_match(
+                storage_tx,
+                checked_tx.transaction().inputs(),
+                header.da_height,
+            )?;
+        }
+
+        if self.options.forbid_unauthorized_inputs {
+            checked_tx = checked_tx
+                .check_signatures(&self.consensus_params.chain_id())
+                .map_err(TransactionValidityError::from)?;
+            debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+        }
+
         Ok(checked_tx)
     }
 
@@ -2173,7 +2222,7 @@ where
                 }) => {
                     let contract = ContractRef::new(db, *contract_id);
                     let utxo_info =
-                        contract.validated_utxo(self.options.forbid_fake_coins)?;
+                        contract.validated_utxo(self.options.forbid_fake_utxo)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
                     *balance_root = contract.balance_root()?;
@@ -2235,7 +2284,7 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if self.options.forbid_fake_coins {
+        if self.options.forbid_fake_utxo {
             db.storage::<Coins>()
                 .get(&utxo_id)?
                 .ok_or(ExecutorError::TransactionValidity(
