@@ -108,7 +108,7 @@ where
         amount: u64,
     ) -> &mut Self {
         let utxo_id: UtxoId = rng.r#gen();
-        let secret_key = SecretKey::default();
+        let secret_key = SecretKey::random(rng);
         let public_key = secret_key.public_key();
         let owner = Input::owner(&public_key);
         let mut tx = storage.0.write_transaction();
