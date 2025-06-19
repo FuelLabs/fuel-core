@@ -65,13 +65,14 @@ use std::time::Duration;
 use fuel_core_upgradable_executor::error::UpgradableError;
 
 #[cfg(feature = "wasm-executor")]
-use fuel_core_types::fuel_merkle::common::Bytes32;
+use fuel_core_types::fuel_merkle::common::Bytes32 as MerkleBytes32;
 
 pub struct Executor<S, R, P> {
     config: Config,
     relayer: R,
     storage: S,
     preconfirmation_sender: P,
+    memory_pool: Option<Vec<MemoryInstance>>,
 }
 
 impl<S, R, P> Executor<S, R, P> {
@@ -82,6 +83,7 @@ impl<S, R, P> Executor<S, R, P> {
         config: Config,
     ) -> Self {
         Self {
+            memory_pool: Some(vec![MemoryInstance::new(); config.number_of_cores.get()]),
             config,
             relayer,
             storage: storage_view_provider,
@@ -154,12 +156,19 @@ where
             .await?;
 
         // Run parallel scheduler for L2 transactions
+        let memory_pool =
+            self.memory_pool
+                .take()
+                .ok_or(SchedulerError::InternalError(
+                    "Memory pool is not initialized".to_string(),
+                ))?;
         let scheduler_result = self
             .run_scheduler(
                 &mut components,
                 da_changes,
                 execution_data,
                 executor.clone(),
+                memory_pool,
                 consensus_parameters,
                 maximum_execution_time,
             )
@@ -238,12 +247,14 @@ where
     }
 
     /// Run the parallel executor for L2 transactions
+    #[allow(clippy::too_many_arguments)]
     async fn run_scheduler<TxSource>(
         &mut self,
         components: &mut Components<TxSource>,
         da_changes: Changes,
         execution_data: ExecutionData,
         executor: BlockExecutor<R, NoWaitTxs, P>,
+        memory_pool: Vec<MemoryInstance>,
         consensus_parameters: ConsensusParameters,
         maximum_execution_time: Duration,
     ) -> Result<SchedulerExecutionResult, SchedulerError>
@@ -254,13 +265,18 @@ where
             self.config.clone(),
             self.storage.clone(),
             executor,
+            memory_pool,
             consensus_parameters,
             maximum_execution_time,
         )?;
 
-        scheduler
+        let (res, memory_instance) = scheduler
             .run(components, da_changes, execution_data.into())
-            .await
+            .await?;
+
+        // Restore memory pool to be re-used
+        self.memory_pool = Some(memory_instance);
+        Ok(res)
     }
 
     /// Finalize the block by adding mint transaction and generating the final block
@@ -389,7 +405,7 @@ where
     #[cfg(feature = "wasm-executor")]
     pub fn validate_uploaded_wasm(
         &self,
-        _wasm_root: &Bytes32,
+        _wasm_root: &MerkleBytes32,
     ) -> Result<(), UpgradableError> {
         unimplemented!("WASM validation not implemented yet");
     }

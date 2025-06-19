@@ -328,6 +328,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
         config: Config,
         storage: S,
         executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
+        memory_pool: Vec<MemoryInstance>,
         consensus_parameters: ConsensusParameters,
         maximum_time_per_block: Duration,
     ) -> Result<Self, SchedulerError> {
@@ -337,6 +338,13 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             .build()
             .expect("Failed to create tokio runtime");
 
+        let current_available_workers: VecDeque<(usize, MemoryInstance)> =
+            memory_pool.into_iter().enumerate().collect();
+        if current_available_workers.len() < config.number_of_cores.get() {
+            return Err(SchedulerError::InternalError(
+                "Not enough memory instances for the number of cores".to_string(),
+            ));
+        }
         Ok(Self {
             runtime: Some(runtime),
             executor,
@@ -345,9 +353,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             tx_left: u16::MAX,
             tx_size_left: consensus_parameters.block_transaction_size_limit(),
             gas_left: consensus_parameters.block_gas_limit(),
-            current_available_workers: ((0..config.number_of_cores.get())
-                .map(|id| (id, MemoryInstance::new())))
-            .collect(),
+            current_available_workers,
             config,
             current_execution_tasks: FuturesUnordered::new(),
             blob_transactions: vec![],
@@ -374,7 +380,7 @@ where
         components: &mut Components<TxSource>,
         da_changes: Changes,
         l1_execution_data: L1ExecutionData,
-    ) -> Result<SchedulerExecutionResult, SchedulerError> {
+    ) -> Result<(SchedulerExecutionResult, Vec<MemoryInstance>), SchedulerError> {
         let view = self.storage.latest_view()?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
@@ -506,7 +512,13 @@ where
             res.add_blob_execution_data(blob_execution_data, blob_txs);
         }
 
-        Ok(res)
+        Ok((
+            res,
+            self.current_available_workers
+                .drain(..)
+                .map(|(_, mem)| mem)
+                .collect(),
+        ))
     }
 
     fn update_constraints(
