@@ -763,4 +763,43 @@ mod tests {
         assert!(maybe_block.is_some());
         service.shutdown().await.unwrap();
     }
+
+    #[cfg(feature = "fault-proving")]
+    #[tokio::test]
+    async fn compression_service__writes_to_registrations_table() {
+        // given: we create the compression service
+        let block_with_metadata = BlockWithMetadata::default();
+        let block_source = MockBlockSource::new(vec![block_with_metadata]);
+        let storage = test_storage();
+        let config_provider = MockConfigProvider::default();
+        let canonical_height_provider = MockCanonicalHeightProvider::default();
+
+        let uninit_service = UninitializedCompressionService::new(
+            block_source,
+            storage,
+            config_provider.config(),
+            canonical_height_provider,
+        );
+        let sync_observer = uninit_service.shared_data();
+
+        // when: the compression service is started
+        let mut service = uninit_service
+            .into_task(&Default::default(), ())
+            .await
+            .unwrap();
+        let _ = service.run(&mut StateWatcher::started()).await;
+
+        // then: we ensure we can get the registrations per block + root of that table
+        let target_block_height = 0;
+        sync_observer
+            .await_synced_until(&target_block_height)
+            .await
+            .unwrap();
+        let maybe_registrations = service
+            .storage
+            .storage_as_ref::<storage::registrations::Registrations>()
+            .get(&target_block_height.into())
+            .unwrap();
+        assert!(maybe_registrations.is_some());
+    }
 }

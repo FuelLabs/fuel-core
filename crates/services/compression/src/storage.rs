@@ -20,6 +20,8 @@ pub mod predicate_code;
 pub mod registry_index;
 pub mod script_code;
 // TODO: https://github.com/FuelLabs/fuel-core/issues/2842
+#[cfg(feature = "fault-proving")]
+pub mod registrations;
 pub mod timestamps;
 
 /// Merkleized Address table type alias
@@ -48,3 +50,7 @@ pub type Timestamps = Merkleized<timestamps::Timestamps>;
 
 /// Re-export to match api
 pub use compressed_blocks::CompressedBlocks;
+
+/// Merkleized Registrations table type alias
+#[cfg(feature = "fault-proving")]
+pub type Registrations = Merkleized<registrations::Registrations>;

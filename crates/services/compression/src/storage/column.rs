@@ -40,6 +40,9 @@ pub enum CompressionColumn {
     EvictorCache = 7,
     /// Keeps track of timestamps, will be removed eventually, see [`Timestamps`](crate::storage::timestamps::Timestamps)
     Timestamps = 8,
+    #[cfg(feature = "fault-proving")]
+    /// Keeps track of registrations per table associated with a compressed block, see [`Registrations`](crate::storage::registrations::Registrations)
+    Registrations = 9,
 }
 
 impl AsU32 for CompressionColumn {
