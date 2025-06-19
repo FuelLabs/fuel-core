@@ -1,3 +1,10 @@
+use fuel_core_storage::{
+    StorageAsRef,
+    column::Column,
+    kv_store::KeyValueInspect,
+    tables::Coins,
+    transactional::StorageTransaction,
+};
 use fuel_core_types::{
     entities::coins::coin::{
         CompressedCoin,
@@ -17,9 +24,7 @@ use fuel_core_types::{
 };
 use fxhash::FxHashMap;
 
-use crate::ports::Storage;
-
-use crate::scheduler::SchedulerError;
+use super::SchedulerError;
 
 #[derive(Debug, Eq)]
 pub(crate) struct CoinInBatch {
@@ -193,13 +198,13 @@ impl CoinDependencyChainVerifier {
         &self,
         batch_id: usize,
         coins_used: impl Iterator<Item = &'a CoinInBatch>,
-        storage: &S,
+        storage: &StorageTransaction<S>,
     ) -> Result<(), SchedulerError>
     where
-        S: Storage + Send,
+        S: KeyValueInspect<Column = Column> + Send,
     {
         for coin in coins_used {
-            match storage.get_coin(coin.utxo()) {
+            match storage.storage::<Coins>().get(coin.utxo()) {
                 Ok(Some(db_coin)) => {
                     // Coin is in the database
                     match coin.equal_compressed_coin(&db_coin) {
