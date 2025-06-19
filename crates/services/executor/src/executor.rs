@@ -712,9 +712,9 @@ where
         mut self,
         transactions: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
-        execution_data: &mut ExecutionData,
+        start_idx: u16,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<PartialFuelBlock>
+    ) -> ExecutorResult<(Vec<Transaction>, ExecutionData)>
     where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column>,
@@ -722,17 +722,22 @@ where
         let mut partial_block =
             PartialFuelBlock::new(transactions.header_to_produce, vec![]);
 
+        let mut execution_data = ExecutionData {
+            tx_count: start_idx,
+            ..Default::default()
+        };
+
         self.process_l2_txs(
             &mut partial_block,
             &transactions,
             &mut block_storage_tx,
-            execution_data,
+            &mut execution_data,
             memory,
         )
         .await?;
 
         execution_data.changes = block_storage_tx.into_changes();
-        Ok(partial_block)
+        Ok((partial_block.transactions, execution_data))
     }
 
     /// Process transactions coming from the underlying L1

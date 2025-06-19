@@ -656,14 +656,10 @@ where
         self.current_execution_tasks.push(runtime.spawn({
             let storage_with_da = storage_with_da.clone();
             async move {
-                let mut execution_data = ExecutionData {
-                    tx_count: start_idx_txs,
-                    ..Default::default()
-                };
                 let storage_tx = storage_with_da
                     .into_transaction()
                     .with_changes(required_changes);
-                let block = executor
+                let (transactions, execution_data) = executor
                     .execute_l2_transactions(
                         Components {
                             header_to_produce,
@@ -675,12 +671,12 @@ where
                             gas_price,
                         },
                         storage_tx,
-                        &mut execution_data,
+                        start_idx_txs,
                         &mut memory_instance,
                     )
                     .await?;
                 let coins_created = get_coins_outputs(
-                    block.transactions.iter().zip(
+                    transactions.iter().zip(
                         execution_data
                             .tx_status
                             .iter()
@@ -709,7 +705,7 @@ where
                     coins_used: batch.coins_used,
                     contracts_used: batch.contracts_used,
                     skipped_tx: execution_data.skipped_transactions,
-                    txs: block.transactions,
+                    txs: transactions,
                     message_ids: execution_data.message_ids,
                     events: execution_data.events,
                     tx_statuses: execution_data.tx_status,
@@ -931,17 +927,13 @@ where
     where
         D: KeyValueInspect<Column = Column>,
     {
-        let mut execution_data = ExecutionData {
-            tx_count: start_idx_txs,
-            ..Default::default()
-        };
         // Get a memory instance for the blob transactions execution (all workers should be available)
         let (worker_id, mut memory_instance) =
             self.current_available_workers.pop_front().ok_or(
                 SchedulerError::InternalError("No available workers".to_string()),
             )?;
         let executor = self.executor.clone();
-        let block = executor
+        let (transactions, execution_data) = executor
             .execute_l2_transactions(
                 Components {
                     header_to_produce: components.header_to_produce,
@@ -953,14 +945,14 @@ where
                     gas_price: components.gas_price,
                 },
                 storage,
-                &mut execution_data,
+                start_idx_txs,
                 &mut memory_instance,
             )
             .await?;
         // Register the worker back to the available workers
         self.current_available_workers
             .push_back((worker_id, memory_instance));
-        Ok((execution_data, block.transactions))
+        Ok((execution_data, transactions))
     }
 
     // Wait for all the workers to finish gather all theirs transactions
@@ -1054,14 +1046,13 @@ where
             }
         }
 
-        let mut execution_data = ExecutionData::default();
         let executor = self.executor.clone();
         // Get a memory instance for the blob transactions execution (all workers should be available)
         let (worker_id, mut memory_instance) =
             self.current_available_workers.pop_front().ok_or(
                 SchedulerError::InternalError("No available workers".to_string()),
             )?;
-        let block = executor
+        let (transactions, execution_data) = executor
             .execute_l2_transactions(
                 Components {
                     header_to_produce: PartialBlockHeader::default(),
@@ -1070,7 +1061,7 @@ where
                     gas_price: Default::default(),
                 },
                 self.storage.latest_view().unwrap().write_transaction(),
-                &mut execution_data,
+                0,
                 &mut memory_instance,
             )
             .await?;
@@ -1088,7 +1079,7 @@ where
                 changes: execution_data.changes,
                 coins_created: all_coins_created,
                 coins_used: all_coins_used,
-                txs: block.transactions,
+                txs: transactions,
                 message_ids: execution_data.message_ids,
                 events: execution_data.events,
                 tx_statuses: execution_data.tx_status,
