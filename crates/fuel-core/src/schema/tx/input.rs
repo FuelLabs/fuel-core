@@ -286,6 +286,10 @@ impl From<&fuel_tx::Input> for Input {
                 predicate: HexString(predicate.to_vec()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Input::InputV2(_) => {
+                todo!()
+            }
         }
     }
 }
