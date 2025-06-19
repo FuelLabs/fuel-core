@@ -450,7 +450,7 @@ where
     pub fn dry_run(
         &self,
         component: Components<Vec<Transaction>>,
-        forbid_fake_signature: Option<bool>,
+        forbid_unauthorized_inputs: Option<bool>,
         forbid_fake_utxo: Option<bool>,
         at_height: Option<BlockHeight>,
         record_storage_reads: bool,
@@ -462,13 +462,13 @@ where
         }
 
         // fallback to service config value if no utxo_validation override is provided
-        let forbid_fake_signature =
-            forbid_fake_signature.unwrap_or(self.config.forbid_fake_signature_default);
+        let forbid_unauthorized_inputs = forbid_unauthorized_inputs
+            .unwrap_or(self.config.forbid_unauthorized_inputs_default);
         let forbid_fake_utxo =
             forbid_fake_utxo.unwrap_or(self.config.forbid_fake_utxo_default);
 
         let options = ExecutionOptions {
-            forbid_fake_signature,
+            forbid_unauthorized_inputs,
             forbid_fake_utxo,
             backtrace: false,
         };

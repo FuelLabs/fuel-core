@@ -605,7 +605,7 @@ where
         BlockExecutor::new(
             self.relayer.clone(),
             ExecutionOptions {
-                forbid_fake_signature: true,
+                forbid_unauthorized_inputs: true,
                 forbid_fake_utxo: false,
                 backtrace: false,
             },

@@ -335,9 +335,9 @@ impl ExecutionData {
 /// These are passed to the executor.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
-    /// The flag allows the usage of fake coins in the inputs of the transaction.
-    /// When `false` the executor skips signature.
-    pub forbid_fake_signature: bool,
+    /// The flag allows the usage of fake signatures in the transaction.
+    /// When `false` the executor skips signature and predicate checks.
+    pub forbid_unauthorized_inputs: bool,
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips UTXO existence checks.
     pub forbid_fake_utxo: bool,
@@ -351,9 +351,9 @@ pub struct ExecutionOptions {
 /// Per-block execution options
 #[derive(Clone, Default, Debug)]
 struct ExecutionOptionsInner {
-    /// The flag allows the usage of fake coins in the inputs of the transaction.
-    /// When `false` the executor skips signature.
-    pub forbid_fake_signature: bool,
+    /// The flag allows the usage of fake signatures in the transaction.
+    /// When `false` the executor skips signature and predicate checks.
+    pub forbid_unauthorized_inputs: bool,
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips UTXO existence checks.
     pub forbid_fake_utxo: bool,
@@ -538,7 +538,7 @@ impl<R, TxWaiter, PreconfirmationSender>
             relayer,
             consensus_params,
             options: ExecutionOptionsInner {
-                forbid_fake_signature: options.forbid_fake_signature,
+                forbid_unauthorized_inputs: options.forbid_unauthorized_inputs,
                 forbid_fake_utxo: options.forbid_fake_utxo,
                 dry_run,
             },
@@ -1493,7 +1493,7 @@ where
     {
         let tx_id = checked_tx.id();
 
-        if self.options.forbid_fake_signature || self.options.forbid_fake_utxo {
+        if self.options.forbid_unauthorized_inputs || self.options.forbid_fake_utxo {
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
@@ -1816,18 +1816,20 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
-        checked_tx = checked_tx
-            .check_predicates(
-                &CheckPredicateParams::from(&self.consensus_params),
-                memory,
-                storage_tx,
-            )
-            .map_err(|e| {
-                ExecutorError::TransactionValidity(TransactionValidityError::Validation(
-                    e,
-                ))
-            })?;
-        debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+        if self.options.forbid_unauthorized_inputs {
+            checked_tx = checked_tx
+                .check_predicates(
+                    &CheckPredicateParams::from(&self.consensus_params),
+                    memory,
+                    storage_tx,
+                )
+                .map_err(|e| {
+                    ExecutorError::TransactionValidity(
+                        TransactionValidityError::Validation(e),
+                    )
+                })?;
+            debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+        }
 
         if self.options.forbid_fake_utxo {
             self.verify_inputs_exist_and_values_match(
@@ -1837,7 +1839,7 @@ where
             )?;
         }
 
-        if self.options.forbid_fake_signature {
+        if self.options.forbid_unauthorized_inputs {
             checked_tx = checked_tx
                 .check_signatures(&self.consensus_params.chain_id())
                 .map_err(TransactionValidityError::from)?;

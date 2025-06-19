@@ -3,8 +3,8 @@ use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 #[derive(Clone, Debug, Default)]
 pub struct Config {
-    /// Default mode for `forbid_fake_signature` in `ExecutionOptions`.
-    pub forbid_fake_signature_default: bool,
+    /// Default mode for `forbid_unauthorized_inputs` in `ExecutionOptions`.
+    pub forbid_unauthorized_inputs_default: bool,
     /// Default mode for `forbid_fake_utxo` in `ExecutionOptions`
     pub forbid_fake_utxo_default: bool,
     /// The version of the native executor to determine usage of native vs WASM executor.
@@ -21,7 +21,7 @@ pub struct Config {
 impl From<&Config> for ExecutionOptions {
     fn from(value: &Config) -> Self {
         Self {
-            forbid_fake_signature: value.forbid_fake_signature_default,
+            forbid_unauthorized_inputs: value.forbid_unauthorized_inputs_default,
             forbid_fake_utxo: value.forbid_fake_utxo_default,
             backtrace: false,
         }
