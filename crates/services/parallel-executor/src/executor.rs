@@ -98,6 +98,7 @@ where
     pub async fn produce_without_commit_with_source<TxSource>(
         &mut self,
         mut components: Components<TxSource>,
+        maximum_execution_time: Duration,
     ) -> Result<Uncommitted<ExecutionResult, StorageChanges>, SchedulerError>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -125,7 +126,7 @@ where
             self.storage.clone(),
             self.preconfirmation_sender.clone(),
             consensus_parameters,
-            Duration::from_millis(300),
+            maximum_execution_time,
         )?;
 
         let mut executor = scheduler.create_executor()?;
@@ -148,12 +149,7 @@ where
             .await?;
 
         // Finalize block with mint transaction
-        self.finalize_block(
-            &mut components,
-            scheduler_result,
-            &mut MemoryInstance::new(),
-            &mut executor,
-        )
+        self.finalize_block(&mut components, scheduler_result, &mut executor)
     }
 
     /// Process DA changes if the DA height has changed
@@ -240,7 +236,6 @@ where
         &mut self,
         components: &mut Components<TxSource>,
         scheduler_result: SchedulerExecutionResult,
-        memory: &mut MemoryInstance,
         executor: &mut BlockExecutor<R, NoWaitTxs, P>,
     ) -> Result<Uncommitted<ExecutionResult, StorageChanges>, SchedulerError>
     where
@@ -250,7 +245,7 @@ where
 
         // Produce mint transaction (pass the entire scheduler_result)
         let (execution_data, storage_changes, partial_block) =
-            self.produce_mint_tx(components, scheduler_result, memory, view, executor)?;
+            self.produce_mint_tx(components, scheduler_result, view, executor)?;
 
         // Generate final block
         let block = partial_block
@@ -280,7 +275,6 @@ where
         &mut self,
         components: &mut Components<TxSource>,
         scheduler_res: SchedulerExecutionResult,
-        memory: &mut MemoryInstance,
         view: View,
         executor: &mut BlockExecutor<R, NoWaitTxs, P>,
     ) -> Result<(ExecutionData, StorageChanges, PartialFuelBlock), SchedulerError> {
@@ -330,7 +324,7 @@ where
             components,
             &mut tx_changes,
             &mut execution_data,
-            memory,
+            &mut MemoryInstance::new(),
         )?;
 
         let storage_changes = match changes {

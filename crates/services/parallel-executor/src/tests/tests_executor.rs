@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use std::time::Duration;
+
 use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
@@ -204,20 +206,26 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
         },
     );
     let res = executor
-        .produce_without_commit_with_source(Components {
-            header_to_produce: Default::default(),
-            transactions_source: OnceTransactionsSource::new(
-                vec![
-                    tx_creation
-                        .into_checked_basic(0u32.into(), &ConsensusParameters::default())
-                        .unwrap()
-                        .into(),
-                ],
-                0,
-            ),
-            coinbase_recipient: Default::default(),
-            gas_price: 0,
-        })
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: Default::default(),
+                transactions_source: OnceTransactionsSource::new(
+                    vec![
+                        tx_creation
+                            .into_checked_basic(
+                                0u32.into(),
+                                &ConsensusParameters::default(),
+                            )
+                            .unwrap()
+                            .into(),
+                    ],
+                    0,
+                ),
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Duration::from_millis(300),
+        )
         .await
         .unwrap()
         .into_changes();
@@ -249,12 +257,15 @@ async fn execute__simple_independent_transactions_sorted() {
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
-    let future = executor.produce_without_commit_with_source(Components {
-        header_to_produce: Default::default(),
-        transactions_source,
-        coinbase_recipient: Default::default(),
-        gas_price: 0,
-    });
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Duration::from_millis(300),
+    );
 
     // Request for a thread
     mock_tx_pool.push_response(MockTxPoolResponse::new(
@@ -325,12 +336,15 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
-    let future = executor.produce_without_commit_with_source(Components {
-        header_to_produce: Default::default(),
-        transactions_source,
-        coinbase_recipient: Default::default(),
-        gas_price: 0,
-    });
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Duration::from_millis(300),
+    );
 
     // Request for a thread
     mock_tx_pool.push_response(
@@ -437,12 +451,15 @@ async fn execute__gas_left_updated_when_state_merges() {
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
-    let future = executor.produce_without_commit_with_source(Components {
-        header_to_produce: Default::default(),
-        transactions_source,
-        coinbase_recipient: Default::default(),
-        gas_price: 0,
-    });
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Duration::from_millis(300),
+    );
 
     // Request for one of the threads
     mock_tx_pool.push_response(
@@ -524,12 +541,15 @@ async fn execute__utxo_ordering_kept() {
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
-    let future = executor.produce_without_commit_with_source(Components {
-        header_to_produce: Default::default(),
-        transactions_source,
-        coinbase_recipient: Default::default(),
-        gas_price: 0,
-    });
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Duration::from_millis(300),
+    );
 
     // Request for one of the threads
     mock_tx_pool.push_response(
@@ -592,12 +612,15 @@ async fn execute__utxo_resolved() {
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
-    let future = executor.produce_without_commit_with_source(Components {
-        header_to_produce: Default::default(),
-        transactions_source,
-        coinbase_recipient: Default::default(),
-        gas_price: 0,
-    });
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Duration::from_millis(300),
+    );
 
     // Request for one of the threads
     mock_tx_pool.push_response(
@@ -681,12 +704,15 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
-    let future = executor.produce_without_commit_with_source(Components {
-        header_to_produce: Default::default(),
-        transactions_source,
-        coinbase_recipient: Default::default(),
-        gas_price: 0,
-    });
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Duration::from_millis(300),
+    );
 
     // Request for a thread
     mock_tx_pool.push_response(
