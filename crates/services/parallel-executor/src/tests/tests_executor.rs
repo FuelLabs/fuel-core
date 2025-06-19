@@ -153,16 +153,9 @@ impl Storage {
     }
 }
 
-fn basic_tx(
-    rng: &mut StdRng,
-    database: &mut Storage,
-    max_gas: Option<u64>,
-) -> Transaction {
+fn basic_tx(rng: &mut StdRng, database: &mut Storage) -> Transaction {
     let mut builder = TransactionBuilder::script(vec![], vec![]);
     builder.add_stored_coin_input(rng, database, 1000);
-    if let Some(gas) = max_gas {
-        builder.script_gas_limit(gas);
-    }
     builder.finalize_as_transaction()
 }
 
@@ -238,10 +231,10 @@ async fn execute__simple_independent_transactions_sorted() {
     storage = add_consensus_parameters(storage, &ConsensusParameters::default());
 
     // Given
-    let tx1: Transaction = basic_tx(&mut rng, &mut storage, None);
-    let tx2: Transaction = basic_tx(&mut rng, &mut storage, None);
-    let tx3: Transaction = basic_tx(&mut rng, &mut storage, None);
-    let tx4: Transaction = basic_tx(&mut rng, &mut storage, None);
+    let tx1: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx2: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx3: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx4: Transaction = basic_tx(&mut rng, &mut storage);
 
     let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
         Executor::new(
@@ -626,9 +619,7 @@ async fn execute__utxo_resolved() {
     assert_eq!(output.amount(), Some(1000));
 }
 
-// We use the overflow of gas to skip the transactions.
-// TODO: This test can't be performed anymore now that we lower the gas ourself in the scheduler and so
-// scheduler fails before the executor can skip the transaction.
+// The fallback mechanism is triggered by a wrong predicate estimation
 #[tokio::test]
 async fn execute__trigger_skipped_txs_fallback_mechanism() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -636,12 +627,46 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
     let mut consensus_parameters = ConsensusParameters::default();
     consensus_parameters.set_block_gas_limit(100000);
     storage = add_consensus_parameters(storage, &consensus_parameters);
+    let utxo_id: UtxoId = rng.r#gen();
+    let code = [op::ret(RegId::ONE)];
+    let code_bytes: Vec<u8> = code.iter().flat_map(|op| op.to_bytes()).collect();
+    let owner = Input::predicate_owner(&code_bytes);
+    let amount = 1000;
+    let mut tx = storage.0.write_transaction();
+    tx.storage_as_mut::<Coins>()
+        .insert(
+            &utxo_id,
+            &(Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id: Default::default(),
+                tx_pointer: Default::default(),
+            }
+            .compress()),
+        )
+        .unwrap();
+    tx.commit().unwrap();
 
     // Given
-    let tx1: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
-    let tx2: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
-    let tx3: Transaction = basic_tx(&mut rng, &mut storage, Some(90000));
-    let tx4: Transaction = basic_tx(&mut rng, &mut storage, Some(10));
+    let tx1: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx2: Transaction = basic_tx(&mut rng, &mut storage);
+
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_stored_coin_input(&mut rng, &mut storage, 1000);
+    builder.add_input(Input::coin_predicate(
+        utxo_id,
+        owner,
+        amount,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        code_bytes.clone(),
+        vec![],
+    ));
+    let tx3 = builder.finalize_as_transaction();
+
+    let tx4: Transaction = basic_tx(&mut rng, &mut storage);
 
     let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
         Executor::new(
