@@ -17,6 +17,7 @@ use fuel_core_storage::{
     transactional::{
         Changes,
         ConflictPolicy,
+        Modifiable,
         ReadTransaction,
         StorageChanges,
         StorageTransaction,
@@ -59,7 +60,7 @@ pub trait Transactional {
         Self: 'a;
 
     /// Returns the storage transaction based on the `Changes`.
-    fn storage_transaction(&self, changes: Changes) -> Self::Transaction<'_>;
+    fn storage_transaction(&self, changes: StorageChanges) -> Self::Transaction<'_>;
 }
 
 /// The alias port used by the block importer.
@@ -119,10 +120,21 @@ where
     where
         Self: 'a;
 
-    fn storage_transaction(&self, changes: Changes) -> Self::Transaction<'_> {
-        self.read_transaction()
-            .with_changes(changes)
-            .with_policy(ConflictPolicy::Fail)
+    fn storage_transaction(&self, changes: StorageChanges) -> Self::Transaction<'_> {
+        match changes {
+            StorageChanges::Changes(inner) => self
+                .read_transaction()
+                .with_changes(inner)
+                .with_policy(ConflictPolicy::Fail),
+            StorageChanges::ChangesList(list) => {
+                // TODO: I don't know if this is right :////
+                let mut tx = self.read_transaction();
+                for item in list {
+                    tx.commit_changes(item).unwrap();
+                }
+                tx.with_policy(ConflictPolicy::Fail)
+            }
+        }
     }
 }
 

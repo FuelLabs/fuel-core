@@ -324,9 +324,9 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             relayer,
             preconfirmation_sender,
             storage,
-            tx_left: 0,
-            tx_size_left: 0,
-            gas_left: 0,
+            tx_left: u16::MAX,
+            tx_size_left: u32::MAX,
+            gas_left: u64::MAX,
             current_available_workers: (0..config.number_of_cores.get()).collect(),
             config,
             current_execution_tasks: FuturesUnordered::new(),
@@ -541,18 +541,18 @@ where
         total_execution_time: Duration,
     ) -> Result<PreparedBatch, SchedulerError> {
         let spent_time = start_execution_time.elapsed();
+        let scaled_gas_initial = initial_gas
+            .saturating_mul(
+                (total_execution_time.as_millis() as u64)
+                    .saturating_sub(spent_time.as_millis() as u64),
+            )
+            .saturating_div(total_execution_time.as_millis() as u64);
+        let scaled_gas_left = self
+            .gas_left
+            .saturating_div(self.config.number_of_cores.get() as u64);
         // Time left in percentage to have the gas percentage left
         // TODO: Maybe avoid as u32
-        let current_gas = std::cmp::min(
-            initial_gas
-                .saturating_mul(
-                    (total_execution_time.as_millis() as u64)
-                        .saturating_sub(spent_time.as_millis() as u64),
-                )
-                .saturating_div(total_execution_time.as_millis() as u64),
-            self.gas_left
-                .saturating_div(self.config.number_of_cores.get() as u64),
-        );
+        let current_gas = std::cmp::min(scaled_gas_initial, scaled_gas_left);
 
         let executable_transactions = tx_source.get_executable_transactions(
             current_gas,

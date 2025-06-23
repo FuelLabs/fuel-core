@@ -283,6 +283,11 @@ where
         source: TransactionsSource,
         deadline: Instant,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>> {
+        tracing::warn!(
+            "Producing block at height {} with time {:?}",
+            height,
+            block_time,
+        );
         let future = self
             .block_producer
             .produce_and_execute_block(height, block_time, source, deadline);
@@ -331,6 +336,7 @@ where
         };
         match block_production.mode {
             Mode::Blocks { number_of_blocks } => {
+                tracing::info!("Manual block production started");
                 for _ in 0..number_of_blocks {
                     self.produce_block(
                         self.next_height(),
@@ -403,31 +409,46 @@ where
         };
 
         // TODO: Dedup
+        tracing::warn!(
+            "Producing block at height {} with time {:?} and hash {}",
+            height,
+            block_time,
+            block.entity.header().id(),
+        );
         // Import the sealed block
-        match storage_changes {
-            StorageChanges::Changes(changes) => {
-                self.block_importer
-                    .commit_result(Uncommitted::new(
-                        ImportResult::new_from_local(block, tx_status, events),
-                        changes,
-                    ))
-                    .await?;
-            }
-            StorageChanges::ChangesList(list) => {
-                for changes in list {
-                    self.block_importer
-                        .commit_result(Uncommitted::new(
-                            ImportResult::new_from_local(
-                                block.clone(),
-                                tx_status.clone(),
-                                events.clone(),
-                            ),
-                            changes,
-                        ))
-                        .await?;
-                }
-            }
-        }
+        self.block_importer
+            .commit_result(Uncommitted::new(
+                ImportResult::new_from_local(block, tx_status, events),
+                storage_changes,
+            ))
+            .await?;
+        // match storage_changes {
+        //     StorageChanges::Changes(changes) => {
+        //         tracing::warn!("Committing changes for block at height {}", height);
+        //         self.block_importer
+        //             .commit_result(Uncommitted::new(
+        //                 ImportResult::new_from_local(block, tx_status, events),
+        //                 changes,
+        //             ))
+        //             .await?;
+        //     }
+        //     StorageChanges::ChangesList(list) => {
+        //         tracing::warn!("committing multiple changes");
+        //         for changes in list {
+        //             tracing::warn!("Committing changes for block at height {}", height);
+        //             self.block_importer
+        //                 .commit_result(Uncommitted::new(
+        //                     ImportResult::new_from_local(
+        //                         block.clone(),
+        //                         tx_status.clone(),
+        //                         events.clone(),
+        //                     ),
+        //                     changes,
+        //                 ))
+        //                 .await?;
+        //         }
+        //     }
+        // }
 
         // Update last block time
         self.last_height = height;
@@ -486,34 +507,40 @@ where
 
         // Dedup
         // Import the sealed block
-        match storage_changes {
-            StorageChanges::Changes(changes) => {
-                self.block_importer
-                    .commit_result(Uncommitted::new(
-                        ImportResult::new_from_local(
-                            sealed_block.clone(),
-                            tx_status,
-                            events,
-                        ),
-                        changes,
-                    ))
-                    .await?;
-            }
-            StorageChanges::ChangesList(list) => {
-                for changes in list {
-                    self.block_importer
-                        .commit_result(Uncommitted::new(
-                            ImportResult::new_from_local(
-                                sealed_block.clone(),
-                                tx_status.clone(),
-                                events.clone(),
-                            ),
-                            changes,
-                        ))
-                        .await?;
-                }
-            }
-        }
+        self.block_importer
+            .commit_result(Uncommitted::new(
+                ImportResult::new_from_local(sealed_block.clone(), tx_status, events),
+                storage_changes,
+            ))
+            .await?;
+        // match storage_changes {
+        //     StorageChanges::Changes(changes) => {
+        //         self.block_importer
+        //             .commit_result(Uncommitted::new(
+        //                 ImportResult::new_from_local(
+        //                     sealed_block.clone(),
+        //                     tx_status,
+        //                     events,
+        //                 ),
+        //                 changes,
+        //             ))
+        //             .await?;
+        //     }
+        //     StorageChanges::ChangesList(list) => {
+        //         for changes in list {
+        //             self.block_importer
+        //                 .commit_result(Uncommitted::new(
+        //                     ImportResult::new_from_local(
+        //                         sealed_block.clone(),
+        //                         tx_status.clone(),
+        //                         events.clone(),
+        //                     ),
+        //                     changes,
+        //                 ))
+        //                 .await?;
+        //         }
+        //     }
+        // }
 
         // Update last block time
         self.last_height = *sealed_block.entity.header().height();
@@ -579,6 +606,7 @@ where
             Some(request) => {
                 match request {
                     Request::ManualBlocks((block, response)) => {
+                        tracing::warn!("Received a request for manual block production");
                         let result = self.produce_manual_blocks(block).await;
                         let _ = response.send(result);
                     }

@@ -41,6 +41,7 @@ use rand::{
 use std::{
     collections::HashMap,
     io,
+    num::NonZeroUsize,
 };
 
 /// Helper for wrapping a currently running node environment
@@ -265,6 +266,10 @@ impl TestSetupBuilder {
             txpool,
             block_production: self.trigger,
             gas_price_config,
+            executor_number_of_cores: NonZeroUsize::try_from(
+                self.number_threads_pool_verif,
+            )
+            .unwrap_or(NonZeroUsize::try_from(1).expect("1 is not 0")),
             ..Config::local_node_with_configs(chain_conf, state)
         };
         config.combined_db_config.database_config = self.database_config;

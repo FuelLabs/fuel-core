@@ -199,6 +199,7 @@ where
         Executor: ports::BlockProducer<TxSource, Deadline = Deadline> + 'static,
         F: Future<Output = anyhow::Result<TxSource>>,
     {
+        tracing::warn!("Producing and executing block at height: {}", height);
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool

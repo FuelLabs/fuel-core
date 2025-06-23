@@ -134,6 +134,11 @@ impl Validator for ParallelExecutorAdapter {
         _block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         // TODO
+        // let mut tx_status = vec![];
+        // for tx in _block.transactions() {
+        //     let status = TransactionStatus::Success()
+        //     tx_status.push(tx.id().into());
+        // }
         let result = ValidationResult {
             tx_status: vec![],
             events: vec![],

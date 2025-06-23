@@ -23,10 +23,7 @@ use fuel_core_poa::{
     },
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::transactional::{
-    Changes,
-    StorageChanges,
-};
+use fuel_core_storage::transactional::StorageChanges;
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_types::BlockHeight,
@@ -101,6 +98,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
     ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         match source {
             TransactionsSource::TxPool => {
+                tracing::warn!("Producing block from txpool at height: {}", height);
                 self.block_producer
                     .produce_and_execute_block_txpool(height, block_time, deadline)
                     .await
@@ -127,7 +125,7 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
 impl BlockImporter for BlockImporterAdapter {
     async fn commit_result(
         &self,
-        result: UncommittedImporterResult<Changes>,
+        result: UncommittedImporterResult<StorageChanges>,
     ) -> anyhow::Result<()> {
         self.block_importer
             .commit_result(result)

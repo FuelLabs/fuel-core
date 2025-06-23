@@ -1,9 +1,6 @@
 #![allow(clippy::let_unit_value)]
 
-use std::{
-    num::NonZeroUsize,
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
@@ -221,9 +218,8 @@ pub fn init_sub_services(
     };
     #[cfg(feature = "parallel-executor")]
     let executor = {
-        // todo: pass this value
         let parallel_executor_config = fuel_core_parallel_executor::config::Config {
-            number_of_cores: NonZeroUsize::try_from(16).unwrap(),
+            number_of_cores: config.executor_number_of_cores,
         };
         ParallelExecutorAdapter::new(
             database.on_chain().clone(),
