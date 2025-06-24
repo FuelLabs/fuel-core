@@ -206,25 +206,43 @@ where
         let transactions = block.transactions();
         let mut memory = MemoryInstance::new();
         let consensus_parameters = {
-            let latest_view = self
-                .storage
-                .latest_view()
-                .map_err(SchedulerError::StorageError)?;
-
-            latest_view
-                .get_consensus_parameters(block.header().consensus_parameters_version())
-                .map_err(SchedulerError::StorageError)?
+            block_storage_tx
+                .storage::<ConsensusParametersVersions>()
+                .get(&block.header().consensus_parameters_version())?
+                .ok_or_else(|| {
+                    SchedulerError::InternalError(
+                        "Consensus parameters not found".to_string(),
+                    )
+                })?
+                .into_owned()
         };
-        let scheduler = Validator::new(self.config.clone());
+        // Initialize block executor
+        let mut executor = BlockExecutor::new(
+            self.relayer.clone(),
+            ExecutionOptions {
+                forbid_unauthorized_inputs: true,
+                forbid_fake_utxo: false,
+                backtrace: false,
+            },
+            consensus_parameters.clone(),
+            NoWaitTxs,
+            validator::NoPreconfirmationSender,
+            true, // dry run
+        )
+        .map_err(|e| {
+            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
+        })?;
+        let validator = Validator::new(self.config.clone(), executor);
 
         let (gas_price, coinbase_contract_id) = transactions.coinbase()?;
 
-        let block_storage_tx = self.process_l1_txs(
+        let (block_storage_tx, event_root) = self.process_l1_txs(
             &mut partial_block,
             coinbase_contract_id,
             &mut data,
             &mut memory,
-            block_storage_tx,
+            block_storage_tx.into_storage(),
+            &mut executor,
         )?;
         let processed_l1_tx_count = partial_block.transactions.len();
 
@@ -235,9 +253,8 @@ where
             gas_price,
         };
 
-        let executed_block_result = self
-            .validator
-            .validate_block(self.relayer.clone(), components, block_storage_tx, block)
+        let executed_block_result = validator
+            .validate_block(components, block_storage_tx, block)
             .await?;
 
         Ok(executed_block_result)

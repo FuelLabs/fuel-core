@@ -24,8 +24,7 @@ use fuel_core_types::{
 };
 use fxhash::FxHashMap;
 
-use super::SchedulerError;
-
+use crate::scheduler::SchedulerError;
 #[derive(Debug, Eq)]
 pub(crate) struct CoinInBatch {
     /// The utxo id

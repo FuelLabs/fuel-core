@@ -8,7 +8,6 @@ use fuel_core_executor::{
     executor::{
         BlockExecutor,
         ExecutionData,
-        ExecutionOptions,
     },
     ports::{
         MaybeCheckedTransaction,
@@ -17,10 +16,8 @@ use fuel_core_executor::{
     },
 };
 use fuel_core_storage::{
-    StorageAsRef,
     column::Column,
     kv_store::KeyValueInspect,
-    tables::ConsensusParametersVersions,
     transactional::{
         Changes,
         ConflictPolicy,
@@ -31,15 +28,11 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::{
         block::PartialFuelBlock,
-        header::{
-            BlockHeader,
-            PartialBlockHeader,
-        },
+        header::PartialBlockHeader,
         primitives::BlockId,
         transaction::TransactionExt,
     },
     fuel_tx::{
-        ConsensusParameters,
         ContractId,
         MessageId,
         Output,
@@ -47,11 +40,7 @@ use fuel_core_types::{
         TxId,
         UtxoId,
     },
-    fuel_types::BlockHeight,
-    fuel_vm::{
-        checked_transaction::IntoChecked,
-        interpreter::MemoryInstance,
-    },
+    fuel_vm::interpreter::MemoryInstance,
     services::{
         block_producer::Components,
         executor::{
@@ -59,7 +48,6 @@ use fuel_core_types::{
             Event,
             TransactionExecutionStatus,
         },
-        relayer,
     },
 };
 use futures::{
@@ -75,13 +63,12 @@ use crate::{
         CoinInBatch,
     },
     config::Config,
-    ports::Storage,
     scheduler::SchedulerError,
     tx_waiter::NoWaitTxs,
 };
 
 #[derive(Clone)]
-struct NoPreconfirmationSender;
+pub struct NoPreconfirmationSender;
 
 impl PreconfirmationSenderPort for NoPreconfirmationSender {
     fn send(
@@ -103,8 +90,9 @@ impl PreconfirmationSenderPort for NoPreconfirmationSender {
     }
 }
 
-pub struct Validator {
+pub struct Validator<R> {
     config: Config,
+    executor: BlockExecutor<R, NoWaitTxs, NoPreconfirmationSender>,
 }
 
 pub struct TransactionExecutionResult {
@@ -133,26 +121,27 @@ pub struct ValidationResult {
     pub skipped_transactions: Vec<(TxId, ExecutionError)>,
 }
 
-impl Validator {
-    pub fn new(config: Config) -> Self {
-        Self { config }
+impl<R> Validator<R> {
+    pub fn new(
+        config: Config,
+        executor: BlockExecutor<R, NoWaitTxs, NoPreconfirmationSender>,
+    ) -> Self {
+        Self { config, executor }
     }
 
-    pub async fn validate_block<S, D, R>(
+    pub async fn validate_block<S, D>(
         &self,
-        relayer: R,
         components: Components<S>,
         block_storage_tx: StorageTransaction<D>,
         block: &fuel_core_types::blockchain::block::Block,
     ) -> Result<ValidationResult, SchedulerError>
     where
-        D: KeyValueInspect<Column = Column> + Storage + Send + Sync + 'static,
+        D: KeyValueInspect<Column = Column> + Send + Sync + 'static,
         S: Iterator<Item = Transaction>,
         R: RelayerPort + Clone + Send + 'static,
     {
-        let executed_block_result = self
-            .recreate_block(relayer, components, block_storage_tx)
-            .await?;
+        let executed_block_result =
+            self.recreate_block(components, block_storage_tx).await?;
 
         // validation 1: ensure that there are no skipped transactions
         if let Some((_, error)) = executed_block_result.skipped_transactions.first() {
@@ -167,40 +156,18 @@ impl Validator {
         Ok(executed_block_result)
     }
 
-    async fn recreate_block<S, D, R>(
+    async fn recreate_block<S, D>(
         &self,
-        relayer: R,
         components: Components<S>,
         block_storage_tx: StorageTransaction<D>,
     ) -> Result<ValidationResult, SchedulerError>
     where
-        D: KeyValueInspect<Column = Column> + Storage + Send + Sync + 'static,
+        D: KeyValueInspect<Column = Column> + Send + Sync + 'static,
         S: Iterator<Item = Transaction>,
         R: RelayerPort + Clone + Send + 'static,
     {
         let mut execution_results = HashMap::new();
-        let consensus_parameters = block_storage_tx
-            .storage::<ConsensusParametersVersions>()
-            .get(&components.consensus_parameters_version())
-            .map_err(|e| SchedulerError::InternalError(e.to_string()))?
-            .ok_or(SchedulerError::ConsensusParametersNotFound(
-                components.consensus_parameters_version(),
-            ))?
-            .into_owned();
-        let executor = BlockExecutor::new(
-            relayer,
-            ExecutionOptions {
-                forbid_fake_coins: false,
-                backtrace: false,
-            },
-            consensus_parameters,
-            NoWaitTxs,
-            NoPreconfirmationSender,
-            true, // dry run
-        )
-        .map_err(|e| {
-            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
-        })?;
+
         let mut highest_id: u16 = 0;
         let storage_tx = Arc::new(block_storage_tx);
         let mut workers_running = 0;
@@ -233,7 +200,6 @@ impl Validator {
                         .with_changes(changes);
                     // If a transaction is ready to be executed, spawn a new task
                     self.spawn_execution_task(
-                        executor.clone(),
                         components.header_to_produce.clone(),
                         components.gas_price,
                         components.coinbase_recipient,
@@ -334,9 +300,8 @@ impl Validator {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn spawn_execution_task<D, R>(
+    fn spawn_execution_task<D>(
         &self,
-        executor: BlockExecutor<R, NoWaitTxs, NoPreconfirmationSender>,
         header_to_produce: PartialBlockHeader,
         gas_price: u64,
         coinbase_recipient: ContractId,
@@ -349,6 +314,7 @@ impl Validator {
         D: KeyValueInspect<Column = Column> + Send + Sync + 'static,
         R: RelayerPort + Clone + Send + 'static,
     {
+        let executor = self.executor.clone();
         // Spawn a new task to execute the transaction
         tokio::spawn(async move {
             let mut execution_data = ExecutionData {
@@ -393,25 +359,6 @@ impl Validator {
                 coins_used,
                 coins_created,
             })
-        })
-    }
-
-    pub fn create_executor(
-        &self,
-    ) -> Result<BlockExecutor<R, NoWaitTxs, PreconfirmationSender>, SchedulerError> {
-        BlockExecutor::new(
-            self.relayer.clone(),
-            ExecutionOptions {
-                forbid_fake_coins: false,
-                backtrace: false,
-            },
-            self.consensus_parameters.clone(),
-            NoWaitTxs,
-            NoPreconfirmationSender,
-            true, // dry run
-        )
-        .map_err(|e| {
-            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
         })
     }
 }
