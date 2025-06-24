@@ -266,11 +266,10 @@ impl<R> Validator<R> {
             if let Some(result) = execution_results.remove(&tx_idx) {
                 coin_dependency_verifier
                     .register_coins_created(tx_idx as usize, result.coins_created);
-                // TODO: Fix this
                 coin_dependency_verifier.verify_coins_used(
                     tx_idx as usize,
                     result.coins_used.iter(),
-                    &block_storage_tx,
+                    &storage_tx.clone(),
                 )?;
                 validation_result.tx_status.push(result.status);
                 validation_result.events.extend(result.events);

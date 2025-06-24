@@ -194,72 +194,6 @@ where
         )
     }
 
-    async fn validate_block(
-        mut self,
-        block: &Block,
-        block_storage_tx: StorageTransaction<View>,
-    ) -> Result<validator::ValidationResult, SchedulerError> {
-        let mut data = ExecutionData::new();
-
-        let partial_header = PartialBlockHeader::from(block.header());
-        let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
-        let transactions = block.transactions();
-        let mut memory = MemoryInstance::new();
-        let consensus_parameters = {
-            block_storage_tx
-                .storage::<ConsensusParametersVersions>()
-                .get(&block.header().consensus_parameters_version())?
-                .ok_or_else(|| {
-                    SchedulerError::InternalError(
-                        "Consensus parameters not found".to_string(),
-                    )
-                })?
-                .into_owned()
-        };
-        // Initialize block executor
-        let mut executor = BlockExecutor::new(
-            self.relayer.clone(),
-            ExecutionOptions {
-                forbid_unauthorized_inputs: true,
-                forbid_fake_utxo: false,
-                backtrace: false,
-            },
-            consensus_parameters.clone(),
-            NoWaitTxs,
-            validator::NoPreconfirmationSender,
-            true, // dry run
-        )
-        .map_err(|e| {
-            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
-        })?;
-        let validator = Validator::new(self.config.clone(), executor);
-
-        let (gas_price, coinbase_contract_id) = transactions.coinbase()?;
-
-        let (block_storage_tx, event_root) = self.process_l1_txs(
-            &mut partial_block,
-            coinbase_contract_id,
-            &mut data,
-            &mut memory,
-            block_storage_tx.into_storage(),
-            &mut executor,
-        )?;
-        let processed_l1_tx_count = partial_block.transactions.len();
-
-        let components = Components {
-            header_to_produce: partial_block.header,
-            transactions_source: transactions.iter().cloned().skip(processed_l1_tx_count),
-            coinbase_recipient: coinbase_contract_id,
-            gas_price,
-        };
-
-        let executed_block_result = validator
-            .validate_block(components, block_storage_tx, block)
-            .await?;
-
-        Ok(executed_block_result)
-    }
-
     /// Process DA changes if the DA height has changed
     async fn process_da_if_needed(
         &mut self,
@@ -274,20 +208,28 @@ where
             return Ok(Default::default());
         };
 
-        let prev_block = structured_storage
+        let prev_da = structured_storage
             .storage::<FuelBlocks>()
             .get(&prev_height)?
             .ok_or_else(|| {
                 SchedulerError::InternalError("Previous block not found".to_string())
-            })?;
+            })?
+            .header()
+            .da_height();
 
-        if prev_block.header().da_height() != components.header_to_produce.da_height {
-            let (storage_tx, event_inbox_root) = self.process_l1_txs(
+        let mut storage_tx = StorageTransaction::transaction(
+            structured_storage.into_storage(),
+            ConflictPolicy::Fail,
+            Default::default(),
+        );
+
+        if prev_da != components.header_to_produce.da_height {
+            let event_inbox_root = self.process_l1_txs(
                 partial_block,
                 components.coinbase_recipient,
                 execution_data,
                 memory,
-                structured_storage.into_storage(),
+                &mut storage_tx,
                 executor,
             )?;
             Ok((storage_tx.into_changes(), event_inbox_root))
@@ -303,24 +245,18 @@ where
         coinbase_contract_id: ContractId,
         execution_data: &mut ExecutionData,
         memory: &mut MemoryInstance,
-        view: View,
+        storage_tx: &mut StorageTransaction<View>,
         executor: &mut BlockExecutor<R, NoWaitTxs, P>,
-    ) -> Result<(StorageTransaction<View>, Bytes32), SchedulerError> {
-        let mut storage_tx = StorageTransaction::transaction(
-            view,
-            ConflictPolicy::Fail,
-            Default::default(),
-        );
-
+    ) -> Result<Bytes32, SchedulerError> {
         executor.process_l1_txs(
             partial_block,
             coinbase_contract_id,
-            &mut storage_tx,
+            storage_tx,
             execution_data,
             memory,
         )?;
 
-        Ok((storage_tx, execution_data.event_inbox_root))
+        Ok(execution_data.event_inbox_root)
     }
 
     /// Run the parallel executor for L2 transactions
@@ -493,5 +429,78 @@ where
         _utxo_validation: Option<bool>,
     ) -> ExecutorResult<Vec<TransactionExecutionStatus>> {
         unimplemented!("Dry run not implemented yet");
+    }
+}
+
+impl<S, R, View> Executor<S, R, validator::NoPreconfirmationSender>
+where
+    R: RelayerPort + Clone + Send + 'static,
+    S: AtomicView<LatestView = View> + Clone + Send + 'static,
+    View: KeyValueInspect<Column = Column> + Send + Sync + 'static,
+{
+    async fn validate_block(
+        mut self,
+        block: &Block,
+        mut block_storage_tx: StorageTransaction<View>,
+    ) -> Result<validator::ValidationResult, SchedulerError> {
+        let mut data = ExecutionData::new();
+
+        let partial_header = PartialBlockHeader::from(block.header());
+        let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
+        let transactions = block.transactions();
+        let mut memory = MemoryInstance::new();
+        let consensus_parameters = {
+            block_storage_tx
+                .storage::<ConsensusParametersVersions>()
+                .get(&block.header().consensus_parameters_version())?
+                .ok_or_else(|| {
+                    SchedulerError::InternalError(
+                        "Consensus parameters not found".to_string(),
+                    )
+                })?
+                .into_owned()
+        };
+        // Initialize block executor
+        let mut executor = BlockExecutor::new(
+            self.relayer.clone(),
+            ExecutionOptions {
+                forbid_unauthorized_inputs: true,
+                forbid_fake_utxo: false,
+                backtrace: false,
+            },
+            consensus_parameters.clone(),
+            NoWaitTxs,
+            validator::NoPreconfirmationSender,
+            true, // dry run
+        )
+        .map_err(|e| {
+            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
+        })?;
+        let validator = Validator::new(self.config.clone(), executor.clone());
+
+        let (gas_price, coinbase_contract_id) = transactions.coinbase()?;
+
+        let _event_root = self.process_l1_txs(
+            &mut partial_block,
+            coinbase_contract_id,
+            &mut data,
+            &mut memory,
+            &mut block_storage_tx,
+            &mut executor,
+        )?;
+        let processed_l1_tx_count = partial_block.transactions.len();
+
+        let components = Components {
+            header_to_produce: partial_block.header,
+            transactions_source: transactions.iter().cloned().skip(processed_l1_tx_count),
+            coinbase_recipient: coinbase_contract_id,
+            gas_price,
+        };
+
+        let executed_block_result = validator
+            .validate_block(components, block_storage_tx, block)
+            .await?;
+
+        Ok(executed_block_result)
     }
 }
