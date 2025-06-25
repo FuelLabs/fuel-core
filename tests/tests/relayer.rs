@@ -1,3 +1,4 @@
+use clap::Parser;
 use ethers::{
     providers::Middleware,
     types::{
@@ -7,9 +8,10 @@ use ethers::{
     },
 };
 use fuel_core::{
-    coins_query::{
-        CoinsQueryError,
-        CoinsQueryError::InsufficientCoins,
+    chain_config::Randomize,
+    coins_query::CoinsQueryError::{
+        self,
+        InsufficientCoins,
     },
     combined_database::CombinedDatabase,
     database::Database,
@@ -19,7 +21,13 @@ use fuel_core::{
         Config,
         FuelService,
     },
-    state::rocks_db::DatabaseConfig,
+    state::{
+        historical_rocksdb::StateRewindPolicy,
+        rocks_db::{
+            ColumnsPolicy,
+            DatabaseConfig,
+        },
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
@@ -34,10 +42,13 @@ use fuel_core_client::client::{
     },
 };
 use fuel_core_poa::service::Mode;
-use fuel_core_relayer::test_helpers::{
-    EvtToLog,
-    LogTestHelper,
-    middleware::MockMiddleware,
+use fuel_core_relayer::{
+    ports::Transactional,
+    test_helpers::{
+        EvtToLog,
+        LogTestHelper,
+        middleware::MockMiddleware,
+    },
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -66,6 +77,7 @@ use hyper::{
     },
 };
 use rand::{
+    Rng,
     SeedableRng,
     prelude::StdRng,
 };
@@ -79,6 +91,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use tempfile::TempDir;
 use test_helpers::{
     assemble_tx::{
         AssembleAndRunTx,
@@ -86,6 +99,7 @@ use test_helpers::{
     },
     config_with_fee,
     default_signing_wallet,
+    fuel_core_driver::FuelCoreDriver,
 };
 use tokio::sync::oneshot::Sender;
 
@@ -703,6 +717,112 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
 
     srv.send_stop_signal_and_await_shutdown().await.unwrap();
     eth_node_handle.shutdown.send(()).unwrap();
+}
+
+#[tokio::test]
+async fn relayer_db_can_be_rewinded() {
+    // Given
+    let rollback_target_height = 0;
+    let num_da_blocks = 10;
+    let mut rng = StdRng::seed_from_u64(1234);
+    let mut config = config_with_fee();
+    config.relayer = Some(relayer::Config::default());
+    let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
+    let eth_node = MockMiddleware::default();
+    let contract_address = relayer_config.eth_v2_listening_contracts[0];
+
+    let logs: Vec<_> = (1..=num_da_blocks)
+        .map(|block_height| {
+            make_message_event(
+                Nonce::randomize(&mut rng),
+                block_height,
+                contract_address,
+                Some(rng.r#gen()),
+                Some(rng.r#gen()),
+                Some(rng.r#gen()),
+                None,
+                0,
+            )
+        })
+        .collect();
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    eth_node.update_data(|data| data.best_block.number = Some(num_da_blocks.into()));
+
+    let eth_node_handle = spawn_eth_node(Arc::new(eth_node)).await;
+
+    let relayer_url = format!("http://{}", eth_node_handle.address);
+
+    let tmp_dir = TempDir::new().unwrap();
+    let open_db = |tmp_dir: &TempDir| {
+        CombinedDatabase::open(
+            tmp_dir.path(),
+            StateRewindPolicy::RewindFullRange,
+            DatabaseConfig {
+                cache_capacity: Some(16 * 1024 * 1024 * 1024),
+                max_fds: -1,
+                columns_policy: ColumnsPolicy::Lazy,
+            },
+        )
+        .expect("Failed to create database")
+    };
+
+    let driver = FuelCoreDriver::spawn_feeless_with_directory(
+        tmp_dir,
+        &[
+            "--debug",
+            "--poa-instant",
+            "true",
+            "--state-rewind-duration",
+            "7d",
+            "--enable-relayer",
+            "--relayer",
+            &relayer_url,
+        ],
+    )
+    .await
+    .unwrap();
+    let srv = &driver.node;
+
+    let client = FuelClient::from(srv.bound_address);
+
+    srv.await_relayer_synced().await.unwrap();
+    client.produce_blocks(1, None).await.unwrap();
+
+    srv.send_stop_signal_and_await_shutdown().await.unwrap();
+    eth_node_handle.shutdown.send(()).unwrap();
+
+    // When
+    let tmp_dir = driver.kill().await;
+
+    let db = open_db(&tmp_dir);
+    let relayer_block_height_before_rollback = db.relayer().latest_da_height();
+    db.shutdown();
+
+    let target_block_height = rollback_target_height.to_string();
+    let target_da_block_height = rollback_target_height.to_string();
+    let args = [
+        "_IGNORED_",
+        "--db-path",
+        tmp_dir.path().to_str().unwrap(),
+        "--target-block-height",
+        target_block_height.as_str(),
+        "--target-da-block-height",
+        target_da_block_height.as_str(),
+    ];
+
+    let command = fuel_core_bin::cli::rollback::Command::parse_from(args);
+    fuel_core_bin::cli::rollback::exec(command).await.unwrap();
+
+    let db = open_db(&tmp_dir);
+    let relayer_block_height_after_rollback =
+        db.relayer().latest_height_from_metadata().unwrap();
+
+    // Then
+    assert_eq!(
+        relayer_block_height_before_rollback.unwrap().as_u64(),
+        num_da_blocks
+    );
+    assert!(relayer_block_height_after_rollback.is_none());
 }
 
 fn setup_messages(
