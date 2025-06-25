@@ -221,6 +221,11 @@ impl PoolTransaction {
             self.max_gas_inner()
         }
     }
+
+    /// Returns true if the transaction is a blob.
+    pub fn is_blob(&self) -> bool {
+        matches!(self, PoolTransaction::Blob(_, _))
+    }
 }
 
 #[allow(missing_docs)]
