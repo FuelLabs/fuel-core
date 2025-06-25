@@ -42,7 +42,7 @@ pub struct Command {
 
     /// The path to the database.
     #[clap(long = "target-block-height")]
-    pub target_block_height: u32,
+    pub target_block_height: Option<u32>,
 
     /// The path to the database.
     #[clap(long = "target-da-block-height")]
@@ -72,9 +72,9 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     .context(format!("failed to open combined database at path {path:?}"))?;
 
     let mut shutdown_listener = ShutdownListener::spawn();
-    let target_block_height = command.target_block_height.into();
-
-    db.rollback_to(target_block_height, &mut shutdown_listener)?;
+    if let Some(target_block_height) = command.target_block_height {
+        db.rollback_to(target_block_height.into(), &mut shutdown_listener)?;
+    }
 
     if let Some(target_da_height) = command.target_da_block_height {
         db.rollback_relayer_to(target_da_height.into(), &mut shutdown_listener)?;
