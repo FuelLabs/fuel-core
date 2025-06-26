@@ -910,7 +910,6 @@ where
                 )));
             }
         }
-        exec_result.header = partial_block_header;
         storage_changes.extend(self.contracts_changes.extract_all_contracts_changes());
         exec_result.changes = StorageChanges::ChangesList(storage_changes);
         Ok(exec_result)
