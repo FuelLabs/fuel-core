@@ -1132,11 +1132,12 @@ fn prepare_transactions_batch(
         let is_blob = matches!(&tx, CheckedTransaction::Blob(_));
         prepared_batch.total_size += tx.size() as u64;
         prepared_batch.number_of_transactions += 1;
+        let max_gas = CheckedTransactionExt::max_gas(&tx)?;
         if is_blob {
-            prepared_batch.blob_gas += CheckedTransactionExt::max_gas(&tx)?;
+            prepared_batch.blob_gas += max_gas;
             prepared_batch.blob_transactions.push(tx);
         } else {
-            prepared_batch.gas += CheckedTransactionExt::max_gas(&tx)?;
+            prepared_batch.gas += max_gas;
             prepared_batch.transactions.push(tx);
         }
     }
