@@ -137,7 +137,7 @@ where
             consensus_parameters.clone(),
             NoWaitTxs,
             self.preconfirmation_sender.clone(),
-            true, // dry run
+            false, // not dry run
         )
         .map_err(|e| {
             SchedulerError::InternalError(format!("Failed to create executor: {e}"))

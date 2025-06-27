@@ -75,7 +75,6 @@ use fuel_core_types::{
         TxId,
         UtxoId,
     },
-    fuel_types::BlockHeight,
     fuel_vm::{
         checked_transaction::{
             CheckedTransaction,
@@ -391,7 +390,8 @@ where
 
         let consensus_parameters_version =
             components.header_to_produce.consensus_parameters_version;
-        let block_height = *components.header_to_produce.height();
+        let coinbase_recipient = components.coinbase_recipient;
+        let gas_price = components.gas_price;
 
         let new_tx_notifier = components
             .transactions_source
@@ -458,7 +458,7 @@ where
                             Ok(res) => {
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
-                                    self.sequential_fallback(block_height, res.worker_id, res.memory_instance, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
+                                    self.sequential_fallback(components.header_to_produce.clone(), coinbase_recipient, gas_price, res.worker_id, res.memory_instance, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
@@ -478,8 +478,13 @@ where
             }
         }
 
-        self.wait_all_execution_tasks(block_height, self.maximum_time_per_block)
-            .await?;
+        self.wait_all_execution_tasks(
+            components.header_to_produce,
+            coinbase_recipient,
+            gas_price,
+            self.maximum_time_per_block,
+        )
+        .await?;
 
         let mut res = self.verify_coherency_and_merge_results(
             nb_batch_created,
@@ -773,7 +778,9 @@ where
 
     async fn wait_all_execution_tasks(
         &mut self,
-        block_height: BlockHeight,
+        partial_block_header: PartialBlockHeader,
+        coinbase_recipient: ContractId,
+        gas_price: u64,
         total_execution_time: Duration,
     ) -> Result<(), SchedulerError> {
         let tolerance_execution_time_overflow = total_execution_time / 10;
@@ -787,7 +794,9 @@ where
                     let res = res?;
                     if !res.skipped_tx.is_empty() {
                         self.sequential_fallback(
-                            block_height,
+                            partial_block_header.clone(),
+                            coinbase_recipient,
+                            gas_price,
                             res.worker_id,
                             res.memory_instance,
                             res.batch_id,
@@ -964,7 +973,9 @@ where
     #[allow(clippy::too_many_arguments)]
     async fn sequential_fallback(
         &mut self,
-        block_height: BlockHeight,
+        header: PartialBlockHeader,
+        coinbase_recipient: ContractId,
+        gas_price: u64,
         worker_id: usize,
         memory_instance: MemoryInstance,
         batch_id: usize,
@@ -974,6 +985,7 @@ where
     ) -> Result<(), SchedulerError> {
         self.current_available_workers
             .push_back((worker_id, memory_instance));
+        let block_height = *header.height();
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
@@ -1053,10 +1065,10 @@ where
         let (transactions, execution_data) = executor
             .execute_l2_transactions(
                 Components {
-                    header_to_produce: PartialBlockHeader::default(),
+                    header_to_produce: header,
                     transactions_source: OnceTransactionsSource::new(all_txs, 0),
-                    coinbase_recipient: Default::default(),
-                    gas_price: Default::default(),
+                    coinbase_recipient,
+                    gas_price,
                 },
                 self.storage.latest_view().unwrap().write_transaction(),
                 0,
