@@ -61,12 +61,6 @@ use fuel_core_types::{
 };
 use std::time::Duration;
 
-#[cfg(feature = "wasm-executor")]
-use fuel_core_upgradable_executor::error::UpgradableError;
-
-#[cfg(feature = "wasm-executor")]
-use fuel_core_types::fuel_merkle::common::Bytes32 as MerkleBytes32;
-
 pub struct Executor<S, R, P> {
     config: Config,
     relayer: R,
@@ -347,7 +341,9 @@ where
             coinbase,
         } = scheduler_res;
 
-        let tx_count = transactions.len() as u16;
+        let tx_count = u16::try_from(transactions.len()).map_err(|_| {
+            SchedulerError::InternalError("Too many transactions".to_string())
+        })?;
 
         let mut partial_block = PartialFuelBlock {
             header,
@@ -400,14 +396,6 @@ where
         _block: &Block,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         unimplemented!("Parallel validation not implemented yet");
-    }
-
-    #[cfg(feature = "wasm-executor")]
-    pub fn validate_uploaded_wasm(
-        &self,
-        _wasm_root: &MerkleBytes32,
-    ) -> Result<(), UpgradableError> {
-        unimplemented!("WASM validation not implemented yet");
     }
 
     pub fn dry_run(

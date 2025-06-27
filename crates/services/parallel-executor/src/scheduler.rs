@@ -397,7 +397,9 @@ where
             .transactions_source
             .get_new_transactions_notifier();
         let now = tokio::time::Instant::now();
-        let deadline = now + self.maximum_time_per_block;
+        let deadline = now.checked_add(self.maximum_time_per_block).ok_or(
+            SchedulerError::InternalError("Maximum time per block overflow".to_string()),
+        )?;
         let mut nb_batch_created = 0;
         let mut nb_transactions = 0;
         let initial_gas_per_worker = self
@@ -437,8 +439,12 @@ where
                     storage_with_da.clone(),
                 )?;
 
-                nb_batch_created += 1;
-                nb_transactions += batch_len;
+                nb_batch_created = nb_batch_created.saturating_add(1);
+                nb_transactions = nb_transactions.checked_add(batch_len).ok_or(
+                    SchedulerError::InternalError(
+                        "Transaction count overflow".to_string(),
+                    ),
+                )?;
             } else if self.current_execution_tasks.is_empty() {
                 tokio::select! {
                     _ = new_tx_notifier.notified() => {
@@ -458,7 +464,7 @@ where
                             Ok(res) => {
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
-                                    self.sequential_fallback(components.header_to_produce.clone(), coinbase_recipient, gas_price, res.worker_id, res.memory_instance, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
+                                    self.sequential_fallback(components.header_to_produce, coinbase_recipient, gas_price, res.worker_id, res.memory_instance, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
@@ -568,20 +574,26 @@ where
     ) -> Result<PreparedBatch, SchedulerError> {
         let spent_time = start_execution_time.elapsed();
         // Time left in percentage to have the gas percentage left
-        // TODO: Maybe avoid as u64
-        let current_gas = std::cmp::min(
-            (initial_gas
+        let current_gas = u64::try_from(std::cmp::min(
+            ((initial_gas as u128)
                 .saturating_mul(
-                    (total_execution_time.as_millis() as u64)
-                        .saturating_sub(spent_time.as_millis() as u64),
+                    (total_execution_time.as_millis())
+                        .saturating_sub(spent_time.as_millis()),
                 )
-                .saturating_div(total_execution_time.as_millis() as u64))
-            .saturating_sub(self.blob_gas),
+                .checked_div(total_execution_time.as_millis()))
+            .expect(
+                "Total execution time cannot be zero as it's the block execution time",
+            )
+            .saturating_sub(self.blob_gas as u128),
             // TODO: avoid always divide because if there is only one worker left he can use it all
-            self.gas_left
-                .saturating_div(self.config.number_of_cores.get() as u64)
-                .saturating_sub(self.blob_gas),
-        );
+            (self.gas_left as u128)
+                .checked_div(self.config.number_of_cores.get() as u128)
+                .expect("Number of cores cannot be zero as it's a NonZeroUsize")
+                .saturating_sub(self.blob_gas as u128),
+        ))
+        .map_err(|_| {
+            SchedulerError::InternalError("Current gas overflowed u64".to_string())
+        })?;
 
         let executable_transactions = tx_source.get_executable_transactions(
             current_gas,
@@ -783,7 +795,8 @@ where
         gas_price: u64,
         total_execution_time: Duration,
     ) -> Result<(), SchedulerError> {
-        let tolerance_execution_time_overflow = total_execution_time / 10;
+        let tolerance_execution_time_overflow =
+            total_execution_time.checked_div(10).unwrap_or_default();
         let now = tokio::time::Instant::now();
 
         // We have reached the deadline
@@ -794,7 +807,7 @@ where
                     let res = res?;
                     if !res.skipped_tx.is_empty() {
                         self.sequential_fallback(
-                            partial_block_header.clone(),
+                            partial_block_header,
                             coinbase_recipient,
                             gas_price,
                             res.worker_id,
@@ -1142,14 +1155,16 @@ fn prepare_transactions_batch(
         }
 
         let is_blob = matches!(&tx, CheckedTransaction::Blob(_));
-        prepared_batch.total_size += tx.size() as u64;
-        prepared_batch.number_of_transactions += 1;
+        prepared_batch.total_size =
+            prepared_batch.total_size.saturating_add(tx.size() as u64);
+        prepared_batch.number_of_transactions =
+            prepared_batch.number_of_transactions.saturating_add(1);
         let max_gas = CheckedTransactionExt::max_gas(&tx)?;
         if is_blob {
-            prepared_batch.blob_gas += max_gas;
+            prepared_batch.blob_gas = prepared_batch.blob_gas.saturating_add(max_gas);
             prepared_batch.blob_transactions.push(tx);
         } else {
-            prepared_batch.gas += max_gas;
+            prepared_batch.gas = prepared_batch.gas.saturating_add(max_gas);
             prepared_batch.transactions.push(tx);
         }
     }
@@ -1169,7 +1184,11 @@ fn get_coins_outputs<'a>(
                     asset_id,
                 } => {
                     coins.push(CoinInBatch::from_output(
-                        UtxoId::new(tx_id, output_idx as u16),
+                        UtxoId::new(
+                            tx_id,
+                            u16::try_from(output_idx)
+                                .expect("Output index should fit in u16"),
+                        ),
                         idx,
                         tx_id,
                         *to,
@@ -1183,7 +1202,11 @@ fn get_coins_outputs<'a>(
                     asset_id,
                 } => {
                     coins.push(CoinInBatch::from_output(
-                        UtxoId::new(tx_id, output_idx as u16),
+                        UtxoId::new(
+                            tx_id,
+                            u16::try_from(output_idx)
+                                .expect("Output index should fit in u16"),
+                        ),
                         idx,
                         tx_id,
                         *to,
@@ -1197,7 +1220,11 @@ fn get_coins_outputs<'a>(
                     asset_id,
                 } => {
                     coins.push(CoinInBatch::from_output(
-                        UtxoId::new(tx_id, output_idx as u16),
+                        UtxoId::new(
+                            tx_id,
+                            u16::try_from(output_idx)
+                                .expect("Output index should fit in u16"),
+                        ),
                         idx,
                         tx_id,
                         *to,

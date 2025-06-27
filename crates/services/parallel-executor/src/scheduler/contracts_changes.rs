@@ -20,7 +20,7 @@ impl ContractsChanges {
 
     pub fn add_changes(&mut self, contract_ids: &[ContractId], changes: Changes) {
         let index = self.latest_index;
-        self.latest_index += 1;
+        self.latest_index = self.latest_index.saturating_add(1);
         for contract_id in contract_ids {
             self.contracts_changes.insert(*contract_id, index);
         }

@@ -32,7 +32,7 @@ impl Iterator for ContractColumnsIterator {
 
         if self.index < columns.len() {
             let column = columns[self.index];
-            self.index += 1;
+            self.index = self.index.saturating_add(1);
             Some(column)
         } else {
             None
