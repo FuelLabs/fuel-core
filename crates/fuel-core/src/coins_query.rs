@@ -292,12 +292,19 @@ pub async fn select_coins_to_spend(
     let big_coins_stream = futures::stream::iter(big_coins_iter).yield_each(batch_size);
     let dust_coins_stream = futures::stream::iter(dust_coins_iter).yield_each(batch_size);
 
-    let (selected_big_coins_total, selected_big_coins) =
+    let (selected_big_coins_total, selected_big_coins, has_more_big_coins) =
         big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
-    if selected_big_coins_total == 0
-        || (selected_big_coins_total < total && !allow_partial)
+    if selected_big_coins_total == 0 || (selected_big_coins_total < total && !allow_partial)
     {
+        if selected_big_coins.len() >= max as usize && has_more_big_coins {
+          return Err(CoinsQueryError::MaxCoinsReached {
+              asset_id: *asset_id,
+              collected_amount: selected_big_coins_total,
+              max,
+          })
+        }
+
         return Err(CoinsQueryError::InsufficientCoins {
             asset_id: *asset_id,
             collected_amount: selected_big_coins_total,
@@ -325,7 +332,7 @@ pub async fn select_coins_to_spend(
 
     let max_dust_count =
         max_dust_count(max, number_of_big_coins, DUST_TO_BIG_COINS_FACTOR);
-    let (dust_coins_total, selected_dust_coins) = dust_coins(
+    let (dust_coins_total, selected_dust_coins, _has_more_dust_coins) = dust_coins(
         dust_coins_stream,
         last_selected_big_coin,
         max_dust_count,
@@ -344,7 +351,7 @@ async fn big_coins(
     total: u128,
     max: u16,
     exclude: &Exclude,
-) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError> {
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>, bool), CoinsQueryError> {
     select_coins_until(big_coins_stream, max, exclude, |_, total_so_far| {
         total_so_far >= total
     })
@@ -356,7 +363,7 @@ async fn dust_coins(
     last_big_coin: &CoinsToSpendIndexKey,
     max_dust_count: u16,
     exclude: &Exclude,
-) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError> {
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>, bool), CoinsQueryError> {
     select_coins_until(dust_coins_stream, max_dust_count, exclude, |coin, _| {
         coin == last_big_coin
     })
@@ -368,16 +375,18 @@ async fn select_coins_until<Pred>(
     max: u16,
     exclude: &Exclude,
     predicate: Pred,
-) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError>
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>, bool), CoinsQueryError>
 where
     Pred: Fn(&CoinsToSpendIndexKey, u128) -> bool,
 {
     let mut coins_total_value: u128 = 0;
     let mut coins = Vec::with_capacity(max as usize);
+    let mut has_more_coins = false;
     while let Some(coin) = coins_stream.next().await {
         let coin = coin?;
         if !is_excluded(&coin, exclude) {
             if coins.len() >= max as usize || predicate(&coin, coins_total_value) {
+                has_more_coins = true;
                 break;
             }
             let amount = coin.amount() as u128;
@@ -385,7 +394,7 @@ where
             coins.push(coin);
         }
     }
-    Ok((coins_total_value, coins))
+    Ok((coins_total_value, coins, has_more_coins))
 }
 
 fn is_excluded(key: &CoinsToSpendIndexKey, exclude: &Exclude) -> bool {
@@ -1144,6 +1153,7 @@ mod tests {
     }
 
     mod indexed_coins_to_spend {
+        use super::*;
         use fuel_core_storage::iter::IntoBoxedIter;
         use fuel_core_types::{
             entities::coins::{
@@ -1533,9 +1543,58 @@ mod tests {
             const EXPECTED_COLLECTED_AMOUNT: u128 = 10 + 9 + 8; // Because MAX == 3
 
             // Then
-            assert!(matches!(result, Err(actual_error)
-                if CoinsQueryError::InsufficientCoins { asset_id, collected_amount: EXPECTED_COLLECTED_AMOUNT,
-                } == actual_error));
+            assert_matches!(
+              result,
+              Err(CoinsQueryError::MaxCoinsReached {
+                asset_id: _,
+                collected_amount: EXPECTED_COLLECTED_AMOUNT,
+                max: MAX,
+              })
+            );
+        }
+
+        #[tokio::test]
+        async fn selection_algorithm_should_bail_on_insufficient_funds() {
+            // Given
+            const MAX: u16 = 3;
+            const TOTAL: u128 = 28;
+
+            let coins = setup_test_coins([10, 9, 8]);
+            let (coins, _): (Vec<_>, Vec<_>) = coins
+                .into_iter()
+                .map(|spec| (spec.index_entry, spec.utxo_id))
+                .unzip();
+
+            let exclude = Exclude::default();
+
+            let coins_to_spend_iter = CoinsToSpendIndexIter {
+                big_coins_iter: coins.into_iter().into_boxed(),
+                dust_coins_iter: std::iter::empty().into_boxed(),
+            };
+
+            let asset_id = AssetId::default();
+
+            let result = select_coins_to_spend(
+                coins_to_spend_iter,
+                TOTAL,
+                MAX,
+                &asset_id,
+                false,
+                &exclude,
+                BATCH_SIZE,
+            )
+            .await;
+
+            const EXPECTED_COLLECTED_AMOUNT: u128 = 10 + 9 + 8; // Because MAX == 3
+
+            // Then
+            assert_matches!(
+              result,
+              Err(CoinsQueryError::InsufficientCoins {
+                asset_id: _,
+                collected_amount: EXPECTED_COLLECTED_AMOUNT
+              })
+            );
         }
 
         mod allow_partial {

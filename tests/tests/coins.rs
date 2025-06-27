@@ -291,9 +291,10 @@ mod coin {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoins {
+            CoinsQueryError::MaxCoinsReached {
                 asset_id: asset_id_a,
                 collected_amount: 250,
+                max: MAX,
             }
             .to_str_error_string()
         );
@@ -498,9 +499,10 @@ mod message_coin {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoins {
+            CoinsQueryError::MaxCoinsReached {
                 asset_id: base_asset_id,
                 collected_amount: 250,
+                max: MAX,
             }
             .to_str_error_string()
         );
@@ -721,9 +723,10 @@ mod all_coins {
         assert!(coins_per_asset.is_err());
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
-            CoinsQueryError::InsufficientCoins {
+            CoinsQueryError::MaxCoinsReached {
                 asset_id: asset_id_a,
                 collected_amount: 250,
+                max: MAX
             }
             .to_str_error_string()
         );
