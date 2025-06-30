@@ -44,6 +44,6 @@ impl WorkerPool {
 
     pub fn return_worker(&self) {
         let mut workers = self.workers.lock();
-        *workers += 1;
+        *workers = (*workers).saturating_add(1);
     }
 }
