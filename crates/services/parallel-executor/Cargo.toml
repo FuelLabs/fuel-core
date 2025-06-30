@@ -20,6 +20,7 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
 futures = { workspace = true, features = ["std"] }
 fxhash = { version = "0.2.1", default-features = false }
+parking_lot = { workspace = true }
 tokio = { workspace = true, features = [
   "rt-multi-thread",
   "macros",

@@ -1,5 +1,6 @@
 use crate::{
     config::Config,
+    memory::MemoryPool,
     ports::TransactionsSource,
     scheduler::{
         Scheduler,
@@ -66,7 +67,7 @@ pub struct Executor<S, R, P> {
     relayer: R,
     storage: S,
     preconfirmation_sender: P,
-    memory_pool: Option<Vec<MemoryInstance>>,
+    memory_pool: MemoryPool,
 }
 
 impl<S, R, P> Executor<S, R, P> {
@@ -77,7 +78,7 @@ impl<S, R, P> Executor<S, R, P> {
         config: Config,
     ) -> Self {
         Self {
-            memory_pool: Some(vec![MemoryInstance::new(); config.number_of_cores.get()]),
+            memory_pool: MemoryPool::new(),
             config,
             relayer,
             storage: storage_view_provider,
@@ -150,12 +151,7 @@ where
             .await?;
 
         // Run parallel scheduler for L2 transactions
-        let memory_pool =
-            self.memory_pool
-                .take()
-                .ok_or(SchedulerError::InternalError(
-                    "Memory pool is not initialized".to_string(),
-                ))?;
+        let memory_pool = self.memory_pool.clone();
         let scheduler_result = self
             .run_scheduler(
                 &mut components,
@@ -248,7 +244,7 @@ where
         da_changes: Changes,
         execution_data: ExecutionData,
         executor: BlockExecutor<R, NoWaitTxs, P>,
-        memory_pool: Vec<MemoryInstance>,
+        memory_pool: MemoryPool,
         consensus_parameters: ConsensusParameters,
         maximum_execution_time: Duration,
     ) -> Result<SchedulerExecutionResult, SchedulerError>
@@ -264,12 +260,10 @@ where
             maximum_execution_time,
         )?;
 
-        let (res, memory_instance) = scheduler
+        let res = scheduler
             .run(components, da_changes, execution_data.into())
             .await?;
 
-        // Restore memory pool to be re-used
-        self.memory_pool = Some(memory_instance);
         Ok(res)
     }
 

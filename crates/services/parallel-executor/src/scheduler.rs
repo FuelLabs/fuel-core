@@ -80,7 +80,6 @@ use fuel_core_types::{
             CheckedTransaction,
             IntoChecked,
         },
-        interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
     services::{
@@ -100,6 +99,7 @@ use crate::{
     column_adapter::ContractColumnsIterator,
     config::Config,
     l1_execution_data::L1ExecutionData,
+    memory::MemoryPool,
     once_transaction_source::OnceTransactionsSource,
     ports::{
         Filter,
@@ -125,7 +125,9 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     /// Runtime to run the workers
     runtime: Option<Runtime>,
     /// List of available workers
-    current_available_workers: VecDeque<(usize, MemoryInstance)>,
+    current_available_workers: VecDeque<usize>,
+    /// Memory pool to store the memory instances
+    memory_pool: MemoryPool,
     /// All contracts changes
     contracts_changes: ContractsChanges,
     /// Current contracts being executed
@@ -155,8 +157,6 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
 struct WorkSessionExecutionResult {
     /// Worker id
     worker_id: usize,
-    /// Memory instance used by the worker
-    memory_instance: MemoryInstance,
     /// The id of the batch of transactions
     batch_id: usize,
     /// The changes made by the worker used to commit them to the database at the end of execution
@@ -327,7 +327,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
         config: Config,
         storage: S,
         executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
-        memory_pool: Vec<MemoryInstance>,
+        memory_pool: MemoryPool,
         consensus_parameters: ConsensusParameters,
         maximum_time_per_block: Duration,
     ) -> Result<Self, SchedulerError> {
@@ -337,13 +337,9 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             .build()
             .expect("Failed to create tokio runtime");
 
-        let current_available_workers: VecDeque<(usize, MemoryInstance)> =
-            memory_pool.into_iter().enumerate().collect();
-        if current_available_workers.len() < config.number_of_cores.get() {
-            return Err(SchedulerError::InternalError(
-                "Not enough memory instances for the number of cores".to_string(),
-            ));
-        }
+        let current_available_workers: VecDeque<usize> =
+            (0..config.number_of_cores.get()).collect();
+
         Ok(Self {
             runtime: Some(runtime),
             executor,
@@ -353,6 +349,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             tx_size_left: consensus_parameters.block_transaction_size_limit(),
             gas_left: consensus_parameters.block_gas_limit(),
             current_available_workers,
+            memory_pool,
             config,
             current_execution_tasks: FuturesUnordered::new(),
             blob_transactions: vec![],
@@ -379,7 +376,7 @@ where
         components: &mut Components<TxSource>,
         da_changes: Changes,
         l1_execution_data: L1ExecutionData,
-    ) -> Result<(SchedulerExecutionResult, Vec<MemoryInstance>), SchedulerError> {
+    ) -> Result<SchedulerExecutionResult, SchedulerError> {
         let view = self.storage.latest_view()?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
@@ -464,7 +461,7 @@ where
                             Ok(res) => {
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
-                                    self.sequential_fallback(components.header_to_produce, coinbase_recipient, gas_price, res.worker_id, res.memory_instance, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
+                                    self.sequential_fallback(components.header_to_produce, coinbase_recipient, gas_price, res.worker_id, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
@@ -523,13 +520,7 @@ where
             res.add_blob_execution_data(blob_execution_data, blob_txs);
         }
 
-        Ok((
-            res,
-            self.current_available_workers
-                .drain(..)
-                .map(|(_, mem)| mem)
-                .collect(),
-        ))
+        Ok(res)
     }
 
     fn update_constraints(
@@ -636,10 +627,9 @@ where
         start_idx_txs: u16,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
-        let (worker_id, mut memory_instance) =
-            self.current_available_workers.pop_front().ok_or(
-                SchedulerError::InternalError("No available workers".to_string()),
-            )?;
+        let worker_id = self.current_available_workers.pop_front().ok_or(
+            SchedulerError::InternalError("No available workers".to_string()),
+        )?;
         let runtime = self.runtime.as_ref().unwrap();
 
         let mut new_contracts_used = vec![];
@@ -670,6 +660,7 @@ where
         let coinbase_recipient = components.coinbase_recipient;
         let gas_price = components.gas_price;
         let header_to_produce = components.header_to_produce;
+        let mut memory = self.memory_pool.take_raw();
         self.current_execution_tasks.push(runtime.spawn({
             let storage_with_da = storage_with_da.clone();
             async move {
@@ -689,7 +680,7 @@ where
                         },
                         storage_tx,
                         start_idx_txs,
-                        &mut memory_instance,
+                        &mut memory.as_mut(),
                     )
                     .await?;
                 let coins_created = get_coins_outputs(
@@ -714,7 +705,6 @@ where
                 }
                 Ok(WorkSessionExecutionResult {
                     worker_id,
-                    memory_instance,
                     batch_id,
                     changes: execution_data.changes,
                     coins_created,
@@ -765,8 +755,7 @@ where
                 coinbase: res.coinbase,
             },
         );
-        self.current_available_workers
-            .push_back((res.worker_id, res.memory_instance));
+        self.current_available_workers.push_back(res.worker_id);
     }
 
     fn store_any_contract_changes(
@@ -811,7 +800,6 @@ where
                             coinbase_recipient,
                             gas_price,
                             res.worker_id,
-                            res.memory_instance,
                             res.batch_id,
                             res.txs,
                             res.coins_used,
@@ -948,11 +936,11 @@ where
         D: KeyValueInspect<Column = Column>,
     {
         // Get a memory instance for the blob transactions execution (all workers should be available)
-        let (worker_id, mut memory_instance) =
-            self.current_available_workers.pop_front().ok_or(
-                SchedulerError::InternalError("No available workers".to_string()),
-            )?;
+        let worker_id = self.current_available_workers.pop_front().ok_or(
+            SchedulerError::InternalError("No available workers".to_string()),
+        )?;
         let executor = self.executor.clone();
+        let mut memory_instance = self.memory_pool.take_raw();
         let (transactions, execution_data) = executor
             .execute_l2_transactions(
                 Components {
@@ -966,12 +954,11 @@ where
                 },
                 storage,
                 start_idx_txs,
-                &mut memory_instance,
+                &mut memory_instance.as_mut(),
             )
             .await?;
         // Register the worker back to the available workers
-        self.current_available_workers
-            .push_back((worker_id, memory_instance));
+        self.current_available_workers.push_back(worker_id);
         Ok((execution_data, transactions))
     }
 
@@ -990,14 +977,12 @@ where
         coinbase_recipient: ContractId,
         gas_price: u64,
         worker_id: usize,
-        memory_instance: MemoryInstance,
         batch_id: usize,
         txs: Vec<Transaction>,
         coins_used: Vec<CoinInBatch>,
         coins_created: Vec<CoinInBatch>,
     ) -> Result<(), SchedulerError> {
-        self.current_available_workers
-            .push_back((worker_id, memory_instance));
+        self.current_available_workers.push_back(worker_id);
         let block_height = *header.height();
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
@@ -1018,8 +1003,7 @@ where
                     if res.batch_id > higher_batch_id {
                         higher_batch_id = res.batch_id;
                     }
-                    self.current_available_workers
-                        .push_back((res.worker_id, res.memory_instance));
+                    self.current_available_workers.push_back(res.worker_id);
                 }
                 Err(_) => {
                     tracing::error!("Worker execution failed");
@@ -1071,10 +1055,10 @@ where
 
         let executor = self.executor.clone();
         // Get a memory instance for the blob transactions execution (all workers should be available)
-        let (worker_id, mut memory_instance) =
-            self.current_available_workers.pop_front().ok_or(
-                SchedulerError::InternalError("No available workers".to_string()),
-            )?;
+        let worker_id = self.current_available_workers.pop_front().ok_or(
+            SchedulerError::InternalError("No available workers".to_string()),
+        )?;
+        let mut memory_instance = self.memory_pool.take_raw();
         let (transactions, execution_data) = executor
             .execute_l2_transactions(
                 Components {
@@ -1085,7 +1069,7 @@ where
                 },
                 self.storage.latest_view().unwrap().write_transaction(),
                 0,
-                &mut memory_instance,
+                &mut memory_instance.as_mut(),
             )
             .await?;
 
@@ -1114,8 +1098,7 @@ where
         );
 
         // Register the worker back to the available workers
-        self.current_available_workers
-            .push_back((worker_id, memory_instance));
+        self.current_available_workers.push_back(worker_id);
         Ok(())
     }
 }

@@ -9,6 +9,7 @@ pub mod executor;
 pub(crate) mod l1_execution_data;
 pub mod ports;
 
+mod memory;
 mod once_transaction_source;
 mod tx_waiter;
 
