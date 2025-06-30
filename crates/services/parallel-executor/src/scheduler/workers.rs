@@ -28,7 +28,7 @@ impl WorkerPool {
     pub fn take_worker(&self) -> Option<WorkerId> {
         let mut workers = self.workers.lock();
         if *workers > 0 {
-            *workers -= 1;
+            *workers = workers.saturating_sub(1);
             Some(WorkerId {
                 pool: self.clone(),
                 _id: *workers,
@@ -44,6 +44,6 @@ impl WorkerPool {
 
     pub fn return_worker(&self) {
         let mut workers = self.workers.lock();
-        *workers = (*workers).saturating_add(1);
+        *workers = workers.saturating_add(1);
     }
 }

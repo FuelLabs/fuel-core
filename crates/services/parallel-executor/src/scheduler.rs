@@ -75,6 +75,7 @@ use fuel_core_types::{
         TxId,
         UtxoId,
     },
+    fuel_types::Nonce,
     fuel_vm::{
         checked_transaction::{
             CheckedTransaction,
@@ -171,6 +172,8 @@ struct WorkSessionExecutionResult {
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
     coins_used: Vec<CoinInBatch>,
+    /// Messages nonces used, useful to check double spending
+    message_nonces_used: Vec<Nonce>,
     /// Contracts used during the execution of the transactions to save the changes for future usage of
     /// the contracts
     contracts_used: Vec<ContractId>,
@@ -204,6 +207,8 @@ struct WorkSessionSavedData {
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
     coins_used: Vec<CoinInBatch>,
+    /// Messages nonces used, useful to check double spending
+    message_nonces_used: Vec<Nonce>,
     /// The transactions of the batch
     txs: Vec<Transaction>,
     /// Message ids
@@ -306,6 +311,7 @@ pub(crate) struct PreparedBatch {
     pub total_size: u64,
     pub contracts_used: Vec<ContractId>,
     pub coins_used: Vec<CoinInBatch>,
+    pub message_nonces_used: Vec<Nonce>,
     pub number_of_transactions: u16,
 }
 
@@ -463,7 +469,7 @@ where
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
                                     drop(res.worker_id);
-                                    self.sequential_fallback(components.header_to_produce, coinbase_recipient, gas_price, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
+                                    self.sequential_fallback(components.header_to_produce, coinbase_recipient, gas_price, res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
@@ -714,6 +720,7 @@ where
                     changes: execution_data.changes,
                     coins_created,
                     coins_used: batch.coins_used,
+                    message_nonces_used: batch.message_nonces_used,
                     contracts_used: batch.contracts_used,
                     skipped_tx: execution_data.skipped_transactions,
                     txs: transactions,
@@ -748,6 +755,7 @@ where
             res.batch_id,
             WorkSessionSavedData {
                 changes,
+                message_nonces_used: res.message_nonces_used,
                 coins_created: res.coins_created,
                 coins_used: res.coins_used,
                 txs: res.txs,
@@ -808,6 +816,7 @@ where
                             res.txs,
                             res.coins_used,
                             res.coins_created,
+                            res.message_nonces_used,
                         )
                         .await?;
                         break;
@@ -818,6 +827,7 @@ where
                                 changes: res.changes,
                                 coins_created: res.coins_created,
                                 coins_used: res.coins_used,
+                                message_nonces_used: res.message_nonces_used,
                                 txs: res.txs,
                                 message_ids: res.message_ids,
                                 events: res.events,
@@ -879,6 +889,7 @@ where
         };
         let mut storage_changes = vec![];
         let mut compiled_created_coins = CoinDependencyChainVerifier::new();
+        let mut nonce_used = HashSet::new();
         for batch_id in 0..nb_batch {
             if let Some(changes) = self.execution_results.remove(&batch_id) {
                 compiled_created_coins
@@ -888,6 +899,13 @@ where
                     changes.coins_used.iter(),
                     &block_transaction,
                 )?;
+                for nonce in changes.message_nonces_used.iter() {
+                    if !nonce_used.insert(*nonce) {
+                        return Err(SchedulerError::InternalError(format!(
+                            "Nonce {nonce} used multiple times."
+                        )));
+                    }
+                }
                 storage_changes.push(changes.changes);
                 exec_result.events.extend(changes.events);
                 exec_result.message_ids.extend(changes.message_ids);
@@ -980,20 +998,29 @@ where
         txs: Vec<Transaction>,
         coins_used: Vec<CoinInBatch>,
         coins_created: Vec<CoinInBatch>,
+        message_nonces_used: Vec<Nonce>,
     ) -> Result<(), SchedulerError> {
         let block_height = *header.height();
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
         let mut all_txs_by_batch_id = FxHashMap::default();
-        all_txs_by_batch_id.insert(batch_id, (txs, coins_created, coins_used));
+        all_txs_by_batch_id.insert(
+            batch_id,
+            (txs, coins_created, coins_used, message_nonces_used),
+        );
         for future in current_execution_tasks {
             match future.await {
                 Ok(res) => {
                     let res = res?;
                     all_txs_by_batch_id.insert(
                         res.batch_id,
-                        (res.txs, res.coins_created, res.coins_used),
+                        (
+                            res.txs,
+                            res.coins_created,
+                            res.coins_used,
+                            res.message_nonces_used,
+                        ),
                     );
                     if res.batch_id < lower_batch_id {
                         lower_batch_id = res.batch_id;
@@ -1011,8 +1038,9 @@ where
         let mut all_txs: Vec<CheckedTransaction> = vec![];
         let mut all_coins_created: Vec<CoinInBatch> = vec![];
         let mut all_coins_used: Vec<CoinInBatch> = vec![];
+        let mut all_nonces_used: Vec<Nonce> = vec![];
         for id in lower_batch_id..=higher_batch_id {
-            if let Some((txs, coins_created, coins_used)) =
+            if let Some((txs, coins_created, coins_used, message_nonces_used)) =
                 all_txs_by_batch_id.remove(&id)
             {
                 for tx in txs {
@@ -1031,6 +1059,7 @@ where
                 }
                 all_coins_created.extend(coins_created);
                 all_coins_used.extend(coins_used);
+                all_nonces_used.extend(message_nonces_used);
             } else if let Some(res) = self.execution_results.remove(&id) {
                 for tx in res.txs {
                     all_txs.push(
@@ -1045,6 +1074,7 @@ where
                 }
                 all_coins_created.extend(res.coins_created);
                 all_coins_used.extend(res.coins_used);
+                all_nonces_used.extend(res.message_nonces_used);
             } else {
                 tracing::error!("Batch {id} not found in the execution results");
             }
@@ -1079,6 +1109,7 @@ where
             WorkSessionSavedData {
                 changes: execution_data.changes,
                 coins_created: all_coins_created,
+                message_nonces_used: all_nonces_used,
                 coins_used: all_coins_used,
                 txs: transactions,
                 message_ids: execution_data.message_ids,
@@ -1119,7 +1150,18 @@ fn prepare_transactions_batch(
                         .coins_used
                         .push(CoinInBatch::from_predicate_coin(coin, idx, tx_id));
                 }
-                _ => {}
+                fuel_core_types::fuel_tx::Input::MessageCoinPredicate(message) => {
+                    prepared_batch.message_nonces_used.push(message.nonce);
+                }
+                fuel_core_types::fuel_tx::Input::MessageCoinSigned(message) => {
+                    prepared_batch.message_nonces_used.push(message.nonce);
+                }
+                fuel_core_types::fuel_tx::Input::MessageDataPredicate(message) => {
+                    prepared_batch.message_nonces_used.push(message.nonce);
+                }
+                fuel_core_types::fuel_tx::Input::MessageDataSigned(message) => {
+                    prepared_batch.message_nonces_used.push(message.nonce);
+                }
             }
         }
 
