@@ -348,6 +348,13 @@ pub struct ExecutionOptions {
     pub backtrace: bool,
 }
 
+#[derive(serde::Deserialize, Debug)]
+/// Execution options to maintain for backward compatibility.
+pub struct ExecutionOptionsDeserialized {
+    pub forbid_fake_coins: bool,
+    pub backtrace: bool,
+}
+
 /// Per-block execution options
 #[derive(Clone, Default, Debug)]
 struct ExecutionOptionsInner {
