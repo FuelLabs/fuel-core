@@ -36,7 +36,10 @@ use fuel_core_storage::tables::{
     ContractsState,
     Messages,
 };
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -215,7 +218,7 @@ impl CombinedDatabase {
         )?;
         let relayer = Database::open_rocksdb(
             path,
-            StateRewindPolicy::NoRewind,
+            state_rewind_policy,
             DatabaseConfig {
                 max_fds,
                 ..database_config
@@ -421,14 +424,18 @@ impl CombinedDatabase {
 
             let gas_price_chain_height =
                 self.gas_price().latest_height_from_metadata()?;
+            let gas_price_rolled_back =
+                is_equal_or_none(gas_price_chain_height, target_block_height);
 
-            let gas_price_rolled_back = gas_price_chain_height.is_none()
-                || gas_price_chain_height.expect("We checked height before")
-                    == target_block_height;
+            let compression_db_height =
+                self.compression().latest_height_from_metadata()?;
+            let compression_db_rolled_back =
+                is_equal_or_none(compression_db_height, target_block_height);
 
             if on_chain_height == target_block_height
                 && off_chain_height == target_block_height
                 && gas_price_rolled_back
+                && compression_db_rolled_back
             {
                 break;
             }
@@ -450,7 +457,16 @@ impl CombinedDatabase {
             if let Some(gas_price_chain_height) = gas_price_chain_height {
                 if gas_price_chain_height < target_block_height {
                     return Err(anyhow::anyhow!(
-                        "gas-price-chain database height({gas_price_chain_height}) \
+                        "gas-price database height({gas_price_chain_height}) \
+                        is less than target height({target_block_height})"
+                    ));
+                }
+            }
+
+            if let Some(compression_db_height) = compression_db_height {
+                if compression_db_height < target_block_height {
+                    return Err(anyhow::anyhow!(
+                        "compression database height({compression_db_height}) \
                         is less than target height({target_block_height})"
                     ));
                 }
@@ -467,6 +483,55 @@ impl CombinedDatabase {
             if let Some(gas_price_chain_height) = gas_price_chain_height {
                 if gas_price_chain_height > target_block_height {
                     self.gas_price().rollback_last_block()?;
+                }
+            }
+
+            if let Some(compression_db_height) = compression_db_height {
+                if compression_db_height > target_block_height {
+                    self.compression().rollback_last_block()?;
+                }
+            }
+        }
+
+        if shutdown_listener.is_cancelled() {
+            return Err(anyhow::anyhow!(
+                "Stop the rollback due to shutdown signal received"
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Rollbacks the state of the relayer to a specific block height.
+    pub fn rollback_relayer_to<S>(
+        &self,
+        target_da_height: DaBlockHeight,
+        shutdown_listener: &mut S,
+    ) -> anyhow::Result<()>
+    where
+        S: ShutdownListener,
+    {
+        while !shutdown_listener.is_cancelled() {
+            let relayer_db_height = self.relayer().latest_height_from_metadata()?;
+            let relayer_db_rolled_back =
+                is_equal_or_none(relayer_db_height, target_da_height);
+
+            if relayer_db_rolled_back {
+                break;
+            }
+
+            if let Some(relayer_db_height) = relayer_db_height {
+                if relayer_db_height < target_da_height {
+                    return Err(anyhow::anyhow!(
+                        "relayer database height({relayer_db_height}) \
+                        is less than target height({target_da_height})"
+                    ));
+                }
+            }
+
+            if let Some(relayer_db_height) = relayer_db_height {
+                if relayer_db_height > target_da_height {
+                    self.relayer().rollback_last_block()?;
                 }
             }
         }
@@ -557,12 +622,19 @@ impl CombinedGenesisDatabase {
     }
 }
 
+fn is_equal_or_none<T: PartialEq>(maybe_left: Option<T>, right: T) -> bool {
+    maybe_left.map(|left| left == right).unwrap_or(true)
+}
+
 #[allow(non_snake_case)]
 #[cfg(feature = "backup")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::StorageAsMut;
+    use fuel_core_storage::{
+        StorageAsMut,
+        StorageAsRef,
+    };
     use fuel_core_types::{
         entities::coins::coin::CompressedCoin,
         fuel_tx::UtxoId,
@@ -603,7 +675,7 @@ mod tests {
         )
         .unwrap();
 
-        let mut restored_on_chain_db = restored_db.on_chain();
+        let restored_on_chain_db = restored_db.on_chain();
         let restored_value = restored_on_chain_db
             .storage::<Coins>()
             .get(&key)
