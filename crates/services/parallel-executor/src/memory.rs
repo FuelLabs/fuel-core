@@ -42,6 +42,12 @@ pub struct MemoryPool {
     pool: Arc<Mutex<Vec<MemoryInstance>>>,
 }
 
+impl Default for MemoryPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MemoryPool {
     pub fn new() -> Self {
         Self {

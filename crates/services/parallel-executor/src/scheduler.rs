@@ -685,7 +685,7 @@ where
                         },
                         storage_tx,
                         start_idx_txs,
-                        &mut memory.as_mut(),
+                        memory.as_mut(),
                     )
                     .await?;
                 let coins_created = get_coins_outputs(
@@ -955,7 +955,7 @@ where
                 },
                 storage,
                 start_idx_txs,
-                &mut memory_instance.as_mut(),
+                memory_instance.as_mut(),
             )
             .await?;
 
@@ -1063,7 +1063,7 @@ where
                 },
                 self.storage.latest_view().unwrap().write_transaction(),
                 0,
-                &mut memory_instance.as_mut(),
+                memory_instance.as_mut(),
             )
             .await?;
 
