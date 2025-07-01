@@ -40,16 +40,18 @@ pub enum CoinsQueryError {
     #[error("store error occurred: {0}")]
     StorageError(StorageError),
     #[error(
-        "the target cannot be met due to insufficient coins available for {asset_id}. Collected: {collected_amount}."
+        "the target cannot be met due to insufficient coins available for {asset_id}. Collected: {collected_amount}. Owner: {owner}."
     )]
     InsufficientCoins {
+        owner: Address,
         asset_id: AssetId,
         collected_amount: u128,
     },
     #[error(
-        "the target for {asset_id} cannot be met due to exceeding the {max} coin limit. Collected: {collected_amount}."
+        "the target for {asset_id} cannot be met due to exceeding the {max} coin limit. Collected: {collected_amount}. Owner: {owner}."
     )]
     MaxCoinsReached {
+        owner: Address,
         asset_id: AssetId,
         collected_amount: u128,
         max: u16,
@@ -144,6 +146,7 @@ impl<'s> SpendQuery<'s> {
 pub async fn largest_first(
     query: AssetQuery<'_>,
 ) -> Result<Vec<CoinType>, CoinsQueryError> {
+    let owner = query.owner;
     let target = query.asset.target;
     let max = query.asset.max;
     let asset_id = query.asset.id;
@@ -157,19 +160,20 @@ pub async fn largest_first(
     for coin in inputs {
         // Break if we don't need any more coins
         if collected_amount >= target {
-            break
+            break;
         }
 
         if coins.len() >= max as usize {
             if allow_partial {
-                return Ok(coins)
+                return Ok(coins);
             } else {
                 // Error if we can't fit more coins
                 return Err(CoinsQueryError::MaxCoinsReached {
+                    owner: *owner,
                     asset_id,
                     collected_amount,
                     max,
-                })
+                });
             }
         }
 
@@ -183,9 +187,10 @@ pub async fn largest_first(
             return Ok(coins);
         } else {
             return Err(CoinsQueryError::InsufficientCoins {
+                owner: *owner,
                 asset_id,
                 collected_amount,
-            })
+            });
         }
     }
 
@@ -220,7 +225,7 @@ pub async fn random_improve(
                 if collected_amount >= u64::MAX as u128
                     || coin.amount() as u128 > upper_target
                 {
-                    break
+                    break;
                 }
 
                 // Break if adding doesn't improve the distance
@@ -231,7 +236,7 @@ pub async fn random_improve(
                 let next_distance =
                     target.abs_diff(change_amount.saturating_add(coin.amount() as u128));
                 if next_distance >= distance {
-                    break
+                    break;
                 }
             }
 
@@ -262,6 +267,7 @@ pub async fn select_coins_to_spend(
     allow_partial: bool,
     exclude: &Exclude,
     batch_size: usize,
+    owner: Address,
 ) -> Result<Vec<CoinsToSpendIndexKey>, CoinsQueryError> {
     // We aim to reduce dust creation by targeting twice the required amount for selection,
     // inspired by the random-improve approach. This increases the likelihood of generating
@@ -284,7 +290,7 @@ pub async fn select_coins_to_spend(
     const DUST_TO_BIG_COINS_FACTOR: u16 = 5;
 
     if total == 0 || max == 0 {
-        return Ok(vec![])
+        return Ok(vec![]);
     }
 
     let adjusted_total = total.saturating_mul(TOTAL_AMOUNT_ADJUSTMENT_FACTOR);
@@ -295,20 +301,23 @@ pub async fn select_coins_to_spend(
     let (selected_big_coins_total, selected_big_coins, has_more_big_coins) =
         big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
-    if selected_big_coins_total == 0 || (selected_big_coins_total < total && !allow_partial)
+    if selected_big_coins_total == 0
+        || (selected_big_coins_total < total && !allow_partial)
     {
         if selected_big_coins.len() >= max as usize && has_more_big_coins {
-          return Err(CoinsQueryError::MaxCoinsReached {
-              asset_id: *asset_id,
-              collected_amount: selected_big_coins_total,
-              max,
-          })
+            return Err(CoinsQueryError::MaxCoinsReached {
+                owner,
+                asset_id: *asset_id,
+                collected_amount: selected_big_coins_total,
+                max,
+            });
         }
 
         return Err(CoinsQueryError::InsufficientCoins {
+            owner,
             asset_id: *asset_id,
             collected_amount: selected_big_coins_total,
-        })
+        });
     }
 
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
@@ -655,6 +664,7 @@ mod tests {
                         assert_matches!(
                             coins,
                             Err(CoinsQueryError::InsufficientCoins {
+                                owner: _,
                                 asset_id: _,
                                 collected_amount: 15,
                             })
@@ -890,6 +900,7 @@ mod tests {
                         assert_matches!(
                             coins,
                             Err(CoinsQueryError::InsufficientCoins {
+                                owner: _,
                                 asset_id: _,
                                 collected_amount: 15,
                             })
@@ -1090,6 +1101,7 @@ mod tests {
                         assert_matches!(
                             coins,
                             Err(CoinsQueryError::InsufficientCoins {
+                                owner: _,
                                 asset_id: _,
                                 collected_amount: 10,
                             })
@@ -1323,6 +1335,7 @@ mod tests {
             };
 
             let exclude = Exclude::default();
+            let owner = Address::default();
 
             // When
             let result = select_coins_to_spend(
@@ -1333,6 +1346,7 @@ mod tests {
                 false,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await
             .expect("should not error");
@@ -1386,6 +1400,7 @@ mod tests {
                 big_coins_iter: coins.into_iter().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
+            let owner = Address::default();
 
             // When
             let result = select_coins_to_spend(
@@ -1396,6 +1411,7 @@ mod tests {
                 false,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await
             .expect("should not error");
@@ -1434,6 +1450,7 @@ mod tests {
                 big_coins_iter: coins.into_iter().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
+            let owner = Address::default();
 
             // When
             let result = select_coins_to_spend(
@@ -1444,6 +1461,7 @@ mod tests {
                 false,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
@@ -1465,6 +1483,8 @@ mod tests {
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
 
+            let owner = Address::default();
+
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
                 TOTAL,
@@ -1473,6 +1493,7 @@ mod tests {
                 false,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
@@ -1493,6 +1514,8 @@ mod tests {
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
 
+            let owner = Address::default();
+
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
                 TOTAL,
@@ -1501,6 +1524,7 @@ mod tests {
                 false,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
@@ -1528,6 +1552,7 @@ mod tests {
             };
 
             let asset_id = AssetId::default();
+            let owner = Address::default();
 
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
@@ -1537,6 +1562,7 @@ mod tests {
                 false,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
@@ -1544,12 +1570,13 @@ mod tests {
 
             // Then
             assert_matches!(
-              result,
-              Err(CoinsQueryError::MaxCoinsReached {
-                asset_id: _,
-                collected_amount: EXPECTED_COLLECTED_AMOUNT,
-                max: MAX,
-              })
+                result,
+                Err(CoinsQueryError::MaxCoinsReached {
+                    owner: _,
+                    asset_id: _,
+                    collected_amount: EXPECTED_COLLECTED_AMOUNT,
+                    max: MAX,
+                })
             );
         }
 
@@ -1573,6 +1600,7 @@ mod tests {
             };
 
             let asset_id = AssetId::default();
+            let owner = Address::default();
 
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
@@ -1582,6 +1610,7 @@ mod tests {
                 false,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
@@ -1589,17 +1618,21 @@ mod tests {
 
             // Then
             assert_matches!(
-              result,
-              Err(CoinsQueryError::InsufficientCoins {
-                asset_id: _,
-                collected_amount: EXPECTED_COLLECTED_AMOUNT
-              })
+                result,
+                Err(CoinsQueryError::InsufficientCoins {
+                    owner: _,
+                    asset_id: _,
+                    collected_amount: EXPECTED_COLLECTED_AMOUNT
+                })
             );
         }
 
         mod allow_partial {
             use fuel_core_storage::iter::IntoBoxedIter;
-            use fuel_core_types::fuel_tx::AssetId;
+            use fuel_core_types::{
+                fuel_tx::AssetId,
+                fuel_types::Address,
+            };
 
             use crate::{
                 coins_query::tests::indexed_coins_to_spend::{
@@ -1630,6 +1663,7 @@ mod tests {
                     dust_coins_iter: std::iter::empty().into_boxed(),
                 };
                 let asset_id = AssetId::default();
+                let owner = Address::default();
 
                 // When
                 let result = select_coins_to_spend(
@@ -1640,6 +1674,7 @@ mod tests {
                     false,
                     &exclude,
                     BATCH_SIZE,
+                    owner,
                 )
                 .await;
 
@@ -1666,6 +1701,7 @@ mod tests {
                     dust_coins_iter: std::iter::empty().into_boxed(),
                 };
                 let asset_id = AssetId::default();
+                let owner = Address::default();
 
                 // When
                 let result = select_coins_to_spend(
@@ -1676,6 +1712,7 @@ mod tests {
                     true,
                     &exclude,
                     BATCH_SIZE,
+                    owner,
                 )
                 .await
                 .expect("should return coins");
@@ -1760,6 +1797,7 @@ mod tests {
         assert_matches!(
             coin_result,
             Err(CoinsQueryError::InsufficientCoins {
+                owner: _,
                 asset_id: _base_asset_id,
                 collected_amount: 0,
             })

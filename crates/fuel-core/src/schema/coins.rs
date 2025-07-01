@@ -438,6 +438,7 @@ async fn coins_to_spend_with_cache(
             asset.allow_partial.unwrap_or(false),
             excluded,
             db.batch_size,
+            owner,
         )
         .await?;
 

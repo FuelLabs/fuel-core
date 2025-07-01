@@ -237,6 +237,7 @@ mod coin {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::InsufficientCoins {
+                owner,
                 asset_id: asset_id_a,
                 collected_amount: 0,
             }
@@ -266,6 +267,7 @@ mod coin {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::InsufficientCoins {
+                owner,
                 asset_id: asset_id_a,
                 collected_amount: 300,
             }
@@ -292,6 +294,7 @@ mod coin {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::MaxCoinsReached {
+                owner,
                 asset_id: asset_id_a,
                 collected_amount: 250,
                 max: MAX,
@@ -460,6 +463,7 @@ mod message_coin {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::InsufficientCoins {
+                owner,
                 asset_id: base_asset_id,
                 collected_amount: 0,
             }
@@ -479,6 +483,7 @@ mod message_coin {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::InsufficientCoins {
+                owner,
                 asset_id: base_asset_id,
                 collected_amount: 300,
             }
@@ -500,6 +505,7 @@ mod message_coin {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::MaxCoinsReached {
+                owner,
                 asset_id: base_asset_id,
                 collected_amount: 250,
                 max: MAX,
@@ -676,6 +682,7 @@ mod all_coins {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::InsufficientCoins {
+                owner,
                 asset_id: asset_id_a,
                 collected_amount: 0,
             }
@@ -699,6 +706,7 @@ mod all_coins {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::InsufficientCoins {
+                owner,
                 asset_id: asset_id_a,
                 collected_amount: 300,
             }
@@ -724,6 +732,7 @@ mod all_coins {
         assert_eq!(
             coins_per_asset.unwrap_err().to_string(),
             CoinsQueryError::MaxCoinsReached {
+                owner,
                 asset_id: asset_id_a,
                 collected_amount: 250,
                 max: MAX
