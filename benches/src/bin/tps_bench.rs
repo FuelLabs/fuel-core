@@ -64,7 +64,7 @@ use clap::Parser;
 struct Args {
     #[clap(short = 'c', long, default_value = "16")]
     pub number_of_cores: usize,
-    #[clap(short = 't', long, default_value = "1500")]
+    #[clap(short = 't', long, default_value = "15000")]
     pub number_of_transactions: u64,
 }
 
