@@ -1,3 +1,5 @@
+#[cfg(feature = "parallel-executor")]
+use crate::service::adapters::ParallelExecutorAdapter;
 use crate::{
     database::{
         Database,
@@ -6,7 +8,6 @@ use crate::{
     service::adapters::{
         BlockImporterAdapter,
         ExecutorAdapter,
-        ParallelExecutorAdapter,
         VerifierAdapter,
     },
 };
@@ -43,6 +44,8 @@ use fuel_core_txpool::ports::{
     WasmChecker,
     WasmValidityError,
 };
+#[cfg(feature = "parallel-executor")]
+use fuel_core_types::services::executor::ValidationResult;
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
@@ -57,7 +60,6 @@ use fuel_core_types::{
     services::executor::{
         Result as ExecutorResult,
         UncommittedValidationResult,
-        ValidationResult,
     },
 };
 use itertools::Itertools;
@@ -128,6 +130,7 @@ impl Validator for ExecutorAdapter {
     }
 }
 
+#[cfg(feature = "parallel-executor")]
 impl Validator for ParallelExecutorAdapter {
     fn validate(
         &self,
@@ -165,6 +168,7 @@ impl WasmChecker for ExecutorAdapter {
 }
 
 #[cfg(feature = "wasm-executor")]
+#[cfg(feature = "parallel-executor")]
 impl WasmChecker for ParallelExecutorAdapter {
     fn validate_uploaded_wasm(
         &self,

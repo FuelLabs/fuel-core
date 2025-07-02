@@ -1,3 +1,5 @@
+#[cfg(feature = "parallel-executor")]
+use crate::service::adapters::ParallelExecutorAdapter;
 use crate::{
     database::OnChainIterableKeyValueView,
     service::{
@@ -7,7 +9,6 @@ use crate::{
             ExecutorAdapter,
             MaybeRelayerAdapter,
             NewTxWaiter,
-            ParallelExecutorAdapter,
             StaticGasPrice,
             TransactionsSource,
             TxPoolAdapter,
@@ -66,13 +67,15 @@ use fuel_core_types::{
         block_producer::Components,
         executor::{
             DryRunResult,
-            Error as ExecutorError,
             Result as ExecutorResult,
             StorageReadReplayEvent,
             UncommittedResult,
         },
     },
 };
+
+#[cfg(feature = "parallel-executor")]
+use fuel_core_types::services::executor::Error as ExecutorError;
 use std::{
     borrow::Cow,
     sync::Arc,
@@ -121,6 +124,7 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
     }
 }
 
+#[cfg(feature = "parallel-executor")]
 impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
     for ParallelExecutorAdapter
 {
@@ -163,6 +167,7 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
     }
 }
 
+#[cfg(feature = "parallel-executor")]
 impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>>
     for ParallelExecutorAdapter
 {
@@ -193,6 +198,7 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         )
     }
 }
+#[cfg(feature = "parallel-executor")]
 impl fuel_core_producer::ports::DryRunner for ParallelExecutorAdapter {
     fn dry_run(
         &self,
@@ -214,6 +220,7 @@ impl fuel_core_producer::ports::StorageReadReplayRecorder for ExecutorAdapter {
     }
 }
 
+#[cfg(feature = "parallel-executor")]
 impl fuel_core_producer::ports::StorageReadReplayRecorder for ParallelExecutorAdapter {
     fn storage_read_replay(
         &self,

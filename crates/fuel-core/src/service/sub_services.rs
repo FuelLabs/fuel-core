@@ -51,6 +51,8 @@ use super::{
 };
 #[cfg(not(feature = "parallel-executor"))]
 use crate::service::adapters::ExecutorAdapter;
+#[cfg(feature = "parallel-executor")]
+use crate::service::adapters::ParallelExecutorAdapter;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -71,7 +73,6 @@ use crate::{
             BlockProducerAdapter,
             ChainStateInfoProvider,
             MaybeRelayerAdapter,
-            ParallelExecutorAdapter,
             PoAAdapter,
             PreconfirmationSender,
             SharedMemoryPool,

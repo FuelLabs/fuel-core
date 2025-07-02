@@ -22,6 +22,7 @@ use fuel_core_executor::{
         PreconfirmationSenderPort,
     },
 };
+#[cfg(feature = "parallel-executor")]
 use fuel_core_parallel_executor::ports::{
     Filter,
     TransactionFiltered,
@@ -39,10 +40,9 @@ use std::{
     collections::HashSet,
     sync::Arc,
 };
-use tokio::sync::{
-    Notify,
-    mpsc::error::TrySendError,
-};
+#[cfg(feature = "parallel-executor")]
+use tokio::sync::Notify;
+use tokio::sync::mpsc::error::TrySendError;
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
@@ -70,6 +70,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     }
 }
 
+#[cfg(feature = "parallel-executor")]
 impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSource {
     fn get_executable_transactions(
         &mut self,

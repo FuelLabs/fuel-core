@@ -3,8 +3,9 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "parallel-executor")]
+use tokio::sync::Mutex;
 use tokio::sync::{
-    Mutex,
     mpsc,
     watch,
 };

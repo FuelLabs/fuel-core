@@ -266,6 +266,7 @@ impl TestSetupBuilder {
             txpool,
             block_production: self.trigger,
             gas_price_config,
+            #[cfg(feature = "parallel-executor")]
             executor_number_of_cores: NonZeroUsize::try_from(
                 self.number_threads_pool_verif,
             )
