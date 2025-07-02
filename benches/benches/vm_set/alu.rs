@@ -209,26 +209,40 @@ pub fn run(c: &mut Criterion) {
             ($niop:expr, $operation:ident, $opwidth:ident, $lhs:expr, $rhs:expr) => {
                 run_group_ref(
                     $niop,
-                    &format!("niop_{}_{}",
+                    &format!(
+                        "niop_{}_{}",
                         stringify!($operation).to_lowercase(),
                         stringify!($opwidth).to_lowercase()
                     ),
-                    VmBench::new(op::niop_args(0x10, 0x11, 0x12, narrowint::MathArgs {
-                        op: narrowint::MathOp::$operation,
-                        width: narrowint::OpWidth::$opwidth
-                    }))
-                    .with_prepare_script(vec![op::movi(0x11, $lhs), op::movi(0x12, $rhs)]),
+                    VmBench::new(op::niop_args(
+                        0x10,
+                        0x11,
+                        0x12,
+                        narrowint::MathArgs {
+                            op: narrowint::MathOp::$operation,
+                            width: narrowint::OpWidth::$opwidth,
+                        },
+                    ))
+                    .with_prepare_script(vec![
+                        op::movi(0x11, $lhs),
+                        op::movi(0x12, $rhs),
+                    ]),
                 );
             };
         }
 
-        let u8_values = (0..value_count).map(|i| i * 10 + 1).collect::<Vec<_>>();
-        let u16_values = (0..value_count).map(|i| i * 200 + 1).collect::<Vec<_>>();
-        let u32_values = (0..value_count).map(|i| i * 10_000 + 1).collect::<Vec<_>>();
+        let u8_values = (0..value_count).map(|i| i + 1).collect::<Vec<_>>();
+        let u16_values = (0..value_count).map(|i| i * 10 + 1).collect::<Vec<_>>();
+        let u32_values = (0..value_count).map(|i| i * 100 + 1).collect::<Vec<_>>();
 
         for (lhs, rhs) in u8_values.iter().zip(u8_values.iter().cycle().skip(1)) {
+            let (big, small) = if lhs > rhs {
+                (*lhs, *rhs)
+            } else {
+                (*rhs, *lhs)
+            };
             niop_bench!(&mut niop, ADD, U8, *lhs, *rhs);
-            niop_bench!(&mut niop, SUB, U8, *lhs, *rhs);
+            niop_bench!(&mut niop, SUB, U8, big, small);
             niop_bench!(&mut niop, MUL, U8, *lhs, *rhs);
             niop_bench!(&mut niop, EXP, U8, *lhs, 3);
             niop_bench!(&mut niop, SLL, U8, *lhs, 2);
