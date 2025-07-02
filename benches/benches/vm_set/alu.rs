@@ -203,7 +203,7 @@ pub fn run(c: &mut Criterion) {
 
     {
         let mut niop = c.benchmark_group("niop");
-        let value_count = 10;
+        let value_count = 5;
 
         macro_rules! niop_bench {
             ($niop:expr, $operation:ident, $opwidth:ident, $lhs:expr, $rhs:expr, $index:expr) => {
@@ -232,7 +232,7 @@ pub fn run(c: &mut Criterion) {
             };
         }
 
-        let u8_values = (0..value_count).map(|i| i + 1).collect::<Vec<_>>();
+        let u8_values = (0..value_count).map(|i| i + 5).collect::<Vec<_>>();
         let u16_values = (0..value_count).map(|i| i * 10 + 1).collect::<Vec<_>>();
         let u32_values = (0..value_count).map(|i| i * 100 + 1).collect::<Vec<_>>();
 
