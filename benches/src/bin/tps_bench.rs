@@ -241,6 +241,7 @@ fn main() {
                 .get_sealed_block_by_height(&1.into())
                 .unwrap()
                 .unwrap();
+            assert_eq!(block.entity.transactions().len(), transactions.len() + 1);
             block
         }
     });

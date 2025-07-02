@@ -115,7 +115,8 @@ pub mod broadcast_tests;
 #[cfg(test)]
 pub mod task_tests;
 
-const CHANNEL_SIZE: usize = 1024 * 10;
+// const CHANNEL_SIZE: usize = 1024 * 10;
+const CHANNEL_SIZE: usize = 15_000;
 
 pub type Service<V, T> = ServiceRunner<UninitializedTask<V, SharedState, T>>;
 
