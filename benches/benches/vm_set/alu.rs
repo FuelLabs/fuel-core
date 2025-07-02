@@ -239,14 +239,8 @@ pub fn run(c: &mut Criterion) {
         for (i, (lhs, rhs)) in
             (u8_values.iter().zip(u8_values.iter().cycle().skip(1))).enumerate()
         {
-            let (big, small) = if lhs > rhs {
-                (*lhs, *rhs)
-            } else {
-                (*rhs, *lhs)
-            };
-
             niop_bench!(&mut niop, ADD, U8, *lhs, *rhs, i);
-            niop_bench!(&mut niop, SUB, U8, big, small, i);
+            niop_bench!(&mut niop, SUB, U8, *lhs.max(rhs), *lhs.min(rhs), i);
             niop_bench!(&mut niop, MUL, U8, *lhs, *rhs, i);
             niop_bench!(&mut niop, EXP, U8, *lhs, 2, i);
             niop_bench!(&mut niop, SLL, U8, *lhs, 2, i);
@@ -257,7 +251,7 @@ pub fn run(c: &mut Criterion) {
             (u16_values.iter().zip(u16_values.iter().cycle().skip(1))).enumerate()
         {
             niop_bench!(&mut niop, ADD, U16, *lhs, *rhs, i);
-            niop_bench!(&mut niop, SUB, U16, *lhs, *rhs, i);
+            niop_bench!(&mut niop, SUB, U16, *lhs.max(rhs), *lhs.min(rhs), i);
             niop_bench!(&mut niop, MUL, U16, *lhs, *rhs, i);
             niop_bench!(&mut niop, EXP, U16, *lhs, 2, i);
             niop_bench!(&mut niop, SLL, U16, *lhs, 2, i);
@@ -270,7 +264,7 @@ pub fn run(c: &mut Criterion) {
             .enumerate()
         {
             niop_bench!(&mut niop, ADD, U32, *lhs, *rhs, i);
-            niop_bench!(&mut niop, SUB, U32, *lhs, *rhs, i);
+            niop_bench!(&mut niop, SUB, U32, *lhs.max(rhs), *lhs.min(rhs), i);
             niop_bench!(&mut niop, MUL, U32, *lhs, *rhs, i);
             niop_bench!(&mut niop, EXP, U32, *lhs, 2, i);
             niop_bench!(&mut niop, SLL, U32, *lhs, 2, i);
