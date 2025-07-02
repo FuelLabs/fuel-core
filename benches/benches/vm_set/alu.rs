@@ -201,6 +201,59 @@ pub fn run(c: &mut Criterion) {
             .with_prepare_script(vec![op::movi(0x11, 100000)]),
     );
 
+    {
+        let mut niop = c.benchmark_group("niop");
+        let value_count = 10;
+
+        macro_rules! niop_bench {
+            ($niop:expr, $operation:ident, $opwidth:ident, $lhs:expr, $rhs:expr) => {
+                run_group_ref(
+                    $niop,
+                    &format!("niop_{}_{}",
+                        stringify!($operation).to_lowercase(),
+                        stringify!($opwidth).to_lowercase()
+                    ),
+                    VmBench::new(op::niop_args(0x10, 0x11, 0x12, narrowint::MathArgs {
+                        op: narrowint::MathOp::$operation,
+                        width: narrowint::OpWidth::$opwidth
+                    }))
+                    .with_prepare_script(vec![op::movi(0x11, $lhs), op::movi(0x12, $rhs)]),
+                );
+            };
+        }
+
+        let u8_values = (0..value_count).map(|i| i * 10 + 1).collect::<Vec<_>>();
+        let u16_values = (0..value_count).map(|i| i * 200 + 1).collect::<Vec<_>>();
+        let u32_values = (0..value_count).map(|i| i * 10_000 + 1).collect::<Vec<_>>();
+
+        for (lhs, rhs) in u8_values.iter().zip(u8_values.iter().cycle().skip(1)) {
+            niop_bench!(&mut niop, ADD, U8, *lhs, *rhs);
+            niop_bench!(&mut niop, SUB, U8, *lhs, *rhs);
+            niop_bench!(&mut niop, MUL, U8, *lhs, *rhs);
+            niop_bench!(&mut niop, EXP, U8, *lhs, 3);
+            niop_bench!(&mut niop, SLL, U8, *lhs, 2);
+            niop_bench!(&mut niop, XNOR, U8, *lhs, *rhs);
+        }
+
+        for (lhs, rhs) in u16_values.iter().zip(u16_values.iter().cycle().skip(1)) {
+            niop_bench!(&mut niop, ADD, U16, *lhs, *rhs);
+            niop_bench!(&mut niop, SUB, U16, *lhs, *rhs);
+            niop_bench!(&mut niop, MUL, U16, *lhs, *rhs);
+            niop_bench!(&mut niop, EXP, U16, *lhs, 4);
+            niop_bench!(&mut niop, SLL, U16, *lhs, 2);
+            niop_bench!(&mut niop, XNOR, U16, *lhs, *rhs);
+        }
+
+        for (lhs, rhs) in u32_values.iter().zip(u32_values.iter().cycle().skip(1)) {
+            niop_bench!(&mut niop, ADD, U32, *lhs, *rhs);
+            niop_bench!(&mut niop, SUB, U32, *lhs, *rhs);
+            niop_bench!(&mut niop, MUL, U32, *lhs, *rhs);
+            niop_bench!(&mut niop, EXP, U32, *lhs, 3);
+            niop_bench!(&mut niop, SLL, U32, *lhs, 2);
+            niop_bench!(&mut niop, XNOR, U32, *lhs, *rhs);
+        }
+    }
+
     run_group_ref(
         &mut c.benchmark_group("noop"),
         "noop",
