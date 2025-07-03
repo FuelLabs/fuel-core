@@ -42,7 +42,7 @@ pub trait TransactionsSource {
         &mut self,
         gas_limit: u64,
         tx_count_limit: u16,
-        block_transaction_size_limit: u32,
+        block_transaction_size_limit: u64,
         filter: Filter,
     ) -> TransactionSourceExecutableTransactions;
 

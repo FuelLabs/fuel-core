@@ -20,12 +20,12 @@
 //! fallback a sequential execution of the transaction that used the skipped one as a dependency.
 mod coin;
 mod contracts_changes;
+mod workers;
 
 use std::{
     collections::{
         HashMap,
         HashSet,
-        VecDeque,
     },
     sync::Arc,
     time::Duration,
@@ -40,7 +40,6 @@ use fuel_core_executor::{
     executor::{
         BlockExecutor,
         ExecutionData,
-        ExecutionOptions,
     },
     ports::{
         PreconfirmationSenderPort,
@@ -76,13 +75,12 @@ use fuel_core_types::{
         TxId,
         UtxoId,
     },
-    fuel_types::BlockHeight,
+    fuel_types::Nonce,
     fuel_vm::{
         checked_transaction::{
             CheckedTransaction,
             IntoChecked,
         },
-        interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
     services::{
@@ -102,11 +100,16 @@ use crate::{
     column_adapter::ContractColumnsIterator,
     config::Config,
     l1_execution_data::L1ExecutionData,
+    memory::MemoryPool,
     once_transaction_source::OnceTransactionsSource,
     ports::{
         Filter,
         TransactionFiltered,
         TransactionsSource,
+    },
+    scheduler::workers::{
+        WorkerId,
+        WorkerPool,
     },
     tx_waiter::NoWaitTxs,
 };
@@ -120,18 +123,16 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     config: Config,
     /// Storage
     pub(crate) storage: S,
-    /// Relayer
-    relayer: R,
+    /// Executor to execute the transactions
+    executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
     /// Consensus parameters
     consensus_parameters: ConsensusParameters,
-    /// Preconfirmation sender
-    preconfirmation_sender: PreconfirmationSender,
-    /// Memory instance
-    memory: MemoryInstance,
     /// Runtime to run the workers
     runtime: Option<Runtime>,
     /// List of available workers
-    current_available_workers: VecDeque<usize>,
+    worker_pool: WorkerPool,
+    /// Memory pool to store the memory instances
+    memory_pool: MemoryPool,
     /// All contracts changes
     contracts_changes: ContractsChanges,
     /// Current contracts being executed
@@ -149,14 +150,18 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     /// Total maximum of transactions left
     tx_left: u16,
     /// Total maximum of byte size left
-    tx_size_left: u32,
+    tx_size_left: u64,
     /// Total remaining gas
     gas_left: u64,
+    /// Total time allowed for the block execution
+    maximum_time_per_block: Duration,
+    /// Gas used by blob transactions
+    blob_gas: u64,
 }
 
 struct WorkSessionExecutionResult {
     /// Worker id
-    worker_id: usize,
+    worker_id: WorkerId,
     /// The id of the batch of transactions
     batch_id: usize,
     /// The changes made by the worker used to commit them to the database at the end of execution
@@ -167,6 +172,8 @@ struct WorkSessionExecutionResult {
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
     coins_used: Vec<CoinInBatch>,
+    /// Messages nonces used, useful to check double spending
+    message_nonces_used: Vec<Nonce>,
     /// Contracts used during the execution of the transactions to save the changes for future usage of
     /// the contracts
     contracts_used: Vec<ContractId>,
@@ -182,6 +189,8 @@ struct WorkSessionExecutionResult {
     tx_statuses: Vec<TransactionExecutionStatus>,
     /// used gas
     used_gas: u64,
+    /// Difference between gas expected and gas used by the transactions
+    gas_diff: u64,
     /// used tx size
     used_size: u32,
     /// coinbase
@@ -198,6 +207,8 @@ struct WorkSessionSavedData {
     /// The coins used by the worker used to verify the coin dependency chain at the end of execution
     /// We also store the index of the transaction in the batch in case the creation is in the same batch
     coins_used: Vec<CoinInBatch>,
+    /// Messages nonces used, useful to check double spending
+    message_nonces_used: Vec<Nonce>,
     /// The transactions of the batch
     txs: Vec<Transaction>,
     /// Message ids
@@ -227,6 +238,18 @@ pub enum SchedulerError {
     StorageError(StorageError),
     /// Internal error
     InternalError(String),
+}
+
+impl From<StorageError> for SchedulerError {
+    fn from(error: StorageError) -> Self {
+        SchedulerError::StorageError(error)
+    }
+}
+
+impl From<ExecutorError> for SchedulerError {
+    fn from(error: ExecutorError) -> Self {
+        SchedulerError::ExecutionError(error)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -268,6 +291,10 @@ impl SchedulerExecutionResult {
             .extend(blob_execution_data.tx_status);
         // Should contains all the changes from all executions
         self.changes = StorageChanges::Changes(blob_execution_data.changes);
+        debug_assert!(
+            self.changes.is_empty(),
+            "Changes should be empty after blob merging"
+        );
         self.used_gas = self.used_gas.saturating_add(blob_execution_data.used_gas);
         self.used_size = self.used_size.saturating_add(blob_execution_data.used_size);
         self.coinbase = self.coinbase.saturating_add(blob_execution_data.coinbase);
@@ -281,9 +308,10 @@ pub(crate) struct PreparedBatch {
     pub blob_transactions: Vec<CheckedTransaction>,
     // Separated from the other gas because this need to be deduced to the global one and not a core one
     pub blob_gas: u64,
-    pub total_size: u32,
+    pub total_size: u64,
     pub contracts_used: Vec<ContractId>,
     pub coins_used: Vec<CoinInBatch>,
+    pub message_nonces_used: Vec<Nonce>,
     pub number_of_transactions: u16,
 }
 
@@ -307,11 +335,11 @@ impl<R, S, PreconfirmationSender> Drop for Scheduler<R, S, PreconfirmationSender
 impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
     pub fn new(
         config: Config,
-        relayer: R,
         storage: S,
-        preconfirmation_sender: PreconfirmationSender,
+        executor: BlockExecutor<R, NoWaitTxs, PreconfirmationSender>,
+        memory_pool: MemoryPool,
         consensus_parameters: ConsensusParameters,
-        memory: MemoryInstance,
+        maximum_time_per_block: Duration,
     ) -> Result<Self, SchedulerError> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(config.number_of_cores.get())
@@ -321,13 +349,14 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
 
         Ok(Self {
             runtime: Some(runtime),
-            relayer,
-            preconfirmation_sender,
+            executor,
             storage,
+            // TODO: Use consensus parameters after https://github.com/FuelLabs/fuel-vm/pull/905 is merged
             tx_left: u16::MAX,
-            tx_size_left: u32::MAX,
-            gas_left: u64::MAX,
-            current_available_workers: (0..config.number_of_cores.get()).collect(),
+            tx_size_left: consensus_parameters.block_transaction_size_limit(),
+            gas_left: consensus_parameters.block_gas_limit(),
+            worker_pool: WorkerPool::new(config.number_of_cores.get()),
+            memory_pool,
             config,
             current_execution_tasks: FuturesUnordered::new(),
             blob_transactions: vec![],
@@ -336,7 +365,8 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             contracts_changes: ContractsChanges::new(),
             current_executing_contracts: HashSet::new(),
             consensus_parameters,
-            memory,
+            blob_gas: 0,
+            maximum_time_per_block,
         })
     }
 }
@@ -352,40 +382,40 @@ where
         mut self,
         components: &mut Components<TxSource>,
         da_changes: Changes,
-        block_constraints: BlockConstraints,
         l1_execution_data: L1ExecutionData,
     ) -> Result<SchedulerExecutionResult, SchedulerError> {
-        let view = self
-            .storage
-            .latest_view()
-            .map_err(SchedulerError::StorageError)?;
+        let view = self.storage.latest_view()?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
             l1_execution_data.tx_count,
-            l1_execution_data.used_size,
+            l1_execution_data.used_size as u64,
             l1_execution_data.used_gas,
         )?;
 
         let consensus_parameters_version =
             components.header_to_produce.consensus_parameters_version;
-        let block_height = *components.header_to_produce.height();
+        let coinbase_recipient = components.coinbase_recipient;
+        let gas_price = components.gas_price;
 
         let new_tx_notifier = components
             .transactions_source
             .get_new_transactions_notifier();
         let now = tokio::time::Instant::now();
-        let deadline = now + block_constraints.total_execution_time;
+        let deadline = now.checked_add(self.maximum_time_per_block).ok_or(
+            SchedulerError::InternalError("Maximum time per block overflow".to_string()),
+        )?;
         let mut nb_batch_created = 0;
         let mut nb_transactions = 0;
-        let initial_gas_per_worker = block_constraints
-            .block_gas_limit
-            .checked_sub(l1_execution_data.used_gas)
-            .ok_or(SchedulerError::InternalError(
-                "L1 transactions consumed all the gas".to_string(),
-            ))?
+        let initial_gas_per_worker = self
+            .consensus_parameters
+            .block_gas_limit()
             .checked_div(self.config.number_of_cores.get() as u64)
             .ok_or(SchedulerError::InternalError(
                 "Invalid block gas limit".to_string(),
+            ))?
+            .checked_sub(l1_execution_data.used_gas)
+            .ok_or(SchedulerError::InternalError(
+                "L1 transactions consumed all the gas".to_string(),
             ))?;
 
         'outer: loop {
@@ -394,7 +424,7 @@ where
                     &mut components.transactions_source,
                     now,
                     initial_gas_per_worker,
-                    block_constraints.total_execution_time,
+                    self.maximum_time_per_block,
                 )?;
                 let batch_len = batch.number_of_transactions;
 
@@ -413,8 +443,12 @@ where
                     storage_with_da.clone(),
                 )?;
 
-                nb_batch_created += 1;
-                nb_transactions += batch_len;
+                nb_batch_created = nb_batch_created.saturating_add(1);
+                nb_transactions = nb_transactions.checked_add(batch_len).ok_or(
+                    SchedulerError::InternalError(
+                        "Transaction count overflow".to_string(),
+                    ),
+                )?;
             } else if self.current_execution_tasks.is_empty() {
                 tokio::select! {
                     _ = new_tx_notifier.notified() => {
@@ -432,18 +466,13 @@ where
                     result = self.current_execution_tasks.select_next_some() => {
                         match result {
                             Ok(res) => {
-                                match res {
-                                    Ok(res) => {
-                                        if !res.skipped_tx.is_empty() {
-                                    self.sequential_fallback(block_height, res.batch_id, res.txs, res.coins_used, res.coins_created).await?;
+                                let res = res?;
+                                if !res.skipped_tx.is_empty() {
+                                    drop(res.worker_id);
+                                    self.sequential_fallback(components.header_to_produce, coinbase_recipient, gas_price, res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used).await?;
                                     continue;
                                 }
                                 self.register_execution_result(res);
-                                    },
-                                    Err(e) => {
-                                        return Err(SchedulerError::ExecutionError(e));
-                                    }
-                                }
 
                             }
                             _ => {
@@ -461,8 +490,10 @@ where
         }
 
         self.wait_all_execution_tasks(
-            block_height,
-            block_constraints.total_execution_time,
+            components.header_to_produce,
+            coinbase_recipient,
+            gas_price,
+            self.maximum_time_per_block,
         )
         .await?;
 
@@ -503,7 +534,7 @@ where
     fn update_constraints(
         &mut self,
         tx_number_to_add: u16,
-        tx_size_to_add: u32,
+        tx_size_to_add: u64,
         gas_to_add: u64,
     ) -> Result<(), SchedulerError> {
         self.tx_left = self.tx_left.checked_sub(tx_number_to_add).ok_or(
@@ -525,7 +556,7 @@ where
     }
 
     fn is_worker_idling(&self) -> bool {
-        !self.current_available_workers.is_empty()
+        !self.worker_pool.is_empty()
             && self.state == SchedulerState::TransactionsReadyForPickup
     }
 
@@ -551,8 +582,27 @@ where
             .gas_left
             .saturating_div(self.config.number_of_cores.get() as u64);
         // Time left in percentage to have the gas percentage left
-        // TODO: Maybe avoid as u32
-        let current_gas = std::cmp::min(scaled_gas_initial, scaled_gas_left);
+
+        let current_gas = u64::try_from(std::cmp::min(
+            ((initial_gas as u128)
+                .saturating_mul(
+                    (total_execution_time.as_millis())
+                        .saturating_sub(spent_time.as_millis()),
+                )
+                .checked_div(total_execution_time.as_millis()))
+            .expect(
+                "Total execution time cannot be zero as it's the block execution time",
+            )
+            .saturating_sub(self.blob_gas as u128),
+            // TODO: avoid always divide because if there is only one worker left he can use it all
+            (self.gas_left as u128)
+                .checked_div(self.config.number_of_cores.get() as u128)
+                .expect("Number of cores cannot be zero as it's a NonZeroUsize")
+                .saturating_sub(self.blob_gas as u128),
+        ))
+        .map_err(|_| {
+            SchedulerError::InternalError("Current gas overflowed u64".to_string())
+        })?;
 
         let executable_transactions = tx_source.get_executable_transactions(
             current_gas,
@@ -580,32 +630,10 @@ where
         self.update_constraints(
             prepared_batch.number_of_transactions,
             prepared_batch.total_size,
-            prepared_batch.gas.saturating_add(
-                prepared_batch
-                    .blob_gas
-                    .saturating_mul(self.config.number_of_cores.get() as u64),
-            ),
+            prepared_batch.gas,
         )?;
+        self.blob_gas = self.blob_gas.saturating_add(prepared_batch.blob_gas);
         Ok(prepared_batch)
-    }
-
-    pub fn create_executor(
-        &self,
-    ) -> Result<BlockExecutor<R, NoWaitTxs, PreconfirmationSender>, SchedulerError> {
-        BlockExecutor::new(
-            self.relayer.clone(),
-            ExecutionOptions {
-                forbid_fake_coins: false,
-                backtrace: false,
-            },
-            self.consensus_parameters.clone(),
-            NoWaitTxs,
-            self.preconfirmation_sender.clone(),
-            true, // dry run
-        )
-        .map_err(|e| {
-            SchedulerError::InternalError(format!("Failed to create executor: {e}"))
-        })
     }
 
     fn execute_batch<TxSource>(
@@ -617,9 +645,12 @@ where
         start_idx_txs: u16,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
-        let worker_id = self.current_available_workers.pop_front().ok_or(
-            SchedulerError::InternalError("No available workers".to_string()),
-        )?;
+        let worker_id =
+            self.worker_pool
+                .take_worker()
+                .ok_or(SchedulerError::InternalError(
+                    "No available workers".to_string(),
+                ))?;
         let runtime = self.runtime.as_ref().unwrap();
 
         let mut new_contracts_used = vec![];
@@ -646,22 +677,18 @@ where
         let required_changes = tx.into_changes();
         batch.contracts_used.extend(new_contracts_used);
 
-        let executor = self.create_executor()?;
+        let executor = self.executor.clone();
         let coinbase_recipient = components.coinbase_recipient;
         let gas_price = components.gas_price;
         let header_to_produce = components.header_to_produce;
-        let mut memory = self.memory.clone();
+        let mut memory = self.memory_pool.take_raw();
         self.current_execution_tasks.push(runtime.spawn({
             let storage_with_da = storage_with_da.clone();
             async move {
-                let mut execution_data = ExecutionData {
-                    tx_count: start_idx_txs,
-                    ..Default::default()
-                };
                 let storage_tx = storage_with_da
                     .into_transaction()
                     .with_changes(required_changes);
-                let block = executor
+                let (transactions, execution_data) = executor
                     .execute_l2_transactions(
                         Components {
                             header_to_produce,
@@ -673,13 +700,12 @@ where
                             gas_price,
                         },
                         storage_tx,
-                        &mut execution_data,
-                        &mut memory,
+                        start_idx_txs,
+                        memory.as_mut(),
                     )
                     .await?;
-                // TODO: Outputs seems to not be resolved here, why? It should be the case need to investigate
                 let coins_created = get_coins_outputs(
-                    block.transactions.iter().zip(
+                    transactions.iter().zip(
                         execution_data
                             .tx_status
                             .iter()
@@ -704,13 +730,15 @@ where
                     changes: execution_data.changes,
                     coins_created,
                     coins_used: batch.coins_used,
+                    message_nonces_used: batch.message_nonces_used,
                     contracts_used: batch.contracts_used,
                     skipped_tx: execution_data.skipped_transactions,
-                    txs: block.transactions,
+                    txs: transactions,
                     message_ids: execution_data.message_ids,
                     events: execution_data.events,
                     tx_statuses: execution_data.tx_status,
                     used_gas: execution_data.used_gas,
+                    gas_diff: batch.gas.saturating_sub(execution_data.used_gas),
                     used_size: execution_data.used_size,
                     coinbase: execution_data.coinbase,
                 })
@@ -731,10 +759,13 @@ where
         let changes =
             self.store_any_contract_changes(res.changes, res.contracts_used.as_ref());
 
+        self.gas_left = self.gas_left.saturating_add(res.gas_diff);
+
         self.execution_results.insert(
             res.batch_id,
             WorkSessionSavedData {
                 changes,
+                message_nonces_used: res.message_nonces_used,
                 coins_created: res.coins_created,
                 coins_used: res.coins_used,
                 txs: res.txs,
@@ -747,7 +778,6 @@ where
                 coinbase: res.coinbase,
             },
         );
-        self.current_available_workers.push_back(res.worker_id);
     }
 
     fn store_any_contract_changes(
@@ -771,24 +801,32 @@ where
 
     async fn wait_all_execution_tasks(
         &mut self,
-        block_height: BlockHeight,
+        partial_block_header: PartialBlockHeader,
+        coinbase_recipient: ContractId,
+        gas_price: u64,
         total_execution_time: Duration,
     ) -> Result<(), SchedulerError> {
-        let tolerance_execution_time_overflow = total_execution_time / 10;
+        let tolerance_execution_time_overflow =
+            total_execution_time.checked_div(10).unwrap_or_default();
         let now = tokio::time::Instant::now();
 
         // We have reached the deadline
         // We need to merge the states of all the workers
         while !self.current_execution_tasks.is_empty() {
             match self.current_execution_tasks.next().await {
-                Some(Ok(Ok(res))) => {
+                Some(Ok(res)) => {
+                    let res = res?;
                     if !res.skipped_tx.is_empty() {
+                        drop(res.worker_id);
                         self.sequential_fallback(
-                            block_height,
+                            partial_block_header,
+                            coinbase_recipient,
+                            gas_price,
                             res.batch_id,
                             res.txs,
                             res.coins_used,
                             res.coins_created,
+                            res.message_nonces_used,
                         )
                         .await?;
                         break;
@@ -799,6 +837,7 @@ where
                                 changes: res.changes,
                                 coins_created: res.coins_created,
                                 coins_used: res.coins_used,
+                                message_nonces_used: res.message_nonces_used,
                                 txs: res.txs,
                                 message_ids: res.message_ids,
                                 events: res.events,
@@ -810,10 +849,6 @@ where
                             },
                         );
                     }
-                }
-                Some(Ok(Err(e))) => {
-                    tracing::error!("Worker execution failed: {e}");
-                    return Err(SchedulerError::ExecutionError(e));
                 }
                 Some(Err(_)) => {
                     return Err(SchedulerError::InternalError(
@@ -864,6 +899,7 @@ where
         };
         let mut storage_changes = vec![];
         let mut compiled_created_coins = CoinDependencyChainVerifier::new();
+        let mut nonce_used = HashSet::new();
         for batch_id in 0..nb_batch {
             if let Some(changes) = self.execution_results.remove(&batch_id) {
                 compiled_created_coins
@@ -873,6 +909,13 @@ where
                     changes.coins_used.iter(),
                     &block_transaction,
                 )?;
+                for nonce in changes.message_nonces_used.iter() {
+                    if !nonce_used.insert(*nonce) {
+                        return Err(SchedulerError::InternalError(format!(
+                            "Nonce {nonce} used multiple times."
+                        )));
+                    }
+                }
                 storage_changes.push(changes.changes);
                 exec_result.events.extend(changes.events);
                 exec_result.message_ids.extend(changes.message_ids);
@@ -909,7 +952,6 @@ where
                 )));
             }
         }
-        exec_result.header = partial_block_header;
         storage_changes.extend(self.contracts_changes.extract_all_contracts_changes());
         exec_result.changes = StorageChanges::ChangesList(storage_changes);
         Ok(exec_result)
@@ -925,12 +967,10 @@ where
     where
         D: KeyValueInspect<Column = Column>,
     {
-        let mut execution_data = ExecutionData {
-            tx_count: start_idx_txs,
-            ..Default::default()
-        };
-        let executor = self.create_executor()?;
-        let block = executor
+        // Get a memory instance for the blob transactions execution
+        let executor = self.executor.clone();
+        let mut memory_instance = self.memory_pool.take_raw();
+        let (transactions, execution_data) = executor
             .execute_l2_transactions(
                 Components {
                     header_to_produce: components.header_to_produce,
@@ -942,12 +982,12 @@ where
                     gas_price: components.gas_price,
                 },
                 storage,
-                &mut execution_data,
-                &mut self.memory,
+                start_idx_txs,
+                memory_instance.as_mut(),
             )
-            .await
-            .map_err(SchedulerError::ExecutionError)?;
-        Ok((execution_data, block.transactions))
+            .await?;
+
+        Ok((execution_data, transactions))
     }
 
     // Wait for all the workers to finish gather all theirs transactions
@@ -958,25 +998,39 @@ where
     // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
     //
     // Can be replaced by a mechanism that replace the skipped_tx by a dummy transaction to not shift everything
+    #[allow(clippy::too_many_arguments)]
     async fn sequential_fallback(
         &mut self,
-        block_height: BlockHeight,
+        header: PartialBlockHeader,
+        coinbase_recipient: ContractId,
+        gas_price: u64,
         batch_id: usize,
         txs: Vec<Transaction>,
         coins_used: Vec<CoinInBatch>,
         coins_created: Vec<CoinInBatch>,
+        message_nonces_used: Vec<Nonce>,
     ) -> Result<(), SchedulerError> {
+        let block_height = *header.height();
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
         let mut all_txs_by_batch_id = FxHashMap::default();
-        all_txs_by_batch_id.insert(batch_id, (txs, coins_created, coins_used));
+        all_txs_by_batch_id.insert(
+            batch_id,
+            (txs, coins_created, coins_used, message_nonces_used),
+        );
         for future in current_execution_tasks {
             match future.await {
-                Ok(Ok(res)) => {
+                Ok(res) => {
+                    let res = res?;
                     all_txs_by_batch_id.insert(
                         res.batch_id,
-                        (res.txs, res.coins_created, res.coins_used),
+                        (
+                            res.txs,
+                            res.coins_created,
+                            res.coins_used,
+                            res.message_nonces_used,
+                        ),
                     );
                     if res.batch_id < lower_batch_id {
                         lower_batch_id = res.batch_id;
@@ -988,18 +1042,15 @@ where
                 Err(_) => {
                     tracing::error!("Worker execution failed");
                 }
-                Ok(Err(e)) => {
-                    tracing::error!("Worker execution failed: {e}");
-                    return Err(SchedulerError::ExecutionError(e));
-                }
             }
         }
 
         let mut all_txs: Vec<CheckedTransaction> = vec![];
         let mut all_coins_created: Vec<CoinInBatch> = vec![];
         let mut all_coins_used: Vec<CoinInBatch> = vec![];
+        let mut all_nonces_used: Vec<Nonce> = vec![];
         for id in lower_batch_id..=higher_batch_id {
-            if let Some((txs, coins_created, coins_used)) =
+            if let Some((txs, coins_created, coins_used, message_nonces_used)) =
                 all_txs_by_batch_id.remove(&id)
             {
                 for tx in txs {
@@ -1018,6 +1069,7 @@ where
                 }
                 all_coins_created.extend(coins_created);
                 all_coins_used.extend(coins_used);
+                all_nonces_used.extend(message_nonces_used);
             } else if let Some(res) = self.execution_results.remove(&id) {
                 for tx in res.txs {
                     all_txs.push(
@@ -1032,27 +1084,28 @@ where
                 }
                 all_coins_created.extend(res.coins_created);
                 all_coins_used.extend(res.coins_used);
+                all_nonces_used.extend(res.message_nonces_used);
             } else {
                 tracing::error!("Batch {id} not found in the execution results");
             }
         }
 
-        let mut execution_data = ExecutionData::default();
-        let executor = self.create_executor()?;
-        let block = executor
+        let executor = self.executor.clone();
+        // Get a memory instance for the blob transactions execution
+        let mut memory_instance = self.memory_pool.take_raw();
+        let (transactions, execution_data) = executor
             .execute_l2_transactions(
                 Components {
-                    header_to_produce: PartialBlockHeader::default(),
+                    header_to_produce: header,
                     transactions_source: OnceTransactionsSource::new(all_txs, 0),
-                    coinbase_recipient: Default::default(),
-                    gas_price: Default::default(),
+                    coinbase_recipient,
+                    gas_price,
                 },
                 self.storage.latest_view().unwrap().write_transaction(),
-                &mut execution_data,
-                &mut self.memory,
+                0,
+                memory_instance.as_mut(),
             )
-            .await
-            .map_err(SchedulerError::ExecutionError)?;
+            .await?;
 
         // Save execution results for all batch id with empty data
         // to not break the batch chain
@@ -1066,8 +1119,9 @@ where
             WorkSessionSavedData {
                 changes: execution_data.changes,
                 coins_created: all_coins_created,
+                message_nonces_used: all_nonces_used,
                 coins_used: all_coins_used,
-                txs: block.transactions,
+                txs: transactions,
                 message_ids: execution_data.message_ids,
                 events: execution_data.events,
                 tx_statuses: execution_data.tx_status,
@@ -1077,6 +1131,7 @@ where
                 coinbase: execution_data.coinbase,
             },
         );
+
         Ok(())
     }
 }
@@ -1105,7 +1160,18 @@ fn prepare_transactions_batch(
                         .coins_used
                         .push(CoinInBatch::from_predicate_coin(coin, idx, tx_id));
                 }
-                _ => {}
+                fuel_core_types::fuel_tx::Input::MessageCoinPredicate(message) => {
+                    prepared_batch.message_nonces_used.push(message.nonce);
+                }
+                fuel_core_types::fuel_tx::Input::MessageCoinSigned(message) => {
+                    prepared_batch.message_nonces_used.push(message.nonce);
+                }
+                fuel_core_types::fuel_tx::Input::MessageDataPredicate(message) => {
+                    prepared_batch.message_nonces_used.push(message.nonce);
+                }
+                fuel_core_types::fuel_tx::Input::MessageDataSigned(message) => {
+                    prepared_batch.message_nonces_used.push(message.nonce);
+                }
             }
         }
 
@@ -1116,13 +1182,16 @@ fn prepare_transactions_batch(
         }
 
         let is_blob = matches!(&tx, CheckedTransaction::Blob(_));
-        prepared_batch.total_size += tx.size() as u32;
-        prepared_batch.number_of_transactions += 1;
+        prepared_batch.total_size =
+            prepared_batch.total_size.saturating_add(tx.size() as u64);
+        prepared_batch.number_of_transactions =
+            prepared_batch.number_of_transactions.saturating_add(1);
+        let max_gas = CheckedTransactionExt::max_gas(&tx)?;
         if is_blob {
-            prepared_batch.blob_gas += CheckedTransactionExt::max_gas(&tx)?;
+            prepared_batch.blob_gas = prepared_batch.blob_gas.saturating_add(max_gas);
             prepared_batch.blob_transactions.push(tx);
         } else {
-            prepared_batch.gas += CheckedTransactionExt::max_gas(&tx)?;
+            prepared_batch.gas = prepared_batch.gas.saturating_add(max_gas);
             prepared_batch.transactions.push(tx);
         }
     }
@@ -1142,7 +1211,11 @@ fn get_coins_outputs<'a>(
                     asset_id,
                 } => {
                     coins.push(CoinInBatch::from_output(
-                        UtxoId::new(tx_id, output_idx as u16),
+                        UtxoId::new(
+                            tx_id,
+                            u16::try_from(output_idx)
+                                .expect("Output index should fit in u16"),
+                        ),
                         idx,
                         tx_id,
                         *to,
@@ -1156,7 +1229,11 @@ fn get_coins_outputs<'a>(
                     asset_id,
                 } => {
                     coins.push(CoinInBatch::from_output(
-                        UtxoId::new(tx_id, output_idx as u16),
+                        UtxoId::new(
+                            tx_id,
+                            u16::try_from(output_idx)
+                                .expect("Output index should fit in u16"),
+                        ),
                         idx,
                         tx_id,
                         *to,
@@ -1170,7 +1247,11 @@ fn get_coins_outputs<'a>(
                     asset_id,
                 } => {
                     coins.push(CoinInBatch::from_output(
-                        UtxoId::new(tx_id, output_idx as u16),
+                        UtxoId::new(
+                            tx_id,
+                            u16::try_from(output_idx)
+                                .expect("Output index should fit in u16"),
+                        ),
                         idx,
                         tx_id,
                         *to,

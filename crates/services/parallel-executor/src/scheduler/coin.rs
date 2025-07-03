@@ -22,7 +22,10 @@ use fuel_core_types::{
         },
     },
 };
-use fxhash::FxHashMap;
+use fxhash::{
+    FxHashMap,
+    FxHashSet,
+};
 
 use super::SchedulerError;
 
@@ -175,12 +178,14 @@ impl From<CoinInBatch> for CompressedCoin {
 
 pub struct CoinDependencyChainVerifier {
     coins_registered: FxHashMap<UtxoId, (usize, CoinInBatch)>,
+    coins_used: FxHashSet<UtxoId>,
 }
 
 impl CoinDependencyChainVerifier {
     pub fn new() -> Self {
         Self {
             coins_registered: FxHashMap::default(),
+            coins_used: FxHashSet::default(),
         }
     }
 
@@ -195,7 +200,7 @@ impl CoinDependencyChainVerifier {
     }
 
     pub fn verify_coins_used<'a, S>(
-        &self,
+        &mut self,
         batch_id: usize,
         coins_used: impl Iterator<Item = &'a CoinInBatch>,
         storage: &StorageTransaction<S>,
@@ -203,7 +208,15 @@ impl CoinDependencyChainVerifier {
     where
         S: KeyValueInspect<Column = Column> + Send,
     {
+        // Check if the coins used are not already used and if they are valid
         for coin in coins_used {
+            if self.coins_used.contains(coin.utxo()) {
+                return Err(SchedulerError::InternalError(format!(
+                    "Coin {} is already used in the batch",
+                    coin.utxo(),
+                )));
+            }
+            self.coins_used.insert(*coin.utxo());
             match storage.storage::<Coins>().get(coin.utxo()) {
                 Ok(Some(db_coin)) => {
                     // Coin is in the database

@@ -201,6 +201,14 @@ pub fn init_sub_services(
         preconfirmation_sender,
         tx_status_manager_adapter.clone(),
     );
+  
+    let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
+        forbid_unauthorized_inputs_default: config.utxo_validation,
+        forbid_fake_utxo_default: config.utxo_validation,
+        native_executor_version: config.native_executor_version,
+        allow_historical_execution: config.historical_execution,
+        create_exec_sequencer_skeleton
+    };
 
     #[cfg(not(feature = "parallel-executor"))]
     let executor = {
@@ -217,6 +225,7 @@ pub fn init_sub_services(
             preconfirmation_sender.clone(),
         )
     };
+
     #[cfg(feature = "parallel-executor")]
     let executor = {
         let parallel_executor_config = fuel_core_parallel_executor::config::Config {
