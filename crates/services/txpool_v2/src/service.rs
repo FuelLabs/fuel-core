@@ -732,10 +732,12 @@ where
     let tx_from_p2p_stream = p2p.gossiped_transaction_events();
     let new_peers_subscribed_stream = p2p.subscribe_new_peers();
 
+    // TODO: Why do we need +1 here?
     let (write_pool_requests_sender, write_pool_requests_receiver) = mpsc::channel(
         config
             .service_channel_limits
-            .max_pending_write_pool_requests,
+            .max_pending_write_pool_requests
+            + 1,
     );
 
     let (pool_stats_sender, pool_stats_receiver) =

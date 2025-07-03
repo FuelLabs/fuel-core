@@ -572,7 +572,17 @@ where
         total_execution_time: Duration,
     ) -> Result<PreparedBatch, SchedulerError> {
         let spent_time = start_execution_time.elapsed();
+        let scaled_gas_initial = initial_gas
+            .saturating_mul(
+                (total_execution_time.as_millis() as u64)
+                    .saturating_sub(spent_time.as_millis() as u64),
+            )
+            .saturating_div(total_execution_time.as_millis() as u64);
+        let scaled_gas_left = self
+            .gas_left
+            .saturating_div(self.config.number_of_cores.get() as u64);
         // Time left in percentage to have the gas percentage left
+
         let current_gas = u64::try_from(std::cmp::min(
             ((initial_gas as u128)
                 .saturating_mul(
@@ -635,6 +645,10 @@ where
         start_idx_txs: u16,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
+        tracing::warn!(
+            "Executing batch {batch_id} with {} transactions",
+            batch.transactions.len()
+        );
         let worker_id =
             self.worker_pool
                 .take_worker()

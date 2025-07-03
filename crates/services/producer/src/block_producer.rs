@@ -16,8 +16,8 @@ use anyhow::{
 };
 use fuel_core_storage::transactional::{
     AtomicView,
-    Changes,
     HistoricalView,
+    StorageChanges,
 };
 use fuel_core_types::{
     blockchain::{
@@ -95,7 +95,7 @@ pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainState
     pub config: Config,
     pub view_provider: ViewProvider,
     pub txpool: TxPool,
-    pub executor: Arc<Executor>,
+    pub executor: Arc<Mutex<Executor>>,
     pub relayer: Box<dyn ports::Relayer>,
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
@@ -115,7 +115,7 @@ where
         &self,
         predefined_block: &Block,
         deadline: D,
-    ) -> anyhow::Result<UncommittedResult<Changes>>
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>>
     where
         Executor: ports::BlockProducer<Vec<Transaction>, Deadline = D> + 'static,
     {
@@ -166,6 +166,8 @@ where
 
         let result = self
             .executor
+            .lock()
+            .await
             .produce_without_commit(component, deadline)
             .await
             .map_err(Into::<anyhow::Error>::into)
@@ -192,11 +194,12 @@ where
         block_time: Tai64,
         tx_source: impl FnOnce(u64, BlockHeight) -> F,
         deadline: Deadline,
-    ) -> anyhow::Result<UncommittedResult<Changes>>
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>>
     where
         Executor: ports::BlockProducer<TxSource, Deadline = Deadline> + 'static,
         F: Future<Output = anyhow::Result<TxSource>>,
     {
+        tracing::warn!("Producing and executing block at height: {}", height);
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -242,6 +245,8 @@ where
             format!("Failed to produce block {height:?} due to execution failure");
         let result = self
             .executor
+            .lock()
+            .await
             .produce_without_commit(component, deadline)
             .await
             .map_err(Into::<anyhow::Error>::into)
@@ -287,7 +292,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         deadline: Deadline,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.produce_and_execute::<TxSource, _, Deadline>(
             height,
             block_time,
@@ -313,7 +318,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         transactions: Vec<Transaction>,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.produce_and_execute(
             height,
             block_time,
@@ -384,7 +389,12 @@ where
 
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let result = tokio_rayon::spawn_fifo(move || {
-            executor.dry_run(component, utxo_validation, height, record_storage_reads)
+            executor.try_lock().unwrap().dry_run(
+                component,
+                utxo_validation,
+                height,
+                record_storage_reads,
+            )
         })
         .await?;
 
@@ -419,7 +429,7 @@ where
         // use the blocking threadpool to avoid clogging up the main async runtime
         tokio_rayon::spawn_fifo(move || {
             let block = view.get_full_block(&height)?;
-            Ok(executor.storage_read_replay(&block)?)
+            Ok(executor.try_lock().unwrap().storage_read_replay(&block)?)
         })
         .await
     }

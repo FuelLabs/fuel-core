@@ -66,8 +66,9 @@ use tracing::warn;
 #[cfg(test)]
 pub mod test;
 
+#[derive(Debug)]
 enum CommitInput {
-    Uncommitted(UncommittedResult<Changes>),
+    Uncommitted(UncommittedResult<StorageChanges>),
     PrepareImportResult(PrepareImportResult),
 }
 
@@ -229,7 +230,7 @@ impl Importer {
     /// Returns an error if called while another call is in progress.
     pub async fn commit_result(
         &self,
-        result: UncommittedResult<Changes>,
+        result: UncommittedResult<StorageChanges>,
     ) -> Result<(), Error> {
         let _guard = self.lock()?;
 
@@ -249,6 +250,9 @@ impl Importer {
             return Err(Error::PreviousBlockProcessingNotFinished)
         };
         let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
+
+        let height = *result.result().sealed_block.entity.header().height();
+        tracing::warn!("sending committing result: height={}", height);
 
         self.run_commit_result(permit, CommitInput::Uncommitted(result))
             .await
@@ -355,7 +359,7 @@ where
     ) -> Result<(), Error> {
         let PrepareImportResult {
             result,
-            block_changes,
+            mut block_changes,
         } = prepare;
 
         let (result, changes) = result.into();
@@ -366,7 +370,7 @@ where
         // execution without block itself.
         let expected_block_root = self.database.latest_block_root()?;
 
-        let db_after_execution = self.database.storage_transaction(changes);
+        let db_after_execution = self.database.storage_transaction(changes.clone());
         let actual_block_root = db_after_execution.latest_block_root()?;
 
         if actual_block_root != expected_block_root {
@@ -375,14 +379,27 @@ where
                 actual_block_root,
             ))
         }
+        drop(db_after_execution);
 
-        let changes = db_after_execution.into_changes();
+        // TODO: Ensure this is the same value as the above `changes`, righ?
+        // let changes = db_after_execution.into_changes();
 
         #[cfg(feature = "test-helpers")]
         let changes_clone = changes.clone();
 
-        self.database
-            .commit_changes(StorageChanges::ChangesList(vec![block_changes, changes]))?;
+        let combined_changes = match changes {
+            StorageChanges::Changes(inner) => {
+                let mut combined = block_changes.extract_list_of_changes();
+                combined.push(inner);
+                StorageChanges::ChangesList(combined)
+            }
+            StorageChanges::ChangesList(list) => {
+                let mut combined = block_changes.extract_list_of_changes();
+                combined.extend(list);
+                StorageChanges::ChangesList(combined)
+            }
+        };
+        self.database.commit_changes(combined_changes)?;
 
         if self.metrics {
             Self::update_metrics(&result, &actual_next_height);
@@ -474,12 +491,13 @@ where
 struct VerifyAndExecutionResult {
     tx_status: Vec<TransactionExecutionStatus>,
     events: Vec<Event>,
-    changes: Changes,
+    changes: StorageChanges,
 }
 
+#[derive(Debug)]
 struct PrepareImportResult {
-    result: UncommittedResult<Changes>,
-    block_changes: Changes,
+    result: UncommittedResult<StorageChanges>,
+    block_changes: StorageChanges,
 }
 
 impl<IDatabase, E, V> ImporterInner<IDatabase, E, V>
@@ -491,6 +509,7 @@ where
     async fn run(&mut self) {
         let local_runner = LocalRunner::new().expect("Failed to create the local runner");
         while let Some(command) = self.commands.recv().await {
+            warn!("received command");
             match command {
                 Commands::Stop => break,
                 Commands::CommitResult {
@@ -498,6 +517,19 @@ where
                     permit,
                     callback,
                 } => {
+                    let height = match &result {
+                        CommitInput::Uncommitted(uncommitted) => {
+                            *uncommitted.result().sealed_block.entity.header().height()
+                        }
+                        CommitInput::PrepareImportResult(prepare) => *prepare
+                            .result
+                            .result()
+                            .sealed_block
+                            .entity
+                            .header()
+                            .height(),
+                    };
+                    warn!("committing result: height={height}");
                     let result = self.commit_result(&local_runner, permit, result);
                     let _ = callback.send(result);
                 }
@@ -637,7 +669,7 @@ where
         let result = VerifyAndExecutionResult {
             tx_status,
             events,
-            changes,
+            changes: StorageChanges::Changes(changes),
         };
 
         Ok(result)
@@ -714,7 +746,7 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
     chain_id: &ChainId,
     sealed_block: &SealedBlock,
     database: &D,
-) -> Result<Changes, Error> {
+) -> Result<StorageChanges, Error> {
     let consensus = &sealed_block.consensus;
     let actual_next_height = *sealed_block.entity.header().height();
 
@@ -761,11 +793,12 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
         ))
     }
 
-    let mut transaction = database.storage_transaction(Changes::new());
+    let mut transaction =
+        database.storage_transaction(StorageChanges::Changes(Changes::new()));
 
     if !transaction.store_new_block(chain_id, sealed_block)? {
         return Err(Error::NotUnique(actual_next_height))
     }
 
-    Ok(transaction.into_changes())
+    Ok(StorageChanges::Changes(transaction.into_changes()))
 }

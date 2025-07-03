@@ -3,6 +3,22 @@ use std::{
     sync::Arc,
 };
 
+use self::adapters::BlockImporterAdapter;
+#[cfg(not(feature = "parallel-executor"))]
+use crate::service::adapters::ExecutorAdapter;
+#[cfg(feature = "parallel-executor")]
+use crate::service::adapters::ParallelExecutorAdapter;
+use crate::{
+    combined_database::{
+        CombinedDatabase,
+        ShutdownListener,
+    },
+    database::Database,
+    service::{
+        adapters::PoAAdapter,
+        sub_services::TxPoolSharedState,
+    },
+};
 use adapters::{
     TxStatusManagerAdapter,
     ready_signal::ReadySignal,
@@ -43,24 +59,8 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::consensus::Consensus,
     fuel_types::BlockHeight,
+    services::block_importer::UncommittedResult,
 };
-
-use crate::{
-    combined_database::{
-        CombinedDatabase,
-        ShutdownListener,
-    },
-    database::Database,
-    service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
-        sub_services::TxPoolSharedState,
-    },
-};
-
-use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -90,8 +90,14 @@ pub struct SharedState {
     pub database: CombinedDatabase,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
+    #[cfg(not(feature = "parallel-executor"))]
     /// The executor to validate blocks.
     pub executor: ExecutorAdapter,
+
+    #[cfg(feature = "parallel-executor")]
+    /// The executor to validate blocks.
+    pub executor: ParallelExecutorAdapter,
+
     /// The config of the service.
     pub config: Config,
     /// The compression service shared data.
@@ -362,8 +368,11 @@ impl FuelService {
                     &self.shared.database,
                 )
                 .await?;
+                let (result, changes) = result.into();
+                let res =
+                    UncommittedResult::new(result, StorageChanges::Changes(changes));
 
-                self.shared.block_importer.commit_result(result).await?;
+                self.shared.block_importer.commit_result(res).await?;
             }
         }
 

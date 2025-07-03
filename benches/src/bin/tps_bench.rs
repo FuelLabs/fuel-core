@@ -64,7 +64,7 @@ use clap::Parser;
 struct Args {
     #[clap(short = 'c', long, default_value = "16")]
     pub number_of_cores: usize,
-    #[clap(short = 't', long, default_value = "150000")]
+    #[clap(short = 't', long, default_value = "3000")]
     pub number_of_transactions: u64,
 }
 
@@ -131,6 +131,9 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 }
 
 fn main() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::WARN)
+        .try_init();
     let args = Args::parse();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
@@ -238,6 +241,7 @@ fn main() {
                 .get_sealed_block_by_height(&1.into())
                 .unwrap()
                 .unwrap();
+            assert_eq!(block.entity.transactions().len(), transactions.len() + 1);
             block
         }
     });

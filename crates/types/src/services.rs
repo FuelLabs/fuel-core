@@ -27,6 +27,19 @@ pub struct Uncommitted<Result, Changes> {
     changes: Changes,
 }
 
+// impl<TR, TC, SR, SC> From<Uncommitted<TR, TC>> for Uncommitted<SR, SC>
+// where
+//     TR: Into<SR>,
+//     TC: Into<SC>,
+// {
+//     fn from(uncommitted: Uncommitted<TR, TC>) -> Self {
+//         Uncommitted {
+//             result: uncommitted.result.into(),
+//             changes: uncommitted.changes.into(),
+//         }
+//     }
+// }
+
 impl<Result, Changes> Uncommitted<Result, Changes> {
     /// Create a new instance of `Uncommitted`.
     pub fn new(result: Result, changes: Changes) -> Self {
@@ -61,6 +74,20 @@ impl<Result, Changes> Uncommitted<Result, Changes> {
         Uncommitted {
             result: f(self.result),
             changes: self.changes,
+        }
+    }
+
+    /// Converts the `Uncommitted` instance to a new type, applying the provided conversion functions.
+    pub fn from_converted<TR, TC, SR, SC>(
+        uncommitted: Uncommitted<TR, TC>,
+    ) -> Uncommitted<SR, SC>
+    where
+        TR: Into<SR>,
+        TC: Into<SC>,
+    {
+        Uncommitted {
+            result: uncommitted.result.into(),
+            changes: uncommitted.changes.into(),
         }
     }
 }
