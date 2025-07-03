@@ -202,13 +202,13 @@ pub fn run(c: &mut Criterion) {
     );
 
     {
-        let mut niop = c.benchmark_group("niop");
+        let mut niop_benchmark_group = c.benchmark_group("niop");
         let value_count = 5;
 
         macro_rules! niop_bench {
-            ($niop:expr, $operation:ident, $opwidth:ident, $lhs:expr, $rhs:expr, $index:expr) => {
+            ($operation:ident, $opwidth:ident, $lhs:expr, $rhs:expr, $index:expr) => {
                 run_group_ref(
-                    $niop,
+                    &mut niop_benchmark_group,
                     &format!(
                         "niop_{}_{}_{}",
                         stringify!($operation).to_lowercase(),
@@ -239,23 +239,23 @@ pub fn run(c: &mut Criterion) {
         for (i, (lhs, rhs)) in
             (u8_values.iter().zip(u8_values.iter().cycle().skip(1))).enumerate()
         {
-            niop_bench!(&mut niop, ADD, U8, *lhs, *rhs, i);
-            niop_bench!(&mut niop, SUB, U8, *lhs.max(rhs), *lhs.min(rhs), i);
-            niop_bench!(&mut niop, MUL, U8, *lhs, *rhs, i);
-            niop_bench!(&mut niop, EXP, U8, *lhs, 2, i);
-            niop_bench!(&mut niop, SLL, U8, *lhs, 2, i);
-            niop_bench!(&mut niop, XNOR, U8, *lhs, *rhs, i);
+            niop_bench!(ADD, U8, *lhs, *rhs, i);
+            niop_bench!(SUB, U8, *lhs.max(rhs), *lhs.min(rhs), i);
+            niop_bench!(MUL, U8, *lhs, *rhs, i);
+            niop_bench!(EXP, U8, *lhs, 2, i);
+            niop_bench!(SLL, U8, *lhs, 2, i);
+            niop_bench!(XNOR, U8, *lhs, *rhs, i);
         }
 
         for (i, (lhs, rhs)) in
             (u16_values.iter().zip(u16_values.iter().cycle().skip(1))).enumerate()
         {
-            niop_bench!(&mut niop, ADD, U16, *lhs, *rhs, i);
-            niop_bench!(&mut niop, SUB, U16, *lhs.max(rhs), *lhs.min(rhs), i);
-            niop_bench!(&mut niop, MUL, U16, *lhs, *rhs, i);
-            niop_bench!(&mut niop, EXP, U16, *lhs, 2, i);
-            niop_bench!(&mut niop, SLL, U16, *lhs, 2, i);
-            niop_bench!(&mut niop, XNOR, U16, *lhs, *rhs, i);
+            niop_bench!(ADD, U16, *lhs, *rhs, i);
+            niop_bench!(SUB, U16, *lhs.max(rhs), *lhs.min(rhs), i);
+            niop_bench!(MUL, U16, *lhs, *rhs, i);
+            niop_bench!(EXP, U16, *lhs, 2, i);
+            niop_bench!(SLL, U16, *lhs, 2, i);
+            niop_bench!(XNOR, U16, *lhs, *rhs, i);
         }
 
         for (i, (lhs, rhs)) in u32_values
@@ -263,12 +263,12 @@ pub fn run(c: &mut Criterion) {
             .zip(u32_values.iter().cycle().skip(1))
             .enumerate()
         {
-            niop_bench!(&mut niop, ADD, U32, *lhs, *rhs, i);
-            niop_bench!(&mut niop, SUB, U32, *lhs.max(rhs), *lhs.min(rhs), i);
-            niop_bench!(&mut niop, MUL, U32, *lhs, *rhs, i);
-            niop_bench!(&mut niop, EXP, U32, *lhs, 2, i);
-            niop_bench!(&mut niop, SLL, U32, *lhs, 2, i);
-            niop_bench!(&mut niop, XNOR, U32, *lhs, *rhs, i);
+            niop_bench!(ADD, U32, *lhs, *rhs, i);
+            niop_bench!(SUB, U32, *lhs.max(rhs), *lhs.min(rhs), i);
+            niop_bench!(MUL, U32, *lhs, *rhs, i);
+            niop_bench!(EXP, U32, *lhs, 2, i);
+            niop_bench!(SLL, U32, *lhs, 2, i);
+            niop_bench!(XNOR, U32, *lhs, *rhs, i);
         }
     }
 
