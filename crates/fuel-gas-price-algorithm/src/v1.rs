@@ -176,6 +176,8 @@ pub struct AlgorithmUpdaterV1 {
     pub l2_activity: L2ActivityTracker,
     /// Total unrecorded block bytes
     pub unrecorded_blocks_bytes: u128,
+    /// Don't start DA price updates before this height
+    pub start_da_price_from: u32,
 }
 
 /// The `L2ActivityTracker` tracks the chain activity to determine a safety mode for setting the DA price.
@@ -407,15 +409,17 @@ impl AlgorithmUpdaterV1 {
 
             // gas prices
             self.update_exec_gas_price(used, capacity);
-            self.update_da_gas_price();
+            if height > self.start_da_price_from {
+                self.update_da_gas_price();
 
-            // metadata
-            unrecorded_blocks
-                .insert(height, block_bytes)
-                .map_err(Error::CouldNotInsertUnrecordedBlock)?;
-            self.unrecorded_blocks_bytes = self
-                .unrecorded_blocks_bytes
-                .saturating_add(block_bytes as u128);
+                // metadata
+                unrecorded_blocks
+                    .insert(height, block_bytes)
+                    .map_err(Error::CouldNotInsertUnrecordedBlock)?;
+                self.unrecorded_blocks_bytes = self
+                    .unrecorded_blocks_bytes
+                    .saturating_add(block_bytes as u128);
+            }
             Ok(())
         }
     }
