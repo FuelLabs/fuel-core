@@ -261,14 +261,16 @@ pub async fn select_coins_to_spend(
         big_coins_iter,
         dust_coins_iter,
     }: CoinsToSpendIndexIter<'_>,
-    total: u128,
-    max: u16,
-    asset_id: &AssetId,
-    allow_partial: bool,
+    asset: AssetSpendTarget,
     exclude: &Exclude,
     batch_size: usize,
     owner: Address,
 ) -> Result<Vec<CoinsToSpendIndexKey>, CoinsQueryError> {
+    let asset_id = asset.id;
+    let total = asset.target;
+    let max = asset.max;
+    let allow_partial = asset.allow_partial;
+
     // We aim to reduce dust creation by targeting twice the required amount for selection,
     // inspired by the random-improve approach. This increases the likelihood of generating
     // useful change outputs for future transactions, minimizing unusable dust outputs.
@@ -307,7 +309,7 @@ pub async fn select_coins_to_spend(
         if selected_big_coins.len() >= max as usize && has_more_big_coins {
             return Err(CoinsQueryError::MaxCoinsReached {
                 owner,
-                asset_id: *asset_id,
+                asset_id,
                 collected_amount: selected_big_coins_total,
                 max,
             });
@@ -315,7 +317,7 @@ pub async fn select_coins_to_spend(
 
         return Err(CoinsQueryError::InsufficientCoins {
             owner,
-            asset_id: *asset_id,
+            asset_id,
             collected_amount: selected_big_coins_total,
         });
     }
@@ -1333,17 +1335,15 @@ mod tests {
                 big_coins_iter,
                 dust_coins_iter,
             };
-
+            let asset_id = AssetId::default();
             let exclude = Exclude::default();
             let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
                 owner,
@@ -1400,15 +1400,14 @@ mod tests {
                 big_coins_iter: coins.into_iter().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
+            let asset_id = AssetId::default();
             let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
                 owner,
@@ -1450,15 +1449,14 @@ mod tests {
                 big_coins_iter: coins.into_iter().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
+            let asset_id = AssetId::default();
             let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
                 owner,
@@ -1482,15 +1480,13 @@ mod tests {
                 big_coins_iter: std::iter::empty().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
-
+            let asset_id = AssetId::default();
             let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
                 owner,
@@ -1513,15 +1509,13 @@ mod tests {
                 big_coins_iter: std::iter::empty().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
-
+            let asset_id = AssetId::default();
             let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
                 owner,
@@ -1550,16 +1544,13 @@ mod tests {
                 big_coins_iter: coins.into_iter().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
-
             let asset_id = AssetId::default();
             let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &asset_id,
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
                 owner,
@@ -1601,13 +1592,11 @@ mod tests {
 
             let asset_id = AssetId::default();
             let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &asset_id,
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
                 owner,
@@ -1641,7 +1630,10 @@ mod tests {
                     setup_test_coins,
                 },
                 graphql_api::ports::CoinsToSpendIndexIter,
-                query::asset_query::Exclude,
+                query::asset_query::{
+                    AssetSpendTarget,
+                    Exclude,
+                },
             };
 
             #[tokio::test]
@@ -1664,14 +1656,12 @@ mod tests {
                 };
                 let asset_id = AssetId::default();
                 let owner = Address::default();
+                let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
                 // When
                 let result = select_coins_to_spend(
                     coins_to_spend_iter,
-                    TOTAL,
-                    MAX,
-                    &asset_id,
-                    false,
+                    asset_target,
                     &exclude,
                     BATCH_SIZE,
                     owner,
@@ -1702,14 +1692,12 @@ mod tests {
                 };
                 let asset_id = AssetId::default();
                 let owner = Address::default();
+                let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, true);
 
                 // When
                 let result = select_coins_to_spend(
                     coins_to_spend_iter,
-                    TOTAL,
-                    MAX,
-                    &asset_id,
-                    true,
+                    asset_target,
                     &exclude,
                     BATCH_SIZE,
                     owner,
