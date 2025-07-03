@@ -26,6 +26,7 @@ use crate::{
         SetLatestRecordedHeight,
         SetMetadataStorage,
     },
+    sync_state::new_sync_state_channel,
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -368,7 +369,7 @@ fn gas_price_database_with_metadata(
 }
 
 #[tokio::test]
-async fn next_gas_price__affected_by_new_l2_block() {
+async fn next_gas_price_affected_by_new_l2_block() {
     // given
     let l2_block = BlockInfo::Block {
         height: 1,
@@ -402,6 +403,7 @@ async fn next_gas_price__affected_by_new_l2_block() {
     da_service_runner.start_and_await().await.unwrap();
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
+    let (sync_notifier, _) = new_sync_state_channel();
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -412,16 +414,21 @@ async fn next_gas_price__affected_by_new_l2_block() {
         latest_l2_height,
         None,
         false,
+        sync_notifier,
     );
 
     let read_algo = service.next_block_algorithm();
     let initial = read_algo.next_gas_price();
     let mut watcher = StateWatcher::started();
+    let observer = service.shared_data();
     tokio::spawn(async move { service.run(&mut watcher).await });
 
     // when
     l2_block_sender.send(l2_block).await.unwrap();
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    tokio::time::timeout(Duration::from_millis(10), observer.await_synced())
+        .await
+        .unwrap()
+        .unwrap();
 
     // then
     let new = read_algo.next_gas_price();
@@ -462,6 +469,7 @@ async fn run__new_l2_block_saves_old_metadata() {
     da_service_runner.start_and_await().await.unwrap();
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
+    let (sync_notifier, _) = new_sync_state_channel();
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -472,6 +480,7 @@ async fn run__new_l2_block_saves_old_metadata() {
         latest_l2_height,
         None,
         false,
+        sync_notifier,
     );
     let mut watcher = StateWatcher::started();
 
@@ -524,6 +533,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
     );
 
     let latest_gas_price = LatestGasPrice::new(0, 0);
+    let (sync_notifier, _) = new_sync_state_channel();
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
         shared_algo,
@@ -534,6 +544,7 @@ async fn run__new_l2_block_updates_latest_gas_price_arc() {
         latest_l2_height,
         None,
         false,
+        sync_notifier,
     );
     let mut watcher = StateWatcher::started();
 
@@ -584,6 +595,7 @@ async fn run__updates_da_service_latest_l2_height() {
     );
 
     da_service_runner.start_and_await().await.unwrap();
+    let (sync_notifier, _) = new_sync_state_channel();
 
     let mut service = GasPriceServiceV1::new(
         l2_block_source,
@@ -595,6 +607,7 @@ async fn run__updates_da_service_latest_l2_height() {
         latest_l2_height,
         None,
         false,
+        sync_notifier,
     );
     let mut watcher = StateWatcher::started();
 
