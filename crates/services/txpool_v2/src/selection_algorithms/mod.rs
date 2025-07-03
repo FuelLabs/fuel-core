@@ -18,7 +18,7 @@ pub struct Constraints {
     /// Maximum number of transactions that can be selected.
     pub maximum_txs: u16,
     /// Maximum size of the block.
-    pub maximum_block_size: u32,
+    pub maximum_block_size: u64,
     /// List of excluded contracts.
     pub excluded_contracts: HashSet<ContractId>,
 }

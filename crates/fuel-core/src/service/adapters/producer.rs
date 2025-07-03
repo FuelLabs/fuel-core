@@ -76,6 +76,8 @@ use fuel_core_types::{
 
 #[cfg(feature = "parallel-executor")]
 use fuel_core_types::services::executor::Error as ExecutorError;
+#[cfg(feature = "parallel-executor")]
+use std::time::Duration;
 use std::{
     borrow::Cow,
     sync::Arc,
@@ -134,10 +136,12 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
         component: Components<TransactionsSource>,
         _deadline: Instant,
     ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
+        // TODO: This is probably determined from `_deadline`?
+        let max_execution_time = Duration::from_secs(300);
         self.executor
             .lock()
             .await
-            .produce_without_commit_with_source(component)
+            .produce_without_commit_with_source(component, max_execution_time)
             .await
             .map_err(|e| ExecutorError::Other(format!("{:?}", e)))
         // let (result, changes) = res.into();

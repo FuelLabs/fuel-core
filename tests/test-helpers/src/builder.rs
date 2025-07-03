@@ -38,10 +38,11 @@ use rand::{
     SeedableRng,
     rngs::StdRng,
 };
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZeroUsize;
 use std::{
     collections::HashMap,
     io,
-    num::NonZeroUsize,
 };
 
 /// Helper for wrapping a currently running node environment

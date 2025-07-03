@@ -645,6 +645,10 @@ where
         start_idx_txs: u16,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
+        tracing::warn!(
+            "Executing batch {batch_id} with {} transactions",
+            batch.transactions.len()
+        );
         let worker_id =
             self.worker_pool
                 .take_worker()
