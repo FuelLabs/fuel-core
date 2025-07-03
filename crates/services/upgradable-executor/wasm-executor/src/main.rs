@@ -19,7 +19,10 @@ use crate::utils::{
     WasmDeserializationBlockTypes,
     convert_to_v1_execution_result,
 };
-use fuel_core_executor::executor::ExecutionInstance;
+use fuel_core_executor::executor::{
+    ExecutionInstance,
+    ExecutionOptions,
+};
 use fuel_core_types::{
     blockchain::block::Block,
     services::{
@@ -91,7 +94,11 @@ pub fn execute_without_commit(input_len: u32) -> ReturnType {
     let instance = ExecutionInstance {
         relayer: WasmRelayer {},
         database: WasmStorage {},
-        options,
+        options: ExecutionOptions {
+            forbid_unauthorized_inputs: options.forbid_fake_coins,
+            forbid_fake_utxo: options.forbid_fake_coins,
+            backtrace: options.backtrace,
+        },
     };
 
     match block {

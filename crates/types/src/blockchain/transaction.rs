@@ -36,6 +36,9 @@ pub trait TransactionExt {
 
     /// Returns the maximum gas of the transaction.
     fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64>;
+
+    /// Returns the size of the transaction.
+    fn size(&self) -> usize;
 }
 
 impl TransactionExt for Transaction {
@@ -75,6 +78,17 @@ impl TransactionExt for Transaction {
             Transaction::Blob(tx) => Cow::Borrowed(tx.outputs()),
         }
     }
+
+    fn size(&self) -> usize {
+        match self {
+            Transaction::Script(tx) => tx.metered_bytes_size(),
+            Transaction::Create(tx) => tx.metered_bytes_size(),
+            Transaction::Mint(_) => 0,
+            Transaction::Upgrade(tx) => tx.metered_bytes_size(),
+            Transaction::Upload(tx) => tx.metered_bytes_size(),
+            Transaction::Blob(tx) => tx.metered_bytes_size(),
+        }
+    }
 }
 
 impl TransactionExt for CheckedTransaction {
@@ -110,6 +124,17 @@ impl TransactionExt for CheckedTransaction {
             CheckedTransaction::Upgrade(tx) => Ok(tx.metadata().max_gas),
             CheckedTransaction::Upload(tx) => Ok(tx.metadata().max_gas),
             CheckedTransaction::Blob(tx) => Ok(tx.metadata().max_gas),
+        }
+    }
+
+    fn size(&self) -> usize {
+        match self {
+            CheckedTransaction::Script(tx) => tx.transaction().metered_bytes_size(),
+            CheckedTransaction::Create(tx) => tx.transaction().metered_bytes_size(),
+            CheckedTransaction::Mint(_) => 0,
+            CheckedTransaction::Upgrade(tx) => tx.transaction().metered_bytes_size(),
+            CheckedTransaction::Upload(tx) => tx.transaction().metered_bytes_size(),
+            CheckedTransaction::Blob(tx) => tx.transaction().metered_bytes_size(),
         }
     }
 }

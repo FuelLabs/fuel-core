@@ -56,7 +56,7 @@ impl TransactionsSource for OnceTransactionsSource {
         &mut self,
         _gas_limit: u64,
         tx_count_limit: u16,
-        _block_transaction_size_limit: u32,
+        _block_transaction_size_limit: u64,
         filter: crate::ports::Filter,
     ) -> TransactionSourceExecutableTransactions {
         let mut transactions = self.transactions.lock().expect("Mutex poisoned");
