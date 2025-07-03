@@ -510,7 +510,7 @@ async fn run__received_empty_tx_will_not_be_broadcasted() {
     let mut state_watcher = StateWatcher::started();
 
     // when
-    let empyt_txs = vec![];
+    let empty_txs = vec![];
 
     tokio::task::spawn(async move {
         // run it on repeat so the receiver isn't dropped
@@ -521,7 +521,7 @@ async fn run__received_empty_tx_will_not_be_broadcasted() {
 
     handles
         .tx_sender_handle
-        .send(empyt_txs.clone())
+        .send(empty_txs.clone())
         .await
         .expect("Failed to send txs");
 
