@@ -24,7 +24,7 @@ mod smt {
     };
     use alloc::borrow::Cow;
 
-    /// The key convertor used to convert the key from the `ContractsAssets` table
+    /// The key converter used to convert the key from the `ContractsAssets` table
     /// to the key of the `ContractsAssetsMerkleMetadata` table.
     pub struct KeyConverter;
 
