@@ -17,13 +17,13 @@ use async_graphql::{
 use fuel_core_types::fuel_tx;
 
 #[derive(Union)]
-pub enum Input {
-    Coin(InputCoin),
+pub enum Input<'a> {
+    Coin(InputCoin<'a>),
     Contract(InputContract),
-    Message(InputMessage),
+    Message(InputMessage<'a>),
 }
 
-pub struct InputCoin {
+pub struct InputCoin<'a> {
     utxo_id: UtxoId,
     owner: Address,
     amount: U64,
@@ -31,12 +31,12 @@ pub struct InputCoin {
     tx_pointer: TxPointer,
     witness_index: u16,
     predicate_gas_used: U64,
-    predicate: HexString,
-    predicate_data: HexString,
+    predicate: HexString<'a>,
+    predicate_data: HexString<'a>,
 }
 
 #[Object]
-impl InputCoin {
+impl InputCoin<'_> {
     async fn utxo_id(&self) -> UtxoId {
         self.utxo_id
     }
@@ -105,20 +105,20 @@ impl InputContract {
     }
 }
 
-pub struct InputMessage {
+pub struct InputMessage<'a> {
     sender: Address,
     recipient: Address,
     amount: U64,
     nonce: Nonce,
     witness_index: u16,
     predicate_gas_used: U64,
-    data: HexString,
-    predicate: HexString,
-    predicate_data: HexString,
+    data: HexString<'a>,
+    predicate: HexString<'a>,
+    predicate_data: HexString<'a>,
 }
 
 #[Object]
-impl InputMessage {
+impl InputMessage<'_> {
     async fn sender(&self) -> Address {
         self.sender
     }
@@ -156,8 +156,8 @@ impl InputMessage {
     }
 }
 
-impl From<&fuel_tx::Input> for Input {
-    fn from(input: &fuel_tx::Input) -> Self {
+impl <'a> From<&'a fuel_tx::Input> for Input<'a> {
+    fn from(input: &'a fuel_tx::Input) -> Self {
         match input {
             fuel_tx::Input::CoinSigned(fuel_tx::input::coin::CoinSigned {
                 utxo_id,
@@ -175,7 +175,7 @@ impl From<&fuel_tx::Input> for Input {
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: *witness_index,
                 predicate_gas_used: 0.into(),
-                predicate: HexString(Default::default()),
+                predicate: HexString(vec![].into()),
                 predicate_data: HexString(Default::default()),
             }),
             fuel_tx::Input::CoinPredicate(fuel_tx::input::coin::CoinPredicate {
@@ -196,8 +196,8 @@ impl From<&fuel_tx::Input> for Input {
                 tx_pointer: TxPointer(*tx_pointer),
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
-                predicate: HexString(predicate.to_vec()),
-                predicate_data: HexString(predicate_data.clone()),
+                predicate: HexString::from(predicate.as_ref()),
+                predicate_data: HexString::from(predicate_data.as_ref()),
             }),
             fuel_tx::Input::Contract(contract) => Input::Contract(contract.into()),
             fuel_tx::Input::MessageCoinSigned(
@@ -239,8 +239,8 @@ impl From<&fuel_tx::Input> for Input {
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
                 data: HexString(Default::default()),
-                predicate: HexString(predicate.to_vec()),
-                predicate_data: HexString(predicate_data.clone()),
+                predicate: HexString::from(predicate.as_ref()),
+                predicate_data: HexString::from(predicate_data.as_ref()),
             }),
             fuel_tx::Input::MessageDataSigned(
                 fuel_tx::input::message::MessageDataSigned {
@@ -259,9 +259,9 @@ impl From<&fuel_tx::Input> for Input {
                 nonce: Nonce(*nonce),
                 witness_index: *witness_index,
                 predicate_gas_used: 0.into(),
-                data: HexString(data.clone()),
-                predicate: HexString(Default::default()),
-                predicate_data: HexString(Default::default()),
+                data: HexString::from(data.as_ref()),
+                predicate: HexString(vec![].into()),
+                predicate_data: HexString(vec![].into()),
             }),
             fuel_tx::Input::MessageDataPredicate(
                 fuel_tx::input::message::MessageDataPredicate {
@@ -282,9 +282,9 @@ impl From<&fuel_tx::Input> for Input {
                 nonce: Nonce(*nonce),
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
-                data: HexString(data.clone()),
-                predicate: HexString(predicate.to_vec()),
-                predicate_data: HexString(predicate_data.clone()),
+                data: HexString::from(data.as_ref()),
+                predicate: HexString::from(predicate.as_ref()),
+                predicate_data: HexString::from(predicate_data.as_ref()),
             }),
         }
     }
