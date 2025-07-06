@@ -743,7 +743,7 @@ impl<'a> TxStatusSubscription {
     /// `SubmittedStatus` and potentially preconfirmation as an intermediate state.
     #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
     async fn submit_and_await_status(
-        &'a self,
+        &self,
         ctx: &'a Context<'a>,
         tx: HexString<'a>,
         estimate_predicates: Option<bool>,
