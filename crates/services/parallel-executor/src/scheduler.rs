@@ -406,6 +406,8 @@ where
         )?;
         let mut nb_batch_created = 0;
         let mut nb_transactions = 0;
+        // TODO: should this be divided by cores? we are also using this as the total remaining when
+        //   creating a new batch
         let initial_gas_per_worker = self
             .consensus_parameters
             .block_gas_limit()
@@ -417,8 +419,13 @@ where
             .ok_or(SchedulerError::InternalError(
                 "L1 transactions consumed all the gas".to_string(),
             ))?;
+        tracing::warn!(
+            "Initial gas per worker: {initial_gas_per_worker}, total gas left: {}",
+            self.gas_left
+        );
 
         'outer: loop {
+            tracing::warn!("Scheduling batch {nb_batch_created}");
             if self.is_worker_idling() {
                 let batch = self.ask_new_transactions_batch(
                     &mut components.transactions_source,
@@ -568,41 +575,47 @@ where
         &mut self,
         tx_source: &mut TxSource,
         start_execution_time: tokio::time::Instant,
-        initial_gas: u64,
+        initial_gas_per_core: u64,
         total_execution_time: Duration,
     ) -> Result<PreparedBatch, SchedulerError> {
         let spent_time = start_execution_time.elapsed();
-        let scaled_gas_initial = initial_gas
+        // (initial_gas as u128)
+        //                 .saturating_mul(
+        //                     (total_execution_time.as_millis())
+        //                         .saturating_sub(spent_time.as_millis()),
+        //                 )
+        //                 .checked_div(total_execution_time.as_millis()))
+        //             .expect(
+        //                 "Total execution time cannot be zero as it's the block execution time",
+        //             )
+        let scaled_gas_per_core = (initial_gas_per_core as u128)
             .saturating_mul(
-                (total_execution_time.as_millis() as u64)
-                    .saturating_sub(spent_time.as_millis() as u64),
+                (total_execution_time.as_millis()).saturating_sub(spent_time.as_millis()),
             )
-            .saturating_div(total_execution_time.as_millis() as u64);
-        let scaled_gas_left = self
-            .gas_left
-            .saturating_div(self.config.number_of_cores.get() as u64);
+            .saturating_div(total_execution_time.as_millis());
+        // TODO: avoid always divide because if there is only one worker left he can use it all
         // Time left in percentage to have the gas percentage left
-
+        // (self.gas_left as u128)
+        //                 .checked_div(self.config.number_of_cores.get() as u128)
+        //                 .expect("Number of cores cannot be zero as it's a NonZeroUsize")
+        let scaled_gas_left = self.gas_left as u128;
         let current_gas = u64::try_from(std::cmp::min(
-            ((initial_gas as u128)
-                .saturating_mul(
-                    (total_execution_time.as_millis())
-                        .saturating_sub(spent_time.as_millis()),
-                )
-                .checked_div(total_execution_time.as_millis()))
-            .expect(
-                "Total execution time cannot be zero as it's the block execution time",
-            )
-            .saturating_sub(self.blob_gas as u128),
-            // TODO: avoid always divide because if there is only one worker left he can use it all
-            (self.gas_left as u128)
-                .checked_div(self.config.number_of_cores.get() as u128)
-                .expect("Number of cores cannot be zero as it's a NonZeroUsize")
-                .saturating_sub(self.blob_gas as u128),
+            scaled_gas_per_core.saturating_sub(self.blob_gas as u128),
+            scaled_gas_left.saturating_sub(self.blob_gas as u128),
         ))
         .map_err(|_| {
             SchedulerError::InternalError("Current gas overflowed u64".to_string())
         })?;
+
+        tracing::warn!(
+            "current gas: {current_gas}, where scaled_gas_per_core: {scaled_gas_per_core}, scaled_gas_left: {scaled_gas_left}, blob_gas: {}",
+            self.blob_gas
+        );
+        tracing::warn!(
+            "With execution time: {}ms, spent time: {}ms",
+            total_execution_time.as_millis(),
+            spent_time.as_millis()
+        );
 
         let executable_transactions = tx_source.get_executable_transactions(
             current_gas,

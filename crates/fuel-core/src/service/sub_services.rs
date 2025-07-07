@@ -197,6 +197,8 @@ pub fn init_sub_services(
     );
     let tx_status_manager_adapter =
         TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
+
+    // #[cfg(feature = "p2p")]
     let preconfirmation_sender = PreconfirmationSender::new(
         preconfirmation_sender,
         tx_status_manager_adapter.clone(),

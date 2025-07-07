@@ -14,13 +14,17 @@ parallel-executor = [
   "fuel-core-bin/parallel-executor"
 ]
 
+p2p = [
+  "fuel-core-bin/p2p",
+]
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
 fuel-core = { path = "../../crates/fuel-core", default-features = false, features = [
   "test-helpers",
 ] }
-fuel-core-bin = { path = "../../bin/fuel-core", features = ["parquet", "p2p"] }
+fuel-core-bin = { path = "../../bin/fuel-core", features = ["parquet"] }
 fuel-core-client = { path = "../../crates/client", features = ["test-helpers"] }
 fuel-core-p2p = { path = "../../crates/services/p2p", features = [
   "test-helpers",

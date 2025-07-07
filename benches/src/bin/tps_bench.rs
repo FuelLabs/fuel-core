@@ -64,7 +64,7 @@ use clap::Parser;
 struct Args {
     #[clap(short = 'c', long, default_value = "16")]
     pub number_of_cores: usize,
-    #[clap(short = 't', long, default_value = "3000")]
+    #[clap(short = 't', long, default_value = "15000")]
     pub number_of_transactions: u64,
 }
 
@@ -201,7 +201,7 @@ fn main() {
             })
             .sum(),
     );
-    test_builder.block_size_limit = Some(1_000_000_000_000_000);
+    test_builder.block_size_limit = Some(u64::MAX);
     test_builder.number_threads_pool_verif = args.number_of_cores;
     test_builder.max_txs = transactions.len();
     // spin up node

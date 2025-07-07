@@ -137,7 +137,7 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
         _deadline: Instant,
     ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         // TODO: This is probably determined from `_deadline`?
-        let max_execution_time = Duration::from_secs(300);
+        let max_execution_time = Duration::from_millis(1_000);
         self.executor
             .lock()
             .await
