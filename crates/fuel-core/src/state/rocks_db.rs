@@ -14,28 +14,22 @@ use super::rocks_db_key_iterator::{
 };
 use core::ops::Deref;
 use fuel_core_metrics::core_metrics::DatabaseMetrics;
-use fuel_core_storage::{
-    Error as StorageError,
-    Result as StorageResult,
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterableStore,
-    },
-    kv_store::{
-        KVItem,
-        KeyItem,
-        KeyValueInspect,
-        StorageColumn,
-        Value,
-        WriteOperation,
-    },
-    transactional::{
-        Changes,
-        ReferenceBytesKey,
-        StorageChanges,
-    },
-};
+use fuel_core_storage::{Error as StorageError, Result as StorageResult, iter::{
+    BoxedIter,
+    IntoBoxedIter,
+    IterableStore,
+}, kv_store::{
+    KVItem,
+    KeyItem,
+    KeyValueInspect,
+    StorageColumn,
+    Value,
+    WriteOperation,
+}, transactional::{
+    Changes,
+    ReferenceBytesKey,
+    StorageChanges,
+}, Direction, NextEntry};
 use itertools::Itertools;
 use rocksdb::{
     BlockBasedOptions,
@@ -72,6 +66,7 @@ use std::{
     },
 };
 use tempfile::TempDir;
+use fuel_core_storage::kv_store::Key;
 
 #[derive(Debug)]
 struct PrimaryInstance(DBWithThreadMode<MultiThreaded>);

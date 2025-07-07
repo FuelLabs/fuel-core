@@ -1,8 +1,10 @@
 use fuel_core_storage::{
+    Direction,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    NextEntry,
     PredicateStorageRequirements,
     Result as StorageResult,
     StorageAsRef,
@@ -16,6 +18,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        Key,
         KeyValueInspect,
         Value,
     },
@@ -66,6 +69,20 @@ where
 
     fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
         self.storage.storage::<M>().get(key)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &M::Key,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> Result<NextEntry<M::OwnedKey, M::OwnedValue>, Self::Error> {
+        <_ as StorageInspect<M>>::get_next(
+            &self.storage,
+            start_key,
+            direction,
+            max_iterations,
+        )
     }
 
     fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
@@ -133,6 +150,22 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         KeyValueInspect::get(&self.storage, key, column)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        KeyValueInspect::get_next(
+            &self.storage,
+            start_key,
+            column,
+            direction,
+            max_iterations,
+        )
     }
 
     fn read(

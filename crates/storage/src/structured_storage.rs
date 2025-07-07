@@ -2,10 +2,13 @@
 //! that implements the storage traits for the tables with blueprint.
 
 use crate::{
+    Direction,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    NextEntry,
+    NextMappableEntry,
     Result as StorageResult,
     StorageBatchMutate,
     StorageInspect,
@@ -57,6 +60,7 @@ use alloc::{
     fmt::Debug,
 };
 
+use crate::kv_store::Key;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 use fuel_vm_private::storage::{
@@ -141,6 +145,17 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         self.inner.get(key, column)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        self.inner
+            .get_next(start_key, column, direction, max_iterations)
     }
 
     fn read(
@@ -261,6 +276,21 @@ where
     fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::get(self, key, M::column())
             .map(|value| value.map(Cow::Owned))
+    }
+
+    fn get_next(
+        &self,
+        start_key: &M::Key,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> Result<NextMappableEntry<M>, Self::Error> {
+        <M as TableWithBlueprint>::Blueprint::get_next(
+            self,
+            start_key,
+            M::column(),
+            direction,
+            max_iterations,
+        )
     }
 
     fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {
@@ -426,17 +456,26 @@ where
 #[cfg(feature = "test-helpers")]
 pub mod test {
     use crate as fuel_core_storage;
-    use crate::kv_store::{
-        KeyValueInspect,
-        StorageColumn,
+    use crate::{
+        Direction,
+        NextEntry,
+        kv_store::{
+            Key,
+            KeyValueInspect,
+            StorageColumn,
+        },
+        transactional::ReferenceBytesKey,
     };
     use fuel_core_storage::{
         Result as StorageResult,
         kv_store::Value,
     };
-    use std::collections::HashMap;
+    use std::collections::{
+        BTreeMap,
+        HashMap,
+    };
 
-    type Storage = HashMap<(u32, Vec<u8>), Value>;
+    type Storage = HashMap<u32, BTreeMap<ReferenceBytesKey, Value>>;
 
     /// The in-memory storage for testing purposes.
     #[derive(Clone, Debug, PartialEq, Eq)]
@@ -468,8 +507,36 @@ pub mod test {
         type Column = Column;
 
         fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
-            let value = self.storage.get(&(column.id(), key.to_vec())).cloned();
+            let value = self
+                .storage
+                .get(&column.id())
+                .and_then(|map| map.get(key))
+                .cloned();
             Ok(value)
+        }
+
+        fn get_next(
+            &self,
+            start_key: &[u8],
+            column: Self::Column,
+            direction: Direction,
+            max_iterations: usize,
+        ) -> StorageResult<NextEntry<Key, Value>> {
+            if max_iterations == 0 {
+                return Err(
+                    anyhow::anyhow!("Max iterations must be greater than 0").into()
+                );
+            }
+
+            let entry = self
+                .storage
+                .get(&column.id())
+                .and_then(|map| direction.next_from_map(start_key, map).entry);
+
+            Ok(NextEntry {
+                entry,
+                iterations: 1,
+            })
         }
     }
 }

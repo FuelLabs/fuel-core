@@ -3,6 +3,8 @@ use crate::{
     state::TransactableStorage,
 };
 use fuel_core_storage::{
+    Direction,
+    NextEntry,
     Result as StorageResult,
     iter::{
         BoxedIter,
@@ -11,6 +13,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        Key,
         KeyValueInspect,
         Value,
     },
@@ -61,6 +64,17 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         self.data.get(key, column)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        self.data
+            .get_next(start_key, column, direction, max_iterations)
     }
 
     fn read(

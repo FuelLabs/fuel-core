@@ -3,10 +3,12 @@
 use crate::{
     ContractsAssetsStorage,
     ContractsStateKey,
+    Direction,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    NextMappableEntry,
     StorageAsMut,
     StorageBatchMutate,
     StorageInspect,
@@ -145,6 +147,20 @@ where
 
     fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
         StorageInspect::<M>::get(&self.database, key)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &M::Key,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> Result<NextMappableEntry<M>, Self::Error> {
+        StorageInspect::<M>::get_next(
+            &self.database,
+            start_key,
+            direction,
+            max_iterations,
+        )
     }
 
     fn contains_key(&self, key: &M::Key) -> Result<bool, Self::Error> {

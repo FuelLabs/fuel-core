@@ -1,7 +1,9 @@
 //! This module provides storage trait implementations for sparse merkleized columns.
 
 use crate::{
+    Direction,
     Mappable,
+    NextEntry,
     Result as StorageResult,
     blueprint::{
         BlueprintInspect,
@@ -17,6 +19,7 @@ use crate::{
         raw::Raw,
     },
     kv_store::{
+        Key,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -168,6 +171,16 @@ where
     type Column = Column;
 
     fn get(&self, _: &[u8], _: Self::Column) -> StorageResult<Option<Value>> {
+        unreachable!()
+    }
+
+    fn get_next(
+        &self,
+        _: &[u8],
+        _: Self::Column,
+        _: Direction,
+        _: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
         unreachable!()
     }
 }

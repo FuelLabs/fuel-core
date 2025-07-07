@@ -16,8 +16,11 @@ use crate::{
     },
 };
 use fuel_core_storage::{
+    Direction,
+    NextEntry,
     Result as StorageResult,
     kv_store::{
+        Key,
         KeyValueInspect,
         Value,
         WriteOperation,
@@ -81,6 +84,17 @@ where
         }
 
         self.read_db.get(key, Column::OriginalColumn(column))
+    }
+
+    fn get_next(
+        &self,
+        _: &[u8],
+        _: Self::Column,
+        _: Direction,
+        _: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        // TODO: Implement this method to retrieve the next entry in the storage.
+        todo!()
     }
 }
 

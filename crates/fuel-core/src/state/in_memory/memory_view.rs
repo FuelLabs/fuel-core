@@ -1,8 +1,13 @@
-use crate::database::database_description::{
-    DatabaseDescription,
-    on_chain::OnChain,
+use crate::database::{
+    Error as DatabaseError,
+    database_description::{
+        DatabaseDescription,
+        on_chain::OnChain,
+    },
 };
 use fuel_core_storage::{
+    Direction,
+    NextEntry,
     Result as StorageResult,
     iter::{
         BoxedIter,
@@ -14,6 +19,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        Key,
         KeyItem,
         KeyValueInspect,
         StorageColumn,
@@ -73,6 +79,24 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         Ok(self.inner[column.as_usize()].get(key).cloned())
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        if max_iterations == 0 {
+            return Err(DatabaseError::MaxIterationsReached.into())
+        }
+
+        let btree = &self.inner[column.as_usize()];
+
+        let next = direction.next_from_map(start_key, btree);
+
+        Ok(next)
     }
 }
 

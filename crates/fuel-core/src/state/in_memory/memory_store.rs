@@ -17,6 +17,8 @@ use crate::{
     },
 };
 use fuel_core_storage::{
+    Direction,
+    NextEntry,
     Result as StorageResult,
     iter::{
         BoxedIter,
@@ -27,6 +29,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        Key,
         KeyItem,
         KeyValueInspect,
         StorageColumn,
@@ -40,6 +43,7 @@ use fuel_core_storage::{
     },
 };
 use std::{
+    borrow::Cow,
     collections::{
         BTreeMap,
         HashSet,
@@ -126,7 +130,7 @@ where
         let lock = self.inner[column.as_usize()].lock().expect("poisoned");
 
         let collection: Vec<_> = keys_iterator(&lock, prefix, start, direction)
-            .map(|key| key.to_vec())
+            .map(|key| key.to_vec().into())
             .collect();
 
         collection.into_iter().map(Ok)
@@ -176,6 +180,35 @@ where
             .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?
             .get(key)
             .cloned())
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        if max_iterations == 0 {
+            return Err(DatabaseError::MaxIterationsReached.into());
+        }
+
+        let lock = self.inner[column.as_usize()]
+            .lock()
+            .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?;
+
+        let next = direction.next_from_map(start_key, &lock);
+
+        let entry = next.entry.map(|(key, value)| {
+            let key = key.into_owned();
+            let value = value.into_owned();
+            (Cow::Owned(key), Cow::Owned(value))
+        });
+
+        Ok(NextEntry {
+            entry,
+            iterations: next.iterations,
+        })
     }
 }
 

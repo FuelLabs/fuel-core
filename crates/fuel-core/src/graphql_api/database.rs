@@ -12,9 +12,11 @@ use crate::{
 };
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
+    Direction,
     Error as StorageError,
     IsNotFound,
     Mappable,
+    NextMappableEntry,
     PredicateStorageRequirements,
     Result as StorageResult,
     StorageInspect,
@@ -325,6 +327,20 @@ impl StorageInspect<BlobData> for ReadView {
         key: &<BlobData as Mappable>::Key,
     ) -> StorageResult<Option<Cow<<BlobData as Mappable>::OwnedValue>>> {
         StorageInspect::<BlobData>::get(self.on_chain.as_ref(), key)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &<BlobData as Mappable>::Key,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> Result<NextMappableEntry<BlobData>, Self::Error> {
+        StorageInspect::<BlobData>::get_next(
+            self.on_chain.as_ref(),
+            start_key,
+            direction,
+            max_iterations,
+        )
     }
 
     fn contains_key(&self, key: &<BlobData as Mappable>::Key) -> StorageResult<bool> {

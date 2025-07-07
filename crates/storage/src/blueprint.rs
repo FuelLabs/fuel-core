@@ -4,7 +4,11 @@
 //! blueprint that maintains a valid Merkle tree over the storage entries.
 
 use crate::{
+    Direction,
+    Error as StorageError,
     Mappable,
+    NextEntry,
+    NextMappableEntry,
     Result as StorageResult,
     codec::{
         Decode,
@@ -17,6 +21,7 @@ use crate::{
         KeyValueMutate,
     },
 };
+use alloc::borrow::Cow;
 use fuel_vm_private::prelude::MerkleRoot;
 
 pub mod merklized;
@@ -74,6 +79,37 @@ where
                 Self::ValueCodec::decode_from_value(value).map_err(crate::Error::Codec)
             })
             .transpose()
+    }
+
+    /// Returns the next key and value from the storage.
+    fn get_next<'a>(
+        storage: &'a S,
+        start_key: &M::Key,
+        column: S::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextMappableEntry<'a, M>> {
+        let key_encoder = Self::KeyCodec::encode(start_key);
+        let key_bytes = key_encoder.as_bytes();
+        let entry =
+            storage.get_next(key_bytes.as_ref(), column, direction, max_iterations)?;
+
+        let decoded_entry = entry
+            .entry
+            .map(|(key, value)| {
+                let key = Self::KeyCodec::decode(key.as_slice())
+                    .map_err(crate::Error::Codec)?;
+                let value = Self::ValueCodec::decode_from_value(value.into_owned())
+                    .map_err(crate::Error::Codec)?;
+
+                Ok::<_, StorageError>((Cow::Owned(key), Cow::Owned(value)))
+            })
+            .transpose()?;
+
+        Ok(NextEntry {
+            entry: decoded_entry,
+            iterations: entry.iterations,
+        })
     }
 }
 

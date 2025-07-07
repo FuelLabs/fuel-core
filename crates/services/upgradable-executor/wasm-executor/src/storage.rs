@@ -1,8 +1,11 @@
 use super::ext;
 use fuel_core_storage::{
+    Direction,
+    NextEntry,
     Result as StorageResult,
     column::Column,
     kv_store::{
+        Key,
         KeyValueInspect,
         Value,
     },
@@ -31,5 +34,17 @@ impl KeyValueInspect for WasmStorage {
         } else {
             Ok(None)
         }
+    }
+
+    fn get_next(
+        &self,
+        _: &[u8],
+        _: Self::Column,
+        _: Direction,
+        _: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        // TODO: Implement this method to retrieve the next entry in the storage.
+        //  It requires breaking to WASM interface and hard-fork of the network.
+        todo!()
     }
 }

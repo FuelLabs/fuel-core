@@ -1,6 +1,11 @@
 //! The module provides plain abstract definition of the key-value store.
 
-use crate::Result as StorageResult;
+use crate::{
+    Direction,
+    NextEntry,
+    Result as StorageResult,
+    transactional::ReferenceBytesKey,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -13,7 +18,7 @@ use alloc::{
 use core::ops::Deref;
 
 /// The key of the storage.
-pub type Key = Vec<u8>;
+pub type Key = ReferenceBytesKey;
 /// The value of the storage. It is wrapped into the `Arc` to provide less cloning of massive objects.
 pub type Value = alloc::sync::Arc<[u8]>;
 
@@ -58,6 +63,15 @@ pub trait KeyValueInspect {
 
     /// Returns the value from the storage.
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>>;
+
+    /// Returns the next key and value from the storage.
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>>;
 
     /// Reads the value from the storage into the `buf` and returns the whether the value exists.
     fn read(
@@ -111,6 +125,17 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         self.deref().get(key, column)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        self.deref()
+            .get_next(start_key, column, direction, max_iterations)
     }
 
     fn read(
@@ -184,4 +209,70 @@ pub trait BatchOperations: KeyValueMutate {
     fn batch_write<I>(&mut self, column: Self::Column, entries: I) -> StorageResult<()>
     where
         I: Iterator<Item = (Vec<u8>, WriteOperation)>;
+}
+
+/// An iterator that allows to iterate over the next items in the storage.
+pub struct StorageNextIterator<'a, S>
+where
+    S: KeyValueInspect,
+{
+    storage: &'a S,
+    column: S::Column,
+    start_key: Option<alloc::borrow::Cow<'a, Key>>,
+    direction: Direction,
+    max_iterations: usize,
+}
+
+impl<'a, S> StorageNextIterator<'a, S>
+where
+    S: KeyValueInspect,
+{
+    /// Creates a new `StorageNextIterator` with the given storage, column, start key, and direction.
+    pub fn new(
+        storage: &'a S,
+        column: S::Column,
+        start_key: alloc::borrow::Cow<'a, Key>,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> Self {
+        Self {
+            storage,
+            column,
+            start_key: Some(start_key),
+            direction,
+            max_iterations,
+        }
+    }
+
+    fn next(&mut self, start_key: &Key) -> StorageResult<NextEntry<'a, Key, Value>> {
+        let next = self.storage.get_next(
+            start_key,
+            self.column,
+            self.direction,
+            self.max_iterations,
+        )?;
+
+        self.max_iterations = self.max_iterations.saturating_sub(next.iterations);
+
+        // If we have a next item, we update the start_key to the current key
+        self.start_key = next.entry.as_ref().map(|(key, _)| key.clone());
+
+        Ok(next)
+    }
+}
+
+impl<'a, S> Iterator for StorageNextIterator<'a, S>
+where
+    S: KeyValueInspect,
+{
+    type Item = StorageResult<NextEntry<'a, Key, Value>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let key = match self.start_key.take() {
+            Some(key) => key,
+            None => return None, // No more items to iterate
+        };
+
+        Some(self.next(&key))
+    }
 }

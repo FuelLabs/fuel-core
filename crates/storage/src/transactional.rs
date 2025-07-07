@@ -1,28 +1,22 @@
 //! The primitives to work with storage in transactional mode.
 
 use crate::{
+    Direction,
+    NextEntry,
     Result as StorageResult,
     kv_store::{
         BatchOperations,
+        Key,
         KeyValueInspect,
         KeyValueMutate,
         StorageColumn,
+        StorageNextIterator,
         Value,
         WriteOperation,
     },
     structured_storage::StructuredStorage,
 };
 use core::borrow::Borrow;
-
-#[cfg(feature = "alloc")]
-use alloc::{
-    boxed::Box,
-    collections::{
-        BTreeMap,
-        btree_map,
-    },
-    vec::Vec,
-};
 
 #[cfg(feature = "test-helpers")]
 use crate::{
@@ -36,6 +30,18 @@ use crate::{
         KeyItem,
     },
 };
+use alloc::borrow::Cow;
+#[cfg(feature = "alloc")]
+use alloc::{
+    boxed::Box,
+    collections::{
+        BTreeMap,
+        btree_map,
+    },
+    vec::Vec,
+};
+use core::ops::Bound;
+use itertools::Either;
 
 /// Provides an atomic view of the storage at the latest height at
 /// the moment of view instantiation. All modifications to the storage
@@ -362,6 +368,45 @@ where
             .get(&column.id())
             .and_then(|btree| btree.get(key))
     }
+
+    fn get_next_from_changes(
+        &self,
+        start_key: &[u8],
+        column: Column,
+        direction: &Direction,
+    ) -> Option<(&Key, &Value)> {
+        let btree = self.changes.get(&column.id())?;
+
+        let iter = match direction {
+            Direction::Next => Either::Left(
+                btree.range::<[u8], _>((Bound::Excluded(start_key), Bound::Unbounded)),
+            ),
+            Direction::Previous => Either::Right(
+                btree
+                    .range::<[u8], _>((Bound::Unbounded, Bound::Excluded(start_key)))
+                    .rev(),
+            ),
+        };
+
+        let (key, value) = iter
+            // TODO: The `Changes` should have two separate maps, one for inserts and one for removes.
+            //  In this case, we can iterate only over inserts and avoid potentially long iteration over removed values.
+            .skip_while(|(_, value)| matches!(value, WriteOperation::Remove))
+            .next()?;
+
+        let WriteOperation::Insert(value) = value else {
+            return None;
+        };
+
+        Some((key, value))
+    }
+
+    fn is_removed(&self, key: &[u8], column: Column) -> bool {
+        matches!(
+            self.get_from_changes(key, column),
+            Some(WriteOperation::Remove)
+        )
+    }
 }
 
 impl<Column, S> KeyValueInspect for InMemoryTransaction<S>
@@ -406,6 +451,81 @@ where
         } else {
             self.storage.get(key, column)
         }
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        if max_iterations == 0 {
+            return Err(anyhow::anyhow!(
+                "Max iterations should be greater than 0 during `get_next` operation."
+            )
+            .into());
+        }
+
+        let mut storage_iter = StorageNextIterator::new(
+            &self.storage,
+            column,
+            Cow::Owned(start_key.to_vec().into()),
+            direction,
+            max_iterations,
+        );
+
+        let memory_entry = self.get_next_from_changes(start_key, column, &direction);
+        let mut total_iterations = 0usize;
+
+        while let Some(storage_entry) = storage_iter.next() {
+            let entry = storage_entry?;
+            total_iterations = total_iterations.saturating_add(entry.iterations);
+
+            let Some((key, value)) = entry.entry else {
+                break;
+            };
+
+            // Handle the case when we inserted a new value into the memory that should be the next
+            // entry(because entry in the storage is further).
+            if let Some((memory_key, _)) = memory_entry {
+                match direction {
+                    Direction::Next => {
+                        // If the memory entry is before(or is) the storage entry, we return it.
+                        if memory_key <= &key {
+                            break
+                        }
+                    }
+                    Direction::Previous => {
+                        // If the memory entry is after(or is) the storage entry, we return it.
+                        if memory_key >= &key {
+                            break
+                        }
+                    }
+                }
+            }
+
+            // If the key is removed in the memory changes, skip it.
+            if self.is_removed(&key, column) {
+                continue;
+            }
+
+            // If the value from the storage is not removed and earlier than the nearest memory
+            // entry, then return it.
+            let entry = NextEntry {
+                entry: Some((key, value)),
+                iterations: total_iterations,
+            };
+            return Ok(entry);
+        }
+
+        let entry = NextEntry {
+            entry: memory_entry
+                .map(|(key, value)| (Cow::Borrowed(key), Cow::Borrowed(value))),
+            iterations: total_iterations,
+        };
+
+        Ok(entry)
     }
 
     fn read(
@@ -591,6 +711,7 @@ mod test {
         StorageAsMut,
         tables::Messages,
     };
+    use std::collections::hash_map;
     #[allow(unused_imports)]
     use std::sync::Arc;
 
@@ -600,10 +721,25 @@ mod test {
                 for (key, value) in value {
                     match value {
                         WriteOperation::Insert(value) => {
-                            self.storage.insert((column, key.into()), value);
+                            self.storage
+                                .entry(column)
+                                .or_default()
+                                .insert(key.into(), value);
                         }
                         WriteOperation::Remove => {
-                            self.storage.remove(&(column, key.into()));
+                            let entry = self.storage.entry(column);
+
+                            match entry {
+                                hash_map::Entry::Occupied(mut occupied) => {
+                                    let btree = occupied.get_mut();
+                                    btree.remove(&key);
+
+                                    if btree.is_empty() {
+                                        occupied.remove();
+                                    }
+                                }
+                                hash_map::Entry::Vacant(_) => {}
+                            }
                         }
                     }
                 }

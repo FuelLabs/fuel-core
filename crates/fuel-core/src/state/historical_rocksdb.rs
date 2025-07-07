@@ -1,3 +1,4 @@
+use super::rocks_db::DatabaseConfig;
 use crate::{
     database::{
         Error as DatabaseError,
@@ -27,7 +28,9 @@ use crate::{
     },
 };
 use fuel_core_storage::{
+    Direction,
     Error as StorageError,
+    NextEntry,
     Result as StorageResult,
     StorageAsMut,
     StorageAsRef,
@@ -39,6 +42,7 @@ use fuel_core_storage::{
     },
     kv_store::{
         KVItem,
+        Key,
         KeyValueInspect,
         Value,
         WriteOperation,
@@ -66,8 +70,6 @@ use std::{
     num::NonZeroU64,
     path::Path,
 };
-
-use super::rocks_db::DatabaseConfig;
 
 pub mod description;
 pub mod modifications_history;
@@ -518,6 +520,21 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         self.db.get(key, Column::OriginalColumn(column))
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        self.db.get_next(
+            start_key,
+            Column::OriginalColumn(column),
+            direction,
+            max_iterations,
+        )
     }
 
     fn read(

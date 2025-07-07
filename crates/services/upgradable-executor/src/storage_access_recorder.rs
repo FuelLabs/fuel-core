@@ -1,6 +1,9 @@
 use fuel_core_storage::{
+    Direction,
+    NextEntry,
     Result as StorageResult,
     kv_store::{
+        Key,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -44,5 +47,26 @@ where
             value: value.as_ref().map(|v| v.to_vec()),
         });
         Ok(value)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        let next = self
+            .storage
+            .get_next(start_key, column, direction, max_iterations)?;
+        if let Some((key, value)) = &next.entry {
+            // TODO: Record number of iterations since it affects gas consumption.
+            self.record.lock().push(StorageReadReplayEvent {
+                column: column.id(),
+                key: key.to_vec(),
+                value: Some(value.to_vec()),
+            });
+        }
+        Ok(next)
     }
 }

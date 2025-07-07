@@ -1,6 +1,8 @@
 //! A type that allows to iterate over the `Changes`.
 
 use crate::{
+    Direction,
+    NextEntry,
     iter::{
         BoxedIter,
         IntoBoxedIter,
@@ -17,6 +19,7 @@ use crate::{
     transactional::StorageChanges,
 };
 
+use crate::kv_store::Key;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
@@ -77,6 +80,18 @@ where
                 Ok(found_value)
             }
         }
+    }
+
+    fn get_next(
+        &self,
+        _: &[u8],
+        _: Self::Column,
+        _: Direction,
+        _: usize,
+    ) -> crate::Result<NextEntry<Key, Value>> {
+        unimplemented!(
+            "`get_next` is not required for `ChangesIterator`, but it can be implemented later if needed."
+        );
     }
 }
 

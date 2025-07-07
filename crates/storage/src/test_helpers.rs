@@ -1,10 +1,12 @@
 //! The module to help with tests.
 
 use crate::{
+    Direction,
     Error as StorageError,
     Mappable,
     MerkleRoot,
     MerkleRootStorage,
+    NextMappableEntry,
     Result as StorageResult,
     StorageInspect,
     StorageMutate,
@@ -99,6 +101,15 @@ where
         key: &M::Key,
     ) -> StorageResult<Option<std::borrow::Cow<M::OwnedValue>>> {
         MockStorageMethods::get::<M>(&self.storage, key)
+    }
+
+    fn get_next(
+        &self,
+        _: &M::Key,
+        _: Direction,
+        _: usize,
+    ) -> Result<NextMappableEntry<M>, Self::Error> {
+        unimplemented!()
     }
 
     fn contains_key(&self, key: &M::Key) -> StorageResult<bool> {

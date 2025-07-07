@@ -1180,9 +1180,13 @@ where
 mod test {
     use super::*;
     use fuel_core_storage::{
+        Direction,
         Result as StorageResult,
         StorageAsMut,
-        kv_store::Value,
+        kv_store::{
+            Key,
+            Value,
+        },
         structured_storage::test::InMemoryStorage,
         tables::ConsensusParametersVersions,
         transactional::WriteTransaction,
@@ -1249,6 +1253,15 @@ mod test {
 
         fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
             self.0.get(key, column)
+        }
+
+        fn get_next(
+            &self,
+            start_key: &[u8],
+            column: Self::Column,
+            direction: Direction,
+        ) -> StorageResult<Option<(Key, Value)>> {
+            self.0.get_next(start_key, column, direction)
         }
     }
 

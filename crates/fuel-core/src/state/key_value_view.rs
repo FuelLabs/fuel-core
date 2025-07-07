@@ -1,6 +1,9 @@
 use fuel_core_storage::{
+    Direction,
+    NextEntry,
     Result as StorageResult,
     kv_store::{
+        Key,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -48,6 +51,17 @@ where
 
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
         self.0.get(key, column)
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        self.0
+            .get_next(start_key, column, direction, max_iterations)
     }
 
     fn read(
