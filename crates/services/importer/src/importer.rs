@@ -251,9 +251,6 @@ impl Importer {
         };
         let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
-        let height = *result.result().sealed_block.entity.header().height();
-        tracing::warn!("sending committing result: height={}", height);
-
         self.run_commit_result(permit, CommitInput::Uncommitted(result))
             .await
     }
@@ -509,7 +506,6 @@ where
     async fn run(&mut self) {
         let local_runner = LocalRunner::new().expect("Failed to create the local runner");
         while let Some(command) = self.commands.recv().await {
-            warn!("received command");
             match command {
                 Commands::Stop => break,
                 Commands::CommitResult {
@@ -517,19 +513,6 @@ where
                     permit,
                     callback,
                 } => {
-                    let height = match &result {
-                        CommitInput::Uncommitted(uncommitted) => {
-                            *uncommitted.result().sealed_block.entity.header().height()
-                        }
-                        CommitInput::PrepareImportResult(prepare) => *prepare
-                            .result
-                            .result()
-                            .sealed_block
-                            .entity
-                            .header()
-                            .height(),
-                    };
-                    warn!("committing result: height={height}");
                     let result = self.commit_result(&local_runner, permit, result);
                     let _ = callback.send(result);
                 }

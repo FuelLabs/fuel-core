@@ -98,7 +98,6 @@ impl fuel_core_poa::ports::BlockProducer for BlockProducerAdapter {
     ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         match source {
             TransactionsSource::TxPool => {
-                tracing::warn!("Producing block from txpool at height: {}", height);
                 self.block_producer
                     .produce_and_execute_block_txpool(height, block_time, deadline)
                     .await

@@ -9,6 +9,7 @@ use crate::storage::{
 
 pub mod ratio_tip_gas;
 
+#[derive(Debug)]
 /// Constraints that the selection algorithm has to respect.
 pub struct Constraints {
     /// Minimum gas price that all transaction must support.

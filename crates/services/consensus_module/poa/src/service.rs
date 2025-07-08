@@ -283,11 +283,6 @@ where
         source: TransactionsSource,
         deadline: Instant,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>> {
-        tracing::warn!(
-            "Producing block at height {} with time {:?}",
-            height,
-            block_time,
-        );
         let future = self
             .block_producer
             .produce_and_execute_block(height, block_time, source, deadline);
@@ -408,13 +403,6 @@ where
             consensus: seal,
         };
 
-        // TODO: Dedup
-        tracing::warn!(
-            "Producing block at height {} with time {:?} and hash {}",
-            height,
-            block_time,
-            block.entity.header().id(),
-        );
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
@@ -422,33 +410,6 @@ where
                 storage_changes,
             ))
             .await?;
-        // match storage_changes {
-        //     StorageChanges::Changes(changes) => {
-        //         tracing::warn!("Committing changes for block at height {}", height);
-        //         self.block_importer
-        //             .commit_result(Uncommitted::new(
-        //                 ImportResult::new_from_local(block, tx_status, events),
-        //                 changes,
-        //             ))
-        //             .await?;
-        //     }
-        //     StorageChanges::ChangesList(list) => {
-        //         tracing::warn!("committing multiple changes");
-        //         for changes in list {
-        //             tracing::warn!("Committing changes for block at height {}", height);
-        //             self.block_importer
-        //                 .commit_result(Uncommitted::new(
-        //                     ImportResult::new_from_local(
-        //                         block.clone(),
-        //                         tx_status.clone(),
-        //                         events.clone(),
-        //                     ),
-        //                     changes,
-        //                 ))
-        //                 .await?;
-        //         }
-        //     }
-        // }
 
         // Update last block time
         self.last_height = height;
@@ -606,7 +567,6 @@ where
             Some(request) => {
                 match request {
                     Request::ManualBlocks((block, response)) => {
-                        tracing::warn!("Received a request for manual block production");
                         let result = self.produce_manual_blocks(block).await;
                         let _ = response.send(result);
                     }
