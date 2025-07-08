@@ -59,7 +59,12 @@ where
         let next = self
             .storage
             .get_next(start_key, column, direction, max_iterations)?;
-        if let Some((key, value)) = &next.entry {
+
+        if let NextEntry::Entry {
+            entry: Some((key, value)),
+            ..
+        } = &next
+        {
             // TODO: Record number of iterations since it affects gas consumption.
             self.record.lock().push(StorageReadReplayEvent {
                 column: column.id(),

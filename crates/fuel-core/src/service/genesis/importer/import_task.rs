@@ -159,6 +159,18 @@ mod tests {
         Mutex,
     };
 
+    use crate::{
+        database::{
+            database_description::on_chain::OnChain,
+            genesis_progress::GenesisProgressMutate,
+        },
+        state::{
+            IterableKeyValueView,
+            KeyValueView,
+            TransactableStorage,
+            in_memory::memory_store::MemoryStore,
+        },
+    };
     use anyhow::{
         anyhow,
         bail,
@@ -168,6 +180,8 @@ mod tests {
         TableEntry,
     };
     use fuel_core_storage::{
+        Direction,
+        NextEntry,
         Result as StorageResult,
         StorageAsMut,
         StorageAsRef,
@@ -180,6 +194,7 @@ mod tests {
         },
         kv_store::{
             KVItem,
+            Key,
             KeyItem,
             KeyValueInspect,
             Value,
@@ -201,19 +216,6 @@ mod tests {
     use rand::{
         SeedableRng,
         rngs::StdRng,
-    };
-
-    use crate::{
-        database::{
-            database_description::on_chain::OnChain,
-            genesis_progress::GenesisProgressMutate,
-        },
-        state::{
-            IterableKeyValueView,
-            KeyValueView,
-            TransactableStorage,
-            in_memory::memory_store::MemoryStore,
-        },
     };
 
     use super::ImportTable;
@@ -547,6 +549,17 @@ mod tests {
 
         fn get(&self, key: &[u8], column: Column) -> StorageResult<Option<Value>> {
             self.store.get(key, column)
+        }
+
+        fn get_next(
+            &self,
+            start_key: &[u8],
+            column: Self::Column,
+            direction: Direction,
+            max_iterations: usize,
+        ) -> StorageResult<NextEntry<Key, Value>> {
+            self.store
+                .get_next(start_key, column, direction, max_iterations)
         }
     }
 

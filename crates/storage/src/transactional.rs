@@ -377,7 +377,7 @@ where
     ) -> Option<(&Key, &Value)> {
         let btree = self.changes.get(&column.id())?;
 
-        let iter = match direction {
+        let mut iter = match direction {
             Direction::Next => Either::Left(
                 btree.range::<[u8], _>((Bound::Excluded(start_key), Bound::Unbounded)),
             ),
@@ -391,8 +391,7 @@ where
         let (key, value) = iter
             // TODO: The `Changes` should have two separate maps, one for inserts and one for removes.
             //  In this case, we can iterate only over inserts and avoid potentially long iteration over removed values.
-            .skip_while(|(_, value)| matches!(value, WriteOperation::Remove))
-            .next()?;
+            .find(|(_, value)| matches!(value, WriteOperation::Insert(_)))?;
 
         let WriteOperation::Insert(value) = value else {
             return None;
@@ -461,13 +460,10 @@ where
         max_iterations: usize,
     ) -> StorageResult<NextEntry<Key, Value>> {
         if max_iterations == 0 {
-            return Err(anyhow::anyhow!(
-                "Max iterations should be greater than 0 during `get_next` operation."
-            )
-            .into());
+            return Ok(NextEntry::ReachedMaxIterations);
         }
 
-        let mut storage_iter = StorageNextIterator::new(
+        let storage_iter = StorageNextIterator::new(
             &self.storage,
             column,
             Cow::Owned(start_key.to_vec().into()),
@@ -478,11 +474,18 @@ where
         let memory_entry = self.get_next_from_changes(start_key, column, &direction);
         let mut total_iterations = 0usize;
 
-        while let Some(storage_entry) = storage_iter.next() {
+        for storage_entry in storage_iter {
             let entry = storage_entry?;
-            total_iterations = total_iterations.saturating_add(entry.iterations);
 
-            let Some((key, value)) = entry.entry else {
+            let (entry, iterations) = match entry {
+                NextEntry::Entry { entry, iterations } => (entry, iterations),
+                NextEntry::ReachedMaxIterations => {
+                    return Ok(NextEntry::ReachedMaxIterations)
+                }
+            };
+            total_iterations = total_iterations.saturating_add(iterations);
+
+            let Some((key, value)) = entry else {
                 break;
             };
 
@@ -512,14 +515,14 @@ where
 
             // If the value from the storage is not removed and earlier than the nearest memory
             // entry, then return it.
-            let entry = NextEntry {
+            let entry = NextEntry::Entry {
                 entry: Some((key, value)),
                 iterations: total_iterations,
             };
             return Ok(entry);
         }
 
-        let entry = NextEntry {
+        let entry = NextEntry::Entry {
             entry: memory_entry
                 .map(|(key, value)| (Cow::Borrowed(key), Cow::Borrowed(value))),
             iterations: total_iterations,
@@ -721,10 +724,7 @@ mod test {
                 for (key, value) in value {
                     match value {
                         WriteOperation::Insert(value) => {
-                            self.storage
-                                .entry(column)
-                                .or_default()
-                                .insert(key.into(), value);
+                            self.storage.entry(column).or_default().insert(key, value);
                         }
                         WriteOperation::Remove => {
                             let entry = self.storage.entry(column);

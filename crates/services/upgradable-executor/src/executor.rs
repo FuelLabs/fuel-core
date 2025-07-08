@@ -1181,6 +1181,7 @@ mod test {
     use super::*;
     use fuel_core_storage::{
         Direction,
+        NextEntry,
         Result as StorageResult,
         StorageAsMut,
         kv_store::{
@@ -1260,8 +1261,10 @@ mod test {
             start_key: &[u8],
             column: Self::Column,
             direction: Direction,
-        ) -> StorageResult<Option<(Key, Value)>> {
-            self.0.get_next(start_key, column, direction)
+            max_iterations: usize,
+        ) -> StorageResult<NextEntry<Key, Value>> {
+            self.0
+                .get_next(start_key, column, direction, max_iterations)
         }
     }
 

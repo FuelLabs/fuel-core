@@ -112,7 +112,7 @@ where
                     crate::iter::iterator(tree, prefix, start, direction)
                         .filter_map(|(key, value)| match value {
                             WriteOperation::Insert(value) => {
-                                Some((key.clone().into(), value.clone()))
+                                Some((key.clone(), value.clone()))
                             }
                             WriteOperation::Remove => None,
                         })
@@ -132,7 +132,7 @@ where
                         crate::iter::iterator(tree, prefix, start, direction)
                             .filter_map(|(key, value)| match value {
                                 WriteOperation::Insert(value) => {
-                                    Some((key.clone().into(), value.clone()))
+                                    Some((key.clone(), value.clone()))
                                 }
                                 WriteOperation::Remove => None,
                             })
@@ -165,7 +165,7 @@ where
                 if let Some(tree) = changes.get(&column.id()) {
                     crate::iter::iterator(tree, prefix, start, direction)
                         .filter_map(|(key, value)| match value {
-                            WriteOperation::Insert(_) => Some(key.clone().into()),
+                            WriteOperation::Insert(_) => Some(key.clone()),
                             WriteOperation::Remove => None,
                         })
                         .map(Ok)
@@ -183,7 +183,7 @@ where
                     let iter = changes.get(&column).map(|tree| {
                         crate::iter::iterator(tree, prefix, start, direction)
                             .filter_map(|(key, value)| match value {
-                                WriteOperation::Insert(_) => Some(key.clone().into()),
+                                WriteOperation::Insert(_) => Some(key.clone()),
                                 WriteOperation::Remove => None,
                             })
                             .map(Ok)

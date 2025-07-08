@@ -523,20 +523,21 @@ pub mod test {
             max_iterations: usize,
         ) -> StorageResult<NextEntry<Key, Value>> {
             if max_iterations == 0 {
-                return Err(
-                    anyhow::anyhow!("Max iterations must be greater than 0").into()
-                );
+                return Ok(NextEntry::ReachedMaxIterations);
             }
 
             let entry = self
                 .storage
                 .get(&column.id())
-                .and_then(|map| direction.next_from_map(start_key, map).entry);
+                .map(|map| direction.next_from_map(start_key, map, max_iterations));
 
-            Ok(NextEntry {
-                entry,
-                iterations: 1,
-            })
+            match entry {
+                None => Ok(NextEntry::Entry {
+                    entry: None,
+                    iterations: 1,
+                }),
+                Some(entry) => Ok(entry),
+            }
         }
     }
 }

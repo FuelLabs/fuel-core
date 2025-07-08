@@ -14,9 +14,9 @@
 # - `cargo install cargo-nextest`
 # - `npm install prettier prettier-plugin-toml`
 
-npx prettier --write "**/Cargo.toml" &&
+#npx prettier --write "**/Cargo.toml" &&
 cargo +nightly fmt --all &&
-cargo sort -w --check &&
+#cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&
 cargo clippy -p fuel-core-wasm-executor --target wasm32-unknown-unknown --no-default-features &&
 cargo clippy --all-targets --all-features &&

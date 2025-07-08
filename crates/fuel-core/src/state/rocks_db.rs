@@ -14,22 +14,31 @@ use super::rocks_db_key_iterator::{
 };
 use core::ops::Deref;
 use fuel_core_metrics::core_metrics::DatabaseMetrics;
-use fuel_core_storage::{Error as StorageError, Result as StorageResult, iter::{
-    BoxedIter,
-    IntoBoxedIter,
-    IterableStore,
-}, kv_store::{
-    KVItem,
-    KeyItem,
-    KeyValueInspect,
-    StorageColumn,
-    Value,
-    WriteOperation,
-}, transactional::{
-    Changes,
-    ReferenceBytesKey,
-    StorageChanges,
-}, Direction, NextEntry};
+use fuel_core_storage::{
+    Direction,
+    Error as StorageError,
+    NextEntry,
+    Result as StorageResult,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterableStore,
+    },
+    kv_store::{
+        KVItem,
+        Key,
+        KeyItem,
+        KeyValueInspect,
+        StorageColumn,
+        Value,
+        WriteOperation,
+    },
+    transactional::{
+        Changes,
+        ReferenceBytesKey,
+        StorageChanges,
+    },
+};
 use itertools::Itertools;
 use rocksdb::{
     BlockBasedOptions,
@@ -48,6 +57,7 @@ use rocksdb::{
     WriteBatch,
 };
 use std::{
+    borrow::Cow,
     cmp,
     collections::{
         BTreeMap,
@@ -66,7 +76,6 @@ use std::{
     },
 };
 use tempfile::TempDir;
-use fuel_core_storage::kv_store::Key;
 
 #[derive(Debug)]
 struct PrimaryInstance(DBWithThreadMode<MultiThreaded>);
@@ -873,7 +882,7 @@ where
 pub(crate) struct KeyOnly;
 
 impl ExtractItem for KeyOnly {
-    type Item = Vec<u8>;
+    type Item = ReferenceBytesKey;
 
     fn extract_item<D>(
         raw_iterator: &DBRawIteratorWithThreadMode<D>,
@@ -881,7 +890,7 @@ impl ExtractItem for KeyOnly {
     where
         D: DBAccess,
     {
-        raw_iterator.key().map(|key| key.to_vec())
+        raw_iterator.key().map(|key| key.to_vec().into())
     }
 
     fn size(item: &Self::Item) -> u64 {
@@ -896,7 +905,7 @@ impl ExtractItem for KeyOnly {
 pub(crate) struct KeyAndValue;
 
 impl ExtractItem for KeyAndValue {
-    type Item = (Vec<u8>, Value);
+    type Item = (ReferenceBytesKey, Value);
 
     fn extract_item<D>(
         raw_iterator: &DBRawIteratorWithThreadMode<D>,
@@ -906,7 +915,7 @@ impl ExtractItem for KeyAndValue {
     {
         raw_iterator
             .item()
-            .map(|(key, value)| (key.to_vec(), Value::from(value)))
+            .map(|(key, value)| (key.to_vec().into(), Value::from(value)))
     }
 
     fn size(item: &Self::Item) -> u64 {
@@ -955,6 +964,51 @@ where
         }
 
         Ok(value.map(Arc::from))
+    }
+
+    fn get_next(
+        &self,
+        start_key: &[u8],
+        column: Self::Column,
+        direction: Direction,
+        max_iterations: usize,
+    ) -> StorageResult<NextEntry<Key, Value>> {
+        if max_iterations == 0 {
+            return Ok(NextEntry::ReachedMaxIterations)
+        }
+
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
+
+        let direction = match direction {
+            Direction::Next => rocksdb::Direction::Forward,
+            Direction::Previous => rocksdb::Direction::Reverse,
+        };
+
+        let mut iter = self
+            .iterator::<KeyAndValue>(
+                column,
+                self.read_options(),
+                IteratorMode::From(start_key, direction),
+            )
+            .skip_while(|result| {
+                if let Ok((key, _)) = result {
+                    key.as_slice() == start_key
+                } else {
+                    false
+                }
+            });
+
+        let entry = iter
+            .next()
+            .transpose()?
+            .map(|(key, value)| (Cow::Owned(key), Cow::Owned(value)));
+
+        Ok(NextEntry::Entry {
+            entry,
+            iterations: 1,
+        })
     }
 
     fn read(
@@ -1293,7 +1347,7 @@ mod tests {
             db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
-            (key.clone(), expected.clone())
+            (key.clone().into(), expected.clone())
         );
 
         assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1317,7 +1371,7 @@ mod tests {
             db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
-            (key.clone(), expected.clone())
+            (key.clone().into(), expected.clone())
         );
 
         assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1341,7 +1395,7 @@ mod tests {
             db.iter_store(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap()[0],
-            (key.clone(), expected.clone())
+            (key.clone().into(), expected.clone())
         );
 
         assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -1460,9 +1514,9 @@ mod tests {
         assert_eq!(
             snapshot_iter,
             vec![
-                Ok((key_1, value.clone())),
-                Ok((key_2, value.clone())),
-                Ok((key_3, value))
+                Ok((key_1.into(), value.clone())),
+                Ok((key_2.into(), value.clone())),
+                Ok((key_3.into(), value))
             ]
         );
     }
@@ -1558,7 +1612,10 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Then
-        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+        assert_eq!(
+            db_iter,
+            vec![Ok(key_3.to_vec().into()), Ok(key_2.to_vec().into())]
+        );
     }
 
     #[test]
@@ -1585,7 +1642,10 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Then
-        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+        assert_eq!(
+            db_iter,
+            vec![Ok(key_3.to_vec().into()), Ok(key_2.to_vec().into())]
+        );
     }
 
     #[test]
@@ -1612,7 +1672,10 @@ mod tests {
             .collect::<Vec<_>>();
 
         // Then
-        assert_eq!(db_iter, vec![Ok(key_3.to_vec()), Ok(key_2.to_vec())]);
+        assert_eq!(
+            db_iter,
+            vec![Ok(key_3.to_vec().into()), Ok(key_2.to_vec().into())]
+        );
     }
 
     #[test]

@@ -114,7 +114,7 @@ where
         let lock = self.inner[column.as_usize()].lock().expect("poisoned");
 
         let collection: Vec<_> = iterator(&lock, prefix, start, direction)
-            .map(|(key, value)| (key.clone().into(), value.clone()))
+            .map(|(key, value)| (key.clone(), value.clone()))
             .collect();
 
         collection.into_iter().map(Ok)
@@ -189,26 +189,25 @@ where
         direction: Direction,
         max_iterations: usize,
     ) -> StorageResult<NextEntry<Key, Value>> {
-        if max_iterations == 0 {
-            return Err(DatabaseError::MaxIterationsReached.into());
-        }
-
         let lock = self.inner[column.as_usize()]
             .lock()
             .map_err(|e| anyhow::anyhow!("The lock is poisoned: {}", e))?;
 
-        let next = direction.next_from_map(start_key, &lock);
+        let next = direction.next_from_map(start_key, &lock, max_iterations);
 
-        let entry = next.entry.map(|(key, value)| {
-            let key = key.into_owned();
-            let value = value.into_owned();
-            (Cow::Owned(key), Cow::Owned(value))
-        });
+        let next = match next {
+            NextEntry::Entry { entry, iterations } => {
+                let entry = entry.map(|(key, value)| {
+                    let key = key.into_owned();
+                    let value = value.into_owned();
+                    (Cow::Owned(key), Cow::Owned(value))
+                });
+                NextEntry::Entry { entry, iterations }
+            }
+            NextEntry::ReachedMaxIterations => NextEntry::ReachedMaxIterations,
+        };
 
-        Ok(NextEntry {
-            entry,
-            iterations: next.iterations,
-        })
+        Ok(next)
     }
 }
 
@@ -344,7 +343,7 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), expected.clone())]
+            vec![(key.clone().into(), expected.clone())]
         );
 
         assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -368,7 +367,7 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), expected.clone())]
+            vec![(key.clone().into(), expected.clone())]
         );
 
         assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);
@@ -392,7 +391,7 @@ mod tests {
             db.iter_all(Column::Metadata, None, None, IterDirection::Forward)
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap(),
-            vec![(key.clone(), expected.clone())]
+            vec![(key.clone().into(), expected.clone())]
         );
 
         assert_eq!(db.take(&key, Column::Metadata).unwrap().unwrap(), expected);

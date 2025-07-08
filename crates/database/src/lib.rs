@@ -83,9 +83,6 @@ pub enum Error {
         modifications at column {column} for the key {key:?}")]
     ConflictingChanges { column: u32, key: ReferenceBytesKey },
 
-    #[display(fmt = "Max iterations reached while trying to find next entry")]
-    MaxIterationsReached,
-
     /// Not related to database error.
     #[from]
     Other(anyhow::Error),

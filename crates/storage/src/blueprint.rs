@@ -94,22 +94,27 @@ where
         let entry =
             storage.get_next(key_bytes.as_ref(), column, direction, max_iterations)?;
 
-        let decoded_entry = entry
-            .entry
-            .map(|(key, value)| {
-                let key = Self::KeyCodec::decode(key.as_slice())
-                    .map_err(crate::Error::Codec)?;
-                let value = Self::ValueCodec::decode_from_value(value.into_owned())
-                    .map_err(crate::Error::Codec)?;
+        match entry {
+            NextEntry::Entry { entry, iterations } => {
+                let decoded_entry = entry
+                    .map(|(key, value)| {
+                        let key = Self::KeyCodec::decode(key.as_slice())
+                            .map_err(crate::Error::Codec)?;
+                        let value =
+                            Self::ValueCodec::decode_from_value(value.into_owned())
+                                .map_err(crate::Error::Codec)?;
 
-                Ok::<_, StorageError>((Cow::Owned(key), Cow::Owned(value)))
-            })
-            .transpose()?;
+                        Ok::<_, StorageError>((Cow::Owned(key), Cow::Owned(value)))
+                    })
+                    .transpose()?;
 
-        Ok(NextEntry {
-            entry: decoded_entry,
-            iterations: entry.iterations,
-        })
+                Ok(NextEntry::Entry {
+                    entry: decoded_entry,
+                    iterations,
+                })
+            }
+            NextEntry::ReachedMaxIterations => Ok(NextEntry::ReachedMaxIterations),
+        }
     }
 }
 

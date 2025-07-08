@@ -1,9 +1,6 @@
-use crate::database::{
-    Error as DatabaseError,
-    database_description::{
-        DatabaseDescription,
-        on_chain::OnChain,
-    },
+use crate::database::database_description::{
+    DatabaseDescription,
+    on_chain::OnChain,
 };
 use fuel_core_storage::{
     Direction,
@@ -52,7 +49,7 @@ where
         let btree = &self.inner[column.as_usize()];
 
         iterator(btree, prefix, start, direction)
-            .map(|(key, value)| (key.clone().into(), value.clone()))
+            .map(|(key, value)| (key.clone(), value.clone()))
             .map(Ok)
     }
 
@@ -66,7 +63,7 @@ where
         let btree = &self.inner[column.as_usize()];
 
         keys_iterator(btree, prefix, start, direction)
-            .map(|key| key.clone().into())
+            .cloned()
             .map(Ok)
     }
 }
@@ -88,13 +85,9 @@ where
         direction: Direction,
         max_iterations: usize,
     ) -> StorageResult<NextEntry<Key, Value>> {
-        if max_iterations == 0 {
-            return Err(DatabaseError::MaxIterationsReached.into())
-        }
-
         let btree = &self.inner[column.as_usize()];
 
-        let next = direction.next_from_map(start_key, btree);
+        let next = direction.next_from_map(start_key, btree, max_iterations);
 
         Ok(next)
     }

@@ -16,7 +16,9 @@ use crate::{
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
+    Direction,
     Mappable,
+    NextMappableEntry,
     PredicateStorageRequirements,
     Result as StorageResult,
     StorageInspect,
@@ -233,6 +235,15 @@ impl StorageInspect<BlobData> for MockDb {
         let table = self.data.lock().unwrap();
         let bytes = table.blobs.get(key);
         Ok(bytes.map(|b| Cow::Owned(b.clone())))
+    }
+
+    fn get_next(
+        &self,
+        _: &<BlobData as Mappable>::Key,
+        _: Direction,
+        _: usize,
+    ) -> Result<NextMappableEntry<BlobData>, Self::Error> {
+        todo!()
     }
 
     fn contains_key(

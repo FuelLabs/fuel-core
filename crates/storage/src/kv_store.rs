@@ -252,12 +252,21 @@ where
             self.max_iterations,
         )?;
 
-        self.max_iterations = self.max_iterations.saturating_sub(next.iterations);
+        match next {
+            NextEntry::Entry { entry, iterations } => {
+                self.max_iterations = self.max_iterations.saturating_sub(iterations);
 
-        // If we have a next item, we update the start_key to the current key
-        self.start_key = next.entry.as_ref().map(|(key, _)| key.clone());
+                // If we have a next item, we update the start_key to the current key
+                self.start_key = entry.as_ref().map(|(key, _)| key.clone());
 
-        Ok(next)
+                Ok(NextEntry::Entry { entry, iterations })
+            }
+            NextEntry::ReachedMaxIterations => {
+                self.start_key = None;
+
+                Ok(NextEntry::ReachedMaxIterations)
+            }
+        }
     }
 }
 
@@ -268,10 +277,7 @@ where
     type Item = StorageResult<NextEntry<'a, Key, Value>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let key = match self.start_key.take() {
-            Some(key) => key,
-            None => return None, // No more items to iterate
-        };
+        let key = self.start_key.take()?;
 
         Some(self.next(&key))
     }
