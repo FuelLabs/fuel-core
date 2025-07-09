@@ -16,10 +16,7 @@ fault-proving = [
     "fuel-core-database/fault-proving",
     "fuel-core-sync/fault-proving",
 ]
-parallel-executor = [
-    "fuel-core/parallel-executor",
-    "test-helpers/parallel-executor"
-]
+parallel-executor = ["fuel-core/parallel-executor", "test-helpers/parallel-executor"]
 
 [dependencies]
 anyhow = { workspace = true }
