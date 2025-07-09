@@ -378,7 +378,7 @@ where
         }
         drop(db_after_execution);
 
-        // TODO: Ensure this is the same value as the above `changes`, righ?
+        // TODO: Ensure this is the same value as the above `changes`, right?
         // let changes = db_after_execution.into_changes();
 
         #[cfg(feature = "test-helpers")]
