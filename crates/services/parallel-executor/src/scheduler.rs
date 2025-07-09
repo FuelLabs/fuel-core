@@ -148,7 +148,7 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     /// Current scheduler state
     state: SchedulerState,
     /// Total maximum of transactions left
-    tx_left: u16,
+    tx_left: u32,
     /// Total maximum of byte size left
     tx_size_left: u64,
     /// Total remaining gas
@@ -312,7 +312,7 @@ pub(crate) struct PreparedBatch {
     pub contracts_used: Vec<ContractId>,
     pub coins_used: Vec<CoinInBatch>,
     pub message_nonces_used: Vec<Nonce>,
-    pub number_of_transactions: u16,
+    pub number_of_transactions: u32,
 }
 
 pub struct BlockConstraints {
@@ -352,7 +352,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             executor,
             storage,
             // TODO: Use consensus parameters after https://github.com/FuelLabs/fuel-vm/pull/905 is merged
-            tx_left: u16::MAX,
+            tx_left: u32::MAX,
             tx_size_left: consensus_parameters.block_transaction_size_limit(),
             gas_left: consensus_parameters.block_gas_limit(),
             worker_pool: WorkerPool::new(config.number_of_cores.get()),
@@ -405,7 +405,7 @@ where
             SchedulerError::InternalError("Maximum time per block overflow".to_string()),
         )?;
         let mut nb_batch_created = 0;
-        let mut nb_transactions = 0;
+        let mut nb_transactions: u32 = 0;
         // TODO: should this be divided by cores? we are also using this as the total remaining when
         //   creating a new batch
         let initial_gas_per_worker = self
@@ -494,6 +494,8 @@ where
             }
         }
 
+        tracing::warn!("started all batches");
+
         self.wait_all_execution_tasks(
             components.header_to_produce,
             coinbase_recipient,
@@ -502,6 +504,8 @@ where
         )
         .await?;
 
+        tracing::warn!("finished all batches");
+
         let mut res = self.verify_coherency_and_merge_results(
             nb_batch_created,
             components.header_to_produce,
@@ -509,18 +513,48 @@ where
             storage_with_da.clone(),
         )?;
 
+        // #[derive(Default, Debug)]
+        // pub struct SchedulerExecutionResult {
+        //     pub header: PartialBlockHeader,
+        //     pub transactions: Vec<Transaction>,
+        //     pub events: Vec<Event>,
+        //     pub message_ids: Vec<MessageId>,
+        //     pub skipped_txs: Vec<(TxId, ExecutorError)>,
+        //     pub transactions_status: Vec<TransactionExecutionStatus>,
+        //     pub changes: StorageChanges,
+        //     pub used_gas: u64,
+        //     pub used_size: u32,
+        //     pub coinbase: u64,
+        // }
+        tracing::warn!("execution result: ");
+        tracing::warn!("header: {:?}", res.header);
+        tracing::warn!("transactions size: {:?}", res.transactions.len());
+        tracing::warn!("events size: {:?}", res.events.len());
+        tracing::warn!("message_ids size: {:?}", res.message_ids.len());
+        tracing::warn!("skipped_txs size: {:?}", res.skipped_txs.len());
+        tracing::warn!(
+            "transactions_status size: {:?}",
+            res.transactions_status.len()
+        );
+        // tracing::warn!("changes size: {:?}", res.changes.len());
+        tracing::warn!("used_gas: {:?}", res.used_gas);
+        tracing::warn!("used_size: {:?}", res.used_size);
+        tracing::warn!("coinbase: {:?}", res.coinbase);
+
         if !self.blob_transactions.is_empty() {
             let mut tx = StorageTransaction::transaction(
                 storage_with_da.clone(),
                 ConflictPolicy::Fail,
                 Default::default(),
             );
+            tracing::warn!("aaa");
 
             for changes in res.changes.extract_list_of_changes() {
                 if let Err(e) = tx.commit_changes(changes) {
                     return Err(SchedulerError::StorageError(e));
                 }
             }
+            tracing::warn!("bbb");
 
             let (blob_execution_data, blob_txs) = self
                 .execute_blob_transactions(
@@ -530,15 +564,18 @@ where
                     consensus_parameters_version,
                 )
                 .await?;
+            tracing::warn!("ccc");
             res.add_blob_execution_data(blob_execution_data, blob_txs);
         }
+
+        tracing::warn!("execution done");
 
         Ok(res)
     }
 
     fn update_constraints(
         &mut self,
-        tx_number_to_add: u16,
+        tx_number_to_add: u32,
         tx_size_to_add: u64,
         gas_to_add: u64,
     ) -> Result<(), SchedulerError> {
@@ -631,7 +668,7 @@ where
         components: &Components<TxSource>,
         mut batch: PreparedBatch,
         batch_id: usize,
-        start_idx_txs: u16,
+        start_idx_txs: u32,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
         tracing::warn!(
@@ -954,7 +991,7 @@ where
         &mut self,
         components: &Components<TxSource>,
         storage: StorageTransaction<D>,
-        start_idx_txs: u16,
+        start_idx_txs: u32,
         consensus_parameters_version: u32,
     ) -> Result<(ExecutionData, Vec<Transaction>), SchedulerError>
     where

@@ -163,6 +163,12 @@ where
                 maximum_execution_time,
             )
             .await?;
+        tracing::warn!(
+            "Scheduler finished with {} transactions, {} events, and {} skipped transactions",
+            scheduler_result.transactions.len(),
+            scheduler_result.events.len(),
+            scheduler_result.skipped_txs.len()
+        );
 
         // Finalize block with mint transaction
         self.finalize_block(
@@ -288,9 +294,14 @@ where
             view,
             executor,
         )?;
+        tracing::warn!(
+            "Produced mint transaction with {} gas and {} size",
+            execution_data.used_gas,
+            execution_data.used_size
+        );
 
         // Generate final block
-        let block = partial_block
+        let res = partial_block
             .generate(
                 &execution_data.message_ids,
                 event_inbox_root,
@@ -299,7 +310,13 @@ where
             )
             .map_err(|e| {
                 SchedulerError::InternalError(format!("Block generation failed: {}", e))
-            })?;
+            });
+
+        match &res {
+            Ok(_) => tracing::warn!("Block generated successfully"),
+            Err(e) => tracing::warn!("Failed to generate block: {}", e),
+        }
+        let block = res?;
 
         Ok(Uncommitted::new(
             ExecutionResult {
@@ -335,7 +352,7 @@ where
             coinbase,
         } = scheduler_res;
 
-        let tx_count = u16::try_from(transactions.len()).map_err(|_| {
+        let tx_count = u32::try_from(transactions.len()).map_err(|_| {
             SchedulerError::InternalError("Too many transactions".to_string())
         })?;
 

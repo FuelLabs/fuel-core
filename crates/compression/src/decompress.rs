@@ -106,7 +106,7 @@ where
         *tx_pointer = FuelTxPointer::new(
             block.consensus_header().height,
             #[allow(clippy::arithmetic_side_effects)]
-            u16::try_from(transaction_count - 1)?,
+            u32::try_from(transaction_count - 1)?,
         );
     } else {
         anyhow::bail!("Last transaction is not a mint");

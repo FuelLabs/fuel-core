@@ -159,15 +159,11 @@ pub fn input(size: usize) -> anyhow::Result<InputDeserializationType> {
 /// Gets the next transactions by using the host function.
 pub fn next_transactions(
     gas_limit: u64,
-    tx_count_limit: u16,
+    tx_count_limit: u32,
     block_transaction_size_limit: u32,
 ) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
     let next_size = unsafe {
-        host::peek_next_txs_size(
-            gas_limit,
-            tx_count_limit as u32,
-            block_transaction_size_limit,
-        )
+        host::peek_next_txs_size(gas_limit, tx_count_limit, block_transaction_size_limit)
     };
 
     if next_size == 0 {

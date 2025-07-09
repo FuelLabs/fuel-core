@@ -49,7 +49,7 @@ ed25519 = { workspace = true, default-features = false }
 ed25519-dalek = { workspace = true, default-features = false }
 educe = { workspace = true, optional = true }
 fuel-vm-private = { workspace = true, default-features = false, features = [
-  "alloc",
+  "alloc", "u32-tx-pointer"
 ] }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 rand = { workspace = true, optional = true }

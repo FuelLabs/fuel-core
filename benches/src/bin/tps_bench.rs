@@ -62,9 +62,9 @@ use clap::Parser;
 
 #[derive(Parser)]
 struct Args {
-    #[clap(short = 'c', long, default_value = "16")]
+    #[clap(short = 'c', long, default_value = "12")]
     pub number_of_cores: usize,
-    #[clap(short = 't', long, default_value = "30000")]
+    #[clap(short = 't', long, default_value = "150000")]
     pub number_of_transactions: u64,
 }
 
@@ -226,11 +226,6 @@ fn main() {
                 .try_insert(transactions.clone())
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            // tracing::warn!(
-            //     "Inserted {} transactions in {:?} ms.",
-            //     args.number_of_transactions,
-            //     start_insertion.elapsed().as_millis()
-            // );
             client.produce_blocks(1, None).await.unwrap();
             let block = srv
                 .shared

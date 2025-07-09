@@ -908,7 +908,7 @@ where
         let mut preconfirmations = iter
             .enumerate()
             .map(|(i, (status, tx))| {
-                let tx_index = u16::try_from(i).unwrap_or(u16::MAX);
+                let tx_index = u32::try_from(i).unwrap_or(u32::MAX);
                 let preconfirmation_status =
                     convert_tx_execution_result_to_preconfirmation(
                         tx,

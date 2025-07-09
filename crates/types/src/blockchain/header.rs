@@ -125,7 +125,7 @@ impl BlockHeader {
     }
 
     /// Getter for the transactions count
-    pub fn transactions_count(&self) -> u16 {
+    pub fn transactions_count(&self) -> u32 {
         match self {
             BlockHeader::V1(header) => header.application().transactions_count,
             #[cfg(feature = "fault-proving")]
@@ -611,7 +611,7 @@ impl PartialBlockHeader {
                     .application
                     .state_transition_bytecode_version,
                 generated: GeneratedApplicationFieldsV1 {
-                    transactions_count: u16::try_from(transactions.len())
+                    transactions_count: u32::try_from(transactions.len())
                         .map_err(|_| BlockHeaderError::TooManyTransactions)?,
                     message_receipt_count: u32::try_from(outbox_message_ids.len())
                         .map_err(|_| BlockHeaderError::TooManyMessages)?,

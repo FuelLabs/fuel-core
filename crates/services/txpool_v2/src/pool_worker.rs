@@ -485,6 +485,7 @@ where
         blocks: oneshot::Sender<Vec<ArcPoolTx>>,
     ) {
         let txs = self.pool.extract_transactions_for_block(constraints);
+        tracing::warn!("Sending {} transactions for block", txs.len());
         if blocks.send(txs).is_err() {
             tracing::error!("Failed to send block transactions");
         }

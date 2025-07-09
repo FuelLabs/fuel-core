@@ -17,7 +17,7 @@ pub struct Constraints {
     /// Maximum limit of gas that all selected transaction shouldn't exceed.
     pub max_gas: u64,
     /// Maximum number of transactions that can be selected.
-    pub maximum_txs: u16,
+    pub maximum_txs: u32,
     /// Maximum size of the block.
     pub maximum_block_size: u64,
     /// List of excluded contracts.

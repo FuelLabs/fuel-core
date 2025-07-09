@@ -113,7 +113,7 @@ fn owned_tx_index_key(
 
 ////////////////////////////////////// Not storage part //////////////////////////////////////
 
-pub type TransactionIndex = u16;
+pub type TransactionIndex = u32;
 
 #[derive(
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -144,13 +144,13 @@ impl From<[u8; INDEX_SIZE]> for OwnedTransactionIndexKey {
         // the first 32 bytes are the owner, which is already known when querying
         let mut block_height_bytes: [u8; 4] = Default::default();
         block_height_bytes.copy_from_slice(&bytes[32..36]);
-        let mut tx_idx_bytes: [u8; 2] = Default::default();
+        let mut tx_idx_bytes: [u8; 4] = Default::default();
         tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..38]);
 
         Self {
             owner: Address::from(owner),
             block_height: u32::from_be_bytes(block_height_bytes).into(),
-            tx_idx: u16::from_be_bytes(tx_idx_bytes),
+            tx_idx: u32::from_be_bytes(tx_idx_bytes),
         }
     }
 }
@@ -198,12 +198,12 @@ impl From<Vec<u8>> for OwnedTransactionIndexCursor {
     fn from(bytes: Vec<u8>) -> Self {
         let mut block_height_bytes: [u8; 4] = Default::default();
         block_height_bytes.copy_from_slice(&bytes[..4]);
-        let mut tx_idx_bytes: [u8; 2] = Default::default();
+        let mut tx_idx_bytes: [u8; 4] = Default::default();
         tx_idx_bytes.copy_from_slice(&bytes[4..6]);
 
         Self {
             block_height: u32::from_be_bytes(block_height_bytes).into(),
-            tx_idx: u16::from_be_bytes(tx_idx_bytes),
+            tx_idx: u32::from_be_bytes(tx_idx_bytes),
         }
     }
 }

@@ -456,10 +456,8 @@ where
             .chain_state_info_provider
             .consensus_params_at_version(&block_header.consensus_parameters_version)?
             .block_gas_limit();
-        // We have a hard limit of u16::MAX transactions per block, including the final mint transactions.
-        // Therefore we choose the `new_da_height` to never include more than u16::MAX - 1 transactions in a block.
         let new_da_height = self
-            .select_new_da_height(gas_limit, previous_da_height, u16::MAX - 1)
+            .select_new_da_height(gas_limit, previous_da_height, u32::MAX - 1)
             .await?;
 
         block_header.application.da_height = new_da_height;
@@ -483,7 +481,7 @@ where
         &self,
         gas_limit: u64,
         previous_da_height: DaBlockHeight,
-        transactions_limit: u16,
+        transactions_limit: u32,
     ) -> anyhow::Result<DaBlockHeight> {
         let mut new_best = previous_da_height;
         let mut total_cost: u64 = 0;
