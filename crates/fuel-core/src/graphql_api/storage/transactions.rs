@@ -145,7 +145,7 @@ impl From<[u8; INDEX_SIZE]> for OwnedTransactionIndexKey {
         let mut block_height_bytes: [u8; 4] = Default::default();
         block_height_bytes.copy_from_slice(&bytes[32..36]);
         let mut tx_idx_bytes: [u8; 4] = Default::default();
-        tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..38]);
+        tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..40]);
 
         Self {
             owner: Address::from(owner),
