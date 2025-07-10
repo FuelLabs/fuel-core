@@ -82,7 +82,7 @@ enum Commands {
     #[cfg(test)]
     VerifyAndExecuteBlock {
         sealed_block: SealedBlock,
-        callback: oneshot::Sender<Result<UncommittedResult<Changes>, Error>>,
+        callback: oneshot::Sender<Result<UncommittedResult<StorageChanges>, Error>>,
     },
     PrepareImportResult {
         sealed_block: SealedBlock,
@@ -274,7 +274,7 @@ impl Importer {
     async fn run_verify_and_execute_block(
         &self,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<Changes>, Error> {
+    ) -> Result<UncommittedResult<StorageChanges>, Error> {
         let (sender, receiver) = oneshot::channel();
         let command = Commands::VerifyAndExecuteBlock {
             sealed_block,
@@ -595,7 +595,7 @@ where
         &self,
         runner: &LocalRunner,
         sealed_block: SealedBlock,
-    ) -> Result<UncommittedResult<Changes>, Error> {
+    ) -> Result<UncommittedResult<StorageChanges>, Error> {
         runner.run(move || {
             let result = Self::verify_and_execute_block_inner(
                 &self.executor,

@@ -643,7 +643,7 @@ impl PartialBlockHeader {
                     .application
                     .state_transition_bytecode_version,
                 generated: GeneratedApplicationFieldsV2 {
-                    transactions_count: u16::try_from(transactions.len())
+                    transactions_count: u32::try_from(transactions.len())
                         .map_err(|_| BlockHeaderError::TooManyTransactions)?,
                     message_receipt_count: u32::try_from(outbox_message_ids.len())
                         .map_err(|_| BlockHeaderError::TooManyMessages)?,

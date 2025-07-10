@@ -189,6 +189,7 @@ impl WasmChecker for ExecutorAdapter {
 }
 
 #[cfg(not(feature = "wasm-executor"))]
+#[cfg(feature = "parallel-executor")]
 impl WasmChecker for ParallelExecutorAdapter {
     fn validate_uploaded_wasm(
         &self,

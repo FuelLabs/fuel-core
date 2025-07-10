@@ -737,7 +737,7 @@ where
         config
             .service_channel_limits
             .max_pending_write_pool_requests
-            + 1,
+            .saturating_add(1),
     );
 
     let (pool_stats_sender, pool_stats_receiver) =

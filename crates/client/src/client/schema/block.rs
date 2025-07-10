@@ -6,7 +6,6 @@ use crate::client::schema::{
     Signature,
     Tai64Timestamp,
     TransactionId,
-    U16,
     U32,
     U64,
     schema,

@@ -49,14 +49,14 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
         &self,
         gas_limit: u64,
         transactions_limit: u32,
-        block_transaction_size_limit: u32,
+        block_transaction_size_limit: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         self.tx_pool
             .extract_transactions_for_block(Constraints {
                 minimal_gas_price: self.minimum_gas_price,
                 max_gas: gas_limit,
                 maximum_txs: transactions_limit,
-                maximum_block_size: block_transaction_size_limit as u64,
+                maximum_block_size: block_transaction_size_limit,
                 excluded_contracts: HashSet::default(),
             })
             .unwrap_or_default()

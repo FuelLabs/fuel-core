@@ -192,7 +192,7 @@ impl BlockHeaderV2 {
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct GeneratedApplicationFieldsV2 {
     /// Number of transactions in this block.
-    pub transactions_count: u16,
+    pub transactions_count: u32,
     /// Number of message receipts in this block.
     pub message_receipt_count: u32,
     /// Merkle root of transactions.

@@ -30,7 +30,7 @@ impl CoinType {
 pub struct Coin {
     pub amount: u64,
     pub block_created: u32,
-    pub tx_created_idx: u16,
+    pub tx_created_idx: u32,
     pub asset_id: AssetId,
     pub utxo_id: UtxoId,
     pub owner: Address,

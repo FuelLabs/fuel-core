@@ -3962,7 +3962,7 @@ mod tests {
         fn relayer_db_with_mint_relayed_tx(
             da_height: u64,
             block_height: u32,
-            tx_count: u16,
+            tx_count: u32,
         ) -> Database<Relayer> {
             let mut relayed_tx = RelayedTransaction::default();
             let base_asset_id = AssetId::BASE;

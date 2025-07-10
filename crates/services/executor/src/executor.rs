@@ -209,7 +209,7 @@ impl TransactionsSource for OnceTransactionsSource {
         &self,
         _: u64,
         transactions_limit: u32,
-        _: u32,
+        _: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
         let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
@@ -800,15 +800,12 @@ where
             ..
         } = components;
         let block_gas_limit = self.consensus_params.block_gas_limit();
-        let block_transaction_size_limit = self
-            .consensus_params
-            .block_transaction_size_limit()
-            .try_into()
-            .unwrap_or(u32::MAX);
+        let block_transaction_size_limit =
+            self.consensus_params.block_transaction_size_limit();
 
         let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
         let mut remaining_block_transaction_size_limit =
-            block_transaction_size_limit.saturating_sub(data.used_size);
+            block_transaction_size_limit.saturating_sub(data.used_size as u64);
 
         // We allow at most u16::MAX transactions in a block, including the mint transaction.
         // When processing l2 transactions, we must take into account transactions from the l1
@@ -881,7 +878,7 @@ where
                 statuses = self.preconfirmation_sender.try_send(statuses);
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
-                    block_transaction_size_limit.saturating_sub(data.used_size);
+                    block_transaction_size_limit.saturating_sub(data.used_size as u64);
                 remaining_tx_count = max_tx_count().saturating_sub(data.tx_count);
             }
 

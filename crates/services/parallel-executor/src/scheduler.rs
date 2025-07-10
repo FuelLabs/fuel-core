@@ -614,11 +614,13 @@ where
         total_execution_time: Duration,
     ) -> Result<PreparedBatch, SchedulerError> {
         let spent_time = start_execution_time.elapsed();
+        // TODO: Is this divide the right approach?
         let scaled_gas_per_core = (initial_gas_per_core as u128)
             .saturating_mul(
                 (total_execution_time.as_millis()).saturating_sub(spent_time.as_millis()),
             )
-            .saturating_div(total_execution_time.as_millis());
+            .checked_div(total_execution_time.as_millis())
+            .unwrap_or(initial_gas_per_core as u128);
         // TODO: We were dividing every time before and this was causing it to use too little gas
         //   each time, but is this safe?
         let scaled_gas_left = self.gas_left as u128;
