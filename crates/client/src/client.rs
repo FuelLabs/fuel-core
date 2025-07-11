@@ -1388,9 +1388,7 @@ impl FuelClient {
             start_timestamp: start_timestamp
                 .map(|timestamp| Tai64Timestamp::from(Tai64(timestamp))),
         });
-        tracing::warn!("Producing {} blocks", blocks_to_produce);
         let new_height = self.query(query).await?.produce_blocks;
-        tracing::warn!("Produced blocks up to height");
 
         Ok(new_height.into())
     }

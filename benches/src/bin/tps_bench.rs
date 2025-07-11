@@ -132,17 +132,13 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 
 fn main() {
     let args = Args::parse();
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::WARN)
-        .try_init();
-
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     let start_transaction_generation = std::time::Instant::now();
     let transactions = generate_transactions(args.number_of_transactions, &mut rng);
     let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
     let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
-    tracing::warn!(
+    tracing::debug!(
         "Generated {} transactions in {:?} ms.",
         args.number_of_transactions,
         start_transaction_generation.elapsed().as_millis()
