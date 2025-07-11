@@ -37,6 +37,7 @@ fault-proving = [
 u32-tx-count = [
     "fuel-core-executor/u32-tx-count",
     "fuel-core-types/u32-tx-pointer",
+    "fuel-core-wasm-executor/u32-tx-count"
 ]
 
 [dependencies]

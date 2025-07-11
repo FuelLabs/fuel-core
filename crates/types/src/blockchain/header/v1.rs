@@ -167,8 +167,12 @@ impl BlockHeaderV1 {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct GeneratedApplicationFieldsV1 {
+    #[cfg(feature = "u32-tx-pointer")]
     /// Number of transactions in this block.
     pub transactions_count: u32,
+    #[cfg(not(feature = "u32-tx-pointer"))]
+    /// Number of transactions in this block.
+    pub transactions_count: u16,
     /// Number of message receipts in this block.
     pub message_receipt_count: u32,
     /// Merkle root of transactions.

@@ -1,4 +1,7 @@
-use super::Bytes32;
+use super::{
+    Bytes32,
+    U16,
+};
 use crate::client::schema::{
     BlockId,
     ConnectionArgsFields,
@@ -137,7 +140,7 @@ pub struct Header {
     pub da_height: U64,
     pub consensus_parameters_version: U32,
     pub state_transition_bytecode_version: U32,
-    pub transactions_count: U32,
+    pub transactions_count: U16,
     pub message_receipt_count: U32,
     pub transactions_root: Bytes32,
     pub message_outbox_root: Bytes32,
