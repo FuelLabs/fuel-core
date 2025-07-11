@@ -1421,7 +1421,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_storage_error() {
+        async fn select_coins_to_spend_should_bail_on_storage_error() {
             // Given
             const MAX: u16 = u16::MAX;
             const TOTAL: u128 = 101;
@@ -1469,7 +1469,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_incorrect_max() {
+        async fn select_coins_to_spend_should_bail_on_incorrect_max() {
             // Given
             const MAX: u16 = 0;
             const TOTAL: u128 = 101;
@@ -1498,7 +1498,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_incorrect_total() {
+        async fn select_coins_to_spend_should_bail_on_incorrect_total() {
             // Given
             const MAX: u16 = 101;
             const TOTAL: u128 = 0;
@@ -1527,7 +1527,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_not_enough_coins() {
+        async fn select_coins_to_spend__fails_if_coins_exceed_max_inputs() {
             // Given
             const MAX: u16 = 3;
             const TOTAL: u128 = 2137;
@@ -1572,7 +1572,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_insufficient_funds() {
+        async fn select_coins_to_spend__fails_if_insufficient_funds() {
             // Given
             const MAX: u16 = 3;
             const TOTAL: u128 = 28;
