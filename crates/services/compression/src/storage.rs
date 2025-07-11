@@ -1,5 +1,3 @@
-use fuel_core_storage::merkle::sparse::Merkleized;
-
 /// Generates a random RegistryKey
 #[cfg(feature = "test-helpers")]
 #[allow(clippy::arithmetic_side_effects)]
@@ -25,32 +23,32 @@ pub mod registrations;
 pub mod timestamps;
 
 /// Merkleized Address table type alias
-pub type Address = Merkleized<address::Address>;
+pub type Address = address::Address;
 
 /// Merkleized AssetId table type alias
-pub type AssetId = Merkleized<asset_id::AssetId>;
+pub type AssetId = asset_id::AssetId;
 
 /// Merkleized ContractId table type alias
-pub type ContractId = Merkleized<contract_id::ContractId>;
+pub type ContractId = contract_id::ContractId;
 
 /// Merkleized EvictorCache table type alias
-pub type EvictorCache = Merkleized<evictor_cache::EvictorCache>;
+pub type EvictorCache = evictor_cache::EvictorCache;
 
 /// Merkleized PredicateCode table type alias
-pub type PredicateCode = Merkleized<predicate_code::PredicateCode>;
+pub type PredicateCode = predicate_code::PredicateCode;
 
 /// Merkleized ScriptCode table type alias
-pub type ScriptCode = Merkleized<script_code::ScriptCode>;
+pub type ScriptCode = script_code::ScriptCode;
 
 /// Merkleized RegistryIndex table type alias
-pub type RegistryIndex = Merkleized<registry_index::RegistryIndex>;
+pub type RegistryIndex = registry_index::RegistryIndex;
 
 /// Merkleized Timestamps table type alias
-pub type Timestamps = Merkleized<timestamps::Timestamps>;
+pub type Timestamps = timestamps::Timestamps;
 
 /// Re-export to match api
 pub use compressed_blocks::CompressedBlocks;
 
 /// Merkleized Registrations table type alias
 #[cfg(feature = "fault-proving")]
-pub type Registrations = Merkleized<registrations::Registrations>;
+pub type Registrations = registrations::Registrations;

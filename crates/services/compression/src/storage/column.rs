@@ -1,11 +1,8 @@
 //! Column enum for the database.
 
-use fuel_core_storage::merkle::{
-    column::{
-        AsU32,
-        MerkleizedColumn,
-    },
-    sparse::MerkleizedTableColumn,
+use fuel_core_storage::{
+    kv_store::StorageColumn,
+    merkle::column::AsU32,
 };
 
 /// Enum representing the columns in the storage.
@@ -43,6 +40,8 @@ pub enum CompressionColumn {
     #[cfg(feature = "fault-proving")]
     /// Keeps track of registrations per table associated with a compressed block, see [`Registrations`](crate::storage::registrations::Registrations)
     Registrations = 9,
+    /// Metadata table
+    Metadata = 10,
 }
 
 impl AsU32 for CompressionColumn {
@@ -51,6 +50,13 @@ impl AsU32 for CompressionColumn {
     }
 }
 
-/// Type alias to get the `MerkleizedColumn` for some type that implements `MerkleizedTableColumn`.
-pub type MerkleizedColumnOf<TC> =
-    MerkleizedColumn<<TC as MerkleizedTableColumn>::TableColumn>;
+impl StorageColumn for CompressionColumn {
+    fn name(&self) -> String {
+        let str: &str = self.into();
+        str.to_string()
+    }
+
+    fn id(&self) -> u32 {
+        *self as u32
+    }
+}

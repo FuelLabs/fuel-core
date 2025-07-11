@@ -10,7 +10,6 @@ use fuel_core_storage::{
     StorageAsMut,
     StorageSize,
     kv_store::KeyValueInspect,
-    merkle::column::MerkleizedColumn,
     not_found,
     transactional::{
         Modifiable,
@@ -29,15 +28,12 @@ pub trait LatestHeight {
 
 /// Trait for interacting with storage that supports compression
 pub trait CompressionStorage:
-    KeyValueInspect<Column = MerkleizedColumn<storage::column::CompressionColumn>>
-    + Modifiable
-    + Send
-    + Sync
+    KeyValueInspect<Column = storage::column::CompressionColumn> + Modifiable + Send + Sync
 {
 }
 
 impl<T> CompressionStorage for T where
-    T: KeyValueInspect<Column = MerkleizedColumn<storage::column::CompressionColumn>>
+    T: KeyValueInspect<Column = storage::column::CompressionColumn>
         + Modifiable
         + Send
         + Sync
@@ -54,8 +50,7 @@ pub(crate) trait WriteCompressedBlock {
 
 impl<Storage> WriteCompressedBlock for StorageTransaction<Storage>
 where
-    Storage:
-        KeyValueInspect<Column = MerkleizedColumn<storage::column::CompressionColumn>>,
+    Storage: KeyValueInspect<Column = storage::column::CompressionColumn>,
 {
     fn write_compressed_block(
         &mut self,

@@ -11,7 +11,6 @@ default = ["fuel-core/rocksdb", "fuel-core/rocksdb-production"]
 fault-proving = [
     "fuel-core-types/fault-proving",
     "fuel-core-chain-config/fault-proving",
-    "fuel-core/fault-proving",
     "fuel-core-storage/fault-proving",
     "fuel-core-database/fault-proving",
     "fuel-core-sync/fault-proving",

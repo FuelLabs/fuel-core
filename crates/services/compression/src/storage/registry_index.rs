@@ -4,7 +4,6 @@ use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
     codec::postcard::Postcard,
-    merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::{
@@ -20,10 +19,7 @@ use fuel_core_types::{
 };
 use std::ops::Deref;
 
-use super::column::{
-    CompressionColumn,
-    MerkleizedColumnOf,
-};
+use super::column::CompressionColumn;
 
 #[derive(
     Debug,
@@ -100,14 +96,6 @@ impl rand::distributions::Distribution<ReverseKey> for rand::distributions::Stan
 /// Table that indexes the script codes
 pub struct RegistryIndex;
 
-impl MerkleizedTableColumn for RegistryIndex {
-    type TableColumn = CompressionColumn;
-
-    fn table_column() -> Self::TableColumn {
-        Self::TableColumn::RegistryIndex
-    }
-}
-
 impl Mappable for RegistryIndex {
     type Key = Self::OwnedKey;
     type OwnedKey = ReverseKey;
@@ -117,10 +105,10 @@ impl Mappable for RegistryIndex {
 
 impl TableWithBlueprint for RegistryIndex {
     type Blueprint = Plain<Postcard, Postcard>;
-    type Column = MerkleizedColumnOf<Self>;
+    type Column = CompressionColumn;
 
     fn column() -> Self::Column {
-        Self::Column::TableColumn(Self::table_column())
+        Self::Column::RegistryIndex
     }
 }
 
