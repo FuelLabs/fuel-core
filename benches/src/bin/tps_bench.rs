@@ -131,9 +131,6 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 }
 
 fn main() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::WARN)
-        .try_init();
     let args = Args::parse();
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 

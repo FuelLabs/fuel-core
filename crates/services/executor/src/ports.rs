@@ -163,7 +163,8 @@ pub trait TransactionsSource {
     fn next(
         &self,
         gas_limit: u64,
-        tx_count_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] tx_count_limit: u16,
+        #[cfg(feature = "u32-tx-count")] tx_count_limit: u32,
         block_transaction_size_limit: u64,
     ) -> Vec<MaybeCheckedTransaction>;
 }

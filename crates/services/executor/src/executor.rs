@@ -172,12 +172,12 @@ use alloc::{
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
-#[cfg(not(feature = "limited-tx-count"))]
+#[cfg(feature = "u32-tx-count")]
 pub const fn max_tx_count() -> u32 {
     u32::MAX.saturating_sub(1)
 }
-#[cfg(feature = "limited-tx-count")]
-pub const fn max_tx_count() -> u32 {
+#[cfg(not(feature = "u32-tx-count"))]
+pub const fn max_tx_count() -> u16 {
     1024
 }
 
@@ -208,7 +208,8 @@ impl TransactionsSource for OnceTransactionsSource {
     fn next(
         &self,
         _: u64,
-        transactions_limit: u32,
+        #[cfg(feature = "u32-tx-count")] transactions_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] transactions_limit: u16,
         _: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
@@ -250,7 +251,8 @@ pub fn convert_tx_execution_result_to_preconfirmation(
     tx_id: TxId,
     tx_exec_result: &TransactionExecutionResult,
     block_height: BlockHeight,
-    tx_index: u32,
+    #[cfg(feature = "u32-tx-count")] tx_index: u32,
+    #[cfg(not(feature = "u32-tx-count"))] tx_index: u16,
 ) -> Preconfirmation {
     let tx_pointer = TxPointer::new(block_height, tx_index);
     let dynamic_outputs = tx
@@ -303,7 +305,10 @@ pub struct ExecutionData {
     pub coinbase: u64,
     pub used_gas: u64,
     pub used_size: u32,
+    #[cfg(feature = "u32-tx-count")]
     pub tx_count: u32,
+    #[cfg(not(feature = "u32-tx-count"))]
+    pub tx_count: u16,
     pub found_mint: bool,
     pub message_ids: Vec<MessageId>,
     pub tx_status: Vec<TransactionExecutionStatus>,
@@ -719,7 +724,8 @@ where
         mut self,
         transactions: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
-        start_idx: u32,
+        #[cfg(feature = "u32-tx-count")] start_idx: u32,
+        #[cfg(not(feature = "u32-tx-count"))] start_idx: u16,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<(Vec<Transaction>, ExecutionData)>
     where

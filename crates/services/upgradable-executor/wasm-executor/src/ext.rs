@@ -83,7 +83,8 @@ mod host {
         /// If the size is 0, there are no more transactions.
         pub(crate) fn peek_next_txs_size(
             gas_limit: u64,
-            tx_count_limit: u32,
+            #[cfg(not(feature = "u32-tx-count"))] tx_count_limit: u16,
+            #[cfg(feature = "u32-tx-count")] tx_count_limit: u32,
             block_transaction_size_limit: u64,
         ) -> u32;
     }
@@ -159,7 +160,8 @@ pub fn input(size: usize) -> anyhow::Result<InputDeserializationType> {
 /// Gets the next transactions by using the host function.
 pub fn next_transactions(
     gas_limit: u64,
-    tx_count_limit: u32,
+    #[cfg(not(feature = "u32-tx-count"))] tx_count_limit: u16,
+    #[cfg(feature = "u32-tx-count")] tx_count_limit: u32,
     block_transaction_size_limit: u64,
 ) -> anyhow::Result<Vec<MaybeCheckedTransaction>> {
     let next_size = unsafe {

@@ -37,7 +37,10 @@ pub struct CoinConfig {
     pub tx_pointer_block_height: BlockHeight,
     /// used if coin is forked from another chain to preserve id & tx_pointer
     /// The index of the originating tx within `tx_pointer_block_height`
+    #[cfg(feature = "u32-tx-count")]
     pub tx_pointer_tx_idx: u32,
+    #[cfg(not(feature = "u32-tx-count"))]
+    pub tx_pointer_tx_idx: u16,
     pub owner: Address,
     pub amount: u64,
     pub asset_id: AssetId,

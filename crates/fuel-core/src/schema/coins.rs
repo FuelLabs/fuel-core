@@ -89,7 +89,13 @@ impl Coin {
     }
 
     /// TxPointer - the index of the transaction that created this coin
+    #[cfg(feature = "u32-tx-count")]
     async fn tx_created_idx(&self) -> U32 {
+        self.0.tx_pointer.tx_index().into()
+    }
+
+    #[cfg(not(feature = "u32-tx-count"))]
+    async fn tx_created_idx(&self) -> U16 {
         self.0.tx_pointer.tx_index().into()
     }
 }
