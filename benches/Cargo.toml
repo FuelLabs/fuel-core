@@ -12,7 +12,7 @@ default = [
     "fuel-core/rocksdb-production",
     "fuel-core/u32-tx-count",
     "fuel-core-chain-config/u32-tx-count",
-    "fuel-core-types/u32-tx-pointer"
+    "fuel-core-types/u32-tx-pointer",
 ]
 fault-proving = [
     "fuel-core-types/fault-proving",
@@ -22,7 +22,11 @@ fault-proving = [
     "fuel-core-database/fault-proving",
     "fuel-core-sync/fault-proving",
 ]
-parallel-executor = ["fuel-core/parallel-executor", "test-helpers/parallel-executor", "fuel-core/u32-tx-count"]
+parallel-executor = [
+    "fuel-core/parallel-executor",
+    "test-helpers/parallel-executor",
+    "fuel-core/u32-tx-count",
+]
 
 [dependencies]
 anyhow = { workspace = true }

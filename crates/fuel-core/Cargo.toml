@@ -43,7 +43,7 @@ wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
 parallel-executor = [
     "fuel-core-parallel-executor",
     "fuel-core/parallel-executor",
-    "u32-tx-count"
+    "u32-tx-count",
 ]
 fault-proving = [
     "fuel-core-types/fault-proving",
