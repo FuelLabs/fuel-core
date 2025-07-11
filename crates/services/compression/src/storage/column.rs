@@ -19,29 +19,29 @@ use fuel_core_storage::{
     Hash,
 )]
 pub enum CompressionColumn {
+    /// Metadata table
+    Metadata = 0,
     /// CompressedBlocks, see [`CompressedBlocks`](crate::storage::compressed_blocks::CompressedBlocks)
-    CompressedBlocks = 0,
+    CompressedBlocks = 1,
     /// RegistryKey to Address index, see [`Address`](crate::storage::address::Address)
-    Address = 1,
+    Address = 2,
     /// RegistryKey to AssetId index, see [`AssetId`](crate::storage::asset_id::AssetId)
-    AssetId = 2,
+    AssetId = 3,
     /// RegistryKey to ContractId index, see [`ContractId`](crate::storage::contract_id::ContractId)
-    ContractId = 3,
+    ContractId = 4,
     /// RegistryKey to ScriptCode index, see [`ScriptCode`](crate::storage::script_code::ScriptCode)
-    ScriptCode = 4,
+    ScriptCode = 5,
     /// RegistryKey to PredicateCode index, see [`PredicateCode`](crate::storage::predicate_code::PredicateCode)
-    PredicateCode = 5,
+    PredicateCode = 6,
     /// RegistryKey to ReverseKey index, see [`RegistryIndex`](crate::storage::registry_index::RegistryIndex)
-    RegistryIndex = 6,
+    RegistryIndex = 7,
     /// Keeps track of keys to remove, see [`EvictorCache`](crate::storage::evictor_cache::EvictorCache)
-    EvictorCache = 7,
+    EvictorCache = 8,
     /// Keeps track of timestamps, will be removed eventually, see [`Timestamps`](crate::storage::timestamps::Timestamps)
-    Timestamps = 8,
+    Timestamps = 9,
     #[cfg(feature = "fault-proving")]
     /// Keeps track of registrations per table associated with a compressed block, see [`Registrations`](crate::storage::registrations::Registrations)
-    Registrations = 9,
-    /// Metadata table
-    Metadata = 10,
+    Registrations = 10,
 }
 
 impl AsU32 for CompressionColumn {
@@ -57,6 +57,6 @@ impl StorageColumn for CompressionColumn {
     }
 
     fn id(&self) -> u32 {
-        *self as u32
+        self.as_u32()
     }
 }
