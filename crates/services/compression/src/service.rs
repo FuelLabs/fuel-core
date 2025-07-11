@@ -502,9 +502,8 @@ mod tests {
         }
     }
 
-    type MockStorage = StorageTransaction<
-        InMemoryStorage<crate::storage::column::CompressionColumn>,
-    >;
+    type MockStorage =
+        StorageTransaction<InMemoryStorage<crate::storage::column::CompressionColumn>>;
 
     fn test_storage() -> MockStorage {
         InMemoryStorage::default().into_transaction()
