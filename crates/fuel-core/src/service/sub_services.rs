@@ -198,7 +198,6 @@ pub fn init_sub_services(
     let tx_status_manager_adapter =
         TxStatusManagerAdapter::new(tx_status_manager.shared.clone());
 
-    // #[cfg(feature = "p2p")]
     let preconfirmation_sender = PreconfirmationSender::new(
         preconfirmation_sender,
         tx_status_manager_adapter.clone(),
@@ -206,17 +205,11 @@ pub fn init_sub_services(
 
     #[cfg(not(feature = "parallel-executor"))]
     let executor = {
-        // let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
-        //     forbid_fake_coins_default: config.utxo_validation,
-        //     native_executor_version: config.native_executor_version,
-        //     allow_historical_execution: config.historical_execution,
-        // };
         let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
             forbid_unauthorized_inputs_default: config.utxo_validation,
             forbid_fake_utxo_default: config.utxo_validation,
             native_executor_version: config.native_executor_version,
             allow_historical_execution: config.historical_execution,
-            // create_exec_sequencer_skeleton,
         };
         ExecutorAdapter::new(
             database.on_chain().clone(),

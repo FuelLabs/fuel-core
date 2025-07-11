@@ -144,16 +144,6 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
             .produce_without_commit_with_source(component, max_execution_time)
             .await
             .map_err(|e| ExecutorError::Other(format!("{:?}", e)))
-        // let (result, changes) = res.into();
-        // match changes {
-        //     StorageChanges::Changes(changes) => {
-        //         Ok(UncommittedResult::new(result, changes))
-        //     }
-        //     StorageChanges::ChangesList(changes_list) => {
-        //
-        //
-        //     }
-        // }
     }
 }
 
@@ -182,7 +172,6 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>>
         _: (),
     ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         unimplemented!("ParallelExecutorAdapter does not support produce_without_commit");
-        // self.produce_without_commit_from_vector(component)
     }
 }
 

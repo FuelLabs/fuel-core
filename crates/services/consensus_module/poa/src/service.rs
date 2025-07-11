@@ -474,34 +474,6 @@ where
                 storage_changes,
             ))
             .await?;
-        // match storage_changes {
-        //     StorageChanges::Changes(changes) => {
-        //         self.block_importer
-        //             .commit_result(Uncommitted::new(
-        //                 ImportResult::new_from_local(
-        //                     sealed_block.clone(),
-        //                     tx_status,
-        //                     events,
-        //                 ),
-        //                 changes,
-        //             ))
-        //             .await?;
-        //     }
-        //     StorageChanges::ChangesList(list) => {
-        //         for changes in list {
-        //             self.block_importer
-        //                 .commit_result(Uncommitted::new(
-        //                     ImportResult::new_from_local(
-        //                         sealed_block.clone(),
-        //                         tx_status.clone(),
-        //                         events.clone(),
-        //                     ),
-        //                     changes,
-        //                 ))
-        //                 .await?;
-        //         }
-        //     }
-        // }
 
         // Update last block time
         self.last_height = *sealed_block.entity.header().height();

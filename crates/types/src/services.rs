@@ -27,19 +27,6 @@ pub struct Uncommitted<Result, Changes> {
     changes: Changes,
 }
 
-// impl<TR, TC, SR, SC> From<Uncommitted<TR, TC>> for Uncommitted<SR, SC>
-// where
-//     TR: Into<SR>,
-//     TC: Into<SC>,
-// {
-//     fn from(uncommitted: Uncommitted<TR, TC>) -> Self {
-//         Uncommitted {
-//             result: uncommitted.result.into(),
-//             changes: uncommitted.changes.into(),
-//         }
-//     }
-// }
-
 impl<Result, Changes> Uncommitted<Result, Changes> {
     /// Create a new instance of `Uncommitted`.
     pub fn new(result: Result, changes: Changes) -> Self {

@@ -511,48 +511,18 @@ where
             storage_with_da.clone(),
         )?;
 
-        // #[derive(Default, Debug)]
-        // pub struct SchedulerExecutionResult {
-        //     pub header: PartialBlockHeader,
-        //     pub transactions: Vec<Transaction>,
-        //     pub events: Vec<Event>,
-        //     pub message_ids: Vec<MessageId>,
-        //     pub skipped_txs: Vec<(TxId, ExecutorError)>,
-        //     pub transactions_status: Vec<TransactionExecutionStatus>,
-        //     pub changes: StorageChanges,
-        //     pub used_gas: u64,
-        //     pub used_size: u32,
-        //     pub coinbase: u64,
-        // }
-        tracing::warn!("execution result: ");
-        tracing::warn!("header: {:?}", res.header);
-        tracing::warn!("transactions size: {:?}", res.transactions.len());
-        tracing::warn!("events size: {:?}", res.events.len());
-        tracing::warn!("message_ids size: {:?}", res.message_ids.len());
-        tracing::warn!("skipped_txs size: {:?}", res.skipped_txs.len());
-        tracing::warn!(
-            "transactions_status size: {:?}",
-            res.transactions_status.len()
-        );
-        // tracing::warn!("changes size: {:?}", res.changes.len());
-        tracing::warn!("used_gas: {:?}", res.used_gas);
-        tracing::warn!("used_size: {:?}", res.used_size);
-        tracing::warn!("coinbase: {:?}", res.coinbase);
-
         if !self.blob_transactions.is_empty() {
             let mut tx = StorageTransaction::transaction(
                 storage_with_da.clone(),
                 ConflictPolicy::Fail,
                 Default::default(),
             );
-            tracing::warn!("aaa");
 
             for changes in res.changes.extract_list_of_changes() {
                 if let Err(e) = tx.commit_changes(changes) {
                     return Err(SchedulerError::StorageError(e));
                 }
             }
-            tracing::warn!("bbb");
 
             let (blob_execution_data, blob_txs) = self
                 .execute_blob_transactions(
@@ -562,11 +532,8 @@ where
                     consensus_parameters_version,
                 )
                 .await?;
-            tracing::warn!("ccc");
             res.add_blob_execution_data(blob_execution_data, blob_txs);
         }
-
-        tracing::warn!("execution done");
 
         Ok(res)
     }
@@ -612,15 +579,12 @@ where
         total_execution_time: Duration,
     ) -> Result<PreparedBatch, SchedulerError> {
         let spent_time = start_execution_time.elapsed();
-        // TODO: Is this divide the right approach?
         let scaled_gas_per_core = (initial_gas_per_core as u128)
             .saturating_mul(
                 (total_execution_time.as_millis()).saturating_sub(spent_time.as_millis()),
             )
             .checked_div(total_execution_time.as_millis())
             .unwrap_or(initial_gas_per_core as u128);
-        // TODO: We were dividing every time before and this was causing it to use too little gas
-        //   each time, but is this safe?
         let scaled_gas_left = self.gas_left as u128;
         let current_gas = u64::try_from(std::cmp::min(
             scaled_gas_per_core.saturating_sub(self.blob_gas as u128),
@@ -671,10 +635,6 @@ where
         start_idx_txs: u32,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
-        tracing::warn!(
-            "Executing batch {batch_id} with {} transactions",
-            batch.transactions.len()
-        );
         let worker_id =
             self.worker_pool
                 .take_worker()
