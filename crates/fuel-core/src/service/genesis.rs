@@ -61,6 +61,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 pub use exporter::Exporter;
+#[cfg(feature = "test-helpers")]
 use fuel_core_storage::transactional::StorageChanges;
 pub use task_manager::NotifyCancel;
 
