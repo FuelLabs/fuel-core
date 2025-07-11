@@ -48,8 +48,8 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
         &self,
         gas_limit: u64,
-        #[cfg(not(feature = "parallel-executor"))] transactions_limit: u16,
-        #[cfg(feature = "parallel-executor")] transactions_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] transactions_limit: u16,
+        #[cfg(feature = "u32-tx-count")] transactions_limit: u32,
         block_transaction_size_limit: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         self.tx_pool

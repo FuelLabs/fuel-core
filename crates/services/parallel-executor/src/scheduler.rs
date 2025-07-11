@@ -406,8 +406,6 @@ where
         )?;
         let mut nb_batch_created = 0;
         let mut nb_transactions: u32 = 0;
-        // TODO: should this be divided by cores? we are also using this as the total remaining when
-        //   creating a new batch
         let initial_gas_per_worker = self
             .consensus_parameters
             .block_gas_limit()

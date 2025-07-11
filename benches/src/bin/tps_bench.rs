@@ -64,7 +64,7 @@ use clap::Parser;
 struct Args {
     #[clap(short = 'c', long, default_value = "12")]
     pub number_of_cores: usize,
-    #[clap(short = 't', long, default_value = "150000")]
+    #[clap(short = 't', long, default_value = "15000")]
     pub number_of_transactions: u64,
 }
 
@@ -132,6 +132,10 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 
 fn main() {
     let args = Args::parse();
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::WARN)
+        .try_init();
+
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
 
     let start_transaction_generation = std::time::Instant::now();

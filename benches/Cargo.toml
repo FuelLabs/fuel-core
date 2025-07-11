@@ -7,7 +7,13 @@ rust-version = { workspace = true }
 version = "0.0.0"
 
 [features]
-default = ["fuel-core/rocksdb", "fuel-core/rocksdb-production"]
+default = [
+    "fuel-core/rocksdb",
+    "fuel-core/rocksdb-production",
+    "fuel-core/u32-tx-count",
+    "fuel-core-chain-config/u32-tx-count",
+    "fuel-core-types/u32-tx-pointer"
+]
 fault-proving = [
     "fuel-core-types/fault-proving",
     "fuel-core-chain-config/fault-proving",

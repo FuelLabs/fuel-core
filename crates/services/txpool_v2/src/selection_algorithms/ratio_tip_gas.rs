@@ -168,6 +168,9 @@ where
             "exec tx sorted tip gas ratio: {:?}",
             self.executable_transactions_sorted_tip_gas_ratio.len()
         );
+        tracing::warn!("gas left: {}", gas_left);
+        tracing::warn!("space left: {}", space_left);
+        tracing::warn!("nb left: {}", nb_left);
         while gas_left > 0
             && nb_left > 0
             && space_left > 0
