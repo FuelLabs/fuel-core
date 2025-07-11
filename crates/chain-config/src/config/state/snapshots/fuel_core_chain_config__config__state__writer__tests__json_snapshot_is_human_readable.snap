@@ -8,7 +8,7 @@ expression: encoded_json
       "tx_id": "9b07815f04497e2e05d22cac3aa061410b20868cc619154c42a1c61be9902717",
       "output_index": 3250,
       "tx_pointer_block_height": 1405935179,
-      "tx_pointer_tx_idx": 35726,
+      "tx_pointer_tx_idx": 2431224718,
       "owner": "c168fe4896f5b70ccb10f1a705e061d0fdfa189618d28b0d44efef92cbf44b58",
       "amount": 16206947779870322207,
       "asset_id": "222c10916b17a369b4da039d075952b58036f2a7b561446592403c672f0dbe12"
@@ -17,7 +17,7 @@ expression: encoded_json
       "tx_id": "9f1e39113f9f6164ea2867f8deccf3c3c518f146de9554f03f27a83d5b1185f3",
       "output_index": 10142,
       "tx_pointer_block_height": 476225137,
-      "tx_pointer_tx_idx": 52207,
+      "tx_pointer_tx_idx": 3669740527,
       "owner": "357e2bd9e13962516b0a41403276437b25f0ffbe897cf476c0777e9d246ff397",
       "amount": 901131989421222986,
       "asset_id": "f1b350aa16c42ea0d7117b30c8c8436ce7a9254b30d253e4567ccafa5f36ce84"
@@ -58,7 +58,7 @@ expression: encoded_json
       "tx_id": "1a6742c537f2bb32473b01b1dcb1caac942722a4787bb185e4791916926e5fdb",
       "output_index": 8485,
       "tx_pointer_block_height": 758127325,
-      "tx_pointer_tx_idx": 50052,
+      "tx_pointer_tx_idx": 2017510276,
       "states": [
         {
           "key": "71bb3e4634561f8892e604021ab96b632eafa229ec3dd885442b44972526c4e8",
@@ -78,7 +78,7 @@ expression: encoded_json
       "tx_id": "aa291871f4b9d120f76583a1da5d1123f2b8a0ac606b940a66e42efd782af520",
       "output_index": 561,
       "tx_pointer_block_height": 3943236114,
-      "tx_pointer_tx_idx": 63027,
+      "tx_pointer_tx_idx": 1233188403,
       "states": [
         {
           "key": "ad614726b313d811012d4be723755687120a7c6df2389c373c8fbe06bda7a611",
