@@ -1548,6 +1548,7 @@ mod tests {
             let owner = Address::default();
             let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
+            // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
                 asset_target,
@@ -1594,6 +1595,7 @@ mod tests {
             let owner = Address::default();
             let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
+            // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
                 asset_target,
