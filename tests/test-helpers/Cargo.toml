@@ -10,7 +10,6 @@ publish = false
 
 [features]
 parallel-executor = [
-  "fuel-core/parallel-executor",
   "fuel-core-bin/parallel-executor"
 ]
 

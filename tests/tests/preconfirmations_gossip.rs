@@ -222,6 +222,9 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn preconfirmation__propagate_p2p_after_failed_execution() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::ERROR)
+        .try_init();
     let mut rng = rand::thread_rng();
     let address = Address::new([0; 32]);
     let block_production_period = Duration::from_secs(8);

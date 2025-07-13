@@ -42,7 +42,6 @@ rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
 parallel-executor = [
     "fuel-core-parallel-executor",
-    "fuel-core/parallel-executor",
     "u32-tx-count",
 ]
 fault-proving = [

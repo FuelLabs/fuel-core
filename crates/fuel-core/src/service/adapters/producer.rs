@@ -137,7 +137,7 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
         _deadline: Instant,
     ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         // TODO: This is probably determined from `_deadline`?
-        let max_execution_time = Duration::from_millis(10_000);
+        let max_execution_time = Duration::from_millis(1_000);
         self.executor
             .lock()
             .await
@@ -201,6 +201,7 @@ impl fuel_core_producer::ports::DryRunner for ParallelExecutorAdapter {
         _at_height: Option<BlockHeight>,
         _record_storage_read_replay: bool,
     ) -> ExecutorResult<DryRunResult> {
+        tracing::error!("jkjksaldjf");
         unimplemented!("ParallelExecutorAdapter does not support dry run");
     }
 }
