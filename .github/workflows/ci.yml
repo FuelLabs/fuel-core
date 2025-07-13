@@ -188,7 +188,7 @@ jobs:
         if: ${{ matrix.command == 'nextest' }}
         with:
           command: install
-          args: cargo-nextest --locked
+          args: cargo-nextest --locked --version 0.9.100 # supported by rust 1.85.0
         continue-on-error: true
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
