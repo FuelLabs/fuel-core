@@ -1,4 +1,4 @@
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::AsyncIterTrait;
 use fuel_core_types::{
     fuel_tx::Bytes64,
     services::p2p::{
@@ -20,7 +20,7 @@ pub type P2PPreConfirmationGossipData = GossipData<P2PPreConfirmationMessage>;
 pub trait P2PSubscriptions: Send {
     type GossipedStatuses: NetworkData<P2PPreConfirmationMessage>;
 
-    fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses>;
+    fn gossiped_tx_statuses(&self) -> impl AsyncIterTrait<Item = Self::GossipedStatuses> + Sync + Unpin + 'static;
 
     /// Report the validity of a transaction received from the network.
     fn notify_gossip_transaction_validity(

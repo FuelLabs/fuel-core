@@ -45,7 +45,6 @@ use fuel_core_services::{
     SyncProcessor,
     TaskNextAction,
     TraceErr,
-    stream::BoxStream,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
@@ -75,7 +74,6 @@ use fuel_core_types::{
     },
 };
 use futures::{
-    StreamExt,
     future::BoxFuture,
 };
 use libp2p::{
@@ -109,6 +107,7 @@ use tokio::{
     },
 };
 use tracing::warn;
+use fuel_core_services::stream::{AsyncIterTrait, BoxAsyncIter};
 
 #[cfg(test)]
 pub mod broadcast_tests;
@@ -434,7 +433,7 @@ pub struct UninitializedTask<V, B, T> {
     chain_id: ChainId,
     last_height: BlockHeight,
     view_provider: V,
-    next_block_height: BoxStream<BlockHeight>,
+    next_block_height: BoxAsyncIter<BlockHeight>,
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     broadcast: B,
@@ -449,7 +448,7 @@ pub struct Task<P, V, B, T> {
     response_timeout: Duration,
     p2p_service: P,
     view_provider: V,
-    next_block_height: BoxStream<BlockHeight>,
+    next_block_height: BoxAsyncIter<BlockHeight>,
     /// Receive internal Task Requests
     request_receiver: mpsc::Receiver<TaskRequest>,
     request_sender: mpsc::Sender<TaskRequest>,
@@ -514,13 +513,12 @@ impl<V, T> UninitializedTask<V, SharedState, T> {
         tx_pool: T,
     ) -> Self {
         let next_block_height = block_importer.next_block_height();
-
         Self {
             chain_id,
             last_height,
             view_provider,
             tx_pool,
-            next_block_height,
+            next_block_height: Box::pin(next_block_height),
             request_receiver,
             broadcast: shared_state,
             config,

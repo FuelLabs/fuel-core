@@ -22,7 +22,7 @@ use fuel_core_poa::{
         SharedState,
     },
 };
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{AsyncIterFromStream, AsyncIterTrait, BoxStream};
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
@@ -132,11 +132,13 @@ impl BlockImporter for BlockImporterAdapter {
             .map_err(Into::into)
     }
 
-    fn block_stream(&self) -> BoxStream<BlockImportInfo> {
+    fn block_stream(&self) -> impl AsyncIterTrait<Item=BlockImportInfo> + Sync + Unpin + 'static {
         Box::pin(
-            BroadcastStream::new(self.block_importer.subscribe())
-                .filter_map(|result| result.ok())
-                .map(|result| BlockImportInfo::from(result.shared_result)),
+            AsyncIterFromStream {
+                stream: Box::pin(BroadcastStream::new(self.block_importer.subscribe())
+                    .filter_map(|result| result.ok())
+                    .map(|result| BlockImportInfo::from(result.shared_result)))
+            }
         )
     }
 }

@@ -1,4 +1,4 @@
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{AsyncIterTrait, BoxStream};
 use fuel_core_storage::{
     Result as StorageResult,
     transactional::Changes,
@@ -65,7 +65,7 @@ pub trait BlockImporter: Send + Sync {
         result: UncommittedImportResult<Changes>,
     ) -> anyhow::Result<()>;
 
-    fn block_stream(&self) -> BoxStream<BlockImportInfo>;
+    fn block_stream(&self) -> impl AsyncIterTrait<Item=BlockImportInfo> + Sync + Unpin + 'static;
 }
 
 #[async_trait::async_trait]
