@@ -66,12 +66,27 @@ use itertools::Itertools;
 use std::sync::Arc;
 
 impl BlockImporterAdapter {
+    #[cfg(not(feature = "parallel-executor"))]
     pub fn new(
         chain_id: ChainId,
         config: Config,
         database: Database,
-        #[cfg(not(feature = "parallel-executor"))] executor: ExecutorAdapter,
-        #[cfg(feature = "parallel-executor")] executor: ParallelExecutorAdapter,
+        executor: ExecutorAdapter,
+        verifier: VerifierAdapter,
+    ) -> Self {
+        let importer = Importer::new(chain_id, config, database, executor, verifier);
+        Self {
+            block_importer: Arc::new(importer),
+        }
+    }
+
+    #[cfg(feature = "parallel-executor")]
+    pub fn new(
+        chain_id: ChainId,
+        config: Config,
+        database: Database,
+        #[cfg(not(feature = "no-parallel-executor"))] executor: ParallelExecutorAdapter,
+        #[cfg(feature = "no-parallel-executor")] executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
         let importer = Importer::new(chain_id, config, database, executor, verifier);

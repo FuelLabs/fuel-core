@@ -201,7 +201,6 @@ impl fuel_core_producer::ports::DryRunner for ParallelExecutorAdapter {
         _at_height: Option<BlockHeight>,
         _record_storage_read_replay: bool,
     ) -> ExecutorResult<DryRunResult> {
-        tracing::error!("jkjksaldjf");
         unimplemented!("ParallelExecutorAdapter does not support dry run");
     }
 }

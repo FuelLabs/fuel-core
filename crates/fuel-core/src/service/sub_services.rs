@@ -49,10 +49,6 @@ use super::{
     config::DaCompressionMode,
     genesis::create_genesis_block,
 };
-#[cfg(not(feature = "parallel-executor"))]
-use crate::service::adapters::ExecutorAdapter;
-#[cfg(feature = "parallel-executor")]
-use crate::service::adapters::ParallelExecutorAdapter;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -72,6 +68,7 @@ use crate::{
             BlockImporterAdapter,
             BlockProducerAdapter,
             ChainStateInfoProvider,
+            ExecutorAdapter,
             MaybeRelayerAdapter,
             PoAAdapter,
             PreconfirmationSender,
@@ -103,24 +100,43 @@ pub type PoAService = fuel_core_poa::Service<
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
 pub type TxPoolSharedState = fuel_core_txpool::SharedState;
 
-#[cfg(not(feature = "parallel-executor"))]
-pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
-    Database,
-    TxPoolAdapter,
-    ExecutorAdapter,
-    FuelGasPriceProvider<AlgorithmV1, u32, u64>,
-    ChainStateInfoProvider,
->;
-#[cfg(feature = "parallel-executor")]
-pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
-    Database,
-    TxPoolAdapter,
-    ParallelExecutorAdapter,
-    FuelGasPriceProvider<AlgorithmV1, u32, u64>,
-    ChainStateInfoProvider,
->;
+#[cfg(all(feature = "parallel-executor", not(feature = "no-parallel-executor")))]
+mod block_producer_type {
+    use super::*;
+    pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
+        Database,
+        TxPoolAdapter,
+        ParallelExecutorAdapter,
+        FuelGasPriceProvider<AlgorithmV1, u32, u64>,
+        ChainStateInfoProvider,
+    >;
+}
 
-pub type GraphQL = fuel_core_graphql_api::api_service::Service;
+#[cfg(all(feature = "parallel-executor", feature = "no-parallel-executor"))]
+mod block_producer_type {
+    use super::*;
+    pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
+        Database,
+        TxPoolAdapter,
+        ExecutorAdapter,
+        FuelGasPriceProvider<AlgorithmV1, u32, u64>,
+        ChainStateInfoProvider,
+    >;
+}
+
+#[cfg(not(feature = "parallel-executor"))]
+mod block_producer_type {
+    use super::*;
+    pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
+        Database,
+        TxPoolAdapter,
+        ExecutorAdapter,
+        FuelGasPriceProvider<AlgorithmV1, u32, u64>,
+        ChainStateInfoProvider,
+    >;
+}
+
+pub use block_producer_type::BlockProducerService;
 
 // TODO: Add to consensus params https://github.com/FuelLabs/fuel-vm/issues/888
 pub const DEFAULT_GAS_PRICE_CHANGE_PERCENT: u16 = 10;
@@ -222,16 +238,37 @@ pub fn init_sub_services(
 
     #[cfg(feature = "parallel-executor")]
     let executor = {
-        let parallel_executor_config = fuel_core_parallel_executor::config::Config {
-            number_of_cores: config.executor_number_of_cores,
-        };
-        ParallelExecutorAdapter::new(
-            database.on_chain().clone(),
-            database.relayer().clone(),
-            parallel_executor_config,
-            new_txs_watcher,
-            preconfirmation_sender.clone(),
-        )
+        #[cfg(feature = "no-parallel-executor")]
+        {
+            use crate::service::adapters::ExecutorAdapter;
+            let upgradable_executor_config =
+                fuel_core_upgradable_executor::config::Config {
+                    forbid_unauthorized_inputs_default: config.utxo_validation,
+                    forbid_fake_utxo_default: config.utxo_validation,
+                    native_executor_version: config.native_executor_version,
+                    allow_historical_execution: config.historical_execution,
+                };
+            ExecutorAdapter::new(
+                database.on_chain().clone(),
+                database.relayer().clone(),
+                upgradable_executor_config,
+                new_txs_watcher,
+                preconfirmation_sender.clone(),
+            )
+        }
+        #[cfg(not(feature = "no-parallel-executor"))]
+        {
+            let parallel_executor_config = fuel_core_parallel_executor::config::Config {
+                number_of_cores: config.executor_number_of_cores,
+            };
+            ParallelExecutorAdapter::new(
+                database.on_chain().clone(),
+                database.relayer().clone(),
+                parallel_executor_config,
+                new_txs_watcher,
+                preconfirmation_sender.clone(),
+            )
+        }
     };
 
     let import_result_provider =

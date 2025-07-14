@@ -13,7 +13,7 @@ autobenches = false
 autotests = false
 
 [features]
-default = ["fuel-core/default"]
+default = ["fuel-core/default", "fuel-core/no-parallel-executor"]
 only-p2p = ["fuel-core-p2p"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
 fault-proving = [

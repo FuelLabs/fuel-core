@@ -44,6 +44,9 @@ parallel-executor = [
     "fuel-core-parallel-executor",
     "u32-tx-count",
 ]
+# use to override `parallel-executor` during `--all-features --workspace` builds
+no-parallel-executor = []
+
 fault-proving = [
     "fuel-core-types/fault-proving",
     "fuel-core-executor/fault-proving",
