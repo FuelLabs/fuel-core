@@ -240,6 +240,7 @@ pub fn init_sub_services(
     let executor = {
         #[cfg(feature = "no-parallel-executor")]
         {
+            #[allow(unused_variables)]
             use crate::service::adapters::ExecutorAdapter;
             let upgradable_executor_config =
                 fuel_core_upgradable_executor::config::Config {

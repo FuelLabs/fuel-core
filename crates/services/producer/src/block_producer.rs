@@ -386,16 +386,15 @@ where
 
         let executor = self.executor.clone();
 
-        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let result = tokio_rayon::spawn_fifo(move || {
-            executor.try_lock().unwrap().dry_run(
-                component,
-                utxo_validation,
-                height,
-                record_storage_reads,
-            )
-        })
-        .await?;
+        let rt = tokio::runtime::Handle::current();
+        let fut = async move {
+            executor
+                .lock()
+                .await
+                .dry_run(component, utxo_validation, height, record_storage_reads)
+                .map_err(Into::<anyhow::Error>::into)
+        };
+        let result = tokio_rayon::spawn_fifo(move || rt.block_on(fut)).await?;
 
         if result.transactions.iter().any(|(transaction, tx_status)| {
             transaction.is_script() && tx_status.result.receipts().is_empty()

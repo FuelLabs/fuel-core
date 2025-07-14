@@ -7,7 +7,7 @@ license = { workspace = true }
 publish = false
 
 [features]
-default = ["fuel-core/default"]
+default = ["fuel-core/default", "fuel-core/no-parallel-executor"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
