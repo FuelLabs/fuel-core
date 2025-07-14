@@ -40,10 +40,7 @@ test-helpers = [
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
-parallel-executor = [
-    "fuel-core-parallel-executor",
-    "u32-tx-count",
-]
+parallel-executor = ["fuel-core-parallel-executor", "u32-tx-count"]
 # use to override `parallel-executor` during `--all-features --workspace` builds
 no-parallel-executor = []
 
