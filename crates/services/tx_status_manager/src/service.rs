@@ -16,6 +16,10 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
     TaskNextAction,
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
 };
 use fuel_core_types::{
     ed25519::Signature,
@@ -58,6 +62,7 @@ use tokio::sync::{
     mpsc,
     oneshot,
 };
+use tokio_stream::wrappers::BroadcastStream;
 
 enum ReadRequest {
     GetStatus {
@@ -67,6 +72,9 @@ enum ReadRequest {
     Subscribe {
         tx_id: TxId,
         sender: oneshot::Sender<anyhow::Result<TxStatusStream>>,
+    },
+    SubscribeAll {
+        sender: oneshot::Sender<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>>,
     },
 }
 
@@ -117,6 +125,15 @@ impl SharedData {
         receiver.await?
     }
 
+    pub async fn subscribe_all(
+        &self,
+    ) -> anyhow::Result<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>> {
+        let (sender, receiver) = oneshot::channel();
+        let request = ReadRequest::SubscribeAll { sender };
+        self.read_requests_sender.send(request).await?;
+        Ok(receiver.await?)
+    }
+
     pub fn update_status(&self, tx_id: TxId, status: TransactionStatus) {
         let request = UpdateRequest::Status { tx_id, status };
         let _ = self.write_requests_sender.send(request);
@@ -143,6 +160,7 @@ impl SharedData {
 
 pub struct Task<Pubkey, P2P> {
     manager: TxStatusManager,
+    all_events_sender: broadcast::Sender<(TxId, TransactionStatus)>,
     subscriptions: Subscriptions,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
     write_requests_receiver: mpsc::UnboundedReceiver<UpdateRequest>,
@@ -237,7 +255,8 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
             .into_iter()
             .for_each(|Preconfirmation { tx_id, status }| {
                 let status: TransactionStatus = status.into();
-                self.manager.status_update(tx_id, status);
+                self.manager.status_update(tx_id, status.clone());
+                let _ = self.all_events_sender.send((tx_id, status));
             });
     }
 
@@ -400,6 +419,13 @@ where
                         let _ = sender.send(result);
                         TaskNextAction::Continue
                     }
+                    Some(ReadRequest::SubscribeAll { sender }) => {
+                        let receiver = self.all_events_sender.subscribe();
+                        let stream =
+                            BroadcastStream::new(receiver).map(|result|result.map_err(Into::into));
+                        let _ = sender.send(stream.into_boxed());
+                        TaskNextAction::Continue
+                    }
                     None => {
                         TaskNextAction::Stop
                     },
@@ -449,6 +475,8 @@ where
     };
     let signature_verification = SignatureVerification::new(protocol_pubkey);
 
+    let (all_events_sender, _) = broadcast::channel(config.max_tx_update_subscriptions);
+
     ServiceRunner::new(Task {
         subscriptions,
         manager: tx_status_manager,
@@ -457,6 +485,7 @@ where
         shared_data,
         signature_verification,
         p2p,
+        all_events_sender,
     })
 }
 
@@ -743,6 +772,7 @@ mod tests {
             p2p: MockP2P {
                 p2p_notify_validity_sender,
             },
+            all_events_sender: broadcast::channel(1000).0,
         };
 
         (task, handles)
