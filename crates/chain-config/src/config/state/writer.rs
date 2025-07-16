@@ -556,8 +556,10 @@ mod tests {
             StateConfig,
             config::randomize::Randomize,
         };
-        use rand::rngs::StdRng;
-        use rand::SeedableRng;
+        use rand::{
+            SeedableRng,
+            rngs::StdRng,
+        };
 
         // given
         let dir = tempfile::tempdir().unwrap();
