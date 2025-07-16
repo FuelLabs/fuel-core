@@ -803,9 +803,9 @@ impl FuelClient {
     /// - The number of required balances exceeds the maximum number of inputs allowed.
     /// - The fee address index is out of bounds.
     /// - The same asset has multiple change policies(either the receiver of
-    ///     the change is different, or one of the policies states about the destruction
-    ///     of the token while the other does not). The `Change` output from the transaction
-    ///     also count as a `ChangePolicy`.
+    ///   the change is different, or one of the policies states about the destruction
+    ///   of the token while the other does not). The `Change` output from the transaction
+    ///   also count as a `ChangePolicy`.
     /// - The number of excluded coin IDs exceeds the maximum number of inputs allowed.
     /// - Required assets have multiple entries.
     /// - If accounts don't have sufficient amounts to cover the transaction requirements in assets.

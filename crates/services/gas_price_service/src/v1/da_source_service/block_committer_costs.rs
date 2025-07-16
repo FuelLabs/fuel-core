@@ -307,8 +307,12 @@ pub mod fake_server {
                         // We don't support `limit` yet!!!!
                         "latest" => {
                             let args = values.next().unwrap();
-                            let limit =
-                                args.split('=').last().unwrap().parse::<usize>().unwrap();
+                            let limit = args
+                                .split('=')
+                                .next_back()
+                                .unwrap()
+                                .parse::<usize>()
+                                .unwrap();
                             assert!(limit == 1);
                             let guard = shared_responses.lock().unwrap();
                             let most_recent = guard
@@ -331,12 +335,15 @@ pub mod fake_server {
                         "specific" => {
                             let args = values.next().unwrap();
                             let mut specific_values = args.split('=');
-                            let height =
-                                specific_values.last().unwrap().parse::<u32>().unwrap();
+                            let height = specific_values
+                                .next_back()
+                                .unwrap()
+                                .parse::<u32>()
+                                .unwrap();
                             tracing::info!("Height: {:?}", height);
                             let maybe_limit = values
                                 .next()
-                                .and_then(|x| x.split('=').last())
+                                .and_then(|x| x.split('=').next_back())
                                 .and_then(|x| x.parse::<usize>().ok());
                             tracing::info!("Limit: {:?}", maybe_limit);
                             let guard = shared_responses.lock().unwrap();
