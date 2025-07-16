@@ -42,8 +42,7 @@ const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 /// The configuration of the ingress should be the same:
 /// - `nginx.org/client-max-body-size`
 /// - `nginx.ingress.kubernetes.io/proxy-body-size`
-pub const MAX_RESPONSE_SIZE: NonZeroU32 =
-    unsafe { NonZeroU32::new_unchecked(50 * 1024 * 1024) };
+pub const MAX_RESPONSE_SIZE: NonZeroU32 = NonZeroU32::new(50 * 1024 * 1024).unwrap();
 
 /// Maximum number of blocks per request.
 pub const MAX_HEADERS_PER_REQUEST: usize = 100;
