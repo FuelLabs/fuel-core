@@ -152,7 +152,10 @@ impl From<[u8; INDEX_SIZE]> for OwnedTransactionIndexKey {
         #[cfg(not(feature = "u32-tx-count"))]
         let mut tx_idx_bytes: [u8; 2] = Default::default();
 
+        #[cfg(feature = "u32-tx-count")]
         tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..40]);
+        #[cfg(not(feature = "u32-tx-count"))]
+        tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..38]);
 
         Self {
             owner: Address::from(owner),
