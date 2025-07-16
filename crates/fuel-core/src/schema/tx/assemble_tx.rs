@@ -1,4 +1,5 @@
 use crate::{
+    coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
         api_service::BlockProducer,
         database::ReadView,
@@ -18,7 +19,6 @@ use crate::{
     },
     service::adapters::SharedMemoryPool,
 };
-use crate::coins_query::CoinsQueryError;
 use fuel_core_types::{
     entities::coins::CoinId,
     fuel_asm::{
@@ -961,7 +961,8 @@ where
                     asset_id: base_asset_id,
                     collected_amount: total_base_asset.into(),
                     max: self.arguments.consensus_parameters.tx_params().max_inputs(),
-                }.into());
+                }
+                .into());
             }
 
             let how_much_to_add = need_to_cover.saturating_sub(total_base_asset);
