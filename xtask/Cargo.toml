@@ -7,7 +7,8 @@ license = { workspace = true }
 publish = false
 
 [features]
-default = ["fuel-core/default", "fuel-core/no-parallel-executor"]
+default = ["fuel-core/default"]
+u32-tx-count = ["fuel-core/u32-tx-count"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
