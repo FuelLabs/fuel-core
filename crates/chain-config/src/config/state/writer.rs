@@ -555,6 +555,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "u32-tx-count"))]
     #[test]
     fn json_snapshot_is_human_readable() {
         // given
