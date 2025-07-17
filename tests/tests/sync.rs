@@ -316,9 +316,9 @@ async fn test_multiple_producers_same_key() {
         mut validators,
         bootstrap_nodes: _dont_drop,
     } = make_nodes(
-        std::iter::repeat(Some(BootstrapSetup::new(pub_key))).take(num_producers),
-        std::iter::repeat(Some(ProducerSetup::new(secret))).take(num_producers),
-        std::iter::repeat(Some(ValidatorSetup::new(pub_key))).take(num_validators),
+        std::iter::repeat_n(Some(BootstrapSetup::new(pub_key)), num_producers),
+        std::iter::repeat_n(Some(ProducerSetup::new(secret)), num_producers),
+        std::iter::repeat_n(Some(ValidatorSetup::new(pub_key)), num_validators),
         None,
     )
     .await;
