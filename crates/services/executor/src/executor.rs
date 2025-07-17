@@ -607,14 +607,25 @@ where
         )?;
 
         loop {
-            self.process_l2_txs(
-                &mut partial_block,
-                &components,
-                &mut block_storage_tx,
-                &mut data,
-                &mut memory,
-            )
-            .await?;
+            let res = self
+                .process_l2_txs(
+                    &mut partial_block,
+                    &components,
+                    &mut block_storage_tx,
+                    &mut data,
+                    &mut memory,
+                )
+                .await;
+            match res {
+                Ok(_) => {
+                    //
+                    let _ = 10;
+                }
+                Err(err) => {
+                    let _ = 10;
+                    return Err(err)
+                }
+            }
             match self.new_tx_waiter.wait_for_new_transactions().await {
                 WaitNewTransactionsResult::Timeout => break,
                 WaitNewTransactionsResult::NewTransaction => {

@@ -159,7 +159,7 @@ pub fn init_sub_services(
 
     let genesis_block = on_chain_view
         .genesis_block()?
-        .unwrap_or(create_genesis_block(config).compress(&chain_id));
+        .unwrap_or_else(|| create_genesis_block(config).compress(&chain_id));
     let last_block_header = on_chain_view
         .get_current_block()?
         .map(|block| block.header().clone())
