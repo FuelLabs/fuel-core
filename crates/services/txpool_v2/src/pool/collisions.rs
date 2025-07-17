@@ -25,13 +25,13 @@ where
     /// Rules:
     /// - A transaction has dependencies:
     ///     - Can collide only with one other transaction. So, the user can submit
-    ///         the same transaction with a higher tip but not merge one or more
-    ///         transactions into one.
+    ///       the same transaction with a higher tip but not merge one or more
+    ///       transactions into one.
     ///     - A new transaction can be accepted if its profitability is higher than
-    ///         the collided subtree's.
+    ///       the collided subtree's.
     /// - A transaction doesn't have dependencies:
     ///     - A new transaction can be accepted if its profitability is higher
-    ///         than the collided subtrees'.
+    ///       than the collided subtrees'.
     fn check_collision_requirements(
         &self,
         tx: &PoolTransaction,

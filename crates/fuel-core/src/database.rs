@@ -516,7 +516,7 @@ where
         .into());
     }
 
-    let new_height = new_heights.into_iter().last();
+    let new_height = new_heights.into_iter().next_back();
     let prev_height = *database.stage.height.lock();
 
     match (prev_height, new_height) {

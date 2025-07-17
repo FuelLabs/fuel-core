@@ -9,6 +9,7 @@ use fuel_core_types::{
     },
     fuel_vm::consts::WORD_SIZE,
 };
+use std::iter::repeat_n;
 
 // This register is used by `setup_instructions` function to set contract id.
 const CONTRACT_ID_REGISTER: RegId = RegId::new(0x10);
@@ -105,9 +106,8 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // call
     for size in arb_dependent_cost_values() {
-        let mut contract_instructions = std::iter::repeat(op::noop())
-            .take(size as usize)
-            .collect::<Vec<_>>();
+        let mut contract_instructions =
+            repeat_n(op::noop(), size as usize).collect::<Vec<_>>();
         contract_instructions.push(op::ret(0x10));
 
         let instructions = vec![
@@ -143,8 +143,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // ccp
     for i in arb_dependent_cost_values() {
-        let contract = std::iter::repeat(op::noop())
-            .take(i as usize)
+        let contract = repeat_n(op::noop(), i as usize)
             .chain(vec![op::ret(RegId::ZERO)])
             .collect();
 
@@ -189,8 +188,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // csiz
     for size in arb_dependent_cost_values() {
-        let contract = std::iter::repeat(op::noop())
-            .take(size as usize)
+        let contract = repeat_n(op::noop(), size as usize)
             .chain(vec![op::ret(RegId::ZERO)])
             .collect();
         let mut instructions = setup_instructions();
@@ -210,8 +208,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // ldc
     for size in arb_dependent_cost_values() {
-        let contract = std::iter::repeat(op::noop())
-            .take(size as usize)
+        let contract = repeat_n(op::noop(), size as usize)
             .chain(vec![op::ret(RegId::ZERO)])
             .collect();
         let mut instructions = setup_instructions();

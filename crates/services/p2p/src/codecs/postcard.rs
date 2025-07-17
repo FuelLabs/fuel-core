@@ -84,7 +84,7 @@ mod tests {
         },
     };
 
-    const MAX_REQUEST_SIZE: NonZeroU32 = unsafe { NonZeroU32::new_unchecked(1024) };
+    const MAX_REQUEST_SIZE: NonZeroU32 = NonZeroU32::new(1024).unwrap();
 
     #[test]
     fn test_request_size_fits() {
