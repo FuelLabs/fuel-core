@@ -22,6 +22,7 @@ use tokio::{
     time::MissedTickBehavior,
 };
 use tokio_stream::StreamExt;
+use fuel_core_services::stream::{AsyncIterTrait, BoxAsyncIter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SyncState {
@@ -46,7 +47,7 @@ impl SyncState {
 pub struct SyncTask {
     min_connected_reserved_peers: usize,
     peer_connections_stream: BoxStream<usize>,
-    block_stream: BoxStream<BlockImportInfo>,
+    block_stream: BoxAsyncIter<BlockImportInfo>,
     state_sender: watch::Sender<SyncState>,
     // shared with `MainTask` via SyncTask::SharedState
     state_receiver: watch::Receiver<SyncState>,
@@ -59,7 +60,7 @@ impl SyncTask {
         peer_connections_stream: BoxStream<usize>,
         min_connected_reserved_peers: usize,
         time_until_synced: Duration,
-        block_stream: BoxStream<BlockImportInfo>,
+        block_stream: impl AsyncIterTrait<Item = BlockImportInfo> + Sync + Unpin + 'static,
         block_header: &BlockHeader,
     ) -> Self {
         let inner_state = InnerSyncState::from_config(
@@ -87,7 +88,7 @@ impl SyncTask {
         Self {
             peer_connections_stream,
             min_connected_reserved_peers,
-            block_stream,
+            block_stream: Box::pin(block_stream),
             state_sender,
             state_receiver,
             inner_state,

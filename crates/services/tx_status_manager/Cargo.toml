@@ -18,7 +18,6 @@ async-trait = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-types = { workspace = true, features = ["std", "serde"] }
-futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true }
 tokio = { workspace = true }

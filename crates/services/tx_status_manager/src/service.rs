@@ -51,7 +51,6 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use futures::StreamExt;
 use std::collections::HashMap;
 use tokio::sync::{
     broadcast,
@@ -426,7 +425,7 @@ where
     let (tx_status_sender, tx_status_receiver) =
         broadcast::channel(config.max_tx_update_subscriptions);
     let subscriptions = Subscriptions {
-        new_tx_status: tx_status_from_p2p_stream,
+        new_tx_status: Box::pin(tx_status_from_p2p_stream),
     };
 
     let tx_update_sender =
@@ -463,7 +462,9 @@ where
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-    use std::{
+    use async_trait::async_trait;
+use std::pin::Pin;
+use std::{
         collections::HashSet,
         time::Duration,
     };
@@ -504,10 +505,7 @@ mod tests {
         },
         tai64::Tai64,
     };
-    use futures::{
-        StreamExt,
-        stream::BoxStream,
-    };
+    use futures::{StreamExt, stream::BoxStream, Stream};
     use status::transaction::{
         random_prunable_tx_status,
         random_tx_status,
@@ -567,8 +565,8 @@ mod tests {
 
         fn gossiped_tx_statuses(
             &self,
-        ) -> fuel_core_services::stream::BoxStream<Self::GossipedStatuses> {
-            Box::pin(tokio_stream::empty())
+        ) -> impl AsyncIterTrait<Item = Self::GossipedStatuses> + Sync + Unpin + 'static {
+            AsyncIterFromStream {stream: Box::pin(tokio_stream::empty())}
         }
 
         fn notify_gossip_transaction_validity(
@@ -714,7 +712,7 @@ mod tests {
             tx_status_receiver,
         };
         let (sender, receiver) = mpsc::channel(1_000);
-        let new_tx_status = Box::pin(ReceiverStream::new(receiver));
+        let new_tx_status = Box::pin(AsyncIterFromStream {stream: Box::pin(ReceiverStream::new(receiver)) });
         let subscriptions = Subscriptions { new_tx_status };
         let tx_status_change = TxStatusChange::new(100, Duration::from_secs(360));
         let signing_key = SecretKey::default();
@@ -1213,6 +1211,8 @@ mod tests {
 
     use proptest::prelude::*;
     use std::collections::HashMap;
+    use fuel_core_services::stream::AsyncIterFromStream;
+    use crate::ports::AsyncIterTrait;
 
     const TX_ID_POOL_SIZE: usize = 20;
     const MIN_ACTIONS: usize = 50;

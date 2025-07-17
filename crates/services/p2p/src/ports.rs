@@ -1,4 +1,4 @@
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{AsyncIterTrait};
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
@@ -37,7 +37,7 @@ pub trait P2pDb: Send + Sync {
 
 pub trait BlockHeightImporter: Send + Sync {
     /// Creates a stream of next block heights
-    fn next_block_height(&self) -> BoxStream<BlockHeight>;
+    fn next_block_height(&self) -> impl AsyncIterTrait<Item = BlockHeight> + Sync + Unpin + 'static;
 }
 
 pub trait TxPool: Send + Sync + Clone {
