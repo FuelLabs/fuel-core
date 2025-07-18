@@ -148,7 +148,7 @@ pub struct Scheduler<R, S, PreconfirmationSender> {
     /// Current scheduler state
     state: SchedulerState,
     /// Total maximum of transactions left
-    tx_left: u16,
+    tx_left: u32,
     /// Total maximum of byte size left
     tx_size_left: u64,
     /// Total remaining gas
@@ -312,7 +312,7 @@ pub(crate) struct PreparedBatch {
     pub contracts_used: Vec<ContractId>,
     pub coins_used: Vec<CoinInBatch>,
     pub message_nonces_used: Vec<Nonce>,
-    pub number_of_transactions: u16,
+    pub number_of_transactions: u32,
 }
 
 pub struct BlockConstraints {
@@ -352,7 +352,7 @@ impl<R, S, PreconfirmationSender> Scheduler<R, S, PreconfirmationSender> {
             executor,
             storage,
             // TODO: Use consensus parameters after https://github.com/FuelLabs/fuel-vm/pull/905 is merged
-            tx_left: u16::MAX,
+            tx_left: u32::MAX,
             tx_size_left: consensus_parameters.block_transaction_size_limit(),
             gas_left: consensus_parameters.block_gas_limit(),
             worker_pool: WorkerPool::new(config.number_of_cores.get()),
@@ -405,7 +405,7 @@ where
             SchedulerError::InternalError("Maximum time per block overflow".to_string()),
         )?;
         let mut nb_batch_created = 0;
-        let mut nb_transactions = 0;
+        let mut nb_transactions: u32 = 0;
         let initial_gas_per_worker = self
             .consensus_parameters
             .block_gas_limit()
@@ -429,6 +429,9 @@ where
                 let batch_len = batch.number_of_transactions;
 
                 if batch.transactions.is_empty() {
+                    tracing::warn!(
+                        "No transactions to execute, waiting for new transactions or workers to finish"
+                    );
                     self.blob_transactions
                         .extend(batch.blob_transactions.into_iter());
                     continue 'outer;
@@ -489,6 +492,8 @@ where
             }
         }
 
+        tracing::warn!("started all batches");
+
         self.wait_all_execution_tasks(
             components.header_to_produce,
             coinbase_recipient,
@@ -496,6 +501,8 @@ where
             self.maximum_time_per_block,
         )
         .await?;
+
+        tracing::warn!("finished all batches");
 
         let mut res = self.verify_coherency_and_merge_results(
             nb_batch_created,
@@ -533,7 +540,7 @@ where
 
     fn update_constraints(
         &mut self,
-        tx_number_to_add: u16,
+        tx_number_to_add: u32,
         tx_size_to_add: u64,
         gas_to_add: u64,
     ) -> Result<(), SchedulerError> {
@@ -568,27 +575,20 @@ where
         &mut self,
         tx_source: &mut TxSource,
         start_execution_time: tokio::time::Instant,
-        initial_gas: u64,
+        initial_gas_per_core: u64,
         total_execution_time: Duration,
     ) -> Result<PreparedBatch, SchedulerError> {
         let spent_time = start_execution_time.elapsed();
-        // Time left in percentage to have the gas percentage left
-        let current_gas = u64::try_from(std::cmp::min(
-            ((initial_gas as u128)
-                .saturating_mul(
-                    (total_execution_time.as_millis())
-                        .saturating_sub(spent_time.as_millis()),
-                )
-                .checked_div(total_execution_time.as_millis()))
-            .expect(
-                "Total execution time cannot be zero as it's the block execution time",
+        let scaled_gas_per_core = (initial_gas_per_core as u128)
+            .saturating_mul(
+                (total_execution_time.as_millis()).saturating_sub(spent_time.as_millis()),
             )
-            .saturating_sub(self.blob_gas as u128),
-            // TODO: avoid always divide because if there is only one worker left he can use it all
-            (self.gas_left as u128)
-                .checked_div(self.config.number_of_cores.get() as u128)
-                .expect("Number of cores cannot be zero as it's a NonZeroUsize")
-                .saturating_sub(self.blob_gas as u128),
+            .checked_div(total_execution_time.as_millis())
+            .unwrap_or(initial_gas_per_core as u128);
+        let scaled_gas_left = self.gas_left as u128;
+        let current_gas = u64::try_from(std::cmp::min(
+            scaled_gas_per_core.saturating_sub(self.blob_gas as u128),
+            scaled_gas_left.saturating_sub(self.blob_gas as u128),
         ))
         .map_err(|_| {
             SchedulerError::InternalError("Current gas overflowed u64".to_string())
@@ -632,7 +632,7 @@ where
         components: &Components<TxSource>,
         mut batch: PreparedBatch,
         batch_id: usize,
-        start_idx_txs: u16,
+        start_idx_txs: u32,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
         let worker_id =
@@ -951,7 +951,7 @@ where
         &mut self,
         components: &Components<TxSource>,
         storage: StorageTransaction<D>,
-        start_idx_txs: u16,
+        start_idx_txs: u32,
         consensus_parameters_version: u32,
     ) -> Result<(ExecutionData, Vec<Transaction>), SchedulerError>
     where

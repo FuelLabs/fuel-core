@@ -1,4 +1,7 @@
-use super::Bytes32;
+use super::{
+    Bytes32,
+    U16,
+};
 use crate::client::schema::{
     BlockId,
     ConnectionArgsFields,
@@ -6,7 +9,6 @@ use crate::client::schema::{
     Signature,
     Tai64Timestamp,
     TransactionId,
-    U16,
     U32,
     U64,
     schema,

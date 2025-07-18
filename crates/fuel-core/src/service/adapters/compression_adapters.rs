@@ -20,6 +20,7 @@ use fuel_core_compression_service::{
         configuration,
     },
 };
+use fuel_core_importer::ports::Validator;
 use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::services::block_importer::SharedImportResult;
 
@@ -29,15 +30,15 @@ use super::import_result_provider::{
 };
 
 /// Provides the necessary functionality for accessing latest and historical block data.
-pub struct CompressionBlockImporterAdapter {
+pub struct CompressionBlockImporterAdapter<V> {
     block_importer: BlockImporterAdapter,
-    import_result_provider_adapter: ImportResultProvider,
+    import_result_provider_adapter: ImportResultProvider<V>,
 }
 
-impl CompressionBlockImporterAdapter {
+impl<V> CompressionBlockImporterAdapter<V> {
     pub fn new(
         block_importer: BlockImporterAdapter,
-        import_result_provider_adapter: ImportResultProvider,
+        import_result_provider_adapter: ImportResultProvider<V>,
     ) -> Self {
         Self {
             block_importer,
@@ -55,7 +56,9 @@ impl From<BlockAt> for import_result_provider::BlockAt {
     }
 }
 
-impl block_source::BlockSource for CompressionBlockImporterAdapter {
+impl<V: Validator + Sync + Send> block_source::BlockSource
+    for CompressionBlockImporterAdapter<V>
+{
     fn subscribe(&self) -> fuel_core_services::stream::BoxStream<SharedImportResult> {
         self.block_importer.events_shared_result()
     }

@@ -63,4 +63,18 @@ impl<Result, Changes> Uncommitted<Result, Changes> {
             changes: self.changes,
         }
     }
+
+    /// Converts the `Uncommitted` instance to a new type, applying the provided conversion functions.
+    pub fn from_converted<TR, TC, SR, SC>(
+        uncommitted: Uncommitted<TR, TC>,
+    ) -> Uncommitted<SR, SC>
+    where
+        TR: Into<SR>,
+        TC: Into<SC>,
+    {
+        Uncommitted {
+            result: uncommitted.result.into(),
+            changes: uncommitted.changes.into(),
+        }
+    }
 }

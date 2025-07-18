@@ -14,7 +14,10 @@ use fuel_core_client::client::{
     FuelClient,
     types::TransactionStatus as ClientTransactionStatus,
 };
-use fuel_core_storage::transactional::AtomicView;
+use fuel_core_storage::transactional::{
+    AtomicView,
+    StorageChanges,
+};
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
     fuel_tx::{
@@ -133,8 +136,8 @@ async fn validate_block_at_any_height__only_transfers() -> anyhow::Result<()> {
         let height_to_execute: BlockHeight = height_to_execute.into();
         let result = result.unwrap();
         let expected_changes = database_modifications.get(&height_to_execute).unwrap();
-        let actual_changes = result.into_changes();
-        assert_eq!(&actual_changes, expected_changes);
+        let actual_changes = &StorageChanges::Changes(result.into_changes());
+        assert_eq!(actual_changes, expected_changes);
     }
 
     driver.kill().await;
@@ -393,7 +396,7 @@ async fn backup_and_restore__should_work_with_state_rewind() -> anyhow::Result<(
         let height_to_execute: BlockHeight = height_to_execute.into();
         let result = result.unwrap();
         let expected_changes = database_modifications.get(&height_to_execute).unwrap();
-        let actual_changes = result.into_changes();
+        let actual_changes = StorageChanges::Changes(result.into_changes());
         assert_eq!(&actual_changes, expected_changes);
     }
 

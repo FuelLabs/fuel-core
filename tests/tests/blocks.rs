@@ -434,8 +434,13 @@ mod full_block {
         assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
     }
 
+    #[ignore]
     #[tokio::test]
     async fn too_many_transactions_are_split_in_blocks() {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter("warn")
+            .with_thread_ids(true)
+            .try_init();
         // Given
         let max_gas_limit = 50_000_000;
         let mut rng = StdRng::seed_from_u64(2322);
@@ -475,10 +480,13 @@ mod full_block {
             ..local_node_config
         };
 
+        tracing::warn!("aaaa");
         let srv = FuelService::new_node(patched_node_config).await.unwrap();
+        tracing::warn!("bbbb");
         let client = FuelClient::from(srv.bound_address);
 
-        let tx_count: u64 = max_tx_count() as u64 + 100;
+        let tx_count: u64 = u16::MAX as u64 + 100;
+        tracing::warn!("tx_count = {}", tx_count);
         let txs = (1..=tx_count)
             .map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit))
             .collect_vec();

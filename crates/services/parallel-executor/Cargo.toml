@@ -15,7 +15,7 @@ fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]
 derive_more = { workspace = true, features = ["display"] }
-fuel-core-executor = { workspace = true, features = ["std"] }
+fuel-core-executor = { workspace = true, features = ["std", "u32-tx-count"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
 futures = { workspace = true, features = ["std"] }

@@ -3542,6 +3542,7 @@ dependencies = [
  "tikv-jemallocator",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

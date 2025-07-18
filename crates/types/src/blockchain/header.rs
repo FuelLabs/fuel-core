@@ -124,6 +124,16 @@ impl BlockHeader {
         }
     }
 
+    #[cfg(feature = "u32-tx-pointer")]
+    /// Getter for the transactions count
+    pub fn transactions_count(&self) -> u32 {
+        match self {
+            BlockHeader::V1(header) => header.application().transactions_count,
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application().transactions_count,
+        }
+    }
+    #[cfg(not(feature = "u32-tx-pointer"))]
     /// Getter for the transactions count
     pub fn transactions_count(&self) -> u16 {
         match self {
@@ -611,6 +621,10 @@ impl PartialBlockHeader {
                     .application
                     .state_transition_bytecode_version,
                 generated: GeneratedApplicationFieldsV1 {
+                    #[cfg(feature = "u32-tx-pointer")]
+                    transactions_count: u32::try_from(transactions.len())
+                        .map_err(|_| BlockHeaderError::TooManyTransactions)?,
+                    #[cfg(not(feature = "u32-tx-pointer"))]
                     transactions_count: u16::try_from(transactions.len())
                         .map_err(|_| BlockHeaderError::TooManyTransactions)?,
                     message_receipt_count: u32::try_from(outbox_message_ids.len())
@@ -643,6 +657,10 @@ impl PartialBlockHeader {
                     .application
                     .state_transition_bytecode_version,
                 generated: GeneratedApplicationFieldsV2 {
+                    #[cfg(feature = "u32-tx-pointer")]
+                    transactions_count: u32::try_from(transactions.len())
+                        .map_err(|_| BlockHeaderError::TooManyTransactions)?,
+                    #[cfg(not(feature = "u32-tx-pointer"))]
                     transactions_count: u16::try_from(transactions.len())
                         .map_err(|_| BlockHeaderError::TooManyTransactions)?,
                     message_receipt_count: u32::try_from(outbox_message_ids.len())

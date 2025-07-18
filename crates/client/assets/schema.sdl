@@ -160,9 +160,6 @@ type Coin {
 	TxPointer - the height of the block this coin was created in
 	"""
 	blockCreated: U32!
-	"""
-	TxPointer - the index of the transaction that created this coin
-	"""
 	txCreatedIdx: U16!
 }
 
@@ -563,9 +560,6 @@ type Header {
 	The version of the state transition bytecode used to create this block.
 	"""
 	stateTransitionBytecodeVersion: U32!
-	"""
-	Number of transactions in this block.
-	"""
 	transactionsCount: U16!
 	"""
 	Number of message receipts in this block.

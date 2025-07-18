@@ -61,6 +61,8 @@ use fuel_core_types::{
 use itertools::Itertools;
 
 pub use exporter::Exporter;
+#[cfg(feature = "test-helpers")]
+use fuel_core_storage::transactional::StorageChanges;
 pub use task_manager::NotifyCancel;
 
 mod exporter;
@@ -223,7 +225,10 @@ pub async fn execute_and_commit_genesis_block(
         MockValidator::default(),
         MockBlockVerifier::default(),
     );
-    importer.commit_result(result).await?;
+    let (result, changes) = result.into();
+    let new_result =
+        UncommittedImportResult::new(result, StorageChanges::Changes(changes));
+    importer.commit_result(new_result).await?;
     Ok(())
 }
 

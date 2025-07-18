@@ -50,7 +50,7 @@ impl RelayerPort for MockRelayer {
 #[allow(dead_code)]
 pub struct PoolRequestParams {
     pub gas_limit: u64,
-    pub tx_count_limit: u16,
+    pub tx_count_limit: u32,
     pub block_transaction_size_limit: u64,
     pub filter: Filter,
 }
@@ -124,7 +124,7 @@ impl TransactionsSource for MockTransactionsSource {
     fn get_executable_transactions(
         &mut self,
         gas_limit: u64,
-        tx_count_limit: u16,
+        tx_count_limit: u32,
         _block_transaction_size_limit: u64,
         filter: Filter,
     ) -> TransactionSourceExecutableTransactions {

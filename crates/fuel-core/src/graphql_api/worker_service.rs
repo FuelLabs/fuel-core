@@ -345,6 +345,11 @@ where
         let block_height = *block.header().height();
         let inputs;
         let outputs;
+        #[cfg(feature = "u32-tx-count")]
+        let tx_idx = u32::try_from(tx_idx).map_err(|e| {
+            anyhow::anyhow!("The block has more than `u32::MAX` transactions, {}", e)
+        })?;
+        #[cfg(not(feature = "u32-tx-count"))]
         let tx_idx = u16::try_from(tx_idx).map_err(|e| {
             anyhow::anyhow!("The block has more than `u16::MAX` transactions, {}", e)
         })?;
@@ -390,7 +395,8 @@ fn persist_owners_index<T>(
     inputs: &[Input],
     outputs: &[Output],
     tx_id: &Bytes32,
-    tx_idx: u16,
+    #[cfg(feature = "u32-tx-count")] tx_idx: u32,
+    #[cfg(not(feature = "u32-tx-count"))] tx_idx: u16,
     db: &mut T,
 ) -> StorageResult<()>
 where

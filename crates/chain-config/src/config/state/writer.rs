@@ -485,12 +485,6 @@ mod tests {
             Messages,
         },
     };
-    use rand::{
-        SeedableRng,
-        rngs::StdRng,
-    };
-
-    use crate::StateConfig;
 
     use super::*;
 
@@ -555,10 +549,19 @@ mod tests {
         }
     }
 
+    #[cfg(not(feature = "u32-tx-count"))]
     #[test]
     fn json_snapshot_is_human_readable() {
+        use crate::{
+            StateConfig,
+            config::randomize::Randomize,
+        };
+        use rand::{
+            SeedableRng,
+            rngs::StdRng,
+        };
+
         // given
-        use crate::Randomize;
         let dir = tempfile::tempdir().unwrap();
         let writer = SnapshotWriter::json(dir.path());
         let mut rng = StdRng::from_seed([0; 32]);
