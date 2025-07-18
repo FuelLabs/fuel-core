@@ -3646,8 +3646,7 @@ mod tests {
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
             relayed_tx.set_max_gas(max_gas);
-            let events = std::iter::repeat(relayed_tx.into())
-                .take(duplicate_count + 1)
+            let events = std::iter::repeat_n(relayed_tx.into(), duplicate_count + 1)
                 .collect::<Vec<_>>();
 
             relayer_db_for_events(&events, da_height)
