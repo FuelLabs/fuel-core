@@ -155,6 +155,8 @@ pub struct Executor<S, R> {
 mod private {
     use std::sync::OnceLock;
     use wasmtime::{
+        Cache,
+        CacheConfig,
         Config,
         Engine,
         Module,
@@ -171,9 +173,19 @@ mod private {
         DEFAULT_ENGINE.get_or_init(|| {
             let mut config = Config::default();
             // Enables compilation caching.
-            config
-                .cache_config_load_default()
+            // #[cfg(feature = "cache")]
+            //     pub fn cache_config_load_default(&mut self) -> Result<&mut Self> {
+            //         self.cache_config = CacheConfig::from_file(None)?;
+            //         Ok(self)
+            //     }
+            // config
+            //     .cache_config_load()
+            //     .expect("Failed to load the default cache config");
+            let cache_config = CacheConfig::from_file(None)
                 .expect("Failed to load the default cache config");
+            let cache =
+                Cache::new(cache_config).expect("Failed to create the default cache");
+            config.cache(Some(cache));
             Engine::new(&config).expect("Failed to create the default engine")
         })
     }
