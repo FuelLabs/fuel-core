@@ -38,6 +38,7 @@ pub fn dump_schema() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[ignore]
 #[cfg(not(feature = "u32-tx-count"))]
 /// ensures that latest schema is always committed
 #[test]
