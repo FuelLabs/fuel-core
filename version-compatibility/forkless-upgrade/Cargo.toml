@@ -71,3 +71,4 @@ version-44-fuel-core-types = { version = "0.44.0", package = "fuel-core-types", 
 async-graphql = "=7.0.15"
 [dependencies]
 tracing-subscriber = "0.3.19"
+tracing = "0.1.41"
