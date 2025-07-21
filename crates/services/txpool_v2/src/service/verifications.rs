@@ -17,13 +17,10 @@ use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
-        ConsensusParameters,
-        Transaction,
-        UpgradePurpose,
         field::{
             MaxFeeLimit,
             UpgradePurpose as _,
-        },
+        }, ConsensusParameters, Transaction, UpgradePurpose
     },
     fuel_types::BlockHeight,
     fuel_vm::{
@@ -43,7 +40,7 @@ use fuel_core_types::{
     services::txpool::{
         Metadata,
         PoolTransaction,
-    },
+    }, syscall::IgnoreEcal,
 };
 use std::sync::Arc;
 
@@ -66,6 +63,7 @@ where
         tx: Transaction,
         current_height: BlockHeight,
         utxo_validation: bool,
+        allow_syscall: bool,
     ) -> Result<PoolTransaction, Error> {
         let (version, consensus_params) =
             self.chain_state_info_provider.latest_consensus_parameters();
@@ -99,6 +97,7 @@ where
                 self.memory_pool.take_raw(),
                 &view,
                 utxo_validation,
+                allow_syscall,
             )?;
 
         fully_verified_tx.into_pool_transaction(metadata)
@@ -183,6 +182,7 @@ impl InputDependenciesVerifiedTx {
         memory: impl Memory,
         view: &View,
         utxo_validation: bool,
+        allow_syscall: bool,
     ) -> Result<FullyVerifiedTx, Error>
     where
         View: TxPoolPersistentStorage,
@@ -193,7 +193,9 @@ impl InputDependenciesVerifiedTx {
             tx = tx.check_signatures(&consensus_params.chain_id())?;
 
             let parameters = CheckPredicateParams::from(consensus_params);
-            tx = tx.check_predicates(&parameters, memory, view)?;
+            tx = tx.check_predicates(&parameters, memory, view,
+            IgnoreEcal { enabled: allow_syscall }
+            )?;
 
             debug_assert!(tx.checks().contains(Checks::all()));
         }

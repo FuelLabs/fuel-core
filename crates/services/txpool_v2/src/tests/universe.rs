@@ -19,29 +19,15 @@ use fuel_core_types::{
     },
     fuel_asm::op,
     fuel_crypto::rand::{
-        Rng,
-        SeedableRng,
-        rngs::StdRng,
+        rngs::StdRng, Rng, SeedableRng
     },
     fuel_tx::{
-        ConsensusParameters,
-        Contract,
-        ContractId,
-        Finalizable,
-        Output,
-        Transaction,
-        TransactionBuilder,
-        TxId,
-        UtxoId,
-        field::Inputs,
-        input::{
-            Input,
+        field::Inputs, input::{
             coin::{
                 CoinPredicate,
                 CoinSigned,
-            },
-            contract::Contract as ContractInput,
-        },
+            }, contract::Contract as ContractInput, Input
+        }, ConsensusParameters, Contract, ContractId, Finalizable, Output, Transaction, TransactionBuilder, TxId, UtxoId
     },
     fuel_types::{
         AssetId,
@@ -316,6 +302,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 let tx = Arc::new(tx);
                 pool.write()
@@ -358,6 +345,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 pool.write()
                     .insert(Arc::new(tx), &self.mock_db)
@@ -399,6 +387,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 pool.write()
                     .insert(Arc::new(tx), &self.mock_db)

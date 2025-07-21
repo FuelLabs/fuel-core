@@ -3413,8 +3413,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8961271ed5c974d8a9f12912d87be57fe899638f24948b3ffe4d63dfdf1063f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 dependencies = [
  "bitflags 2.9.1",
  "fuel-types 0.62.0",
@@ -3425,8 +3424,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fad6effad71397dd4ac59451830652e7fc94f382be6f0cb9541027409f1a8a7"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 dependencies = [
  "fuel-derive 0.62.0",
  "fuel-types 0.62.0",
@@ -4243,8 +4241,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "771ddda3fa692da95b5effb32184d058c5df0f4e63764b04334db0c84c26aeb6"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 dependencies = [
  "base64ct",
  "coins-bip32",
@@ -4276,8 +4273,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55f7205c66781a189293ee839abb1bac516f496a22b889b07f8f787b25475601"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4314,8 +4310,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec01781b757227d9553b178f788f7d922688dcc45cf616ec9c871cd1a591a910"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 dependencies = [
  "derive_more 0.99.20",
  "digest 0.10.7",
@@ -4347,8 +4342,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca73c81646409e9cacac532ff790567d629bc6c512c10ff986536e2335de22c9"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 
 [[package]]
 name = "fuel-tx"
@@ -4375,8 +4369,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a74c65a78258d1e8ccc3400692e557910422c3d1a992a88ff384799ccc69c46a"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 dependencies = [
  "bitflags 2.9.1",
  "derive_more 1.0.0",
@@ -4409,8 +4402,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b07f2043e0f0cbef39c49ccf74c158609e0abd989684fa73389e5720b19f6d9"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 dependencies = [
  "fuel-derive 0.62.0",
  "hex",
@@ -4452,8 +4444,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.62.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be89fd58ba3ca4a65a0130804b663f4629a39a1a3c687e92ebf559f2226c7077"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
 dependencies = [
  "anyhow",
  "async-trait",

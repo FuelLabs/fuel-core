@@ -1,12 +1,11 @@
 use crate::{
-    ports::{
+    ecal_logs::{EcalLogCollector, LogEntry}, ports::{
         MaybeCheckedTransaction,
         NewTxWaiterPort,
         PreconfirmationSenderPort,
         RelayerPort,
         TransactionsSource,
-    },
-    refs::ContractRef,
+    }, refs::ContractRef
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -46,36 +45,16 @@ use fuel_core_types::{
         transaction::TransactionExt,
     },
     entities::{
-        RelayedTransaction,
         coins::coin::{
             CompressedCoin,
             CompressedCoinV1,
-        },
-        contract::ContractUtxoInfo,
+        }, contract::ContractUtxoInfo, RelayedTransaction
     },
     fuel_asm::{
-        PanicInstruction,
-        Word,
-        op,
+        op, PanicInstruction, Word
     },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
-        Address,
-        AssetId,
-        Bytes32,
-        Cacheable,
-        Chargeable,
-        ConsensusParameters,
-        Input,
-        Mint,
-        Output,
-        PanicReason,
-        Receipt,
-        Transaction,
-        TxId,
-        TxPointer,
-        UniqueIdentifier,
-        UtxoId,
         field::{
             InputContract,
             MaxFeeLimit,
@@ -84,8 +63,7 @@ use fuel_core_types::{
             MintGasPrice,
             OutputContract,
             TxPointer as TxPointerField,
-        },
-        input::{
+        }, input::{
             self,
             coin::{
                 CoinPredicate,
@@ -97,36 +75,25 @@ use fuel_core_types::{
                 MessageDataPredicate,
                 MessageDataSigned,
             },
-        },
-        output,
+        }, output, Address, AssetId, Bytes32, Cacheable, Chargeable, ConsensusParameters, Input, Mint, Output, PanicReason, Receipt, Transaction, TxId, TxPointer, UniqueIdentifier, UtxoId
     },
     fuel_types::{
-        BlockHeight,
-        ContractId,
-        MessageId,
-        canonical::Deserialize,
+        canonical::Deserialize, BlockHeight, ContractId, MessageId
     },
     fuel_vm::{
-        self,
-        Interpreter,
-        ProgramState,
-        checked_transaction::{
+        self, checked_transaction::{
             CheckPredicateParams,
             CheckPredicates,
             Checked,
             CheckedTransaction,
             Checks,
             IntoChecked,
-        },
-        interpreter::{
+        }, interpreter::{
             CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
             MemoryInstance,
-            NotSupportedEcal,
-        },
-        state::StateTransition,
-        verification,
+        }, state::StateTransition, verification, Interpreter, ProgramState
     },
     services::{
         block_producer::Components,
@@ -148,7 +115,7 @@ use fuel_core_types::{
             PreconfirmationStatus,
         },
         relayer::Event,
-    },
+    }, syscall::IgnoreEcal,
 };
 use parking_lot::Mutex as ParkingMutex;
 use tracing::{
@@ -157,10 +124,10 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::borrow::Cow;
+use std::borrow::{Cow, ToOwned};
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
+use alloc::borrow::{Cow, ToOwned};
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -338,11 +305,8 @@ pub struct ExecutionOptions {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips signature and UTXO existence checks.
     pub forbid_fake_coins: bool,
-    /// Print execution backtraces if transaction execution reverts.
-    ///
-    /// Deprecated field. Do nothing. This fields exists for serialization and
-    /// deserialization compatibility.
-    pub backtrace: bool,
+    /// The flag allows the usage of syscall in the transaction.
+    pub allow_syscall: bool,
 }
 
 /// Per-block execution options
@@ -351,6 +315,7 @@ struct ExecutionOptionsInner {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips signature and UTXO existence checks.
     pub forbid_fake_coins: bool,
+    pub allow_syscall: bool,
     pub dry_run: bool,
 }
 
@@ -533,6 +498,7 @@ impl<R, TxWaiter, PreconfirmationSender>
             consensus_params,
             options: ExecutionOptionsInner {
                 forbid_fake_coins: options.forbid_fake_coins,
+                allow_syscall: options.allow_syscall,
                 dry_run,
             },
             new_tx_waiter,
@@ -1785,6 +1751,7 @@ where
                 &CheckPredicateParams::from(&self.consensus_params),
                 memory,
                 storage_tx,
+                IgnoreEcal { enabled: self.options.allow_syscall },
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
@@ -1852,12 +1819,13 @@ where
         let mut reverted;
 
         let (state, mut tx, receipts) = if !self.options.dry_run {
-            let mut vm = Interpreter::<_, _, _, NotSupportedEcal,
+            let mut vm = Interpreter::<_, _, _, EcalLogCollector,
                 verification::Normal>::with_storage(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
             );
+            vm.ecal_state_mut().enabled = self.options.allow_syscall;
 
             let vm_result: StateTransition<_> = vm
                 .transact(ready_tx)
@@ -1874,13 +1842,14 @@ where
                 _,
                 _,
                 _,
-                NotSupportedEcal,
+                EcalLogCollector,
                 verification::AttemptContinue,
             >::with_storage(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
             );
+            vm.ecal_state_mut().enabled = self.options.allow_syscall;
 
             let vm_result: StateTransition<_> = vm
                 .transact(ready_tx)
@@ -1889,6 +1858,8 @@ where
                     transaction_id: tx_id,
                 })?
                 .into();
+
+            maybe_print_logs(vm.ecal_state().logs(), &tx_id);
 
             reverted = vm_result.should_revert();
 
@@ -2374,5 +2345,30 @@ where
         }
 
         Ok(())
+    }
+}
+
+/// Print ECAL/syscall logs if any produced.
+fn maybe_print_logs(logs: &[LogEntry], tx_id: &TxId) {
+    if !logs.is_empty() {
+        let logs_string = logs.iter().map(|entry| {
+            format!(
+                "[PC: {:x<10}] {} Message: {}",
+                entry.pc, match entry.fd {
+                    1 => "stdout".to_owned(),
+                    2 => "stderr".to_owned(),
+                    other => format!("fd={}", other),
+                }, entry.message
+            )
+        }).collect::<Vec<_>>().join("\n");
+
+        let span = tracing::info_span!(
+            "execute_transaction",
+            tx_id = % tx_id
+        );
+
+        span.in_scope(|| {
+            tracing::info!("\n{}", logs_string);
+        });
     }
 }

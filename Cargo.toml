@@ -173,3 +173,6 @@ lto = "fat"
 # To speedup iterations between compilation.
 #lto = "thin"
 panic = "unwind"
+
+[patch.crates-io]
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "dento/check-predicates-ecal" }
