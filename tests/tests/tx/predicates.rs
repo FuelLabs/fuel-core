@@ -236,6 +236,8 @@ async fn syscall_is_allowed_in_the_predicate() {
         .await
         .unwrap();
 
+    dbg!(&transaction_with_predicates);
+
     // When
     let result = context
         .client
