@@ -88,7 +88,8 @@ use fuel_core_types::{
     services::{
         executor::DryRunResult,
         transaction_status,
-    }, syscall::IgnoreEcal,
+    },
+    syscall::IgnoreEcal,
 };
 use futures::{
     Stream,
@@ -522,10 +523,12 @@ impl TxQuery {
         let query = ctx.read_view()?.into_owned();
 
         let tx = FuelTx::from_bytes(&tx.0)?;
-        
+
         let config = ctx.data_unchecked::<GraphQLConfig>();
 
-        let tx = ctx.estimate_predicates(tx, query, config.allow_syscall).await?;
+        let tx = ctx
+            .estimate_predicates(tx, query, config.allow_syscall)
+            .await?;
         let chain_id = ctx
             .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params()
@@ -658,7 +661,9 @@ impl TxMutation {
 
         if estimate_predicates.unwrap_or(false) {
             let query = ctx.read_view()?.into_owned();
-            tx = ctx.estimate_predicates(tx, query, config.allow_syscall).await?;
+            tx = ctx
+                .estimate_predicates(tx, query, config.allow_syscall)
+                .await?;
         }
 
         txpool
@@ -786,7 +791,9 @@ async fn submit_and_await_status<'a>(
 
     if estimate_predicates {
         let query = ctx.read_view()?.into_owned();
-        tx = ctx.estimate_predicates(tx, query, config.allow_syscall).await?;
+        tx = ctx
+            .estimate_predicates(tx, query, config.allow_syscall)
+            .await?;
     }
 
     let subscription = tx_status_manager.tx_update_subscribe(tx_id).await?;
@@ -1011,9 +1018,14 @@ impl ContextExt for Context<'_> {
 
         let parameters = CheckPredicateParams::from(params.as_ref());
         let tx = tokio_rayon::spawn_fifo(move || {
-            let result = tx.estimate_predicates_ecal(&parameters, memory, &query, IgnoreEcal {
-                enabled: allow_syscall
-            });
+            let result = tx.estimate_predicates_ecal(
+                &parameters,
+                memory,
+                &query,
+                IgnoreEcal {
+                    enabled: allow_syscall,
+                },
+            );
             result.map(|_| tx)
         })
         .await

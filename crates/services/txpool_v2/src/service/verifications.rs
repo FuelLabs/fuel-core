@@ -17,10 +17,13 @@ use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+        UpgradePurpose,
         field::{
             MaxFeeLimit,
             UpgradePurpose as _,
-        }, ConsensusParameters, Transaction, UpgradePurpose
+        },
     },
     fuel_types::BlockHeight,
     fuel_vm::{
@@ -40,7 +43,8 @@ use fuel_core_types::{
     services::txpool::{
         Metadata,
         PoolTransaction,
-    }, syscall::IgnoreEcal,
+    },
+    syscall::IgnoreEcal,
 };
 use std::sync::Arc;
 
@@ -193,8 +197,13 @@ impl InputDependenciesVerifiedTx {
             tx = tx.check_signatures(&consensus_params.chain_id())?;
 
             let parameters = CheckPredicateParams::from(consensus_params);
-            tx = tx.check_predicates(&parameters, memory, view,
-            IgnoreEcal { enabled: allow_syscall }
+            tx = tx.check_predicates(
+                &parameters,
+                memory,
+                view,
+                IgnoreEcal {
+                    enabled: allow_syscall,
+                },
             )?;
 
             debug_assert!(tx.checks().contains(Checks::all()));

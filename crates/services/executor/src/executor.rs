@@ -1,11 +1,16 @@
 use crate::{
-    ecal_logs::{EcalLogCollector, LogEntry}, ports::{
+    ecal_logs::{
+        EcalLogCollector,
+        LogEntry,
+    },
+    ports::{
         MaybeCheckedTransaction,
         NewTxWaiterPort,
         PreconfirmationSenderPort,
         RelayerPort,
         TransactionsSource,
-    }, refs::ContractRef
+    },
+    refs::ContractRef,
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -45,16 +50,36 @@ use fuel_core_types::{
         transaction::TransactionExt,
     },
     entities::{
+        RelayedTransaction,
         coins::coin::{
             CompressedCoin,
             CompressedCoinV1,
-        }, contract::ContractUtxoInfo, RelayedTransaction
+        },
+        contract::ContractUtxoInfo,
     },
     fuel_asm::{
-        op, PanicInstruction, Word
+        PanicInstruction,
+        Word,
+        op,
     },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
+        Address,
+        AssetId,
+        Bytes32,
+        Cacheable,
+        Chargeable,
+        ConsensusParameters,
+        Input,
+        Mint,
+        Output,
+        PanicReason,
+        Receipt,
+        Transaction,
+        TxId,
+        TxPointer,
+        UniqueIdentifier,
+        UtxoId,
         field::{
             InputContract,
             MaxFeeLimit,
@@ -63,7 +88,8 @@ use fuel_core_types::{
             MintGasPrice,
             OutputContract,
             TxPointer as TxPointerField,
-        }, input::{
+        },
+        input::{
             self,
             coin::{
                 CoinPredicate,
@@ -75,25 +101,35 @@ use fuel_core_types::{
                 MessageDataPredicate,
                 MessageDataSigned,
             },
-        }, output, Address, AssetId, Bytes32, Cacheable, Chargeable, ConsensusParameters, Input, Mint, Output, PanicReason, Receipt, Transaction, TxId, TxPointer, UniqueIdentifier, UtxoId
+        },
+        output,
     },
     fuel_types::{
-        canonical::Deserialize, BlockHeight, ContractId, MessageId
+        BlockHeight,
+        ContractId,
+        MessageId,
+        canonical::Deserialize,
     },
     fuel_vm::{
-        self, checked_transaction::{
+        self,
+        Interpreter,
+        ProgramState,
+        checked_transaction::{
             CheckPredicateParams,
             CheckPredicates,
             Checked,
             CheckedTransaction,
             Checks,
             IntoChecked,
-        }, interpreter::{
+        },
+        interpreter::{
             CheckedMetadata as CheckedMetadataTrait,
             ExecutableTransaction,
             InterpreterParams,
             MemoryInstance,
-        }, state::StateTransition, verification, Interpreter, ProgramState
+        },
+        state::StateTransition,
+        verification,
     },
     services::{
         block_producer::Components,
@@ -115,7 +151,8 @@ use fuel_core_types::{
             PreconfirmationStatus,
         },
         relayer::Event,
-    }, syscall::IgnoreEcal,
+    },
+    syscall::IgnoreEcal,
 };
 use parking_lot::Mutex as ParkingMutex;
 use tracing::{
@@ -124,10 +161,16 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::borrow::{Cow, ToOwned};
+use std::borrow::{
+    Cow,
+    ToOwned,
+};
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::{Cow, ToOwned};
+use alloc::borrow::{
+    Cow,
+    ToOwned,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -1751,7 +1794,9 @@ where
                 &CheckPredicateParams::from(&self.consensus_params),
                 memory,
                 storage_tx,
-                IgnoreEcal { enabled: self.options.allow_syscall },
+                IgnoreEcal {
+                    enabled: self.options.allow_syscall,
+                },
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
@@ -2351,16 +2396,22 @@ where
 /// Print ECAL/syscall logs if any produced.
 fn maybe_print_logs(logs: &[LogEntry], tx_id: &TxId) {
     if !logs.is_empty() {
-        let logs_string = logs.iter().map(|entry| {
-            format!(
-                "[PC: {:x<10}] {} Message: {}",
-                entry.pc, match entry.fd {
-                    1 => "stdout".to_owned(),
-                    2 => "stderr".to_owned(),
-                    other => format!("fd={}", other),
-                }, entry.message
-            )
-        }).collect::<Vec<_>>().join("\n");
+        let logs_string = logs
+            .iter()
+            .map(|entry| {
+                format!(
+                    "[PC: {:x<10}] {} Message: {}",
+                    entry.pc,
+                    match entry.fd {
+                        1 => "stdout".to_owned(),
+                        2 => "stderr".to_owned(),
+                        other => format!("fd={}", other),
+                    },
+                    entry.message
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
 
         let span = tracing::info_span!(
             "execute_transaction",

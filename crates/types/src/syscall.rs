@@ -1,6 +1,17 @@
 //! Generic ECAL handlers.
 
-use crate::{fuel_asm::RegId, fuel_tx::PanicReason, fuel_vm::{error::SimpleResult, interpreter::{EcalHandler, Memory}, Interpreter}};
+use crate::{
+    fuel_asm::RegId,
+    fuel_tx::PanicReason,
+    fuel_vm::{
+        Interpreter,
+        error::SimpleResult,
+        interpreter::{
+            EcalHandler,
+            Memory,
+        },
+    },
+};
 
 /// If enabled, ignores all ECAL invocations.
 #[derive(Debug, Clone, Default)]
@@ -24,6 +35,6 @@ impl EcalHandler for IgnoreEcal {
         if !vm.ecal_state().enabled {
             return Err(PanicReason::EcalError.into());
         }
-        Ok(())                    
+        Ok(())
     }
 }

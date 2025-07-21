@@ -1,5 +1,20 @@
-use fuel_core_types::{fuel_asm::RegId, fuel_tx::PanicReason, fuel_vm::{error::SimpleResult, interpreter::{EcalHandler, Memory}, Interpreter}};
-use alloc::{vec::Vec, string::String, borrow::ToOwned};
+use alloc::{
+    borrow::ToOwned,
+    string::String,
+    vec::Vec,
+};
+use fuel_core_types::{
+    fuel_asm::RegId,
+    fuel_tx::PanicReason,
+    fuel_vm::{
+        Interpreter,
+        error::SimpleResult,
+        interpreter::{
+            EcalHandler,
+            Memory,
+        },
+    },
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct EcalLogCollector {
@@ -16,7 +31,6 @@ pub struct LogEntry {
     /// Log message
     pub message: String,
 }
-
 
 /// Syscall ID for logging operation.
 pub const LOG_SYSCALL: u64 = 1000;
@@ -46,7 +60,6 @@ impl EcalHandler for EcalLogCollector {
             return Err(PanicReason::EcalError.into());
         }
 
-
         let regs = vm.registers();
         match regs[a] {
             LOG_SYSCALL => {
@@ -55,8 +68,9 @@ impl EcalHandler for EcalLogCollector {
                 let addr = regs[c];
                 let size = regs[d];
                 let bytes = vm.memory().read(addr, size)?;
-                let message =
-                    core::str::from_utf8(bytes).map_err(|_| PanicReason::EcalError)?.to_owned();
+                let message = core::str::from_utf8(bytes)
+                    .map_err(|_| PanicReason::EcalError)?
+                    .to_owned();
 
                 vm.ecal_state_mut().logs.push(LogEntry { pc, fd, message });
             }
@@ -65,7 +79,6 @@ impl EcalHandler for EcalLogCollector {
             }
         };
 
-        Ok(())                    
+        Ok(())
     }
 }
-

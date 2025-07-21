@@ -19,15 +19,29 @@ use fuel_core_types::{
     },
     fuel_asm::op,
     fuel_crypto::rand::{
-        rngs::StdRng, Rng, SeedableRng
+        Rng,
+        SeedableRng,
+        rngs::StdRng,
     },
     fuel_tx::{
-        field::Inputs, input::{
+        ConsensusParameters,
+        Contract,
+        ContractId,
+        Finalizable,
+        Output,
+        Transaction,
+        TransactionBuilder,
+        TxId,
+        UtxoId,
+        field::Inputs,
+        input::{
+            Input,
             coin::{
                 CoinPredicate,
                 CoinSigned,
-            }, contract::Contract as ContractInput, Input
-        }, ConsensusParameters, Contract, ContractId, Finalizable, Output, Transaction, TransactionBuilder, TxId, UtxoId
+            },
+            contract::Contract as ContractInput,
+        },
     },
     fuel_types::{
         AssetId,
