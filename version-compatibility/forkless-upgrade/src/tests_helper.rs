@@ -179,23 +179,6 @@ pub fn valid_input(secret_key: &SecretKey, rng: &mut StdRng, amount: u64) -> Inp
     )
 }
 
-// pub fn v44_valid_input(
-//     secret_key: &V44SecretKey,
-//     rng: &mut StdRng,
-//     amount: u64,
-// ) -> version_44_fuel_core_types::fuel_tx::Input {
-//     let pk = secret_key.public_key();
-//     let owner = version_44_fuel_core_types::fuel_tx::Input::owner(&pk);
-//     version_44_fuel_core_types::fuel_tx::Input::coin_signed(
-//         rng.r#gen(),
-//         owner,
-//         amount,
-//         BASE_ASSET_ID.parse().unwrap(),
-//         Default::default(),
-//         Default::default(),
-//     )
-// }
-
 pub fn transactions_from_subsections(
     rng: &mut StdRng,
     subsections: Vec<UploadSubsection>,
@@ -220,31 +203,6 @@ pub fn transactions_from_subsections(
         .collect::<Vec<_>>()
 }
 
-// pub fn v44_transactions_from_subsections(
-//     rng: &mut StdRng,
-//     subsections: Vec<version_44_fuel_core_types::fuel_tx::UploadSubsection>,
-//     amount: u64,
-// ) -> Vec<version_44_fuel_core_types::fuel_tx::Upload> {
-//     subsections
-//         .into_iter()
-//         .map(|subsection| {
-//             let secret_key = V44SecretKey::from_str(PRIVILEGED_ADDRESS_KEY).unwrap();
-//             let mut tx =
-//                 version_44_fuel_core_types::fuel_tx::Transaction::upload_from_subsection(
-//                     subsection,
-//                     version_44_fuel_core_types::fuel_tx::policies::Policies::new()
-//                         .with_max_fee(amount),
-//                     vec![v44_valid_input(&secret_key, rng, amount)],
-//                     vec![],
-//                     vec![version_44_fuel_core_types::fuel_tx::Witness::default()],
-//                 );
-//             tx.sign_inputs(&secret_key, &V44ChainId::new(0));
-//
-//             tx
-//         })
-//         .collect::<Vec<_>>()
-// }
-
 pub fn upgrade_transaction(
     purpose: UpgradePurpose,
     rng: &mut StdRng,
@@ -261,21 +219,3 @@ pub fn upgrade_transaction(
     tx.sign_inputs(&secret_key, &ChainId::new(0));
     tx
 }
-
-// pub fn v44_upgrade_transaction(
-//     purpose: version_44_fuel_core_types::fuel_tx::UpgradePurpose,
-//     rng: &mut StdRng,
-//     amount: u64,
-// ) -> version_44_fuel_core_types::fuel_tx::Upgrade {
-//     let secret_key = V44SecretKey::from_str(PRIVILEGED_ADDRESS_KEY).unwrap();
-//     let mut tx = version_44_fuel_core_types::fuel_tx::Transaction::upgrade(
-//         purpose,
-//         version_44_fuel_core_types::fuel_tx::policies::Policies::new()
-//             .with_max_fee(100000),
-//         vec![v44_valid_input(&secret_key, rng, amount)],
-//         vec![],
-//         vec![version_44_fuel_core_types::fuel_tx::Witness::default()],
-//     );
-//     tx.sign_inputs(&secret_key, &V44ChainId::new(0));
-//     tx
-// }

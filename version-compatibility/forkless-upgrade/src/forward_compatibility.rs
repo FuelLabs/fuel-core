@@ -13,9 +13,6 @@ use crate::{
         upgrade_transaction,
     },
 };
-// use fuel_tx::field::ChargeableBody;
-// use latest_fuel_core_type::fuel_tx::field::ChargeableBody;
-// use fuel_tx::field::ChargeableBody;
 use latest_fuel_core_type::fuel_tx::field::ChargeableBody;
 use libp2p::{
     futures::StreamExt,
@@ -122,7 +119,6 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
     let transactions = transactions_from_subsections(&mut rng, subsections, amount);
     let root = transactions[0].body().root;
     for upload in transactions {
-        // let tx = upload.into();
         let tx = latest_fuel_core_type::fuel_tx::Transaction::Upload(upload);
         validator_node
             .client
