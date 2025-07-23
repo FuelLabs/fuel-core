@@ -29,8 +29,6 @@ use std::time::Duration;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_state_transition_function_is_forward_compatible_with_v44_binary() {
-    let _ = tracing_subscriber::fmt().with_env_filter("warn").try_init();
-
     let (_bootstrap_node, addr) = bootstrap_node(V44_TESTNET_SNAPSHOT).await.unwrap();
 
     // The test has a v44 block producer and one v44 validator.
@@ -97,11 +95,10 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
     const BLOCKS_TO_PRODUCE: u32 = 10;
     for i in 0..BLOCKS_TO_PRODUCE {
         tracing::warn!("beep");
-        let block =
-            tokio::time::timeout(Duration::from_secs(120), imported_blocks.next())
-                .await
-                .expect(format!("Timed out waiting for block import {i}").as_str())
-                .expect(format!("Failed to import block {i}").as_str());
+        let block = tokio::time::timeout(Duration::from_secs(10), imported_blocks.next())
+            .await
+            .expect(format!("Timed out waiting for block import {i}").as_str())
+            .expect(format!("Failed to import block {i}").as_str());
         tracing::warn!("boop");
         assert_eq!(
             block
@@ -109,7 +106,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
                 .entity
                 .header()
                 .state_transition_bytecode_version(),
-            11
+            29
         );
     }
     drop(imported_blocks);
@@ -160,7 +157,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
                 .entity
                 .header()
                 .state_transition_bytecode_version(),
-            12
+            30
         );
     }
 }
