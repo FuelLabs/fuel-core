@@ -173,14 +173,6 @@ mod private {
         DEFAULT_ENGINE.get_or_init(|| {
             let mut config = Config::default();
             // Enables compilation caching.
-            // #[cfg(feature = "cache")]
-            //     pub fn cache_config_load_default(&mut self) -> Result<&mut Self> {
-            //         self.cache_config = CacheConfig::from_file(None)?;
-            //         Ok(self)
-            //     }
-            // config
-            //     .cache_config_load()
-            //     .expect("Failed to load the default cache config");
             let cache_config = CacheConfig::from_file(None)
                 .expect("Failed to load the default cache config");
             let cache =
