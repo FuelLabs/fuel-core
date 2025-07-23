@@ -44,16 +44,6 @@ genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", feature
 genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
 genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
 
-# Fuel core version 0.36.0
-version-36-fuel-core-bin = { version = "0.36.0", package = "fuel-core-bin", features = [
-  "parquet",
-  "p2p",
-] }
-version-36-fuel-core-client = { version = "0.36.0", package = "fuel-core-client" }
-version-36-fuel-core-services = { version = "0.36.0", package = "fuel-core-services" }
-version-36-fuel-core-gas-price-service = { version = "0.36.0", package = "fuel-core-gas-price-service" }
-version-36-fuel-core-storage = { version = "0.36.0", package = "fuel-core-storage" }
-
 # Fuel core version 0.44.0
 version-44-fuel-core-bin = { version = "0.44.0", package = "fuel-core-bin", features = [
   "parquet",

@@ -28,9 +28,6 @@ use rand::{
     prelude::StdRng,
 };
 use std::str::FromStr;
-use version_36_fuel_core_bin::FuelService as Version36FuelService;
-use version_36_fuel_core_client::client::FuelClient as Version36Client;
-use version_36_fuel_core_services as _;
 use version_44_fuel_core_bin::FuelService as Version44FuelService;
 use version_44_fuel_core_client::client::FuelClient as Version44Client;
 use version_44_fuel_core_services as _;
@@ -106,14 +103,6 @@ define_core_driver!(
 );
 
 define_core_driver!(
-    version_36_fuel_core_bin,
-    Version36FuelService,
-    Version36Client,
-    Version36FuelCoreDriver,
-    true
-);
-
-define_core_driver!(
     version_44_fuel_core_bin,
     Version44FuelService,
     Version44Client,
@@ -121,7 +110,7 @@ define_core_driver!(
     true
 );
 
-impl Version36FuelCoreDriver {
+impl Version44FuelCoreDriver {
     pub async fn kill(self) -> tempfile::TempDir {
         self.node
             .send_stop_signal_and_await_shutdown()
@@ -150,7 +139,6 @@ impl LatestFuelCoreDriver {
 }
 
 pub const IGNITION_TESTNET_SNAPSHOT: &str = "./chain-configurations/ignition";
-pub const V36_TESTNET_SNAPSHOT: &str = "./chain-configurations/v36";
 
 pub const V44_TESTNET_SNAPSHOT: &str = "./chain-configurations/v44";
 pub const POA_SECRET_KEY: &str =

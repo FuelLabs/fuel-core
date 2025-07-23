@@ -2,9 +2,10 @@
 
 use crate::tests_helper::{
     LatestFuelCoreDriver,
-    Version36FuelCoreDriver,
+    Version44FuelCoreDriver,
     default_multiaddr,
 };
+
 use latest_fuel_core_gas_price_service::{
     common::{
         fuel_core_storage_adapter::storage::GasPriceMetadata as NewGasPriceMetadata,
@@ -28,12 +29,14 @@ use std::{
     ops::Deref,
     time::Duration,
 };
-use version_36_fuel_core_gas_price_service::fuel_gas_price_updater::{
-    UpdaterMetadata as OldUpdaterMetadata,
-    V0Metadata,
+use version_44_fuel_core_gas_price_service::common::{
     fuel_core_storage_adapter::storage::GasPriceMetadata as OldGasPriceMetadata,
+    updater_metadata::{
+        UpdaterMetadata as OldUpdaterMetadata,
+        UpdaterMetadata,
+    },
 };
-use version_36_fuel_core_storage::{
+use version_44_fuel_core_storage::{
     StorageAsRef as OldStorageAsRef,
     transactional::{
         AtomicView as OldAtomicView,
@@ -45,7 +48,7 @@ use version_36_fuel_core_storage::{
 async fn v1_gas_price_metadata_updates_successfully_from_v0() {
     // Given
     let starting_gas_price = 987;
-    let old_driver = Version36FuelCoreDriver::spawn(&[
+    let old_driver = Version44FuelCoreDriver::spawn(&[
         "--service-name",
         "V36Producer",
         "--debug",
@@ -76,6 +79,9 @@ async fn v1_gas_price_metadata_updates_successfully_from_v0() {
         .clone()
     {
         OldUpdaterMetadata::V0(v0) => v0,
+        _ => {
+            unimplemented!("Expected v0 metadata")
+        }
     };
 
     drop(view);
