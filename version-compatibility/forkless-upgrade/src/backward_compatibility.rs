@@ -114,15 +114,15 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v36_binary() {
+async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v44_binary() {
     let (_bootstrap_node, addr) = bootstrap_node(V44_TESTNET_SNAPSHOT).await.unwrap();
 
     // Given
     let v36_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
-    let _v36_node = Version44FuelCoreDriver::spawn(&[
+    let _v44_node = Version44FuelCoreDriver::spawn(&[
         "--service-name",
-        "V36Producer",
+        "V44Producer",
         "--debug",
         "--poa-interval-period",
         "1s",

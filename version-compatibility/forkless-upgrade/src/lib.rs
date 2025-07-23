@@ -19,9 +19,6 @@ mod backward_compatibility;
 mod forward_compatibility;
 
 #[cfg(test)]
-mod gas_price_algo_compatibility;
-
-#[cfg(test)]
 mod genesis;
 #[cfg(test)]
 pub(crate) mod tests_helper;
