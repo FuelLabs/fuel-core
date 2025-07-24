@@ -55,5 +55,4 @@ version-44-fuel-core-services = { version = "0.44.0", package = "fuel-core-servi
 # pin async-graphql because they bumped msrv in a patch release
 async-graphql = "=7.0.15"
 [dependencies]
-tracing-subscriber = "0.3.19"
 tracing = "0.1.41"
