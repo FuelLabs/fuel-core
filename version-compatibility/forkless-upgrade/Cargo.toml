@@ -14,6 +14,7 @@ hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
+yamux = "=0.13.5"
 
 # Neutral deps
 fuel-core = { path = "../../crates/fuel-core", features = ["test-helpers"] }
@@ -62,3 +63,6 @@ async-graphql = "=7.0.15"
 [dependencies]
 tracing-subscriber = "0.3.19"
 tracing = "0.1.41"
+
+#[patch.crates-io]
+#yamux = "=0.13.5"
