@@ -153,7 +153,7 @@ strum_macros = "0.25"
 tempfile = "3.4"
 test-case = "3.3"
 test-strategy = "0.3"
-thiserror = "1.0"
+thiserror = "2.0.12"
 tikv-jemallocator = "0.5"
 tokio = { version = "1.27", default-features = false }
 tokio-rayon = "2.1.0"
