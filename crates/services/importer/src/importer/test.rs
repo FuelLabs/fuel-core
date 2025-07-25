@@ -54,7 +54,7 @@ mockall::mock! {
         where
             Self: 'a;
 
-        fn storage_transaction(&self, changes: Changes) -> MockDatabaseTransaction;
+        fn storage_transaction(&self, changes: StorageChanges) -> MockDatabaseTransaction;
     }
 
     impl ImporterDatabase for Database {

@@ -1,3 +1,5 @@
+#[cfg(feature = "parallel-executor")]
+use crate::service::adapters::ParallelExecutorAdapter;
 use crate::{
     database::{
         Database,
@@ -42,6 +44,8 @@ use fuel_core_txpool::ports::{
     WasmChecker,
     WasmValidityError,
 };
+#[cfg(feature = "parallel-executor")]
+use fuel_core_types::services::executor::ValidationResult;
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
@@ -62,11 +66,27 @@ use itertools::Itertools;
 use std::sync::Arc;
 
 impl BlockImporterAdapter {
+    #[cfg(not(feature = "parallel-executor"))]
     pub fn new(
         chain_id: ChainId,
         config: Config,
         database: Database,
         executor: ExecutorAdapter,
+        verifier: VerifierAdapter,
+    ) -> Self {
+        let importer = Importer::new(chain_id, config, database, executor, verifier);
+        Self {
+            block_importer: Arc::new(importer),
+        }
+    }
+
+    #[cfg(feature = "parallel-executor")]
+    pub fn new(
+        chain_id: ChainId,
+        config: Config,
+        database: Database,
+        #[cfg(not(feature = "no-parallel-executor"))] executor: ParallelExecutorAdapter,
+        #[cfg(feature = "no-parallel-executor")] executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
         let importer = Importer::new(chain_id, config, database, executor, verifier);
@@ -125,6 +145,21 @@ impl Validator for ExecutorAdapter {
     }
 }
 
+#[cfg(feature = "parallel-executor")]
+impl Validator for ParallelExecutorAdapter {
+    fn validate(
+        &self,
+        _block: &Block,
+    ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
+        // TODO
+        let result = ValidationResult {
+            tx_status: vec![],
+            events: vec![],
+        };
+        Ok(UncommittedValidationResult::new(result, Changes::default()))
+    }
+}
+
 #[cfg(feature = "wasm-executor")]
 impl WasmChecker for ExecutorAdapter {
     fn validate_uploaded_wasm(
@@ -142,8 +177,30 @@ impl WasmChecker for ExecutorAdapter {
     }
 }
 
+#[cfg(feature = "wasm-executor")]
+#[cfg(feature = "parallel-executor")]
+impl WasmChecker for ParallelExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        unimplemented!("no validation yet")
+    }
+}
+
 #[cfg(not(feature = "wasm-executor"))]
 impl WasmChecker for ExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        Err(WasmValidityError::NotEnabled)
+    }
+}
+
+#[cfg(not(feature = "wasm-executor"))]
+#[cfg(feature = "parallel-executor")]
+impl WasmChecker for ParallelExecutorAdapter {
     fn validate_uploaded_wasm(
         &self,
         _wasm_root: &Bytes32,
