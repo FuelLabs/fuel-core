@@ -147,6 +147,13 @@ impl TransactionExt for MaybeCheckedTransaction {
             MaybeCheckedTransaction::Transaction(tx) => tx.max_gas(consensus_params),
         }
     }
+
+    fn size(&self) -> usize {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.size(),
+            MaybeCheckedTransaction::Transaction(tx) => tx.size(),
+        }
+    }
 }
 
 pub trait TransactionsSource {
