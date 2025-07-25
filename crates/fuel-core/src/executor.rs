@@ -3189,6 +3189,11 @@ mod tests {
     #[tokio::test]
     async fn produce_without_commit_with_source__includes_a_mint_with_whatever_gas_price_provided()
      {
+        use fuel_core_executor::executor::{
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        };
+
         // Given
         let mut rng = StdRng::seed_from_u64(2322u64);
         let base_asset_id = rng.r#gen();
