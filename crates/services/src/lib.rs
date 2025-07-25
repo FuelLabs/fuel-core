@@ -16,12 +16,72 @@ pub mod yield_stream;
 
 /// Re-exports for streaming utilities
 pub mod stream {
+    use std::ops::DerefMut;
+    use std::pin::Pin;
+    use async_trait::async_trait;
+    use futures::StreamExt;
     #[doc(no_inline)]
     pub use futures::stream::{
         Stream,
         pending,
         unfold,
     };
+
+    /// Generic item provider.
+    #[async_trait]
+    pub trait AsyncIterTrait: Send {
+        /// Generic return item.
+        type Item;
+        /// Returner of this item.
+        async fn next(&mut self) -> Option<Self::Item>;
+    }
+
+    /// Stream wrapper for `AsyncIterator`.
+    pub struct AsyncIterFromStream<T> {
+        /// Wrapped stream.
+        pub stream: Pin<Box<dyn Stream<Item = T> + Send + Sync + 'static>>
+    }
+
+    #[async_trait]
+    impl <T> AsyncIterTrait for AsyncIterFromStream<T> {
+        type Item = T;
+
+        async fn next(&mut self) -> Option<T> {
+            self.stream.next().await
+        }
+    }
+
+    /// A Boxed `Send` + `Sync` AsyncIterator with static lifetime.
+    pub type BoxAsyncIter<T> = Pin<Box<dyn AsyncIterTrait<Item=T> + Sync + Unpin + 'static>>;
+
+    #[async_trait]
+    impl<'a, S: ?Sized + AsyncIterTrait + Unpin + 'a> AsyncIterTrait for &'a mut S {
+        type Item = S::Item;
+
+        async fn next(&mut self) -> Option<Self::Item> {
+            self.next().await
+        }
+    }
+    #[async_trait]
+    impl<P> AsyncIterTrait for Pin<P>
+    where
+        P: DerefMut + Unpin + Sync + Send,
+        P::Target: AsyncIterTrait,
+    {
+        type Item = <P::Target as AsyncIterTrait>::Item;
+
+        async fn next(&mut self) -> Option<Self::Item> {
+            self.deref_mut().next().await
+        }
+    }
+
+    #[async_trait]
+    impl<S: ?Sized + AsyncIterTrait + Unpin> AsyncIterTrait for Box<S> {
+        type Item = S::Item;
+        async fn next(&mut self) -> Option<Self::Item> {
+            self.next().await
+        }
+    }
 
     /// A `Send` + `Sync` BoxStream with static lifetime.
     pub type BoxStream<T> =

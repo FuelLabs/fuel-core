@@ -1,6 +1,8 @@
+#[cfg(not(feature = "p2p"))]
+use fuel_core_services::stream::{AsyncIterFromStream};
 use super::P2PAdapter;
 use fuel_core_chain_config::ConsensusConfig;
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{AsyncIterTrait};
 use fuel_core_tx_status_manager::{
     ports::P2PPreConfirmationGossipData,
     service::ProtocolPublicKey,
@@ -17,20 +19,22 @@ use fuel_core_types::{
 impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
     type GossipedStatuses = P2PPreConfirmationGossipData;
 
-    fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
+    fn gossiped_tx_statuses(&self) -> impl AsyncIterTrait<Item = Self::GossipedStatuses> + Sync + Unpin + 'static {
         use tokio_stream::{
             StreamExt,
             wrappers::BroadcastStream,
         };
 
-        match &self.service {
-            Some(service) => Box::pin(
-                BroadcastStream::new(service.subscribe_preconfirmations())
-                    .filter_map(|result| result.ok()),
-            ),
-            _ => fuel_core_services::stream::IntoBoxStream::into_boxed(
-                tokio_stream::pending(),
-            ),
+        AsyncIterFromStream {
+            stream: match &self.service {
+                Some(service) => Box::pin(
+                    BroadcastStream::new(service.subscribe_preconfirmations())
+                        .filter_map(|result| result.ok()),
+                ),
+                _ => fuel_core_services::stream::IntoBoxStream::into_boxed(
+                    tokio_stream::pending(),
+                ),
+            }
         }
     }
 
@@ -52,8 +56,8 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
 impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
     type GossipedStatuses = P2PPreConfirmationGossipData;
 
-    fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
-        Box::pin(fuel_core_services::stream::pending())
+    fn gossiped_tx_statuses(&self) -> impl AsyncIterTrait<Item = Self::GossipedStatuses> + Sync + Unpin + 'static {
+        AsyncIterFromStream {stream: Box::pin(fuel_core_services::stream::pending())}
     }
 
     fn notify_gossip_transaction_validity(

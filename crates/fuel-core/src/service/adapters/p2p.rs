@@ -8,7 +8,7 @@ use fuel_core_p2p::ports::{
     P2pDb,
     TxPool,
 };
-use fuel_core_services::stream::BoxStream;
+use fuel_core_services::stream::{AsyncIterTrait, AsyncIterFromStream};
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::{
@@ -45,16 +45,18 @@ impl P2pDb for OnChainIterableKeyValueView {
 }
 
 impl BlockHeightImporter for BlockImporterAdapter {
-    fn next_block_height(&self) -> BoxStream<BlockHeight> {
+    fn next_block_height(&self) -> impl AsyncIterTrait<Item = BlockHeight> + Sync + Unpin + 'static {
         use tokio_stream::{
             StreamExt,
             wrappers::BroadcastStream,
         };
-        Box::pin(
-            BroadcastStream::new(self.block_importer.subscribe())
-                .filter_map(|result| result.ok())
-                .map(|result| *result.sealed_block.entity.header().height()),
-        )
+        AsyncIterFromStream {
+            stream: Box::pin(
+                BroadcastStream::new(self.block_importer.subscribe())
+                    .filter_map(|result| result.ok())
+                    .map(|result| *result.sealed_block.entity.header().height()),
+            )
+        }
     }
 }
 
