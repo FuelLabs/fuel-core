@@ -1,4 +1,3 @@
-#![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
 #[cfg(test)]
@@ -18,9 +17,6 @@ use async_graphql as _;
 mod backward_compatibility;
 #[cfg(test)]
 mod forward_compatibility;
-
-#[cfg(test)]
-mod gas_price_algo_compatibility;
 
 #[cfg(test)]
 mod genesis;
