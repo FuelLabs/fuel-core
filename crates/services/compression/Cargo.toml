@@ -18,12 +18,12 @@ test-helpers = [
     "dep:rand",
     "dep:fuel-core-chain-config",
 ]
-fault-proving = [
-    "fuel-core-compression/fault-proving",
-    "fuel-core-chain-config?/fault-proving",
-    "fuel-core-types/fault-proving",
-    "fuel-core-storage/fault-proving",
-]
+# fault-proving = [
+#     "fuel-core-compression/fault-proving",
+#     "fuel-core-chain-config?/fault-proving",
+#     "fuel-core-types/fault-proving",
+#     "fuel-core-storage/fault-proving",
+# ]
 
 [dependencies]
 anyhow = { workspace = true }

@@ -2,6 +2,7 @@
 #![deny(clippy::cast_possible_truncation)]
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
+#![allow(unexpected_cfgs)]
 
 pub mod compress;
 mod compressed_block_payload;
