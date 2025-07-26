@@ -58,6 +58,7 @@ use test_helpers::{
     default_signing_wallet,
 };
 
+mod log_syscall;
 mod predicates;
 mod tx_pointer;
 mod txn_status_subscription;

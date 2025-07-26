@@ -1,8 +1,4 @@
 use crate::{
-    ecal_logs::{
-        EcalLogCollector,
-        LogEntry,
-    },
     ports::{
         MaybeCheckedTransaction,
         NewTxWaiterPort,
@@ -35,6 +31,10 @@ use fuel_core_storage::{
         WriteTransaction,
     },
     vm_storage::VmStorage,
+};
+use fuel_core_syscall::handlers::log_collector::{
+    EcalLogCollector,
+    maybe_print_logs,
 };
 use fuel_core_types::{
     blockchain::{
@@ -152,7 +152,6 @@ use fuel_core_types::{
         },
         relayer::Event,
     },
-    syscall::IgnoreEcal,
 };
 use parking_lot::Mutex as ParkingMutex;
 use tracing::{
@@ -161,16 +160,10 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::borrow::{
-    Cow,
-    ToOwned,
-};
+use std::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::{
-    Cow,
-    ToOwned,
-};
+use alloc::borrow::Cow;
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -1789,14 +1782,15 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
+        let mut ecal_state = EcalLogCollector::default();
+        ecal_state.enabled = true;
+
         checked_tx = checked_tx
             .check_predicates(
                 &CheckPredicateParams::from(&self.consensus_params),
                 memory,
                 storage_tx,
-                IgnoreEcal {
-                    enabled: self.options.allow_syscall,
-                },
+                ecal_state.clone(),
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
@@ -1804,6 +1798,12 @@ where
                 ))
             })?;
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+
+        // Note that the code above only executes predicates if the txpool didn't do so already.
+        maybe_print_logs(
+            &ecal_state.logs.lock().clone(),
+            tracing::info_span!("predicate_logs", tx_id = % &checked_tx.id()),
+        );
 
         self.verify_inputs_exist_and_values_match(
             storage_tx,
@@ -1879,6 +1879,12 @@ where
                     transaction_id: tx_id,
                 })?
                 .into();
+
+            maybe_print_logs(
+                &vm.ecal_state().logs.lock().clone(),
+                tracing::info_span!("tx_logs", tx_id = % tx_id),
+            );
+
             reverted = vm_result.should_revert();
 
             vm_result.into_inner()
@@ -1904,7 +1910,10 @@ where
                 })?
                 .into();
 
-            maybe_print_logs(vm.ecal_state().logs(), &tx_id);
+            maybe_print_logs(
+                &vm.ecal_state().logs.lock().clone(),
+                tracing::info_span!("tx_logs", tx_id = % tx_id),
+            );
 
             reverted = vm_result.should_revert();
 
@@ -2390,36 +2399,5 @@ where
         }
 
         Ok(())
-    }
-}
-
-/// Print ECAL/syscall logs if any produced.
-fn maybe_print_logs(logs: &[LogEntry], tx_id: &TxId) {
-    if !logs.is_empty() {
-        let logs_string = logs
-            .iter()
-            .map(|entry| {
-                format!(
-                    "[PC: {:x<10}] {} Message: {}",
-                    entry.pc,
-                    match entry.fd {
-                        1 => "stdout".to_owned(),
-                        2 => "stderr".to_owned(),
-                        other => format!("fd={}", other),
-                    },
-                    entry.message
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let span = tracing::info_span!(
-            "execute_transaction",
-            tx_id = % tx_id
-        );
-
-        span.in_scope(|| {
-            tracing::info!("\n{}", logs_string);
-        });
     }
 }

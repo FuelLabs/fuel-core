@@ -1,6 +1,6 @@
-//! Generic ECAL handlers.
+//! Syscall handler that ignores all ECAL invocations when enabled.
 
-use crate::{
+use fuel_core_types::{
     fuel_asm::RegId,
     fuel_tx::PanicReason,
     fuel_vm::{

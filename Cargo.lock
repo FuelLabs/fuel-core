@@ -3413,7 +3413,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 dependencies = [
  "bitflags 2.9.1",
  "fuel-types 0.62.0",
@@ -3424,7 +3424,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 dependencies = [
  "fuel-derive 0.62.0",
  "fuel-types 0.62.0",
@@ -3463,6 +3463,7 @@ dependencies = [
  "fuel-core-shared-sequencer",
  "fuel-core-storage",
  "fuel-core-sync",
+ "fuel-core-syscall",
  "fuel-core-trace",
  "fuel-core-tx-status-manager",
  "fuel-core-txpool",
@@ -3744,6 +3745,7 @@ version = "0.44.0"
 dependencies = [
  "anyhow",
  "fuel-core-storage",
+ "fuel-core-syscall",
  "fuel-core-trace",
  "fuel-core-types 0.44.0",
  "parking_lot",
@@ -4042,6 +4044,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-syscall"
+version = "0.44.0"
+dependencies = [
+ "fuel-core-types 0.44.0",
+ "parking_lot",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core-tests"
 version = "0.0.0"
 dependencies = [
@@ -4079,6 +4091,7 @@ dependencies = [
  "primitive-types",
  "proptest",
  "rand 0.8.5",
+ "regex",
  "reqwest 0.12.15",
  "rstest",
  "serde_json",
@@ -4134,6 +4147,7 @@ dependencies = [
  "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
+ "fuel-core-syscall",
  "fuel-core-trace",
  "fuel-core-txpool",
  "fuel-core-types 0.44.0",
@@ -4241,7 +4255,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 dependencies = [
  "base64ct",
  "coins-bip32",
@@ -4273,7 +4287,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4310,7 +4324,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 dependencies = [
  "derive_more 0.99.20",
  "digest 0.10.7",
@@ -4342,7 +4356,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 
 [[package]]
 name = "fuel-tx"
@@ -4369,7 +4383,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 dependencies = [
  "bitflags 2.9.1",
  "derive_more 1.0.0",
@@ -4402,7 +4416,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 dependencies = [
  "fuel-derive 0.62.0",
  "hex",
@@ -4444,7 +4458,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.62.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#dac6f2c3ecfe8737c6259d1e1b92d28bcebeb64f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fcheck-predicates-ecal#1ee9c4afe412bf8f746d214a64c78d302b6f5d33"
 dependencies = [
  "anyhow",
  "async-trait",

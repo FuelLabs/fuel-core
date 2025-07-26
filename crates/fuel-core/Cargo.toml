@@ -80,6 +80,7 @@ fuel-core-relayer = { workspace = true, optional = true }
 fuel-core-services = { workspace = true }
 fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-storage = { workspace = true }
+fuel-core-syscall = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
 fuel-core-tx-status-manager = { workspace = true }
 fuel-core-txpool = { workspace = true }

@@ -78,6 +78,7 @@ k256 = { version = "0.13.3", features = ["ecdsa-core"] }
 postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
 rand = { workspace = true }
+regex = "1"
 reqwest = { workspace = true }
 rstest = "0.15"
 serde_json = { workspace = true }

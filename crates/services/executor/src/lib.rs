@@ -7,7 +7,6 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-pub mod ecal_logs;
 pub mod executor;
 pub mod ports;
 pub mod refs;

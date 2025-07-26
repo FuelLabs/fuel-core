@@ -34,7 +34,6 @@ pub mod blockchain;
 pub mod entities;
 pub mod services;
 pub mod signer;
-pub mod syscall;
 
 /// Re-export of some fuel-vm types
 pub mod fuel_vm {

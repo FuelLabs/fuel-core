@@ -67,6 +67,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     iter::IterDirection,
 };
+use fuel_core_syscall::handlers::ignore::IgnoreEcal;
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
@@ -89,7 +90,6 @@ use fuel_core_types::{
         executor::DryRunResult,
         transaction_status,
     },
-    syscall::IgnoreEcal,
 };
 use futures::{
     Stream,
