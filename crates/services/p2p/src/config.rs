@@ -28,7 +28,10 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
-    num::NonZeroU32,
+    num::{
+        NonZeroU32,
+        NonZeroUsize,
+    },
     time::Duration,
 };
 
@@ -148,6 +151,9 @@ pub struct Config<State = Initialized> {
 
     /// If true, the node will subscribe to pre-confirmations topic
     pub subscribe_to_pre_confirmations: bool,
+
+    /// The cache size for the p2p req/res protocol
+    pub cache_size: Option<NonZeroUsize>,
 }
 
 /// The initialized state can be achieved only by the `init` function because `()` is private.
@@ -198,6 +204,7 @@ impl Config<NotInitialized> {
             tx_pool_threads: self.tx_pool_threads,
             state: Initialized(()),
             subscribe_to_pre_confirmations: self.subscribe_to_pre_confirmations,
+            cache_size: self.cache_size,
         })
     }
 }
@@ -253,6 +260,7 @@ impl Config<NotInitialized> {
             tx_pool_threads: 0,
             state: NotInitialized,
             subscribe_to_pre_confirmations: true,
+            cache_size: None,
         }
     }
 }

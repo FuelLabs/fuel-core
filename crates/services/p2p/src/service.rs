@@ -865,6 +865,7 @@ where
             database_read_threads,
             tx_pool_threads,
             metrics,
+            cache_size,
             ..
         } = config;
 
@@ -918,7 +919,12 @@ where
             heartbeat_max_time_since_last,
             next_check_time,
             heartbeat_peer_reputation_config,
-            cached_view: Arc::new(CachedView::new(614 * 10, metrics)),
+            cached_view: Arc::new(CachedView::new(
+                cache_size
+                    .map(|cache_size| cache_size.into())
+                    .unwrap_or(1_535),
+                metrics,
+            )),
         };
         Ok(task)
     }
