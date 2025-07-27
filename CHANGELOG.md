@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
-## [Version 0.44.0]
+## [Version 0.45.0]
 
 ### Breaking
 - [2887](https://github.com/FuelLabs/fuel-core/pull/2887): Bump Rust version to `1.85.0`.

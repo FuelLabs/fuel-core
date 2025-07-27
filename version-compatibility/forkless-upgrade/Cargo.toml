@@ -44,13 +44,13 @@ genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", feature
 genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
 genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
 
-# Fuel core version 0.44.0
-version-44-fuel-core-bin = { version = "0.44.0", package = "fuel-core-bin", features = [
+# Fuel core version 0.45.0
+version-44-fuel-core-bin = { version = "0.45.0", package = "fuel-core-bin", features = [
   "parquet",
   "p2p",
 ] }
-version-44-fuel-core-client = { version = "0.44.0", package = "fuel-core-client" }
-version-44-fuel-core-services = { version = "0.44.0", package = "fuel-core-services" }
+version-44-fuel-core-client = { version = "0.45.0", package = "fuel-core-client" }
+version-44-fuel-core-services = { version = "0.45.0", package = "fuel-core-services" }
 
 # pin async-graphql because they bumped msrv in a patch release
 async-graphql = "=7.0.15"
