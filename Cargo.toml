@@ -157,8 +157,6 @@ tracing = "0.1"
 tracing-attributes = "0.1"
 tracing-subscriber = "0.3"
 url = "2.2"
-# Solves the compiler issues
-yamux = "=0.13.5"
 
 [profile.release]
 codegen-units = 1
