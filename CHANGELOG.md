@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.45.0]
+
+### Breaking
+- [3022](https://github.com/FuelLabs/fuel-core/pull/3022): Support rolling back Relayer DB.
+- [3056](https://github.com/FuelLabs/fuel-core/pull/3056): Bump Rust version to 1.86.0
+- [3058](https://github.com/FuelLabs/fuel-core/pull/3058): upgrade `wasmtime` and `thiserror` dependencies
+
+### Added
+- [2959](https://github.com/FuelLabs/fuel-core/pull/2959): Add `Registrations` table to the compression database. This is merkleized.
+- [3027](https://github.com/FuelLabs/fuel-core/pull/3027): Support state rewind for compression DB.
+- [3054](https://github.com/FuelLabs/fuel-core/pull/3054): Added a new configuration option `--p2p-cache-size` to control the size of the p2p req/res protocol cache size.
+
+### Changed
+- [3030](https://github.com/FuelLabs/fuel-core/pull/3030): Disable dependency on blob transactions in transaction pool.
+- [3033](https://github.com/FuelLabs/fuel-core/pull/3033): Use ubuntu:24.04 to build x86_64 binary
+- [3060](https://github.com/FuelLabs/fuel-core/pull/3060): Use v44 STF if forward-compatibility test
+- [3062](https://github.com/FuelLabs/fuel-core/pull/3062): Increase default transmission size to 260MB, to support 2.5MB blocks by default during synchronization
+
+### Fixed
+- [3048](https://github.com/FuelLabs/fuel-core/pull/3048): The `MaxCoinsReached` error is now thrown when the target reached the max input limit.
+
 ## [Version 0.44.0]
 
 ### Breaking

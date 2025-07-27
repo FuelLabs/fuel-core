@@ -118,8 +118,8 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v44_
     let (_bootstrap_node, addr) = bootstrap_node(V44_TESTNET_SNAPSHOT).await.unwrap();
 
     // Given
-    let v36_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
+    let v44_keypair = SecpKeypair::generate();
+    let hexed_secret = hex::encode(v44_keypair.secret().to_bytes());
     let _v44_node = Version44FuelCoreDriver::spawn(&[
         "--service-name",
         "V44Producer",
@@ -142,7 +142,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v44_
     .unwrap();
 
     // Starting node that uses latest fuel core.
-    // It will connect to the v36 node and sync blocks.
+    // It will connect to the v44 node and sync blocks.
     let latest_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
     let latest_node = LatestFuelCoreDriver::spawn(&[
