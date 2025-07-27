@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
-## [Version 0.45.0]
+## [Version 0.45.1]
 
 ### Breaking
 - [3022](https://github.com/FuelLabs/fuel-core/pull/3022): Support rolling back Relayer DB.

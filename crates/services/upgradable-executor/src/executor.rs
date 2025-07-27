@@ -247,7 +247,8 @@ impl<S, R> Executor<S, R> {
         ("0-43-1", 27),
         ("0-43-2", 28),
         ("0-44-0", 29),
-        ("0-45-0", LATEST_STATE_TRANSITION_VERSION),
+        // We are skipping 0-45-0 because it was not published.
+        ("0-45-1", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
