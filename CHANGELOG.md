@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
-## [Version 0.44.0]
+## [Version 0.45.0]
 
 ### Breaking
 - [3022](https://github.com/FuelLabs/fuel-core/pull/3022): Support rolling back Relayer DB.
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Fixed
 - [3048](https://github.com/FuelLabs/fuel-core/pull/3048): The `MaxCoinsReached` error is now thrown when the target reached the max input limit.
 
-## [Version 0.45.0]
+## [Version 0.44.0]
 
 ### Breaking
 - [2887](https://github.com/FuelLabs/fuel-core/pull/2887): Bump Rust version to `1.85.0`.
