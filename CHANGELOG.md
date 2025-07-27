@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [3030](https://github.com/FuelLabs/fuel-core/pull/3030): Disable dependency on blob transactions in transaction pool.
 - [3033](https://github.com/FuelLabs/fuel-core/pull/3033): Use ubuntu:24.04 to build x86_64 binary
 - [3060](https://github.com/FuelLabs/fuel-core/pull/3060): Use v44 STF if forward-compatibility test
-- [3062](https://github.com/FuelLabs/fuel-core/pull/3062): Increase default transmition size to 260MB, to support 2.5MB blocks by default during synchronization
+- [3062](https://github.com/FuelLabs/fuel-core/pull/3062): Increase default transmission size to 260MB, to support 2.5MB blocks by default during synchronization
 
 ### Fixed
 - [3048](https://github.com/FuelLabs/fuel-core/pull/3048): The `MaxCoinsReached` error is now thrown when the target reached the max input limit.
