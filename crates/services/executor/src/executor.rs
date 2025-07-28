@@ -1782,8 +1782,7 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
-        let mut ecal_state = EcalLogCollector::default();
-        ecal_state.enabled = true;
+        let ecal_state = EcalLogCollector::default();
 
         checked_tx = checked_tx
             .check_predicates(
