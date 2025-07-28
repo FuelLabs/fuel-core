@@ -254,7 +254,7 @@ impl CoinQuery {
                     if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
                     {
                         if coin.asset_id != filter_asset_id.0 {
-                            return None
+                            return None;
                         }
                     }
 
@@ -421,23 +421,24 @@ async fn coins_to_spend_with_cache(
 ) -> Result<Vec<Vec<CoinType>>, CoinsQueryError> {
     let mut all_coins = Vec::with_capacity(query_per_asset.len());
 
-    for asset in query_per_asset {
-        let asset_id = asset.asset_id.0;
-        let total_amount = asset.amount.0;
-        let max = asset
+    for element in query_per_asset {
+        let asset_id = element.asset_id.0;
+        let target = element.amount.0;
+        let max = element
             .max
             .map(|max| max.0)
             .unwrap_or(max_input)
             .min(max_input);
+        let allow_partial = element.allow_partial.unwrap_or(false);
+
+        let asset_target = AssetSpendTarget::new(asset_id, target, max, allow_partial);
 
         let selected_coins = select_coins_to_spend(
             db.off_chain.coins_to_spend_index(&owner, &asset_id),
-            total_amount,
-            max,
-            &asset_id,
-            asset.allow_partial.unwrap_or(false),
+            asset_target,
             excluded,
             db.batch_size,
+            owner,
         )
         .await?;
 
