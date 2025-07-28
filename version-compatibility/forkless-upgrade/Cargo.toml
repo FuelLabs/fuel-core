@@ -14,6 +14,8 @@ hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
+# pin to prevent compilation error from 1.13.6
+yamux = "=0.13.5"
 
 # Neutral deps
 fuel-core = { path = "../../crates/fuel-core", features = ["test-helpers"] }
@@ -30,8 +32,6 @@ latest-fuel-core-type = { path = "../../crates/types", package = "fuel-core-type
   "test-helpers",
 ] }
 latest-fuel-core-client = { path = "../../crates/client", package = "fuel-core-client" }
-latest-fuel-core-gas-price-service = { path = "../../crates/services/gas_price_service", package = "fuel-core-gas-price-service" }
-latest-fuel-core-storage = { path = "../../crates/storage", package = "fuel-core-storage" }
 latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradable-executor", package = "fuel-core-upgradable-executor", features = [
   "wasm-executor",
 ] }
@@ -44,14 +44,15 @@ genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", feature
 genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
 genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
 
-# Fuel core version 0.36.0
-version-36-fuel-core-bin = { version = "0.36.0", package = "fuel-core-bin", features = [
+# Fuel core version 0.44.0
+version-44-fuel-core-bin = { version = "0.44.0", package = "fuel-core-bin", features = [
   "parquet",
   "p2p",
 ] }
-version-36-fuel-core-client = { version = "0.36.0", package = "fuel-core-client" }
-version-36-fuel-core-services = { version = "0.36.0", package = "fuel-core-services" }
-version-36-fuel-core-gas-price-service = { version = "0.36.0", package = "fuel-core-gas-price-service" }
-version-36-fuel-core-storage = { version = "0.36.0", package = "fuel-core-storage" }
+version-44-fuel-core-client = { version = "0.44.0", package = "fuel-core-client" }
+version-44-fuel-core-services = { version = "0.44.0", package = "fuel-core-services" }
+
 # pin async-graphql because they bumped msrv in a patch release
 async-graphql = "=7.0.15"
+[dependencies]
+tracing = "0.1.41"
