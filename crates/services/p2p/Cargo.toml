@@ -58,6 +58,8 @@ thiserror = "1.0.47"
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 void = "1"
+# Fix publishing of the crate
+yamux = "=0.13.5"
 
 [dev-dependencies]
 fuel-core-p2p = { path = ".", features = ["test-helpers"] }
