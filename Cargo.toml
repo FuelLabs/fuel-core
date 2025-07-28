@@ -103,8 +103,8 @@ fuel-core-relayer = { version = "0.45.1", path = "./crates/services/relayer" }
 fuel-core-services = { version = "0.45.1", path = "./crates/services" }
 fuel-core-shared-sequencer = { version = "0.45.1", path = "crates/services/shared-sequencer" }
 fuel-core-storage = { version = "0.45.1", path = "./crates/storage", default-features = false }
-fuel-core-syscall = { version = "0.45.1", path = "./crates/syscall", default-features = false }
 fuel-core-sync = { version = "0.45.1", path = "./crates/services/sync" }
+fuel-core-syscall = { version = "0.45.1", path = "./crates/syscall", default-features = false }
 fuel-core-trace = { version = "0.45.1", path = "./crates/trace" }
 fuel-core-tx-status-manager = { version = "0.45.1", path = "./crates/services/tx_status_manager" }
 fuel-core-txpool = { version = "0.45.1", path = "./crates/services/txpool_v2" }
@@ -112,7 +112,6 @@ fuel-core-types = { version = "0.45.1", path = "./crates/types", default-feature
 fuel-core-upgradable-executor = { version = "0.45.1", path = "./crates/services/upgradable-executor" }
 fuel-core-wasm-executor = { version = "0.45.1", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-gas-price-algorithm = { version = "0.45.1", path = "crates/fuel-gas-price-algorithm" }
-
 
 # Fuel dependencies
 fuel-vm-private = { version = "0.62.0", package = "fuel-vm", default-features = false }
