@@ -51,11 +51,17 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         let contract_instructions =
             u256_iterator_loop(|iterator| op::bal(0x13, iterator, CONTRACT_ID_REGISTER));
 
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract_instructions.into_iter().collect()),
+            });
+
         let instructions = call_contract_once();
         let id = "contract/bal contract";
 
-        shared_runner_builder
-            .build_with_new_contract(contract_instructions)
+        runner
+            .build()
             .run(id, group, instructions, script_data.clone());
     }
 
@@ -95,13 +101,17 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // burn
     {
         let contract = u256_iterator_loop(|iterator| op::burn(RegId::ONE, iterator));
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let instructions = call_contract_once();
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/burn",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/burn", group, instructions, script_data.clone());
     }
 
     // call
@@ -109,6 +119,12 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         let mut contract_instructions =
             repeat_n(op::noop(), size as usize).collect::<Vec<_>>();
         contract_instructions.push(op::ret(0x10));
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract_instructions.into_iter().collect()),
+            });
 
         let instructions = vec![
             op::gtf_args(CONTRACT_ID_REGISTER, 0x00, GTFArgs::ScriptData),
@@ -120,8 +136,8 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         ];
 
         let id = format!("contract/call {:?}", size);
-        shared_runner_builder
-            .build_with_new_contract(contract_instructions)
+        runner
+            .build()
             .run(&id, group, instructions, script_data.clone());
     }
 
@@ -143,9 +159,15 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
     // ccp
     for i in arb_dependent_cost_values() {
-        let contract = repeat_n(op::noop(), i as usize)
+        let contract: Vec<Instruction> = repeat_n(op::noop(), i as usize)
             .chain(vec![op::ret(RegId::ZERO)])
             .collect();
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
 
         let mut instructions = setup_instructions();
         instructions.extend(vec![
@@ -160,12 +182,9 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         let id = format!("contract/ccp {:?}", i);
-        shared_runner_builder.build_with_new_contract(contract).run(
-            &id,
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run(&id, group, instructions, script_data.clone());
     }
     // croo
     {
@@ -177,20 +196,31 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::croo(0x14, 0x16),
             op::ret(RegId::ZERO),
         ];
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let instructions = call_contract_repeat();
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/croo",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/croo", group, instructions, script_data.clone());
     }
 
     // csiz
     for size in arb_dependent_cost_values() {
-        let contract = repeat_n(op::noop(), size as usize)
+        let contract: Vec<Instruction> = repeat_n(op::noop(), size as usize)
             .chain(vec![op::ret(RegId::ZERO)])
             .collect();
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let mut instructions = setup_instructions();
         instructions.extend(vec![
             op::gtf_args(CONTRACT_ID_REGISTER, 0x00, GTFArgs::ScriptData),
@@ -198,19 +228,23 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         let id = format!("contract/csiz {:?}", size);
-        shared_runner_builder.build_with_new_contract(contract).run(
-            &id,
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run(&id, group, instructions, script_data.clone());
     }
 
     // ldc
     for size in arb_dependent_cost_values() {
-        let contract = repeat_n(op::noop(), size as usize)
+        let contract: Vec<Instruction> = repeat_n(op::noop(), size as usize)
             .chain(vec![op::ret(RegId::ZERO)])
             .collect();
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let mut instructions = setup_instructions();
         instructions.extend(vec![
             op::movi(0x13, size),
@@ -218,12 +252,9 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::jmpb(RegId::ZERO, 0),
         ]);
         let id = format!("contract/ldc {:?}", size);
-        shared_runner_builder.build_with_new_contract(contract).run(
-            &id,
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run(&id, group, instructions, script_data.clone());
     }
 
     // log
@@ -258,20 +289,31 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // mint
     {
         let contract = u256_iterator_loop(|iterator| op::mint(RegId::ONE, iterator));
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let instructions = call_contract_once();
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/mint",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/mint", group, instructions, script_data.clone());
     }
 
     // ret contract
     {
         let contract = vec![op::ret(RegId::ONE), op::ret(RegId::ZERO)];
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let instructions = call_contract_repeat();
-        shared_runner_builder.build_with_new_contract(contract).run(
+        runner.build().run(
             "contract/ret contract",
             group,
             instructions,
@@ -283,15 +325,19 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     {
         for i in arb_dependent_cost_values() {
             let contract = vec![op::movi(0x14, i), op::retd(RegId::ONE, 0x14)];
+
+            let mut runner =
+                SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                    contract_id,
+                    bytecode: Some(contract.into_iter().collect()),
+                });
+
             let instructions = call_contract_repeat();
             // replace_contract_in_service(&mut service, &contract_id, contract);
             let id = format!("contract/retd contract {:?}", i);
-            shared_runner_builder.build_with_new_contract(contract).run(
-                &id,
-                group,
-                instructions,
-                script_data.clone(),
-            );
+            runner
+                .build()
+                .run(&id, group, instructions, script_data.clone());
         }
     }
 
@@ -343,6 +389,13 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                 op::smo(0x15, 0x16, 0x17, 0x18),
                 op::jmpb(RegId::ZERO, 0),
             ];
+
+            let mut runner =
+                SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                    contract_id,
+                    bytecode: Some(contract.into_iter().collect()),
+                });
+
             let mut instructions = setup_instructions();
             instructions.extend(vec![
                 op::movi(0x18, 1), // coins to send
@@ -356,10 +409,12 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
                     .chain(vec![2u8; i as usize]),
             );
             let id = format!("contract/smo {:?}", i);
-            shared_runner_builder
-                .build_with_new_contract(contract)
-                .with_extra_inputs(extra_inputs.clone())
-                .run(&id, group, instructions, data);
+            runner.build().with_extra_inputs(extra_inputs.clone()).run(
+                &id,
+                group,
+                instructions,
+                data,
+            );
         }
     }
 
@@ -368,31 +423,39 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         let step = SEQUENTIAL_STEP;
         let contract =
             u256_iterator_loop_with_step(|iterator| op::scwq(iterator, 0x13, 0x15), step);
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let mut instructions = vec![op::movi(0x15, step)];
         instructions.extend(call_contract_once());
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/scwq",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/scwq", group, instructions, script_data.clone());
     }
 
     // srw
 
     {
         let contract = u256_iterator_loop(|iterator| op::srw(0x13, 0x14, iterator));
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let mut instructions = setup_instructions();
         instructions.extend(vec![
             op::movi(0x15, 2000),
             op::call(CONTRACT_ID_REGISTER, RegId::ZERO, 0x11, RegId::CGAS),
         ]);
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/srw",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/srw", group, instructions, script_data.clone());
     }
 
     // srwq
@@ -408,18 +471,29 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             |iterator| op::srwq(0x17, 0x13, iterator, 0x15),
             step,
         ));
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let instructions = call_contract_once();
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/srwq",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/srwq", group, instructions, script_data.clone());
     }
 
     // sww
     {
         let contract = u256_iterator_loop(|iterator| op::sww(iterator, 0x29, RegId::ONE));
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let mut instructions = setup_instructions();
         instructions.extend(vec![op::call(
             CONTRACT_ID_REGISTER,
@@ -427,12 +501,9 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             0x11,
             RegId::CGAS,
         )]);
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/sww",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/sww", group, instructions, script_data.clone());
     }
 
     // swwq
@@ -442,14 +513,18 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             |iterator| op::swwq(iterator, 0x13, RegId::ZERO, 0x15),
             step,
         );
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let mut instructions = vec![op::movi(0x15, step)];
         instructions.extend(call_contract_once());
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/swwq",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/swwq", group, instructions, script_data.clone());
     }
 
     // time
@@ -469,6 +544,13 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // tr
     {
         let contract = u256_iterator_loop(|iterator| op::tr(0x15, 0x14, iterator));
+
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract.into_iter().collect()),
+            });
+
         let mut instructions = setup_instructions();
         instructions.extend(vec![
             op::movi(0x13, (1 << 18) - 1),
@@ -476,12 +558,9 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             op::movi(0x14, 1),
             op::call(CONTRACT_ID_REGISTER, 0x13, 0x15, RegId::CGAS),
         ]);
-        shared_runner_builder.build_with_new_contract(contract).run(
-            "contract/tr",
-            group,
-            instructions,
-            script_data.clone(),
-        );
+        runner
+            .build()
+            .run("contract/tr", group, instructions, script_data.clone());
     }
 
     // tro
