@@ -3,6 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+use yamux as _;
+
 pub mod behavior;
 pub mod codecs;
 pub mod config;
