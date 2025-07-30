@@ -19,7 +19,7 @@ pub struct AssetInfoArg {
 )]
 pub struct AssetInfoQuery {
     #[arguments(id: $id)]
-    pub asset_details: AssetInfoDetails,
+    pub asset_details: Option<AssetInfoDetails>,
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

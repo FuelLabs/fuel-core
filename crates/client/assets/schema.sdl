@@ -948,7 +948,7 @@ type Query {
 		ID of the Asset
 		"""
 		id: AssetId!
-	): AssetInfoDetails!
+	): AssetInfoDetails
 	"""
 	Read register value by index.
 	"""

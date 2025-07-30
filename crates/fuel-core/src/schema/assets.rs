@@ -27,12 +27,13 @@ impl AssetInfoQuery {
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "ID of the Asset")] id: AssetId,
-    ) -> async_graphql::Result<AssetInfoDetails> {
+    ) -> async_graphql::Result<Option<AssetInfoDetails>> {
         let query = ctx.read_view()?;
-        query
+        let maybe_asset_details = query
             .get_asset_details(&id.into())
-            .map(|details| details.into())
-            .map_err(async_graphql::Error::from)
+            .map_err(async_graphql::Error::from)?
+            .map(|details| details.into());
+        Ok(maybe_asset_details)
     }
 }
 
