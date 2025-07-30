@@ -1684,11 +1684,14 @@ impl FuelClient {
         Ok(status)
     }
 
-    pub async fn asset_info(&self, asset_id: &AssetId) -> io::Result<AssetDetail> {
+    pub async fn asset_info(
+        &self,
+        asset_id: &AssetId,
+    ) -> io::Result<Option<AssetDetail>> {
         let query = schema::assets::AssetInfoQuery::build(AssetInfoArg {
             id: (*asset_id).into(),
         });
-        let asset_info = self.query(query).await?.asset_details.into();
+        let asset_info = self.query(query).await?.asset_details.map(Into::into);
         Ok(asset_info)
     }
 }
