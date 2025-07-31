@@ -391,7 +391,7 @@ where
                     Some(block_with_metadata) => {
                         tracing::debug!("Got new block: {:?}", &block_with_metadata.height());
                         try_or_continue!(
-                            self.handle_new_block(&block_with_metadata.block()),
+                            self.handle_new_block(block_with_metadata.block()),
                             |e| tracing::error!("Error handling new block: {:?}", e)
                         );
                         TaskNextAction::Continue
@@ -404,7 +404,7 @@ where
     async fn shutdown(mut self) -> anyhow::Result<()> {
         // gracefully handle all the remaining blocks in the stream and then stop
         if let Some(Some(block_with_metadata)) = self.block_stream.next().now_or_never() {
-            if let Err(e) = self.handle_new_block(&block_with_metadata.block()) {
+            if let Err(e) = self.handle_new_block(block_with_metadata.block()) {
                 return Err(anyhow::anyhow!(e).context(format!(
                     "Couldn't compress block: {}. Shutting down. \
                             Node will be in indeterminate state upon restart. \
@@ -487,7 +487,7 @@ mod tests {
         fn get_block(
             &self,
             _: crate::ports::block_source::BlockAt,
-        ) -> anyhow::Result<BlockWithMetadata> {
+        ) -> anyhow::Result<Block> {
             anyhow::bail!("Block not found")
         }
     }
@@ -517,10 +517,12 @@ mod tests {
 
     impl Default for MockConfigProvider {
         fn default() -> Self {
-            Self(crate::config::CompressionConfig::new(
+            let chain_id = ChainId::new(123);
+            Self(CompressionConfig::new(
                 std::time::Duration::from_secs(10),
                 None,
                 false,
+                chain_id,
             ))
         }
     }
@@ -532,7 +534,7 @@ mod tests {
     }
 
     impl CompressionConfigProvider for MockConfigProvider {
-        fn config(&self) -> crate::config::CompressionConfig {
+        fn config(&self, _: ChainId) -> crate::config::CompressionConfig {
             self.0
         }
     }
@@ -558,6 +560,7 @@ mod tests {
     #[tokio::test]
     async fn compression_service__can_be_started_and_stopped() {
         // given
+        let chain_id = ChainId::new(123);
         let block_source = EmptyBlockSource;
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
@@ -568,6 +571,7 @@ mod tests {
             storage,
             config_provider,
             canonical_height_provider,
+            chain_id,
         )
         .unwrap();
 
@@ -595,11 +599,11 @@ mod tests {
         fn get_block(
             &self,
             height: crate::ports::block_source::BlockAt,
-        ) -> anyhow::Result<BlockWithMetadata> {
+        ) -> anyhow::Result<Block> {
             self.0
                 .iter()
                 .find(|block| height == *block.height())
-                .cloned()
+                .map(|block| block.block().clone())
                 .ok_or_else(|| anyhow::anyhow!("Block not found"))
         }
     }
@@ -608,6 +612,7 @@ mod tests {
     async fn compression_service__run__does_not_compress_blocks_if_no_blocks_provided() {
         // given
         // we provide a block source that will return None upon calling .next()
+        let chain_id = ChainId::new(123);
         let block_source = MockBlockSource::new(vec![]);
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
@@ -616,7 +621,7 @@ mod tests {
         let mut service = CompressionService::new(
             block_source.subscribe(),
             storage,
-            config_provider.config(),
+            config_provider.config(chain_id),
             sync_notifier,
             None,
         );
@@ -638,6 +643,7 @@ mod tests {
     async fn compression_service__run__compresses_blocks() {
         // given
         // we provide a block source that will return a block upon calling .next()
+        let chain_id = ChainId::new(123);
         let block_with_metadata = BlockWithMetadata::default();
         let block_source = MockBlockSource::new(vec![block_with_metadata]);
         let storage = test_storage();
@@ -647,7 +653,7 @@ mod tests {
         let uninit_service = UninitializedCompressionService::new(
             block_source,
             storage,
-            config_provider.config(),
+            config_provider.config(chain_id),
             canonical_height_provider,
         );
         let sync_observer = uninit_service.shared_data();
@@ -678,6 +684,7 @@ mod tests {
     async fn compression_service__syncs_from_scratch_when_database_is_empty() {
         // given: we start the compression service, with a canonical height provider of height 5
         let block_count = 10;
+        let chain_id = ChainId::new(123);
         let mut blocks = Vec::with_capacity(block_count);
         for i in 0..u32::try_from(block_count).unwrap() {
             blocks.push(BlockWithMetadata::test_block_with_height(i));
@@ -690,7 +697,7 @@ mod tests {
         let uninit_service = UninitializedCompressionService::new(
             block_source,
             storage,
-            config_provider.config(),
+            config_provider.config(chain_id),
             canonical_height_provider.clone(),
         );
 
@@ -715,6 +722,7 @@ mod tests {
         // given: we start the compression service, with a canonical height provider of height 5,
         // and a config override of starting height 1
         let block_count = 10;
+        let chain_id = ChainId::new(123);
         let override_starting_height = 1;
         let mut blocks = Vec::with_capacity(block_count);
         for i in 0..u32::try_from(block_count).unwrap() {
@@ -727,13 +735,14 @@ mod tests {
                 std::time::Duration::from_secs(10),
                 Some(NonZeroU32::new(override_starting_height).unwrap()),
                 false,
+                chain_id,
             ));
         let canonical_height_provider = MockCanonicalHeightProvider::new(5);
 
         let uninit_service = UninitializedCompressionService::new(
             block_source,
             storage,
-            config_provider.config(),
+            config_provider.config(chain_id),
             canonical_height_provider.clone(),
         );
 
@@ -762,11 +771,12 @@ mod tests {
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
         let canonical_height_provider = MockCanonicalHeightProvider::default();
+        let chain_id = ChainId::new(123);
 
         let uninit_service = UninitializedCompressionService::new(
             block_source,
             storage,
-            config_provider.config(),
+            config_provider.config(chain_id),
             canonical_height_provider,
         );
         let sync_observer = uninit_service.shared_data();
