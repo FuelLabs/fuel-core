@@ -273,6 +273,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             let mut instructions = setup_instructions();
             instructions.extend(vec![
                 op::movi(0x13, i),
+                op::cfe(0x13),
                 op::logd(0x10, 0x11, RegId::ZERO, 0x13),
                 op::jmpb(RegId::ZERO, 0),
             ]);
