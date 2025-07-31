@@ -1,3 +1,7 @@
+use super::import_result_provider::{
+    self,
+    ImportResultProvider,
+};
 use crate::{
     database::{
         Database,
@@ -22,13 +26,9 @@ use fuel_core_compression_service::{
 };
 use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::{
+    blockchain::block::Block,
     fuel_types::ChainId,
     services::block_importer::SharedImportResult,
-};
-
-use super::import_result_provider::{
-    self,
-    ImportResultProvider,
 };
 
 /// Provides the necessary functionality for accessing latest and historical block data.
@@ -63,9 +63,13 @@ impl block_source::BlockSource for CompressionBlockImporterAdapter {
         self.block_importer.events_shared_result()
     }
 
-    fn get_block(&self, height: BlockAt) -> anyhow::Result<SharedImportResult> {
-        self.import_result_provider_adapter
-            .result_at_height(height.into())
+    fn get_block(&self, height: BlockAt) -> anyhow::Result<Block> {
+        let block = &self
+            .import_result_provider_adapter
+            .result_at_height(height.into())?
+            .sealed_block
+            .entity;
+        Ok(block.clone())
     }
 }
 

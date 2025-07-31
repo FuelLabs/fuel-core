@@ -6,7 +6,6 @@ use crate::{
         block_source::{
             BlockAt,
             BlockSource,
-            BlockWithMetadata,
             BlockWithMetadataExt,
         },
         canonical_height::CanonicalHeight,
@@ -34,7 +33,10 @@ use fuel_core_services::{
     try_or_continue,
 };
 use fuel_core_storage::transactional::WriteTransaction;
-use fuel_core_types::fuel_types::ChainId;
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_types::ChainId,
+};
 use futures::{
     FutureExt,
     StreamExt,
@@ -125,7 +127,7 @@ where
 /// reused by uninit and init task
 fn compress_block<S>(
     storage: &mut S,
-    block_with_metadata: &BlockWithMetadata,
+    block: &Block,
     config: &CompressionConfig,
 ) -> crate::Result<usize>
 where
@@ -135,23 +137,16 @@ where
 
     // compress the block
     let chain_id = config.chain_id();
-    let compression_context = CompressionContext::create_from_block(
-        &mut storage_tx,
-        block_with_metadata.block(),
-        chain_id,
-    )
-    .map_err(CompressionError::FailedToCompressBlock)?;
-    let compressed_block = compress(
-        &config.into(),
-        compression_context,
-        block_with_metadata.block(),
-    )
-    .now_or_never()
-    .expect("The current implementation should resolve all futures instantly")
-    .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
+    let compression_context =
+        CompressionContext::create_from_block(&mut storage_tx, block, chain_id)
+            .map_err(CompressionError::FailedToCompressBlock)?;
+    let compressed_block = compress(&config.into(), compression_context, block)
+        .now_or_never()
+        .expect("The current implementation should resolve all futures instantly")
+        .map_err(crate::errors::CompressionError::FailedToCompressBlock)?;
 
-    let size_of_compressed_block = storage_tx
-        .write_compressed_block(block_with_metadata.height(), &compressed_block)?;
+    let size_of_compressed_block =
+        storage_tx.write_compressed_block(block.header().height(), &compressed_block)?;
 
     storage_tx
         .commit()
@@ -162,7 +157,7 @@ where
 
 fn handle_new_block<S>(
     storage: &mut S,
-    block_with_metadata: &BlockWithMetadata,
+    block: &Block,
     config: &CompressionConfig,
     sync_notifier: &SyncStateNotifier,
     metrics_manager: &Option<CompressionMetricsManager>,
@@ -174,26 +169,24 @@ where
     sync_notifier
         .send(crate::sync_state::SyncState::NotSynced)
         .ok();
+    let height = (*block.header().height()).into();
     // compress the block
     if let Some(metrics_manager) = metrics_manager {
         let (compressed_block_size, compression_duration) = {
             let start = Instant::now();
-            let compressed_block_size =
-                compress_block(storage, block_with_metadata, config)?;
+            let compressed_block_size = compress_block(storage, block, config)?;
             (compressed_block_size, start.elapsed().as_secs_f64())
         };
 
         metrics_manager.record_compression_duration_ms(compression_duration);
         metrics_manager.record_compressed_block_size(compressed_block_size);
-        metrics_manager.record_compression_block_height(*block_with_metadata.height());
+        metrics_manager.record_compression_block_height(height);
     } else {
-        compress_block(storage, block_with_metadata, config)?;
+        compress_block(storage, block, config)?;
     }
     // set the status to synced
     sync_notifier
-        .send(crate::sync_state::SyncState::Synced(
-            *block_with_metadata.height(),
-        ))
+        .send(crate::sync_state::SyncState::Synced(height))
         .ok();
 
     Ok(())
@@ -203,13 +196,10 @@ impl<S> CompressionService<S>
 where
     S: CompressionStorage,
 {
-    fn handle_new_block(
-        &mut self,
-        block_with_metadata: &BlockWithMetadata,
-    ) -> crate::Result<()> {
+    fn handle_new_block(&mut self, block: &Block) -> crate::Result<()> {
         handle_new_block(
             &mut self.storage,
-            block_with_metadata,
+            block,
             &self.config,
             &self.sync_notifier,
             &self.metrics_manager,
@@ -296,17 +286,16 @@ where
                 SyncHeight::ConfiguredHeight(height) => BlockAt::Specific(height),
             };
 
-            let block_with_metadata =
-                self.block_source.get_block(height_to_sync).map_err(|err| {
-                    crate::errors::CompressionError::FailedToGetBlock(format!(
-                        "during synchronization of canonical chain at height: {:?}: {}",
-                        height_to_sync, err
-                    ))
-                })?;
+            let block = self.block_source.get_block(height_to_sync).map_err(|err| {
+                CompressionError::FailedToGetBlock(format!(
+                    "during synchronization of canonical chain at height: {:?}: {}",
+                    height_to_sync, err
+                ))
+            })?;
 
             handle_new_block(
                 &mut self.storage,
-                &block_with_metadata,
+                &block,
                 &self.config,
                 &self.sync_notifier,
                 &self.metrics_manager,
@@ -402,7 +391,7 @@ where
                     Some(block_with_metadata) => {
                         tracing::debug!("Got new block: {:?}", &block_with_metadata.height());
                         try_or_continue!(
-                            self.handle_new_block(&block_with_metadata),
+                            self.handle_new_block(&block_with_metadata.block()),
                             |e| tracing::error!("Error handling new block: {:?}", e)
                         );
                         TaskNextAction::Continue
@@ -415,7 +404,7 @@ where
     async fn shutdown(mut self) -> anyhow::Result<()> {
         // gracefully handle all the remaining blocks in the stream and then stop
         if let Some(Some(block_with_metadata)) = self.block_stream.next().now_or_never() {
-            if let Err(e) = self.handle_new_block(&block_with_metadata) {
+            if let Err(e) = self.handle_new_block(&block_with_metadata.block()) {
                 return Err(anyhow::anyhow!(e).context(format!(
                     "Couldn't compress block: {}. Shutting down. \
                             Node will be in indeterminate state upon restart. \

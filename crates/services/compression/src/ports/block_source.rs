@@ -1,4 +1,5 @@
 use fuel_core_services::stream::BoxStream;
+use fuel_core_types::blockchain::block::Block;
 pub(crate) use fuel_core_types::services::block_importer::SharedImportResult as BlockWithMetadata;
 
 pub(crate) type BlockHeight = u32;
@@ -68,5 +69,5 @@ pub trait BlockSource: Send + Sync {
     /// Should provide a stream of blocks with metadata
     fn subscribe(&self) -> BlockStream;
     /// Should provide the block at a given height
-    fn get_block(&self, height: BlockAt) -> anyhow::Result<BlockWithMetadata>;
+    fn get_block(&self, height: BlockAt) -> anyhow::Result<Block>;
 }
