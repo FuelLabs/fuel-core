@@ -77,6 +77,17 @@ impl<'a, CS> CompressionContext<'a, CS> {
             let tx_index = u16::try_from(tx_index)
                 .map_err(|_| anyhow::anyhow!("Transaction index exceeds u16 limit"))?;
             let tx_id = tx.id(&chain_id);
+            for input in tx.inputs().iter() {
+                if let fuel_core_types::fuel_tx::Input::CoinPredicate(coin) = input {
+                    let utxo_id = coin.utxo_id;
+                    let tx_pointer = coin.tx_pointer;
+                    tx_pointers.insert(utxo_id, tx_pointer);
+                } else if let fuel_core_types::fuel_tx::Input::CoinSigned(coin) = input {
+                    let utxo_id = coin.utxo_id;
+                    let tx_pointer = coin.tx_pointer;
+                    tx_pointers.insert(utxo_id, tx_pointer);
+                }
+            }
             for (index, output) in tx.outputs().iter().enumerate() {
                 let index = u16::try_from(index)
                     .map_err(|_| anyhow::anyhow!("Output index exceeds u16 limit"))?;
