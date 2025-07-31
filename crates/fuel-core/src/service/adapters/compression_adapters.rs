@@ -21,7 +21,10 @@ use fuel_core_compression_service::{
     },
 };
 use fuel_core_storage::transactional::HistoricalView;
-use fuel_core_types::services::block_importer::SharedImportResult;
+use fuel_core_types::{
+    fuel_types::ChainId,
+    services::block_importer::SharedImportResult,
+};
 
 use super::import_result_provider::{
     self,
@@ -69,11 +72,12 @@ impl block_source::BlockSource for CompressionBlockImporterAdapter {
 impl configuration::CompressionConfigProvider
     for crate::service::config::DaCompressionConfig
 {
-    fn config(&self) -> config::CompressionConfig {
+    fn config(&self, chain_id: ChainId) -> config::CompressionConfig {
         config::CompressionConfig::new(
             self.retention_duration,
             self.starting_height,
             self.metrics,
+            chain_id,
         )
     }
 }

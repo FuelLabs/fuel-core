@@ -323,7 +323,7 @@ impl<CS> UtxoIdToPointer for CompressionContext<'_, CS> {
                 output_index: utxo_id.output_index(),
             })
             .ok_or(anyhow::anyhow!(
-                "UtxoId not found in the compression context"
+                "UTxO Id not found in the compression context"
             ))
     }
 }

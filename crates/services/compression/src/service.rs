@@ -134,8 +134,7 @@ where
     let mut storage_tx = storage.write_transaction();
 
     // compress the block
-    // TODO: pass correct ChainId
-    let chain_id = ChainId::new(999);
+    let chain_id = config.chain_id();
     let compression_context = CompressionContext::create_from_block(
         &mut storage_tx,
         block_with_metadata.block(),
@@ -435,6 +434,7 @@ pub fn new_service<B, S, C, CH>(
     storage: S,
     config_provider: C,
     canonical_height: CH,
+    chain_id: ChainId,
 ) -> crate::Result<ServiceRunner<UninitializedCompressionService<B, S, CH>>>
 where
     B: BlockSource,
@@ -442,7 +442,7 @@ where
     C: CompressionConfigProvider,
     CH: CanonicalHeight,
 {
-    let config = config_provider.config();
+    let config = config_provider.config(chain_id);
     Ok(ServiceRunner::new(UninitializedCompressionService::new(
         block_source,
         storage,

@@ -414,6 +414,7 @@ pub fn init_sub_services(
                 database.compression().clone(),
                 cfg.clone(),
                 database.on_chain().clone(),
+                chain_id,
             )
             .map_err(|e| anyhow::anyhow!(e))?,
         ),
