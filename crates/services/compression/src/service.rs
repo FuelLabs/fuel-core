@@ -1,5 +1,6 @@
 use crate::{
     config::CompressionConfig,
+    errors::CompressionError,
     metrics::CompressionMetricsManager,
     ports::{
         block_source::{
@@ -133,20 +134,14 @@ where
     let mut storage_tx = storage.write_transaction();
 
     // compress the block
-    // TODO: This creation should iterate over all the txs in the block and create a hashmap of UTxO ID -> Tx Pointer
-    // let compression_context = CompressionContext {
-    //     compression_storage: CompressionStorageWrapper {
-    //         storage_tx: &mut storage_tx,
-    //     },
-    //     block_events: block_with_metadata.events(),
-    // };
+    // TODO: pass correct ChainId
     let chain_id = ChainId::new(999);
     let compression_context = CompressionContext::create_from_block(
         &mut storage_tx,
-        &block_with_metadata.block(),
+        block_with_metadata.block(),
         chain_id,
     )
-    .map_err(|e| crate::errors::CompressionError::FailedToCompressBlock(e))?;
+    .map_err(CompressionError::FailedToCompressBlock)?;
     let compressed_block = compress(
         &config.into(),
         compression_context,
