@@ -21,10 +21,7 @@ use crate::{
         SyncStateObserver,
         new_sync_state_channel,
     },
-    temporal_registry::{
-        CompressionContext,
-        CompressionStorageWrapper,
-    },
+    temporal_registry::CompressionContext,
 };
 use fuel_core_compression::compress::compress;
 use fuel_core_services::{
@@ -32,8 +29,11 @@ use fuel_core_services::{
     RunnableTask,
     ServiceRunner,
     StateWatcher,
+    TaskNextAction,
+    try_or_continue,
 };
 use fuel_core_storage::transactional::WriteTransaction;
+use fuel_core_types::fuel_types::ChainId;
 use futures::{
     FutureExt,
     StreamExt,
@@ -133,12 +133,20 @@ where
     let mut storage_tx = storage.write_transaction();
 
     // compress the block
-    let compression_context = CompressionContext {
-        compression_storage: CompressionStorageWrapper {
-            storage_tx: &mut storage_tx,
-        },
-        block_events: block_with_metadata.events(),
-    };
+    // TODO: This creation should iterate over all the txs in the block and create a hashmap of UTxO ID -> Tx Pointer
+    // let compression_context = CompressionContext {
+    //     compression_storage: CompressionStorageWrapper {
+    //         storage_tx: &mut storage_tx,
+    //     },
+    //     block_events: block_with_metadata.events(),
+    // };
+    let chain_id = ChainId::new(999);
+    let compression_context = CompressionContext::create_from_block(
+        &mut storage_tx,
+        &block_with_metadata.block(),
+        chain_id,
+    )
+    .map_err(|e| crate::errors::CompressionError::FailedToCompressBlock(e))?;
     let compressed_block = compress(
         &config.into(),
         compression_context,
@@ -383,30 +391,27 @@ impl<S> RunnableTask for CompressionService<S>
 where
     S: CompressionStorage,
 {
-    async fn run(
-        &mut self,
-        watcher: &mut StateWatcher,
-    ) -> fuel_core_services::TaskNextAction {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
             biased;
 
             _ = watcher.while_started() => {
-                fuel_core_services::TaskNextAction::Stop
+                TaskNextAction::Stop
             }
 
             block_res = self.block_stream.next() => {
                 match block_res {
                     None => {
                         tracing::warn!("No blocks available");
-                        fuel_core_services::TaskNextAction::Stop
+                        TaskNextAction::Stop
                     }
                     Some(block_with_metadata) => {
                         tracing::debug!("Got new block: {:?}", &block_with_metadata.height());
-                        if let Err(e) = self.handle_new_block(&block_with_metadata) {
-                            tracing::error!("Error handling new block: {:?}", e);
-                            return fuel_core_services::TaskNextAction::ErrorContinue(anyhow::anyhow!(e));
-                        };
-                        fuel_core_services::TaskNextAction::Continue
+                        try_or_continue!(
+                            self.handle_new_block(&block_with_metadata),
+                            |e| tracing::error!("Error handling new block: {:?}", e)
+                        );
+                        TaskNextAction::Continue
                     }
                 }
             }

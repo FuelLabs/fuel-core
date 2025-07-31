@@ -5,7 +5,6 @@ pub(crate) type BlockHeight = u32;
 
 pub(crate) trait BlockWithMetadataExt {
     fn height(&self) -> &BlockHeight;
-    fn events(&self) -> &[fuel_core_types::services::executor::Event];
     fn block(&self) -> &fuel_core_types::blockchain::block::Block;
     #[cfg(test)]
     fn default() -> Self;
@@ -14,10 +13,6 @@ pub(crate) trait BlockWithMetadataExt {
 }
 
 impl BlockWithMetadataExt for BlockWithMetadata {
-    fn events(&self) -> &[fuel_core_types::services::executor::Event] {
-        self.events.as_ref()
-    }
-
     fn height(&self) -> &BlockHeight {
         self.block().header().height()
     }
