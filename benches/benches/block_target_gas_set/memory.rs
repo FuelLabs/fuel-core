@@ -179,6 +179,7 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
             vec![
                 op::movi(0x11, i),
                 op::aloc(0x11),
+                op::cfe(0x11),
                 op::move_(0x10, RegId::HP),
                 op::mcp(0x10, RegId::ZERO, 0x11),
                 op::jmpb(RegId::ZERO, 0),
@@ -201,6 +202,7 @@ pub fn run_memory(group: &mut BenchmarkGroup<WallTime>) {
             vec![
                 op::movi(0x11, val),
                 op::aloc(0x11),
+                op::cfe(0x11),
                 op::move_(0x10, RegId::HP),
                 op::mcpi(0x10, RegId::ZERO, val_as_u16),
                 op::jmpb(RegId::ZERO, 0),
