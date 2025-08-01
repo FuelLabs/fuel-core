@@ -57,7 +57,7 @@ impl UpgradeQuery {
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
     async fn state_transition_bytecode_by_root(
         &self,
-        root: HexString,
+        root: HexString<'_>,
     ) -> async_graphql::Result<StateTransitionBytecode> {
         StateTransitionBytecode::try_from(root)
     }
@@ -70,7 +70,7 @@ pub struct StateTransitionBytecode {
 #[Object]
 impl StateTransitionBytecode {
     async fn root(&self) -> HexString {
-        HexString(self.root.to_vec())
+        HexString::from(self.root.as_ref())
     }
 
     #[graphql(complexity = "query_costs().state_transition_bytecode_read")]
@@ -92,38 +92,38 @@ impl From<fuel_types::Bytes32> for StateTransitionBytecode {
     }
 }
 
-impl TryFrom<HexString> for StateTransitionBytecode {
+impl TryFrom<HexString<'_>> for StateTransitionBytecode {
     type Error = async_graphql::Error;
 
     fn try_from(root: HexString) -> Result<Self, Self::Error> {
-        let root = root.0.as_slice().try_into()?;
+        let root = (*root.0).try_into()?;
         Ok(Self { root })
     }
 }
 
 #[derive(SimpleObject)]
-pub struct UploadedBytecode {
+pub struct UploadedBytecode<'a> {
     /// Combined bytecode of all uploaded subsections.
-    bytecode: HexString,
+    bytecode: HexString<'a>,
     /// Number of uploaded subsections (if incomplete).
     uploaded_subsections_number: Option<u16>,
     /// Indicates if the bytecode upload is complete.
     completed: bool,
 }
 
-impl From<StorageUploadedBytecode> for UploadedBytecode {
+impl From<StorageUploadedBytecode> for UploadedBytecode<'_> {
     fn from(value: fuel_core_types::fuel_vm::UploadedBytecode) -> Self {
         match value {
             StorageUploadedBytecode::Uncompleted {
                 bytecode,
                 uploaded_subsections_number,
             } => Self {
-                bytecode: HexString(bytecode),
+                bytecode: HexString(bytecode.into()),
                 uploaded_subsections_number: Some(uploaded_subsections_number),
                 completed: false,
             },
             StorageUploadedBytecode::Completed(bytecode) => Self {
-                bytecode: HexString(bytecode),
+                bytecode: HexString(bytecode.into()),
                 uploaded_subsections_number: None,
                 completed: true,
             },
