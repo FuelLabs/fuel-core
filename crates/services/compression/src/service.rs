@@ -596,13 +596,15 @@ mod tests {
             tokio_stream::iter(self.0.clone()).into_boxed()
         }
 
-        fn get_block(
-            &self,
-            height: crate::ports::block_source::BlockAt,
-        ) -> anyhow::Result<Block> {
+        fn get_block(&self, height: BlockAt) -> anyhow::Result<Block> {
+            let block_height = match height {
+                BlockAt::Specific(h) => h,
+                // this is not always true, but for our tests we assume genesis is at height 0
+                BlockAt::Genesis => 0,
+            };
             self.0
                 .iter()
-                .find(|block| height == *block.height())
+                .find(|block| block.height() == &block_height)
                 .map(|block| block.block().clone())
                 .ok_or_else(|| anyhow::anyhow!("Block not found"))
         }
