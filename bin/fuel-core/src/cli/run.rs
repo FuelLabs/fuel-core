@@ -387,6 +387,7 @@ impl Command {
             da_committer_url,
             da_poll_interval,
             da_starting_recorded_height,
+            da_start_da_price_from,
         } = gas_price;
 
         let enabled_metrics = metrics.list_of_enabled();
@@ -642,6 +643,7 @@ impl Command {
             da_committer_url,
             block_activity_threshold: 0,
             da_poll_interval: gas_price.da_poll_interval.map(Into::into),
+            start_da_price_from: da_start_da_price_from.into(),
         };
 
         let tx_pool_ttl: Duration = tx_pool_ttl.into();
