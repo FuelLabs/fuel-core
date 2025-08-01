@@ -29,6 +29,11 @@ use crate::{
         SetLatestRecordedHeight,
         SetMetadataStorage,
     },
+    sync_state::{
+        SyncStateNotifier,
+        SyncStateObserver,
+        new_sync_state_channel,
+    },
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
@@ -46,6 +51,7 @@ use crate::{
         service::{
             GasPriceServiceV1,
             LatestGasPrice,
+            SharedData,
             initialize_algorithm,
         },
         uninitialized_task::fuel_storage_unrecorded_blocks::{
@@ -102,6 +108,7 @@ pub struct UninitializedTask<L2DataStoreView, GasPriceStore, DA, SettingsProvide
     pub gas_price_db: GasPriceStore,
     pub on_chain_db: L2DataStoreView,
     pub block_stream: BoxStream<SharedImportResult>,
+    pub sync_notifier: SyncStateNotifier,
     pub(crate) shared_algo: SharedV1Algorithm,
     pub(crate) latest_gas_price: LatestGasPrice<u32, u64>,
     pub(crate) algo_updater: AlgorithmUpdaterV1,
@@ -144,6 +151,8 @@ where
             &gas_price_db,
         )?;
 
+        let (sync_notifier, _) = new_sync_state_channel();
+
         let latest_gas_price = on_chain_db
             .latest_view()?
             .get_block(&latest_block_height.into())?
@@ -163,6 +172,7 @@ where
             gas_price_db,
             on_chain_db,
             block_stream,
+            sync_notifier,
             algo_updater,
             latest_gas_price,
             shared_algo,
@@ -235,6 +245,7 @@ where
                 Arc::clone(&latest_l2_height),
                 Some(starting_recorded_height),
                 record_metrics,
+                self.sync_notifier,
             );
             Ok(service)
         } else {
@@ -264,6 +275,7 @@ where
                 Arc::clone(&latest_l2_height),
                 Some(starting_recorded_height),
                 record_metrics,
+                self.sync_notifier,
             );
             Ok(service)
         }
@@ -281,12 +293,16 @@ where
     SettingsProvider: GasPriceSettingsProvider + 'static,
 {
     const NAME: &'static str = "GasPriceServiceV1";
-    type SharedData = (SharedV1Algorithm, LatestGasPrice<u32, u64>);
+    type SharedData = SharedData;
     type Task = GasPriceServiceV1<FuelL2BlockSource<SettingsProvider>, DA, AtomicStorage>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        (self.shared_algo.clone(), self.latest_gas_price.clone())
+        SharedData {
+            gas_price_algo: self.shared_algo.clone(),
+            latest_gas_price: self.latest_gas_price.clone(),
+            sync_observer: self.sync_notifier.subscribe(),
+        }
     }
 
     async fn into_task(

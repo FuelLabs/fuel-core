@@ -96,6 +96,8 @@ pub struct SharedState {
     pub config: Config,
     /// The compression service shared data.
     pub compression: Option<fuel_core_compression_service::service::SharedData>,
+    /// The gas price service shared data.
+    pub gas_price_service: fuel_core_gas_price_service::v1::service::SharedData,
 }
 
 pub struct FuelService {
@@ -241,6 +243,13 @@ impl FuelService {
         if let Some(sync_observer) = &self.runner.shared.compression {
             sync_observer.await_synced_until(block_height).await?;
         }
+        Ok(())
+    }
+
+    /// Waits until the gas price service has synced
+    /// with current l2 block height
+    pub async fn await_gas_price_synced(&self) -> anyhow::Result<()> {
+        let _ = &self.runner.shared.gas_price_service.await_synced().await?;
         Ok(())
     }
 
