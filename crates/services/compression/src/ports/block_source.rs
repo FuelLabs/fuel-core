@@ -55,15 +55,6 @@ pub enum BlockAt {
     Genesis,
 }
 
-impl PartialEq<BlockHeight> for BlockAt {
-    fn eq(&self, other: &BlockHeight) -> bool {
-        match self {
-            Self::Genesis => 0 == *other,
-            Self::Specific(h) => h == other,
-        }
-    }
-}
-
 /// Port for L2 blocks source
 pub trait BlockSource: Send + Sync {
     /// Should provide a stream of blocks with metadata
