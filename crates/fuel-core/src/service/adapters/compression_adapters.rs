@@ -1,6 +1,5 @@
 use super::import_result_provider::{
     self,
-    ImportResultProvider,
 };
 use crate::{
     database::{
@@ -24,7 +23,10 @@ use fuel_core_compression_service::{
         configuration,
     },
 };
-use fuel_core_storage::transactional::HistoricalView;
+use fuel_core_storage::transactional::{
+    AtomicView,
+    HistoricalView,
+};
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_types::ChainId,
@@ -32,20 +34,14 @@ use fuel_core_types::{
 };
 
 /// Provides the necessary functionality for accessing latest and historical block data.
-pub struct CompressionBlockImporterAdapter {
+pub struct CompressionBlockDBAdapter {
     block_importer: BlockImporterAdapter,
-    import_result_provider_adapter: ImportResultProvider,
+    db: Database<OnChain>,
 }
 
-impl CompressionBlockImporterAdapter {
-    pub fn new(
-        block_importer: BlockImporterAdapter,
-        import_result_provider_adapter: ImportResultProvider,
-    ) -> Self {
-        Self {
-            block_importer,
-            import_result_provider_adapter,
-        }
+impl CompressionBlockDBAdapter {
+    pub fn new(block_importer: BlockImporterAdapter, db: Database<OnChain>) -> Self {
+        Self { block_importer, db }
     }
 }
 
@@ -58,18 +54,24 @@ impl From<BlockAt> for import_result_provider::BlockAt {
     }
 }
 
-impl block_source::BlockSource for CompressionBlockImporterAdapter {
+impl block_source::BlockSource for CompressionBlockDBAdapter {
     fn subscribe(&self) -> fuel_core_services::stream::BoxStream<SharedImportResult> {
         self.block_importer.events_shared_result()
     }
 
     fn get_block(&self, height: BlockAt) -> anyhow::Result<Block> {
-        let block = &self
-            .import_result_provider_adapter
-            .result_at_height(height.into())?
-            .sealed_block
-            .entity;
-        Ok(block.clone())
+        let latest_view = self.db.latest_view()?;
+        let height = match height {
+            BlockAt::Genesis => latest_view.genesis_height()?.ok_or_else(|| {
+                anyhow::anyhow!("Genesis block not found in the database")
+            })?,
+            BlockAt::Specific(h) => h.into(),
+        };
+        let block = latest_view
+            .get_sealed_block_by_height(&height)?
+            .map(|sealed_block| sealed_block.entity)
+            .ok_or(anyhow::anyhow!("Block not found at height: {:?}", height))?;
+        Ok(block)
     }
 }
 

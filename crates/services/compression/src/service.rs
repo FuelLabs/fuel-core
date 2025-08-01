@@ -517,7 +517,7 @@ mod tests {
 
     impl Default for MockConfigProvider {
         fn default() -> Self {
-            let chain_id = ChainId::new(123);
+            let chain_id = ChainId::default();
             Self(CompressionConfig::new(
                 std::time::Duration::from_secs(10),
                 None,
@@ -560,7 +560,7 @@ mod tests {
     #[tokio::test]
     async fn compression_service__can_be_started_and_stopped() {
         // given
-        let chain_id = ChainId::new(123);
+        let chain_id = ChainId::default();
         let block_source = EmptyBlockSource;
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
@@ -612,7 +612,7 @@ mod tests {
     async fn compression_service__run__does_not_compress_blocks_if_no_blocks_provided() {
         // given
         // we provide a block source that will return None upon calling .next()
-        let chain_id = ChainId::new(123);
+        let chain_id = ChainId::default();
         let block_source = MockBlockSource::new(vec![]);
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
@@ -643,7 +643,7 @@ mod tests {
     async fn compression_service__run__compresses_blocks() {
         // given
         // we provide a block source that will return a block upon calling .next()
-        let chain_id = ChainId::new(123);
+        let chain_id = ChainId::default();
         let block_with_metadata = BlockWithMetadata::default();
         let block_source = MockBlockSource::new(vec![block_with_metadata]);
         let storage = test_storage();
@@ -684,7 +684,7 @@ mod tests {
     async fn compression_service__syncs_from_scratch_when_database_is_empty() {
         // given: we start the compression service, with a canonical height provider of height 5
         let block_count = 10;
-        let chain_id = ChainId::new(123);
+        let chain_id = ChainId::default();
         let mut blocks = Vec::with_capacity(block_count);
         for i in 0..u32::try_from(block_count).unwrap() {
             blocks.push(BlockWithMetadata::test_block_with_height(i));
@@ -722,7 +722,7 @@ mod tests {
         // given: we start the compression service, with a canonical height provider of height 5,
         // and a config override of starting height 1
         let block_count = 10;
-        let chain_id = ChainId::new(123);
+        let chain_id = ChainId::default();
         let override_starting_height = 1;
         let mut blocks = Vec::with_capacity(block_count);
         for i in 0..u32::try_from(block_count).unwrap() {
@@ -771,7 +771,7 @@ mod tests {
         let storage = test_storage();
         let config_provider = MockConfigProvider::default();
         let canonical_height_provider = MockCanonicalHeightProvider::default();
-        let chain_id = ChainId::new(123);
+        let chain_id = ChainId::default();
 
         let uninit_service = UninitializedCompressionService::new(
             block_source,

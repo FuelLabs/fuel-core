@@ -40,6 +40,8 @@ use fuel_core_types::{
         Address,
         AssetId,
         ContractId,
+        Input,
+        Output,
         ScriptCode,
         TxPointer,
         UniqueIdentifier,
@@ -74,27 +76,37 @@ impl<'a, CS> CompressionContext<'a, CS> {
     ) -> anyhow::Result<Self> {
         let mut tx_pointers = HashMap::new();
         for (tx_index, tx) in block.transactions().iter().enumerate() {
+            for input in tx.inputs().iter() {
+                match input {
+                    Input::CoinPredicate(coin) => {
+                        let utxo_id = coin.utxo_id;
+                        let tx_pointer = coin.tx_pointer;
+                        tx_pointers.insert(utxo_id, tx_pointer);
+                    }
+                    Input::CoinSigned(coin) => {
+                        let utxo_id = coin.utxo_id;
+                        let tx_pointer = coin.tx_pointer;
+                        tx_pointers.insert(utxo_id, tx_pointer);
+                    }
+                    _ => {}
+                }
+            }
             let tx_index = u16::try_from(tx_index)
                 .map_err(|_| anyhow::anyhow!("Transaction index exceeds u16 limit"))?;
             let tx_id = tx.id(&chain_id);
-            for input in tx.inputs().iter() {
-                if let fuel_core_types::fuel_tx::Input::CoinPredicate(coin) = input {
-                    let utxo_id = coin.utxo_id;
-                    let tx_pointer = coin.tx_pointer;
-                    tx_pointers.insert(utxo_id, tx_pointer);
-                } else if let fuel_core_types::fuel_tx::Input::CoinSigned(coin) = input {
-                    let utxo_id = coin.utxo_id;
-                    let tx_pointer = coin.tx_pointer;
-                    tx_pointers.insert(utxo_id, tx_pointer);
-                }
-            }
             for (index, output) in tx.outputs().iter().enumerate() {
                 let index = u16::try_from(index)
                     .map_err(|_| anyhow::anyhow!("Output index exceeds u16 limit"))?;
-                if let fuel_core_types::fuel_tx::Output::Coin { .. } = output {
-                    let utxo_id = UtxoId::new(tx_id, index);
-                    let tx_pointer = TxPointer::new(*block.header().height(), tx_index);
-                    tx_pointers.insert(utxo_id, tx_pointer);
+                match output {
+                    Output::Coin { .. }
+                    | Output::Change { .. }
+                    | Output::Variable { .. } => {
+                        let utxo_id = UtxoId::new(tx_id, index);
+                        let tx_pointer =
+                            TxPointer::new(*block.header().height(), tx_index);
+                        tx_pointers.insert(utxo_id, tx_pointer);
+                    }
+                    _ => {}
                 }
             }
         }
