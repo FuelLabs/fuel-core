@@ -167,3 +167,9 @@ lto = "fat"
 # To speedup iterations between compilation.
 #lto = "thin"
 panic = "unwind"
+
+[patch.crates-io.fuel-vm-private]
+version = "0.62.0"
+package = "fuel-vm"
+git = "https://github.com/FuelLabs/fuel-vm"
+branch = "feature/v2-chargeable-tx-coin"
