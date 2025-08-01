@@ -24,6 +24,9 @@ anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
+fuel-core-syscall = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "alloc",
 ] }

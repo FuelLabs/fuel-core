@@ -472,7 +472,7 @@ where
 
         let options = ExecutionOptions {
             forbid_fake_coins,
-            backtrace: false,
+            allow_syscall: self.config.allow_syscall,
         };
 
         let component = Components {
