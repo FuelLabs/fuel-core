@@ -693,6 +693,7 @@ pub struct AllReceipts {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Subscription")]
 pub struct PreconfirmationsSubscription {
+    #[cynic(rename = "alpha__preconfirmations")]
     pub preconfirmations: TransactionStatus,
 }
 

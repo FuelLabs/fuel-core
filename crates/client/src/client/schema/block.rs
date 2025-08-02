@@ -198,6 +198,7 @@ impl Block {
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Subscription")]
 pub struct NewBlocksSubscription {
+    #[cynic(rename = "alpha__new_blocks")]
     pub new_blocks: HexString,
 }
 

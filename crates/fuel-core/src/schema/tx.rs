@@ -719,6 +719,7 @@ impl TxStatusSubscription {
         .map_err(async_graphql::Error::from))
     }
 
+    #[graphql(name = "alpha__preconfirmations")]
     async fn preconfirmations<'a>(
         &self,
         ctx: &'a Context<'a>,

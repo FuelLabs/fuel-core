@@ -425,6 +425,7 @@ pub struct BlockSubscription;
 
 #[Subscription]
 impl BlockSubscription {
+    #[graphql(name = "alpha__new_blocks")]
     async fn new_blocks<'a>(
         &self,
         ctx: &Context<'a>,
