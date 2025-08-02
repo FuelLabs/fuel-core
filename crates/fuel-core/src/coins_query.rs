@@ -40,16 +40,18 @@ pub enum CoinsQueryError {
     #[error("store error occurred: {0}")]
     StorageError(StorageError),
     #[error(
-        "the target cannot be met due to insufficient coins available for {asset_id}. Collected: {collected_amount}."
+        "the target cannot be met due to insufficient coins available for {asset_id}. Collected: {collected_amount}. Owner: {owner}."
     )]
     InsufficientCoins {
+        owner: Address,
         asset_id: AssetId,
         collected_amount: u128,
     },
     #[error(
-        "the target for {asset_id} cannot be met due to exceeding the {max} coin limit. Collected: {collected_amount}."
+        "the target for {asset_id} cannot be met due to exceeding the {max} coin limit. Collected: {collected_amount}. Owner: {owner}."
     )]
     MaxCoinsReached {
+        owner: Address,
         asset_id: AssetId,
         collected_amount: u128,
         max: u16,
@@ -144,6 +146,7 @@ impl<'s> SpendQuery<'s> {
 pub async fn largest_first(
     query: AssetQuery<'_>,
 ) -> Result<Vec<CoinType>, CoinsQueryError> {
+    let owner = query.owner;
     let target = query.asset.target;
     let max = query.asset.max;
     let asset_id = query.asset.id;
@@ -157,19 +160,20 @@ pub async fn largest_first(
     for coin in inputs {
         // Break if we don't need any more coins
         if collected_amount >= target {
-            break
+            break;
         }
 
         if coins.len() >= max as usize {
             if allow_partial {
-                return Ok(coins)
+                return Ok(coins);
             } else {
                 // Error if we can't fit more coins
                 return Err(CoinsQueryError::MaxCoinsReached {
+                    owner: *owner,
                     asset_id,
                     collected_amount,
                     max,
-                })
+                });
             }
         }
 
@@ -183,9 +187,10 @@ pub async fn largest_first(
             return Ok(coins);
         } else {
             return Err(CoinsQueryError::InsufficientCoins {
+                owner: *owner,
                 asset_id,
                 collected_amount,
-            })
+            });
         }
     }
 
@@ -220,7 +225,7 @@ pub async fn random_improve(
                 if collected_amount >= u64::MAX as u128
                     || coin.amount() as u128 > upper_target
                 {
-                    break
+                    break;
                 }
 
                 // Break if adding doesn't improve the distance
@@ -231,7 +236,7 @@ pub async fn random_improve(
                 let next_distance =
                     target.abs_diff(change_amount.saturating_add(coin.amount() as u128));
                 if next_distance >= distance {
-                    break
+                    break;
                 }
             }
 
@@ -256,13 +261,16 @@ pub async fn select_coins_to_spend(
         big_coins_iter,
         dust_coins_iter,
     }: CoinsToSpendIndexIter<'_>,
-    total: u128,
-    max: u16,
-    asset_id: &AssetId,
-    allow_partial: bool,
+    asset: AssetSpendTarget,
     exclude: &Exclude,
     batch_size: usize,
+    owner: Address,
 ) -> Result<Vec<CoinsToSpendIndexKey>, CoinsQueryError> {
+    let asset_id = asset.id;
+    let total = asset.target;
+    let max = asset.max;
+    let allow_partial = asset.allow_partial;
+
     // We aim to reduce dust creation by targeting twice the required amount for selection,
     // inspired by the random-improve approach. This increases the likelihood of generating
     // useful change outputs for future transactions, minimizing unusable dust outputs.
@@ -284,7 +292,7 @@ pub async fn select_coins_to_spend(
     const DUST_TO_BIG_COINS_FACTOR: u16 = 5;
 
     if total == 0 || max == 0 {
-        return Ok(vec![])
+        return Ok(vec![]);
     }
 
     let adjusted_total = total.saturating_mul(TOTAL_AMOUNT_ADJUSTMENT_FACTOR);
@@ -292,16 +300,26 @@ pub async fn select_coins_to_spend(
     let big_coins_stream = futures::stream::iter(big_coins_iter).yield_each(batch_size);
     let dust_coins_stream = futures::stream::iter(dust_coins_iter).yield_each(batch_size);
 
-    let (selected_big_coins_total, selected_big_coins) =
+    let (selected_big_coins_total, selected_big_coins, has_more_big_coins) =
         big_coins(big_coins_stream, adjusted_total, max, exclude).await?;
 
     if selected_big_coins_total == 0
         || (selected_big_coins_total < total && !allow_partial)
     {
+        if selected_big_coins.len() >= max as usize && has_more_big_coins {
+            return Err(CoinsQueryError::MaxCoinsReached {
+                owner,
+                asset_id,
+                collected_amount: selected_big_coins_total,
+                max,
+            });
+        }
+
         return Err(CoinsQueryError::InsufficientCoins {
-            asset_id: *asset_id,
+            owner,
+            asset_id,
             collected_amount: selected_big_coins_total,
-        })
+        });
     }
 
     let Some(last_selected_big_coin) = selected_big_coins.last() else {
@@ -325,7 +343,7 @@ pub async fn select_coins_to_spend(
 
     let max_dust_count =
         max_dust_count(max, number_of_big_coins, DUST_TO_BIG_COINS_FACTOR);
-    let (dust_coins_total, selected_dust_coins) = dust_coins(
+    let (dust_coins_total, selected_dust_coins, _has_more_dust_coins) = dust_coins(
         dust_coins_stream,
         last_selected_big_coin,
         max_dust_count,
@@ -344,7 +362,7 @@ async fn big_coins(
     total: u128,
     max: u16,
     exclude: &Exclude,
-) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError> {
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>, bool), CoinsQueryError> {
     select_coins_until(big_coins_stream, max, exclude, |_, total_so_far| {
         total_so_far >= total
     })
@@ -356,7 +374,7 @@ async fn dust_coins(
     last_big_coin: &CoinsToSpendIndexKey,
     max_dust_count: u16,
     exclude: &Exclude,
-) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError> {
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>, bool), CoinsQueryError> {
     select_coins_until(dust_coins_stream, max_dust_count, exclude, |coin, _| {
         coin == last_big_coin
     })
@@ -368,16 +386,18 @@ async fn select_coins_until<Pred>(
     max: u16,
     exclude: &Exclude,
     predicate: Pred,
-) -> Result<(u128, Vec<CoinsToSpendIndexKey>), CoinsQueryError>
+) -> Result<(u128, Vec<CoinsToSpendIndexKey>, bool), CoinsQueryError>
 where
     Pred: Fn(&CoinsToSpendIndexKey, u128) -> bool,
 {
     let mut coins_total_value: u128 = 0;
     let mut coins = Vec::with_capacity(max as usize);
+    let mut has_more_coins = false;
     while let Some(coin) = coins_stream.next().await {
         let coin = coin?;
         if !is_excluded(&coin, exclude) {
             if coins.len() >= max as usize || predicate(&coin, coins_total_value) {
+                has_more_coins = true;
                 break;
             }
             let amount = coin.amount() as u128;
@@ -385,7 +405,7 @@ where
             coins.push(coin);
         }
     }
-    Ok((coins_total_value, coins))
+    Ok((coins_total_value, coins, has_more_coins))
 }
 
 fn is_excluded(key: &CoinsToSpendIndexKey, exclude: &Exclude) -> bool {
@@ -646,6 +666,7 @@ mod tests {
                         assert_matches!(
                             coins,
                             Err(CoinsQueryError::InsufficientCoins {
+                                owner: _,
                                 asset_id: _,
                                 collected_amount: 15,
                             })
@@ -881,6 +902,7 @@ mod tests {
                         assert_matches!(
                             coins,
                             Err(CoinsQueryError::InsufficientCoins {
+                                owner: _,
                                 asset_id: _,
                                 collected_amount: 15,
                             })
@@ -1081,6 +1103,7 @@ mod tests {
                         assert_matches!(
                             coins,
                             Err(CoinsQueryError::InsufficientCoins {
+                                owner: _,
                                 asset_id: _,
                                 collected_amount: 10,
                             })
@@ -1144,6 +1167,7 @@ mod tests {
     }
 
     mod indexed_coins_to_spend {
+        use super::*;
         use fuel_core_storage::iter::IntoBoxedIter;
         use fuel_core_types::{
             entities::coins::{
@@ -1311,18 +1335,18 @@ mod tests {
                 big_coins_iter,
                 dust_coins_iter,
             };
-
+            let asset_id = AssetId::default();
             let exclude = Exclude::default();
+            let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await
             .expect("should not error");
@@ -1376,16 +1400,17 @@ mod tests {
                 big_coins_iter: coins.into_iter().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
+            let asset_id = AssetId::default();
+            let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await
             .expect("should not error");
@@ -1396,7 +1421,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_storage_error() {
+        async fn select_coins_to_spend_should_bail_on_storage_error() {
             // Given
             const MAX: u16 = u16::MAX;
             const TOTAL: u128 = 101;
@@ -1424,16 +1449,17 @@ mod tests {
                 big_coins_iter: coins.into_iter().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
+            let asset_id = AssetId::default();
+            let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
@@ -1443,7 +1469,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_incorrect_max() {
+        async fn select_coins_to_spend_should_bail_on_incorrect_max() {
             // Given
             const MAX: u16 = 0;
             const TOTAL: u128 = 101;
@@ -1454,15 +1480,16 @@ mod tests {
                 big_coins_iter: std::iter::empty().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
+            let asset_id = AssetId::default();
+            let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
@@ -1471,7 +1498,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_incorrect_total() {
+        async fn select_coins_to_spend_should_bail_on_incorrect_total() {
             // Given
             const MAX: u16 = 101;
             const TOTAL: u128 = 0;
@@ -1482,15 +1509,16 @@ mod tests {
                 big_coins_iter: std::iter::empty().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
+            let asset_id = AssetId::default();
+            let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &AssetId::default(),
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
@@ -1499,7 +1527,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn selection_algorithm_should_bail_on_not_enough_coins() {
+        async fn select_coins_to_spend__fails_if_coins_exceed_max_inputs() {
             // Given
             const MAX: u16 = 3;
             const TOTAL: u128 = 2137;
@@ -1516,31 +1544,86 @@ mod tests {
                 big_coins_iter: coins.into_iter().into_boxed(),
                 dust_coins_iter: std::iter::empty().into_boxed(),
             };
-
             let asset_id = AssetId::default();
+            let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
+            // When
             let result = select_coins_to_spend(
                 coins_to_spend_iter,
-                TOTAL,
-                MAX,
-                &asset_id,
-                false,
+                asset_target,
                 &exclude,
                 BATCH_SIZE,
+                owner,
             )
             .await;
 
             const EXPECTED_COLLECTED_AMOUNT: u128 = 10 + 9 + 8; // Because MAX == 3
 
             // Then
-            assert!(matches!(result, Err(actual_error)
-                if CoinsQueryError::InsufficientCoins { asset_id, collected_amount: EXPECTED_COLLECTED_AMOUNT,
-                } == actual_error));
+            assert_matches!(
+                result,
+                Err(CoinsQueryError::MaxCoinsReached {
+                    owner: _,
+                    asset_id: _,
+                    collected_amount: EXPECTED_COLLECTED_AMOUNT,
+                    max: MAX,
+                })
+            );
+        }
+
+        #[tokio::test]
+        async fn select_coins_to_spend__fails_if_insufficient_funds() {
+            // Given
+            const MAX: u16 = 3;
+            const TOTAL: u128 = 28;
+
+            let coins = setup_test_coins([10, 9, 8]);
+            let (coins, _): (Vec<_>, Vec<_>) = coins
+                .into_iter()
+                .map(|spec| (spec.index_entry, spec.utxo_id))
+                .unzip();
+
+            let exclude = Exclude::default();
+
+            let coins_to_spend_iter = CoinsToSpendIndexIter {
+                big_coins_iter: coins.into_iter().into_boxed(),
+                dust_coins_iter: std::iter::empty().into_boxed(),
+            };
+
+            let asset_id = AssetId::default();
+            let owner = Address::default();
+            let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
+
+            // When
+            let result = select_coins_to_spend(
+                coins_to_spend_iter,
+                asset_target,
+                &exclude,
+                BATCH_SIZE,
+                owner,
+            )
+            .await;
+
+            const EXPECTED_COLLECTED_AMOUNT: u128 = 10 + 9 + 8; // Because MAX == 3
+
+            // Then
+            assert_matches!(
+                result,
+                Err(CoinsQueryError::InsufficientCoins {
+                    owner: _,
+                    asset_id: _,
+                    collected_amount: EXPECTED_COLLECTED_AMOUNT
+                })
+            );
         }
 
         mod allow_partial {
             use fuel_core_storage::iter::IntoBoxedIter;
-            use fuel_core_types::fuel_tx::AssetId;
+            use fuel_core_types::{
+                fuel_tx::AssetId,
+                fuel_types::Address,
+            };
 
             use crate::{
                 coins_query::tests::indexed_coins_to_spend::{
@@ -1549,7 +1632,10 @@ mod tests {
                     setup_test_coins,
                 },
                 graphql_api::ports::CoinsToSpendIndexIter,
-                query::asset_query::Exclude,
+                query::asset_query::{
+                    AssetSpendTarget,
+                    Exclude,
+                },
             };
 
             #[tokio::test]
@@ -1571,16 +1657,16 @@ mod tests {
                     dust_coins_iter: std::iter::empty().into_boxed(),
                 };
                 let asset_id = AssetId::default();
+                let owner = Address::default();
+                let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, false);
 
                 // When
                 let result = select_coins_to_spend(
                     coins_to_spend_iter,
-                    TOTAL,
-                    MAX,
-                    &asset_id,
-                    false,
+                    asset_target,
                     &exclude,
                     BATCH_SIZE,
+                    owner,
                 )
                 .await;
 
@@ -1607,16 +1693,16 @@ mod tests {
                     dust_coins_iter: std::iter::empty().into_boxed(),
                 };
                 let asset_id = AssetId::default();
+                let owner = Address::default();
+                let asset_target = AssetSpendTarget::new(asset_id, TOTAL, MAX, true);
 
                 // When
                 let result = select_coins_to_spend(
                     coins_to_spend_iter,
-                    TOTAL,
-                    MAX,
-                    &asset_id,
-                    true,
+                    asset_target,
                     &exclude,
                     BATCH_SIZE,
+                    owner,
                 )
                 .await
                 .expect("should return coins");
@@ -1701,6 +1787,7 @@ mod tests {
         assert_matches!(
             coin_result,
             Err(CoinsQueryError::InsufficientCoins {
+                owner: _,
                 asset_id: _base_asset_id,
                 collected_amount: 0,
             })

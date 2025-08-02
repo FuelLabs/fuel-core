@@ -709,6 +709,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     assert_eq!(
         query.to_string(),
         InsufficientCoins {
+            owner: recipient,
             asset_id: base_asset_id,
             collected_amount: 100,
         }

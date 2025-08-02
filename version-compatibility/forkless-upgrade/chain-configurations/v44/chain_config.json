@@ -1,5 +1,5 @@
 {
-  "chain_name": "V36",
+  "chain_name": "V44",
   "consensus_parameters": {
     "V2": {
       "tx_params": {
@@ -297,7 +297,7 @@
       "privileged_address": "f034f7859dbf1d775cba16fc175eef249a045d6484a8b9388c9e280267125b73"
     }
   },
-  "genesis_state_transition_version": 10,
+  "genesis_state_transition_version": 28,
   "consensus": {
     "PoAV2": {
       "genesis_signing_key": "3ba3b213c8d5ec4d4901ac34b0e924d635384a8b0a5df6e116bce9a783da8e02",

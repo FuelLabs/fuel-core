@@ -42,7 +42,7 @@ use super::{
         P2PAdapter,
         TxStatusManagerAdapter,
         compression_adapters::{
-            CompressionBlockImporterAdapter,
+            CompressionBlockDBAdapter,
             CompressionServiceAdapter,
         },
     },
@@ -401,9 +401,9 @@ pub fn init_sub_services(
     let compression_service_adapter =
         CompressionServiceAdapter::new(database.compression().clone());
 
-    let compression_importer_adapter = CompressionBlockImporterAdapter::new(
+    let compression_importer_adapter = CompressionBlockDBAdapter::new(
         importer_adapter.clone(),
-        import_result_provider.clone(),
+        database.on_chain().clone(),
     );
 
     let compression_service = match &config.da_compression {
@@ -414,6 +414,7 @@ pub fn init_sub_services(
                 database.compression().clone(),
                 cfg.clone(),
                 database.on_chain().clone(),
+                chain_id,
             )
             .map_err(|e| anyhow::anyhow!(e))?,
         ),
