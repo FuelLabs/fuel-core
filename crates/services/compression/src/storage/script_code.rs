@@ -7,26 +7,14 @@ use fuel_core_storage::{
         postcard::Postcard,
         raw::Raw,
     },
-    merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::fuel_compression::RegistryKey;
 
-use super::column::{
-    CompressionColumn,
-    MerkleizedColumnOf,
-};
+use super::column::CompressionColumn;
 
 /// Table that indexes the script codes
 pub struct ScriptCode;
-
-impl MerkleizedTableColumn for ScriptCode {
-    type TableColumn = CompressionColumn;
-
-    fn table_column() -> Self::TableColumn {
-        Self::TableColumn::ScriptCode
-    }
-}
 
 impl Mappable for ScriptCode {
     type Key = Self::OwnedKey;
@@ -37,10 +25,10 @@ impl Mappable for ScriptCode {
 
 impl TableWithBlueprint for ScriptCode {
     type Blueprint = Plain<Postcard, Raw>;
-    type Column = MerkleizedColumnOf<Self>;
+    type Column = CompressionColumn;
 
     fn column() -> Self::Column {
-        Self::Column::TableColumn(Self::table_column())
+        Self::Column::ScriptCode
     }
 }
 

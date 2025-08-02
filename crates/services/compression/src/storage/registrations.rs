@@ -5,7 +5,6 @@ use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
     codec::postcard::Postcard,
-    merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
 };
 
@@ -17,14 +16,6 @@ use super::column::{
 /// Table that indexes the registrations.
 pub struct Registrations;
 
-impl MerkleizedTableColumn for Registrations {
-    type TableColumn = CompressionColumn;
-
-    fn table_column() -> Self::TableColumn {
-        Self::TableColumn::Registrations
-    }
-}
-
 impl Mappable for Registrations {
     type Key = Self::OwnedKey;
     type OwnedKey = fuel_core_types::fuel_types::BlockHeight;
@@ -34,10 +25,10 @@ impl Mappable for Registrations {
 
 impl TableWithBlueprint for Registrations {
     type Blueprint = Plain<Postcard, Postcard>;
-    type Column = MerkleizedColumnOf<Self>;
+    type Column = CompressionColumn;
 
     fn column() -> Self::Column {
-        Self::Column::TableColumn(Self::table_column())
+        Self::Column::Registrations
     }
 }
 
