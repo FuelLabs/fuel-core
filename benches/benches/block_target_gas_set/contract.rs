@@ -325,7 +325,8 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // retd contract
     {
         for i in arb_dependent_cost_values() {
-            let contract = vec![op::movi(0x14, i), op::cfe(0x14), op::retd(RegId::ONE, 0x14)];
+            let contract =
+                vec![op::movi(0x14, i), op::cfe(0x14), op::retd(RegId::ONE, 0x14)];
 
             let mut runner =
                 SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
