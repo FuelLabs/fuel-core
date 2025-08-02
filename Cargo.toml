@@ -51,7 +51,7 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
 rust-version = "1.86.0"
-version = "0.45.1"
+version = "0.46.0"
 
 [workspace.dependencies]
 
@@ -80,35 +80,35 @@ educe = { version = "0.6", default-features = false, features = [
 enum-iterator = "1.2"
 enum_dispatch = "0.3.13"
 # Workspace members
-fuel-core = { version = "0.45.1", path = "./crates/fuel-core", default-features = false }
-fuel-core-bin = { version = "0.45.1", path = "./bin/fuel-core" }
-fuel-core-chain-config = { version = "0.45.1", path = "./crates/chain-config", default-features = false }
-fuel-core-client = { version = "0.45.1", path = "./crates/client" }
-fuel-core-compression = { version = "0.45.1", path = "./crates/compression" }
-fuel-core-compression-service = { version = "0.45.1", path = "./crates/services/compression" }
-fuel-core-consensus-module = { version = "0.45.1", path = "./crates/services/consensus_module" }
-fuel-core-database = { version = "0.45.1", path = "./crates/database" }
-fuel-core-executor = { version = "0.45.1", path = "./crates/services/executor", default-features = false }
-fuel-core-gas-price-service = { version = "0.45.1", path = "crates/services/gas_price_service" }
-fuel-core-importer = { version = "0.45.1", path = "./crates/services/importer" }
-fuel-core-keygen = { version = "0.45.1", path = "./crates/keygen" }
-fuel-core-metrics = { version = "0.45.1", path = "./crates/metrics" }
-fuel-core-p2p = { version = "0.45.1", path = "./crates/services/p2p" }
-fuel-core-parallel-executor = { version = "0.45.1", path = "./crates/services/parallel-executor" }
-fuel-core-poa = { version = "0.45.1", path = "./crates/services/consensus_module/poa" }
-fuel-core-producer = { version = "0.45.1", path = "./crates/services/producer" }
-fuel-core-relayer = { version = "0.45.1", path = "./crates/services/relayer" }
-fuel-core-services = { version = "0.45.1", path = "./crates/services" }
-fuel-core-shared-sequencer = { version = "0.45.1", path = "crates/services/shared-sequencer" }
-fuel-core-storage = { version = "0.45.1", path = "./crates/storage", default-features = false }
-fuel-core-sync = { version = "0.45.1", path = "./crates/services/sync" }
-fuel-core-trace = { version = "0.45.1", path = "./crates/trace" }
-fuel-core-tx-status-manager = { version = "0.45.1", path = "./crates/services/tx_status_manager" }
-fuel-core-txpool = { version = "0.45.1", path = "./crates/services/txpool_v2" }
-fuel-core-types = { version = "0.45.1", path = "./crates/types", default-features = false }
-fuel-core-upgradable-executor = { version = "0.45.1", path = "./crates/services/upgradable-executor" }
-fuel-core-wasm-executor = { version = "0.45.1", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
-fuel-gas-price-algorithm = { version = "0.45.1", path = "crates/fuel-gas-price-algorithm" }
+fuel-core = { version = "0.46.0", path = "./crates/fuel-core", default-features = false }
+fuel-core-bin = { version = "0.46.0", path = "./bin/fuel-core" }
+fuel-core-chain-config = { version = "0.46.0", path = "./crates/chain-config", default-features = false }
+fuel-core-client = { version = "0.46.0", path = "./crates/client" }
+fuel-core-compression = { version = "0.46.0", path = "./crates/compression" }
+fuel-core-compression-service = { version = "0.46.0", path = "./crates/services/compression" }
+fuel-core-consensus-module = { version = "0.46.0", path = "./crates/services/consensus_module" }
+fuel-core-database = { version = "0.46.0", path = "./crates/database" }
+fuel-core-executor = { version = "0.46.0", path = "./crates/services/executor", default-features = false }
+fuel-core-gas-price-service = { version = "0.46.0", path = "crates/services/gas_price_service" }
+fuel-core-importer = { version = "0.46.0", path = "./crates/services/importer" }
+fuel-core-keygen = { version = "0.46.0", path = "./crates/keygen" }
+fuel-core-metrics = { version = "0.46.0", path = "./crates/metrics" }
+fuel-core-p2p = { version = "0.46.0", path = "./crates/services/p2p" }
+fuel-core-parallel-executor = { version = "0.46.0", path = "./crates/services/parallel-executor" }
+fuel-core-poa = { version = "0.46.0", path = "./crates/services/consensus_module/poa" }
+fuel-core-producer = { version = "0.46.0", path = "./crates/services/producer" }
+fuel-core-relayer = { version = "0.46.0", path = "./crates/services/relayer" }
+fuel-core-services = { version = "0.46.0", path = "./crates/services" }
+fuel-core-shared-sequencer = { version = "0.46.0", path = "crates/services/shared-sequencer" }
+fuel-core-storage = { version = "0.46.0", path = "./crates/storage", default-features = false }
+fuel-core-sync = { version = "0.46.0", path = "./crates/services/sync" }
+fuel-core-trace = { version = "0.46.0", path = "./crates/trace" }
+fuel-core-tx-status-manager = { version = "0.46.0", path = "./crates/services/tx_status_manager" }
+fuel-core-txpool = { version = "0.46.0", path = "./crates/services/txpool_v2" }
+fuel-core-types = { version = "0.46.0", path = "./crates/types", default-features = false }
+fuel-core-upgradable-executor = { version = "0.46.0", path = "./crates/services/upgradable-executor" }
+fuel-core-wasm-executor = { version = "0.46.0", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
+fuel-gas-price-algorithm = { version = "0.46.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
 fuel-vm-private = { version = "0.62.0", package = "fuel-vm", default-features = false }
