@@ -37,6 +37,7 @@ use fuel_core_types::{
     signer::SignMode,
     tai64::Tai64,
 };
+use futures::StreamExt;
 use itertools::{
     Itertools,
     rev,
@@ -271,6 +272,30 @@ async fn produce_block_overflow_time() {
     assert!(err.to_string().starts_with(
         "Response errors; The provided time parameters lead to an overflow"
     ));
+}
+
+#[tokio::test]
+async fn new_blocks_subscription_returns_blocks() {
+    let mut config = Config::local_node();
+    config.block_production = Trigger::Instant;
+    config.debug = true;
+
+    let srv = FuelService::from_database(Database::default(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    // Given
+    let mut new_blocks = client.new_blocks_subscription().await.unwrap();
+    tokio::time::sleep(Duration::from_millis(1000)).await;
+
+    // When
+    client.produce_blocks(1, None).await.unwrap();
+
+    // Then
+    let block_1 = new_blocks.next().await.unwrap().unwrap();
+    assert_eq!(*block_1.sealed_block.entity.header().height(), 1u32.into());
 }
 
 #[rstest]

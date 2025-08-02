@@ -431,6 +431,7 @@ pub fn init_sub_services(
         on_chain_database: database.on_chain().clone(),
         off_chain_database: database.off_chain().clone(),
         continue_on_error: config.continue_on_error,
+        block_subscriptions_queue: config.graphql_config.block_subscriptions_queue,
         consensus_parameters: &chain_config.consensus_parameters,
     };
     let graphql_worker =
@@ -443,6 +444,7 @@ pub fn init_sub_services(
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         historical_execution: config.historical_execution,
+        expensive_subscriptions: config.expensive_subscriptions,
         max_tx: config.txpool.pool_limits.max_txs,
         max_gas: config.txpool.pool_limits.max_gas,
         max_size: config.txpool.pool_limits.max_bytes_size,

@@ -463,7 +463,7 @@ impl FuelClient {
     ) -> io::Result<impl futures::Stream<Item = io::Result<ResponseData>> + '_>
     where
         Vars: serde::Serialize,
-        ResponseData: serde::de::DeserializeOwned + 'static,
+        ResponseData: serde::de::DeserializeOwned + 'static + Send,
     {
         use core::ops::Deref;
         use eventsource_client as es;
@@ -533,7 +533,12 @@ impl FuelClient {
 
         let mut last = None;
 
-        let stream = es::Client::stream(&client)
+        enum Event<ResponseData> {
+            Connected,
+            ResponseData(ResponseData),
+        }
+
+        let mut init_stream = es::Client::stream(&client)
             .take_while(|result| {
                 futures::future::ready(!matches!(result, Err(es::Error::Eof)))
             })
@@ -556,7 +561,7 @@ impl FuelClient {
                                             {
                                                 None
                                             }
-                                            _ => Some(Ok(resp)),
+                                            _ => Some(Ok(Event::ResponseData(resp))),
                                         }
                                     }
                                     Err(e) => Some(Err(io::Error::new(
@@ -571,6 +576,7 @@ impl FuelClient {
                             ))),
                         }
                     }
+                    Ok(es::SSE::Connected(_)) => Some(Ok(Event::Connected)),
                     Ok(_) => None,
                     Err(e) => Some(Err(io::Error::new(
                         io::ErrorKind::Other,
@@ -579,6 +585,35 @@ impl FuelClient {
                 };
                 futures::future::ready(r)
             });
+
+        let event = init_stream.next().await;
+        let stream_with_resp = init_stream.filter_map(|result| async move {
+            match result {
+                Ok(Event::Connected) => None,
+                Ok(Event::ResponseData(resp)) => Some(Ok(resp)),
+                Err(error) => Some(Err(error)),
+            }
+        });
+
+        let stream = match event {
+            Some(Ok(Event::Connected)) => {
+                tracing::debug!("Subscription connected");
+                stream_with_resp.boxed()
+            }
+            Some(Ok(Event::ResponseData(resp))) => {
+                tracing::debug!("Subscription returned response");
+                let joined_stream = futures::stream::once(async move { Ok(resp) })
+                    .chain(stream_with_resp);
+                joined_stream.boxed()
+            }
+            Some(Err(e)) => return Err(e),
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Subscription stream ended unexpectedly",
+                ));
+            }
+        };
 
         Ok(stream)
     }
@@ -1052,6 +1087,52 @@ impl FuelClient {
             |result: io::Result<schema::storage::ContractStorageBalances>| {
                 let result: ContractBalance = result?.contract_storage_balances;
                 Result::<_, io::Error>::Ok(result)
+            },
+        );
+
+        Ok(stream)
+    }
+
+    /// Returns a stream of new blocks.
+    #[cfg(feature = "subscriptions")]
+    pub async fn new_blocks_subscription(
+        &self,
+    ) -> io::Result<
+        impl Stream<
+            Item = io::Result<fuel_core_types::services::block_importer::ImportResult>,
+        > + '_,
+    > {
+        use cynic::SubscriptionBuilder;
+        let s = schema::block::NewBlocksSubscription::build(());
+
+        let stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::block::NewBlocksSubscription>| {
+                let result: fuel_core_types::services::block_importer::ImportResult =
+                    postcard::from_bytes(r?.new_blocks.0.0.as_slice()).map_err(|e| {
+                        io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("Failed to deserialize ImportResult: {e:?}"),
+                        )
+                    })?;
+                Result::<_, io::Error>::Ok(result)
+            },
+        );
+
+        Ok(stream)
+    }
+
+    /// Returns a stream of preconfirmations for all transactions.
+    #[cfg(feature = "subscriptions")]
+    pub async fn preconfirmations_subscription(
+        &self,
+    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
+        use cynic::SubscriptionBuilder;
+        let s = schema::tx::PreconfirmationsSubscription::build(());
+
+        let stream = self.subscribe(s).await?.map(
+            |r: io::Result<schema::tx::PreconfirmationsSubscription>| {
+                let status: TransactionStatus = r?.preconfirmations.try_into()?;
+                Result::<_, io::Error>::Ok(status)
             },
         );
 

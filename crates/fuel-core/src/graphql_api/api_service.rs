@@ -99,13 +99,10 @@ use tower_http::{
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
-use super::{
-    block_height_subscription,
-    ports::{
-        DatabaseDaCompressedBlocks,
-        OnChainDatabaseAt,
-        worker,
-    },
+use super::ports::{
+    DatabaseDaCompressedBlocks,
+    OnChainDatabaseAt,
+    worker,
 };
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
@@ -250,7 +247,7 @@ pub fn new_service<OnChain, OffChain>(
     gas_price_provider: GasPriceProvider,
     chain_state_info_provider: ChainInfoProvider,
     memory_pool: SharedMemoryPool,
-    block_height_subscriber: block_height_subscription::Subscriber,
+    worker_shared_state: graphql_api::worker_service::SharedState,
     da_compression_provider: DaCompressionProvider,
 ) -> anyhow::Result<Service>
 where
@@ -296,7 +293,7 @@ where
         .limit_directives(config.config.max_queries_directives)
         // The ordering for extensions meters, the `ChainStateInfoExtension` should be the
         // first, because it adds additional information to the final response.
-        .extension(ChainStateInfoExtension::new(block_height_subscriber.clone()))
+        .extension(ChainStateInfoExtension::new(worker_shared_state.block_height_subscription_handler.subscribe()))
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))
@@ -311,7 +308,7 @@ where
         .data(chain_state_info_provider)
         .data(memory_pool)
         .data(da_compression_provider)
-        .data(block_height_subscriber.clone())
+        .data(worker_shared_state.clone())
         .extension(ValidationExtension::new(
             max_queries_resolver_recursive_depth,
         ))
@@ -319,7 +316,7 @@ where
         .extension(RequiredFuelBlockHeightExtension::new(
             required_fuel_block_height_tolerance,
             required_fuel_block_height_timeout,
-            block_height_subscriber,
+            worker_shared_state.block_height_subscription_handler.subscribe(),
         ))
         .finish();
 

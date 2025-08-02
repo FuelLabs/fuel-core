@@ -3638,6 +3638,7 @@ dependencies = [
  "hyper-rustls 0.24.2",
  "insta",
  "itertools 0.12.1",
+ "postcard",
  "reqwest 0.12.15",
  "schemafy_lib",
  "serde",
