@@ -8,7 +8,7 @@ use fuel_core_types::fuel_types::BlockHeight;
 use parking_lot::RwLock;
 use tokio::sync::oneshot;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Handler {
     inner: Arc<RwLock<HandlersMapInner>>,
 }

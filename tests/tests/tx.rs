@@ -491,6 +491,27 @@ async fn get_transaction_by_id() {
 }
 
 #[tokio::test]
+async fn preconfirmations_subscription() {
+    let transaction = Transaction::default_test_tx();
+
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Given
+    let mut subscription = client.preconfirmations_subscription().await.unwrap();
+
+    // When
+    client.submit(&transaction).await.unwrap();
+
+    // Then
+    let status = subscription.next().await.unwrap().unwrap();
+    assert!(matches!(
+        status,
+        TransactionStatus::PreconfirmationSuccess { .. }
+    ))
+}
+
+#[tokio::test]
 async fn get_transparent_transaction_by_id() {
     let transaction = Transaction::default_test_tx();
     let id = transaction.id(&ChainId::default());

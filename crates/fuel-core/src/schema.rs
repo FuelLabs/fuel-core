@@ -78,7 +78,11 @@ pub struct Query(
 pub struct Mutation(dap::DapMutation, tx::TxMutation, block::BlockMutation);
 
 #[derive(MergedSubscription, Default)]
-pub struct Subscription(tx::TxStatusSubscription, storage::StorageSubscription);
+pub struct Subscription(
+    tx::TxStatusSubscription,
+    storage::StorageSubscription,
+    block::BlockSubscription,
+);
 
 pub type CoreSchema = Schema<Query, Mutation, Subscription>;
 pub type CoreSchemaBuilder = SchemaBuilder<Query, Mutation, Subscription>;

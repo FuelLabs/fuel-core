@@ -106,7 +106,9 @@ use futures::{
 use std::{
     borrow::Cow,
     ops::Deref,
+    sync::Arc,
 };
+
 #[cfg(test)]
 mod tests;
 
@@ -116,6 +118,7 @@ pub(crate) struct Context<'a, TxStatusManager, BlockImporter, OnChain, OffChain>
     pub(crate) on_chain_database: OnChain,
     pub(crate) off_chain_database: OffChain,
     pub(crate) continue_on_error: bool,
+    pub(crate) block_subscriptions_queue: usize,
     pub(crate) consensus_parameters: &'a ConsensusParameters,
 }
 
@@ -129,7 +132,13 @@ pub struct InitializeTask<TxStatusManager, BlockImporter, OnChain, OffChain> {
     on_chain_database: OnChain,
     off_chain_database: OffChain,
     base_asset_id: AssetId,
-    block_height_subscription_handler: block_height_subscription::Handler,
+    shared_state: SharedState,
+}
+
+#[derive(Clone)]
+pub struct SharedState {
+    pub block_height_subscription_handler: block_height_subscription::Handler,
+    pub block_subscription: tokio::sync::broadcast::Sender<Arc<Vec<u8>>>,
 }
 
 /// The off-chain GraphQL API worker task processes the imported blocks
@@ -144,7 +153,7 @@ pub struct Task<TxStatusManager, D> {
     coins_to_spend_indexation_enabled: bool,
     asset_metadata_indexation_enabled: bool,
     base_asset_id: AssetId,
-    block_height_subscription_handler: block_height_subscription::Handler,
+    shared_state: SharedState,
 }
 
 impl<TxStatusManager, D> Task<TxStatusManager, D>
@@ -197,8 +206,17 @@ where
         }
 
         // Notify subscribers and update last seen block height
-        self.block_height_subscription_handler
+        self.shared_state
+            .block_height_subscription_handler
             .notify_and_update(*height);
+
+        let import_result = result.as_ref().deref();
+        let raw_import_result = postcard::to_allocvec(import_result)?;
+
+        let _ = self
+            .shared_state
+            .block_subscription
+            .send(Arc::new(raw_import_result));
         // Get all the subscribers that need to be notified that the block height
         // has been reached.
 
@@ -551,12 +569,12 @@ where
     OffChain: ports::worker::OffChainDatabase,
 {
     const NAME: &'static str = "GraphQL_Off_Chain_Worker";
-    type SharedData = block_height_subscription::Subscriber;
+    type SharedData = SharedState;
     type Task = Task<TxStatusManager, OffChain>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
-        self.block_height_subscription_handler.subscribe()
+        self.shared_state.clone()
     }
 
     async fn into_task(
@@ -598,7 +616,7 @@ where
             off_chain_database,
             continue_on_error,
             base_asset_id,
-            block_height_subscription_handler,
+            shared_state,
         } = self;
 
         let mut task = Task {
@@ -611,7 +629,7 @@ where
             coins_to_spend_indexation_enabled,
             asset_metadata_indexation_enabled,
             base_asset_id,
-            block_height_subscription_handler,
+            shared_state,
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
@@ -742,10 +760,17 @@ where
         on_chain_database,
         off_chain_database,
         continue_on_error,
+        block_subscriptions_queue,
         consensus_parameters,
     } = context;
 
     let off_chain_block_height = off_chain_database.latest_height()?.unwrap_or_default();
+    let block_height_subscription_handler =
+        block_height_subscription::Handler::new(off_chain_block_height);
+    let shared_state = SharedState {
+        block_height_subscription_handler,
+        block_subscription: tokio::sync::broadcast::channel(block_subscriptions_queue).0,
+    };
 
     let service = ServiceRunner::new(InitializeTask {
         tx_status_manager,
@@ -756,9 +781,7 @@ where
         chain_id: consensus_parameters.chain_id(),
         continue_on_error,
         base_asset_id: *consensus_parameters.base_asset_id(),
-        block_height_subscription_handler: block_height_subscription::Handler::new(
-            off_chain_block_height,
-        ),
+        shared_state,
     });
 
     Ok(service)

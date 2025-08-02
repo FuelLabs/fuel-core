@@ -690,6 +690,12 @@ pub struct AllReceipts {
     pub all_receipts: Vec<Receipt>,
 }
 
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Subscription")]
+pub struct PreconfirmationsSubscription {
+    pub preconfirmations: TransactionStatus,
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;

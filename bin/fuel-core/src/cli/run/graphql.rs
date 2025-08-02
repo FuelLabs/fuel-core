@@ -22,6 +22,10 @@ pub struct GraphQLArgs {
     #[clap(long = "graphql-database-batch-size", default_value = "100", env)]
     pub database_batch_size: usize,
 
+    /// The size of the queue for block subscriptions.
+    #[clap(long = "block-subscription-queue", default_value = "100", env)]
+    pub block_subscriptions_queue: usize,
+
     /// The max depth of GraphQL queries.
     #[clap(long = "graphql-max-depth", default_value = "16", env)]
     pub graphql_max_depth: usize,
