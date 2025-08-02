@@ -15,7 +15,14 @@ description = "Tx client and schema specification."
 std = ["fuel-core-types/std"]
 default = ["subscriptions", "std"]
 test-helpers = []
-subscriptions = ["base64", "eventsource-client", "futures", "hyper-rustls", "dep:postcard"]
+subscriptions = [
+    "base64",
+    "eventsource-client",
+    "futures",
+    "hyper-rustls",
+    "dep:postcard",
+    "fuel-core-types/serde",
+]
 fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]

@@ -62,7 +62,6 @@ use tokio::sync::{
     mpsc,
     oneshot,
 };
-use tokio_stream::wrappers::BroadcastStream;
 
 enum ReadRequest {
     GetStatus {
@@ -127,8 +126,10 @@ impl SharedData {
     pub fn subscribe_all(
         &self,
     ) -> anyhow::Result<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>> {
-        let stream = BroadcastStream::new(self.all_subscription_receiver.resubscribe())
-            .map(|result| result.map_err(Into::into));
+        let stream = tokio_stream::wrappers::BroadcastStream::new(
+            self.all_subscription_receiver.resubscribe(),
+        )
+        .map(|result| result.map_err(Into::into));
         Ok(stream.into_boxed())
     }
 
