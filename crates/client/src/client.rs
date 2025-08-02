@@ -77,12 +77,9 @@ use fuel_core_types::{
         Nonce,
         canonical::Serialize,
     },
-    services::{
-        block_importer::ImportResult,
-        executor::{
-            StorageReadReplayEvent,
-            TransactionExecutionStatus,
-        },
+    services::executor::{
+        StorageReadReplayEvent,
+        TransactionExecutionStatus,
     },
 };
 #[cfg(feature = "subscriptions")]
@@ -1100,13 +1097,17 @@ impl FuelClient {
     #[cfg(feature = "subscriptions")]
     pub async fn new_blocks_subscription(
         &self,
-    ) -> io::Result<impl Stream<Item = io::Result<ImportResult>> + '_> {
+    ) -> io::Result<
+        impl Stream<
+            Item = io::Result<fuel_core_types::services::block_importer::ImportResult>,
+        > + '_,
+    > {
         use cynic::SubscriptionBuilder;
         let s = schema::block::NewBlocksSubscription::build(());
 
         let stream = self.subscribe(s).await?.map(
             |r: io::Result<schema::block::NewBlocksSubscription>| {
-                let result: ImportResult =
+                let result: fuel_core_types::services::block_importer::ImportResult =
                     postcard::from_bytes(r?.new_blocks.0.0.as_slice()).map_err(|e| {
                         io::Error::new(
                             io::ErrorKind::Other,
