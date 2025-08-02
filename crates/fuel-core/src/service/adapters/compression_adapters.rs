@@ -1,3 +1,6 @@
+use super::import_result_provider::{
+    self,
+};
 use crate::{
     database::{
         Database,
@@ -20,29 +23,25 @@ use fuel_core_compression_service::{
         configuration,
     },
 };
-use fuel_core_storage::transactional::HistoricalView;
-use fuel_core_types::services::block_importer::SharedImportResult;
-
-use super::import_result_provider::{
-    self,
-    ImportResultProvider,
+use fuel_core_storage::transactional::{
+    AtomicView,
+    HistoricalView,
+};
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_types::ChainId,
+    services::block_importer::SharedImportResult,
 };
 
 /// Provides the necessary functionality for accessing latest and historical block data.
-pub struct CompressionBlockImporterAdapter {
+pub struct CompressionBlockDBAdapter {
     block_importer: BlockImporterAdapter,
-    import_result_provider_adapter: ImportResultProvider,
+    db: Database<OnChain>,
 }
 
-impl CompressionBlockImporterAdapter {
-    pub fn new(
-        block_importer: BlockImporterAdapter,
-        import_result_provider_adapter: ImportResultProvider,
-    ) -> Self {
-        Self {
-            block_importer,
-            import_result_provider_adapter,
-        }
+impl CompressionBlockDBAdapter {
+    pub fn new(block_importer: BlockImporterAdapter, db: Database<OnChain>) -> Self {
+        Self { block_importer, db }
     }
 }
 
@@ -55,25 +54,36 @@ impl From<BlockAt> for import_result_provider::BlockAt {
     }
 }
 
-impl block_source::BlockSource for CompressionBlockImporterAdapter {
+impl block_source::BlockSource for CompressionBlockDBAdapter {
     fn subscribe(&self) -> fuel_core_services::stream::BoxStream<SharedImportResult> {
         self.block_importer.events_shared_result()
     }
 
-    fn get_block(&self, height: BlockAt) -> anyhow::Result<SharedImportResult> {
-        self.import_result_provider_adapter
-            .result_at_height(height.into())
+    fn get_block(&self, height: BlockAt) -> anyhow::Result<Block> {
+        let latest_view = self.db.latest_view()?;
+        let height = match height {
+            BlockAt::Genesis => latest_view.genesis_height()?.ok_or_else(|| {
+                anyhow::anyhow!("Genesis block not found in the database")
+            })?,
+            BlockAt::Specific(h) => h.into(),
+        };
+        let block = latest_view
+            .get_sealed_block_by_height(&height)?
+            .map(|sealed_block| sealed_block.entity)
+            .ok_or(anyhow::anyhow!("Block not found at height: {:?}", height))?;
+        Ok(block)
     }
 }
 
 impl configuration::CompressionConfigProvider
     for crate::service::config::DaCompressionConfig
 {
-    fn config(&self) -> config::CompressionConfig {
+    fn config(&self, chain_id: ChainId) -> config::CompressionConfig {
         config::CompressionConfig::new(
             self.retention_duration,
             self.starting_height,
             self.metrics,
+            chain_id,
         )
     }
 }
