@@ -731,7 +731,7 @@ impl TxStatusSubscription {
         require_expensive_subscriptions(ctx)?;
 
         let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
-        let stream = tx_status_manager.subscribe_txs_updates().await?;
+        let stream = tx_status_manager.subscribe_txs_updates()?;
 
         let stream = stream.map(|result| {
             result

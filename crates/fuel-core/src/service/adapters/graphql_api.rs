@@ -97,10 +97,10 @@ impl TxStatusManager for TxStatusManagerAdapter {
         self.tx_status_manager_shared_data.subscribe(tx_id).await
     }
 
-    async fn subscribe_txs_updates(
+    fn subscribe_txs_updates(
         &self,
     ) -> anyhow::Result<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>> {
-        self.tx_status_manager_shared_data.subscribe_all().await
+        self.tx_status_manager_shared_data.subscribe_all()
     }
 }
 

@@ -73,9 +73,6 @@ enum ReadRequest {
         tx_id: TxId,
         sender: oneshot::Sender<anyhow::Result<TxStatusStream>>,
     },
-    SubscribeAll {
-        sender: oneshot::Sender<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>>,
-    },
 }
 
 enum UpdateRequest {
@@ -95,6 +92,7 @@ pub struct SharedData {
     read_requests_sender: mpsc::Sender<ReadRequest>,
     write_requests_sender: mpsc::UnboundedSender<UpdateRequest>,
     tx_status_receiver: broadcast::Receiver<(TxId, PreConfirmationStatus)>,
+    all_subscription_receiver: broadcast::Receiver<(TxId, TransactionStatus)>,
 }
 
 impl Clone for SharedData {
@@ -103,6 +101,7 @@ impl Clone for SharedData {
             read_requests_sender: self.read_requests_sender.clone(),
             write_requests_sender: self.write_requests_sender.clone(),
             tx_status_receiver: self.tx_status_receiver.resubscribe(),
+            all_subscription_receiver: self.all_subscription_receiver.resubscribe(),
         }
     }
 }
@@ -125,13 +124,12 @@ impl SharedData {
         receiver.await?
     }
 
-    pub async fn subscribe_all(
+    pub fn subscribe_all(
         &self,
     ) -> anyhow::Result<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>> {
-        let (sender, receiver) = oneshot::channel();
-        let request = ReadRequest::SubscribeAll { sender };
-        self.read_requests_sender.send(request).await?;
-        Ok(receiver.await?)
+        let stream = BroadcastStream::new(self.all_subscription_receiver.resubscribe())
+            .map(|result| result.map_err(Into::into));
+        Ok(stream.into_boxed())
     }
 
     pub fn update_status(&self, tx_id: TxId, status: TransactionStatus) {
@@ -419,13 +417,6 @@ where
                         let _ = sender.send(result);
                         TaskNextAction::Continue
                     }
-                    Some(ReadRequest::SubscribeAll { sender }) => {
-                        let receiver = self.all_events_sender.subscribe();
-                        let stream =
-                            BroadcastStream::new(receiver).map(|result|result.map_err(Into::into));
-                        let _ = sender.send(stream.into_boxed());
-                        TaskNextAction::Continue
-                    }
                     None => {
                         TaskNextAction::Stop
                     },
@@ -468,14 +459,16 @@ where
         mpsc::channel(config.max_tx_update_subscriptions);
     let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
 
+    let (all_events_sender, all_subscription_receiver) =
+        broadcast::channel(config.max_tx_update_subscriptions);
+
     let shared_data = SharedData {
         read_requests_sender,
         write_requests_sender,
         tx_status_receiver,
+        all_subscription_receiver,
     };
     let signature_verification = SignatureVerification::new(protocol_pubkey);
-
-    let (all_events_sender, _) = broadcast::channel(config.max_tx_update_subscriptions);
 
     ServiceRunner::new(Task {
         subscriptions,
@@ -737,10 +730,12 @@ mod tests {
             mpsc::channel(10000);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let (tx_status_sender, tx_status_receiver) = broadcast::channel(10000);
+        let (all_events_sender, all_subscription_receiver) = broadcast::channel(1000);
         let shared_data = SharedData {
             read_requests_sender: read_requests_sender.clone(),
             write_requests_sender: write_requests_sender.clone(),
             tx_status_receiver,
+            all_subscription_receiver,
         };
         let (sender, receiver) = mpsc::channel(1_000);
         let new_tx_status = Box::pin(ReceiverStream::new(receiver));
@@ -772,7 +767,7 @@ mod tests {
             p2p: MockP2P {
                 p2p_notify_validity_sender,
             },
-            all_events_sender: broadcast::channel(1000).0,
+            all_events_sender,
         };
 
         (task, handles)
