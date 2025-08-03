@@ -7,7 +7,7 @@ use crate::{
         P2PPreConfirmationMessage,
         P2PSubscriptions,
     },
-    subscriptions::Subscriptions,
+    subscriptions::{Subscriptions, TxStatusSubscription},
     update_sender::TxStatusChange,
 };
 use fuel_core_services::{
@@ -157,10 +157,10 @@ impl SharedData {
     }
 }
 
-pub struct Task<Pubkey, P2P> {
+pub struct Task<Pubkey, P2P, StatusSub> {
     manager: TxStatusManager,
     all_events_sender: broadcast::Sender<(TxId, TransactionStatus)>,
-    subscriptions: Subscriptions,
+    subscriptions: StatusSub,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
     write_requests_receiver: mpsc::UnboundedReceiver<UpdateRequest>,
     shared_data: SharedData,
@@ -248,7 +248,7 @@ impl<Pubkey: ProtocolPublicKey> SignatureVerification<Pubkey> {
     }
 }
 
-impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
+impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions, StatusSub: TxStatusSubscription> Task<Pubkey, P2P, StatusSub> {
     fn handle_preconfirmations(&mut self, preconfirmations: Vec<Preconfirmation>) {
         preconfirmations
             .into_iter()
@@ -336,10 +336,11 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
 }
 
 #[async_trait::async_trait]
-impl<Pubkey, P2P> RunnableService for Task<Pubkey, P2P>
+impl<Pubkey, P2P, StatusSub> RunnableService for Task<Pubkey, P2P, StatusSub>
 where
     Pubkey: ProtocolPublicKey,
     P2P: P2PSubscriptions,
+    StatusSub: TxStatusSubscription
 {
     const NAME: &'static str = "TxStatusManagerTask";
     type SharedData = SharedData;
@@ -359,10 +360,11 @@ where
     }
 }
 
-impl<Pubkey, P2P> RunnableTask for Task<Pubkey, P2P>
+impl<Pubkey, P2P, StatusSub> RunnableTask for Task<Pubkey, P2P, StatusSub>
 where
     Pubkey: ProtocolPublicKey,
     P2P: P2PSubscriptions,
+    StatusSub: TxStatusSubscription
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -372,7 +374,7 @@ where
                 TaskNextAction::Stop
             }
 
-            tx_status_from_p2p = self.subscriptions.new_tx_status.next() => {
+            tx_status_from_p2p = self.subscriptions.next_tx_status() => {
                 if let Some(GossipData { data, message_id, peer_id }) = tx_status_from_p2p {
                     if let Some(msg) = data {
                         self.new_preconfirmations_from_p2p(msg, message_id, peer_id);
@@ -435,7 +437,7 @@ pub fn new_service<P2P, Pubkey>(
     p2p: P2P,
     config: Config,
     protocol_pubkey: Pubkey,
-) -> ServiceRunner<Task<Pubkey, P2P>>
+) -> ServiceRunner<Task<Pubkey, P2P, Subscriptions>>
 where
     P2P: P2PSubscriptions<GossipedStatuses = P2PPreConfirmationGossipData>,
     Pubkey: ProtocolPublicKey,
