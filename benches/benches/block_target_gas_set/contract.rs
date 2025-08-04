@@ -7,9 +7,15 @@ use fuel_core_types::{
         Address,
         Word,
     },
-    fuel_vm::consts::{VM_MAX_RAM, WORD_SIZE},
+    fuel_vm::consts::{
+        VM_MAX_RAM,
+        WORD_SIZE,
+    },
 };
-use std::{iter::repeat_n, ops::Div};
+use std::{
+    iter::repeat_n,
+    ops::Div,
+};
 
 // This register is used by `setup_instructions` function to set contract id.
 const CONTRACT_ID_REGISTER: RegId = RegId::new(0x10);
