@@ -7,9 +7,9 @@ use fuel_core_types::{
         Address,
         Word,
     },
-    fuel_vm::consts::WORD_SIZE,
+    fuel_vm::consts::{VM_MAX_RAM, WORD_SIZE},
 };
-use std::iter::repeat_n;
+use std::{iter::repeat_n, ops::Div};
 
 // This register is used by `setup_instructions` function to set contract id.
 const CONTRACT_ID_REGISTER: RegId = RegId::new(0x10);
@@ -239,6 +239,9 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
             .chain(vec![op::ret(RegId::ZERO)])
             .collect();
 
+        // casting to u32 is fine since VM_MAX_RAM is < u32::MAX
+        let max_iterations: u32 = VM_MAX_RAM.div(size as u64).try_into().unwrap();
+
         let mut runner =
             SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
                 contract_id,
@@ -247,9 +250,12 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
 
         let mut instructions = setup_instructions();
         instructions.extend(vec![
+            op::movi(0x14, max_iterations),
             op::movi(0x13, size),
             op::ldc(CONTRACT_ID_REGISTER, RegId::ZERO, 0x13, 0),
-            op::jmpb(RegId::ZERO, 0),
+            // jump only if 0x14 is not zero
+            op::subi(0x14, 0x14, 1),
+            op::jneb(0x14, RegId::ZERO, 0, 0),
         ]);
         let id = format!("contract/ldc {:?}", size);
         runner
