@@ -52,7 +52,7 @@ impl Contract {
         let query = ctx.read_view()?;
         query
             .contract_bytecode(self.0)
-            .map(HexString)
+            .map(|bytes|HexString(bytes.into()))
             .map_err(Into::into)
     }
 
