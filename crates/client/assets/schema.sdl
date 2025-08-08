@@ -948,7 +948,7 @@ type Query {
 		ID of the Asset
 		"""
 		id: AssetId!
-	): AssetInfoDetails!
+	): AssetInfoDetails
 	"""
 	Read register value by index.
 	"""
@@ -1355,6 +1355,7 @@ type Subscription {
 		"""
 		includePreconfirmation: Boolean
 	): TransactionStatus!
+	alpha__preconfirmations: TransactionStatus!
 	"""
 	Submits transaction to the `TxPool` and await either success or failure.
 	"""
@@ -1367,6 +1368,7 @@ type Subscription {
 	submitAndAwaitStatus(tx: HexString!, estimatePredicates: Boolean, includePreconfirmation: Boolean): TransactionStatus!
 	contractStorageSlots(contractId: ContractId!): StorageSlot!
 	contractStorageBalances(contractId: ContractId!): ContractBalance!
+	alpha__new_blocks: HexString!
 }
 
 type SuccessStatus {

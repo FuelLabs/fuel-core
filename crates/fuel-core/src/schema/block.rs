@@ -1,5 +1,6 @@
 use super::scalars::{
     Bytes32,
+    HexString,
     Tai64Timestamp,
     TransactionId,
 };
@@ -8,10 +9,11 @@ use crate::{
         Config as GraphQLConfig,
         IntoApiResult,
         api_service::ConsensusModule,
-        block_height_subscription,
         database::ReadView,
         query_costs,
+        require_expensive_subscriptions,
     },
+    graphql_api,
     schema::{
         ReadViewProvider,
         scalars::{
@@ -30,6 +32,7 @@ use async_graphql::{
     Enum,
     Object,
     SimpleObject,
+    Subscription,
     Union,
     connection::{
         Connection,
@@ -56,6 +59,7 @@ use futures::{
     StreamExt,
     TryStreamExt,
 };
+use tokio_stream::wrappers::BroadcastStream;
 
 pub struct Block(pub(crate) CompressedBlock);
 
@@ -405,12 +409,45 @@ impl BlockMutation {
             .await?;
 
         let on_chain_height = ctx.read_view()?.latest_block_height()?;
-        let off_chain_subscriber =
-            ctx.data_unchecked::<block_height_subscription::Subscriber>();
-        off_chain_subscriber
+        let shared_state =
+            ctx.data_unchecked::<graphql_api::worker_service::SharedState>();
+        shared_state
+            .block_height_subscription_handler
+            .subscribe()
             .wait_for_block_height(on_chain_height)
             .await?;
         Ok(on_chain_height.into())
+    }
+}
+
+#[derive(Default)]
+pub struct BlockSubscription;
+
+#[Subscription]
+impl BlockSubscription {
+    #[graphql(name = "alpha__new_blocks")]
+    async fn new_blocks<'a>(
+        &self,
+        ctx: &Context<'a>,
+    ) -> async_graphql::Result<
+        impl Stream<Item = async_graphql::Result<HexString>> + 'a + use<'a>,
+    > {
+        require_expensive_subscriptions(ctx)?;
+        let worker_state: &graphql_api::worker_service::SharedState =
+            ctx.data_unchecked();
+
+        let receiver = worker_state.block_subscription.subscribe();
+        let stream = BroadcastStream::new(receiver).map(|result| {
+            result
+                .map(|bytes| {
+                    // TODO: Avoid cloning the bytes here.
+                    //  https://github.com/FuelLabs/fuel-core/issues/2657
+                    HexString(bytes.as_ref().clone())
+                })
+                .map_err(Into::into)
+        });
+
+        Ok(stream)
     }
 }
 

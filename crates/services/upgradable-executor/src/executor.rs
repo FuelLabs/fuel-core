@@ -155,6 +155,8 @@ pub struct Executor<S, R> {
 mod private {
     use std::sync::OnceLock;
     use wasmtime::{
+        Cache,
+        CacheConfig,
         Config,
         Engine,
         Module,
@@ -171,9 +173,11 @@ mod private {
         DEFAULT_ENGINE.get_or_init(|| {
             let mut config = Config::default();
             // Enables compilation caching.
-            config
-                .cache_config_load_default()
+            let cache_config = CacheConfig::from_file(None)
                 .expect("Failed to load the default cache config");
+            let cache =
+                Cache::new(cache_config).expect("Failed to create the default cache");
+            config.cache(Some(cache));
             Engine::new(&config).expect("Failed to create the default engine")
         })
     }
@@ -242,7 +246,10 @@ impl<S, R> Executor<S, R> {
         ("0-43-0", 26),
         ("0-43-1", 27),
         ("0-43-2", 28),
-        ("0-44-0", LATEST_STATE_TRANSITION_VERSION),
+        ("0-44-0", 29),
+        // We are skipping 0-45-0 because it was not published.
+        ("0-45-1", 30),
+        ("0-46-0", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(

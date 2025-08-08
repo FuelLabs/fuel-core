@@ -16,6 +16,10 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
     TaskNextAction,
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
 };
 use fuel_core_types::{
     ed25519::Signature,
@@ -87,6 +91,7 @@ pub struct SharedData {
     read_requests_sender: mpsc::Sender<ReadRequest>,
     write_requests_sender: mpsc::UnboundedSender<UpdateRequest>,
     tx_status_receiver: broadcast::Receiver<(TxId, PreConfirmationStatus)>,
+    all_subscription_receiver: broadcast::Receiver<(TxId, TransactionStatus)>,
 }
 
 impl Clone for SharedData {
@@ -95,6 +100,7 @@ impl Clone for SharedData {
             read_requests_sender: self.read_requests_sender.clone(),
             write_requests_sender: self.write_requests_sender.clone(),
             tx_status_receiver: self.tx_status_receiver.resubscribe(),
+            all_subscription_receiver: self.all_subscription_receiver.resubscribe(),
         }
     }
 }
@@ -115,6 +121,16 @@ impl SharedData {
         let request = ReadRequest::Subscribe { tx_id, sender };
         self.read_requests_sender.send(request).await?;
         receiver.await?
+    }
+
+    pub fn subscribe_all(
+        &self,
+    ) -> anyhow::Result<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>> {
+        let stream = tokio_stream::wrappers::BroadcastStream::new(
+            self.all_subscription_receiver.resubscribe(),
+        )
+        .map(|result| result.map_err(Into::into));
+        Ok(stream.into_boxed())
     }
 
     pub fn update_status(&self, tx_id: TxId, status: TransactionStatus) {
@@ -143,6 +159,7 @@ impl SharedData {
 
 pub struct Task<Pubkey, P2P> {
     manager: TxStatusManager,
+    all_events_sender: broadcast::Sender<(TxId, TransactionStatus)>,
     subscriptions: Subscriptions,
     read_requests_receiver: mpsc::Receiver<ReadRequest>,
     write_requests_receiver: mpsc::UnboundedReceiver<UpdateRequest>,
@@ -237,7 +254,8 @@ impl<Pubkey: ProtocolPublicKey, P2P: P2PSubscriptions> Task<Pubkey, P2P> {
             .into_iter()
             .for_each(|Preconfirmation { tx_id, status }| {
                 let status: TransactionStatus = status.into();
-                self.manager.status_update(tx_id, status);
+                self.manager.status_update(tx_id, status.clone());
+                let _ = self.all_events_sender.send((tx_id, status));
             });
     }
 
@@ -442,10 +460,14 @@ where
         mpsc::channel(config.max_tx_update_subscriptions);
     let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
 
+    let (all_events_sender, all_subscription_receiver) =
+        broadcast::channel(config.max_tx_update_subscriptions);
+
     let shared_data = SharedData {
         read_requests_sender,
         write_requests_sender,
         tx_status_receiver,
+        all_subscription_receiver,
     };
     let signature_verification = SignatureVerification::new(protocol_pubkey);
 
@@ -457,6 +479,7 @@ where
         shared_data,
         signature_verification,
         p2p,
+        all_events_sender,
     })
 }
 
@@ -708,10 +731,12 @@ mod tests {
             mpsc::channel(10000);
         let (write_requests_sender, write_requests_receiver) = mpsc::unbounded_channel();
         let (tx_status_sender, tx_status_receiver) = broadcast::channel(10000);
+        let (all_events_sender, all_subscription_receiver) = broadcast::channel(1000);
         let shared_data = SharedData {
             read_requests_sender: read_requests_sender.clone(),
             write_requests_sender: write_requests_sender.clone(),
             tx_status_receiver,
+            all_subscription_receiver,
         };
         let (sender, receiver) = mpsc::channel(1_000);
         let new_tx_status = Box::pin(ReceiverStream::new(receiver));
@@ -743,6 +768,7 @@ mod tests {
             p2p: MockP2P {
                 p2p_notify_validity_sender,
             },
+            all_events_sender,
         };
 
         (task, handles)
