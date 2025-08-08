@@ -44,12 +44,11 @@ fn local_chainconfig_validity() -> anyhow::Result<()> {
     let writer = SnapshotWriter::json(temp_dir.path());
     let generated_snapshot = writer.write_state_config(state_config, &chain_config)?;
 
-    let chain_config = std::fs::read_to_string(generated_snapshot.chain_config)?
-        .trim()
-        .to_string();
-    let stored_chain_config = std::fs::read_to_string(stored_snapshot.chain_config)?
-        .trim()
-        .to_string();
+    let chain_config = trim_owner_lines(
+        std::fs::read_to_string(generated_snapshot.chain_config)?.trim(),
+    );
+    let stored_chain_config =
+        trim_owner_lines(std::fs::read_to_string(stored_snapshot.chain_config)?.trim());
     pretty_assertions::assert_str_eq!(
         chain_config,
         stored_chain_config,
@@ -74,13 +73,27 @@ fn local_chainconfig_validity() -> anyhow::Result<()> {
         };
         std::fs::read_to_string(generated_state)?.trim().to_string()
     };
+
+    let stored_state_config_trimmed = trim_owner_lines(&stored_state_config);
+    let generated_state_config_trimmed = trim_owner_lines(&generated_state_config);
+
     pretty_assertions::assert_str_eq!(
-        stored_state_config,
-        generated_state_config,
+        stored_state_config_trimmed,
+        generated_state_config_trimmed,
         "State config should match the one in the local configuration"
     );
 
     Ok(())
+}
+
+// The state config file may contain `owner_secret` entries, which are converted
+// to `owner` entries when the state config is written using a snapshot writer.
+// Therefore, we'll omit these from the test.
+fn trim_owner_lines(s: &str) -> String {
+    s.lines()
+        .filter(|line| !line.contains("owner"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[tokio::test]

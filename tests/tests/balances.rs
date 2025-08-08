@@ -57,7 +57,7 @@ async fn balance() {
         ]
         .into_iter()
         .map(|(owner, amount, asset_id)| CoinConfig {
-            owner,
+            owner: owner.into(),
             amount,
             asset_id,
             ..coin_generator.generate()
@@ -221,7 +221,7 @@ async fn first_5_balances() {
                         ]
                     })
                     .map(|(owner, amount, asset_id)| CoinConfig {
-                        owner: *owner,
+                        owner: (*owner).into(),
                         amount,
                         asset_id,
                         ..coin_generator.generate()
@@ -337,7 +337,7 @@ mod pagination {
                 coin.iter()
                     .flat_map(|(asset_id, amount)| vec![(owner, amount, asset_id)])
                     .map(|(owner, amount, asset_id)| CoinConfig {
-                        owner: *owner,
+                        owner: (*owner).into(),
                         amount: *amount as u64,
                         asset_id: *asset_id,
                         ..coin_generator.generate()
