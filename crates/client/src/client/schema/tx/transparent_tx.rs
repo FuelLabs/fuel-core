@@ -448,6 +448,8 @@ impl TryFrom<Transaction> for fuel_tx::Transaction {
             fuel_tx::Transaction::Upgrade(_) => {}
             fuel_tx::Transaction::Upload(_) => {}
             fuel_tx::Transaction::Blob(_) => {}
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => todo!(),
         };
 
         Ok(tx)

@@ -59,6 +59,7 @@ use test_helpers::{
 };
 
 mod predicates;
+mod predicates_v2;
 mod tx_pointer;
 mod txn_status_subscription;
 mod txpool;

@@ -24,6 +24,7 @@ subscriptions = [
     "fuel-core-types/serde",
 ]
 fault-proving = ["fuel-core-types/fault-proving"]
+chargeable-tx-v2 = ["fuel-core-types/chargeable-tx-v2"]
 
 [dependencies]
 anyhow = { workspace = true }
