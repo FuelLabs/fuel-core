@@ -43,7 +43,8 @@ impl Deref for WrappedImportResult {
 }
 
 /// The result of the block import.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct ImportResult {
     /// Imported sealed block.
@@ -65,6 +66,7 @@ impl ImportResult {
 
 /// The source producer of the block.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Source {
     /// The block was imported from the network.
     Network,

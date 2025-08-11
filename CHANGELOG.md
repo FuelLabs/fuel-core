@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.46.0]
+
+### Breaking
+- [3070](https://github.com/FuelLabs/fuel-core/pull/3070): Fix the `AssetDetails` endpoint to match GraphQL standards
+
+### Added
+- [3061](https://github.com/FuelLabs/fuel-core/pull/3061): Add tests showing that mints are correctly added and validated
+- [3074](https://github.com/FuelLabs/fuel-core/pull/3074): Added alpha version of new subscriptions for pre confirmations and new blocks.
+  These subscriptions are not final and may change in the future.
+  Subscriptions are disabled by default and can be enabled by setting `--expensive-subscriptions` via CLI.
+
+### Fixed
+- [3071](https://github.com/FuelLabs/fuel-core/pull/3071): Use outputs instead of events to compress blocks
+
 ## [Version 0.45.1]
 
 ### Breaking

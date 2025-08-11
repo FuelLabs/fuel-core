@@ -1,4 +1,7 @@
-use super::Bytes32;
+use super::{
+    Bytes32,
+    HexString,
+};
 use crate::client::schema::{
     BlockId,
     ConnectionArgsFields,
@@ -190,6 +193,13 @@ impl Block {
             Consensus::Unknown => None,
         }
     }
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Subscription")]
+pub struct NewBlocksSubscription {
+    #[cynic(rename = "alpha__new_blocks")]
+    pub new_blocks: HexString,
 }
 
 impl From<BlockHeightFragment> for BlockHeight {
