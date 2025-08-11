@@ -20,6 +20,7 @@ use crate::{
     graphql_api::{
         database::ReadView,
         ports::MemoryPool,
+        require_expensive_subscriptions,
     },
     query::{
         TxnStatusChangeState,
@@ -716,6 +717,29 @@ impl TxStatusSubscription {
         )
         .await
         .map_err(async_graphql::Error::from))
+    }
+
+    #[graphql(name = "alpha__preconfirmations")]
+    async fn preconfirmations<'a>(
+        &self,
+        ctx: &'a Context<'a>,
+    ) -> async_graphql::Result<
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a + use<'a>,
+    > {
+        use futures::StreamExt;
+
+        require_expensive_subscriptions(ctx)?;
+
+        let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
+        let stream = tx_status_manager.subscribe_txs_updates()?;
+
+        let stream = stream.map(|result| {
+            result
+                .map(|(id, status)| TransactionStatus::new(id, status))
+                .map_err(Into::into)
+        });
+
+        Ok(stream)
     }
 
     /// Submits transaction to the `TxPool` and await either success or failure.

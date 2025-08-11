@@ -1,11 +1,11 @@
 use fuel_core_services::stream::BoxStream;
+use fuel_core_types::blockchain::block::Block;
 pub(crate) use fuel_core_types::services::block_importer::SharedImportResult as BlockWithMetadata;
 
 pub(crate) type BlockHeight = u32;
 
 pub(crate) trait BlockWithMetadataExt {
     fn height(&self) -> &BlockHeight;
-    fn events(&self) -> &[fuel_core_types::services::executor::Event];
     fn block(&self) -> &fuel_core_types::blockchain::block::Block;
     #[cfg(test)]
     fn default() -> Self;
@@ -14,10 +14,6 @@ pub(crate) trait BlockWithMetadataExt {
 }
 
 impl BlockWithMetadataExt for BlockWithMetadata {
-    fn events(&self) -> &[fuel_core_types::services::executor::Event] {
-        self.events.as_ref()
-    }
-
     fn height(&self) -> &BlockHeight {
         self.block().header().height()
     }
@@ -59,19 +55,10 @@ pub enum BlockAt {
     Genesis,
 }
 
-impl PartialEq<BlockHeight> for BlockAt {
-    fn eq(&self, other: &BlockHeight) -> bool {
-        match self {
-            Self::Genesis => 0 == *other,
-            Self::Specific(h) => h == other,
-        }
-    }
-}
-
 /// Port for L2 blocks source
 pub trait BlockSource: Send + Sync {
     /// Should provide a stream of blocks with metadata
     fn subscribe(&self) -> BlockStream;
     /// Should provide the block at a given height
-    fn get_block(&self, height: BlockAt) -> anyhow::Result<BlockWithMetadata>;
+    fn get_block(&self, height: BlockAt) -> anyhow::Result<Block>;
 }

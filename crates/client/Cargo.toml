@@ -15,7 +15,14 @@ description = "Tx client and schema specification."
 std = ["fuel-core-types/std"]
 default = ["subscriptions", "std"]
 test-helpers = []
-subscriptions = ["base64", "eventsource-client", "futures", "hyper-rustls"]
+subscriptions = [
+    "base64",
+    "eventsource-client",
+    "futures",
+    "hyper-rustls",
+    "dep:postcard",
+    "fuel-core-types/serde",
+]
 fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]
@@ -32,6 +39,7 @@ hyper-rustls = { version = "0.24", features = [
   "webpki-tokio",
 ], optional = true }
 itertools = { workspace = true }
+postcard = { workspace = true, optional = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }

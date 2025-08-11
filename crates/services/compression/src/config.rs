@@ -1,3 +1,4 @@
+use fuel_core_types::fuel_types::ChainId;
 use std::{
     num::NonZeroU32,
     time::Duration,
@@ -9,6 +10,7 @@ pub struct CompressionConfig {
     temporal_registry_retention: Duration,
     starting_height: Option<NonZeroU32>,
     metrics: bool,
+    chain_id: ChainId,
 }
 
 impl CompressionConfig {
@@ -17,11 +19,13 @@ impl CompressionConfig {
         temporal_registry_retention: Duration,
         starting_height: Option<NonZeroU32>,
         metrics: bool,
+        chain_id: ChainId,
     ) -> Self {
         Self {
             temporal_registry_retention,
             starting_height,
             metrics,
+            chain_id,
         }
     }
 
@@ -38,6 +42,11 @@ impl CompressionConfig {
     /// Get the override starting height
     pub fn starting_height(&self) -> Option<u32> {
         self.starting_height.map(|height| height.get())
+    }
+
+    /// Get the chain ID
+    pub fn chain_id(&self) -> ChainId {
+        self.chain_id
     }
 }
 
