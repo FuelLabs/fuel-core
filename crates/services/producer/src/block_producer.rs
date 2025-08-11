@@ -131,9 +131,7 @@ where
 
         let da_height = predefined_block.header().da_height();
 
-        self.relayer
-            .wait_for_at_least_height(&da_height)
-            .await?;
+        self.relayer.wait_for_at_least_height(&da_height).await?;
 
         let view = self.view_provider.latest_view()?;
 
