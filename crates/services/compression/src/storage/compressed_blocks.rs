@@ -1,9 +1,6 @@
 //! The table for the compressed blocks sent to DA.
 
-use super::column::{
-    CompressionColumn,
-    MerkleizedColumnOf,
-};
+use super::column::CompressionColumn;
 use fuel_core_compression::VersionedCompressedBlock;
 use fuel_core_storage::{
     Mappable,
@@ -12,7 +9,6 @@ use fuel_core_storage::{
         postcard::Postcard,
         primitive::Primitive,
     },
-    merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
 };
 
@@ -28,21 +24,13 @@ impl Mappable for CompressedBlocks {
     type OwnedValue = VersionedCompressedBlock;
 }
 
-impl MerkleizedTableColumn for CompressedBlocks {
-    type TableColumn = CompressionColumn;
-
-    fn table_column() -> Self::TableColumn {
-        Self::TableColumn::CompressedBlocks
-    }
-}
-
 impl TableWithBlueprint for CompressedBlocks {
     // we don't use the Merkleized blueprint because we don't need it for this table
     type Blueprint = Plain<Primitive<4>, Postcard>;
-    type Column = MerkleizedColumnOf<Self>;
+    type Column = CompressionColumn;
 
     fn column() -> Self::Column {
-        Self::Column::TableColumn(Self::table_column())
+        Self::Column::CompressedBlocks
     }
 }
 

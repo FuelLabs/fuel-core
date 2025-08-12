@@ -4,15 +4,11 @@ use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
     codec::postcard::Postcard,
-    merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::fuel_compression::RegistryKey;
 
-use super::column::{
-    CompressionColumn,
-    MerkleizedColumnOf,
-};
+use super::column::CompressionColumn;
 
 /// The metadata key used by `EvictorCache` table to
 /// store progress of the evictor.
@@ -57,14 +53,6 @@ impl rand::distributions::Distribution<MetadataKey> for rand::distributions::Sta
 /// Table that indexes the addresses.
 pub struct EvictorCache;
 
-impl MerkleizedTableColumn for EvictorCache {
-    type TableColumn = CompressionColumn;
-
-    fn table_column() -> Self::TableColumn {
-        Self::TableColumn::EvictorCache
-    }
-}
-
 impl Mappable for EvictorCache {
     type Key = Self::OwnedKey;
     type OwnedKey = MetadataKey;
@@ -74,10 +62,10 @@ impl Mappable for EvictorCache {
 
 impl TableWithBlueprint for EvictorCache {
     type Blueprint = Plain<Postcard, Postcard>;
-    type Column = MerkleizedColumnOf<Self>;
+    type Column = CompressionColumn;
 
     fn column() -> Self::Column {
-        Self::Column::TableColumn(Self::table_column())
+        Self::Column::EvictorCache
     }
 }
 
