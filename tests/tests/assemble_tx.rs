@@ -594,6 +594,7 @@ async fn assemble_transaction__if_change_output_included_in_tx_then_not_added_by
     state_config.coins[1].owner = account.owner().into();
 
     let config = Config::local_node_with_configs(chain_config, state_config);
+    let base_asset_id = config.base_asset_id();
     let service = FuelService::new_node(config).await.unwrap();
     let client = FuelClient::from(service.bound_address);
 
@@ -618,9 +619,16 @@ async fn assemble_transaction__if_change_output_included_in_tx_then_not_added_by
             .add_output(Output::change(account.owner(), 0, arb_asset_id))
             .finalize_as_transaction();
 
+    let required_balance = RequiredBalance {
+        asset_id: base_asset_id,
+        amount: 0,
+        account: account.clone().into_account(),
+        change_policy: ChangePolicy::Change(account.owner()),
+    };
+
     // When
     let resp = client
-        .assemble_transaction(&tx.into(), account.clone(), vec![])
+        .assemble_transaction(&tx.into(), account.clone(), vec![required_balance])
         .await;
 
     // Then
