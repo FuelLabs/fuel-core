@@ -4058,9 +4058,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-syscall"
-version = "0.45.1"
+version = "0.46.0"
 dependencies = [
- "fuel-core-types 0.45.1",
+ "fuel-core-types 0.46.0",
  "parking_lot",
  "tracing",
 ]
