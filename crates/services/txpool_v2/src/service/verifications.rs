@@ -201,13 +201,13 @@ impl InputDependenciesVerifiedTx {
 
             let parameters = CheckPredicateParams::from(consensus_params);
 
-            let mut ecal_state = EcalLogCollector::default();
-            ecal_state.enabled = allow_syscall;
+            let mut ecal_handler = EcalLogCollector::default();
+            ecal_handler.enabled = allow_syscall;
 
-            tx = tx.check_predicates(&parameters, memory, view, ecal_state.clone())?;
+            tx = tx.check_predicates(&parameters, memory, view, ecal_handler.clone())?;
 
             maybe_print_logs(
-                &ecal_state.logs.lock().clone(),
+                &ecal_handler.logs.lock(),
                 tracing::info_span!("predicate_logs", tx_id = % tx.id()),
             );
 

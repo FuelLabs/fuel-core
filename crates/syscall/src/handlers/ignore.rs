@@ -14,14 +14,15 @@ use fuel_core_types::{
 };
 
 /// If enabled, ignores all ECAL invocations.
-#[derive(Debug, Clone, Default)]
-pub struct IgnoreEcal {
-    /// If this is true, the ECAL invocations will be ignored.
-    /// If false, the ECAL invocations will error.
-    pub enabled: bool,
+#[derive(Debug, Clone)]
+pub enum PossiblyIgnoreEcal {
+    /// Ignore ECAL invocations.
+    Ignore,
+    /// Error on ECAL invocations, just like the default behavior.
+    Error,
 }
 
-impl EcalHandler for IgnoreEcal {
+impl EcalHandler for PossiblyIgnoreEcal {
     fn ecal<M, S, Tx, V>(
         vm: &mut Interpreter<M, S, Tx, Self, V>,
         _a: RegId,
@@ -32,9 +33,9 @@ impl EcalHandler for IgnoreEcal {
     where
         M: Memory,
     {
-        if !vm.ecal_state().enabled {
-            return Err(PanicReason::EcalError.into());
+        match vm.ecal_state() {
+            Self::Ignore => Ok(()),
+            Self::Error => Err(PanicReason::EcalError.into()),
         }
-        Ok(())
     }
 }

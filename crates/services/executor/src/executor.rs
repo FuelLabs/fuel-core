@@ -1782,14 +1782,15 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
-        let ecal_state = EcalLogCollector::default();
+        let mut ecal_handler = EcalLogCollector::default();
+        ecal_handler.enabled = true;
 
         checked_tx = checked_tx
             .check_predicates(
                 &CheckPredicateParams::from(&self.consensus_params),
                 memory,
                 storage_tx,
-                ecal_state.clone(),
+                ecal_handler.clone(),
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
@@ -1800,7 +1801,7 @@ where
 
         // Note that the code above only executes predicates if the txpool didn't do so already.
         maybe_print_logs(
-            &ecal_state.logs.lock().clone(),
+            &ecal_handler.logs.lock().clone(),
             tracing::info_span!("predicate_logs", tx_id = % &checked_tx.id()),
         );
 
