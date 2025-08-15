@@ -23,6 +23,7 @@ pub struct Config {
     pub config: ServiceConfig,
     pub utxo_validation: bool,
     pub debug: bool,
+    pub allow_syscall: bool,
     pub historical_execution: bool,
     pub expensive_subscriptions: bool,
     pub max_tx: usize,

@@ -210,6 +210,12 @@ pub struct Command {
     #[deprecated]
     pub vm_backtrace: bool,
 
+    /// Enable syscall support for bytecode execution.
+    ///
+    /// Requires `debug` to be enabled.
+    #[arg(long = "allow-syscall", env)]
+    pub allow_syscall: bool,
+
     /// Enable full utxo stateful validation
     /// disabled by default until downstream consumers stabilize
     #[arg(long = "utxo-validation", env)]
@@ -343,6 +349,7 @@ impl Command {
             vm_backtrace: _,
             debug,
             historical_execution,
+            allow_syscall,
             expensive_subscriptions,
             utxo_validation,
             native_executor_version,
@@ -393,6 +400,10 @@ impl Command {
             da_poll_interval,
             da_starting_recorded_height,
         } = gas_price;
+
+        if allow_syscall && !debug {
+            anyhow::bail!("`--allow-syscall` is only allowed in debug mode");
+        }
 
         let enabled_metrics = metrics.list_of_enabled();
 
@@ -714,6 +725,7 @@ impl Command {
             expensive_subscriptions,
             native_executor_version,
             continue_on_error,
+            allow_syscall,
             utxo_validation,
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores,
@@ -724,6 +736,7 @@ impl Command {
                 max_txs_ttl: tx_pool_ttl,
                 ttl_check_interval: tx_ttl_check_interval.into(),
                 utxo_validation,
+                allow_syscall,
                 black_list,
                 pool_limits,
                 heavy_work: pool_heavy_work_config,
