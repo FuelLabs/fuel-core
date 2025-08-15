@@ -64,6 +64,7 @@ pub struct Config {
     /// - Enables storage read replay for historical blocks.
     /// - Enables querying historical contract state and balances.
     pub historical_execution: bool,
+    pub expensive_subscriptions: bool,
     pub utxo_validation: bool,
     pub allow_syscall: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
@@ -163,6 +164,7 @@ impl Config {
                 ),
                 number_of_threads: 0,
                 database_batch_size: 100,
+                block_subscriptions_queue: 1000,
                 max_queries_depth: 16,
                 max_queries_complexity: 80000,
                 max_queries_recursive_depth: 16,
@@ -183,6 +185,7 @@ impl Config {
             debug: true,
             historical_execution: true,
             allow_syscall: true,
+            expensive_subscriptions: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),
             #[cfg(feature = "parallel-executor")]

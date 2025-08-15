@@ -201,6 +201,10 @@ pub struct Command {
     #[arg(long = "historical-execution", env)]
     pub historical_execution: bool,
 
+    /// Allows expensive subscriptions to be used via GraphQL.
+    #[arg(long = "expensive-subscriptions", env)]
+    pub expensive_subscriptions: bool,
+
     /// Enable logging of backtraces from vm errors
     #[arg(long = "vm-backtrace", env)]
     #[deprecated]
@@ -346,6 +350,7 @@ impl Command {
             debug,
             historical_execution,
             allow_syscall,
+            expensive_subscriptions,
             utxo_validation,
             native_executor_version,
             #[cfg(feature = "parallel-executor")]
@@ -668,6 +673,7 @@ impl Command {
                 addr,
                 number_of_threads: graphql.graphql_number_of_threads,
                 database_batch_size: graphql.database_batch_size,
+                block_subscriptions_queue: graphql.block_subscriptions_queue,
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
                 max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
@@ -716,6 +722,7 @@ impl Command {
             snapshot_reader,
             debug,
             historical_execution,
+            expensive_subscriptions,
             native_executor_version,
             continue_on_error,
             allow_syscall,

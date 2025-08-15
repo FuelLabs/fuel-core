@@ -42,7 +42,7 @@ use super::{
         P2PAdapter,
         TxStatusManagerAdapter,
         compression_adapters::{
-            CompressionBlockImporterAdapter,
+            CompressionBlockDBAdapter,
             CompressionServiceAdapter,
         },
     },
@@ -402,9 +402,9 @@ pub fn init_sub_services(
     let compression_service_adapter =
         CompressionServiceAdapter::new(database.compression().clone());
 
-    let compression_importer_adapter = CompressionBlockImporterAdapter::new(
+    let compression_importer_adapter = CompressionBlockDBAdapter::new(
         importer_adapter.clone(),
-        import_result_provider.clone(),
+        database.on_chain().clone(),
     );
 
     let compression_service = match &config.da_compression {
@@ -415,6 +415,7 @@ pub fn init_sub_services(
                 database.compression().clone(),
                 cfg.clone(),
                 database.on_chain().clone(),
+                chain_id,
             )
             .map_err(|e| anyhow::anyhow!(e))?,
         ),
@@ -431,6 +432,7 @@ pub fn init_sub_services(
         on_chain_database: database.on_chain().clone(),
         off_chain_database: database.off_chain().clone(),
         continue_on_error: config.continue_on_error,
+        block_subscriptions_queue: config.graphql_config.block_subscriptions_queue,
         consensus_parameters: &chain_config.consensus_parameters,
     };
     let graphql_worker =
@@ -444,6 +446,7 @@ pub fn init_sub_services(
         debug: config.debug,
         historical_execution: config.historical_execution,
         allow_syscall: config.allow_syscall,
+        expensive_subscriptions: config.expensive_subscriptions,
         max_tx: config.txpool.pool_limits.max_txs,
         max_gas: config.txpool.pool_limits.max_gas,
         max_size: config.txpool.pool_limits.max_bytes_size,
