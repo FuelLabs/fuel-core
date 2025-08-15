@@ -20,11 +20,12 @@ version = { workspace = true }
 [features]
 default = ["std"]
 alloc = ["fuel-core-types/alloc"]
-serde = ["dep:serde", "fuel-core-types/serde"]
-std = ["alloc", "fuel-core-types/std"]
+std = [
+    "alloc",
+    "fuel-core-types/std",
+]
 
 [dependencies]
 fuel-core-types = { workspace = true }
 parking_lot = { workspace = true }
-serde = { workspace = true, features = ["derive"], optional = true }
 tracing = { workspace = true }
