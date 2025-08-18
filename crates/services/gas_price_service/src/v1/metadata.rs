@@ -94,6 +94,7 @@ pub struct V1AlgorithmConfig {
     /// The interval at which the `DaSourceService` polls for new data
     pub da_poll_interval: Option<Duration>,
     pub starting_recorded_height: Option<BlockHeight>,
+    pub start_da_price_from: BlockHeight,
     pub record_metrics: bool,
 }
 
@@ -135,6 +136,7 @@ pub fn updater_from_config(
         da_p_component: value.da_p_component,
         da_d_component: value.da_d_component,
         unrecorded_blocks_bytes,
+        start_da_price_from: value.start_da_price_from.into(),
     }
 }
 
@@ -194,5 +196,6 @@ pub fn v1_algorithm_from_metadata(
         da_p_component: config.da_p_component,
         da_d_component: config.da_d_component,
         unrecorded_blocks_bytes,
+        start_da_price_from: config.start_da_price_from.into(),
     }
 }
