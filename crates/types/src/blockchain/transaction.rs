@@ -47,6 +47,8 @@ impl TransactionExt for Transaction {
             Transaction::Upgrade(tx) => Cow::Borrowed(tx.inputs()),
             Transaction::Upload(tx) => Cow::Borrowed(tx.inputs()),
             Transaction::Blob(tx) => Cow::Borrowed(tx.inputs()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            Transaction::ScriptV2(tx) => Cow::Borrowed(tx.inputs()),
         }
     }
 
@@ -62,6 +64,8 @@ impl TransactionExt for Transaction {
             Transaction::Upgrade(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
             Transaction::Upload(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
             Transaction::Blob(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
+            #[cfg(feature = "chargeable-tx-v2")]
+            Transaction::ScriptV2(tx) => Ok(tx.max_gas(gas_costs, fee_params)),
         }
     }
 
@@ -73,6 +77,8 @@ impl TransactionExt for Transaction {
             Transaction::Upgrade(tx) => Cow::Borrowed(tx.outputs()),
             Transaction::Upload(tx) => Cow::Borrowed(tx.outputs()),
             Transaction::Blob(tx) => Cow::Borrowed(tx.outputs()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            Transaction::ScriptV2(tx) => Cow::Borrowed(tx.outputs()),
         }
     }
 }
@@ -86,6 +92,8 @@ impl TransactionExt for CheckedTransaction {
             CheckedTransaction::Upgrade(tx) => Cow::Borrowed(tx.transaction().inputs()),
             CheckedTransaction::Upload(tx) => Cow::Borrowed(tx.transaction().inputs()),
             CheckedTransaction::Blob(tx) => Cow::Borrowed(tx.transaction().inputs()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            CheckedTransaction::ScriptV2(tx) => Cow::Borrowed(tx.transaction().inputs()),
         }
     }
 
@@ -97,6 +105,8 @@ impl TransactionExt for CheckedTransaction {
             CheckedTransaction::Upgrade(tx) => Cow::Borrowed(tx.transaction().outputs()),
             CheckedTransaction::Upload(tx) => Cow::Borrowed(tx.transaction().outputs()),
             CheckedTransaction::Blob(tx) => Cow::Borrowed(tx.transaction().outputs()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            CheckedTransaction::ScriptV2(tx) => Cow::Borrowed(tx.transaction().outputs()),
         }
     }
 
@@ -110,6 +120,8 @@ impl TransactionExt for CheckedTransaction {
             CheckedTransaction::Upgrade(tx) => Ok(tx.metadata().max_gas),
             CheckedTransaction::Upload(tx) => Ok(tx.metadata().max_gas),
             CheckedTransaction::Blob(tx) => Ok(tx.metadata().max_gas),
+            #[cfg(feature = "chargeable-tx-v2")]
+            CheckedTransaction::ScriptV2(tx) => Ok(tx.metadata().max_gas),
         }
     }
 }

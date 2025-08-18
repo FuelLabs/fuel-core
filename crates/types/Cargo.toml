@@ -38,6 +38,7 @@ random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers"]
 aws-kms = ["dep:aws-sdk-kms"]
 fault-proving = []
+chargeable-tx-v2 = ["fuel-vm-private/chargeable-tx-v2"]
 
 [dependencies]
 anyhow = { workspace = true }

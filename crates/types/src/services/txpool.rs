@@ -1,5 +1,7 @@
 //! Types for interoperability with the txpool service
 
+#[cfg(feature = "chargeable-tx-v2")]
+use crate::fuel_tx::ScriptV2;
 use crate::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
@@ -101,6 +103,9 @@ pub enum PoolTransaction {
     Upload(Checked<Upload>, Metadata),
     /// Blob
     Blob(Checked<Blob>, Metadata),
+    #[cfg(feature = "chargeable-tx-v2")]
+    /// Script V2
+    ScriptV2(Checked<ScriptV2>, Metadata),
 }
 
 impl PoolTransaction {
@@ -120,6 +125,8 @@ impl PoolTransaction {
                 PoolTransaction::Upgrade(tx, _) => tx.transaction().metered_bytes_size(),
                 PoolTransaction::Upload(tx, _) => tx.transaction().metered_bytes_size(),
                 PoolTransaction::Blob(tx, _) => tx.transaction().metered_bytes_size(),
+                #[cfg(feature = "chargeable-tx-v2")]
+                PoolTransaction::ScriptV2(tx, _) => tx.transaction().metered_bytes_size(),
             }
         }
     }
@@ -132,6 +139,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(_, metadata) => metadata.max_gas_price,
             PoolTransaction::Upload(_, metadata) => metadata.max_gas_price,
             PoolTransaction::Blob(_, metadata) => metadata.max_gas_price,
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(_, metadata) => metadata.max_gas_price,
         }
     }
 
@@ -143,6 +152,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(tx, _) => tx.transaction().expiration(),
             PoolTransaction::Upload(tx, _) => tx.transaction().expiration(),
             PoolTransaction::Blob(tx, _) => tx.transaction().expiration(),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => tx.transaction().expiration(),
         }
     }
 
@@ -154,6 +165,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(tx, _) => tx.id(),
             PoolTransaction::Upload(tx, _) => tx.id(),
             PoolTransaction::Blob(tx, _) => tx.id(),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => tx.id(),
         }
     }
 
@@ -165,6 +178,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Upload(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Blob(tx, _) => tx.metadata().max_gas,
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => tx.metadata().max_gas,
         }
     }
 
@@ -175,6 +190,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(_, metadata) => metadata,
             PoolTransaction::Upload(_, metadata) => metadata,
             PoolTransaction::Blob(_, metadata) => metadata,
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(_, metadata) => metadata,
         }
     }
 
@@ -187,6 +204,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(tx, _) => tx.id(),
             PoolTransaction::Upload(tx, _) => tx.id(),
             PoolTransaction::Blob(tx, _) => tx.id(),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => tx.id(),
         }
     }
 
@@ -209,6 +228,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Upload(tx, _) => tx.metadata().max_gas,
             PoolTransaction::Blob(tx, _) => tx.metadata().max_gas,
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => tx.metadata().max_gas,
         }
     }
 
@@ -239,6 +260,10 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(_, _) => None,
             PoolTransaction::Upload(_, _) => None,
             PoolTransaction::Blob(_, _) => None,
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(script, _) => {
+                Some(*script.transaction().script_gas_limit())
+            }
         }
     }
 
@@ -249,6 +274,8 @@ impl PoolTransaction {
             Self::Upload(tx, _) => tx.transaction().tip(),
             Self::Upgrade(tx, _) => tx.transaction().tip(),
             Self::Blob(tx, _) => tx.transaction().tip(),
+            #[cfg(feature = "chargeable-tx-v2")]
+            Self::ScriptV2(tx, _) => tx.transaction().tip(),
         }
     }
 
@@ -259,6 +286,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(tx, _) => tx.transaction().is_computed(),
             PoolTransaction::Upload(tx, _) => tx.transaction().is_computed(),
             PoolTransaction::Blob(tx, _) => tx.transaction().is_computed(),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => tx.transaction().is_computed(),
         }
     }
 
@@ -269,6 +298,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(tx, _) => tx.transaction().inputs(),
             PoolTransaction::Upload(tx, _) => tx.transaction().inputs(),
             PoolTransaction::Blob(tx, _) => tx.transaction().inputs(),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => tx.transaction().inputs(),
         }
     }
 
@@ -279,6 +310,8 @@ impl PoolTransaction {
             PoolTransaction::Upgrade(tx, _) => tx.transaction().outputs(),
             PoolTransaction::Upload(tx, _) => tx.transaction().outputs(),
             PoolTransaction::Blob(tx, _) => tx.transaction().outputs(),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => tx.transaction().outputs(),
         }
     }
 
@@ -310,6 +343,8 @@ impl From<PoolTransaction> for CheckedTransaction {
             PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx),
             PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx),
             PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => CheckedTransaction::ScriptV2(tx),
         }
     }
 }
@@ -330,6 +365,10 @@ impl From<&PoolTransaction> for Transaction {
                 Transaction::Upload(tx.transaction().clone())
             }
             PoolTransaction::Blob(tx, _) => Transaction::Blob(tx.transaction().clone()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => {
+                Transaction::ScriptV2(tx.transaction().clone())
+            }
         }
     }
 }
@@ -342,6 +381,8 @@ impl From<&PoolTransaction> for CheckedTransaction {
             PoolTransaction::Upgrade(tx, _) => CheckedTransaction::Upgrade(tx.clone()),
             PoolTransaction::Upload(tx, _) => CheckedTransaction::Upload(tx.clone()),
             PoolTransaction::Blob(tx, _) => CheckedTransaction::Blob(tx.clone()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            PoolTransaction::ScriptV2(tx, _) => CheckedTransaction::ScriptV2(tx.clone()),
         }
     }
 }

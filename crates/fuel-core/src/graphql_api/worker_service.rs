@@ -389,6 +389,11 @@ where
                 inputs = tx.inputs().as_slice();
                 outputs = tx.outputs().as_slice();
             }
+            #[cfg(feature = "chargeable-tx-v2")]
+            Transaction::ScriptV2(tx) => {
+                inputs = tx.inputs().as_slice();
+                outputs = tx.outputs().as_slice();
+            }
         }
         persist_owners_index(
             block_height,
@@ -515,6 +520,10 @@ where
             | Transaction::Upgrade(_)
             | Transaction::Upload(_)
             | Transaction::Blob(_) => {
+                // Do nothing
+            }
+            #[cfg(feature = "chargeable-tx-v2")]
+            Transaction::ScriptV2(_) => {
                 // Do nothing
             }
         }

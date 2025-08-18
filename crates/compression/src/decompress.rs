@@ -8,6 +8,12 @@ use crate::{
     },
     registry::TemporalRegistryAll,
 };
+#[cfg(feature = "chargeable-tx-v2")]
+use fuel_core_types::fuel_tx::input::{
+    coin::CoinV2,
+    message::MessageV2,
+};
+
 use fuel_core_types::{
     blockchain::block::PartialFuelBlock,
     fuel_compression::{
@@ -277,6 +283,45 @@ where
             c.mint_asset_id.decompress(ctx).await?,
             c.gas_price.decompress(ctx).await?,
         ))
+    }
+}
+
+#[cfg(feature = "chargeable-tx-v2")]
+impl<D> DecompressibleBy<DecompressCtx<D>> for CoinV2
+where
+    D: DecompressDb,
+{
+    async fn decompress_with(
+        _c: <CoinV2 as Compressible>::Compressed,
+        _ctx: &DecompressCtx<D>,
+    ) -> Result<CoinV2, <DecompressCtx<D> as ContextError>::Error> {
+        // let utxo_id = UtxoId::decompress_with(c.utxo_id, ctx).await?;
+        // let coin_info = ctx.db.coin(utxo_id)?;
+        // let witness_index = c.witness_index.decompress(ctx).await?;
+        // let predicate_gas_used = c.predicate_gas_used.decompress(ctx).await?;
+        // let predicate = c.predicate.decompress(ctx).await?;
+        // let predicate_data = c.predicate_data.decompress(ctx).await?;
+        // Ok(Self {
+        //     utxo_id,
+        //     owner: coin_info.owner,
+        //     amount: coin_info.amount,
+        //     asset_id: coin_info.asset_id,
+        //     tx_pointer: Default::default(),
+        // })
+        todo!()
+    }
+}
+
+#[cfg(feature = "chargeable-tx-v2")]
+impl<D> DecompressibleBy<DecompressCtx<D>> for MessageV2
+where
+    D: DecompressDb,
+{
+    async fn decompress_with(
+        _c: Self::Compressed,
+        _ctx: &DecompressCtx<D>,
+    ) -> Result<MessageV2, <DecompressCtx<D> as ContextError>::Error> {
+        todo!()
     }
 }
 

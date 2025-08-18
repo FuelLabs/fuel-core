@@ -530,6 +530,10 @@ impl Transaction {
                     .map(|c| AssetId(*c))
                     .collect(),
             ),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -553,6 +557,10 @@ impl Transaction {
             fuel_tx::Transaction::Blob(tx) => {
                 Some(input_contracts(tx).map(|v| (*v).into()).collect())
             }
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -564,6 +572,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.input_contract().into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -575,6 +587,10 @@ impl Transaction {
             fuel_tx::Transaction::Upgrade(tx) => Some((*tx.policies()).into()),
             fuel_tx::Transaction::Upload(tx) => Some((*tx.policies()).into()),
             fuel_tx::Transaction::Blob(tx) => Some((*tx.policies()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -588,6 +604,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upgrade(_)
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -599,6 +619,10 @@ impl Transaction {
             fuel_tx::Transaction::Upgrade(tx) => Some(tx.maturity().into()),
             fuel_tx::Transaction::Upload(tx) => Some(tx.maturity().into()),
             fuel_tx::Transaction::Blob(tx) => Some(tx.maturity().into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -610,6 +634,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_amount()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -621,6 +649,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.mint_asset_id()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -632,6 +664,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.gas_price()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -644,6 +680,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some((*mint.tx_pointer()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -689,6 +729,10 @@ impl Transaction {
             fuel_tx::Transaction::Blob(tx) => {
                 Some(tx.inputs().iter().map(Into::into).collect())
             }
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -710,6 +754,10 @@ impl Transaction {
             fuel_tx::Transaction::Blob(tx) => {
                 tx.outputs().iter().map(Into::into).collect()
             }
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -721,6 +769,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Mint(mint) => Some(mint.output_contract().into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!();
+            }
         }
     }
 
@@ -757,6 +809,10 @@ impl Transaction {
                     .map(|w| HexString(w.clone().into_inner()))
                     .collect(),
             ),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -770,6 +826,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upgrade(_)
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -805,6 +865,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upgrade(_)
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(script) => {
+                Some(HexString(script.script().clone()))
+            }
         }
     }
 
@@ -818,6 +882,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upgrade(_)
             | fuel_tx::Transaction::Upload(_)
             | fuel_tx::Transaction::Blob(_) => None,
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(script) => {
+                Some(HexString(script.script_data().clone()))
+            }
         }
     }
 
@@ -833,6 +901,10 @@ impl Transaction {
                 Some((*tx.bytecode_witness_index()).into())
             }
             fuel_tx::Transaction::Blob(tx) => Some((*tx.bytecode_witness_index()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -851,6 +923,10 @@ impl Transaction {
             fuel_tx::Transaction::Upgrade(_) => None,
             fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Blob(_) => None,
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -877,6 +953,10 @@ impl Transaction {
             fuel_tx::Transaction::Upgrade(_) => None,
             fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Blob(_) => None,
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -888,6 +968,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upgrade(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.bytecode_root()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -899,6 +983,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upgrade(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.subsection_index()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -910,6 +998,10 @@ impl Transaction {
             | fuel_tx::Transaction::Upgrade(_)
             | fuel_tx::Transaction::Blob(_) => None,
             fuel_tx::Transaction::Upload(tx) => Some((*tx.subsections_number()).into()),
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -923,6 +1015,10 @@ impl Transaction {
             fuel_tx::Transaction::Upload(tx) => {
                 Some(tx.proof_set().iter().map(|proof| (*proof).into()).collect())
             }
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 
@@ -934,6 +1030,10 @@ impl Transaction {
             fuel_tx::Transaction::Upgrade(tx) => Some((*tx.upgrade_purpose()).into()),
             fuel_tx::Transaction::Upload(_) => None,
             fuel_tx::Transaction::Blob(_) => None,
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(_) => {
+                todo!()
+            }
         }
     }
 

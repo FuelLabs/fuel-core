@@ -25,6 +25,10 @@ test-helpers = [
     "fuel-core-types/std",
 ]
 fault-proving = ["fuel-core-types/fault-proving"]
+chargeable-tx-v2 = [
+    "fuel-core-types/chargeable-tx-v2",
+    "fuel-core-types/da-compression",
+]
 
 [dependencies]
 anyhow = { workspace = true }

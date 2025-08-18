@@ -482,6 +482,10 @@ impl TxQuery {
             fuel_tx::Transaction::Blob(tx) => {
                 AssembleTx::new(tx, arguments)?.assemble().await?.into()
             }
+            #[cfg(feature = "chargeable-tx-v2")]
+            fuel_tx::Transaction::ScriptV2(tx) => {
+                AssembleTx::new(tx, arguments)?.assemble().await?.into()
+            }
         };
 
         let (assembled_tx, status) = block_producer

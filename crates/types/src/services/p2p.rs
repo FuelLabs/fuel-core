@@ -29,6 +29,8 @@ use std::{
     time::SystemTime,
 };
 
+#[cfg(feature = "chargeable-tx-v2")]
+use crate::fuel_tx::ScriptV2;
 pub use tai64::Tai64;
 
 /// Contains types and logic for Peer Reputation
@@ -315,6 +317,8 @@ impl Serialize for NetworkableTransactionPool {
                 Transaction::Upgrade(_) => {}
                 Transaction::Upload(_) => {}
                 Transaction::Blob(_) => {}
+                #[cfg(feature = "chargeable-tx-v2")]
+                Transaction::ScriptV2(_) => {}
             }
         }
 
@@ -327,6 +331,8 @@ impl Serialize for NetworkableTransactionPool {
             Upgrade(&'a Upgrade),
             Upload(&'a Upload),
             Blob(&'a Blob),
+            #[cfg(feature = "chargeable-tx-v2")]
+            ScriptV2(&'a ScriptV2),
         }
 
         match self {
@@ -345,6 +351,10 @@ impl Serialize for NetworkableTransactionPool {
                 }
                 PoolTransaction::Upload(tx, _) => {
                     TransactionRef::Upload(tx.transaction()).serialize(serializer)
+                }
+                #[cfg(feature = "chargeable-tx-v2")]
+                PoolTransaction::ScriptV2(tx, _) => {
+                    TransactionRef::ScriptV2(tx.transaction()).serialize(serializer)
                 }
             },
             NetworkableTransactionPool::Transaction(tx) => tx.serialize(serializer),

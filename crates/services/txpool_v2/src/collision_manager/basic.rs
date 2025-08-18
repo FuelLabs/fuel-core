@@ -111,6 +111,10 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
                         message_spenders.insert(*nonce, tx.id());
                     }
                     Input::Contract { .. } => {}
+                    #[cfg(feature = "chargeable-tx-v2")]
+                    Input::InputV2(_) => {
+                        todo!()
+                    }
                 }
             }
             for output in tx.outputs() {

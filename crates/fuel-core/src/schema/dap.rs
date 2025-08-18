@@ -502,6 +502,10 @@ impl DapMutation {
                     json_receipts,
                 })
             }
+            #[cfg(feature = "chargeable-tx-v2")]
+            CheckedTransaction::ScriptV2(_) => {
+                todo!()
+            }
             CheckedTransaction::Create(_) => {
                 Err(async_graphql::Error::new("`Create` is not supported"))
             }

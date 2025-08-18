@@ -75,6 +75,11 @@ impl MaybeCheckedTransaction {
                 _,
             ) => tx.id(),
             MaybeCheckedTransaction::Transaction(tx) => tx.id(chain_id),
+            #[cfg(feature = "chargeable-tx-v2")]
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::ScriptV2(tx),
+                _,
+            ) => tx.id(),
         }
     }
 
@@ -120,6 +125,13 @@ impl MaybeCheckedTransaction {
             MaybeCheckedTransaction::Transaction(Transaction::Blob(tx)) => {
                 tx.expiration()
             }
+            #[cfg(feature = "chargeable-tx-v2")]
+            MaybeCheckedTransaction::Transaction(Transaction::ScriptV2(_)) => todo!(),
+            #[cfg(feature = "chargeable-tx-v2")]
+            MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::ScriptV2(_),
+                _,
+            ) => todo!(),
         }
     }
 }
