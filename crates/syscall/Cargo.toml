@@ -20,10 +20,7 @@ version = { workspace = true }
 [features]
 default = ["std"]
 alloc = ["fuel-core-types/alloc"]
-std = [
-    "alloc",
-    "fuel-core-types/std",
-]
+std = ["alloc", "fuel-core-types/std"]
 
 [dependencies]
 fuel-core-types = { workspace = true }
