@@ -193,6 +193,7 @@ pub struct Command {
     /// - Allows GraphQL Endpoints to arbitrarily advance blocks.
     /// - Enables debugger GraphQL Endpoints.
     /// - Allows setting `utxo_validation` to `false`.
+    /// - Allows setting `allow_syscall` to `true`.
     #[arg(long = "debug", env)]
     pub debug: bool,
 
