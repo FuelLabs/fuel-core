@@ -1,4 +1,12 @@
+#![allow(non_snake_case)]
+
 use crate::helpers::TestSetupBuilder;
+use fuel_core::chain_config::{
+    self,
+    CoinConfig,
+    SnapshotWriter,
+};
+use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
@@ -8,17 +16,111 @@ use rand::{
     SeedableRng,
     rngs::StdRng,
 };
-use std::array;
+use std::{
+    process::{
+        Command,
+        Stdio,
+    },
+    sync::mpsc::{
+        Receiver,
+        channel,
+    },
+    thread,
+};
 
-#[tokio::test]
-async fn syscall_logs_produced_by_both_predicates_and_script() {
-    const SYSCALL_LOG: u64 = 1000;
-    const LOG_FD_STDOUT: u64 = 1;
+pub struct FuelCoreLogCapture {
+    client: FuelClient,
+    child: std::process::Child,
+    _output_thread: thread::JoinHandle<()>,
+    output: Receiver<String>,
+}
+impl FuelCoreLogCapture {
+    /// Starts a fuel-core process with the given extra arguments.
+    /// Captures its stderr, and provides a client connected to it.
+    pub fn start(extra_args: &[&str]) -> Self {
+        let mut child = Command::new("cargo")
+            .args(&["run", "--bin", "fuel-core", "--", "run", "--port", "0"])
+            .args(extra_args)
+            .env("FUEL_TRACE", "1")
+            .env("RUST_LOG", "info")
+            .current_dir(env!("CARGO_MANIFEST_DIR").strip_suffix("/tests").unwrap())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("failed to spawn process");
 
+        let (output_sender, output_receiver) = channel();
+        let (addr_sender, addr_receiver) = channel();
+
+        let stderr = child.stderr.take().expect("stderr not captured");
+        let output_thread = thread::spawn(move || {
+            use std::io::{
+                BufRead,
+                BufReader,
+            };
+
+            let re_addr =
+                regex::Regex::new(r"Binding GraphQL provider to (\S+)").unwrap();
+
+            // https://superuser.com/a/380778
+            let re_ansi_escape = regex::Regex::new(r"\x1b\[[0-9;]*[mGKHF]").unwrap();
+
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                let line = line.unwrap();
+                eprintln!("{line}");
+                if let Some(m) = re_addr.captures(&line) {
+                    addr_sender.send(m[1].to_string()).unwrap();
+                }
+
+                // Removes ANSI escape codes like colors.
+                // We don't want to enable any non-human-readable output, because
+                // the tests here ensure that some human-readable output is present.
+                // Assertions are easier to do without colors.
+                let line = re_ansi_escape.replace_all(&line, "").to_string();
+
+                output_sender.send(line).unwrap();
+            }
+        });
+
+        let addr = addr_receiver.recv().unwrap();
+        let client = FuelClient::new(format!("http://{}", addr)).unwrap();
+
+        Self {
+            child,
+            _output_thread: output_thread,
+            output: output_receiver,
+            client,
+        }
+    }
+
+    /// Reads output lines so far, non-blocking.
+    fn read_output_so_far(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        while let Ok(line) = self.output.try_recv() {
+            lines.push(line);
+        }
+        lines
+    }
+}
+
+impl Drop for FuelCoreLogCapture {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+const SYSCALL_LOG: u64 = 1000;
+const LOG_FD_STDOUT: u64 = 1;
+
+fn setup_tx(
+    base_asset_id: AssetId,
+    predicate_msgs: &[&str],
+    script_msg: Option<&str>,
+) -> (Transaction, Vec<CoinConfig>) {
     let mut rng = StdRng::seed_from_u64(121210);
 
     const AMOUNT: u64 = 1_000;
-    const NUM_PREDICATES: usize = 4;
 
     let text_reg = 0x10;
     let text_size_reg = 0x11;
@@ -26,35 +128,43 @@ async fn syscall_logs_produced_by_both_predicates_and_script() {
     let fd_reg = 0x13;
     let tmp_reg = 0x14;
 
-    let predicates: [_; NUM_PREDICATES] = array::from_fn(|i| i).map(|i| {
-        let predicate_data: Vec<u8> =
-            format!("Hello from Predicate {i}!").bytes().collect();
-        let predicate = vec![
-            op::movi(syscall_id_reg, SYSCALL_LOG as u32),
-            op::movi(fd_reg, LOG_FD_STDOUT as u32),
-            op::gm_args(tmp_reg, GMArgs::GetVerifyingPredicate),
-            op::gtf_args(text_reg, tmp_reg, GTFArgs::InputCoinPredicateData),
-            op::movi(text_size_reg, predicate_data.len().try_into().unwrap()),
-            op::ecal(syscall_id_reg, fd_reg, text_reg, text_size_reg),
-            op::ret(RegId::ONE),
-        ]
-        .into_iter()
+    let predicates: Vec<_> = predicate_msgs
+        .iter()
+        .map(|msg| {
+            let predicate_data: Vec<u8> = msg.bytes().collect();
+            let predicate = vec![
+                op::movi(syscall_id_reg, SYSCALL_LOG as u32),
+                op::movi(fd_reg, LOG_FD_STDOUT as u32),
+                op::gm_args(tmp_reg, GMArgs::GetVerifyingPredicate),
+                op::gtf_args(text_reg, tmp_reg, GTFArgs::InputCoinPredicateData),
+                op::movi(text_size_reg, predicate_data.len().try_into().unwrap()),
+                op::ecal(syscall_id_reg, fd_reg, text_reg, text_size_reg),
+                op::ret(RegId::ONE),
+            ]
+            .into_iter()
+            .collect();
+            let predicate_owner = Input::predicate_owner(&predicate);
+            (predicate, predicate_data, predicate_owner)
+        })
         .collect();
-        let predicate_owner = Input::predicate_owner(&predicate);
-        (predicate, predicate_data, predicate_owner)
-    });
 
-    let script_data: Vec<u8> = "Hello from Script!".bytes().collect();
-    let script: Vec<u8> = vec![
-        op::movi(syscall_id_reg, SYSCALL_LOG as u32),
-        op::movi(fd_reg, LOG_FD_STDOUT as u32),
-        op::gtf_args(text_reg, 0x00, GTFArgs::ScriptData),
-        op::movi(text_size_reg, script_data.len().try_into().unwrap()),
-        op::ecal(syscall_id_reg, fd_reg, text_reg, text_size_reg),
-        op::ret(RegId::ONE),
-    ]
-    .into_iter()
-    .collect();
+    let (script, script_data) = match script_msg {
+        Some(msg) => {
+            let script_data: Vec<u8> = msg.bytes().collect();
+            let script: Vec<u8> = vec![
+                op::movi(syscall_id_reg, SYSCALL_LOG as u32),
+                op::movi(fd_reg, LOG_FD_STDOUT as u32),
+                op::gtf_args(text_reg, 0x00, GTFArgs::ScriptData),
+                op::movi(text_size_reg, script_data.len().try_into().unwrap()),
+                op::ecal(syscall_id_reg, fd_reg, text_reg, text_size_reg),
+                op::ret(RegId::ONE),
+            ]
+            .into_iter()
+            .collect();
+            (script, script_data)
+        }
+        None => (Default::default(), Default::default()),
+    };
 
     // Given
     let mut tx = TransactionBuilder::script(script, script_data);
@@ -64,7 +174,7 @@ async fn syscall_logs_produced_by_both_predicates_and_script() {
             rng.r#gen(),
             predicate_owner,
             AMOUNT,
-            AssetId::BASE,
+            base_asset_id,
             Default::default(),
             Default::default(),
             predicate,
@@ -72,74 +182,381 @@ async fn syscall_logs_produced_by_both_predicates_and_script() {
         ));
     }
     let tx = tx.finalize();
-
     let mut context = TestSetupBuilder::default();
-    context.utxo_validation = true;
     context.config_coin_inputs_from_transactions(&[&tx]);
-    let context = context.finalize().await;
+    (tx.into(), context.initial_coins)
+}
 
-    let mut tx = tx.into();
-    context.client.estimate_predicates(&mut tx).await.unwrap();
+struct TestCtx {
+    /// This must be before the db_dir as the drop order matters here
+    driver: FuelCoreLogCapture,
+    _db_dir: tempfile::TempDir,
+    tx: Transaction,
+    tx_id: TxId,
+}
+impl TestCtx {
+    async fn setup(
+        allow_syscall: bool,
+        predicate_msgs: &[&str],
+        script_msg: Option<&str>,
+    ) -> anyhow::Result<TestCtx> {
+        let cc = chain_config::ChainConfig::local_testnet();
 
-    // When
-    let result = context.client.submit_and_await_commit(&tx).await;
+        let base_asset_id = cc.consensus_parameters.base_asset_id();
+        let (tx, initial_coins) = setup_tx(*base_asset_id, predicate_msgs, script_msg);
 
-    // Then
-    result.expect("Transaction should be executed successfully");
+        let temp_dir = tempfile::tempdir()?;
+
+        let snapshot_dir = temp_dir.path().join("snapshot");
+        let db_path = temp_dir.path().join("db");
+        std::fs::create_dir(&db_path)?;
+
+        let state_config = chain_config::StateConfig {
+            coins: initial_coins,
+            messages: Vec::new(),
+            blobs: Vec::new(),
+            contracts: Vec::new(),
+            last_block: None,
+        };
+
+        let snapshot_writer = SnapshotWriter::json(snapshot_dir.clone());
+        snapshot_writer.write_state_config(state_config, &cc)?;
+
+        let mut args = vec![
+            "--db-type",
+            "in-memory",
+            "--debug",
+            "--utxo-validation",
+            "--snapshot",
+            snapshot_dir.as_path().to_str().unwrap(),
+        ];
+
+        if allow_syscall {
+            args.push("--allow-syscall");
+        }
+
+        let driver = FuelCoreLogCapture::start(&args);
+
+        let chain_id = driver
+            .client
+            .chain_info()
+            .await
+            .unwrap()
+            .consensus_parameters
+            .chain_id();
+        let tx_id = tx.id(&chain_id);
+
+        Ok(TestCtx {
+            driver,
+            _db_dir: temp_dir,
+            tx,
+            tx_id,
+        })
+    }
+
+    fn extract_logs_so_far(&self) -> Logs {
+        let tx_id = self.tx_id;
+        let anchor_predicate_logs = format!("predicate_logs{{tx_id={tx_id}}}");
+        let anchor_tx_logs = format!("tx_logs{{tx_id={tx_id}}}");
+
+        // Log lines start with ISO 8601 timestamp, e.g. "2024-06-14T12:34:56.789Z".
+        // We use this to detect the start of a log lines.
+        let re_timestamp =
+            regex::Regex::new(r"^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+Z").unwrap();
+
+        let mut result = Logs {
+            predicates: Vec::new(),
+            tx: Vec::new(),
+        };
+
+        let mut it = self.driver.read_output_so_far().into_iter().peekable();
+        loop {
+            let Some(line) = it.next() else {
+                break;
+            };
+            if line.contains(&anchor_predicate_logs) {
+                assert!(
+                    result.predicates.is_empty(),
+                    "Multiple predicate logs sections found in output"
+                );
+                while it
+                    .peek()
+                    .map(|line| !re_timestamp.is_match(line))
+                    .unwrap_or(false)
+                {
+                    result.predicates.push(it.next().unwrap());
+                }
+            }
+            if line.contains(&anchor_tx_logs) {
+                assert!(
+                    result.tx.is_empty(),
+                    "Multiple tx logs sections found in output"
+                );
+                while it
+                    .peek()
+                    .map(|line| !re_timestamp.is_match(line))
+                    .unwrap_or(false)
+                {
+                    result.tx.push(it.next().unwrap());
+                }
+            }
+        }
+
+        result
+    }
+}
+
+struct Logs {
+    predicates: Vec<String>,
+    tx: Vec<String>,
 }
 
 #[tokio::test]
-async fn syscall_logs_allow_special_characters() {
-    const SYSCALL_LOG: u64 = 1000;
-    const LOG_FD_STDOUT: u64 = 1;
-
-    let mut rng = StdRng::seed_from_u64(121210);
-
-    const AMOUNT: u64 = 1_000;
-
-    let text_reg = 0x10;
-    let text_size_reg = 0x11;
-    let syscall_id_reg = 0x12;
-    let fd_reg = 0x13;
-
-    let predicate_data: Vec<u8> = "Special\nCharacters:€π≈!".bytes().collect();
-    let predicate = vec![
-        op::movi(syscall_id_reg, SYSCALL_LOG as u32),
-        op::movi(fd_reg, LOG_FD_STDOUT as u32),
-        op::gtf_args(text_reg, 0x00, GTFArgs::InputCoinPredicateData),
-        op::movi(text_size_reg, predicate_data.len().try_into().unwrap()),
-        op::ecal(syscall_id_reg, fd_reg, text_reg, text_size_reg),
-        op::ret(RegId::ONE),
-    ]
-    .into_iter()
-    .collect();
-    let predicate_owner = Input::predicate_owner(&predicate);
-
+async fn estimate_predicates__does_not_print_predicate_logs() {
     // Given
-    let tx = TransactionBuilder::script(Default::default(), Default::default())
-        .add_input(Input::coin_predicate(
-            rng.r#gen(),
-            predicate_owner,
-            AMOUNT,
-            AssetId::BASE,
-            Default::default(),
-            Default::default(),
-            predicate,
-            predicate_data,
-        ))
-        .finalize();
-
-    let mut context = TestSetupBuilder::default();
-    context.utxo_validation = true;
-    context.config_coin_inputs_from_transactions(&[&tx]);
-    let context = context.finalize().await;
-
-    let mut tx = tx.into();
-    context.client.estimate_predicates(&mut tx).await.unwrap();
+    let mut ctx = TestCtx::setup(
+        true,
+        &["Hello from Predicate 0!", "Hello from Predicate 1!"],
+        Some("Hello from Script!"),
+    )
+    .await
+    .expect("Failed to setup test context");
 
     // When
-    let result = context.client.submit_and_await_commit(&tx).await;
+    ctx.driver
+        .client
+        .estimate_predicates(&mut ctx.tx)
+        .await
+        .unwrap();
+
+    // Then
+    let logs = ctx.extract_logs_so_far();
+    assert!(logs.predicates.is_empty(), "Found predicate logs in output");
+    assert!(logs.tx.is_empty(), "Found tx logs in output");
+}
+
+#[tokio::test]
+async fn dry_run__produces_syscall_logs_for_both_script_and_predicates()
+-> anyhow::Result<()> {
+    // Given
+    let mut ctx = TestCtx::setup(
+        true,
+        &["Hello from Predicate 0!", "Hello from Predicate 1!"],
+        Some("Hello from Script!"),
+    )
+    .await
+    .expect("Failed to setup test context");
+    ctx.driver
+        .client
+        .estimate_predicates(&mut ctx.tx)
+        .await
+        .expect("Failed to estimate predicates");
+
+    // When
+    let result = ctx.driver.client.dry_run(&[ctx.tx.clone()]).await;
 
     // Then
     result.expect("Transaction should be executed successfully");
+
+    let logs = ctx.extract_logs_so_far();
+
+    assert_eq!(logs.predicates.len(), 2, "Expected 2 predicate logs");
+    assert!(logs.predicates[0].contains("[predicate 0"));
+    assert!(logs.predicates[0].contains("Hello from Predicate 0!"));
+    assert!(logs.predicates[1].contains("[predicate 1"));
+    assert!(logs.predicates[1].contains("Hello from Predicate 1!"));
+
+    assert_eq!(logs.tx.len(), 1, "Expected 1 tx log line");
+    assert!(logs.tx[0].contains("[script,"));
+    assert!(logs.tx[0].contains("Hello from Script!"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn submit_and_await_commit__produces_syscall_logs_for_both_script_and_predicates()
+-> anyhow::Result<()> {
+    // Given
+    let mut ctx = TestCtx::setup(
+        true,
+        &["Hello from Predicate 0!", "Hello from Predicate 1!"],
+        Some("Hello from Script!"),
+    )
+    .await
+    .expect("Failed to setup test context");
+    ctx.driver
+        .client
+        .estimate_predicates(&mut ctx.tx)
+        .await
+        .expect("Failed to estimate predicates");
+
+    // When
+    let result = ctx
+        .driver
+        .client
+        .submit_and_await_commit(&ctx.tx.clone())
+        .await;
+
+    // Then
+    result.expect("Transaction should be executed successfully");
+
+    let logs = ctx.extract_logs_so_far();
+
+    assert_eq!(logs.predicates.len(), 2, "Expected 2 predicate logs");
+    assert!(logs.predicates[0].contains("[predicate 0"));
+    assert!(logs.predicates[0].contains("Hello from Predicate 0!"));
+    assert!(logs.predicates[1].contains("[predicate 1"));
+    assert!(logs.predicates[1].contains("Hello from Predicate 1!"));
+
+    assert_eq!(logs.tx.len(), 1, "Expected 1 tx log line");
+    assert!(logs.tx[0].contains("[script,"));
+    assert!(logs.tx[0].contains("Hello from Script!"));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn submit_and_await_commit__syscall_logs_allow_special_characters()
+-> anyhow::Result<()> {
+    // Given
+    let mut ctx = TestCtx::setup(true, &["Special\nCharacters:€π≈!"], None)
+        .await
+        .expect("Failed to setup test context");
+    ctx.driver
+        .client
+        .estimate_predicates(&mut ctx.tx)
+        .await
+        .expect("Failed to estimate predicates");
+
+    // When
+    let result = ctx
+        .driver
+        .client
+        .submit_and_await_commit(&ctx.tx.clone())
+        .await;
+
+    // Then
+    result.expect("Transaction should be executed successfully");
+
+    let logs = ctx.extract_logs_so_far();
+
+    assert_eq!(logs.predicates.len(), 2, "Expected 2 predicate log lines");
+    assert!(logs.predicates[0].contains("[predicate 0"));
+    assert!(logs.predicates[0].contains("] stdout: Special"));
+    assert!(logs.predicates[1].contains("Characters:€π≈!"));
+
+    assert!(logs.tx.is_empty(), "Expected no tx logs");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn dry_run__syscall_logs_are_not_printed_when_none_are_present()
+-> anyhow::Result<()> {
+    // Given
+    let mut ctx = TestCtx::setup(false, &[], None)
+        .await
+        .expect("Failed to setup test context");
+    ctx.driver
+        .client
+        .estimate_predicates(&mut ctx.tx)
+        .await
+        .expect("Failed to estimate predicates");
+
+    // When
+    let result = ctx.driver.client.dry_run(&[ctx.tx.clone()]).await;
+
+    // Then
+    result.expect_err("Transaction execution should fail");
+
+    let logs = ctx.extract_logs_so_far();
+    assert!(logs.predicates.is_empty(), "Expected no predicate logs");
+    assert!(logs.tx.is_empty(), "Expected no tx logs");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn submit_and_await_commit__syscall_logs_are_not_printed_when_none_are_present()
+-> anyhow::Result<()> {
+    // Given
+    let mut ctx = TestCtx::setup(false, &[], None)
+        .await
+        .expect("Failed to setup test context");
+    ctx.driver
+        .client
+        .estimate_predicates(&mut ctx.tx)
+        .await
+        .expect("Failed to estimate predicates");
+
+    // When
+    let result = ctx
+        .driver
+        .client
+        .submit_and_await_commit(&ctx.tx.clone())
+        .await;
+
+    // Then
+    result.expect_err("Transaction execution should fail");
+
+    let logs = ctx.extract_logs_so_far();
+    assert!(logs.predicates.is_empty(), "Expected no predicate logs");
+    assert!(logs.tx.is_empty(), "Expected no tx logs");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn dry_run__syscall_logs_cause_error_when_not_enabled() -> anyhow::Result<()> {
+    // Given
+    let mut ctx = TestCtx::setup(false, &["Special\nCharacters:€π≈!"], None)
+        .await
+        .expect("Failed to setup test context");
+    ctx.driver
+        .client
+        .estimate_predicates(&mut ctx.tx)
+        .await
+        .expect("Failed to estimate predicates");
+
+    // When
+    let result = ctx.driver.client.dry_run(&[ctx.tx.clone()]).await;
+
+    // Then
+    result.expect_err("Transaction execution should fail");
+
+    let logs = ctx.extract_logs_so_far();
+    assert!(logs.predicates.is_empty(), "Expected no predicate logs");
+    assert!(logs.tx.is_empty(), "Expected no tx logs");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn submit_and_await_commit__syscall_logs_cause_error_when_not_enabled()
+-> anyhow::Result<()> {
+    // Given
+    let mut ctx = TestCtx::setup(false, &["Special\nCharacters:€π≈!"], None)
+        .await
+        .expect("Failed to setup test context");
+    ctx.driver
+        .client
+        .estimate_predicates(&mut ctx.tx)
+        .await
+        .expect("Failed to estimate predicates");
+
+    // When
+    let result = ctx
+        .driver
+        .client
+        .submit_and_await_commit(&ctx.tx.clone())
+        .await;
+
+    // Then
+    result.expect_err("Transaction execution should fail");
+
+    let logs = ctx.extract_logs_so_far();
+    assert!(logs.predicates.is_empty(), "Expected no predicate logs");
+    assert!(logs.tx.is_empty(), "Expected no tx logs");
+
+    Ok(())
 }

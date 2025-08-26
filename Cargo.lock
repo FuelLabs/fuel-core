@@ -4103,6 +4103,7 @@ dependencies = [
  "primitive-types",
  "proptest",
  "rand 0.8.5",
+ "regex",
  "reqwest 0.12.15",
  "rstest",
  "serde_json",
