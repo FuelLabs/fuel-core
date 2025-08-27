@@ -7,17 +7,13 @@ use crate::{
     tests_helper::{
         POA_SECRET_KEY,
         SUBSECTION_SIZE,
-        V36_TESTNET_SNAPSHOT,
-        Version36FuelCoreDriver,
+        V44_TESTNET_SNAPSHOT,
+        Version44FuelCoreDriver,
         transactions_from_subsections,
         upgrade_transaction,
     },
 };
-use fuel_tx::{
-    UpgradePurpose,
-    UploadSubsection,
-    field::ChargeableBody,
-};
+use latest_fuel_core_type::fuel_tx::field::ChargeableBody;
 use libp2p::{
     futures::StreamExt,
     identity::secp256k1::Keypair as SecpKeypair,
@@ -28,36 +24,33 @@ use rand::{
 };
 use std::time::Duration;
 
-// TODO: Enable the test when new `fuel-core` is released
-//  https://github.com/FuelLabs/fuel-core/issues/2928
-#[ignore]
 #[tokio::test(flavor = "multi_thread")]
-async fn latest_state_transition_function_is_forward_compatible_with_v36_binary() {
-    let (_bootstrap_node, addr) = bootstrap_node(V36_TESTNET_SNAPSHOT).await.unwrap();
+async fn latest_state_transition_function_is_forward_compatible_with_v44_binary() {
+    let (_bootstrap_node, addr) = bootstrap_node(V44_TESTNET_SNAPSHOT).await.unwrap();
 
-    // The test has a v36 block producer and one v36 validator.
-    // v36 nodes execute several blocks by using the v36 state transition function.
+    // The test has a v44 block producer and one v44 validator.
+    // v44 nodes execute several blocks by using the v44 state transition function.
     // At some point, we upgrade the network to use the latest state transition function.
     // The network should be able to generate several new blocks with a new version.
-    // v36 block producer and validator should process all blocks.
+    // v44 block producer and validator should process all blocks.
     //
     // These actions test that old nodes could use a new state transition function,
     // and it is forward compatible.
     //
     // To simplify the upgrade of the network `utxo_validation` is `false`.
 
-    let v36_keypair = SecpKeypair::generate();
-    let hexed_secret = hex::encode(v36_keypair.secret().to_bytes());
-    let _v36_node = Version36FuelCoreDriver::spawn(&[
+    let v44_keypair = SecpKeypair::generate();
+    let hexed_secret = hex::encode(v44_keypair.secret().to_bytes());
+    let _v44_node = Version44FuelCoreDriver::spawn(&[
         "--service-name",
-        "V36Producer",
+        "V44Producer",
         "--debug",
         "--poa-interval-period",
         "50ms",
         "--consensus-key",
         POA_SECRET_KEY,
         "--snapshot",
-        V36_TESTNET_SNAPSHOT,
+        V44_TESTNET_SNAPSHOT,
         "--enable-p2p",
         "--keypair",
         hexed_secret.as_str(),
@@ -65,23 +58,23 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
         addr.as_str(),
         "--peering-port",
         "0",
-        "--heartbeat-idle-duration=0",
+        "--heartbeat-idle-duration=0ms",
     ])
     .await
     .unwrap();
 
-    // Starting a v36 validator node.
-    // It will connect to the v36 node and sync blocks.
+    // Starting a v44 validator node.
+    // It will connect to the v44 node and sync blocks.
     let latest_keypair = SecpKeypair::generate();
     let hexed_secret = hex::encode(latest_keypair.secret().to_bytes());
-    let validator_node = Version36FuelCoreDriver::spawn(&[
+    let validator_node = Version44FuelCoreDriver::spawn(&[
         "--service-name",
-        "V36Validator",
+        "V44Validator",
         "--debug",
         "--poa-instant",
         "false",
         "--snapshot",
-        V36_TESTNET_SNAPSHOT,
+        V44_TESTNET_SNAPSHOT,
         "--enable-p2p",
         "--keypair",
         hexed_secret.as_str(),
@@ -89,7 +82,7 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
         addr.as_str(),
         "--peering-port",
         "0",
-        "--heartbeat-idle-duration=0",
+        "--heartbeat-idle-duration=0ms",
     ])
     .await
     .unwrap();
@@ -98,24 +91,25 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
     let mut imported_blocks = validator_node.node.shared.block_importer.events();
     const BLOCKS_TO_PRODUCE: u32 = 10;
     for i in 0..BLOCKS_TO_PRODUCE {
-        let block =
-            tokio::time::timeout(Duration::from_secs(120), imported_blocks.next())
-                .await
-                .expect(format!("Timed out waiting for block import {i}").as_str())
-                .expect(format!("Failed to import block {i}").as_str());
+        tracing::warn!("beep");
+        let block = tokio::time::timeout(Duration::from_secs(10), imported_blocks.next())
+            .await
+            .expect(format!("Timed out waiting for block import {i}").as_str())
+            .expect(format!("Failed to import block {i}").as_str());
+        tracing::warn!("boop");
         assert_eq!(
             block
                 .sealed_block
                 .entity
                 .header()
-                .state_transition_bytecode_version,
-            11
+                .state_transition_bytecode_version(),
+            29
         );
     }
     drop(imported_blocks);
 
     // When
-    let subsections = UploadSubsection::split_bytecode(
+    let subsections = latest_fuel_core_type::fuel_tx::UploadSubsection::split_bytecode(
         latest_fuel_core_upgradable_executor::WASM_BYTECODE,
         SUBSECTION_SIZE,
     )
@@ -125,18 +119,22 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
     let transactions = transactions_from_subsections(&mut rng, subsections, amount);
     let root = transactions[0].body().root;
     for upload in transactions {
-        let tx = upload.into();
+        let tx = latest_fuel_core_type::fuel_tx::Transaction::Upload(upload);
         validator_node
             .client
             .submit_and_await_commit(&tx)
             .await
             .unwrap();
     }
-    let upgrade =
-        upgrade_transaction(UpgradePurpose::StateTransition { root }, &mut rng, amount);
+    let upgrade = upgrade_transaction(
+        latest_fuel_core_type::fuel_tx::UpgradePurpose::StateTransition { root },
+        &mut rng,
+        amount,
+    );
+    let upgrade_tx = latest_fuel_core_type::fuel_tx::Transaction::Upgrade(upgrade);
     validator_node
         .client
-        .submit_and_await_commit(&upgrade.into())
+        .submit_and_await_commit(&upgrade_tx)
         .await
         .unwrap();
 
@@ -154,8 +152,8 @@ async fn latest_state_transition_function_is_forward_compatible_with_v36_binary(
                 .sealed_block
                 .entity
                 .header()
-                .state_transition_bytecode_version,
-            12
+                .state_transition_bytecode_version(),
+            30
         );
     }
 }

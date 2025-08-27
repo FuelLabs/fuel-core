@@ -104,6 +104,7 @@ mod tests {
                 Inputs,
                 MintAmount,
                 MintAssetId,
+                MintGasPrice,
                 OutputContract,
                 Outputs,
                 Policies,
@@ -3185,6 +3186,119 @@ mod tests {
         assert_eq!(res.block.transactions().len(), 2);
     }
 
+    #[tokio::test]
+    async fn produce_without_commit_with_source__includes_a_mint_with_whatever_gas_price_provided()
+     {
+        use fuel_core_executor::executor::{
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        };
+
+        // Given
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.r#gen();
+        let gas_price = 1000;
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                4321,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let config = Config {
+            forbid_fake_coins_default: false,
+            ..Default::default()
+        };
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let mint = res
+            .block
+            .transactions()
+            .first()
+            .expect("all blocks should have at least one tx (the mint)")
+            .as_mint()
+            .expect("the last tx should be a mint");
+        assert_eq!(mint.gas_price(), &gas_price);
+    }
+
+    #[tokio::test]
+    async fn validate__will_fail_if_gas_price_does_not_match_expected_value() {
+        use fuel_core_executor::executor::{
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        };
+
+        // Given
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.r#gen();
+        let gas_price = 1000;
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                4321,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let config = Config {
+            forbid_fake_coins_default: false,
+            ..Default::default()
+        };
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let mut block = res.block;
+        let mint = block.transactions_mut().first_mut().unwrap();
+        let price = mint.as_mint_mut().unwrap().gas_price_mut();
+        *price = gas_price * 2;
+
+        let res = exec.validate(&block);
+        assert!(
+            matches!(res, Err(ExecutorError::BlockMismatch)),
+            "Expected BlockMismatch error, got: {res:?}"
+        );
+    }
+
     #[test]
     #[cfg(not(feature = "wasm-executor"))]
     fn block_producer_never_includes_more_than_max_tx_count_transactions() {
@@ -3646,8 +3760,7 @@ mod tests {
             let tx_bytes = tx.to_bytes();
             relayed_tx.set_serialized_transaction(tx_bytes);
             relayed_tx.set_max_gas(max_gas);
-            let events = std::iter::repeat(relayed_tx.into())
-                .take(duplicate_count + 1)
+            let events = std::iter::repeat_n(relayed_tx.into(), duplicate_count + 1)
                 .collect::<Vec<_>>();
 
             relayer_db_for_events(&events, da_height)

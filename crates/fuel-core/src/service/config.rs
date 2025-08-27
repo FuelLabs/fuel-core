@@ -1,6 +1,9 @@
 use clap::ValueEnum;
 use std::{
-    num::NonZeroU64,
+    num::{
+        NonZeroU32,
+        NonZeroU64,
+    },
     path::PathBuf,
     time::Duration,
 };
@@ -61,6 +64,7 @@ pub struct Config {
     /// - Enables storage read replay for historical blocks.
     /// - Enables querying historical contract state and balances.
     pub historical_execution: bool,
+    pub expensive_subscriptions: bool,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
@@ -160,6 +164,7 @@ impl Config {
                 ),
                 number_of_threads: 0,
                 database_batch_size: 100,
+                block_subscriptions_queue: 1000,
                 max_queries_depth: 16,
                 max_queries_complexity: 80000,
                 max_queries_recursive_depth: 16,
@@ -179,6 +184,7 @@ impl Config {
             continue_on_error: false,
             debug: true,
             historical_execution: true,
+            expensive_subscriptions: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),
             #[cfg(feature = "parallel-executor")]
@@ -360,6 +366,7 @@ impl GasPriceConfig {
 pub struct DaCompressionConfig {
     pub retention_duration: Duration,
     pub metrics: bool,
+    pub starting_height: Option<NonZeroU32>,
 }
 
 #[derive(Debug, Clone)]

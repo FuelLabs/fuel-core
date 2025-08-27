@@ -263,6 +263,10 @@ pub trait TxStatusManager: Send + Sync {
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>>;
+
+    fn subscribe_txs_updates(
+        &self,
+    ) -> anyhow::Result<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>>;
 }
 
 #[async_trait]

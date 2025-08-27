@@ -16,6 +16,34 @@ publish = true
 name = "fuel-core"
 path = "src/main.rs"
 
+[features]
+default = ["env", "relayer", "rocksdb"]
+aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
+env = ["dep:dotenvy"]
+p2p = ["fuel-core/p2p", "const_format", "dep:fuel-core-poa"]
+shared-sequencer = ["dep:fuel-core-shared-sequencer", "fuel-core/shared-sequencer"]
+relayer = ["fuel-core/relayer", "dep:url"]
+parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
+rocksdb = ["fuel-core/rocksdb"]
+rocksdb-production = ["fuel-core/rocksdb-production", "rocksdb"]
+# features to enable in production, but increase build times
+production = [
+    "env",
+    "relayer",
+    "rocksdb-production",
+    "p2p",
+    "shared-sequencer",
+    "parquet",
+    "aws-kms",
+]
+parallel-executor = ["fuel-core/parallel-executor"]
+fault-proving = [
+    "fuel-core-storage/fault-proving",
+    "fuel-core-types/fault-proving",
+    "fuel-core-chain-config/fault-proving",
+    "fuel-core/fault-proving",
+]
+
 [dependencies]
 anyhow = { workspace = true }
 aws-config = { version = "1.1.7", features = [
@@ -59,34 +87,3 @@ serde = { workspace = true }
 strum = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
-
-[features]
-default = ["env", "relayer", "rocksdb"]
-aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
-env = ["dep:dotenvy"]
-p2p = ["fuel-core/p2p", "const_format", "dep:fuel-core-poa"]
-shared-sequencer = [
-  "dep:fuel-core-shared-sequencer",
-  "fuel-core/shared-sequencer",
-]
-relayer = ["fuel-core/relayer", "dep:url"]
-parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
-rocksdb = ["fuel-core/rocksdb"]
-rocksdb-production = ["fuel-core/rocksdb-production", "rocksdb"]
-# features to enable in production, but increase build times
-production = [
-  "env",
-  "relayer",
-  "rocksdb-production",
-  "p2p",
-  "shared-sequencer",
-  "parquet",
-  "aws-kms",
-]
-parallel-executor = ["fuel-core/parallel-executor"]
-fault-proving = [
-  "fuel-core-storage/fault-proving",
-  "fuel-core-types/fault-proving",
-  "fuel-core-chain-config/fault-proving",
-  "fuel-core/fault-proving",
-]

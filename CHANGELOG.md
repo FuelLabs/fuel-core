@@ -6,6 +6,77 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.46.0]
+
+### Breaking
+- [3070](https://github.com/FuelLabs/fuel-core/pull/3070): Fix the `AssetDetails` endpoint to match GraphQL standards
+
+### Added
+- [3061](https://github.com/FuelLabs/fuel-core/pull/3061): Add tests showing that mints are correctly added and validated
+- [3074](https://github.com/FuelLabs/fuel-core/pull/3074): Added alpha version of new subscriptions for pre confirmations and new blocks.
+  These subscriptions are not final and may change in the future.
+  Subscriptions are disabled by default and can be enabled by setting `--expensive-subscriptions` via CLI.
+
+### Fixed
+- [3071](https://github.com/FuelLabs/fuel-core/pull/3071): Use outputs instead of events to compress blocks
+
+## [Version 0.45.1]
+
+### Breaking
+- [3022](https://github.com/FuelLabs/fuel-core/pull/3022): Support rolling back Relayer DB.
+- [3056](https://github.com/FuelLabs/fuel-core/pull/3056): Bump Rust version to 1.86.0
+- [3058](https://github.com/FuelLabs/fuel-core/pull/3058): upgrade `wasmtime` and `thiserror` dependencies
+
+### Added
+- [2959](https://github.com/FuelLabs/fuel-core/pull/2959): Add `Registrations` table to the compression database. This is merkleized.
+- [3027](https://github.com/FuelLabs/fuel-core/pull/3027): Support state rewind for compression DB.
+- [3054](https://github.com/FuelLabs/fuel-core/pull/3054): Added a new configuration option `--p2p-cache-size` to control the size of the p2p req/res protocol cache size.
+
+### Changed
+- [3030](https://github.com/FuelLabs/fuel-core/pull/3030): Disable dependency on blob transactions in transaction pool.
+- [3033](https://github.com/FuelLabs/fuel-core/pull/3033): Use ubuntu:24.04 to build x86_64 binary
+- [3060](https://github.com/FuelLabs/fuel-core/pull/3060): Use v44 STF if forward-compatibility test
+- [3062](https://github.com/FuelLabs/fuel-core/pull/3062): Increase default transmission size to 260MB, to support 2.5MB blocks by default during synchronization
+
+### Fixed
+- [3048](https://github.com/FuelLabs/fuel-core/pull/3048): The `MaxCoinsReached` error is now thrown when the target reached the max input limit.
+
+## [Version 0.44.0]
+
+### Breaking
+- [2887](https://github.com/FuelLabs/fuel-core/pull/2887): Bump Rust version to `1.85.0`.
+  Starting with this release, newly generated WASM state transition functions are no longer compatible with old versions of the `fuel-core`. So, the change breaks forward compatibility for the network and each node should start to use a new `fuel-core` release.
+- [2943](https://github.com/FuelLabs/fuel-core/pull/2943): Registry root calculation for compression tables no longer accounts for the evictor cache.
+- [2947](https://github.com/FuelLabs/fuel-core/pull/2947): Upgrade to 2024 Rust edition.
+- [2958](https://github.com/FuelLabs/fuel-core/pull/2958): Changed return type of `balance` endpoint from `u64` to `u128`
+- [3002](https://github.com/FuelLabs/fuel-core/pull/3002): Update `fuel-vm` to `0.61.1`. In doing this, we've changed Receipts to use the `SubId` scalar type for sub asset IDs.
+
+### Added
+- [2954](https://github.com/FuelLabs/fuel-core/pull/2954): Made `registry` mod public in `fuel-core-compression`
+- [2956](https://github.com/FuelLabs/fuel-core/pull/2956): Add excluded_contract filter to extract of transaction from TxPool.
+- [2994](https://github.com/FuelLabs/fuel-core/pull/2994): Simple makefile with basic commands.
+- [3004](https://github.com/FuelLabs/fuel-core/pull/3004): Additional error logs for Ethereum provider failures.
+
+### Changed
+- [3021](https://github.com/FuelLabs/fuel-core/pull/3021): Updated fuel-vm to 0.62.0, see https://github.com/fuelLabs/fuel-vm/releases/v0.62.0
+
+### Fixed
+- [2969](https://github.com/FuelLabs/fuel-core/pull/2969): Ensure that vm heap memory is zeroed out on rellocation after `reset`. Adds support for `GM::GetGasPrice` Bumps `fuel-vm` to `0.60.2`.
+- [2984](https://github.com/FuelLabs/fuel-core/pull/2984): Fix client coins endpoint so that passing `None` for `asset_id` no longer defaults to `AssetId::default()` but correctly returns all asset types.
+- [2987](https://github.com/FuelLabs/fuel-core/pull/2987): Make txpool pre-conf broadcast conditional on there being some txs in the list
+- [2989](https://github.com/FuelLabs/fuel-core/pull/2989): Prevent syncing compression database from genesis if override cli arg `--da-compression-starting-height` is provided.
+- [2992](https://github.com/FuelLabs/fuel-core/pull/2992): Make sure assemble tx doesn't count message data inputs as spendable inputs for covering fee
+- [2993](https://github.com/FuelLabs/fuel-core/pull/2993): Pin the graphiql playground to v3, and cache the result to be reused across multiple calls to render the playground.
+
+### Removed
+- [2955](https://github.com/FuelLabs/fuel-core/pull/2955): Remove unnecessary lifetime constraints on fuel-core-client.
+
+## [Version 0.43.2]
+
+### Fixed
+
+- [2978](https://github.com/FuelLabs/fuel-core/pull/2978): Add method to override starting syncing height for compression service if starting from scratch.
+
 ## [Version 0.43.1]
 
 ### Fixed

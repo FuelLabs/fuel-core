@@ -9,6 +9,22 @@ license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
 
+[features]
+test-helpers = [
+    "fuel-core-services/test-helpers",
+    "fuel-core-types/test-helpers",
+    "fuel-core-storage/test-helpers",
+    "fuel-core-compression/test-helpers",
+    "dep:rand",
+    "dep:fuel-core-chain-config",
+]
+fault-proving = [
+    "fuel-core-compression/fault-proving",
+    "fuel-core-chain-config?/fault-proving",
+    "fuel-core-types/fault-proving",
+    "fuel-core-storage/fault-proving",
+]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -34,19 +50,3 @@ tracing = { workspace = true }
 [dev-dependencies]
 fuel-core-compression-service = { path = ".", features = ["test-helpers"] }
 tokio-stream = { workspace = true }
-
-[features]
-test-helpers = [
-  "fuel-core-services/test-helpers",
-  "fuel-core-types/test-helpers",
-  "fuel-core-storage/test-helpers",
-  "fuel-core-compression/test-helpers",
-  "dep:rand",
-  "dep:fuel-core-chain-config",
-]
-fault-proving = [
-  "fuel-core-compression/fault-proving",
-  "fuel-core-chain-config?/fault-proving",
-  "fuel-core-types/fault-proving",
-  "fuel-core-storage/fault-proving",
-]

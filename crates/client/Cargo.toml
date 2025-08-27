@@ -11,6 +11,20 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Tx client and schema specification."
 
+[features]
+std = ["fuel-core-types/std"]
+default = ["subscriptions", "std"]
+test-helpers = []
+subscriptions = [
+    "base64",
+    "eventsource-client",
+    "futures",
+    "hyper-rustls",
+    "dep:postcard",
+    "fuel-core-types/serde",
+]
+fault-proving = ["fuel-core-types/fault-proving"]
+
 [dependencies]
 anyhow = { workspace = true }
 base64 = { version = "0.22.1", optional = true }
@@ -25,6 +39,7 @@ hyper-rustls = { version = "0.24", features = [
   "webpki-tokio",
 ], optional = true }
 itertools = { workspace = true }
+postcard = { workspace = true, optional = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
@@ -33,6 +48,10 @@ tai64 = { version = "=4.0.0", features = ["serde"] }
 thiserror = "1.0"
 tracing = "0.1"
 
+[build-dependencies]
+schemafy_lib = { version = "0.5" }
+serde_json = { version = "1.0", features = ["raw_value"] }
+
 [dev-dependencies]
 fuel-core-types = { workspace = true, features = [
   "serde",
@@ -40,14 +59,3 @@ fuel-core-types = { workspace = true, features = [
   "test-helpers",
 ] }
 insta = { workspace = true }
-
-[build-dependencies]
-schemafy_lib = { version = "0.5" }
-serde_json = { version = "1.0", features = ["raw_value"] }
-
-[features]
-std = ["fuel-core-types/std"]
-default = ["subscriptions", "std"]
-test-helpers = []
-subscriptions = ["base64", "eventsource-client", "futures", "hyper-rustls"]
-fault-proving = ["fuel-core-types/fault-proving"]

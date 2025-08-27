@@ -82,7 +82,10 @@ use rlimit::{
 use std::{
     env,
     net,
-    num::NonZeroU64,
+    num::{
+        NonZeroU32,
+        NonZeroU64,
+    },
     path::PathBuf,
     str::FromStr,
     time::Duration,
@@ -198,6 +201,10 @@ pub struct Command {
     #[arg(long = "historical-execution", env)]
     pub historical_execution: bool,
 
+    /// Allows expensive subscriptions to be used via GraphQL.
+    #[arg(long = "expensive-subscriptions", env)]
+    pub expensive_subscriptions: bool,
+
     /// Enable logging of backtraces from vm errors
     #[arg(long = "vm-backtrace", env)]
     #[deprecated]
@@ -237,6 +244,10 @@ pub struct Command {
     /// with the given retention time.
     #[arg(long = "da-compression", env)]
     pub da_compression: Option<humantime::Duration>,
+
+    /// The starting height of the compression service.
+    #[arg(long = "da-compression-starting-height", env)]
+    pub da_compression_starting_height: Option<NonZeroU32>,
 
     /// A new block is produced instantly when transactions are available.
     #[clap(flatten)]
@@ -332,6 +343,7 @@ impl Command {
             vm_backtrace: _,
             debug,
             historical_execution,
+            expensive_subscriptions,
             utxo_validation,
             native_executor_version,
             #[cfg(feature = "parallel-executor")]
@@ -341,6 +353,7 @@ impl Command {
             #[cfg(feature = "aws-kms")]
             consensus_aws_kms,
             da_compression,
+            da_compression_starting_height,
             poa_trigger,
             predefined_blocks_path,
             coinbase_recipient,
@@ -556,6 +569,7 @@ impl Command {
             Some(retention_duration) => DaCompressionMode::Enabled(
                 fuel_core::service::config::DaCompressionConfig {
                     retention_duration: retention_duration.into(),
+                    starting_height: da_compression_starting_height,
                     metrics: metrics.is_enabled(Module::Compression),
                 },
             ),
@@ -648,6 +662,7 @@ impl Command {
                 addr,
                 number_of_threads: graphql.graphql_number_of_threads,
                 database_batch_size: graphql.database_batch_size,
+                block_subscriptions_queue: graphql.block_subscriptions_queue,
                 max_queries_depth: graphql.graphql_max_depth,
                 max_queries_complexity: graphql.graphql_max_complexity,
                 max_queries_recursive_depth: graphql.graphql_max_recursive_depth,
@@ -696,6 +711,7 @@ impl Command {
             snapshot_reader,
             debug,
             historical_execution,
+            expensive_subscriptions,
             native_executor_version,
             continue_on_error,
             utxo_validation,

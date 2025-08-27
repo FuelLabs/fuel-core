@@ -6,7 +6,7 @@
 # The script runs almost all CI checks locally.
 #
 # Requires installed:
-# - Rust `1.85.0`
+# - Rust `1.86.0`
 # - Nightly rust formatter
 # - `cargo install cargo-sort`
 # - `cargo install cargo-make`
@@ -14,7 +14,6 @@
 # - `cargo install cargo-nextest`
 # - `npm install prettier prettier-plugin-toml`
 
-npx prettier --write "**/Cargo.toml" &&
 cargo +nightly fmt --all &&
 cargo sort -w --check &&
 source .github/workflows/scripts/verify_openssl.sh &&

@@ -1,9 +1,11 @@
 # Fuel Client
 
 [![build](https://github.com/FuelLabs/fuel-core/actions/workflows/ci.yml/badge.svg)](https://github.com/FuelLabs/fuel-core/actions/workflows/ci.yml)
+[![deepwiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FuelLabs/fuel-core)
 [![crates.io](https://img.shields.io/crates/v/fuel-core?label=latest)](https://crates.io/crates/fuel-core)
 [![docs](https://docs.rs/fuel-core/badge.svg)](https://docs.rs/fuel-core/)
 [![discord](https://img.shields.io/badge/chat%20on-discord-orange?&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/xfpK4Pe)
+[![twitter](https://img.shields.io/twitter/follow/fuel_network)](https://x.com/fuel_network)
 
 Fuel client implementation.
 
@@ -11,9 +13,9 @@ Fuel client implementation.
 
 | Network  | Version |
 |----------|---------|
-| Fuel Ignition | 0.43.2 |
-| Testnet | 0.43.2 |
-| Devnet | 0.43.2 |
+| Fuel Ignition | 0.44.0 |
+| Testnet | 0.45.1 |
+| Devnet | 0.45.1 |
 
 ## Contributing
 
@@ -23,7 +25,7 @@ Before pushing any changes or creating pull request please run `source ci_checks
 
 ## Building
 
-If you plan to use already pre-compiled binairies you can directly go to [Running a Ignition node](#running-a-ignition-node).
+If you plan to use already pre-compiled binaries you can directly go to [Running a Ignition node](#running-a-ignition-node).
 
 ### System Requirements
 
@@ -75,7 +77,7 @@ git clone https://github.com/FuelLabs/fuel-core.git
 
 Go to the latest release tag for ignition on the `fuel-core` repository :
 ```
-git checkout v0.42.0
+git checkout v0.45.1
 ```
 
 Build your node binary:
