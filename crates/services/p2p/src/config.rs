@@ -149,7 +149,7 @@ pub struct Config<State = Initialized> {
 
     /// If true, the node will subscribe to pre-confirmations topic
     pub subscribe_to_pre_confirmations: bool,
-    
+
     /// If true, the node will subscribe to transactions topic
     pub subscribe_to_transactions: bool,
 }

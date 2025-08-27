@@ -515,7 +515,6 @@ pub fn make_config(
             p2p.max_functional_peers_connected = max_functional_peers_connected;
         }
 
-        // Apply the subscribe_to_transactions option if set
         if let Some(subscribe_to_transactions) =
             config_overrides.subscribe_to_transactions
         {

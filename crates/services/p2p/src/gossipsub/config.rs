@@ -229,12 +229,12 @@ fn initialize_gossipsub(gossipsub: &mut gossipsub::Behaviour, p2p_config: &Confi
 
     // Create the list of topics to subscribe to based on configuration
     let mut topics = Vec::new();
-    
+
     // Only subscribe to transactions topic if configured to do so
     if p2p_config.subscribe_to_transactions {
         topics.push((NEW_TX_GOSSIP_TOPIC, NEW_TX_GOSSIP_WEIGHT));
     }
-    
+
     // Only subscribe to pre-confirmations topic if configured to do so
     if p2p_config.subscribe_to_pre_confirmations {
         topics.push((
