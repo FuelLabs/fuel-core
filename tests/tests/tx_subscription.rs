@@ -53,7 +53,7 @@ async fn test_tx_gossip_subscribe_to_transactions(
             Some(BootstrapSetup::new(validator_pub_key)),
         ],
         vec![Some(
-            ProducerSetup::new_with_overrides(producer_secret.clone(), overrides.clone())
+            ProducerSetup::new_with_overrides(producer_secret, overrides.clone())
                 .with_name(format!("{}:producer", producer_pub_key)),
         )],
         vec![Some(
