@@ -1394,6 +1394,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "block_aggregator_api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fuel-core-services",
+ "tokio",
+]
+
+[[package]]
 name = "blocking"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

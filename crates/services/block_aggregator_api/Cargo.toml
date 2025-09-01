@@ -1,0 +1,12 @@
+[package]
+name = "block_aggregator_api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fuel-core-services = { workspace = true}
+tokio = "1.45.1"
+anyhow = "1.0.98"
+
+[dev-dependencies]
+fuel-core-services = { workspace = true, features = ["test-helpers"] }
