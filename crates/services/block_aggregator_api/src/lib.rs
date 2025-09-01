@@ -10,7 +10,10 @@ use crate::{
         BlockAggregatorApi,
         BlockAggregatorQuery,
     },
-    blocks::BlockSource,
+    blocks::{
+        Block,
+        BlockSource,
+    },
     db::BlockAggregatorDB,
 };
 use result::Result;
@@ -39,7 +42,8 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
-            res = self.query.await_query() => self.handle_query(res),
+            query_res = self.query.await_query() => self.handle_query(query_res),
+            block_res = self._block_source.next_block() => self.handle_block(block_res),
             _ = watcher.while_started() => self.stop(),
         }
     }
@@ -88,5 +92,9 @@ where
                 TaskNextAction::Continue
             }
         }
+    }
+
+    pub fn handle_block(&mut self, _res: Result<Block>) -> TaskNextAction {
+        todo!()
     }
 }

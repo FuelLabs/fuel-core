@@ -4,6 +4,10 @@ use super::*;
 use crate::blocks::Block;
 use fuel_core_services::stream::BoxStream;
 use futures_util::StreamExt;
+use rand::{
+    SeedableRng,
+    prelude::StdRng,
+};
 use std::{
     collections::HashMap,
     future,
@@ -56,7 +60,7 @@ impl BlockAggregatorDB for FakeDB {
         let mut blocks = vec![];
         for id in first..=last {
             if let Some(block) = self.map.get(&id) {
-                blocks.push(*block);
+                blocks.push(block.to_owned());
             }
         }
         Ok(Box::pin(futures_util::stream::iter(blocks)))
@@ -74,11 +78,12 @@ impl BlockSource for FakeBlockSource {
 #[tokio::test]
 async fn run__get_block_range__returns_expected_blocks() {
     // given
+    let mut rng = StdRng::seed_from_u64(42);
     let (api, sender) = FakeApi::new();
     let mut db = FakeDB::new();
-    db.add_block(1, Block);
-    db.add_block(2, Block);
-    db.add_block(3, Block);
+    db.add_block(1, Block::arb(&mut rng));
+    db.add_block(2, Block::arb(&mut rng));
+    db.add_block(3, Block::arb(&mut rng));
 
     let source = FakeBlockSource;
 
@@ -98,4 +103,9 @@ async fn run__get_block_range__returns_expected_blocks() {
 
     // TODO: Check values
     assert_eq!(blocks.len(), 2);
+}
+
+#[tokio::test]
+async fn run__new_block_gets_added_to_db() {
+    todo!()
 }
