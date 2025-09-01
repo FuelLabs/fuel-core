@@ -1,9 +1,6 @@
 use crate::{
     blocks::Block,
-    result::{
-        Error,
-        Result,
-    },
+    result::Result,
 };
 use fuel_core_services::stream::BoxStream;
 use tokio::sync::oneshot::{

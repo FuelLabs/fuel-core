@@ -28,7 +28,7 @@ mod tests;
 pub struct BlockAggregator<Api, DB, Blocks> {
     query: Api,
     database: DB,
-    block_source: Blocks,
+    _block_source: Blocks,
 }
 
 impl<Api, DB, Blocks> RunnableTask for BlockAggregator<Api, DB, Blocks>
@@ -55,11 +55,11 @@ where
     DB: BlockAggregatorDB,
     Blocks: BlockSource,
 {
-    pub fn new(query: Api, database: DB, block_source: Blocks) -> Self {
+    pub fn new(query: Api, database: DB, _block_source: Blocks) -> Self {
         Self {
             query,
             database,
-            block_source,
+            _block_source,
         }
     }
 
@@ -68,7 +68,9 @@ where
     }
 
     pub fn handle_query(&mut self, res: Result<BlockAggregatorQuery>) -> TaskNextAction {
-        let query = try_or_stop!(res);
+        let query = try_or_stop!(res, |e| {
+            tracing::error!("Error receiving query: {e:?}");
+        });
         match query {
             BlockAggregatorQuery::GetBlockRange {
                 first,
@@ -76,9 +78,13 @@ where
                 response,
             } => {
                 let res = self.database.get_block_range(first, last);
-                let block_stream = try_or_stop!(res);
+                let block_stream = try_or_stop!(res, |e| {
+                    tracing::error!("Error getting block range from database: {e:?}");
+                });
                 let res = response.send(block_stream);
-                try_or_stop!(res);
+                try_or_stop!(res, |_| {
+                    tracing::error!("Error sending block range response");
+                });
                 TaskNextAction::Continue
             }
         }

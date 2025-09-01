@@ -1401,6 +1401,7 @@ dependencies = [
  "fuel-core-services",
  "futures-util",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use super::*;
 use crate::blocks::Block;
 use fuel_core_services::stream::BoxStream;
@@ -46,7 +48,7 @@ impl FakeDB {
 }
 
 impl BlockAggregatorDB for FakeDB {
-    fn store_block(&mut self, block: Block) -> Result<()> {
+    fn store_block(&mut self, _block: Block) -> Result<()> {
         todo!()
     }
 
@@ -72,8 +74,7 @@ impl BlockSource for FakeBlockSource {
 #[tokio::test]
 async fn run__get_block_range__returns_expected_blocks() {
     // given
-    let (sender, receiver) = tokio::sync::mpsc::channel(1);
-    let api = FakeApi { receiver };
+    let (api, sender) = FakeApi::new();
     let mut db = FakeDB::new();
     db.add_block(1, Block);
     db.add_block(2, Block);
@@ -88,7 +89,7 @@ async fn run__get_block_range__returns_expected_blocks() {
     tokio::spawn(async move {
         let _ = srv.run(&mut watcher).await;
     });
-    let (query, mut response) = BlockAggregatorQuery::get_block_range(2, 3);
+    let (query, response) = BlockAggregatorQuery::get_block_range(2, 3);
     sender.send(query).await.unwrap();
 
     // then

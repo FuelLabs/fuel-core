@@ -1,7 +1,4 @@
-use crate::result::{
-    Error,
-    Result,
-};
+use crate::result::Result;
 
 pub trait BlockSource: Send + Sync {
     fn next_block(&mut self) -> impl Future<Output = Result<Block>>;
