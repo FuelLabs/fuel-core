@@ -5,7 +5,8 @@ use crate::{
         Result,
     },
 };
-use tokio::sync::mpsc::{
+use fuel_core_services::stream::BoxStream;
+use tokio::sync::oneshot::{
     Receiver,
     Sender,
     channel,
@@ -21,13 +22,13 @@ pub enum BlockAggregatorQuery {
     GetBlockRange {
         first: u64,
         last: u64,
-        response: Sender<Result<Block>>,
+        response: Sender<BoxStream<Block>>,
     },
 }
 
 impl BlockAggregatorQuery {
-    pub fn get_block_range(first: u64, last: u64) -> (Self, Receiver<Result<Block>>) {
-        let (sender, receiver) = channel(100);
+    pub fn get_block_range(first: u64, last: u64) -> (Self, Receiver<BoxStream<Block>>) {
+        let (sender, receiver) = channel();
         let query = Self::GetBlockRange {
             first,
             last,

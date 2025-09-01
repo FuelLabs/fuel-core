@@ -1,5 +1,7 @@
 use super::*;
 use crate::blocks::Block;
+use fuel_core_services::stream::BoxStream;
+use futures_util::StreamExt;
 use std::{
     collections::HashMap,
     future,
@@ -48,14 +50,14 @@ impl BlockAggregatorDB for FakeDB {
         todo!()
     }
 
-    fn get_block_range(&self, first: u64, last: u64) -> Result<Vec<Block>> {
+    fn get_block_range(&self, first: u64, last: u64) -> Result<BoxStream<Block>> {
         let mut blocks = vec![];
         for id in first..=last {
             if let Some(block) = self.map.get(&id) {
                 blocks.push(*block);
             }
         }
-        Ok(blocks)
+        Ok(Box::pin(futures_util::stream::iter(blocks)))
     }
 }
 
@@ -90,9 +92,9 @@ async fn run__get_block_range__returns_expected_blocks() {
     sender.send(query).await.unwrap();
 
     // then
-    let mut buffer = vec![];
-    let response = response.recv_many(&mut buffer, 3).await;
+    let stream = response.await.unwrap();
+    let blocks = stream.collect::<Vec<Block>>().await;
 
     // TODO: Check values
-    assert_eq!(buffer.len(), 2);
+    assert_eq!(blocks.len(), 2);
 }

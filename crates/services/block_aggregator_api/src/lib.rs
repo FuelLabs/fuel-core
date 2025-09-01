@@ -75,10 +75,10 @@ where
                 last,
                 response,
             } => {
-                let blocks = try_or_stop!(self.database.get_block_range(first, last));
-                for block in blocks {
-                    let _ = try_or_stop!(response.try_send(Ok(block)));
-                }
+                let res = self.database.get_block_range(first, last);
+                let block_stream = try_or_stop!(res);
+                let res = response.send(block_stream);
+                try_or_stop!(res);
                 TaskNextAction::Continue
             }
         }
