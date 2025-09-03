@@ -53,7 +53,7 @@ impl BlockAggregatorQuery {
         (query, receiver)
     }
 
-    pub(crate) fn get_current_height() -> (Self, Receiver<u64>) {
+    pub fn get_current_height() -> (Self, Receiver<u64>) {
         let (sender, receiver) = channel();
         let query = Self::GetCurrentHeight { response: sender };
         (query, receiver)
