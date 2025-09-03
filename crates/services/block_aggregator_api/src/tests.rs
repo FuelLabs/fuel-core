@@ -1,7 +1,10 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use crate::blocks::Block;
+use crate::{
+    blocks::Block,
+    result::Error,
+};
 use fuel_core_services::stream::BoxStream;
 use futures_util::StreamExt;
 use rand::{
@@ -99,7 +102,7 @@ impl FakeBlockSource {
 
 impl BlockSource for FakeBlockSource {
     async fn next_block(&mut self) -> Result<(u64, Block)> {
-        Ok(self.blocks.recv().await.unwrap())
+        self.blocks.recv().await.ok_or(Error::BlockSourceError)
     }
 }
 
@@ -113,16 +116,16 @@ async fn run__get_block_range__returns_expected_blocks() {
     db.add_block(2, Block::random(&mut rng));
     db.add_block(3, Block::random(&mut rng));
 
-    let (source, _) = FakeBlockSource::new();
+    let (source, _block_sender) = FakeBlockSource::new();
 
     let mut srv = BlockAggregator::new(api, db, source);
+    let mut watcher = StateWatcher::started();
+    let (query, response) = BlockAggregatorQuery::get_block_range(2, 3);
 
     // when
-    let mut watcher = StateWatcher::started();
     tokio::spawn(async move {
         let _ = srv.run(&mut watcher).await;
     });
-    let (query, response) = BlockAggregatorQuery::get_block_range(2, 3);
     sender.send(query).await.unwrap();
 
     // then
@@ -131,6 +134,9 @@ async fn run__get_block_range__returns_expected_blocks() {
 
     // TODO: Check values
     assert_eq!(blocks.len(), 2);
+
+    // cleanup
+    drop(_block_sender);
 }
 
 #[tokio::test]
@@ -143,17 +149,18 @@ async fn run__new_block_gets_added_to_db() {
     let (source, source_sender) = FakeBlockSource::new();
     let mut srv = BlockAggregator::new(api, db, source);
 
-    // when
+    let block = Block::random(&mut rng);
+    let id = 123u64;
     let mut watcher = StateWatcher::started();
+
+    // when
     tokio::spawn(async move {
         let _ = srv.run(&mut watcher).await;
     });
-    let block = Block::random(&mut rng);
-    let id = 123u64;
     source_sender.send((id, block.clone())).await.unwrap();
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // then
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     let actual = db_map.lock().unwrap().get(&id).unwrap().clone();
     assert_eq!(block, actual);
 }
@@ -169,19 +176,23 @@ async fn run__get_current_height__returns_expected_height() {
     db.add_block(2, Block::random(&mut rng));
     db.add_block(expected_height, Block::random(&mut rng));
 
-    let (source, _) = FakeBlockSource::new();
-
+    let (source, _block_sender) = FakeBlockSource::new();
     let mut srv = BlockAggregator::new(api, db, source);
 
-    // when
     let mut watcher = StateWatcher::started();
+    let (query, response) = BlockAggregatorQuery::get_current_height();
+
+    // when
     tokio::spawn(async move {
         let _ = srv.run(&mut watcher).await;
     });
-    let (query, response) = BlockAggregatorQuery::get_current_height();
     sender.send(query).await.unwrap();
 
     // then
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     let height = response.await.unwrap();
     assert_eq!(expected_height, height);
+
+    // cleanup
+    drop(_block_sender);
 }

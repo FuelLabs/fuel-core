@@ -1,10 +1,3 @@
-use fuel_core_services::{
-    RunnableTask,
-    StateWatcher,
-    TaskNextAction,
-    try_or_stop,
-};
-
 use crate::{
     api::{
         BlockAggregatorApi,
@@ -15,6 +8,13 @@ use crate::{
         BlockSource,
     },
     db::BlockAggregatorDB,
+};
+use fuel_core_services::{
+    RunnableTask,
+    StateWatcher,
+    TaskNextAction,
+    stream::BoxStream,
+    try_or_stop,
 };
 use result::Result;
 
@@ -86,28 +86,63 @@ where
                 last,
                 response,
             } => {
-                let res = self.database.get_block_range(first, last).await;
-                let block_stream = try_or_stop!(res, |e| {
-                    tracing::error!("Error getting block range from database: {e:?}");
-                });
-                let res = response.send(block_stream);
-                try_or_stop!(res, |_| {
-                    tracing::error!("Error sending block range response");
-                });
-                TaskNextAction::Continue
+                self.handle_get_block_range_query(first, last, response)
+                    .await
+                // let res = self.database.get_block_range(first, last).await;
+                // let block_stream = try_or_stop!(res, |e| {
+                //     tracing::error!("Error getting block range from database: {e:?}");
+                // });
+                // let res = response.send(block_stream);
+                // try_or_stop!(res, |_| {
+                //     tracing::error!("Error sending block range response");
+                // });
+                // TaskNextAction::Continue
             }
             BlockAggregatorQuery::GetCurrentHeight { response } => {
-                let res = self.database.get_current_height().await;
-                let height = try_or_stop!(res, |e| {
-                    tracing::error!("Error getting current height from database: {e:?}");
-                });
-                let res = response.send(height);
-                try_or_stop!(res, |_| {
-                    tracing::error!("Error sending current height response");
-                });
-                TaskNextAction::Continue
+                self.handle_get_current_height_query(response).await
+                // let res = self.database.get_current_height().await;
+                // let height = try_or_stop!(res, |e| {
+                //     tracing::error!("Error getting current height from database: {e:?}");
+                // });
+                // let res = response.send(height);
+                // try_or_stop!(res, |_| {
+                //     tracing::error!("Error sending current height response");
+                // });
+                // TaskNextAction::Continue
             }
         }
+    }
+
+    async fn handle_get_block_range_query(
+        &mut self,
+        first: u64,
+        last: u64,
+        response: tokio::sync::oneshot::Sender<BoxStream<Block>>,
+    ) -> TaskNextAction {
+        let res = self.database.get_block_range(first, last).await;
+        let block_stream = try_or_stop!(res, |e| {
+            tracing::error!("Error getting block range from database: {e:?}");
+        });
+        let res = response.send(block_stream);
+        try_or_stop!(res, |_| {
+            tracing::error!("Error sending block range response");
+        });
+        TaskNextAction::Continue
+    }
+
+    async fn handle_get_current_height_query(
+        &mut self,
+        response: tokio::sync::oneshot::Sender<u64>,
+    ) -> TaskNextAction {
+        let res = self.database.get_current_height().await;
+        let height = try_or_stop!(res, |e| {
+            tracing::error!("Error getting current height from database: {e:?}");
+        });
+        let res = response.send(height);
+        try_or_stop!(res, |_| {
+            tracing::error!("Error sending current height response");
+        });
+        TaskNextAction::Continue
     }
 
     pub async fn handle_block(&mut self, res: Result<(u64, Block)>) -> TaskNextAction {
