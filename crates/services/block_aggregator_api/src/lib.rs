@@ -88,27 +88,9 @@ where
             } => {
                 self.handle_get_block_range_query(first, last, response)
                     .await
-                // let res = self.database.get_block_range(first, last).await;
-                // let block_stream = try_or_stop!(res, |e| {
-                //     tracing::error!("Error getting block range from database: {e:?}");
-                // });
-                // let res = response.send(block_stream);
-                // try_or_stop!(res, |_| {
-                //     tracing::error!("Error sending block range response");
-                // });
-                // TaskNextAction::Continue
             }
             BlockAggregatorQuery::GetCurrentHeight { response } => {
                 self.handle_get_current_height_query(response).await
-                // let res = self.database.get_current_height().await;
-                // let height = try_or_stop!(res, |e| {
-                //     tracing::error!("Error getting current height from database: {e:?}");
-                // });
-                // let res = response.send(height);
-                // try_or_stop!(res, |_| {
-                //     tracing::error!("Error sending current height response");
-                // });
-                // TaskNextAction::Continue
             }
         }
     }
