@@ -135,9 +135,6 @@ async fn run__get_block_range__returns_expected_blocks() {
 
 #[tokio::test]
 async fn run__new_block_gets_added_to_db() {
-    // let _ = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::DEBUG)
-    //     .try_init();
     let mut rng = StdRng::seed_from_u64(42);
     // given
     let (api, _sender) = FakeApi::new();
