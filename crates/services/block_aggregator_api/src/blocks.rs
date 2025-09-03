@@ -1,10 +1,10 @@
 use crate::result::Result;
 
 pub trait BlockSource: Send + Sync {
-    fn next_block(&mut self) -> impl Future<Output = Result<Block>> + Send;
+    fn next_block(&mut self) -> impl Future<Output = Result<(u64, Block)>> + Send;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
     bytes: Vec<u8>,
 }
@@ -21,7 +21,7 @@ impl Block {
     }
 
     #[cfg(test)]
-    pub fn arb<Rng: rand::Rng + ?Sized>(rng: &mut Rng) -> Self {
+    pub fn random<Rng: rand::Rng + ?Sized>(rng: &mut Rng) -> Self {
         const SIZE: usize = 100;
         Self::arb_size(rng, SIZE)
     }

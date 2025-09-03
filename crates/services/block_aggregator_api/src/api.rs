@@ -3,6 +3,7 @@ use crate::{
     result::Result,
 };
 use fuel_core_services::stream::BoxStream;
+use std::fmt;
 use tokio::sync::oneshot::{
     Receiver,
     Sender,
@@ -21,6 +22,18 @@ pub enum BlockAggregatorQuery {
         last: u64,
         response: Sender<BoxStream<Block>>,
     },
+}
+
+impl fmt::Debug for BlockAggregatorQuery {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BlockAggregatorQuery::GetBlockRange { first, last, .. } => f
+                .debug_struct("GetBlockRange")
+                .field("first", first)
+                .field("last", last)
+                .finish(),
+        }
+    }
 }
 
 impl BlockAggregatorQuery {

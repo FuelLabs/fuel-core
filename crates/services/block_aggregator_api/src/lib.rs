@@ -31,7 +31,7 @@ mod tests;
 pub struct BlockAggregator<Api, DB, Blocks> {
     query: Api,
     database: DB,
-    _block_source: Blocks,
+    block_source: Blocks,
 }
 
 impl<Api, DB, Blocks> RunnableTask for BlockAggregator<Api, DB, Blocks>
@@ -41,9 +41,10 @@ where
     Blocks: BlockSource,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        tracing::debug!("BlockAggregator running");
         tokio::select! {
-            query_res = self.query.await_query() => self.handle_query(query_res),
-            block_res = self._block_source.next_block() => self.handle_block(block_res),
+            query_res = self.query.await_query() => self.handle_query(query_res).await,
+            block_res = self.block_source.next_block() => self.handle_block(block_res).await,
             _ = watcher.while_started() => self.stop(),
         }
     }
@@ -63,7 +64,7 @@ where
         Self {
             query,
             database,
-            _block_source,
+            block_source: _block_source,
         }
     }
 
@@ -71,7 +72,11 @@ where
         TaskNextAction::Stop
     }
 
-    pub fn handle_query(&mut self, res: Result<BlockAggregatorQuery>) -> TaskNextAction {
+    pub async fn handle_query(
+        &mut self,
+        res: Result<BlockAggregatorQuery>,
+    ) -> TaskNextAction {
+        tracing::debug!("Handling query: {res:?}");
         let query = try_or_stop!(res, |e| {
             tracing::error!("Error receiving query: {e:?}");
         });
@@ -81,7 +86,7 @@ where
                 last,
                 response,
             } => {
-                let res = self.database.get_block_range(first, last);
+                let res = self.database.get_block_range(first, last).await;
                 let block_stream = try_or_stop!(res, |e| {
                     tracing::error!("Error getting block range from database: {e:?}");
                 });
@@ -94,7 +99,15 @@ where
         }
     }
 
-    pub fn handle_block(&mut self, _res: Result<Block>) -> TaskNextAction {
-        todo!()
+    pub async fn handle_block(&mut self, res: Result<(u64, Block)>) -> TaskNextAction {
+        tracing::debug!("Handling block: {res:?}");
+        let (id, block) = try_or_stop!(res, |e| {
+            tracing::error!("Error receiving block from source: {e:?}");
+        });
+        let res = self.database.store_block(id, block).await;
+        try_or_stop!(res, |e| {
+            tracing::error!("Error storing block in database: {e:?}");
+        });
+        TaskNextAction::Continue
     }
 }

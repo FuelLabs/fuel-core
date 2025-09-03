@@ -13,3 +13,4 @@ rand = "0.9.2"
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
+tracing-subscriber = { workspace = true }

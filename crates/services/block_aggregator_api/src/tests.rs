@@ -11,6 +11,10 @@ use rand::{
 use std::{
     collections::HashMap,
     future,
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tokio::sync::mpsc::{
     Receiver,
@@ -36,30 +40,39 @@ impl BlockAggregatorApi for FakeApi {
 }
 
 struct FakeDB {
-    map: HashMap<u64, Block>,
+    map: Arc<Mutex<HashMap<u64, Block>>>,
 }
 
 impl FakeDB {
     fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
+        let map = Arc::new(Mutex::new(HashMap::new()));
+        Self { map }
     }
 
     fn add_block(&mut self, id: u64, block: Block) {
-        self.map.insert(id, block);
+        self.map.lock().unwrap().insert(id, block);
+    }
+
+    fn clone_inner(&self) -> Arc<Mutex<HashMap<u64, Block>>> {
+        self.map.clone()
     }
 }
 
 impl BlockAggregatorDB for FakeDB {
-    fn store_block(&mut self, _block: Block) -> Result<()> {
-        todo!()
+    async fn store_block(&mut self, id: u64, block: Block) -> Result<()> {
+        self.map.lock().unwrap().insert(id, block);
+        Ok(())
     }
 
-    fn get_block_range(&self, first: u64, last: u64) -> Result<BoxStream<Block>> {
+    async fn get_block_range(&self, first: u64, last: u64) -> Result<BoxStream<Block>> {
         let mut blocks = vec![];
         for id in first..=last {
-            if let Some(block) = self.map.get(&id) {
+            if let Some(block) = self
+                .map
+                .lock()
+                .expect("lets assume for now the test was written to avoid conflicts")
+                .get(&id)
+            {
                 blocks.push(block.to_owned());
             }
         }
@@ -67,25 +80,35 @@ impl BlockAggregatorDB for FakeDB {
     }
 }
 
-struct FakeBlockSource;
+struct FakeBlockSource {
+    blocks: Receiver<(u64, Block)>,
+}
+
+impl FakeBlockSource {
+    fn new() -> (Self, Sender<(u64, Block)>) {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        let _self = Self { blocks: receiver };
+        (_self, _sender)
+    }
+}
 
 impl BlockSource for FakeBlockSource {
-    async fn next_block(&mut self) -> Result<Block> {
-        future::pending().await
+    async fn next_block(&mut self) -> Result<(u64, Block)> {
+        Ok(self.blocks.recv().await.unwrap())
     }
 }
 
 #[tokio::test]
 async fn run__get_block_range__returns_expected_blocks() {
-    // given
     let mut rng = StdRng::seed_from_u64(42);
+    // given
     let (api, sender) = FakeApi::new();
     let mut db = FakeDB::new();
-    db.add_block(1, Block::arb(&mut rng));
-    db.add_block(2, Block::arb(&mut rng));
-    db.add_block(3, Block::arb(&mut rng));
+    db.add_block(1, Block::random(&mut rng));
+    db.add_block(2, Block::random(&mut rng));
+    db.add_block(3, Block::random(&mut rng));
 
-    let source = FakeBlockSource;
+    let (source, _) = FakeBlockSource::new();
 
     let mut srv = BlockAggregator::new(api, db, source);
 
@@ -107,5 +130,28 @@ async fn run__get_block_range__returns_expected_blocks() {
 
 #[tokio::test]
 async fn run__new_block_gets_added_to_db() {
-    todo!()
+    // let _ = tracing_subscriber::fmt()
+    //     .with_max_level(tracing::Level::DEBUG)
+    //     .try_init();
+    let mut rng = StdRng::seed_from_u64(42);
+    // given
+    let (api, _sender) = FakeApi::new();
+    let mut db = FakeDB::new();
+    let db_map = db.clone_inner();
+    let (mut source, source_sender) = FakeBlockSource::new();
+    let mut srv = BlockAggregator::new(api, db, source);
+
+    // when
+    let mut watcher = StateWatcher::started();
+    tokio::spawn(async move {
+        let _ = srv.run(&mut watcher).await;
+    });
+    let block = Block::random(&mut rng);
+    let id = 123u64;
+    source_sender.send((id, block.clone())).await.unwrap();
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    // then
+    let actual = db_map.lock().unwrap().get(&id).unwrap().clone();
+    assert_eq!(block, actual);
 }
