@@ -77,6 +77,12 @@ impl BlockAggregatorDB for FakeDB {
         }
         Ok(Box::pin(futures_util::stream::iter(blocks)))
     }
+
+    async fn get_current_height(&self) -> Result<u64> {
+        let map = self.map.lock().unwrap();
+        let max_height = map.keys().max().cloned().unwrap_or(0);
+        Ok(max_height)
+    }
 }
 
 struct FakeBlockSource {
@@ -153,4 +159,32 @@ async fn run__new_block_gets_added_to_db() {
     // then
     let actual = db_map.lock().unwrap().get(&id).unwrap().clone();
     assert_eq!(block, actual);
+}
+
+#[tokio::test]
+async fn run__get_current_height__returns_expected_height() {
+    let mut rng = StdRng::seed_from_u64(42);
+    // given
+    let (api, sender) = FakeApi::new();
+    let mut db = FakeDB::new();
+    let expected_height = 3;
+    db.add_block(1, Block::random(&mut rng));
+    db.add_block(2, Block::random(&mut rng));
+    db.add_block(expected_height, Block::random(&mut rng));
+
+    let (source, _) = FakeBlockSource::new();
+
+    let mut srv = BlockAggregator::new(api, db, source);
+
+    // when
+    let mut watcher = StateWatcher::started();
+    tokio::spawn(async move {
+        let _ = srv.run(&mut watcher).await;
+    });
+    let (query, response) = BlockAggregatorQuery::get_current_height();
+    sender.send(query).await.unwrap();
+
+    // then
+    let height = response.await.unwrap();
+    assert_eq!(expected_height, height);
 }

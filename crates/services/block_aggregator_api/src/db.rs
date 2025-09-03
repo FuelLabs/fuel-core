@@ -15,4 +15,6 @@ pub trait BlockAggregatorDB: Send + Sync {
         first: u64,
         last: u64,
     ) -> impl Future<Output = Result<BoxStream<Block>>> + Send;
+
+    fn get_current_height(&self) -> impl Future<Output = Result<u64>> + Send;
 }

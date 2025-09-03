@@ -22,6 +22,9 @@ pub enum BlockAggregatorQuery {
         last: u64,
         response: Sender<BoxStream<Block>>,
     },
+    GetCurrentHeight {
+        response: Sender<u64>,
+    },
 }
 
 impl fmt::Debug for BlockAggregatorQuery {
@@ -32,6 +35,9 @@ impl fmt::Debug for BlockAggregatorQuery {
                 .field("first", first)
                 .field("last", last)
                 .finish(),
+            BlockAggregatorQuery::GetCurrentHeight { .. } => {
+                f.debug_struct("GetCurrentHeight").finish()
+            }
         }
     }
 }
@@ -44,6 +50,12 @@ impl BlockAggregatorQuery {
             last,
             response: sender,
         };
+        (query, receiver)
+    }
+
+    pub(crate) fn get_current_height() -> (Self, Receiver<u64>) {
+        let (sender, receiver) = channel();
+        let query = Self::GetCurrentHeight { response: sender };
         (query, receiver)
     }
 }

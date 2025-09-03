@@ -96,6 +96,17 @@ where
                 });
                 TaskNextAction::Continue
             }
+            BlockAggregatorQuery::GetCurrentHeight { response } => {
+                let res = self.database.get_current_height().await;
+                let height = try_or_stop!(res, |e| {
+                    tracing::error!("Error getting current height from database: {e:?}");
+                });
+                let res = response.send(height);
+                try_or_stop!(res, |_| {
+                    tracing::error!("Error sending current height response");
+                });
+                TaskNextAction::Continue
+            }
         }
     }
 
