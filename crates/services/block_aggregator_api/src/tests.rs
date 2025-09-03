@@ -10,7 +10,6 @@ use rand::{
 };
 use std::{
     collections::HashMap,
-    future,
     sync::{
         Arc,
         Mutex,
@@ -136,9 +135,9 @@ async fn run__new_block_gets_added_to_db() {
     let mut rng = StdRng::seed_from_u64(42);
     // given
     let (api, _sender) = FakeApi::new();
-    let mut db = FakeDB::new();
+    let db = FakeDB::new();
     let db_map = db.clone_inner();
-    let (mut source, source_sender) = FakeBlockSource::new();
+    let (source, source_sender) = FakeBlockSource::new();
     let mut srv = BlockAggregator::new(api, db, source);
 
     // when
