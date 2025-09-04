@@ -52,65 +52,6 @@ impl StorageColumn for Column {
         self.as_u32()
     }
 }
-// /// The storage table for metadata of the gas price algorithm updater
-// pub struct GasPriceMetadata;
-//
-// impl Mappable for GasPriceMetadata {
-//     type Key = Self::OwnedKey;
-//     type OwnedKey = BlockHeight;
-//     type Value = Self::OwnedValue;
-//     type OwnedValue = UpdaterMetadata;
-// }
-//
-// impl TableWithBlueprint for GasPriceMetadata {
-//     type Blueprint = Plain<Primitive<4>, Postcard>;
-//     type Column = GasPriceColumn;
-//
-//     fn column() -> Self::Column {
-//         GasPriceColumn::State
-//     }
-// }
-//
-// /// The storage for all the unrecorded blocks from gas price algorithm, used for guessing the cost
-// /// for future blocks to be recorded on the DA chain
-// pub struct UnrecordedBlocksTable;
-//
-// type BlockSizeInBytes = u64;
-//
-// impl Mappable for UnrecordedBlocksTable {
-//     type Key = Self::OwnedKey;
-//     type OwnedKey = BlockHeight;
-//     type Value = Self::OwnedValue;
-//     type OwnedValue = BlockSizeInBytes;
-// }
-//
-// impl TableWithBlueprint for UnrecordedBlocksTable {
-//     type Blueprint = Plain<Primitive<4>, Postcard>;
-//     type Column = GasPriceColumn;
-//
-//     fn column() -> Self::Column {
-//         GasPriceColumn::UnrecordedBlocks
-//     }
-// }
-//
-// /// Used to store the latest L2 block that has been recorded on the DA chain
-// pub struct RecordedHeights;
-//
-// impl Mappable for RecordedHeights {
-//     type Key = Self::OwnedKey;
-//     type OwnedKey = ();
-//     type Value = Self::OwnedValue;
-//     type OwnedValue = BlockHeight;
-// }
-//
-// impl TableWithBlueprint for RecordedHeights {
-//     type Blueprint = Plain<Postcard, Primitive<4>>;
-//     type Column = GasPriceColumn;
-//
-//     fn column() -> Self::Column {
-//         GasPriceColumn::LatestRecordedHeight
-//     }
-// }
 
 pub struct Blocks;
 
