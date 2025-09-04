@@ -15,6 +15,7 @@ use fuel_core_services::{
     TaskNextAction,
     try_or_stop,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 use result::Result;
 
 pub mod api;
@@ -102,8 +103,8 @@ where
 
     async fn handle_get_block_range_query(
         &mut self,
-        first: u64,
-        last: u64,
+        first: BlockHeight,
+        last: BlockHeight,
         response: tokio::sync::oneshot::Sender<BlockRange>,
     ) -> TaskNextAction {
         let res = self.database.get_block_range(first, last).await;
@@ -119,7 +120,7 @@ where
 
     async fn handle_get_current_height_query(
         &mut self,
-        response: tokio::sync::oneshot::Sender<u64>,
+        response: tokio::sync::oneshot::Sender<BlockHeight>,
     ) -> TaskNextAction {
         let res = self.database.get_current_height().await;
         let height = try_or_stop!(res, |e| {
@@ -132,7 +133,10 @@ where
         TaskNextAction::Continue
     }
 
-    pub async fn handle_block(&mut self, res: Result<(u64, Block)>) -> TaskNextAction {
+    pub async fn handle_block(
+        &mut self,
+        res: Result<(BlockHeight, Block)>,
+    ) -> TaskNextAction {
         tracing::debug!("Handling block: {res:?}");
         let (id, block) = try_or_stop!(res, |e| {
             tracing::error!("Error receiving block from source: {e:?}");

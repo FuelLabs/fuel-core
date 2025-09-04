@@ -1,11 +1,13 @@
 use crate::result::Result;
 use bytes::Bytes;
+use fuel_core_types::fuel_types::BlockHeight;
 use std::fmt::Debug;
 
 /// Source from which blocks can be gathered for aggregation
 pub trait BlockSource: Send + Sync {
     /// Asynchronously fetch the next block and its height
-    fn next_block(&mut self) -> impl Future<Output = Result<(u64, Block)>> + Send;
+    fn next_block(&mut self)
+    -> impl Future<Output = Result<(BlockHeight, Block)>> + Send;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

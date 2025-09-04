@@ -2,6 +2,7 @@ use crate::{
     blocks::Block,
     result::Result,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 
 pub mod storage_db;
 
@@ -13,19 +14,19 @@ pub trait BlockAggregatorDB: Send + Sync {
     /// Stores a block with the given ID
     fn store_block(
         &mut self,
-        id: u64,
+        height: BlockHeight,
         block: Block,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Retrieves a range of blocks from the database
     fn get_block_range(
         &self,
-        first: u64,
-        last: u64,
+        first: BlockHeight,
+        last: BlockHeight,
     ) -> impl Future<Output = Result<Self::BlockRange>> + Send;
 
     /// Retrieves the current height of the aggregated blocks If there is a break in the blocks,
     /// i.e. the blocks are being aggregated out of order, return the height of the last
     /// contiguous block
-    fn get_current_height(&self) -> impl Future<Output = Result<u64>> + Send;
+    fn get_current_height(&self) -> impl Future<Output = Result<BlockHeight>> + Send;
 }
