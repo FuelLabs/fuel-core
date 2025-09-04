@@ -4,12 +4,11 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.98"
+anyhow = { workspace = true }
 fuel-core-services = { workspace = true }
-futures-util = "0.3.31"
-rand = "0.9.2"
-tokio = "1.45.1"
-tracing = "0.1.41"
+rand = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
