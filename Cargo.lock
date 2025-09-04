@@ -1406,6 +1406,7 @@ dependencies = [
  "futures",
  "num_enum",
  "rand 0.8.5",
+ "serde",
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "tokio",

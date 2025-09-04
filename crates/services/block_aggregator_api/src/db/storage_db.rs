@@ -19,7 +19,13 @@ pub mod table;
 mod tests;
 
 pub struct StorageDB<S> {
-    _inner: S,
+    inner: S,
+}
+
+impl<S> StorageDB<S> {
+    pub fn new(storage: S) -> Self {
+        Self { inner: storage }
+    }
 }
 
 impl<S> BlockAggregatorDB for StorageDB<S>

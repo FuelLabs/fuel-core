@@ -8,7 +8,7 @@ pub trait BlockSource: Send + Sync {
     fn next_block(&mut self) -> impl Future<Output = Result<(u64, Block)>> + Send;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Block {
     bytes: Bytes,
 }
