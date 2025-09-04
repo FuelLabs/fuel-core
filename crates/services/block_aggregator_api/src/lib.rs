@@ -22,6 +22,8 @@ pub mod blocks;
 pub mod db;
 pub mod result;
 
+pub mod block_range_response;
+
 #[cfg(test)]
 mod tests;
 
