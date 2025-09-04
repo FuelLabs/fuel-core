@@ -1398,6 +1398,7 @@ name = "block_aggregator_api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytes",
  "fuel-core-services",
  "futures",
  "rand 0.8.5",
