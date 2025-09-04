@@ -1,9 +1,6 @@
 use crate::result::Result;
 use bytes::Bytes;
-use std::fmt::{
-    Debug,
-    Formatter,
-};
+use std::fmt::Debug;
 
 /// Source from which blocks can be gathered for aggregation
 pub trait BlockSource: Send + Sync {
@@ -11,40 +8,9 @@ pub trait BlockSource: Send + Sync {
     fn next_block(&mut self) -> impl Future<Output = Result<(u64, Block)>> + Send;
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Block {
     bytes: Bytes,
-}
-
-#[cfg(test)]
-impl Debug for Block {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        const BYTES_DISPLAY: usize = 8;
-        if self.bytes.len() <= BYTES_DISPLAY {
-            let bytes = &self
-                .bytes
-                .iter()
-                .map(|b| format!("{}", b))
-                .collect::<Vec<_>>();
-            let bytes_string = bytes.join(", ");
-            write!(f, "Block {{ bytes: [{}] }}", bytes_string)?;
-        } else {
-            let bytes_string = &self
-                .bytes
-                .iter()
-                .take(BYTES_DISPLAY)
-                .map(|b| format!("{}", b))
-                .collect::<Vec<_>>();
-            let bytes_string = bytes_string.join(", ");
-            let len = self.bytes.len();
-            write!(
-                f,
-                "Block {{ bytes: [{}, ...] (total {} bytes) }}",
-                bytes_string, len
-            )?;
-        }
-        Ok(())
-    }
 }
 
 impl Block {
