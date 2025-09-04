@@ -123,10 +123,8 @@ async fn run__get_block_range__returns_expected_blocks() {
     let (query, response) = BlockAggregatorQuery::get_block_range(2, 3);
 
     // when
-    tokio::spawn(async move {
-        let _ = srv.run(&mut watcher).await;
-    });
     sender.send(query).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
 
     // then
     let stream = response.await.unwrap();
@@ -154,10 +152,8 @@ async fn run__new_block_gets_added_to_db() {
     let mut watcher = StateWatcher::started();
 
     // when
-    tokio::spawn(async move {
-        let _ = srv.run(&mut watcher).await;
-    });
     source_sender.send((id, block.clone())).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
 
     // then
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -183,10 +179,8 @@ async fn run__get_current_height__returns_expected_height() {
     let (query, response) = BlockAggregatorQuery::get_current_height();
 
     // when
-    tokio::spawn(async move {
-        let _ = srv.run(&mut watcher).await;
-    });
     sender.send(query).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
 
     // then
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
