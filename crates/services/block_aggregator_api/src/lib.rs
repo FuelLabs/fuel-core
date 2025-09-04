@@ -29,6 +29,8 @@ mod tests;
 
 // TODO: this doesn't need to limited to the blocks,
 //   but we can change the name later
+/// The Block Aggregator service, which aggregates blocks from a source and stores them in a database
+/// Queries can be made to the service to retrieve data from the `DB`
 pub struct BlockAggregator<Api, DB, Blocks> {
     query: Api,
     database: DB,

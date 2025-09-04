@@ -6,8 +6,12 @@ use tokio::sync::oneshot::{
     channel,
 };
 
+/// The API for querying the block aggregator service.
 pub trait BlockAggregatorApi: Send + Sync {
+    /// The type of the block range response.
     type BlockRangeResponse;
+
+    /// Awaits the next query to the block aggregator service.
     fn await_query(
         &mut self,
     ) -> impl Future<Output = Result<BlockAggregatorQuery<Self::BlockRangeResponse>>> + Send;

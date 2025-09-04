@@ -5,7 +5,9 @@ use std::fmt::{
     Formatter,
 };
 
+/// Source from which blocks can be gathered for aggregation
 pub trait BlockSource: Send + Sync {
+    /// Asynchronously fetch the next block and its height
     fn next_block(&mut self) -> impl Future<Output = Result<(u64, Block)>> + Send;
 }
 
