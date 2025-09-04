@@ -1,4 +1,5 @@
 use crate::result::Result;
+use fuel_core_types::fuel_types::BlockHeight;
 use std::fmt;
 use tokio::sync::oneshot::{
     Receiver,
@@ -19,12 +20,12 @@ pub trait BlockAggregatorApi: Send + Sync {
 
 pub enum BlockAggregatorQuery<BlockRange> {
     GetBlockRange {
-        first: u64,
-        last: u64,
+        first: BlockHeight,
+        last: BlockHeight,
         response: Sender<BlockRange>,
     },
     GetCurrentHeight {
-        response: Sender<u64>,
+        response: Sender<BlockHeight>,
     },
 }
 
@@ -44,8 +45,13 @@ impl<T> fmt::Debug for BlockAggregatorQuery<T> {
 }
 
 impl<T> BlockAggregatorQuery<T> {
-    pub fn get_block_range(first: u64, last: u64) -> (Self, Receiver<T>) {
+    pub fn get_block_range<H: Into<BlockHeight>>(
+        first: H,
+        last: H,
+    ) -> (Self, Receiver<T>) {
         let (sender, receiver) = channel();
+        let first: BlockHeight = first.into();
+        let last: BlockHeight = last.into();
         let query = Self::GetBlockRange {
             first,
             last,
@@ -54,7 +60,7 @@ impl<T> BlockAggregatorQuery<T> {
         (query, receiver)
     }
 
-    pub fn get_current_height() -> (Self, Receiver<u64>) {
+    pub fn get_current_height() -> (Self, Receiver<BlockHeight>) {
         let (sender, receiver) = channel();
         let query = Self::GetCurrentHeight { response: sender };
         (query, receiver)

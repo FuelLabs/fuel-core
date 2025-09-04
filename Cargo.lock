@@ -1400,6 +1400,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "fuel-core-services",
+ "fuel-core-types 0.46.0",
  "futures",
  "rand 0.8.5",
  "tokio",

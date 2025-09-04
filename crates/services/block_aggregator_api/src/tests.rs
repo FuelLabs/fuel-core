@@ -45,7 +45,7 @@ impl<T: Send> BlockAggregatorApi for FakeApi<T> {
 }
 
 struct FakeDB {
-    map: Arc<Mutex<HashMap<u64, Block>>>,
+    map: Arc<Mutex<HashMap<BlockHeight, Block>>>,
 }
 
 impl FakeDB {
@@ -54,11 +54,11 @@ impl FakeDB {
         Self { map }
     }
 
-    fn add_block(&mut self, id: u64, block: Block) {
-        self.map.lock().unwrap().insert(id, block);
+    fn add_block(&mut self, height: BlockHeight, block: Block) {
+        self.map.lock().unwrap().insert(height, block);
     }
 
-    fn clone_inner(&self) -> Arc<Mutex<HashMap<u64, Block>>> {
+    fn clone_inner(&self) -> Arc<Mutex<HashMap<BlockHeight, Block>>> {
         self.map.clone()
     }
 }
@@ -66,13 +66,19 @@ impl FakeDB {
 impl BlockAggregatorDB for FakeDB {
     type BlockRange = BlockRangeResponse;
 
-    async fn store_block(&mut self, id: u64, block: Block) -> Result<()> {
+    async fn store_block(&mut self, id: BlockHeight, block: Block) -> Result<()> {
         self.map.lock().unwrap().insert(id, block);
         Ok(())
     }
 
-    async fn get_block_range(&self, first: u64, last: u64) -> Result<BoxStream<Block>> {
+    async fn get_block_range(
+        &self,
+        first: BlockHeight,
+        last: BlockHeight,
+    ) -> Result<BoxStream<Block>> {
         let mut blocks = vec![];
+        let first: u32 = first.into();
+        let last: u32 = last.into();
         for id in first..=last {
             if let Some(block) = self
                 .map
@@ -86,19 +92,19 @@ impl BlockAggregatorDB for FakeDB {
         Ok(Box::pin(futures::stream::iter(blocks)))
     }
 
-    async fn get_current_height(&self) -> Result<u64> {
+    async fn get_current_height(&self) -> Result<BlockHeight> {
         let map = self.map.lock().unwrap();
-        let max_height = map.keys().max().cloned().unwrap_or(0);
+        let max_height = map.keys().max().cloned().unwrap_or(BlockHeight::from(0u32));
         Ok(max_height)
     }
 }
 
 struct FakeBlockSource {
-    blocks: Receiver<(u64, Block)>,
+    blocks: Receiver<(BlockHeight, Block)>,
 }
 
 impl FakeBlockSource {
-    fn new() -> (Self, Sender<(u64, Block)>) {
+    fn new() -> (Self, Sender<(BlockHeight, Block)>) {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
         let _self = Self { blocks: receiver };
         (_self, _sender)
@@ -106,7 +112,7 @@ impl FakeBlockSource {
 }
 
 impl BlockSource for FakeBlockSource {
-    async fn next_block(&mut self) -> Result<(u64, Block)> {
+    async fn next_block(&mut self) -> Result<(BlockHeight, Block)> {
         self.blocks.recv().await.ok_or(Error::BlockSourceError)
     }
 }
@@ -117,9 +123,9 @@ async fn run__get_block_range__returns_expected_blocks() {
     // given
     let (api, sender) = FakeApi::new();
     let mut db = FakeDB::new();
-    db.add_block(1, Block::random(&mut rng));
-    db.add_block(2, Block::random(&mut rng));
-    db.add_block(3, Block::random(&mut rng));
+    db.add_block(1.into(), Block::random(&mut rng));
+    db.add_block(2.into(), Block::random(&mut rng));
+    db.add_block(3.into(), Block::random(&mut rng));
 
     let (source, _block_sender) = FakeBlockSource::new();
 
@@ -153,7 +159,7 @@ async fn run__new_block_gets_added_to_db() {
     let mut srv = BlockAggregator::new(api, db, source);
 
     let block = Block::random(&mut rng);
-    let id = 123u64;
+    let id = BlockHeight::from(123u32);
     let mut watcher = StateWatcher::started();
 
     // when
@@ -172,9 +178,9 @@ async fn run__get_current_height__returns_expected_height() {
     // given
     let (api, sender) = FakeApi::new();
     let mut db = FakeDB::new();
-    let expected_height = 3;
-    db.add_block(1, Block::random(&mut rng));
-    db.add_block(2, Block::random(&mut rng));
+    let expected_height = BlockHeight::from(3u32);
+    db.add_block(1.into(), Block::random(&mut rng));
+    db.add_block(2.into(), Block::random(&mut rng));
     db.add_block(expected_height, Block::random(&mut rng));
 
     let (source, _block_sender) = FakeBlockSource::new();

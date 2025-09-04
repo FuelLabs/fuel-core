@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = { workspace = true }
 bytes = { workspace = true }
 fuel-core-services = { workspace = true }
+fuel-core-types = { workspace = true, features = ["std"] }
 rand = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
