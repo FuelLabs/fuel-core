@@ -60,11 +60,11 @@ where
     DB: BlockAggregatorDB,
     Blocks: BlockSource,
 {
-    pub fn new(query: Api, database: DB, _block_source: Blocks) -> Self {
+    pub fn new(query: Api, database: DB, block_source: Blocks) -> Self {
         Self {
             query,
             database,
-            block_source: _block_source,
+            block_source,
         }
     }
 
