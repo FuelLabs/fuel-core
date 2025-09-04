@@ -4,10 +4,29 @@ use crate::{
     db::BlockAggregatorDB,
     result::Result,
 };
+use fuel_core_storage::{
+    Error as StorageError,
+    StorageMutate,
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+    },
+};
+use table::Blocks;
 
-pub struct StorageDB;
+pub mod table;
+#[cfg(test)]
+mod tests;
 
-impl BlockAggregatorDB for StorageDB {
+pub struct StorageDB<S> {
+    _inner: S,
+}
+
+impl<S> BlockAggregatorDB for StorageDB<S>
+where
+    S: Send + Sync + Modifiable,
+    for<'a> StorageTransaction<&'a mut S>: StorageMutate<Blocks, Error = StorageError>,
+{
     type BlockRange = BlockRangeResponse;
 
     async fn store_block(&mut self, _id: u64, _block: Block) -> Result<()> {
