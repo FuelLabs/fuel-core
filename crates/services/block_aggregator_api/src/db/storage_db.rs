@@ -1,31 +1,24 @@
 use crate::{
+    block_range_response::BlockRangeResponse,
     blocks::Block,
     db::BlockAggregatorDB,
+    result::Result,
 };
-use fuel_core_services::stream::BoxStream;
 
 pub struct StorageDB;
 
 impl BlockAggregatorDB for StorageDB {
-    fn store_block(
-        &mut self,
-        id: u64,
-        block: Block,
-    ) -> impl Future<Output = crate::result::Result<()>> + Send {
+    type BlockRange = BlockRangeResponse;
+
+    async fn store_block(&mut self, _id: u64, _block: Block) -> Result<()> {
         todo!()
     }
 
-    fn get_block_range(
-        &self,
-        first: u64,
-        last: u64,
-    ) -> impl Future<Output = crate::result::Result<BoxStream<Block>>> + Send {
+    async fn get_block_range(&self, _first: u64, _last: u64) -> Result<Self::BlockRange> {
         todo!()
     }
 
-    fn get_current_height(
-        &self,
-    ) -> impl Future<Output = crate::result::Result<u64>> + Send {
+    async fn get_current_height(&self) -> Result<u64> {
         todo!()
     }
 }
