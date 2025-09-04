@@ -12,6 +12,7 @@ use fuel_core_storage::{
         StorageTransaction,
     },
 };
+use fuel_core_types::fuel_types::BlockHeight;
 use table::Blocks;
 
 pub mod table;
@@ -19,12 +20,12 @@ pub mod table;
 mod tests;
 
 pub struct StorageDB<S> {
-    inner: S,
+    _inner: S,
 }
 
 impl<S> StorageDB<S> {
     pub fn new(storage: S) -> Self {
-        Self { inner: storage }
+        Self { _inner: storage }
     }
 }
 
@@ -35,15 +36,19 @@ where
 {
     type BlockRange = BlockRangeResponse;
 
-    async fn store_block(&mut self, _id: u64, _block: Block) -> Result<()> {
+    async fn store_block(&mut self, _height: BlockHeight, _block: Block) -> Result<()> {
         todo!()
     }
 
-    async fn get_block_range(&self, _first: u64, _last: u64) -> Result<Self::BlockRange> {
+    async fn get_block_range(
+        &self,
+        _first: BlockHeight,
+        _last: BlockHeight,
+    ) -> Result<Self::BlockRange> {
         todo!()
     }
 
-    async fn get_current_height(&self) -> Result<u64> {
+    async fn get_current_height(&self) -> Result<BlockHeight> {
         todo!()
     }
 }
