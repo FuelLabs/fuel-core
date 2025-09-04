@@ -23,20 +23,23 @@ use tokio::sync::mpsc::{
     Sender,
 };
 
-struct FakeApi {
-    receiver: Receiver<BlockAggregatorQuery>,
+type BlockRangeResponse = BoxStream<Block>;
+
+struct FakeApi<T> {
+    receiver: Receiver<BlockAggregatorQuery<T>>,
 }
 
-impl FakeApi {
-    fn new() -> (Self, Sender<BlockAggregatorQuery>) {
+impl<T> FakeApi<T> {
+    fn new() -> (Self, Sender<BlockAggregatorQuery<T>>) {
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
         let api = Self { receiver };
         (api, sender)
     }
 }
 
-impl BlockAggregatorApi for FakeApi {
-    async fn await_query(&mut self) -> Result<BlockAggregatorQuery> {
+impl<T: Send> BlockAggregatorApi for FakeApi<T> {
+    type BlockRangeResponse = T;
+    async fn await_query(&mut self) -> Result<BlockAggregatorQuery<T>> {
         Ok(self.receiver.recv().await.unwrap())
     }
 }
@@ -61,6 +64,8 @@ impl FakeDB {
 }
 
 impl BlockAggregatorDB for FakeDB {
+    type BlockRange = BlockRangeResponse;
+
     async fn store_block(&mut self, id: u64, block: Block) -> Result<()> {
         self.map.lock().unwrap().insert(id, block);
         Ok(())

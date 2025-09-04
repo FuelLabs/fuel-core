@@ -1,8 +1,4 @@
-use crate::{
-    blocks::Block,
-    result::Result,
-};
-use fuel_core_services::stream::BoxStream;
+use crate::result::Result;
 use std::fmt;
 use tokio::sync::oneshot::{
     Receiver,
@@ -11,23 +7,24 @@ use tokio::sync::oneshot::{
 };
 
 pub trait BlockAggregatorApi: Send + Sync {
+    type BlockRangeResponse;
     fn await_query(
         &mut self,
-    ) -> impl Future<Output = Result<BlockAggregatorQuery>> + Send;
+    ) -> impl Future<Output = Result<BlockAggregatorQuery<Self::BlockRangeResponse>>> + Send;
 }
 
-pub enum BlockAggregatorQuery {
+pub enum BlockAggregatorQuery<BlockRange> {
     GetBlockRange {
         first: u64,
         last: u64,
-        response: Sender<BoxStream<Block>>,
+        response: Sender<BlockRange>,
     },
     GetCurrentHeight {
         response: Sender<u64>,
     },
 }
 
-impl fmt::Debug for BlockAggregatorQuery {
+impl<T> fmt::Debug for BlockAggregatorQuery<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BlockAggregatorQuery::GetBlockRange { first, last, .. } => f
@@ -42,8 +39,8 @@ impl fmt::Debug for BlockAggregatorQuery {
     }
 }
 
-impl BlockAggregatorQuery {
-    pub fn get_block_range(first: u64, last: u64) -> (Self, Receiver<BoxStream<Block>>) {
+impl<T> BlockAggregatorQuery<T> {
+    pub fn get_block_range(first: u64, last: u64) -> (Self, Receiver<T>) {
         let (sender, receiver) = channel();
         let query = Self::GetBlockRange {
             first,

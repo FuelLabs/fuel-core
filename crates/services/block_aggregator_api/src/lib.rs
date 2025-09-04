@@ -13,7 +13,6 @@ use fuel_core_services::{
     RunnableTask,
     StateWatcher,
     TaskNextAction,
-    stream::BoxStream,
     try_or_stop,
 };
 use result::Result;
@@ -34,11 +33,12 @@ pub struct BlockAggregator<Api, DB, Blocks> {
     block_source: Blocks,
 }
 
-impl<Api, DB, Blocks> RunnableTask for BlockAggregator<Api, DB, Blocks>
+impl<Api, DB, Blocks, BlockRange> RunnableTask for BlockAggregator<Api, DB, Blocks>
 where
-    Api: BlockAggregatorApi,
-    DB: BlockAggregatorDB,
+    Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
+    DB: BlockAggregatorDB<BlockRange = BlockRange>,
     Blocks: BlockSource,
+    BlockRange: Send,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tracing::debug!("BlockAggregator running");
@@ -54,11 +54,12 @@ where
     }
 }
 
-impl<Api, DB, Blocks> BlockAggregator<Api, DB, Blocks>
+impl<Api, DB, Blocks, BlockRange> BlockAggregator<Api, DB, Blocks>
 where
-    Api: BlockAggregatorApi,
-    DB: BlockAggregatorDB,
+    Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
+    DB: BlockAggregatorDB<BlockRange = BlockRange>,
     Blocks: BlockSource,
+    BlockRange: Send,
 {
     pub fn new(query: Api, database: DB, block_source: Blocks) -> Self {
         Self {
@@ -74,7 +75,7 @@ where
 
     pub async fn handle_query(
         &mut self,
-        res: Result<BlockAggregatorQuery>,
+        res: Result<BlockAggregatorQuery<BlockRange>>,
     ) -> TaskNextAction {
         tracing::debug!("Handling query: {res:?}");
         let query = try_or_stop!(res, |e| {
@@ -99,7 +100,7 @@ where
         &mut self,
         first: u64,
         last: u64,
-        response: tokio::sync::oneshot::Sender<BoxStream<Block>>,
+        response: tokio::sync::oneshot::Sender<BlockRange>,
     ) -> TaskNextAction {
         let res = self.database.get_block_range(first, last).await;
         let block_stream = try_or_stop!(res, |e| {
