@@ -1399,8 +1399,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fuel-core-services",
- "futures-util",
- "rand 0.9.2",
+ "futures",
+ "rand 0.8.5",
  "tokio",
  "tracing",
  "tracing-subscriber",

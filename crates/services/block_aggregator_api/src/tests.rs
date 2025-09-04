@@ -6,7 +6,7 @@ use crate::{
     result::Error,
 };
 use fuel_core_services::stream::BoxStream;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use rand::{
     SeedableRng,
     prelude::StdRng,
@@ -78,7 +78,7 @@ impl BlockAggregatorDB for FakeDB {
                 blocks.push(block.to_owned());
             }
         }
-        Ok(Box::pin(futures_util::stream::iter(blocks)))
+        Ok(Box::pin(futures::stream::iter(blocks)))
     }
 
     async fn get_current_height(&self) -> Result<u64> {

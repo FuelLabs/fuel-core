@@ -16,7 +16,7 @@ impl Block {
 
     #[cfg(test)]
     pub fn arb_size<Rng: rand::Rng + ?Sized>(rng: &mut Rng, size: usize) -> Self {
-        let bytes: Vec<u8> = (0..size).map(|_| rng.random()).collect();
+        let bytes: Vec<u8> = (0..size).map(|_| rng.r#gen()).collect();
         Self::new(bytes)
     }
 
