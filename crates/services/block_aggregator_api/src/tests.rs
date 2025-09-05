@@ -113,7 +113,7 @@ impl FakeBlockSource {
 
 impl BlockSource for FakeBlockSource {
     async fn next_block(&mut self) -> Result<(BlockHeight, Block)> {
-        self.blocks.recv().await.ok_or(Error::BlockSourceError)
+        self.blocks.recv().await.ok_or(Error::BlockSource)
     }
 }
 

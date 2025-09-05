@@ -2,10 +2,7 @@ use crate::blocks::Block;
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{
-        postcard::Postcard,
-        primitive::Primitive,
-    },
+    codec::postcard::Postcard,
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
 };
@@ -25,7 +22,8 @@ use fuel_core_types::fuel_types::BlockHeight;
     num_enum::TryFromPrimitive,
 )]
 pub enum Column {
-    Blocks = 0,
+    Metadata = 0,
+    Blocks = 1,
     // Metadata = 0,
     // State = 1,
     // UnrecordedBlocks = 2,
@@ -63,7 +61,7 @@ impl Mappable for Blocks {
 }
 
 impl TableWithBlueprint for Blocks {
-    type Blueprint = Plain<Primitive<4>, Postcard>;
+    type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
 
     fn column() -> Self::Column {
