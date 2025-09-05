@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_core_services::stream::Stream;
 use fuel_core_storage::{
     Error as StorageError,
     Mappable,
@@ -34,6 +35,13 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
+use std::{
+    pin::Pin,
+    task::{
+        Context,
+        Poll,
+    },
+};
 use table::Blocks;
 
 pub mod table;
@@ -52,9 +60,9 @@ impl<S> StorageDB<S> {
 
 impl<S> BlockAggregatorDB for StorageDB<S>
 where
-    S: Send + Sync + Modifiable + Clone + 'static,
-    S: IterableTable<Blocks>,
+    S: Send + Sync + Modifiable + Clone + Unpin + ReadTransaction + 'static,
     for<'a> StorageTransaction<&'a mut S>: StorageMutate<Blocks, Error = StorageError>,
+    for<'a> StorageTransaction<&'a S>: StorageInspect<Blocks, Error = StorageError>,
 {
     type BlockRange = BlockRangeResponse;
 
@@ -71,21 +79,78 @@ where
         &self,
         first: BlockHeight,
         last: BlockHeight,
-    ) -> Result<Self::BlockRange> {
-        let iter = self
-            .inner
-            .iter_all_by_start::<Blocks>(Some(&first), Some(IterDirection::Forward))
-            .take_while(move |res| match res {
-                Ok((height, _)) => *height <= last,
-                _ => true,
-            })
-            .map(|res| res.map(|(_, block)| block))
-            .map(|res| res.map_err(|e| Error::DB(anyhow!(e))));
-        let stream = futures::stream::iter(iter);
+    ) -> Result<BlockRangeResponse> {
+        let stream = StorageStream::new(self.inner.clone(), first, last);
         Ok(BlockRangeResponse::Literal(Box::pin(stream)))
     }
 
     async fn get_current_height(&self) -> Result<BlockHeight> {
         todo!()
+    }
+}
+
+pub struct StorageStream<S> {
+    inner: S,
+    next: Option<BlockHeight>,
+    last: BlockHeight,
+}
+
+impl<S> StorageStream<S> {
+    pub fn new(inner: S, first: BlockHeight, last: BlockHeight) -> Self {
+        Self {
+            inner,
+            next: Some(first),
+            last,
+        }
+    }
+}
+
+impl<S> Stream for StorageStream<S>
+where
+    S: Unpin + ReadTransaction,
+    for<'a> StorageTransaction<&'a S>: StorageInspect<Blocks, Error = StorageError>,
+{
+    type Item = Block;
+
+    fn poll_next(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        tracing::debug!(
+            "Polling next block from storage stream, next height: {:?}",
+            self.next
+        );
+        let this = self.get_mut();
+        if let Some(height) = this.next {
+            let mut tx = this.inner.read_transaction();
+            let next_block = tx
+                .storage_as_ref::<Blocks>()
+                .get(&height)
+                .map_err(|e| Error::DB(anyhow!(e)));
+            match next_block {
+                Ok(Some(block)) => {
+                    tracing::debug!("Found block at height: {:?}", height);
+                    let next = if height < this.last {
+                        Some(BlockHeight::new(*height + 1))
+                    } else {
+                        None
+                    };
+                    this.next = next;
+                    Poll::Ready(Some(block.into_owned()))
+                }
+                Ok(None) => {
+                    tracing::debug!("No block at height: {:?}", height);
+                    this.next = None;
+                    Poll::Ready(None)
+                }
+                Err(e) => {
+                    tracing::debug!("Error while reading next block: {:?}", e);
+                    this.next = None;
+                    Poll::Ready(Some(Err(e).unwrap()))
+                }
+            }
+        } else {
+            Poll::Ready(None)
+        }
     }
 }
