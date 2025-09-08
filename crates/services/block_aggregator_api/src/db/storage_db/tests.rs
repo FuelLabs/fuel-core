@@ -49,20 +49,13 @@ async fn get_block__can_get_expected_range() {
     let mut rng = StdRng::seed_from_u64(666);
     // given
     let mut db = database();
-    let height_0 = BlockHeight::from(0u32);
     let height_1 = BlockHeight::from(1u32);
     let height_2 = BlockHeight::from(2u32);
     let height_3 = BlockHeight::from(3u32);
-    let expected_0 = Block::random(&mut rng);
     let expected_1 = Block::random(&mut rng);
     let expected_2 = Block::random(&mut rng);
     let expected_3 = Block::random(&mut rng);
 
-    let mut tx = db.write_transaction();
-    tx.storage_as_mut::<Blocks>()
-        .insert(&height_0, &expected_0)
-        .unwrap();
-    tx.commit().unwrap();
     let mut tx = db.write_transaction();
     tx.storage_as_mut::<Blocks>()
         .insert(&height_1, &expected_1)

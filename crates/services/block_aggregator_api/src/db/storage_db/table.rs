@@ -24,17 +24,11 @@ use fuel_core_types::fuel_types::BlockHeight;
 pub enum Column {
     Metadata = 0,
     Blocks = 1,
-    // Metadata = 0,
-    // State = 1,
-    // UnrecordedBlocks = 2,
-    // LatestRecordedHeight = 3,
 }
 
 impl Column {
-    /// The total count of variants in the enum.
     pub const COUNT: usize = <Self as strum::EnumCount>::COUNT;
 
-    /// Returns the `usize` representation of the `Column`.
     pub fn as_u32(&self) -> u32 {
         *self as u32
     }
