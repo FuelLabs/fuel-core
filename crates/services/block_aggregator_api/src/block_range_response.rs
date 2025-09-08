@@ -1,10 +1,7 @@
-use crate::{
-    blocks::Block,
-    result::Result,
-};
+use crate::blocks::Block;
 use fuel_core_services::stream::{
     BoxStream,
-    Stream,
+    RefBoxStream,
 };
 
 /// The response to a block range query, either as a literal stream of blocks or as a remote URL

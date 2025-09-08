@@ -28,6 +28,7 @@ use fuel_core_storage::{
     },
     kv_store::KeyValueInspect,
     transactional::{
+        AtomicView,
         Modifiable,
         ReadTransaction,
         StorageTransaction,
@@ -36,6 +37,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
+    marker::PhantomData,
     pin::Pin,
     task::{
         Context,
@@ -58,11 +60,16 @@ impl<S> StorageDB<S> {
     }
 }
 
-impl<S> BlockAggregatorDB for StorageDB<S>
+impl<S, T> BlockAggregatorDB for StorageDB<S>
 where
-    S: Send + Sync + Modifiable + Clone + Unpin + ReadTransaction + 'static,
-    for<'a> StorageTransaction<&'a mut S>: StorageMutate<Blocks, Error = StorageError>,
-    for<'a> StorageTransaction<&'a S>: StorageInspect<Blocks, Error = StorageError>,
+    // S: Send + Sync + Modifiable + Clone + Unpin + ReadTransaction + 'static,
+    S: Modifiable + std::fmt::Debug,
+    S: KeyValueInspect<Column = Column>,
+    for<'b> StorageTransaction<&'b mut S>: StorageMutate<Blocks, Error = StorageError>,
+    // for<'b> StorageTransaction<&'b S>: StorageInspect<Blocks, Error = StorageError>,
+    S: AtomicView<LatestView = T>,
+    T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
+    StorageTransaction<T>: AtomicView + StorageInspect<Blocks, Error = StorageError>,
 {
     type BlockRange = BlockRangeResponse;
 
@@ -80,7 +87,11 @@ where
         first: BlockHeight,
         last: BlockHeight,
     ) -> Result<BlockRangeResponse> {
-        let stream = StorageStream::new(self.inner.clone(), first, last);
+        let latest_veiw = self
+            .inner
+            .latest_view()
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+        let stream = StorageStream::new(latest_veiw, first, last);
         Ok(BlockRangeResponse::Literal(Box::pin(stream)))
     }
 
@@ -107,7 +118,7 @@ impl<S> StorageStream<S> {
 
 impl<S> Stream for StorageStream<S>
 where
-    S: Unpin + ReadTransaction,
+    S: Unpin + ReadTransaction + std::fmt::Debug,
     for<'a> StorageTransaction<&'a S>: StorageInspect<Blocks, Error = StorageError>,
 {
     type Item = Block;
