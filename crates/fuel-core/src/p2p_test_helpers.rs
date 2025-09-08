@@ -91,6 +91,7 @@ pub struct CustomizeConfig {
     min_exec_gas_price: Option<u64>,
     max_functional_peers_connected: Option<u32>,
     max_discovery_peers_connected: Option<u32>,
+    subscribe_to_transactions: Option<bool>,
 }
 
 impl CustomizeConfig {
@@ -99,6 +100,7 @@ impl CustomizeConfig {
             min_exec_gas_price: None,
             max_functional_peers_connected: None,
             max_discovery_peers_connected: None,
+            subscribe_to_transactions: None,
         }
     }
 
@@ -114,6 +116,11 @@ impl CustomizeConfig {
 
     pub fn max_discovery_peers_connected(mut self, max_peers_connected: u32) -> Self {
         self.max_discovery_peers_connected = Some(max_peers_connected);
+        self
+    }
+
+    pub fn subscribe_to_transactions(mut self, enabled: bool) -> Self {
+        self.subscribe_to_transactions = Some(enabled);
         self
     }
 }
@@ -506,6 +513,12 @@ pub fn make_config(
             config_overrides.max_functional_peers_connected
         {
             p2p.max_functional_peers_connected = max_functional_peers_connected;
+        }
+
+        if let Some(subscribe_to_transactions) =
+            config_overrides.subscribe_to_transactions
+        {
+            p2p.subscribe_to_transactions = subscribe_to_transactions;
         }
     }
     node_config
