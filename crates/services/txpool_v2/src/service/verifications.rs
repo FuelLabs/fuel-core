@@ -201,8 +201,10 @@ impl InputDependenciesVerifiedTx {
 
             let parameters = CheckPredicateParams::from(consensus_params);
 
-            let mut ecal_handler = EcalLogCollector::default();
-            ecal_handler.enabled = allow_syscall;
+            let ecal_handler = EcalLogCollector {
+                enabled: allow_syscall,
+                ..Default::default()
+            };
 
             tx = tx.check_predicates(&parameters, memory, view, ecal_handler.clone())?;
 
