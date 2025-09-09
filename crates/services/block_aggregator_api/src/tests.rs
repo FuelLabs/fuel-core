@@ -6,7 +6,11 @@ use crate::{
         Block,
         BlockSourceEvent,
     },
-    result::Error,
+    api::BlockAggregatorQuery,
+    result::{
+        Error,
+        Result,
+    },
 };
 use fuel_core_services::stream::BoxStream;
 use futures::StreamExt;

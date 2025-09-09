@@ -29,6 +29,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
+    cmp::Ordering,
     collections::BTreeSet,
     pin::Pin,
     task::{
@@ -64,18 +65,25 @@ impl<S> StorageDB<S> {
     }
 
     fn update_highest_contiguous_block(&mut self, height: BlockHeight) {
-        if height == self.next_height() {
-            self.highest_contiguous_block = height;
-            while let Some(next_height) = self.orphaned_heights.first() {
-                if next_height == &self.next_height() {
-                    self.highest_contiguous_block = *next_height;
-                    let _ = self.orphaned_heights.pop_first();
-                } else {
-                    break;
+        let next_height = self.next_height();
+        match height.cmp(&next_height) {
+            Ordering::Equal => {
+                self.highest_contiguous_block = height;
+                while let Some(next_height) = self.orphaned_heights.first() {
+                    if next_height == &self.next_height() {
+                        self.highest_contiguous_block = *next_height;
+                        let _ = self.orphaned_heights.pop_first();
+                    } else {
+                        break;
+                    }
                 }
             }
-        } else if height > self.next_height() {
-            self.orphaned_heights.insert(height);
+            Ordering::Greater => {
+                self.orphaned_heights.insert(height);
+            }
+            Ordering::Less => {
+                // ignore duplicate or old block
+            }
         }
     }
     fn next_height(&self) -> BlockHeight {
