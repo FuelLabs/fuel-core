@@ -244,3 +244,35 @@ async fn run__new_block_subscription__sends_new_block() {
     // cleanup
     drop(source_sender);
 }
+
+#[tokio::test]
+async fn run__new_block_subscription__does_not_send_syncing_blocks() {
+    let mut rng = StdRng::seed_from_u64(42);
+    // given
+    let (api, sender) = FakeApi::new();
+    let db = FakeDB::new();
+    let (source, source_sender) = FakeBlockSource::new();
+    let mut srv = BlockAggregator::new(api, db, source);
+
+    let block = Block::random(&mut rng);
+    let height = BlockHeight::from(123u32);
+    let mut watcher = StateWatcher::started();
+    let (query, mut response) = BlockAggregatorQuery::new_block_subscription();
+
+    // when
+    sender.send(query).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
+    let event = BlockSourceEvent::OldBlock(height, block);
+    source_sender.send(event).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
+
+    // then
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    let res =
+        tokio::time::timeout(tokio::time::Duration::from_millis(100), response.recv())
+            .await;
+    assert!(res.is_err(), "should have timed out");
+
+    // cleanup
+    drop(source_sender);
+}
