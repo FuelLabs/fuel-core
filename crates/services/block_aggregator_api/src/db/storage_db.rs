@@ -14,18 +14,10 @@ use anyhow::anyhow;
 use fuel_core_services::stream::Stream;
 use fuel_core_storage::{
     Error as StorageError,
-    Mappable,
     StorageAsMut,
     StorageAsRef,
     StorageInspect,
     StorageMutate,
-    iter::{
-        IntoBoxedIter,
-        IterDirection,
-        IterableStore,
-        IterableTable,
-        IteratorOverTable,
-    },
     kv_store::KeyValueInspect,
     transactional::{
         AtomicView,
@@ -37,7 +29,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
-    marker::PhantomData,
     pin::Pin,
     task::{
         Context,
@@ -62,11 +53,9 @@ impl<S> StorageDB<S> {
 
 impl<S, T> BlockAggregatorDB for StorageDB<S>
 where
-    // S: Send + Sync + Modifiable + Clone + Unpin + ReadTransaction + 'static,
     S: Modifiable + std::fmt::Debug,
     S: KeyValueInspect<Column = Column>,
     for<'b> StorageTransaction<&'b mut S>: StorageMutate<Blocks, Error = StorageError>,
-    // for<'b> StorageTransaction<&'b S>: StorageInspect<Blocks, Error = StorageError>,
     S: AtomicView<LatestView = T>,
     T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
     StorageTransaction<T>: AtomicView + StorageInspect<Blocks, Error = StorageError>,
@@ -133,7 +122,7 @@ where
         );
         let this = self.get_mut();
         if let Some(height) = this.next {
-            let mut tx = this.inner.read_transaction();
+            let tx = this.inner.read_transaction();
             let next_block = tx
                 .storage_as_ref::<Blocks>()
                 .get(&height)
@@ -155,9 +144,9 @@ where
                     Poll::Ready(None)
                 }
                 Err(e) => {
-                    tracing::debug!("Error while reading next block: {:?}", e);
+                    tracing::error!("Error while reading next block: {:?}", e);
                     this.next = None;
-                    Poll::Ready(Some(Err(e).unwrap()))
+                    Poll::Ready(None)
                 }
             }
         } else {
