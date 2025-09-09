@@ -8,10 +8,13 @@ pub mod importer_and_onchain_source;
 /// Source from which blocks can be gathered for aggregation
 pub trait BlockSource: Send + Sync {
     /// Asynchronously fetch the next block and its height
-    fn next_block(&mut self)
-    -> impl Future<Output = Result<(BlockHeight, Block)>> + Send;
+    fn next_block(&mut self) -> impl Future<Output = Result<BlockSourceEvent>> + Send;
+}
 
-    fn subscribe_to_new_blocks(&mut self) -> Result<()>;
+#[derive(Debug)]
+pub enum BlockSourceEvent {
+    NewBlock(BlockHeight, Block),
+    OldBlock(BlockHeight, Block),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
