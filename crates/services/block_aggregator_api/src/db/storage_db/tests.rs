@@ -43,9 +43,6 @@ async fn store_block__adds_to_storage() {
 
 #[tokio::test]
 async fn get_block__can_get_expected_range() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
     let mut rng = StdRng::seed_from_u64(666);
     // given
     let mut db = database();

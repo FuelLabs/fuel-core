@@ -2,8 +2,12 @@
 
 use super::*;
 use crate::{
+    api::BlockAggregatorQuery,
     blocks::Block,
-    result::Error,
+    result::{
+        Error,
+        Result,
+    },
 };
 use fuel_core_services::stream::BoxStream;
 use futures::StreamExt;
