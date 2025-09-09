@@ -1783,7 +1783,7 @@ where
         T: KeyValueInspect<Column = Column>,
     {
         let ecal_handler = EcalLogCollector {
-            enabled: false,
+            enabled: self.options.allow_syscall,
             ..Default::default()
         };
 
