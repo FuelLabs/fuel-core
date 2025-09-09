@@ -29,6 +29,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
+    collections::BTreeSet,
     pin::Pin,
     task::{
         Context,
@@ -42,12 +43,44 @@ pub mod table;
 mod tests;
 
 pub struct StorageDB<S> {
-    inner: S,
+    highest_contiguous_block: BlockHeight,
+    orphaned_heights: BTreeSet<BlockHeight>,
+    storage: S,
 }
 
 impl<S> StorageDB<S> {
     pub fn new(storage: S) -> Self {
-        Self { inner: storage }
+        let height = BlockHeight::new(0);
+        Self::new_with_height(storage, height)
+    }
+
+    pub fn new_with_height(storage: S, highest_contiguous_block: BlockHeight) -> Self {
+        let orphaned_heights = BTreeSet::new();
+        Self {
+            highest_contiguous_block,
+            orphaned_heights,
+            storage,
+        }
+    }
+
+    fn update_highest_contiguous_block(&mut self, height: BlockHeight) {
+        if height == self.next_height() {
+            self.highest_contiguous_block = height;
+            while let Some(next_height) = self.orphaned_heights.iter().next().cloned() {
+                if next_height == self.next_height() {
+                    self.highest_contiguous_block = next_height;
+                    self.orphaned_heights.remove(&next_height);
+                } else {
+                    break;
+                }
+            }
+        } else if height > self.next_height() {
+            self.orphaned_heights.insert(height);
+        }
+    }
+    fn next_height(&self) -> BlockHeight {
+        let last_height = *self.highest_contiguous_block;
+        BlockHeight::new(last_height.saturating_add(1))
     }
 }
 
@@ -63,7 +96,8 @@ where
     type BlockRange = BlockRangeResponse;
 
     async fn store_block(&mut self, height: BlockHeight, block: Block) -> Result<()> {
-        let mut tx = self.inner.write_transaction();
+        self.update_highest_contiguous_block(height);
+        let mut tx = self.storage.write_transaction();
         tx.storage_as_mut::<Blocks>()
             .insert(&height, &block)
             .map_err(|e| Error::DB(anyhow!(e)))?;
@@ -77,7 +111,7 @@ where
         last: BlockHeight,
     ) -> Result<BlockRangeResponse> {
         let latest_view = self
-            .inner
+            .storage
             .latest_view()
             .map_err(|e| Error::DB(anyhow!(e)))?;
         let stream = StorageStream::new(latest_view, first, last);
@@ -85,7 +119,7 @@ where
     }
 
     async fn get_current_height(&self) -> Result<BlockHeight> {
-        todo!()
+        Ok(self.highest_contiguous_block)
     }
 }
 
