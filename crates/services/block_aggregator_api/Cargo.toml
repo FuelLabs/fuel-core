@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = { workspace = true }
-bytes = { workspace = true, features = ["serde"]}
+bytes = { workspace = true, features = ["serde"] }
 enum-iterator = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
@@ -20,6 +20,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
-futures = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
+futures = { workspace = true }
 tracing-subscriber = { workspace = true }

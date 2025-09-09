@@ -87,11 +87,11 @@ where
         first: BlockHeight,
         last: BlockHeight,
     ) -> Result<BlockRangeResponse> {
-        let latest_veiw = self
+        let latest_view = self
             .inner
             .latest_view()
             .map_err(|e| Error::DB(anyhow!(e)))?;
-        let stream = StorageStream::new(latest_veiw, first, last);
+        let stream = StorageStream::new(latest_view, first, last);
         Ok(BlockRangeResponse::Literal(Box::pin(stream)))
     }
 
