@@ -1,8 +1,5 @@
 use crate::{
-    api::{
-        BlockAggregatorApi,
-        BlockAggregatorQuery,
-    },
+    api::BlockAggregatorApi,
     blocks::{
         Block,
         BlockSource,
@@ -15,7 +12,6 @@ use fuel_core_services::{
     TaskNextAction,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use result::Result;
 
 pub mod api;
 pub mod blocks;
