@@ -66,10 +66,10 @@ impl<S> StorageDB<S> {
     fn update_highest_contiguous_block(&mut self, height: BlockHeight) {
         if height == self.next_height() {
             self.highest_contiguous_block = height;
-            while let Some(next_height) = self.orphaned_heights.iter().next().cloned() {
-                if next_height == self.next_height() {
-                    self.highest_contiguous_block = next_height;
-                    self.orphaned_heights.remove(&next_height);
+            while let Some(next_height) = self.orphaned_heights.first() {
+                if next_height == &self.next_height() {
+                    self.highest_contiguous_block = *next_height;
+                    let _ = self.orphaned_heights.pop_first();
                 } else {
                     break;
                 }
