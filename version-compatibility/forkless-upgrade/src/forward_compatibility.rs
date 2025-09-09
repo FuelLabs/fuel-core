@@ -119,10 +119,14 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
     let transactions = transactions_from_subsections(&mut rng, subsections, amount);
     let root = transactions[0].body().root;
     for upload in transactions {
-        let tx = latest_fuel_core_type::fuel_tx::Transaction::Upload(upload);
+        let tx_latest = latest_fuel_core_type::fuel_tx::Transaction::Upload(upload);
+        let tx_latest_json = serde_json::to_string(&tx_latest).unwrap();
+        let tx_v44 = serde_json::from_str(&tx_latest_json).unwrap();
+        let tx_v44_json = serde_json::to_string(&tx_v44).unwrap();
+        assert_eq!(tx_latest_json, tx_v44_json, "Transaction serialization mismatch between latest and v44 types");
         validator_node
             .client
-            .submit_and_await_commit(&tx)
+            .submit_and_await_commit(&tx_v44)
             .await
             .unwrap();
     }
@@ -131,10 +135,14 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
         &mut rng,
         amount,
     );
-    let upgrade_tx = latest_fuel_core_type::fuel_tx::Transaction::Upgrade(upgrade);
+    let upgrade_tx_latest = latest_fuel_core_type::fuel_tx::Transaction::Upgrade(upgrade);
+    let upgrade_tx_latest_json = serde_json::to_string(&upgrade_tx_latest).unwrap();
+    let upgrade_tx_v44 = serde_json::from_str(&upgrade_tx_latest_json).unwrap();
+    let upgrade_tx_v44_json = serde_json::to_string(&upgrade_tx_v44).unwrap();
+    assert_eq!(upgrade_tx_latest_json, upgrade_tx_v44_json, "Transaction serialization mismatch between latest and v44 types");
     validator_node
         .client
-        .submit_and_await_commit(&upgrade_tx)
+        .submit_and_await_commit(&upgrade_tx_v44)
         .await
         .unwrap();
 
