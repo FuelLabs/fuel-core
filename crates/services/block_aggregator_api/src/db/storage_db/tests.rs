@@ -69,7 +69,7 @@ async fn get_block__can_get_expected_range() {
     tx.commit().unwrap();
     let db = db.commit().unwrap();
     let tx = db.into_transaction();
-    let mut adapter = StorageDB::new(tx);
+    let adapter = StorageDB::new(tx);
 
     // when
     let BlockRangeResponse::Literal(stream) =
