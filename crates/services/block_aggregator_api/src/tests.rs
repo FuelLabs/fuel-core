@@ -2,11 +2,11 @@
 
 use super::*;
 use crate::{
+    api::BlockAggregatorQuery,
     blocks::{
         Block,
         BlockSourceEvent,
     },
-    api::BlockAggregatorQuery,
     result::{
         Error,
         Result,
