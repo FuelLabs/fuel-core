@@ -1,4 +1,7 @@
-use crate::result::Result;
+use crate::{
+    blocks::Block,
+    result::Result,
+};
 use fuel_core_types::fuel_types::BlockHeight;
 use std::fmt;
 use tokio::sync::oneshot::{
@@ -18,14 +21,18 @@ pub trait BlockAggregatorApi: Send + Sync {
     ) -> impl Future<Output = Result<BlockAggregatorQuery<Self::BlockRangeResponse>>> + Send;
 }
 
-pub enum BlockAggregatorQuery<BlockRange> {
+pub enum BlockAggregatorQuery<BlockRangeResponse> {
     GetBlockRange {
         first: BlockHeight,
         last: BlockHeight,
-        response: Sender<BlockRange>,
+        response: Sender<BlockRangeResponse>,
     },
     GetCurrentHeight {
         response: Sender<BlockHeight>,
+    },
+    // TODO: Do we need a way to unsubscribe or can we just see that the receiver is dropped?
+    NewBlockSubscription {
+        response: tokio::sync::mpsc::Sender<(BlockHeight, Block)>,
     },
 }
 
@@ -39,6 +46,9 @@ impl<T> fmt::Debug for BlockAggregatorQuery<T> {
                 .finish(),
             BlockAggregatorQuery::GetCurrentHeight { .. } => {
                 f.debug_struct("GetCurrentHeight").finish()
+            }
+            BlockAggregatorQuery::NewBlockSubscription { .. } => {
+                f.debug_struct("GetNewBlockStream").finish()
             }
         }
     }
@@ -63,6 +73,14 @@ impl<T> BlockAggregatorQuery<T> {
     pub fn get_current_height() -> (Self, Receiver<BlockHeight>) {
         let (sender, receiver) = channel();
         let query = Self::GetCurrentHeight { response: sender };
+        (query, receiver)
+    }
+
+    pub fn new_block_subscription()
+    -> (Self, tokio::sync::mpsc::Receiver<(BlockHeight, Block)>) {
+        const ARBITRARY_CHANNEL_SIZE: usize = 10;
+        let (sender, receiver) = tokio::sync::mpsc::channel(ARBITRARY_CHANNEL_SIZE);
+        let query = Self::NewBlockSubscription { response: sender };
         (query, receiver)
     }
 }

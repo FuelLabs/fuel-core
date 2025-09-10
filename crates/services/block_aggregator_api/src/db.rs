@@ -9,7 +9,7 @@ pub mod storage_db;
 /// The definition of the block aggregator database.
 pub trait BlockAggregatorDB: Send + Sync {
     /// The type used to report a range of blocks
-    type BlockRange;
+    type BlockRangeResponse;
 
     /// Stores a block with the given ID
     fn store_block(
@@ -23,7 +23,7 @@ pub trait BlockAggregatorDB: Send + Sync {
         &self,
         first: BlockHeight,
         last: BlockHeight,
-    ) -> impl Future<Output = Result<Self::BlockRange>> + Send;
+    ) -> impl Future<Output = Result<Self::BlockRangeResponse>> + Send;
 
     /// Retrieves the current height of the aggregated blocks If there is a break in the blocks,
     /// i.e. the blocks are being aggregated out of order, return the height of the last
