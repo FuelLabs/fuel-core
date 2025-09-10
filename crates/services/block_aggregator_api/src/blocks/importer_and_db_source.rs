@@ -17,7 +17,7 @@ use fuel_core_services::{
     stream::BoxStream,
 };
 use fuel_core_types::{
-    blockchain::SealedBlock as FuelBlock,
+    blockchain::Block as FuelBlock,
     services::block_importer::SharedImportResult,
 };
 
@@ -29,26 +29,28 @@ pub trait BlockSerializer {
     fn serialize_block(&self, block: &FuelBlock) -> Result<Block>;
 }
 
-pub struct ImporterAndDbSource<Serializer>
+pub struct ImporterAndDbSource<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + 'static,
+    DB: Send + 'static,
 {
-    _inner: ServiceRunner<InnerTask<Serializer>>,
+    _inner: ServiceRunner<InnerTask<Serializer, DB>>,
     receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent>,
 }
 
-impl<Serializer> ImporterAndDbSource<Serializer>
+impl<Serializer, DB> ImporterAndDbSource<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + 'static,
+    DB: Send,
 {
-    pub fn new(importer: BoxStream<SharedImportResult>, serializer: Serializer) -> Self {
+    pub fn new(
+        importer: BoxStream<SharedImportResult>,
+        serializer: Serializer,
+        database: DB,
+    ) -> Self {
         const ARB_CHANNEL_SIZE: usize = 100;
         let (block_return, receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let inner = InnerTask {
-            importer,
-            serializer,
-            block_return,
-        };
+        let inner = InnerTask::new(importer, serializer, block_return, database);
         let runner = ServiceRunner::new(inner);
         runner.start().unwrap();
         Self {
@@ -58,9 +60,10 @@ where
     }
 }
 
-impl<Serializer> BlockSource for ImporterAndDbSource<Serializer>
+impl<Serializer, DB> BlockSource for ImporterAndDbSource<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + 'static,
+    DB: Send,
 {
     async fn next_block(&mut self) -> Result<BlockSourceEvent> {
         tracing::debug!("awaiting next block");

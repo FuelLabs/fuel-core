@@ -37,13 +37,14 @@ async fn next_block__gets_new_block_from_importer() {
     let blocks: Vec<SharedImportResult> = vec![import_result];
     let block_stream = tokio_stream::iter(blocks).into_boxed();
     let serializer = MockSerializer;
-    let mut adapter = ImporterAndDbSource::new(block_stream, serializer.clone());
+    let db = ();
+    let mut adapter = ImporterAndDbSource::new(block_stream, serializer.clone(), db);
 
     // when
     let actual = adapter.next_block().await.unwrap();
 
     // then
-    let serialized = serializer.serialize_block(&block).unwrap();
+    let serialized = serializer.serialize_block(&block.entity).unwrap();
     let expected = BlockSourceEvent::NewBlock(*height, serialized);
     assert_eq!(expected, actual);
 }
