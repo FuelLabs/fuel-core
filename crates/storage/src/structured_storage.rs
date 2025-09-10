@@ -426,9 +426,16 @@ where
 #[cfg(feature = "test-helpers")]
 pub mod test {
     use crate as fuel_core_storage;
-    use crate::kv_store::{
-        KeyValueInspect,
-        StorageColumn,
+    use crate::{
+        kv_store::{
+            KeyValueInspect,
+            StorageColumn,
+        },
+        structured_storage::StructuredStorage,
+        transactional::{
+            AtomicView,
+            InMemoryTransaction,
+        },
     };
     use fuel_core_storage::{
         Result as StorageResult,
@@ -470,6 +477,18 @@ pub mod test {
         fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>> {
             let value = self.storage.get(&(column.id(), key.to_vec())).cloned();
             Ok(value)
+        }
+    }
+
+    impl<Column> AtomicView
+        for StructuredStorage<InMemoryTransaction<InMemoryStorage<Column>>>
+    where
+        Column: Clone + Send + Sync,
+    {
+        type LatestView = InMemoryStorage<Column>;
+
+        fn latest_view(&self) -> StorageResult<Self::LatestView> {
+            Ok(self.inner.storage.clone())
         }
     }
 }

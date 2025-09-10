@@ -74,9 +74,9 @@ async fn set_metadata__can_set_metadata() {
     let actual = database.get_metadata(&block_height).unwrap();
     assert_eq!(None, actual);
     database.set_metadata(&metadata).unwrap();
-    let actual = database.get_metadata(&block_height).unwrap();
 
     // then
+    let actual = database.get_metadata(&block_height).unwrap();
     let expected = Some(metadata);
     assert_eq!(expected, actual);
 }

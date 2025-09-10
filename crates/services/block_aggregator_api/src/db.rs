@@ -4,6 +4,8 @@ use crate::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
+pub mod storage_db;
+
 /// The definition of the block aggregator database.
 pub trait BlockAggregatorDB: Send + Sync {
     /// The type used to report a range of blocks

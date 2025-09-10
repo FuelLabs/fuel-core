@@ -1,6 +1,8 @@
 #[derive(Debug)]
 pub enum Error {
-    ApiError,
-    BlockSourceError,
+    Api,
+    BlockSource,
+    DB(anyhow::Error),
 }
+
 pub type Result<T, E = Error> = core::result::Result<T, E>;
