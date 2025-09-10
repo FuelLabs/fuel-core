@@ -3,8 +3,6 @@ use bytes::Bytes;
 use fuel_core_types::fuel_types::BlockHeight;
 use std::fmt::Debug;
 
-pub mod importer_and_onchain_source;
-
 /// Source from which blocks can be gathered for aggregation
 pub trait BlockSource: Send + Sync {
     /// Asynchronously fetch the next block and its height
