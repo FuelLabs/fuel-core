@@ -54,7 +54,10 @@ where
         }
     }
 
-    async fn shutdown(self) -> anyhow::Result<()> {
+    async fn shutdown(mut self) -> anyhow::Result<()> {
+        self.block_source.drain().await.map_err(|e| {
+            anyhow::anyhow!("Error draining block source during shutdown: {e:?}")
+        })?;
         Ok(())
     }
 }

@@ -8,6 +8,8 @@ pub trait BlockSource: Send + Sync {
     /// Asynchronously fetch the next block and its height
     fn next_block(&mut self)
     -> impl Future<Output = Result<(BlockHeight, Block)>> + Send;
+
+    fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
