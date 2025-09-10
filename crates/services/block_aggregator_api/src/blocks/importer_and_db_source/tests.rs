@@ -1,8 +1,9 @@
+#![allow(non_snake_case)]
+
 use super::*;
 use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_types::{
     blockchain::SealedBlock,
-    fuel_types::BlockHeight,
     services::block_importer::ImportResult,
 };
 use std::sync::Arc;
@@ -21,9 +22,6 @@ impl BlockSerializer for MockSerializer {
 
 #[tokio::test]
 async fn next_block__gets_new_block_from_importer() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .try_init();
     // given
     let block = SealedBlock::default();
     let height = block.entity.header().height();
