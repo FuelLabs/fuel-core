@@ -79,8 +79,8 @@ impl MessageQuery {
 
     #[graphql(complexity = "{\
         query_costs().storage_iterator\
-        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        + first.unwrap_or_default() as usize * (child_complexity + query_costs().storage_read) \
+        + last.unwrap_or_default() as usize * (child_complexity + query_costs().storage_read) \
     }")]
     async fn messages(
         &self,
