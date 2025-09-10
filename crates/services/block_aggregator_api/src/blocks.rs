@@ -9,6 +9,8 @@ pub mod importer_and_onchain_source;
 pub trait BlockSource: Send + Sync {
     /// Asynchronously fetch the next block and its height
     fn next_block(&mut self) -> impl Future<Output = Result<BlockSourceEvent>> + Send;
+
+    fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[derive(Debug)]

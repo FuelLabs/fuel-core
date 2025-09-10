@@ -122,6 +122,10 @@ impl BlockSource for FakeBlockSource {
     async fn next_block(&mut self) -> Result<BlockSourceEvent> {
         self.blocks.recv().await.ok_or(Error::BlockSource)
     }
+
+    async fn drain(&mut self) -> Result<()> {
+        todo!()
+    }
 }
 
 #[tokio::test]
