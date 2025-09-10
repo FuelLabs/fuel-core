@@ -9,6 +9,7 @@ pub trait BlockSource: Send + Sync {
     fn next_block(&mut self)
     -> impl Future<Output = Result<(BlockHeight, Block)>> + Send;
 
+    /// Drain any remaining blocks from the source
     fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
 }
 
