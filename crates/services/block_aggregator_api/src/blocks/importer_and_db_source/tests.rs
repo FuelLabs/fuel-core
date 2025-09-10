@@ -2,6 +2,14 @@
 
 use super::*;
 use fuel_core_services::stream::IntoBoxStream;
+use fuel_core_storage::{
+    column::Column as OnChainColumn,
+    structured_storage::test::InMemoryStorage,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
+};
 use fuel_core_types::{
     blockchain::SealedBlock,
     services::block_importer::ImportResult,
@@ -18,6 +26,10 @@ impl BlockSerializer for MockSerializer {
         })?;
         Ok(Block::from(bytes_vec))
     }
+}
+
+fn database() -> StorageTransaction<InMemoryStorage<OnChainColumn>> {
+    InMemoryStorage::default().into_transaction()
 }
 
 #[tokio::test]
@@ -37,8 +49,16 @@ async fn next_block__gets_new_block_from_importer() {
     let blocks: Vec<SharedImportResult> = vec![import_result];
     let block_stream = tokio_stream::iter(blocks).into_boxed();
     let serializer = MockSerializer;
-    let db = ();
-    let mut adapter = ImporterAndDbSource::new(block_stream, serializer.clone(), db);
+    let db = database();
+    let db_starting_height = BlockHeight::from(0u32);
+    let db_ending_height = BlockHeight::from(1u32);
+    let mut adapter = ImporterAndDbSource::new(
+        block_stream,
+        serializer.clone(),
+        db,
+        db_starting_height,
+        db_ending_height,
+    );
 
     // when
     let actual = adapter.next_block().await.unwrap();

@@ -1,14 +1,6 @@
 //! Blockchain related types
 
-#[cfg(not(feature = "test-helpers"))]
 use crate::blockchain::{
-    block::Block,
-    consensus::Sealed,
-    header::BlockHeader,
-};
-
-#[cfg(feature = "test-helpers")]
-pub use crate::blockchain::{
     block::Block,
     consensus::Sealed,
     header::BlockHeader,

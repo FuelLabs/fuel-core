@@ -11,8 +11,16 @@ use fuel_core_services::{
     try_or_continue,
     try_or_stop,
 };
+use fuel_core_storage::{
+    StorageInspect,
+    column::Column as OnChainColumn,
+    kv_store::KeyValueInspect,
+    tables::FuelBlocks,
+    transactional::AtomicView,
+};
 use fuel_core_types::{
-    blockchain::Block as FuelBlock,
+    blockchain::block::Block as FuelBlock,
+    fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
 use futures::StreamExt;
@@ -26,7 +34,7 @@ pub struct InnerTask<Serializer, DB> {
     importer: BoxStream<SharedImportResult>,
     serializer: Serializer,
     block_return_sender: Sender<BlockSourceEvent>,
-    sync_task_handle: tokio::task::JoinHandle<()>,
+    sync_task_handle: tokio::task::JoinHandle<bool>,
     sync_task_receiver: Receiver<FuelBlock>,
     _marker: PhantomData<DB>,
 }
@@ -34,21 +42,20 @@ pub struct InnerTask<Serializer, DB> {
 impl<Serializer, DB> InnerTask<Serializer, DB>
 where
     Serializer: BlockSerializer + Send,
+    DB: StorageInspect<FuelBlocks> + Send + 'static,
+    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug,
 {
     pub fn new(
         importer: BoxStream<SharedImportResult>,
         serializer: Serializer,
         block_return: Sender<BlockSourceEvent>,
         db: DB,
+        db_starting_height: BlockHeight,
+        db_ending_height: BlockHeight,
     ) -> Self {
-        const ARB_CHANNEL_SIZE: usize = 100;
-        let (sync_task_sender, sync_task_receiver) =
-            tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let sync_task_handle = tokio::spawn(async move {
-            let _ = sync_task_sender;
-            let _ = db;
-            // Placeholder for any synchronous tasks if needed in the future
-        });
+        // TODO: Should this be its own service?
+        let (sync_task_handle, sync_task_receiver) =
+            Self::sync_task_handle(db, db_starting_height, db_ending_height);
         Self {
             importer,
             serializer,
@@ -57,6 +64,49 @@ where
             sync_task_receiver,
             _marker: PhantomData,
         }
+    }
+
+    fn sync_task_handle(
+        db: DB,
+        db_starting_height: BlockHeight,
+        db_ending_height: BlockHeight,
+    ) -> (tokio::task::JoinHandle<bool>, Receiver<FuelBlock>) {
+        const ARB_CHANNEL_SIZE: usize = 100;
+        let (sync_task_sender, sync_task_receiver) =
+            tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
+        let sync_task_handle = tokio::spawn(async move {
+            let start = u32::from(db_starting_height);
+            let end = u32::from(db_ending_height);
+            for height in start..=end {
+                let height = BlockHeight::new(height);
+                let res = StorageInspect::<FuelBlocks>::get(&db, &height);
+                match res {
+                    Ok(Some(compressed_block)) => {
+                        let block = todo!();
+                        // let send_res = sync_task_sender.send(block).await;
+                        // if send_res.is_err() {
+                        //     tracing::warn!(
+                        //         "sync task receiver dropped, stopping sync task"
+                        //     );
+                        //     return false
+                        // }
+                    }
+                    Ok(None) => {
+                        tracing::warn!("no block found at height {}, skipping", height);
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "error fetching block at height {}: {:?}",
+                            height,
+                            e
+                        );
+                        return false
+                    }
+                }
+            }
+            true
+        });
+        (sync_task_handle, sync_task_receiver)
     }
 }
 

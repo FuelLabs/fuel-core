@@ -16,8 +16,13 @@ use fuel_core_services::{
     ServiceRunner,
     stream::BoxStream,
 };
+use fuel_core_storage::{
+    StorageInspect,
+    tables::FuelBlocks,
+};
 use fuel_core_types::{
-    blockchain::Block as FuelBlock,
+    blockchain::block::Block as FuelBlock,
+    fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
 
@@ -41,16 +46,26 @@ where
 impl<Serializer, DB> ImporterAndDbSource<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + 'static,
-    DB: Send,
+    DB: StorageInspect<FuelBlocks> + Send,
+    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug,
 {
     pub fn new(
         importer: BoxStream<SharedImportResult>,
         serializer: Serializer,
         database: DB,
+        db_starting_height: BlockHeight,
+        db_ending_height: BlockHeight,
     ) -> Self {
         const ARB_CHANNEL_SIZE: usize = 100;
         let (block_return, receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let inner = InnerTask::new(importer, serializer, block_return, database);
+        let inner = InnerTask::new(
+            importer,
+            serializer,
+            block_return,
+            database,
+            db_starting_height,
+            db_ending_height,
+        );
         let runner = ServiceRunner::new(inner);
         runner.start().unwrap();
         Self {
