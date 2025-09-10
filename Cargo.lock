@@ -1406,6 +1406,7 @@ dependencies = [
  "fuel-core-types 0.46.0",
  "futures",
  "num_enum",
+ "postcard",
  "rand 0.8.5",
  "serde",
  "strum 0.25.0",

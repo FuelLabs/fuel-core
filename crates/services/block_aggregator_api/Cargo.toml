@@ -24,5 +24,6 @@ thiserror = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
+postcard = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio-stream = { workspace = true }

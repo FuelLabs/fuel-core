@@ -11,8 +11,11 @@ use std::sync::Arc;
 pub struct MockSerializer;
 
 impl BlockSerializer for MockSerializer {
-    fn serialize_block(&self, _block: &FuelBlock) -> Result<Block> {
-        todo!()
+    fn serialize_block(&self, block: &FuelBlock) -> Result<Block> {
+        let bytes_vec = postcard::to_allocvec(block).map_err(|e| {
+            Error::BlockSource(anyhow!("failed to serialize block: {}", e))
+        })?;
+        Ok(Block::from(bytes_vec))
     }
 }
 
@@ -22,8 +25,8 @@ async fn next_block__gets_new_block_from_importer() {
         .with_max_level(tracing::Level::DEBUG)
         .try_init();
     // given
-    let height = BlockHeight::from(123u32);
     let block = SealedBlock::default();
+    let height = block.entity.header().height();
     let import_result = Arc::new(
         ImportResult {
             sealed_block: block.clone(),
@@ -43,6 +46,6 @@ async fn next_block__gets_new_block_from_importer() {
 
     // then
     let serialized = serializer.serialize_block(&block).unwrap();
-    let expected = BlockSourceEvent::NewBlock(height, serialized);
+    let expected = BlockSourceEvent::NewBlock(*height, serialized);
     assert_eq!(expected, actual);
 }
