@@ -3,7 +3,7 @@ use crate::{
         Block,
         BlockSource,
         BlockSourceEvent,
-        importer_and_db_source::inner_service::InnerTask,
+        importer_and_db_source::importer_service::ImporterTask,
     },
     result::{
         Error,
@@ -26,9 +26,11 @@ use fuel_core_types::{
     services::block_importer::SharedImportResult,
 };
 
+use crate::blocks::importer_and_db_source::sync_service::SyncTask;
 use fuel_core_storage::tables::Transactions;
 
-pub mod inner_service;
+pub mod importer_service;
+pub mod sync_service;
 #[cfg(test)]
 mod tests;
 
@@ -40,14 +42,18 @@ pub struct ImporterAndDbSource<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
     DB: Send + Sync + 'static,
+    DB: StorageInspect<FuelBlocks>,
+    DB: StorageInspect<Transactions>,
+    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
 {
-    _inner: ServiceRunner<InnerTask<Serializer, DB>>,
+    _importer_task: ServiceRunner<ImporterTask<Serializer>>,
+    _sync_task: ServiceRunner<SyncTask<Serializer, DB>>,
     receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent>,
 }
 
 impl<Serializer, DB> ImporterAndDbSource<Serializer, DB>
 where
-    Serializer: BlockSerializer + Send + Sync + 'static,
+    Serializer: BlockSerializer + Clone + Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks> + Send + Sync,
     DB: StorageInspect<Transactions> + Send + 'static,
     <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
@@ -61,18 +67,22 @@ where
     ) -> Self {
         const ARB_CHANNEL_SIZE: usize = 100;
         let (block_return, receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let inner = InnerTask::new(
-            importer,
+        let importer_task =
+            ImporterTask::new(importer, serializer.clone(), block_return.clone());
+        let importer_runner = ServiceRunner::new(importer_task);
+        importer_runner.start().unwrap();
+        let sync_task = SyncTask::new(
             serializer,
             block_return,
             database,
             db_starting_height,
             db_ending_height,
         );
-        let runner = ServiceRunner::new(inner);
-        runner.start().unwrap();
+        let sync_runner = ServiceRunner::new(sync_task);
+        sync_runner.start().unwrap();
         Self {
-            _inner: runner,
+            _importer_task: importer_runner,
+            _sync_task: sync_runner,
             receiver,
         }
     }
@@ -82,6 +92,9 @@ impl<Serializer, DB> BlockSource for ImporterAndDbSource<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
     DB: Send + Sync,
+    DB: StorageInspect<FuelBlocks>,
+    DB: StorageInspect<Transactions>,
+    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
 {
     async fn next_block(&mut self) -> Result<BlockSourceEvent> {
         tracing::debug!("awaiting next block");
