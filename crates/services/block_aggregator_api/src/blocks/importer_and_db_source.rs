@@ -46,6 +46,7 @@ where
     DB: StorageInspect<Transactions>,
     <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
 {
+    // TODO: How to handle errors from these tasks?
     _importer_task: ServiceRunner<ImporterTask<Serializer>>,
     _sync_task: ServiceRunner<SyncTask<Serializer, DB>>,
     receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent>,

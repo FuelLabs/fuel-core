@@ -63,8 +63,10 @@ where
     DB: StorageInspect<Transactions> + Send + 'static,
     <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
 {
+    // TODO: This is syncronous and then just ends. What do we want to do when this is done?
     async fn run(&mut self, _watcher: &mut StateWatcher) -> TaskNextAction {
         let start = u32::from(self.db_starting_height);
+        // TODO: make this more dynamic so we can make sure we get all blocks up to what the importer receives
         let end = u32::from(self.db_ending_height);
         for height in start..=end {
             let height = BlockHeight::new(height);
