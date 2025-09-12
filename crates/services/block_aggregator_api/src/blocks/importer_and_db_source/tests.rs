@@ -109,8 +109,7 @@ async fn next_block__can_get_block_from_db() {
         )
         .unwrap();
     tx.commit().unwrap();
-    let blocks: Vec<SharedImportResult> = vec![];
-    let block_stream = tokio_stream::iter(blocks).into_boxed();
+    let block_stream = tokio_stream::pending().into_boxed();
     let db_starting_height = *height;
     let db_ending_height = *height;
     let mut adapter = ImporterAndDbSource::new(

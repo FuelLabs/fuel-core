@@ -12,16 +12,11 @@ use fuel_core_services::{
     try_or_stop,
 };
 use fuel_core_storage::{
+    self,
     StorageInspect,
-    column::Column as OnChainColumn,
-    kv_store::KeyValueInspect,
     tables::{
         FuelBlocks,
         Transactions,
-    },
-    transactional::{
-        AtomicView,
-        ReadTransaction,
     },
 };
 use fuel_core_types::{
@@ -41,7 +36,7 @@ pub struct InnerTask<Serializer, DB> {
     importer: BoxStream<SharedImportResult>,
     serializer: Serializer,
     block_return_sender: Sender<BlockSourceEvent>,
-    sync_task_handle: tokio::task::JoinHandle<bool>,
+    _sync_task_handle: tokio::task::JoinHandle<bool>,
     sync_task_receiver: Receiver<FuelBlock>,
     _marker: PhantomData<DB>,
 }
@@ -62,13 +57,13 @@ where
         db_ending_height: BlockHeight,
     ) -> Self {
         // TODO: Should this be its own service?
-        let (sync_task_handle, sync_task_receiver) =
+        let (_sync_task_handle, sync_task_receiver) =
             Self::sync_task_handle(db, db_starting_height, db_ending_height);
         Self {
             importer,
             serializer,
             block_return_sender: block_return,
-            sync_task_handle,
+            _sync_task_handle,
             sync_task_receiver,
             _marker: PhantomData,
         }
@@ -109,7 +104,7 @@ where
                                     tracing::debug!("tx id not found in db: {:?}", tx_id);
                                     todo!()
                                 }
-                                Err(e) => {
+                                Err(_) => {
                                     tracing::debug!(
                                         "error while finding tx: {:?}",
                                         tx_id
@@ -142,51 +137,16 @@ where
 
 impl<Serializer, DB> RunnableTask for InnerTask<Serializer, DB>
 where
-    Serializer: BlockSerializer + Send,
-    DB: Send + 'static,
+    Serializer: BlockSerializer + Send + Sync,
+    DB: Send + Sync + 'static,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
-            fuel_block = self.importer.next() => {
-                tracing::debug!("imported block");
-                if let Some(inner) = fuel_block {
-                    let height = inner.sealed_block.entity.header().height();
-                    let res = self.serializer.serialize_block(&inner.sealed_block.entity);
-                    let block = try_or_continue!(res);
-                    let event = BlockSourceEvent::NewBlock(*height, block);
-                    let res = self.block_return_sender.send(event).await;
-                    try_or_stop!(res, |_e| "failed to send imported block to receiver: {_e:?}");
-                    TaskNextAction::Continue
-                } else {
-                    tracing::debug!("importer stream ended");
-                    TaskNextAction::Stop
-                }
-            }
-            fuel_block = self.sync_task_receiver.recv() => {
-                tracing::debug!("synced block from db");
-                if let Some(fuel_block) = fuel_block {
-                    let height = fuel_block.header().height();
-                    let res = self.serializer.serialize_block(&fuel_block);
-                    let block = try_or_continue!(res);
-                    let event = BlockSourceEvent::NewBlock(*height, block);
-                    let res = self.block_return_sender.send(event).await;
-                    try_or_stop!(res, |_e| "failed to send synced block to receiver: {_e:?}");
-                    TaskNextAction::Continue
-                } else {
-                    tracing::debug!("sync task ended");
-                    TaskNextAction::Stop
-                }
-            }
+            fuel_block = self.importer.next() => self.process_shared_import_result(fuel_block).await,
+            fuel_block = self.sync_task_receiver.recv() => self.process_db_block(fuel_block).await,
             _ = watcher.while_started() => {
                 TaskNextAction::Stop
             },
-            // fuel_block = self.db.next_block() => {
-            //     todo!()
-            // }
-            // serialized_block = self.serializer.next_serialized_block() => {
-            //     let res = self.block_return.send(serialized_block);
-            //     try_or_stop!(res)
-            // }
         }
     }
 
@@ -195,11 +155,66 @@ where
     }
 }
 
+impl<Serializer, DB> InnerTask<Serializer, DB>
+where
+    Serializer: BlockSerializer + Send + Sync,
+    DB: Send + Sync + 'static,
+{
+    async fn process_shared_import_result(
+        &self,
+        maybe_import_result: Option<SharedImportResult>,
+    ) -> TaskNextAction {
+        tracing::debug!("imported block");
+        match maybe_import_result {
+            Some(import_result) => {
+                let height = import_result.sealed_block.entity.header().height();
+                let res = self
+                    .serializer
+                    .serialize_block(&import_result.sealed_block.entity);
+                let block = try_or_continue!(res);
+                let event = BlockSourceEvent::NewBlock(*height, block);
+                let res = self.block_return_sender.send(event).await;
+                try_or_stop!(
+                    res,
+                    |_e| "failed to send imported block to receiver: {_e:?}"
+                );
+                TaskNextAction::Continue
+            }
+            None => {
+                tracing::debug!("importer returned None, stopping");
+                TaskNextAction::Stop
+            }
+        }
+    }
+
+    async fn process_db_block(
+        &self,
+        maybe_fuel_block: Option<FuelBlock>,
+    ) -> TaskNextAction {
+        tracing::debug!("synced block from db");
+        match maybe_fuel_block {
+            Some(fuel_block) => {
+                let height = fuel_block.header().height();
+                let res = self.serializer.serialize_block(&fuel_block);
+                let block = try_or_continue!(res);
+                let event = BlockSourceEvent::NewBlock(*height, block);
+                let res = self.block_return_sender.send(event).await;
+                try_or_stop!(res, |_e| "failed to send db block to receiver: {_e:?}");
+                TaskNextAction::Continue
+            }
+            None => {
+                tracing::debug!("sync task returned None, stopping");
+                TaskNextAction::Stop
+            }
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl<Serializer, DB> RunnableService for InnerTask<Serializer, DB>
 where
-    Serializer: BlockSerializer + Send + 'static,
-    DB: Send + 'static,
+    Serializer: BlockSerializer + Send + Sync + 'static,
+    DB: Send + Sync + 'static,
 {
     const NAME: &'static str = "BlockSourceInnerService";
     type SharedData = ();

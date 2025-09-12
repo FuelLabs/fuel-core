@@ -18,7 +18,6 @@ use fuel_core_services::{
 };
 use fuel_core_storage::{
     StorageInspect,
-    kv_store::KeyValueInspect,
     tables::FuelBlocks,
 };
 use fuel_core_types::{
@@ -27,11 +26,7 @@ use fuel_core_types::{
     services::block_importer::SharedImportResult,
 };
 
-use fuel_core_storage::{
-    column::Column as OnChainColumn,
-    tables::Transactions,
-    transactional::StorageTransaction,
-};
+use fuel_core_storage::tables::Transactions;
 
 pub mod inner_service;
 #[cfg(test)]
@@ -43,8 +38,8 @@ pub trait BlockSerializer {
 
 pub struct ImporterAndDbSource<Serializer, DB>
 where
-    Serializer: BlockSerializer + Send + 'static,
-    DB: Send + 'static,
+    Serializer: BlockSerializer + Send + Sync + 'static,
+    DB: Send + Sync + 'static,
 {
     _inner: ServiceRunner<InnerTask<Serializer, DB>>,
     receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent>,
@@ -52,8 +47,8 @@ where
 
 impl<Serializer, DB> ImporterAndDbSource<Serializer, DB>
 where
-    Serializer: BlockSerializer + Send + 'static,
-    DB: StorageInspect<FuelBlocks> + Send,
+    Serializer: BlockSerializer + Send + Sync + 'static,
+    DB: StorageInspect<FuelBlocks> + Send + Sync,
     DB: StorageInspect<Transactions> + Send + 'static,
     <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
 {
@@ -85,8 +80,8 @@ where
 
 impl<Serializer, DB> BlockSource for ImporterAndDbSource<Serializer, DB>
 where
-    Serializer: BlockSerializer + Send + 'static,
-    DB: Send,
+    Serializer: BlockSerializer + Send + Sync + 'static,
+    DB: Send + Sync,
 {
     async fn next_block(&mut self) -> Result<BlockSourceEvent> {
         tracing::debug!("awaiting next block");
