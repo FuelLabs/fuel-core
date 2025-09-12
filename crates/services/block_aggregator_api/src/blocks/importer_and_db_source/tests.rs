@@ -125,6 +125,6 @@ async fn next_block__can_get_block_from_db() {
 
     // then
     let serialized = serializer.serialize_block(&block).unwrap();
-    let expected = BlockSourceEvent::NewBlock(*height, serialized);
+    let expected = BlockSourceEvent::OldBlock(*height, serialized);
     assert_eq!(expected, actual);
 }

@@ -98,7 +98,7 @@ where
                     let res = self.serializer.serialize_block(&block);
                     let block = try_or_continue!(res);
                     let event =
-                        BlockSourceEvent::NewBlock(BlockHeight::from(*height), block);
+                        BlockSourceEvent::OldBlock(BlockHeight::from(*height), block);
                     self.block_return_sender.send(event).await.unwrap();
                 }
                 Ok(None) => {
