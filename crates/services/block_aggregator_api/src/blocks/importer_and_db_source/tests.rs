@@ -15,6 +15,10 @@ use fuel_core_storage::{
 
 use fuel_core_types::{
     blockchain::SealedBlock,
+    fuel_tx::{
+        Transaction,
+        UniqueIdentifier,
+    },
     fuel_types::ChainId,
     services::block_importer::ImportResult,
 };
@@ -73,6 +77,13 @@ async fn next_block__gets_new_block_from_importer() {
     assert_eq!(expected, actual);
 }
 
+fn arbitrary_block_with_txs() -> FuelBlock {
+    let mut block = FuelBlock::default();
+    let txs = block.transactions_mut();
+    *txs = vec![Transaction::default_test_tx()];
+    block
+}
+
 #[tokio::test]
 async fn next_block__can_get_block_from_db() {
     let _ = tracing_subscriber::fmt()
@@ -80,14 +91,22 @@ async fn next_block__can_get_block_from_db() {
         .try_init();
     // given
     let chain_id = ChainId::default();
-    let block = SealedBlock::default();
-    let height = block.entity.header().height();
+    let block = arbitrary_block_with_txs();
+    let height = block.header().height();
     let serializer = MockSerializer;
     let mut db = database();
     let mut tx = db.write_transaction();
-    let compressed_block = block.entity.compress(&chain_id);
+    let compressed_block = block.compress(&chain_id);
     tx.storage_as_mut::<FuelBlocks>()
         .insert(&height, &compressed_block)
+        .unwrap();
+    tx.commit().unwrap();
+    let mut tx = db.write_transaction();
+    tx.storage_as_mut::<Transactions>()
+        .insert(
+            &block.transactions()[0].id(&chain_id),
+            &block.transactions()[0],
+        )
         .unwrap();
     tx.commit().unwrap();
     let blocks: Vec<SharedImportResult> = vec![];
@@ -106,7 +125,7 @@ async fn next_block__can_get_block_from_db() {
     let actual = adapter.next_block().await.unwrap();
 
     // then
-    let serialized = serializer.serialize_block(&block.entity).unwrap();
+    let serialized = serializer.serialize_block(&block).unwrap();
     let expected = BlockSourceEvent::NewBlock(*height, serialized);
     assert_eq!(expected, actual);
 }
