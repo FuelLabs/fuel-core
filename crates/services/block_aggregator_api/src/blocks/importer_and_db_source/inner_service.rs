@@ -15,11 +15,18 @@ use fuel_core_storage::{
     StorageInspect,
     column::Column as OnChainColumn,
     kv_store::KeyValueInspect,
-    tables::FuelBlocks,
-    transactional::AtomicView,
+    tables::{
+        FuelBlocks,
+        Transactions,
+    },
+    transactional::{
+        AtomicView,
+        ReadTransaction,
+    },
 };
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
+    fuel_tx::TxId,
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
@@ -43,7 +50,8 @@ impl<Serializer, DB> InnerTask<Serializer, DB>
 where
     Serializer: BlockSerializer + Send,
     DB: StorageInspect<FuelBlocks> + Send + 'static,
-    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug,
+    DB: StorageInspect<Transactions> + Send + 'static,
+    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
 {
     pub fn new(
         importer: BoxStream<SharedImportResult>,
@@ -75,6 +83,11 @@ where
         let (sync_task_sender, sync_task_receiver) =
             tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
         let sync_task_handle = tokio::spawn(async move {
+            tracing::debug!(
+                "running sync task from height {} to {}",
+                db_starting_height,
+                db_ending_height
+            );
             let start = u32::from(db_starting_height);
             let end = u32::from(db_ending_height);
             for height in start..=end {
@@ -82,14 +95,31 @@ where
                 let res = StorageInspect::<FuelBlocks>::get(&db, &height);
                 match res {
                     Ok(Some(compressed_block)) => {
-                        let block = todo!();
-                        // let send_res = sync_task_sender.send(block).await;
-                        // if send_res.is_err() {
-                        //     tracing::warn!(
-                        //         "sync task receiver dropped, stopping sync task"
-                        //     );
-                        //     return false
-                        // }
+                        tracing::debug!("found block at height {}, syncing", height);
+                        let tx_ids = compressed_block.transactions();
+                        let mut txs = Vec::new();
+                        for tx_id in tx_ids {
+                            let tx_res = StorageInspect::<Transactions>::get(&db, &tx_id);
+                            match tx_res {
+                                Ok(Some(tx)) => {
+                                    tracing::debug!("found tx id: {:?}", tx_id);
+                                    txs.push(tx.into_owned());
+                                }
+                                Ok(None) => {
+                                    tracing::debug!("tx id not found in db: {:?}", tx_id);
+                                    todo!()
+                                }
+                                Err(e) => {
+                                    tracing::debug!(
+                                        "error while finding tx: {:?}",
+                                        tx_id
+                                    );
+                                    todo!()
+                                }
+                            }
+                        }
+                        let block = <fuel_core_types::blockchain::block::Block<TxId> as Clone>::clone(&compressed_block).uncompress(txs);
+                        let _res = sync_task_sender.send(block).await.unwrap();
                     }
                     Ok(None) => {
                         tracing::warn!("no block found at height {}, skipping", height);
@@ -132,6 +162,21 @@ where
                     TaskNextAction::Stop
                 }
             }
+            fuel_block = self.sync_task_receiver.recv() => {
+                tracing::debug!("synced block from db");
+                if let Some(fuel_block) = fuel_block {
+                    let height = fuel_block.header().height();
+                    let res = self.serializer.serialize_block(&fuel_block);
+                    let block = try_or_continue!(res);
+                    let event = BlockSourceEvent::NewBlock(*height, block);
+                    let res = self.block_return_sender.send(event).await;
+                    try_or_stop!(res, |_e| "failed to send synced block to receiver: {_e:?}");
+                    TaskNextAction::Continue
+                } else {
+                    tracing::debug!("sync task ended");
+                    TaskNextAction::Stop
+                }
+            }
             _ = watcher.while_started() => {
                 TaskNextAction::Stop
             },
@@ -146,7 +191,7 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        todo!()
+        Ok(())
     }
 }
 

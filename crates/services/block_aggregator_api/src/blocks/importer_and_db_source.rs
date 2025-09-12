@@ -18,12 +18,19 @@ use fuel_core_services::{
 };
 use fuel_core_storage::{
     StorageInspect,
+    kv_store::KeyValueInspect,
     tables::FuelBlocks,
 };
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
+};
+
+use fuel_core_storage::{
+    column::Column as OnChainColumn,
+    tables::Transactions,
+    transactional::StorageTransaction,
 };
 
 pub mod inner_service;
@@ -47,7 +54,8 @@ impl<Serializer, DB> ImporterAndDbSource<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + 'static,
     DB: StorageInspect<FuelBlocks> + Send,
-    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug,
+    DB: StorageInspect<Transactions> + Send + 'static,
+    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
 {
     pub fn new(
         importer: BoxStream<SharedImportResult>,
