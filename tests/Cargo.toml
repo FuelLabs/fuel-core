@@ -97,6 +97,7 @@ url = { workspace = true }
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
 pretty_assertions = "1.4"
 proptest = { workspace = true }
+regex = "1"
 tracing = { workspace = true }
 
 [[test]]

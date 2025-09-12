@@ -12,6 +12,7 @@ clap = "4.4"
 libp2p = "0.54.1"
 hex = "0.4.3"
 rand = "0.8"
+serde_json = "1.0"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
 # pin to prevent compilation error from 1.13.6
