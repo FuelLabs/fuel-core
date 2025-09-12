@@ -15,6 +15,7 @@ members = [
     "crates/keygen",
     "crates/metrics",
     "crates/services",
+    "crates/services/block_aggregator_api",
     "crates/services/compression",
     "crates/services/consensus_module",
     "crates/services/consensus_module/bft",
