@@ -195,8 +195,7 @@ where
         // set the status to synced
         if let BlockInfo::Block { height, .. } = block {
             self.sync_notifier
-                .send(crate::sync_state::SyncState::Synced(height))
-                .ok();
+                .send_replace(crate::sync_state::SyncState::Synced(height));
         }
         Ok(())
     }
