@@ -1,0 +1,18 @@
+[package]
+name = "block_aggregator_api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { workspace = true }
+bytes = { workspace = true }
+fuel-core-services = { workspace = true }
+fuel-core-types = { workspace = true, features = ["std"] }
+rand = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+fuel-core-services = { workspace = true, features = ["test-helpers"] }
+futures = { workspace = true }
+tracing-subscriber = { workspace = true }
