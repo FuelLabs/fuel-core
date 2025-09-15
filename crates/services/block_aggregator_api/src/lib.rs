@@ -33,7 +33,12 @@ pub struct BlockAggregator<Api, DB, Blocks> {
     query: Api,
     database: DB,
     block_source: Blocks,
-    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<(BlockHeight, Block)>>,
+    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<NewBlock>>,
+}
+
+pub struct NewBlock {
+    height: BlockHeight,
+    block: Block,
 }
 
 impl<Api, DB, Blocks, BlockRange> RunnableTask for BlockAggregator<Api, DB, Blocks>

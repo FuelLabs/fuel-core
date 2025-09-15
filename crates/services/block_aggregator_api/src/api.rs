@@ -54,6 +54,7 @@ impl<T> fmt::Debug for BlockAggregatorQuery<T> {
     }
 }
 
+#[cfg(test)]
 impl<T> BlockAggregatorQuery<T> {
     pub fn get_block_range<H: Into<BlockHeight>>(
         first: H,
