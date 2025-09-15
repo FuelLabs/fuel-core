@@ -14,13 +14,13 @@ pub trait BlockSource: Send + Sync {
     fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum BlockSourceEvent {
     NewBlock(BlockHeight, Block),
     OldBlock(BlockHeight, Block),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Block {
     bytes: Bytes,
 }

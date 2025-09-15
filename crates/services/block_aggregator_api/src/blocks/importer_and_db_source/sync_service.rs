@@ -28,7 +28,8 @@ pub struct SyncTask<Serializer, DB> {
     block_return_sender: Sender<BlockSourceEvent>,
     db: DB,
     db_starting_height: BlockHeight,
-    db_ending_height: BlockHeight,
+    db_ending_height: Option<BlockHeight>,
+    new_ending_height: tokio::sync::oneshot::Receiver<BlockHeight>,
 }
 
 impl<Serializer, DB> SyncTask<Serializer, DB>
@@ -43,7 +44,8 @@ where
         block_return: Sender<BlockSourceEvent>,
         db: DB,
         db_starting_height: BlockHeight,
-        db_ending_height: BlockHeight,
+        db_ending_height: Option<BlockHeight>,
+        new_ending_height: tokio::sync::oneshot::Receiver<BlockHeight>,
     ) -> Self {
         Self {
             serializer,
@@ -51,7 +53,12 @@ where
             db,
             db_starting_height,
             db_ending_height,
+            new_ending_height,
         }
+    }
+
+    async fn check_for_new_end(&mut self) -> Option<BlockHeight> {
+        self.new_ending_height.try_recv().ok()
     }
 }
 
@@ -65,11 +72,21 @@ where
 {
     // TODO: This is synchronous and then just ends. What do we want to do when this is done?
     async fn run(&mut self, _watcher: &mut StateWatcher) -> TaskNextAction {
-        let start = u32::from(self.db_starting_height);
-        // TODO: make this more dynamic so we can make sure we get all blocks up to what the importer receives
-        let end = u32::from(self.db_ending_height);
-        for height in start..=end {
-            let height = BlockHeight::new(height);
+        let mut height = self.db_starting_height;
+        let mut end = self.db_ending_height;
+        loop {
+            if let Some(new_end) = self.check_for_new_end().await {
+                end = Some(new_end);
+            }
+            if let Some(current_end) = end {
+                if height >= current_end {
+                    tracing::info!(
+                        "reached end height {}, stopping sync task",
+                        current_end
+                    );
+                    break;
+                }
+            }
             let res = StorageInspect::<FuelBlocks>::get(&self.db, &height);
             match res {
                 Ok(Some(compressed_block)) => {
@@ -109,6 +126,7 @@ where
                     return TaskNextAction::Stop;
                 }
             }
+            height = BlockHeight::from((*height).saturating_add(1));
         }
         TaskNextAction::Stop
     }

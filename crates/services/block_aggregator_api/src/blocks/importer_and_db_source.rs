@@ -49,6 +49,7 @@ where
     // TODO: How to handle errors from these tasks?
     _importer_task: ServiceRunner<ImporterTask<Serializer>>,
     _sync_task: ServiceRunner<SyncTask<Serializer, DB>>,
+    /// Receive blocks from the importer and sync tasks
     receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent>,
 }
 
@@ -64,12 +65,17 @@ where
         serializer: Serializer,
         database: DB,
         db_starting_height: BlockHeight,
-        db_ending_height: BlockHeight,
+        db_ending_height: Option<BlockHeight>,
     ) -> Self {
         const ARB_CHANNEL_SIZE: usize = 100;
         let (block_return, receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let importer_task =
-            ImporterTask::new(importer, serializer.clone(), block_return.clone());
+        let (new_end_sender, new_end_receiver) = tokio::sync::oneshot::channel();
+        let importer_task = ImporterTask::new(
+            importer,
+            serializer.clone(),
+            block_return.clone(),
+            Some(new_end_sender),
+        );
         let importer_runner = ServiceRunner::new(importer_task);
         importer_runner.start().unwrap();
         let sync_task = SyncTask::new(
@@ -78,6 +84,7 @@ where
             database,
             db_starting_height,
             db_ending_height,
+            new_end_receiver,
         );
         let sync_runner = ServiceRunner::new(sync_task);
         sync_runner.start().unwrap();

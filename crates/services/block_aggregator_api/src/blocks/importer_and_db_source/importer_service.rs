@@ -11,7 +11,10 @@ use fuel_core_services::{
     try_or_continue,
     try_or_stop,
 };
-use fuel_core_types::services::block_importer::SharedImportResult;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    services::block_importer::SharedImportResult,
+};
 use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
 
@@ -19,6 +22,7 @@ pub struct ImporterTask<Serializer> {
     importer: BoxStream<SharedImportResult>,
     serializer: Serializer,
     block_return_sender: Sender<BlockSourceEvent>,
+    new_end_sender: Option<tokio::sync::oneshot::Sender<BlockHeight>>,
 }
 
 impl<Serializer> ImporterTask<Serializer>
@@ -29,11 +33,13 @@ where
         importer: BoxStream<SharedImportResult>,
         serializer: Serializer,
         block_return: Sender<BlockSourceEvent>,
+        new_end_sender: Option<tokio::sync::oneshot::Sender<BlockHeight>>,
     ) -> Self {
         Self {
             importer,
             serializer,
             block_return_sender: block_return,
+            new_end_sender,
         }
     }
 }
@@ -60,13 +66,29 @@ where
     Serializer: BlockSerializer + Send + Sync,
 {
     async fn process_shared_import_result(
-        &self,
+        &mut self,
         maybe_import_result: Option<SharedImportResult>,
     ) -> TaskNextAction {
         tracing::debug!("imported block");
         match maybe_import_result {
             Some(import_result) => {
                 let height = import_result.sealed_block.entity.header().height();
+                if let Some(sender) = self.new_end_sender.take() {
+                    match sender.send(*height) {
+                        Ok(_) => {
+                            tracing::debug!(
+                                "sent new end height to sync task: {:?}",
+                                height
+                            );
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                "failed to send new end height to sync task: {:?}",
+                                e
+                            );
+                        }
+                    }
+                }
                 let res = self
                     .serializer
                     .serialize_block(&import_result.sealed_block.entity);
