@@ -119,7 +119,7 @@ where
                     match send_res {
                         Ok(_) => true,
                         Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                            tracing::error!("Error sending new block to source due to full channel: {id:?}");
+                            tracing::error!("Error sending new block to subscriber due to full channel: {id:?}");
                             true
                         },
                         Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
