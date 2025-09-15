@@ -103,11 +103,9 @@ where
                             }
                             Ok(None) => {
                                 tracing::debug!("tx id not found in db: {:?}", tx_id);
-                                todo!()
                             }
                             Err(_) => {
                                 tracing::debug!("error while finding tx: {:?}", tx_id);
-                                todo!()
                             }
                         }
                     }
