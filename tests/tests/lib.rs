@@ -79,6 +79,8 @@ mod preconfirmations_gossip;
 mod sync;
 #[cfg(feature = "only-p2p")]
 mod tx_gossip;
+#[cfg(feature = "only-p2p")]
+mod tx_subscription;
 
 #[cfg(feature = "only-p2p")]
 mod peering;
