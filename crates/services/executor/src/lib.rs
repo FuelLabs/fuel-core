@@ -11,5 +11,8 @@ pub mod executor;
 pub mod ports;
 pub mod refs;
 
+mod contract_state;
+mod storage_access_recorder;
+
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();

@@ -79,7 +79,6 @@ mod tests {
         },
         fuel_tx::{
             Bytes32,
-            Cacheable,
             ConsensusParameters,
             Create,
             DependentCost,
@@ -108,7 +107,6 @@ mod tests {
                 OutputContract,
                 Outputs,
                 Policies,
-                Script as ScriptField,
                 TxPointer as TxPointerTraitTrait,
             },
             input::{
@@ -168,6 +166,11 @@ mod tests {
         SeedableRng,
         prelude::StdRng,
     };
+    use sha2::{
+        Digest,
+        Sha256,
+    };
+
 
     #[derive(Clone, Debug, Default)]
     struct Config {
@@ -493,15 +496,16 @@ mod tests {
                     mint.tx_pointer(),
                     &TxPointer::new(*block.header().height(), 1)
                 );
+                let empty_sha: [u8; 32] = Sha256::digest(&[]).into();
                 assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
                 assert_eq!(mint.mint_amount(), &expected_fee_amount_1);
                 assert_eq!(mint.input_contract().contract_id, recipient);
-                assert_eq!(mint.input_contract().balance_root, Bytes32::zeroed());
-                assert_eq!(mint.input_contract().state_root, Bytes32::zeroed());
+                assert_eq!(mint.input_contract().balance_root, Bytes32::new(empty_sha));
+                assert_eq!(mint.input_contract().state_root, Bytes32::new(empty_sha));
                 assert_eq!(mint.input_contract().utxo_id, UtxoId::default());
                 assert_eq!(mint.input_contract().tx_pointer, TxPointer::default());
-                assert_ne!(mint.output_contract().balance_root, Bytes32::zeroed());
-                assert_eq!(mint.output_contract().state_root, Bytes32::zeroed());
+                assert_ne!(mint.output_contract().balance_root, Bytes32::new(empty_sha));
+                assert_eq!(mint.output_contract().state_root, Bytes32::new(empty_sha));
                 assert_eq!(mint.output_contract().input_index, 0);
                 first_mint = mint.clone();
             } else {
@@ -572,28 +576,12 @@ mod tests {
                 assert_eq!(second_mint.mint_amount(), &expected_fee_amount_2);
                 assert_eq!(second_mint.input_contract().contract_id, recipient);
                 assert_eq!(
-                    second_mint.input_contract().balance_root,
-                    first_mint.output_contract().balance_root
-                );
-                assert_eq!(
-                    second_mint.input_contract().state_root,
-                    first_mint.output_contract().state_root
-                );
-                assert_eq!(
                     second_mint.input_contract().utxo_id,
                     UtxoId::new(first_mint.id(&consensus_parameters.chain_id()), 0)
                 );
                 assert_eq!(
                     second_mint.input_contract().tx_pointer,
                     TxPointer::new(1.into(), 1)
-                );
-                assert_ne!(
-                    second_mint.output_contract().balance_root,
-                    first_mint.output_contract().balance_root
-                );
-                assert_eq!(
-                    second_mint.output_contract().state_root,
-                    first_mint.output_contract().state_root
                 );
                 assert_eq!(second_mint.output_contract().input_index, 0);
             } else {
@@ -1691,16 +1679,16 @@ mod tests {
         } = executor.produce_and_commit(block).unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[1].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
             TransactionExecutionResult::Success { .. }
         ));
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-        assert_eq!(executed_tx.outputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&empty_state));
+        let empty: [u8; 32] = Sha256::digest(&[]).into();
+        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&Bytes32::new(empty)));
+        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&Bytes32::new(empty)));
+        assert_eq!(executed_tx.outputs()[0].state_root(), Some(&Bytes32::new(empty)));
+        assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&Bytes32::new(empty)));
     }
 
     #[test]
@@ -1746,7 +1734,6 @@ mod tests {
         } = executor.produce_and_commit(block).unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[1].as_script().unwrap();
         assert!(matches!(
             tx_status[1].result,
@@ -1760,8 +1747,11 @@ mod tests {
             executed_tx.inputs()[0].balance_root(),
             executed_tx.outputs()[0].balance_root()
         );
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
+
+        // Both balance and state roots are empty, and should match hash of empty data.
+        let empty: [u8; 32] = Sha256::digest(&[]).into();
+        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&Bytes32::new(empty)));
+        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&Bytes32::new(empty)));
     }
 
     #[test]
@@ -1772,9 +1762,9 @@ mod tests {
 
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
+            // Sets value 1 to slot matching the tx id
             vec![
-                // Sets the state STATE[0x1; 32] = value of `RegId::PC`;
-                op::sww(0x1, 0x29, RegId::PC),
+                op::sww(RegId::ZERO, 0x29, RegId::ONE),
                 op::ret(1),
             ]
             .into_iter()
@@ -1846,152 +1836,57 @@ mod tests {
         let ExecutionResult {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
-
-        let empty_state = (*sparse::empty_sum()).into();
-        let executed_tx = block.transactions()[1].as_script().unwrap();
         assert!(matches!(
             tx_status[2].result,
             TransactionExecutionResult::Success { .. }
         ));
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-        // Roots should be different
-        assert_ne!(
-            executed_tx.inputs()[0].state_root(),
-            executed_tx.outputs()[0].state_root()
-        );
-        assert_ne!(
-            executed_tx.inputs()[0].balance_root(),
-            executed_tx.outputs()[0].balance_root()
-        );
-    }
-
-    #[test]
-    fn contracts_balance_and_state_roots_in_inputs_updated() {
-        // Values in inputs and outputs are random. If the execution of the transaction that
-        // modifies the state and the balance is successful, it should update roots.
-        // The first transaction updates the `balance_root` and `state_root`.
-        // The second transaction is empty. The executor should update inputs of the second
-        // transaction with the same value from `balance_root` and `state_root`.
-        let mut rng = StdRng::seed_from_u64(2322u64);
-
-        // Create a contract that modifies the state
-        let (create, contract_id) = create_contract(
-            vec![
-                // Sets the state STATE[0x1; 32] = value of `RegId::PC`;
-                op::sww(0x1, 0x29, RegId::PC),
-                op::ret(1),
-            ]
-            .into_iter()
-            .collect::<Vec<u8>>()
-            .as_slice(),
-            &mut rng,
-        );
-
-        let transfer_amount = 100 as Word;
-        let asset_id = AssetId::from([2; 32]);
-        let (script, data_offset) = script_with_data_offset!(
-            data_offset,
-            vec![
-                // Set register `0x10` to `Call`
-                op::movi(0x10, data_offset + AssetId::LEN as u32),
-                // Set register `0x11` with offset to data that contains `asset_id`
-                op::movi(0x11, data_offset),
-                // Set register `0x12` with `transfer_amount`
-                op::movi(0x12, transfer_amount as u32),
-                op::call(0x10, 0x12, 0x11, RegId::CGAS),
-                op::ret(RegId::ONE),
-            ],
-            TxParameters::DEFAULT.tx_offset()
-        );
-
-        let script_data: Vec<u8> = [
-            asset_id.as_ref(),
-            Call::new(contract_id, transfer_amount, data_offset as Word)
-                .to_bytes()
-                .as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        .copied()
-        .collect();
-
-        let modify_balance_and_state_tx = TxBuilder::new(2322)
-            .script_gas_limit(10000)
-            .coin_input(AssetId::zeroed(), 10000)
-            .start_script(script, script_data)
-            .contract_input(contract_id)
-            .coin_input(asset_id, transfer_amount)
-            .fee_input()
-            .contract_output(&contract_id)
-            .build()
-            .transaction()
-            .clone();
-        let db = Database::default();
-
-        let consensus_parameters = ConsensusParameters::default();
-        let mut executor = create_executor(
-            db.clone(),
-            Config {
-                forbid_fake_coins_default: false,
-                consensus_parameters: consensus_parameters.clone(),
-            },
-        );
-
-        let block = PartialFuelBlock {
-            header: PartialBlockHeader {
-                consensus: ConsensusHeader {
-                    height: 1.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            transactions: vec![create.into(), modify_balance_and_state_tx.into()],
-        };
-
-        let ExecutionResult { block, .. } = executor.produce_and_commit(block).unwrap();
 
         let executed_tx = block.transactions()[1].as_script().unwrap();
-        let state_root = executed_tx.outputs()[0].state_root();
-        let balance_root = executed_tx.outputs()[0].balance_root();
+        let tx_id = executed_tx.id(&ConsensusParameters::standard().chain_id());
 
-        let mut new_tx = executed_tx.clone();
-        *new_tx.script_mut() = vec![];
-        new_tx.precompute(&consensus_parameters.chain_id()).unwrap();
+        // Check resulting roots
 
-        let block = PartialFuelBlock {
-            header: PartialBlockHeader {
-                consensus: ConsensusHeader {
-                    height: 2.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            transactions: vec![new_tx.into()],
-        };
+        // Input balances: 0 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(&contract_id);
+        hasher.update(&1u64.to_be_bytes()); // number of balances
+        hasher.update(&asset_id);
+        hasher.update(&0u64.to_be_bytes()); // balance
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&Bytes32::new(expected_balance_root)));
 
-        let ExecutionResult {
-            block, tx_status, ..
-        } = executor
-            .produce_without_commit_with_source_direct_resolve(Components {
-                header_to_produce: block.header,
-                transactions_source: OnceTransactionsSource::new(block.transactions),
-                gas_price: 0,
-                coinbase_recipient: Default::default(),
-            })
-            .unwrap()
-            .into_result();
-        assert!(matches!(
-            tx_status[1].result,
-            TransactionExecutionResult::Success { .. }
-        ));
-        let tx = block.transactions()[0].as_script().unwrap();
-        assert_eq!(tx.inputs()[0].balance_root(), balance_root);
-        assert_eq!(tx.inputs()[0].state_root(), state_root);
+        // Output balances: 100 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(&contract_id);
+        hasher.update(&1u64.to_be_bytes()); // number of balances
+        hasher.update(&asset_id);
+        hasher.update(&0u64.to_be_bytes()); // balance
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&Bytes32::new(expected_balance_root)));
 
-        let _ = executor
-            .validate(&block)
-            .expect("Validation of block should be successful");
+        // Input state: empty slot tx_id
+        let mut hasher = Sha256::new();
+        hasher.update(&contract_id);
+        hasher.update(&1u64.to_be_bytes()); // number of slots
+        hasher.update(&tx_id); // the slot key that is modified
+        hasher.update(&[0u8]); // the slot did not contain any value
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&Bytes32::new(expected_state_root)));
+
+        // Output state: slot tx_id with value 1
+        let mut hasher = Sha256::new();
+        hasher.update(&contract_id);
+        hasher.update(&1u64.to_be_bytes()); // number of slots
+        hasher.update(&tx_id); // the slot key that is modified
+        hasher.update(&[1u8]); // the slot contains a 1
+        hasher.update(&32u64.to_be_bytes()); // slot size is 32 bytes
+        hasher.update(&Bytes32::new({
+            let mut value = [0u8; 32];
+            value[..8].copy_from_slice(&1u64.to_be_bytes());
+            value
+        })); // The value in the slot is 1
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(executed_tx.outputs()[0].state_root(), Some(&Bytes32::new(expected_state_root)));
     }
 
     #[test]

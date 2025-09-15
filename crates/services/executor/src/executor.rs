@@ -1,4 +1,8 @@
 use crate::{
+    contract_state::{
+        compute_balances_hash,
+        compute_state_hash,
+    },
     ports::{
         MaybeCheckedTransaction,
         NewTxWaiterPort,
@@ -7,6 +11,7 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
+    storage_access_recorder::StorageAccessRecorder,
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -136,6 +141,7 @@ use fuel_core_types::{
             ExecutionResult,
             ForcedTransactionFailure,
             Result as ExecutorResult,
+            StorageReadReplayEvent,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -157,10 +163,10 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::borrow::Cow;
+use std::{borrow::Cow};
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
+use alloc::{borrow::Cow};
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -1420,7 +1426,7 @@ where
                 )?;
             }
 
-            self.compute_inputs(core::slice::from_mut(&mut input), storage_tx)?;
+            self.compute_inputs(core::slice::from_mut(&mut input), storage_tx, &[])?;
 
             let (input, output) = self.execute_mint_with_vm(
                 header,
@@ -1590,7 +1596,10 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        let mut sub_block_db_commit = storage_tx
+
+        let mut storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
+
+        let mut sub_block_db_commit = storage_tx_record
             .write_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -1609,7 +1618,11 @@ where
         )
         .map_err(|e| format!("{e}"))
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
-        sub_block_db_commit.commit()?;
+
+        let (recorder, changes) = sub_block_db_commit.into_inner();
+        let record = core::mem::take(&mut *recorder.record.lock());
+
+        storage_tx.commit_changes(changes.clone())?;
 
         let block_height = *header.height();
         let output = *mint.output_contract();
@@ -1624,9 +1637,8 @@ where
         )?;
         self.compute_state_of_not_utxo_outputs(
             outputs.as_mut_slice(),
-            core::slice::from_ref(input),
-            *coinbase_id,
-            storage_tx,
+            &record,
+            &changes,
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
             return Err(ExecutorError::Other(
@@ -1641,23 +1653,12 @@ where
         Ok((input, output))
     }
 
-    fn update_tx_outputs<Tx, T>(
-        &self,
-        storage_tx: &TxStorageTransaction<T>,
-        tx_id: TxId,
-        tx: &mut Tx,
-    ) -> ExecutorResult<()>
+    fn update_tx_outputs<Tx>(&self, tx: &mut Tx, record: &[StorageReadReplayEvent], changes: &Changes) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
-        T: KeyValueInspect<Column = Column>,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(
-            &mut outputs,
-            tx.inputs(),
-            tx_id,
-            storage_tx,
-        )?;
+        self.compute_state_of_not_utxo_outputs(&mut outputs, record, changes)?;
         *tx.outputs_mut() = outputs;
         Ok(())
     }
@@ -1822,7 +1823,9 @@ where
     {
         let tx_id = checked_tx.id();
 
-        let mut sub_block_db_commit = storage_tx
+        let storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
+
+        let mut sub_block_db_commit = storage_tx_record
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -1929,17 +1932,25 @@ where
 
         Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
+        let (
+            StorageAccessRecorder {
+                storage: storage_tx_recovered,
+                record,
+            },
+            changes,
+        ) = sub_block_db_commit.into_inner();
+        let record = record.lock().clone();
+
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
-        self.compute_inputs(tx.inputs_mut(), storage_tx)?;
+        self.compute_inputs(tx.inputs_mut(), storage_tx_recovered, &record)?;
 
         // only commit state changes if execution was a success
         if !reverted {
-            let changes = sub_block_db_commit.into_changes();
-            storage_tx.commit_changes(changes)?;
+            storage_tx.commit_changes(changes.clone())?;
         }
 
-        self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
+        self.update_tx_outputs(&mut tx, &record, &changes)?;
         Ok((reverted, state, tx, receipts.to_vec()))
     }
 
@@ -2137,6 +2148,7 @@ where
         &self,
         inputs: &mut [Input],
         db: &TxStorageTransaction<T>,
+        record: &[StorageReadReplayEvent],
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -2176,8 +2188,9 @@ where
                         contract.validated_utxo(self.options.forbid_fake_coins)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
-                    *balance_root = contract.balance_root()?;
-                    *state_root = contract.state_root()?;
+
+                    *balance_root = compute_balances_hash(record, &Changes::default());
+                    *state_root = compute_state_hash(record, &Changes::default());
                 }
                 _ => {}
             }
@@ -2190,34 +2203,16 @@ where
     /// Computes all zeroed or variable outputs.
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
-    fn compute_state_of_not_utxo_outputs<T>(
+    fn compute_state_of_not_utxo_outputs(
         &self,
         outputs: &mut [Output],
-        inputs: &[Input],
-        tx_id: TxId,
-        db: &TxStorageTransaction<T>,
-    ) -> ExecutorResult<()>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
+        record: &[StorageReadReplayEvent],
+        changes: &Changes,
+    ) -> ExecutorResult<()> {
         for output in outputs {
             if let Output::Contract(contract_output) = output {
-                let contract_id =
-                    if let Some(Input::Contract(input::contract::Contract {
-                        contract_id,
-                        ..
-                    })) = inputs.get(contract_output.input_index as usize)
-                    {
-                        contract_id
-                    } else {
-                        return Err(ExecutorError::InvalidTransactionOutcome {
-                            transaction_id: tx_id,
-                        })
-                    };
-
-                let contract = ContractRef::new(db, *contract_id);
-                contract_output.balance_root = contract.balance_root()?;
-                contract_output.state_root = contract.state_root()?;
+                contract_output.balance_root = compute_balances_hash(record, changes);
+                contract_output.state_root = compute_state_hash(record, changes);
             }
         }
         Ok(())
