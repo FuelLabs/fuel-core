@@ -41,6 +41,16 @@ pub struct NewBlock {
     block: Block,
 }
 
+impl NewBlock {
+    pub fn new(height: BlockHeight, block: Block) -> Self {
+        Self { height, block }
+    }
+
+    pub fn decompose(self) -> (BlockHeight, Block) {
+        (self.height, self.block)
+    }
+}
+
 impl<Api, DB, Blocks, BlockRange> RunnableTask for BlockAggregator<Api, DB, Blocks>
 where
     Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,

@@ -245,7 +245,8 @@ async fn run__new_block_subscription__sends_new_block() {
         tokio::time::timeout(tokio::time::Duration::from_secs(1), response.recv())
             .await
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .decompose();
     assert_eq!(expected_block, actual_block);
     assert_eq!(expected_height, actual_height);
 
