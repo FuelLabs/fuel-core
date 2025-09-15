@@ -171,7 +171,6 @@ mod tests {
         Sha256,
     };
 
-
     #[derive(Clone, Debug, Default)]
     struct Config {
         /// Network-wide common parameters used for validating the chain.
@@ -496,7 +495,7 @@ mod tests {
                     mint.tx_pointer(),
                     &TxPointer::new(*block.header().height(), 1)
                 );
-                let empty_sha: [u8; 32] = Sha256::digest(&[]).into();
+                let empty_sha: [u8; 32] = Sha256::digest([]).into();
                 assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
                 assert_eq!(mint.mint_amount(), &expected_fee_amount_1);
                 assert_eq!(mint.input_contract().contract_id, recipient);
@@ -1684,11 +1683,23 @@ mod tests {
             tx_status[2].result,
             TransactionExecutionResult::Success { .. }
         ));
-        let empty: [u8; 32] = Sha256::digest(&[]).into();
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&Bytes32::new(empty)));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&Bytes32::new(empty)));
-        assert_eq!(executed_tx.outputs()[0].state_root(), Some(&Bytes32::new(empty)));
-        assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&Bytes32::new(empty)));
+        let empty: [u8; 32] = Sha256::digest([]).into();
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(empty))
+        );
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(empty))
+        );
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::new(empty))
+        );
+        assert_eq!(
+            executed_tx.outputs()[0].balance_root(),
+            Some(&Bytes32::new(empty))
+        );
     }
 
     #[test]
@@ -1749,9 +1760,15 @@ mod tests {
         );
 
         // Both balance and state roots are empty, and should match hash of empty data.
-        let empty: [u8; 32] = Sha256::digest(&[]).into();
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&Bytes32::new(empty)));
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&Bytes32::new(empty)));
+        let empty: [u8; 32] = Sha256::digest([]).into();
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(empty))
+        );
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(empty))
+        );
     }
 
     #[test]
@@ -1763,13 +1780,10 @@ mod tests {
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
             // Sets value 1 to slot matching the tx id
-            vec![
-                op::sww(RegId::ZERO, 0x29, RegId::ONE),
-                op::ret(1),
-            ]
-            .into_iter()
-            .collect::<Vec<u8>>()
-            .as_slice(),
+            vec![op::sww(RegId::ZERO, 0x29, RegId::ONE), op::ret(1)]
+                .into_iter()
+                .collect::<Vec<u8>>()
+                .as_slice(),
             &mut rng,
         );
 
@@ -1848,45 +1862,57 @@ mod tests {
 
         // Input balances: 0 of asset_id [2; 32]
         let mut hasher = Sha256::new();
-        hasher.update(&contract_id);
-        hasher.update(&1u64.to_be_bytes()); // number of balances
-        hasher.update(&asset_id);
-        hasher.update(&0u64.to_be_bytes()); // balance
+        hasher.update(contract_id);
+        hasher.update(1u64.to_be_bytes()); // number of balances
+        hasher.update(asset_id);
+        hasher.update(0u64.to_be_bytes()); // balance
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&Bytes32::new(expected_balance_root)));
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
 
         // Output balances: 100 of asset_id [2; 32]
         let mut hasher = Sha256::new();
-        hasher.update(&contract_id);
-        hasher.update(&1u64.to_be_bytes()); // number of balances
-        hasher.update(&asset_id);
-        hasher.update(&0u64.to_be_bytes()); // balance
+        hasher.update(contract_id);
+        hasher.update(1u64.to_be_bytes()); // number of balances
+        hasher.update(asset_id);
+        hasher.update(0u64.to_be_bytes()); // balance
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&Bytes32::new(expected_balance_root)));
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
 
         // Input state: empty slot tx_id
         let mut hasher = Sha256::new();
-        hasher.update(&contract_id);
-        hasher.update(&1u64.to_be_bytes()); // number of slots
-        hasher.update(&tx_id); // the slot key that is modified
-        hasher.update(&[0u8]); // the slot did not contain any value
+        hasher.update(contract_id);
+        hasher.update(1u64.to_be_bytes()); // number of slots
+        hasher.update(tx_id); // the slot key that is modified
+        hasher.update([0u8]); // the slot did not contain any value
         let expected_state_root: [u8; 32] = hasher.finalize().into();
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&Bytes32::new(expected_state_root)));
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
 
         // Output state: slot tx_id with value 1
         let mut hasher = Sha256::new();
-        hasher.update(&contract_id);
-        hasher.update(&1u64.to_be_bytes()); // number of slots
-        hasher.update(&tx_id); // the slot key that is modified
-        hasher.update(&[1u8]); // the slot contains a 1
-        hasher.update(&32u64.to_be_bytes()); // slot size is 32 bytes
-        hasher.update(&Bytes32::new({
+        hasher.update(contract_id);
+        hasher.update(1u64.to_be_bytes()); // number of slots
+        hasher.update(tx_id); // the slot key that is modified
+        hasher.update([1u8]); // the slot contains a 1
+        hasher.update(32u64.to_be_bytes()); // slot size is 32 bytes
+        hasher.update(Bytes32::new({
             let mut value = [0u8; 32];
             value[..8].copy_from_slice(&1u64.to_be_bytes());
             value
         })); // The value in the slot is 1
         let expected_state_root: [u8; 32] = hasher.finalize().into();
-        assert_eq!(executed_tx.outputs()[0].state_root(), Some(&Bytes32::new(expected_state_root)));
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
     }
 
     #[test]

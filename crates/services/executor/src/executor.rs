@@ -163,10 +163,10 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::{borrow::Cow};
+use std::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
-use alloc::{borrow::Cow};
+use alloc::borrow::Cow;
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -1596,7 +1596,6 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-
         let mut storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
 
         let mut sub_block_db_commit = storage_tx_record
@@ -1653,7 +1652,12 @@ where
         Ok((input, output))
     }
 
-    fn update_tx_outputs<Tx>(&self, tx: &mut Tx, record: &[StorageReadReplayEvent], changes: &Changes) -> ExecutorResult<()>
+    fn update_tx_outputs<Tx>(
+        &self,
+        tx: &mut Tx,
+        record: &[StorageReadReplayEvent],
+        changes: &Changes,
+    ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
