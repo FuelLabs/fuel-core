@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use super::*;
+use ::postcard::to_allocvec;
 use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_storage::{
     StorageAsMut,
@@ -30,7 +31,7 @@ pub struct MockSerializer;
 
 impl BlockSerializer for MockSerializer {
     fn serialize_block(&self, block: &FuelBlock) -> Result<Block> {
-        let bytes_vec = postcard::to_allocvec(block).map_err(|e| {
+        let bytes_vec = to_allocvec(block).map_err(|e| {
             Error::BlockSource(anyhow!("failed to serialize block: {}", e))
         })?;
         Ok(Block::from(bytes_vec))
@@ -98,7 +99,7 @@ async fn next_block__can_get_block_from_db() {
     let mut tx = db.write_transaction();
     let compressed_block = block.compress(&chain_id);
     tx.storage_as_mut::<FuelBlocks>()
-        .insert(&height, &compressed_block)
+        .insert(height, &compressed_block)
         .unwrap();
     tx.storage_as_mut::<Transactions>()
         .insert(

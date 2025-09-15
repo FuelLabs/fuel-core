@@ -62,7 +62,7 @@ where
     }
 
     async fn maybe_update_stop_height(&mut self) {
-        if let Some(last_height) = self.new_ending_height.try_recv().ok() {
+        if let Ok(last_height) = self.new_ending_height.try_recv() {
             tracing::info!("updating last height to {}", last_height);
             self.maybe_stop_height = Some(last_height);
         }
@@ -88,7 +88,7 @@ where
     fn get_txs(&self, tx_ids: &[TxId]) -> Result<Vec<Transaction>, E> {
         let mut txs = Vec::new();
         for tx_id in tx_ids {
-            match StorageInspect::<Transactions>::get(&self.db, &tx_id)? {
+            match StorageInspect::<Transactions>::get(&self.db, tx_id)? {
                 Some(tx) => {
                     tracing::debug!("found tx id: {:?}", tx_id);
                     txs.push(tx.into_owned());
@@ -157,9 +157,7 @@ where
     type Task = Self;
     type TaskParams = ();
 
-    fn shared_data(&self) -> Self::SharedData {
-        ()
-    }
+    fn shared_data(&self) -> Self::SharedData {}
 
     async fn into_task(
         self,

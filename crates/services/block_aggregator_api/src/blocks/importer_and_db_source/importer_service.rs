@@ -119,9 +119,7 @@ where
     type Task = Self;
     type TaskParams = ();
 
-    fn shared_data(&self) -> Self::SharedData {
-        ()
-    }
+    fn shared_data(&self) -> Self::SharedData {}
 
     async fn into_task(
         self,
