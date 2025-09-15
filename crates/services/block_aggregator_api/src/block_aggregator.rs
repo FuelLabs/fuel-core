@@ -1,11 +1,11 @@
 use crate::{
     BlockAggregator,
+    NewBlock,
     api::{
         BlockAggregatorApi,
         BlockAggregatorQuery,
     },
     blocks::{
-        Block,
         BlockSource,
         BlockSourceEvent,
     },
@@ -98,7 +98,7 @@ where
 
     async fn handle_new_block_subscription(
         &mut self,
-        response: tokio::sync::mpsc::Sender<(BlockHeight, Block)>,
+        response: tokio::sync::mpsc::Sender<NewBlock>,
     ) -> TaskNextAction {
         self.new_block_subscriptions.push(response);
         TaskNextAction::Continue
@@ -115,7 +115,7 @@ where
         let (id, block) = match event {
             BlockSourceEvent::NewBlock(id, block) => {
                 self.new_block_subscriptions.retain_mut(|sub| {
-                    let send_res = sub.try_send((id, block.clone()));
+                    let send_res = sub.try_send(NewBlock::new(id, block.clone()));
                     match send_res {
                         Ok(_) => true,
                         Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
