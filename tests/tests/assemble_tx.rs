@@ -112,7 +112,7 @@ async fn assemble_transaction__preserves_users_variable_output_even_if_it_is_emp
                 coin.utxo_id,
                 coin.amount,
                 coin.asset_id,
-                TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
+                TxPointer::new(coin.block_created.into(), coin.tx_created_idx.into()),
             )
             .add_output(Output::change(account.owner(), 0, base_asset_id))
             .add_output(Output::variable(Default::default(), 0, Default::default()))
@@ -163,7 +163,7 @@ async fn assemble_transaction__input_without_witness() {
             coin.owner,
             coin.amount,
             coin.asset_id,
-            TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
+            TxPointer::new(coin.block_created.into(), coin.tx_created_idx.into()),
             0,
         )],
         vec![],
@@ -211,7 +211,7 @@ async fn assemble_transaction__user_provided_change_output() {
             coin.owner,
             coin.amount,
             coin.asset_id,
-            TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
+            TxPointer::new(coin.block_created.into(), coin.tx_created_idx.into()),
             0,
         )],
         vec![Output::Change {
@@ -416,7 +416,7 @@ async fn assemble_transaction__adds_change_output_for_non_required_non_base_bala
             coin.utxo_id,
             coin.amount,
             coin.asset_id,
-            TxPointer::new(coin.block_created.into(), coin.tx_created_idx),
+            TxPointer::new(coin.block_created.into(), coin.tx_created_idx.into()),
         )
         .finalize_as_transaction();
 

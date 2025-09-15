@@ -18,7 +18,7 @@ pub struct L1ExecutionData {
     pub coinbase: u64,
     pub used_gas: u64,
     pub used_size: u32,
-    pub tx_count: u16,
+    pub tx_count: u32,
     pub message_ids: Vec<MessageId>,
     pub transactions_status: Vec<TransactionExecutionStatus>,
     pub events: Vec<Event>,

@@ -224,7 +224,7 @@ impl<Storage> From<StorageTransaction<Storage>> for Changes {
 }
 
 /// The type describing the list of changes to the storage.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StorageChanges {
     /// A single batch of changes.
     Changes(Changes),
@@ -232,15 +232,15 @@ pub enum StorageChanges {
     ChangesList(Vec<Changes>),
 }
 
-impl Default for StorageChanges {
-    fn default() -> Self {
-        StorageChanges::Changes(Default::default())
-    }
-}
-
 impl From<Changes> for StorageChanges {
     fn from(value: Changes) -> Self {
         StorageChanges::Changes(value)
+    }
+}
+
+impl Default for StorageChanges {
+    fn default() -> Self {
+        StorageChanges::Changes(Default::default())
     }
 }
 

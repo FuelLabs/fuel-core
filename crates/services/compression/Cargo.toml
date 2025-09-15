@@ -24,6 +24,11 @@ fault-proving = [
     "fuel-core-types/fault-proving",
     "fuel-core-storage/fault-proving",
 ]
+u32-tx-count = [
+    "fuel-core-compression/u32-tx-count",
+    "fuel-core-chain-config?/u32-tx-count",
+    "fuel-core-types/u32-tx-pointer",
+]
 
 [dependencies]
 anyhow = { workspace = true }

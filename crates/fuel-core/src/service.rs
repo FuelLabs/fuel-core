@@ -3,6 +3,22 @@ use std::{
     sync::Arc,
 };
 
+use self::adapters::BlockImporterAdapter;
+#[cfg(any(not(feature = "parallel-executor"), feature = "no-parallel-executor"))]
+use crate::service::adapters::ExecutorAdapter;
+#[cfg(all(feature = "parallel-executor", not(feature = "no-parallel-executor")))]
+use crate::service::adapters::ParallelExecutorAdapter;
+use crate::{
+    combined_database::{
+        CombinedDatabase,
+        ShutdownListener,
+    },
+    database::Database,
+    service::{
+        adapters::PoAAdapter,
+        sub_services::TxPoolSharedState,
+    },
+};
 use adapters::{
     TxStatusManagerAdapter,
     ready_signal::ReadySignal,
@@ -43,24 +59,8 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::consensus::Consensus,
     fuel_types::BlockHeight,
+    services::block_importer::UncommittedResult,
 };
-
-use crate::{
-    combined_database::{
-        CombinedDatabase,
-        ShutdownListener,
-    },
-    database::Database,
-    service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
-        sub_services::TxPoolSharedState,
-    },
-};
-
-use self::adapters::BlockImporterAdapter;
 
 pub mod adapters;
 pub mod config;
@@ -70,6 +70,7 @@ mod query;
 pub mod sub_services;
 pub mod vm_pool;
 
+#[cfg(not(feature = "parallel-executor"))]
 #[derive(Clone)]
 pub struct SharedState {
     /// The PoA adaptor around the shared state of the consensus module.
@@ -92,6 +93,40 @@ pub struct SharedState {
     pub block_importer: BlockImporterAdapter,
     /// The executor to validate blocks.
     pub executor: ExecutorAdapter,
+    /// The config of the service.
+    pub config: Config,
+    /// The compression service shared data.
+    pub compression: Option<fuel_core_compression_service::service::SharedData>,
+}
+
+#[cfg(feature = "parallel-executor")]
+#[derive(Clone)]
+pub struct SharedState {
+    /// The PoA adaptor around the shared state of the consensus module.
+    pub poa_adapter: PoAAdapter,
+    /// The transaction pool shared state.
+    pub txpool_shared_state: TxPoolSharedState,
+    /// The Tx Status Manager
+    pub tx_status_manager: TxStatusManagerAdapter,
+    /// The P2P network shared state.
+    #[cfg(feature = "p2p")]
+    pub network: Option<fuel_core_p2p::service::SharedState>,
+    #[cfg(feature = "relayer")]
+    /// The Relayer shared state.
+    pub relayer: Option<fuel_core_relayer::SharedState>,
+    /// The GraphQL shared state.
+    pub graph_ql: crate::fuel_core_graphql_api::api_service::SharedState,
+    /// The underlying database.
+    pub database: CombinedDatabase,
+    /// Subscribe to new block production.
+    pub block_importer: BlockImporterAdapter,
+    #[cfg(not(feature = "no-parallel-executor"))]
+    /// The executor to validate blocks.
+    pub executor: ParallelExecutorAdapter,
+    #[cfg(feature = "no-parallel-executor")]
+    /// The executor to validate blocks.
+    pub executor: ExecutorAdapter,
+
     /// The config of the service.
     pub config: Config,
     /// The compression service shared data.
@@ -362,8 +397,11 @@ impl FuelService {
                     &self.shared.database,
                 )
                 .await?;
+                let (result, changes) = result.into();
+                let res =
+                    UncommittedResult::new(result, StorageChanges::Changes(changes));
 
-                self.shared.block_importer.commit_result(result).await?;
+                self.shared.block_importer.commit_result(res).await?;
             }
         }
 

@@ -33,8 +33,8 @@ impl ExecutorTransactionsSource for OnceTransactionsSource {
     fn next(
         &self,
         _gas_limit: u64,
-        transactions_limit: u16,
-        _block_transaction_size_limit: u32,
+        transactions_limit: u32,
+        _block_transaction_size_limit: u64,
     ) -> Vec<fuel_core_executor::ports::MaybeCheckedTransaction> {
         let mut transactions = self.transactions.lock().expect("Mutex poisoned");
         // Avoid panicking if we request more transactions than there are in the vector
@@ -55,7 +55,7 @@ impl TransactionsSource for OnceTransactionsSource {
     fn get_executable_transactions(
         &mut self,
         _gas_limit: u64,
-        tx_count_limit: u16,
+        tx_count_limit: u32,
         _block_transaction_size_limit: u64,
         filter: crate::ports::Filter,
     ) -> TransactionSourceExecutableTransactions {

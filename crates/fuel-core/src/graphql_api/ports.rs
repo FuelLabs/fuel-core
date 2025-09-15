@@ -425,7 +425,8 @@ pub mod worker {
             &mut self,
             owner: &Address,
             block_height: BlockHeight,
-            tx_idx: u16,
+            #[cfg(feature = "u32-tx-count")] tx_idx: u32,
+            #[cfg(not(feature = "u32-tx-count"))] tx_idx: u16,
             tx_id: &Bytes32,
         ) -> StorageResult<()>;
 

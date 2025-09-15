@@ -172,11 +172,11 @@ use alloc::{
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
-#[cfg(not(feature = "limited-tx-count"))]
-pub const fn max_tx_count() -> u16 {
-    u16::MAX.saturating_sub(1)
+#[cfg(feature = "u32-tx-count")]
+pub const fn max_tx_count() -> u32 {
+    u32::MAX.saturating_sub(1)
 }
-#[cfg(feature = "limited-tx-count")]
+#[cfg(not(feature = "u32-tx-count"))]
 pub const fn max_tx_count() -> u16 {
     1024
 }
@@ -208,8 +208,9 @@ impl TransactionsSource for OnceTransactionsSource {
     fn next(
         &self,
         _: u64,
-        transactions_limit: u16,
-        _: u32,
+        #[cfg(feature = "u32-tx-count")] transactions_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] transactions_limit: u16,
+        _: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
         let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
@@ -250,7 +251,8 @@ pub fn convert_tx_execution_result_to_preconfirmation(
     tx_id: TxId,
     tx_exec_result: &TransactionExecutionResult,
     block_height: BlockHeight,
-    tx_index: u16,
+    #[cfg(feature = "u32-tx-count")] tx_index: u32,
+    #[cfg(not(feature = "u32-tx-count"))] tx_index: u16,
 ) -> Preconfirmation {
     let tx_pointer = TxPointer::new(block_height, tx_index);
     let dynamic_outputs = tx
@@ -303,6 +305,9 @@ pub struct ExecutionData {
     pub coinbase: u64,
     pub used_gas: u64,
     pub used_size: u32,
+    #[cfg(feature = "u32-tx-count")]
+    pub tx_count: u32,
+    #[cfg(not(feature = "u32-tx-count"))]
     pub tx_count: u16,
     pub found_mint: bool,
     pub message_ids: Vec<MessageId>,
@@ -602,14 +607,25 @@ where
         )?;
 
         loop {
-            self.process_l2_txs(
-                &mut partial_block,
-                &components,
-                &mut block_storage_tx,
-                &mut data,
-                &mut memory,
-            )
-            .await?;
+            let res = self
+                .process_l2_txs(
+                    &mut partial_block,
+                    &components,
+                    &mut block_storage_tx,
+                    &mut data,
+                    &mut memory,
+                )
+                .await;
+            match res {
+                Ok(_) => {
+                    //
+                    let _ = 10;
+                }
+                Err(err) => {
+                    let _ = 10;
+                    return Err(err)
+                }
+            }
             match self.new_tx_waiter.wait_for_new_transactions().await {
                 WaitNewTransactionsResult::Timeout => break,
                 WaitNewTransactionsResult::NewTransaction => {
@@ -719,7 +735,8 @@ where
         mut self,
         transactions: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
-        start_idx: u16,
+        #[cfg(feature = "u32-tx-count")] start_idx: u32,
+        #[cfg(not(feature = "u32-tx-count"))] start_idx: u16,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<(Vec<Transaction>, ExecutionData)>
     where
@@ -800,15 +817,12 @@ where
             ..
         } = components;
         let block_gas_limit = self.consensus_params.block_gas_limit();
-        let block_transaction_size_limit = self
-            .consensus_params
-            .block_transaction_size_limit()
-            .try_into()
-            .unwrap_or(u32::MAX);
+        let block_transaction_size_limit =
+            self.consensus_params.block_transaction_size_limit();
 
         let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
         let mut remaining_block_transaction_size_limit =
-            block_transaction_size_limit.saturating_sub(data.used_size);
+            block_transaction_size_limit.saturating_sub(data.used_size as u64);
 
         // We allow at most u16::MAX transactions in a block, including the mint transaction.
         // When processing l2 transactions, we must take into account transactions from the l1
@@ -881,7 +895,7 @@ where
                 statuses = self.preconfirmation_sender.try_send(statuses);
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
-                    block_transaction_size_limit.saturating_sub(data.used_size);
+                    block_transaction_size_limit.saturating_sub(data.used_size as u64);
                 remaining_tx_count = max_tx_count().saturating_sub(data.tx_count);
             }
 

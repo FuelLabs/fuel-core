@@ -40,7 +40,10 @@ test-helpers = [
 # features to enable in production, but increase build times
 rocksdb-production = ["rocksdb", "rocksdb/jemalloc"]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
-parallel-executor = ["fuel-core-parallel-executor"]
+parallel-executor = ["fuel-core-parallel-executor", "u32-tx-count"]
+# use to override `parallel-executor` during `--all-features --workspace` builds
+no-parallel-executor = []
+
 fault-proving = [
     "fuel-core-types/fault-proving",
     "fuel-core-executor/fault-proving",
@@ -52,6 +55,14 @@ fault-proving = [
     "fuel-core-poa/fault-proving",
     "fuel-core-compression-service/fault-proving",
     "fuel-core-upgradable-executor/fault-proving",
+]
+u32-tx-count = [
+    "fuel-core-types/u32-tx-pointer",
+    "fuel-core-executor/u32-tx-count",
+    "fuel-core-chain-config/u32-tx-count",
+    "fuel-core-upgradable-executor/u32-tx-count",
+    "fuel-core-compression-service/u32-tx-count",
+    "fuel-core-txpool/u32-tx-count",
 ]
 
 [dependencies]
@@ -122,7 +133,6 @@ fuel-core = { path = ".", features = ["smt", "test-helpers"] }
 fuel-core-executor = { workspace = true, features = [
   "std",
   "test-helpers",
-  "limited-tx-count",
 ] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }

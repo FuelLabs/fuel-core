@@ -3,6 +3,8 @@ use super::scalars::{
     Tai64Timestamp,
     TransactionId,
 };
+#[cfg(not(feature = "u32-tx-count"))]
+use crate::schema::scalars::U16;
 use crate::{
     fuel_core_graphql_api::{
         Config as GraphQLConfig,
@@ -17,7 +19,6 @@ use crate::{
         scalars::{
             BlockId,
             Signature,
-            U16,
             U32,
             U64,
         },
@@ -203,6 +204,11 @@ impl Header {
     }
 
     /// Number of transactions in this block.
+    #[cfg(feature = "u32-tx-count")]
+    async fn transactions_count(&self) -> U32 {
+        self.0.transactions_count().into()
+    }
+    #[cfg(not(feature = "u32-tx-count"))]
     async fn transactions_count(&self) -> U16 {
         self.0.transactions_count().into()
     }

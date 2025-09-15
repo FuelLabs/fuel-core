@@ -16,8 +16,8 @@ use anyhow::{
 };
 use fuel_core_storage::transactional::{
     AtomicView,
-    Changes,
     HistoricalView,
+    StorageChanges,
 };
 use fuel_core_types::{
     blockchain::{
@@ -95,7 +95,7 @@ pub struct Producer<ViewProvider, TxPool, Executor, GasPriceProvider, ChainState
     pub config: Config,
     pub view_provider: ViewProvider,
     pub txpool: TxPool,
-    pub executor: Arc<Executor>,
+    pub executor: Arc<Mutex<Executor>>,
     pub relayer: Box<dyn ports::Relayer>,
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
@@ -115,7 +115,7 @@ where
         &self,
         predefined_block: &Block,
         deadline: D,
-    ) -> anyhow::Result<UncommittedResult<Changes>>
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>>
     where
         Executor: ports::BlockProducer<Vec<Transaction>, Deadline = D> + 'static,
     {
@@ -166,6 +166,8 @@ where
 
         let result = self
             .executor
+            .lock()
+            .await
             .produce_without_commit(component, deadline)
             .await
             .map_err(Into::<anyhow::Error>::into)
@@ -192,7 +194,7 @@ where
         block_time: Tai64,
         tx_source: impl FnOnce(u64, BlockHeight) -> F,
         deadline: Deadline,
-    ) -> anyhow::Result<UncommittedResult<Changes>>
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>>
     where
         Executor: ports::BlockProducer<TxSource, Deadline = Deadline> + 'static,
         F: Future<Output = anyhow::Result<TxSource>>,
@@ -242,6 +244,8 @@ where
             format!("Failed to produce block {height:?} due to execution failure");
         let result = self
             .executor
+            .lock()
+            .await
             .produce_without_commit(component, deadline)
             .await
             .map_err(Into::<anyhow::Error>::into)
@@ -287,7 +291,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         deadline: Deadline,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.produce_and_execute::<TxSource, _, Deadline>(
             height,
             block_time,
@@ -313,7 +317,7 @@ where
         height: BlockHeight,
         block_time: Tai64,
         transactions: Vec<Transaction>,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.produce_and_execute(
             height,
             block_time,
@@ -382,11 +386,15 @@ where
 
         let executor = self.executor.clone();
 
-        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
-        let result = tokio_rayon::spawn_fifo(move || {
-            executor.dry_run(component, utxo_validation, height, record_storage_reads)
-        })
-        .await?;
+        let rt = tokio::runtime::Handle::current();
+        let fut = async move {
+            executor
+                .lock()
+                .await
+                .dry_run(component, utxo_validation, height, record_storage_reads)
+                .map_err(Into::<anyhow::Error>::into)
+        };
+        let result = tokio_rayon::spawn_fifo(move || rt.block_on(fut)).await?;
 
         if result.transactions.iter().any(|(transaction, tx_status)| {
             transaction.is_script() && tx_status.result.receipts().is_empty()
@@ -419,7 +427,7 @@ where
         // use the blocking threadpool to avoid clogging up the main async runtime
         tokio_rayon::spawn_fifo(move || {
             let block = view.get_full_block(&height)?;
-            Ok(executor.storage_read_replay(&block)?)
+            Ok(executor.try_lock().unwrap().storage_read_replay(&block)?)
         })
         .await
     }
@@ -447,10 +455,8 @@ where
             .chain_state_info_provider
             .consensus_params_at_version(&block_header.consensus_parameters_version)?
             .block_gas_limit();
-        // We have a hard limit of u16::MAX transactions per block, including the final mint transactions.
-        // Therefore we choose the `new_da_height` to never include more than u16::MAX - 1 transactions in a block.
         let new_da_height = self
-            .select_new_da_height(gas_limit, previous_da_height, u16::MAX - 1)
+            .select_new_da_height(gas_limit, previous_da_height, u32::MAX - 1)
             .await?;
 
         block_header.application.da_height = new_da_height;
@@ -474,7 +480,7 @@ where
         &self,
         gas_limit: u64,
         previous_da_height: DaBlockHeight,
-        transactions_limit: u16,
+        transactions_limit: u32,
     ) -> anyhow::Result<DaBlockHeight> {
         let mut new_best = previous_da_height;
         let mut total_cost: u64 = 0;

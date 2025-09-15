@@ -113,6 +113,9 @@ fn owned_tx_index_key(
 
 ////////////////////////////////////// Not storage part //////////////////////////////////////
 
+#[cfg(feature = "u32-tx-count")]
+pub type TransactionIndex = u32;
+#[cfg(not(feature = "u32-tx-count"))]
 pub type TransactionIndex = u16;
 
 #[derive(
@@ -144,12 +147,22 @@ impl From<[u8; INDEX_SIZE]> for OwnedTransactionIndexKey {
         // the first 32 bytes are the owner, which is already known when querying
         let mut block_height_bytes: [u8; 4] = Default::default();
         block_height_bytes.copy_from_slice(&bytes[32..36]);
+        #[cfg(feature = "u32-tx-count")]
+        let mut tx_idx_bytes: [u8; 4] = Default::default();
+        #[cfg(not(feature = "u32-tx-count"))]
         let mut tx_idx_bytes: [u8; 2] = Default::default();
+
+        #[cfg(feature = "u32-tx-count")]
+        tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..40]);
+        #[cfg(not(feature = "u32-tx-count"))]
         tx_idx_bytes.copy_from_slice(&bytes.as_ref()[36..38]);
 
         Self {
             owner: Address::from(owner),
             block_height: u32::from_be_bytes(block_height_bytes).into(),
+            #[cfg(feature = "u32-tx-count")]
+            tx_idx: u32::from_be_bytes(tx_idx_bytes),
+            #[cfg(not(feature = "u32-tx-count"))]
             tx_idx: u16::from_be_bytes(tx_idx_bytes),
         }
     }
@@ -198,12 +211,18 @@ impl From<Vec<u8>> for OwnedTransactionIndexCursor {
     fn from(bytes: Vec<u8>) -> Self {
         let mut block_height_bytes: [u8; 4] = Default::default();
         block_height_bytes.copy_from_slice(&bytes[..4]);
+        #[cfg(feature = "u32-tx-count")]
+        let mut tx_idx_bytes: [u8; 4] = Default::default();
+        #[cfg(not(feature = "u32-tx-count"))]
         let mut tx_idx_bytes: [u8; 2] = Default::default();
         tx_idx_bytes.copy_from_slice(&bytes[4..6]);
 
         Self {
             block_height: u32::from_be_bytes(block_height_bytes).into(),
+            #[cfg(not(feature = "u32-tx-count"))]
             tx_idx: u16::from_be_bytes(tx_idx_bytes),
+            #[cfg(feature = "u32-tx-count")]
+            tx_idx: u32::from_be_bytes(tx_idx_bytes),
         }
     }
 }

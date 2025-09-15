@@ -1,7 +1,4 @@
-use crate::{
-    database::Database,
-    service::adapters::ExecutorAdapter,
-};
+use crate::database::Database;
 use fuel_core_importer::ports::Validator;
 use fuel_core_storage::{
     not_found,
@@ -20,16 +17,16 @@ use fuel_core_types::{
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct ImportResultProvider {
+pub struct ImportResultProvider<V> {
     on_chain_database: Database,
-    executor_adapter: ExecutorAdapter,
+    validator: V,
 }
 
-impl ImportResultProvider {
-    pub fn new(on_chain_database: Database, executor_adapter: ExecutorAdapter) -> Self {
+impl<V> ImportResultProvider<V> {
+    pub fn new(on_chain_database: Database, executor_adapter: V) -> Self {
         Self {
             on_chain_database,
-            executor_adapter,
+            validator: executor_adapter,
         }
     }
 }
@@ -43,7 +40,7 @@ pub enum BlockAt {
     Genesis,
 }
 
-impl ImportResultProvider {
+impl<V: Validator> ImportResultProvider<V> {
     pub fn result_at_height(
         &self,
         height: BlockAt,
@@ -56,10 +53,8 @@ impl ImportResultProvider {
                     .get_sealed_block_by_height(&height)?
                     .ok_or(not_found!("SealedBlock"))?;
 
-                let ValidationResult { tx_status, events } = self
-                    .executor_adapter
-                    .validate(&sealed_block.entity)?
-                    .into_result();
+                let ValidationResult { tx_status, events } =
+                    self.validator.validate(&sealed_block.entity)?.into_result();
                 let result =
                     ImportResult::new_from_local(sealed_block, tx_status, events);
                 Ok(Arc::new(result.wrap()))

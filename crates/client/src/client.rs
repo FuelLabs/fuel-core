@@ -1388,7 +1388,6 @@ impl FuelClient {
             start_timestamp: start_timestamp
                 .map(|timestamp| Tai64Timestamp::from(Tai64(timestamp))),
         });
-
         let new_height = self.query(query).await?.produce_blocks;
 
         Ok(new_height.into())

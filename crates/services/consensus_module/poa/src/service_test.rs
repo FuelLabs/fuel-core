@@ -26,7 +26,7 @@ use fuel_core_services::{
     ServiceRunner,
     State,
 };
-use fuel_core_storage::transactional::Changes;
+use fuel_core_storage::transactional::StorageChanges;
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
@@ -79,7 +79,6 @@ use tokio::{
         Instant,
     },
 };
-
 mod manually_produce_tests;
 mod test_time;
 mod trigger_tests;
@@ -319,7 +318,7 @@ impl BlockProducer for FakeBlockProducer {
         block_time: Tai64,
         _: TransactionsSource,
         _: Instant,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.block_sender
             .send(FakeProducedBlock::New(height, block_time))
             .await
@@ -338,7 +337,7 @@ impl BlockProducer for FakeBlockProducer {
     async fn produce_predefined_block(
         &self,
         block: &Block,
-    ) -> anyhow::Result<UncommittedResult<Changes>> {
+    ) -> anyhow::Result<UncommittedResult<StorageChanges>> {
         self.block_sender
             .send(FakeProducedBlock::Predefined(block.clone()))
             .await

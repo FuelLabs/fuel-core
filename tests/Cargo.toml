@@ -13,7 +13,7 @@ autobenches = false
 autotests = false
 
 [features]
-default = ["fuel-core/default"]
+default = ["fuel-core/default", "fuel-core/no-parallel-executor"]
 only-p2p = ["fuel-core-p2p"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
 fault-proving = [
@@ -26,6 +26,7 @@ fault-proving = [
     "fuel-core-compression-service/fault-proving",
     "fuel-core-benches/fault-proving",
 ]
+parallel-executor = ["fuel-core/parallel-executor"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -94,7 +95,7 @@ tracing-subscriber = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
+fuel-core-executor = { workspace = true, features = [] }
 pretty_assertions = "1.4"
 proptest = { workspace = true }
 tracing = { workspace = true }

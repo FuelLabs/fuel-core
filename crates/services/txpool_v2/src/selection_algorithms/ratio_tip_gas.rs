@@ -152,7 +152,7 @@ where
         storage: &mut S,
     ) -> RemovedTransactions {
         let mut gas_left = constraints.max_gas;
-        let mut space_left = constraints.maximum_block_size as usize;
+        let mut space_left = constraints.maximum_block_size;
         let mut nb_left = constraints.maximum_txs;
         let mut result = Vec::new();
 
@@ -211,8 +211,9 @@ where
                 }
 
                 let not_enough_gas = stored_transaction.transaction.max_gas() > gas_left;
-                let too_big_tx =
-                    stored_transaction.transaction.metered_bytes_size() > space_left;
+                let too_big_tx = stored_transaction.transaction.metered_bytes_size()
+                    as u64
+                    > space_left;
 
                 if not_enough_gas || too_big_tx {
                     continue;
@@ -220,8 +221,9 @@ where
 
                 gas_left =
                     gas_left.saturating_sub(stored_transaction.transaction.max_gas());
-                space_left = space_left
-                    .saturating_sub(stored_transaction.transaction.metered_bytes_size());
+                space_left = space_left.saturating_sub(
+                    stored_transaction.transaction.metered_bytes_size() as u64,
+                );
                 nb_left = nb_left.saturating_sub(1);
 
                 let dependents = storage.get_dependents(storage_id).collect::<Vec<_>>();

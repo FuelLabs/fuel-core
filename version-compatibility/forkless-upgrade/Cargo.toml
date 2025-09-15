@@ -6,6 +6,9 @@ publish = false
 version = "0.0.0"
 build = "build.rs"
 
+[features]
+u32-tx-count = ["fuel-core/u32-tx-count"]
+
 [dev-dependencies]
 anyhow = "1.0"
 clap = "4.4"
@@ -14,6 +17,7 @@ hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
+tracing-subscriber = "0.3.19"
 # pin to prevent compilation error from 1.13.6
 yamux = "=0.13.5"
 

@@ -62,7 +62,7 @@ use clap::Parser;
 
 #[derive(Parser)]
 struct Args {
-    #[clap(short = 'c', long, default_value = "16")]
+    #[clap(short = 'c', long, default_value = "12")]
     pub number_of_cores: usize,
     #[clap(short = 't', long, default_value = "150000")]
     pub number_of_transactions: u64,
@@ -138,7 +138,7 @@ fn main() {
     let transactions = generate_transactions(args.number_of_transactions, &mut rng);
     let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
     let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
-    tracing::warn!(
+    tracing::debug!(
         "Generated {} transactions in {:?} ms.",
         args.number_of_transactions,
         start_transaction_generation.elapsed().as_millis()
@@ -198,7 +198,7 @@ fn main() {
             })
             .sum(),
     );
-    test_builder.block_size_limit = Some(1_000_000_000_000_000);
+    test_builder.block_size_limit = Some(u64::MAX);
     test_builder.number_threads_pool_verif = args.number_of_cores;
     test_builder.max_txs = transactions.len();
     // spin up node
@@ -223,11 +223,6 @@ fn main() {
                 .try_insert(transactions.clone())
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            // tracing::warn!(
-            //     "Inserted {} transactions in {:?} ms.",
-            //     args.number_of_transactions,
-            //     start_insertion.elapsed().as_millis()
-            // );
             client.produce_blocks(1, None).await.unwrap();
             let block = srv
                 .shared
@@ -238,6 +233,7 @@ fn main() {
                 .get_sealed_block_by_height(&1.into())
                 .unwrap()
                 .unwrap();
+            assert_eq!(block.entity.transactions().len(), transactions.len() + 1);
             block
         }
     });

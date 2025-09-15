@@ -912,6 +912,9 @@ where
         let mut preconfirmations = iter
             .enumerate()
             .map(|(i, (status, tx))| {
+                #[cfg(feature = "u32-tx-count")]
+                let tx_index = u32::try_from(i).unwrap_or(u32::MAX);
+                #[cfg(not(feature = "u32-tx-count"))]
                 let tx_index = u16::try_from(i).unwrap_or(u16::MAX);
                 let preconfirmation_status =
                     convert_tx_execution_result_to_preconfirmation(
@@ -1505,6 +1508,7 @@ mod test {
             assert_eq!(Ok(()), result);
         }
 
+        #[cfg(not(feature = "u32-tx-count"))]
         #[test]
         fn can_validate_block__wasm_strategy() {
             let storage = storage();
@@ -1552,6 +1556,7 @@ mod test {
             result.expect_err("The validation should fail because of versions mismatch");
         }
 
+        #[allow(dead_code)]
         fn storage_with_state_transition(
             next_version: StateTransitionBytecodeVersion,
         ) -> Storage {
@@ -1576,6 +1581,7 @@ mod test {
             storage
         }
 
+        #[cfg(not(feature = "u32-tx-count"))]
         #[test]
         fn can_validate_block_with_next_version__native_strategy() {
             // Given
@@ -1591,6 +1597,7 @@ mod test {
             assert_eq!(Ok(()), result);
         }
 
+        #[cfg(not(feature = "u32-tx-count"))]
         #[test]
         fn can_validate_block_with_next_version__wasm_strategy() {
             // Given
@@ -1605,7 +1612,7 @@ mod test {
             // Then
             assert_eq!(Ok(()), result);
         }
-
+        #[cfg(not(feature = "u32-tx-count"))]
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]
@@ -1630,7 +1637,7 @@ mod test {
                 assert_eq!(Ok(()), result);
             }
         }
-
+        #[cfg(not(feature = "u32-tx-count"))]
         // The test verifies that `Executor::get_module` method caches the compiled WASM module.
         // If it doesn't cache the modules, the test will fail with a timeout.
         #[test]

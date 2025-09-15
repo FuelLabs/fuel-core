@@ -300,13 +300,16 @@ where
                     Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, transactions }) => {
                         self.extract_block_transactions(constraints, transactions);
                     }
-                    None => return TaskNextAction::Stop,
+                    None => {
+                        return TaskNextAction::Stop
+                    },
                 }
             }
+            // TODO: Should we hide this behind a `p2p` feature?
             res = self.preconfirmations_update_listener.recv() => {
                 let (tx_id, status) = match res {
                     Ok(res) => res,
-                    Err(_) => return TaskNextAction::Stop,
+                    Err(e) => return TaskNextAction::ErrorContinue(e.into()),
                 };
                 self.process_preconfirmed_transaction(tx_id, status);
             }

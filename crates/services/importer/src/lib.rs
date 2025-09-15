@@ -18,7 +18,7 @@ pub use importer::Importer;
 pub struct ImporterResult {
     pub shared_result: SharedImportResult,
     #[cfg(feature = "test-helpers")]
-    pub changes: std::sync::Arc<fuel_core_storage::transactional::Changes>,
+    pub changes: std::sync::Arc<fuel_core_storage::transactional::StorageChanges>,
 }
 
 impl core::ops::Deref for ImporterResult {
