@@ -438,7 +438,7 @@ pub struct SharedData {
     pub gas_price_algo: SharedV1Algorithm,
     pub latest_gas_price: LatestGasPrice<u32, u64>,
     /// Allows to observe the sync state.
-    sync_observer: SyncStateObserver,
+    pub(crate) sync_observer: SyncStateObserver,
 }
 
 impl SharedData {
