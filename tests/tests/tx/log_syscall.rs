@@ -256,48 +256,51 @@ impl TestCtx {
 
     fn extract_logs_so_far(&self) -> Logs {
         let tx_id = self.tx_id;
-        let anchor_predicate_logs = format!("predicate_logs{{tx_id={tx_id}}}");
-        let anchor_tx_logs = format!("tx_logs{{tx_id={tx_id}}}");
+        let anchor_verification_logs = format!("verification{{tx_id={tx_id}}}");
+        let anchor_execution_logs = format!("execution{{tx_id={tx_id}}}");
+        let anchor_estimation_logs = format!("estimation{{tx_id={tx_id}}}");
 
         // Log lines start with ISO 8601 timestamp, e.g. "2024-06-14T12:34:56.789Z".
         // We use this to detect the start of a log lines.
         let re_timestamp =
             regex::Regex::new(r"^\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+Z").unwrap();
 
-        let mut result = Logs {
-            predicates: Vec::new(),
-            tx: Vec::new(),
-        };
+        let mut result = Logs::default();
 
         let mut it = self.driver.read_output_so_far().into_iter().peekable();
         loop {
             let Some(line) = it.next() else {
                 break;
             };
-            if line.contains(&anchor_predicate_logs) {
-                assert!(
-                    result.predicates.is_empty(),
-                    "Multiple predicate logs sections found in output"
-                );
+            if line.contains(&anchor_verification_logs) {
                 while it
                     .peek()
                     .map(|line| !re_timestamp.is_match(line))
                     .unwrap_or(false)
                 {
-                    result.predicates.push(it.next().unwrap());
+                    result.verification.push(it.next().unwrap());
                 }
             }
-            if line.contains(&anchor_tx_logs) {
+            if line.contains(&anchor_execution_logs) {
                 assert!(
-                    result.tx.is_empty(),
-                    "Multiple tx logs sections found in output"
+                    result.execution.is_empty(),
+                    "Multiple execution logs sections found in output"
                 );
                 while it
                     .peek()
                     .map(|line| !re_timestamp.is_match(line))
                     .unwrap_or(false)
                 {
-                    result.tx.push(it.next().unwrap());
+                    result.execution.push(it.next().unwrap());
+                }
+            }
+            if line.contains(&anchor_estimation_logs) {
+                while it
+                    .peek()
+                    .map(|line| !re_timestamp.is_match(line))
+                    .unwrap_or(false)
+                {
+                    result.estimation.push(it.next().unwrap());
                 }
             }
         }
@@ -306,21 +309,24 @@ impl TestCtx {
     }
 }
 
+#[derive(Default)]
 struct Logs {
-    predicates: Vec<String>,
-    tx: Vec<String>,
+    verification: Vec<String>,
+    execution: Vec<String>,
+    estimation: Vec<String>,
 }
 
+const PREDICATE_0_LOG: &str = "Hello from Predicate 0!";
+const PREDICATE_1_LOG: &str = "Hello from Predicate 1!";
+const SCRIPT_LOG: &str = "Hello from Script!";
+
 #[tokio::test]
-async fn estimate_predicates__does_not_print_predicate_logs() {
+async fn estimate_predicates__print_predicate_logs() {
     // Given
-    let mut ctx = TestCtx::setup(
-        true,
-        &["Hello from Predicate 0!", "Hello from Predicate 1!"],
-        Some("Hello from Script!"),
-    )
-    .await
-    .expect("Failed to setup test context");
+    let mut ctx =
+        TestCtx::setup(true, &[PREDICATE_0_LOG, PREDICATE_1_LOG], Some(SCRIPT_LOG))
+            .await
+            .expect("Failed to setup test context");
 
     // When
     ctx.driver
@@ -331,21 +337,25 @@ async fn estimate_predicates__does_not_print_predicate_logs() {
 
     // Then
     let logs = ctx.extract_logs_so_far();
-    assert!(logs.predicates.is_empty(), "Found predicate logs in output");
-    assert!(logs.tx.is_empty(), "Found tx logs in output");
+    assert!(
+        logs.verification.is_empty(),
+        "Found verification logs in output"
+    );
+    assert!(logs.execution.is_empty(), "Found execution logs in output");
+    assert!(logs.estimation[0].contains("[predicate 0"));
+    assert!(logs.estimation[0].contains(PREDICATE_0_LOG));
+    assert!(logs.estimation[1].contains("[predicate 1"));
+    assert!(logs.estimation[1].contains(PREDICATE_1_LOG));
 }
 
 #[tokio::test]
 async fn dry_run__produces_syscall_logs_for_both_script_and_predicates()
 -> anyhow::Result<()> {
     // Given
-    let mut ctx = TestCtx::setup(
-        true,
-        &["Hello from Predicate 0!", "Hello from Predicate 1!"],
-        Some("Hello from Script!"),
-    )
-    .await
-    .expect("Failed to setup test context");
+    let mut ctx =
+        TestCtx::setup(true, &[PREDICATE_0_LOG, PREDICATE_1_LOG], Some(SCRIPT_LOG))
+            .await
+            .expect("Failed to setup test context");
     ctx.driver
         .client
         .estimate_predicates(&mut ctx.tx)
@@ -360,30 +370,28 @@ async fn dry_run__produces_syscall_logs_for_both_script_and_predicates()
 
     let logs = ctx.extract_logs_so_far();
 
-    assert_eq!(logs.predicates.len(), 2, "Expected 2 predicate logs");
-    assert!(logs.predicates[0].contains("[predicate 0"));
-    assert!(logs.predicates[0].contains("Hello from Predicate 0!"));
-    assert!(logs.predicates[1].contains("[predicate 1"));
-    assert!(logs.predicates[1].contains("Hello from Predicate 1!"));
+    assert_eq!(logs.verification.len(), 2, "Expected 2 predicate logs");
+    assert!(logs.verification[0].contains("[predicate 0"));
+    assert!(logs.verification[0].contains(PREDICATE_0_LOG));
+    assert!(logs.verification[1].contains("[predicate 1"));
+    assert!(logs.verification[1].contains(PREDICATE_1_LOG));
 
-    assert_eq!(logs.tx.len(), 1, "Expected 1 tx log line");
-    assert!(logs.tx[0].contains("[script,"));
-    assert!(logs.tx[0].contains("Hello from Script!"));
+    assert_eq!(logs.execution.len(), 1, "Expected 1 tx log line");
+    assert!(logs.execution[0].contains("[script,"));
+    assert!(logs.execution[0].contains(SCRIPT_LOG));
+
+    assert_eq!(logs.estimation.len(), 2, "Expected 2 estimation logs");
 
     Ok(())
 }
 
 #[tokio::test]
-async fn submit_and_await_commit__produces_syscall_logs_for_both_script_and_predicates()
--> anyhow::Result<()> {
+async fn submit_and_await_commit__produces_syscall_logs_for_all() -> anyhow::Result<()> {
     // Given
-    let mut ctx = TestCtx::setup(
-        true,
-        &["Hello from Predicate 0!", "Hello from Predicate 1!"],
-        Some("Hello from Script!"),
-    )
-    .await
-    .expect("Failed to setup test context");
+    let mut ctx =
+        TestCtx::setup(true, &[PREDICATE_0_LOG, PREDICATE_1_LOG], Some(SCRIPT_LOG))
+            .await
+            .expect("Failed to setup test context");
     ctx.driver
         .client
         .estimate_predicates(&mut ctx.tx)
@@ -402,15 +410,21 @@ async fn submit_and_await_commit__produces_syscall_logs_for_both_script_and_pred
 
     let logs = ctx.extract_logs_so_far();
 
-    assert_eq!(logs.predicates.len(), 2, "Expected 2 predicate logs");
-    assert!(logs.predicates[0].contains("[predicate 0"));
-    assert!(logs.predicates[0].contains("Hello from Predicate 0!"));
-    assert!(logs.predicates[1].contains("[predicate 1"));
-    assert!(logs.predicates[1].contains("Hello from Predicate 1!"));
+    assert_eq!(logs.verification.len(), 2, "Expected 2 predicate logs");
+    assert!(logs.verification[0].contains("[predicate 0"));
+    assert!(logs.verification[0].contains(PREDICATE_0_LOG));
+    assert!(logs.verification[1].contains("[predicate 1"));
+    assert!(logs.verification[1].contains(PREDICATE_1_LOG));
 
-    assert_eq!(logs.tx.len(), 1, "Expected 1 tx log line");
-    assert!(logs.tx[0].contains("[script,"));
-    assert!(logs.tx[0].contains("Hello from Script!"));
+    assert_eq!(logs.execution.len(), 1, "Expected 1 tx log line");
+    assert!(logs.execution[0].contains("[script,"));
+    assert!(logs.execution[0].contains(SCRIPT_LOG));
+
+    assert_eq!(logs.estimation.len(), 2, "Expected 2 predicate logs");
+    assert!(logs.estimation[0].contains("[predicate 0"));
+    assert!(logs.estimation[0].contains(PREDICATE_0_LOG));
+    assert!(logs.estimation[1].contains("[predicate 1"));
+    assert!(logs.estimation[1].contains(PREDICATE_1_LOG));
 
     Ok(())
 }
@@ -440,12 +454,12 @@ async fn submit_and_await_commit__syscall_logs_allow_special_characters()
 
     let logs = ctx.extract_logs_so_far();
 
-    assert_eq!(logs.predicates.len(), 2, "Expected 2 predicate log lines");
-    assert!(logs.predicates[0].contains("[predicate 0"));
-    assert!(logs.predicates[0].contains("] stdout: Special"));
-    assert!(logs.predicates[1].contains("Characters:€π≈!"));
+    assert_eq!(logs.verification.len(), 2, "Expected 2 predicate log lines");
+    assert!(logs.verification[0].contains("[predicate 0"));
+    assert!(logs.verification[0].contains("] stdout: Special"));
+    assert!(logs.verification[1].contains("Characters:€π≈!"));
 
-    assert!(logs.tx.is_empty(), "Expected no tx logs");
+    assert!(logs.execution.is_empty(), "Expected no execution logs");
 
     Ok(())
 }
@@ -470,8 +484,12 @@ async fn dry_run__syscall_logs_are_not_printed_when_none_are_present()
     result.expect_err("Transaction execution should fail");
 
     let logs = ctx.extract_logs_so_far();
-    assert!(logs.predicates.is_empty(), "Expected no predicate logs");
-    assert!(logs.tx.is_empty(), "Expected no tx logs");
+    assert!(
+        logs.verification.is_empty(),
+        "Expected no verification logs"
+    );
+    assert!(logs.execution.is_empty(), "Expected no execution logs");
+    assert!(logs.estimation.is_empty(), "Expected no estimation logs");
 
     Ok(())
 }
@@ -500,8 +518,12 @@ async fn submit_and_await_commit__syscall_logs_are_not_printed_when_none_are_pre
     result.expect_err("Transaction execution should fail");
 
     let logs = ctx.extract_logs_so_far();
-    assert!(logs.predicates.is_empty(), "Expected no predicate logs");
-    assert!(logs.tx.is_empty(), "Expected no tx logs");
+    assert!(
+        logs.verification.is_empty(),
+        "Expected no verification logs"
+    );
+    assert!(logs.execution.is_empty(), "Expected no execution logs");
+    assert!(logs.estimation.is_empty(), "Expected no estimation logs");
 
     Ok(())
 }
@@ -525,8 +547,12 @@ async fn dry_run__syscall_logs_cause_error_when_not_enabled() -> anyhow::Result<
     result.expect_err("Transaction execution should fail");
 
     let logs = ctx.extract_logs_so_far();
-    assert!(logs.predicates.is_empty(), "Expected no predicate logs");
-    assert!(logs.tx.is_empty(), "Expected no tx logs");
+    assert!(
+        logs.verification.is_empty(),
+        "Expected no verification logs"
+    );
+    assert!(logs.execution.is_empty(), "Expected no execution logs");
+    assert!(logs.estimation.is_empty(), "Expected no estimation logs");
 
     Ok(())
 }
@@ -555,8 +581,12 @@ async fn submit_and_await_commit__syscall_logs_cause_error_when_not_enabled()
     result.expect_err("Transaction execution should fail");
 
     let logs = ctx.extract_logs_so_far();
-    assert!(logs.predicates.is_empty(), "Expected no predicate logs");
-    assert!(logs.tx.is_empty(), "Expected no tx logs");
+    assert!(
+        logs.verification.is_empty(),
+        "Expected no verification logs"
+    );
+    assert!(logs.execution.is_empty(), "Expected no execution logs");
+    assert!(logs.estimation.is_empty(), "Expected no estimation logs");
 
     Ok(())
 }

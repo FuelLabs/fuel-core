@@ -68,7 +68,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     iter::IterDirection,
 };
-use fuel_core_syscall::handlers::ignore::PossiblyIgnoreEcal;
+use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
@@ -525,11 +525,7 @@ impl TxQuery {
 
         let tx = FuelTx::from_bytes(&tx.0)?;
 
-        let config = ctx.data_unchecked::<GraphQLConfig>();
-
-        let tx = ctx
-            .estimate_predicates(tx, query, config.allow_syscall)
-            .await?;
+        let tx = ctx.estimate_predicates(tx, query).await?;
         let chain_id = ctx
             .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params()
@@ -658,13 +654,9 @@ impl TxMutation {
         let txpool = ctx.data_unchecked::<TxPool>();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
 
-        let config = ctx.data_unchecked::<GraphQLConfig>();
-
         if estimate_predicates.unwrap_or(false) {
             let query = ctx.read_view()?.into_owned();
-            tx = ctx
-                .estimate_predicates(tx, query, config.allow_syscall)
-                .await?;
+            tx = ctx.estimate_predicates(tx, query).await?;
         }
 
         txpool
@@ -811,13 +803,9 @@ async fn submit_and_await_status<'a>(
     let mut tx = FuelTx::from_bytes(&tx.0)?;
     let tx_id = tx.id(&params.chain_id());
 
-    let config = ctx.data_unchecked::<GraphQLConfig>();
-
     if estimate_predicates {
         let query = ctx.read_view()?.into_owned();
-        tx = ctx
-            .estimate_predicates(tx, query, config.allow_syscall)
-            .await?;
+        tx = ctx.estimate_predicates(tx, query).await?;
     }
 
     let subscription = tx_status_manager.tx_update_subscribe(tx_id).await?;
@@ -991,7 +979,6 @@ pub trait ContextExt {
         &self,
         tx: FuelTx,
         query: impl PredicateStorageRequirements + Send + Sync + 'static,
-        allow_syscall: bool,
     ) -> impl Future<Output = anyhow::Result<FuelTx>> + Send;
 }
 
@@ -1018,7 +1005,6 @@ impl ContextExt for Context<'_> {
         &self,
         mut tx: FuelTx,
         query: impl PredicateStorageRequirements + Send + Sync + 'static,
-        allow_syscall: bool,
     ) -> anyhow::Result<FuelTx> {
         let mut has_predicates = false;
 
@@ -1040,17 +1026,23 @@ impl ContextExt for Context<'_> {
         let memory_pool = self.data_unchecked::<SharedMemoryPool>();
         let memory = memory_pool.get_memory().await;
 
+        let config = self.data_unchecked::<GraphQLConfig>();
+        let allow_syscall = config.allow_syscall;
+
         let parameters = CheckPredicateParams::from(params.as_ref());
         let tx = tokio_rayon::spawn_fifo(move || {
-            let result = tx.estimate_predicates_ecal(
-                &parameters,
-                memory,
-                &query,
-                if allow_syscall {
-                    PossiblyIgnoreEcal::Ignore
-                } else {
-                    PossiblyIgnoreEcal::Error
-                },
+            let ecal = EcalLogCollector {
+                enabled: allow_syscall,
+                ..Default::default()
+            };
+
+            let chain_id = params.chain_id();
+
+            let result =
+                tx.estimate_predicates_ecal(&parameters, memory, &query, ecal.clone());
+
+            ecal.maybe_print_logs(
+                tracing::info_span!("estimation", tx_id = % &tx.id(&chain_id)),
             );
             result.map(|_| tx)
         })

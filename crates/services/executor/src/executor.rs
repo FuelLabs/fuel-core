@@ -32,10 +32,7 @@ use fuel_core_storage::{
     },
     vm_storage::VmStorage,
 };
-use fuel_core_syscall::handlers::log_collector::{
-    EcalLogCollector,
-    maybe_print_logs,
-};
+use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -1802,9 +1799,8 @@ where
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
 
         // Note that the code above only executes predicates if the txpool didn't do so already.
-        maybe_print_logs(
-            &ecal_handler.logs.lock().clone(),
-            tracing::info_span!("predicate_logs", tx_id = % &checked_tx.id()),
+        ecal_handler.maybe_print_logs(
+            tracing::info_span!("verification", tx_id = % &checked_tx.id()),
         );
 
         self.verify_inputs_exist_and_values_match(
@@ -1865,14 +1861,19 @@ where
 
         let mut reverted;
 
+        let ecal = EcalLogCollector {
+            enabled: self.options.allow_syscall,
+            ..Default::default()
+        };
+
         let (state, mut tx, receipts) = if !self.options.dry_run {
             let mut vm = Interpreter::<_, _, _, EcalLogCollector,
-                verification::Normal>::with_storage(
+                verification::Normal>::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
+                ecal.clone(),
             );
-            vm.ecal_state_mut().enabled = self.options.allow_syscall;
 
             let vm_result: StateTransition<_> = vm
                 .transact(ready_tx)
@@ -1881,11 +1882,6 @@ where
                     transaction_id: tx_id,
                 })?
                 .into();
-
-            maybe_print_logs(
-                &vm.ecal_state().logs.lock().clone(),
-                tracing::info_span!("tx_logs", tx_id = % tx_id),
-            );
 
             reverted = vm_result.should_revert();
 
@@ -1897,12 +1893,12 @@ where
                 _,
                 EcalLogCollector,
                 verification::AttemptContinue,
-            >::with_storage(
+            >::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
+                ecal.clone(),
             );
-            vm.ecal_state_mut().enabled = self.options.allow_syscall;
 
             let vm_result: StateTransition<_> = vm
                 .transact(ready_tx)
@@ -1911,11 +1907,6 @@ where
                     transaction_id: tx_id,
                 })?
                 .into();
-
-            maybe_print_logs(
-                &vm.ecal_state().logs.lock().clone(),
-                tracing::info_span!("tx_logs", tx_id = % tx_id),
-            );
 
             reverted = vm_result.should_revert();
 
@@ -1947,6 +1938,8 @@ where
 
             (state, tx, receipts)
         };
+
+        ecal.maybe_print_logs(tracing::info_span!("execution", tx_id = % tx_id));
 
         #[cfg(debug_assertions)]
         {

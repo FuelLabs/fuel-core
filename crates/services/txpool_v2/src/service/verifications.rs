@@ -13,10 +13,7 @@ use crate::{
     service::memory::MemoryPool,
 };
 use fuel_core_storage::transactional::AtomicView;
-use fuel_core_syscall::handlers::log_collector::{
-    EcalLogCollector,
-    maybe_print_logs,
-};
+use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
@@ -208,10 +205,8 @@ impl InputDependenciesVerifiedTx {
 
             tx = tx.check_predicates(&parameters, memory, view, ecal_handler.clone())?;
 
-            maybe_print_logs(
-                &ecal_handler.logs.lock(),
-                tracing::info_span!("predicate_logs", tx_id = % tx.id()),
-            );
+            ecal_handler
+                .maybe_print_logs(tracing::info_span!("verification", tx_id = % tx.id()));
 
             debug_assert!(tx.checks().contains(Checks::all()));
         }
