@@ -8,6 +8,7 @@ use fuel_core_services::{
     StateWatcher,
     TaskNextAction,
     try_or_continue,
+    try_or_stop,
 };
 use fuel_core_storage::{
     self,
@@ -18,7 +19,10 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    fuel_tx::TxId,
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     fuel_types::BlockHeight,
 };
 use tokio::sync::mpsc::Sender;
@@ -27,8 +31,8 @@ pub struct SyncTask<Serializer, DB> {
     serializer: Serializer,
     block_return_sender: Sender<BlockSourceEvent>,
     db: DB,
-    db_starting_height: BlockHeight,
-    db_ending_height: Option<BlockHeight>,
+    next_height: BlockHeight,
+    maybe_stop_height: Option<BlockHeight>,
     new_ending_height: tokio::sync::oneshot::Receiver<BlockHeight>,
 }
 
@@ -51,37 +55,27 @@ where
             serializer,
             block_return_sender: block_return,
             db,
-            db_starting_height,
-            db_ending_height,
+            next_height: db_starting_height,
+            maybe_stop_height: db_ending_height,
             new_ending_height,
         }
     }
 
-    async fn check_for_new_end(&mut self) -> Option<BlockHeight> {
-        self.new_ending_height.try_recv().ok()
+    async fn maybe_update_stop_height(&mut self) {
+        if let Some(last_height) = self.new_ending_height.try_recv().ok() {
+            tracing::info!("updating last height to {}", last_height);
+            self.maybe_stop_height = Some(last_height);
+        }
     }
 
-    async fn get_block(
-        &mut self,
+    fn get_block(
+        &self,
         height: &BlockHeight,
     ) -> Result<Option<fuel_core_types::blockchain::block::Block>, E> {
         let maybe_block = StorageInspect::<FuelBlocks>::get(&self.db, height)?;
         if let Some(block) = maybe_block {
             let tx_ids = block.transactions();
-            let mut txs = Vec::new();
-            for tx_id in tx_ids {
-                let tx_res = StorageInspect::<Transactions>::get(&self.db, &tx_id);
-                match tx_res {
-                    Ok(Some(tx)) => {
-                        tracing::debug!("found tx id: {:?}", tx_id);
-                        txs.push(tx.into_owned());
-                    }
-                    Ok(None) => {
-                        return Ok(None);
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
+            let txs = self.get_txs(tx_ids)?;
             let block =
                 <fuel_core_types::blockchain::block::Block<TxId> as Clone>::clone(&block)
                     .uncompress(txs);
@@ -89,6 +83,22 @@ where
         } else {
             Ok(None)
         }
+    }
+
+    fn get_txs(&self, tx_ids: &[TxId]) -> Result<Vec<Transaction>, E> {
+        let mut txs = Vec::new();
+        for tx_id in tx_ids {
+            match StorageInspect::<Transactions>::get(&self.db, &tx_id)? {
+                Some(tx) => {
+                    tracing::debug!("found tx id: {:?}", tx_id);
+                    txs.push(tx.into_owned());
+                }
+                None => {
+                    return Ok(vec![]);
+                }
+            }
+        }
+        Ok(txs)
     }
 }
 
@@ -102,41 +112,30 @@ where
 {
     // TODO: This is synchronous and then just ends. What do we want to do when this is done?
     async fn run(&mut self, _watcher: &mut StateWatcher) -> TaskNextAction {
-        if let Some(new_end) = self.check_for_new_end().await {
-            self.db_ending_height = Some(new_end);
-        }
-        if let Some(current_end) = self.db_ending_height {
-            if self.db_starting_height >= current_end {
-                tracing::info!("reached end height {}, stopping sync task", current_end);
+        self.maybe_update_stop_height().await;
+        if let Some(last_height) = self.maybe_stop_height {
+            if self.next_height >= last_height {
+                tracing::info!("reached end height {}, stopping sync task", last_height);
                 return TaskNextAction::Stop;
             }
         }
-        let next_height = self.db_starting_height;
-        match self.get_block(&next_height).await {
-            Ok(Some(block)) => {
-                let res = self.serializer.serialize_block(&block);
-                let block = try_or_continue!(res);
-                let event =
-                    BlockSourceEvent::OldBlock(BlockHeight::from(*next_height), block);
-                let res = self.block_return_sender.send(event).await;
-                try_or_continue!(res);
-                self.db_starting_height =
-                    BlockHeight::from((*next_height).saturating_add(1));
-                TaskNextAction::Continue
-            }
-            Ok(None) => {
-                tracing::warn!("no block found at height {:?}, retrying", next_height);
-                TaskNextAction::Continue
-            }
-            Err(e) => {
-                tracing::error!(
-                    "error fetching block at height {}: {:?}",
-                    next_height,
-                    e
-                );
-                TaskNextAction::Stop
-            }
+        let next_height = self.next_height;
+        let res = self.get_block(&next_height);
+        let maybe_block = try_or_stop!(res, |e| {
+            tracing::error!("error fetching block at height {}: {:?}", next_height, e);
+        });
+        if let Some(block) = maybe_block {
+            let res = self.serializer.serialize_block(&block);
+            let block = try_or_continue!(res);
+            let event =
+                BlockSourceEvent::OldBlock(BlockHeight::from(*next_height), block);
+            let res = self.block_return_sender.send(event).await;
+            try_or_continue!(res);
+            self.next_height = BlockHeight::from((*next_height).saturating_add(1));
+        } else {
+            tracing::warn!("no block found at height {:?}, retrying", next_height);
         }
+        TaskNextAction::Continue
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
