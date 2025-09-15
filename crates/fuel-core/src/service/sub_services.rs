@@ -11,6 +11,7 @@ use fuel_core_gas_price_service::v1::{
         BlockCommitterHttpApi,
     },
     metadata::V1AlgorithmConfig,
+    service::SharedData,
     uninitialized_task::new_gas_price_service_v1,
 };
 
@@ -264,7 +265,11 @@ pub fn init_sub_services(
         da_source,
         database.on_chain().clone(),
     )?;
-    let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
+    let SharedData {
+        gas_price_algo,
+        latest_gas_price,
+        ..
+    } = gas_price_service_v1.shared.clone();
     let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
         latest_gas_price,
         DEFAULT_GAS_PRICE_CHANGE_PERCENT,
@@ -484,6 +489,7 @@ pub fn init_sub_services(
         config: config.clone(),
         tx_status_manager: tx_status_manager_adapter,
         compression: compression_service.as_ref().map(|c| c.shared.clone()),
+        gas_price_service: gas_price_service_v1.shared.clone(),
     };
 
     #[allow(unused_mut)]

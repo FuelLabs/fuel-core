@@ -10,5 +10,7 @@ pub mod ports;
 pub mod v0;
 
 pub mod common;
+
+pub mod sync_state;
 #[allow(unused)]
 pub mod v1;
