@@ -82,7 +82,11 @@ impl<S> StorageDB<S> {
                 self.orphaned_heights.insert(height);
             }
             Ordering::Less => {
-                // ignore duplicate or old block
+                tracing::warn!(
+                    "Received block at height {:?}, but the syncing is already at height {:?}. Ignoring block.",
+                    height,
+                    self.highest_contiguous_block
+                );
             }
         }
     }
