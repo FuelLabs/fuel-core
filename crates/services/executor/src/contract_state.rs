@@ -1,3 +1,7 @@
+#[cfg(feature = "std")]
+use std::collections::BTreeMap;
+
+#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{
     collections::BTreeMap,
     vec::Vec,

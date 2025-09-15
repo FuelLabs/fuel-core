@@ -9,6 +9,10 @@ use fuel_core_storage::{
 use fuel_core_types::services::executor::StorageReadReplayEvent;
 use parking_lot::Mutex;
 
+#[cfg(feature = "std")]
+use std::sync::Arc;
+
+#[cfg(not(feature = "std"))]
 use alloc::{
     sync::Arc,
     vec::Vec,
