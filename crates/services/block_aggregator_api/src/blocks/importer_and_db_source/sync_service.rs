@@ -127,7 +127,7 @@ where
     DB: StorageInspect<Transactions> + Send + 'static,
     <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
 {
-    const NAME: &'static str = "BlockSourceInnerService";
+    const NAME: &'static str = "BlockSourceSyncTask";
     type SharedData = ();
     type Task = Self;
     type TaskParams = ();

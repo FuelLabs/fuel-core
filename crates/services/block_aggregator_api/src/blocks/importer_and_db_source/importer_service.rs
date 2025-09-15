@@ -92,7 +92,7 @@ impl<Serializer> RunnableService for ImporterTask<Serializer>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
 {
-    const NAME: &'static str = "BlockSourceInnerService";
+    const NAME: &'static str = "BlockSourceImporterTask";
     type SharedData = ();
     type Task = Self;
     type TaskParams = ();
