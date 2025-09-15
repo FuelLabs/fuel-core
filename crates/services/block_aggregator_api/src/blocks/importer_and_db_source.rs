@@ -38,27 +38,29 @@ pub trait BlockSerializer {
     fn serialize_block(&self, block: &FuelBlock) -> Result<Block>;
 }
 
-pub struct ImporterAndDbSource<Serializer, DB>
+pub struct ImporterAndDbSource<Serializer, DB, E>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
     DB: Send + Sync + 'static,
-    DB: StorageInspect<FuelBlocks>,
-    DB: StorageInspect<Transactions>,
-    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
+    DB: StorageInspect<FuelBlocks, Error = E>,
+    DB: StorageInspect<Transactions, Error = E>,
+    E: std::fmt::Debug + Send,
 {
     // TODO: How to handle errors from these tasks?
     _importer_task: ServiceRunner<ImporterTask<Serializer>>,
     _sync_task: ServiceRunner<SyncTask<Serializer, DB>>,
     /// Receive blocks from the importer and sync tasks
     receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent>,
+
+    _error_marker: std::marker::PhantomData<E>,
 }
 
-impl<Serializer, DB> ImporterAndDbSource<Serializer, DB>
+impl<Serializer, DB, E> ImporterAndDbSource<Serializer, DB, E>
 where
     Serializer: BlockSerializer + Clone + Send + Sync + 'static,
-    DB: StorageInspect<FuelBlocks> + Send + Sync,
-    DB: StorageInspect<Transactions> + Send + 'static,
-    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
+    DB: StorageInspect<FuelBlocks, Error = E> + Send + Sync,
+    DB: StorageInspect<Transactions, Error = E> + Send + 'static,
+    E: std::fmt::Debug + Send,
 {
     pub fn new(
         importer: BoxStream<SharedImportResult>,
@@ -92,17 +94,18 @@ where
             _importer_task: importer_runner,
             _sync_task: sync_runner,
             receiver,
+            _error_marker: std::marker::PhantomData,
         }
     }
 }
 
-impl<Serializer, DB> BlockSource for ImporterAndDbSource<Serializer, DB>
+impl<Serializer, DB, E> BlockSource for ImporterAndDbSource<Serializer, DB, E>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
     DB: Send + Sync,
-    DB: StorageInspect<FuelBlocks>,
-    DB: StorageInspect<Transactions>,
-    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
+    DB: StorageInspect<FuelBlocks, Error = E>,
+    DB: StorageInspect<Transactions, Error = E>,
+    E: std::fmt::Debug + Send + Sync,
 {
     async fn next_block(&mut self) -> Result<BlockSourceEvent> {
         tracing::debug!("awaiting next block");

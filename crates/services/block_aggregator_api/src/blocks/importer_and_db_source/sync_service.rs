@@ -32,12 +32,12 @@ pub struct SyncTask<Serializer, DB> {
     new_ending_height: tokio::sync::oneshot::Receiver<BlockHeight>,
 }
 
-impl<Serializer, DB> SyncTask<Serializer, DB>
+impl<Serializer, DB, E> SyncTask<Serializer, DB>
 where
     Serializer: BlockSerializer + Send,
-    DB: StorageInspect<FuelBlocks> + Send + 'static,
-    DB: StorageInspect<Transactions> + Send + 'static,
-    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
+    DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
+    DB: StorageInspect<Transactions, Error = E> + Send + 'static,
+    E: std::fmt::Debug + Send,
 {
     pub fn new(
         serializer: Serializer,
@@ -60,73 +60,83 @@ where
     async fn check_for_new_end(&mut self) -> Option<BlockHeight> {
         self.new_ending_height.try_recv().ok()
     }
+
+    async fn get_block(
+        &mut self,
+        height: &BlockHeight,
+    ) -> Result<Option<fuel_core_types::blockchain::block::Block>, E> {
+        let maybe_block = StorageInspect::<FuelBlocks>::get(&self.db, height)?;
+        if let Some(block) = maybe_block {
+            let tx_ids = block.transactions();
+            let mut txs = Vec::new();
+            for tx_id in tx_ids {
+                let tx_res = StorageInspect::<Transactions>::get(&self.db, &tx_id);
+                match tx_res {
+                    Ok(Some(tx)) => {
+                        tracing::debug!("found tx id: {:?}", tx_id);
+                        txs.push(tx.into_owned());
+                    }
+                    Ok(None) => {
+                        return Ok(None);
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            let block =
+                <fuel_core_types::blockchain::block::Block<TxId> as Clone>::clone(&block)
+                    .uncompress(txs);
+            Ok(Some(block))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
-impl<Serializer, DB> RunnableTask for SyncTask<Serializer, DB>
+impl<Serializer, DB, E> RunnableTask for SyncTask<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + Sync,
     DB: Send + Sync + 'static,
-    DB: StorageInspect<FuelBlocks> + Send + 'static,
-    DB: StorageInspect<Transactions> + Send + 'static,
-    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
+    DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
+    DB: StorageInspect<Transactions, Error = E> + Send + 'static,
+    E: std::fmt::Debug + Send,
 {
     // TODO: This is synchronous and then just ends. What do we want to do when this is done?
     async fn run(&mut self, _watcher: &mut StateWatcher) -> TaskNextAction {
-        let mut height = self.db_starting_height;
-        let mut end = self.db_ending_height;
-        loop {
-            if let Some(new_end) = self.check_for_new_end().await {
-                end = Some(new_end);
-            }
-            if let Some(current_end) = end {
-                if height >= current_end {
-                    tracing::info!(
-                        "reached end height {}, stopping sync task",
-                        current_end
-                    );
-                    break;
-                }
-            }
-            let res = StorageInspect::<FuelBlocks>::get(&self.db, &height);
-            match res {
-                Ok(Some(compressed_block)) => {
-                    tracing::debug!("found block at height {}, syncing", height);
-                    let tx_ids = compressed_block.transactions();
-                    let mut txs = Vec::new();
-                    for tx_id in tx_ids {
-                        let tx_res =
-                            StorageInspect::<Transactions>::get(&self.db, &tx_id);
-                        match tx_res {
-                            Ok(Some(tx)) => {
-                                tracing::debug!("found tx id: {:?}", tx_id);
-                                txs.push(tx.into_owned());
-                            }
-                            Ok(None) => {
-                                tracing::debug!("tx id not found in db: {:?}", tx_id);
-                            }
-                            Err(_) => {
-                                tracing::debug!("error while finding tx: {:?}", tx_id);
-                            }
-                        }
-                    }
-                    let block = <fuel_core_types::blockchain::block::Block<TxId> as Clone>::clone(&compressed_block).uncompress(txs);
-                    let res = self.serializer.serialize_block(&block);
-                    let block = try_or_continue!(res);
-                    let event =
-                        BlockSourceEvent::OldBlock(BlockHeight::from(*height), block);
-                    self.block_return_sender.send(event).await.unwrap();
-                }
-                Ok(None) => {
-                    tracing::warn!("no block found at height {}, skipping", height);
-                }
-                Err(e) => {
-                    tracing::error!("error fetching block at height {}: {:?}", height, e);
-                    return TaskNextAction::Stop;
-                }
-            }
-            height = BlockHeight::from((*height).saturating_add(1));
+        if let Some(new_end) = self.check_for_new_end().await {
+            self.db_ending_height = Some(new_end);
         }
-        TaskNextAction::Stop
+        if let Some(current_end) = self.db_ending_height {
+            if self.db_starting_height >= current_end {
+                tracing::info!("reached end height {}, stopping sync task", current_end);
+                return TaskNextAction::Stop;
+            }
+        }
+        let next_height = self.db_starting_height;
+        match self.get_block(&next_height).await {
+            Ok(Some(block)) => {
+                let res = self.serializer.serialize_block(&block);
+                let block = try_or_continue!(res);
+                let event =
+                    BlockSourceEvent::OldBlock(BlockHeight::from(*next_height), block);
+                let res = self.block_return_sender.send(event).await;
+                try_or_continue!(res);
+                self.db_starting_height =
+                    BlockHeight::from((*next_height).saturating_add(1));
+                TaskNextAction::Continue
+            }
+            Ok(None) => {
+                tracing::warn!("no block found at height {:?}, retrying", next_height);
+                TaskNextAction::Continue
+            }
+            Err(e) => {
+                tracing::error!(
+                    "error fetching block at height {}: {:?}",
+                    next_height,
+                    e
+                );
+                TaskNextAction::Stop
+            }
+        }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -135,13 +145,13 @@ where
 }
 
 #[async_trait::async_trait]
-impl<Serializer, DB> RunnableService for SyncTask<Serializer, DB>
+impl<Serializer, DB, E> RunnableService for SyncTask<Serializer, DB>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
     DB: Send + Sync + 'static,
-    DB: StorageInspect<FuelBlocks> + Send + 'static,
-    DB: StorageInspect<Transactions> + Send + 'static,
-    <DB as StorageInspect<FuelBlocks>>::Error: std::fmt::Debug + Send,
+    DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
+    DB: StorageInspect<Transactions, Error = E> + Send + 'static,
+    E: std::fmt::Debug + Send,
 {
     const NAME: &'static str = "BlockSourceSyncTask";
     type SharedData = ();
