@@ -110,7 +110,6 @@ where
     DB: StorageInspect<Transactions, Error = E> + Send + 'static,
     E: std::fmt::Debug + Send,
 {
-    // TODO: This is synchronous and then just ends. What do we want to do when this is done?
     async fn run(&mut self, _watcher: &mut StateWatcher) -> TaskNextAction {
         self.maybe_update_stop_height().await;
         if let Some(last_height) = self.maybe_stop_height {
