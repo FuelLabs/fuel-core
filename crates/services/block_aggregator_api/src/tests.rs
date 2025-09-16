@@ -2,8 +2,12 @@
 
 use super::*;
 use crate::{
+    api::BlockAggregatorQuery,
     blocks::Block,
-    result::Error,
+    result::{
+        Error,
+        Result,
+    },
 };
 use fuel_core_services::stream::BoxStream;
 use futures::StreamExt;
@@ -113,7 +117,7 @@ impl FakeBlockSource {
 
 impl BlockSource for FakeBlockSource {
     async fn next_block(&mut self) -> Result<(BlockHeight, Block)> {
-        self.blocks.recv().await.ok_or(Error::BlockSourceError)
+        self.blocks.recv().await.ok_or(Error::BlockSource)
     }
 
     async fn drain(&mut self) -> Result<()> {

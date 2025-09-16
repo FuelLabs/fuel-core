@@ -13,7 +13,7 @@ pub trait BlockSource: Send + Sync {
     fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Block {
     bytes: Bytes,
 }
