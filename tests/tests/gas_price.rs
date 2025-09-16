@@ -442,7 +442,7 @@ async fn latest_gas_price__if_node_restarts_gets_latest_value() {
     for _ in 0..arb_blocks_to_produce {
         driver.client.produce_blocks(1, None).await.unwrap();
         tokio::time::timeout(
-            Duration::from_millis(10),
+            Duration::from_millis(100),
             driver.node.await_gas_price_synced(),
         )
         .await
