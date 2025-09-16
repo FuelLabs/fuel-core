@@ -31,8 +31,7 @@ message BlockRangeRequest {
 }
 
 message Block {
-     uint32 height = 1;
-     bytes data = 2;
+     bytes data = 1;
 }
 
 service BlockAggregator {
