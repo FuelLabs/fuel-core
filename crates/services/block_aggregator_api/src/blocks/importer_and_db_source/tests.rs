@@ -2,7 +2,10 @@
 
 use super::*;
 use ::postcard::to_allocvec;
-use fuel_core_services::stream::IntoBoxStream;
+use fuel_core_services::stream::{
+    IntoBoxStream,
+    pending,
+};
 use fuel_core_storage::{
     StorageAsMut,
     column::Column as OnChainColumn,
@@ -13,6 +16,7 @@ use fuel_core_storage::{
         WriteTransaction,
     },
 };
+use futures::StreamExt;
 use std::collections::HashSet;
 
 use fuel_core_types::{
@@ -42,6 +46,11 @@ fn database() -> StorageTransaction<InMemoryStorage<OnChainColumn>> {
     InMemoryStorage::default().into_transaction()
 }
 
+// let block_stream = tokio_stream::iter(blocks).chain(pending()).into_boxed();
+fn stream_with_pending<T: Send + Sync + 'static>(items: Vec<T>) -> BoxStream<T> {
+    tokio_stream::iter(items).chain(pending()).into_boxed()
+}
+
 #[tokio::test]
 async fn next_block__gets_new_block_from_importer() {
     // given
@@ -57,7 +66,7 @@ async fn next_block__gets_new_block_from_importer() {
         .wrap(),
     );
     let blocks: Vec<SharedImportResult> = vec![import_result];
-    let block_stream = tokio_stream::iter(blocks).into_boxed();
+    let block_stream = tokio_stream::iter(blocks).chain(pending()).into_boxed();
     let serializer = MockSerializer;
     let db = database();
     let db_starting_height = BlockHeight::from(0u32);
@@ -193,7 +202,7 @@ async fn next_block__will_sync_blocks_from_db_after_receiving_height_from_new_en
         .wrap(),
     );
     let blocks: Vec<SharedImportResult> = vec![import_result];
-    let block_stream = tokio_stream::iter(blocks).into_boxed();
+    let block_stream = stream_with_pending(blocks);
     let db_starting_height = height1;
     let mut adapter = ImporterAndDbSource::new(
         block_stream,

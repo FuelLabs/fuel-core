@@ -109,10 +109,21 @@ where
 {
     async fn next_block(&mut self) -> Result<BlockSourceEvent> {
         tracing::debug!("awaiting next block");
-        self.receiver
-            .recv()
-            .await
-            .ok_or(Error::BlockSource(anyhow!("Block source channel closed")))
+        // self.receiver
+        //     .recv()
+        //     .await
+        //     .ok_or(Error::BlockSource(anyhow!("Block source channel closed")))
+        tokio::select! {
+            block_res = self.receiver.recv() => {
+                block_res.ok_or(Error::BlockSource(anyhow!("Block source channel closed")))
+            }
+            importer_error = self._importer_task.await_stop() => {
+                Err(Error::BlockSource(anyhow!("Importer task stopped unexpectedly: {:?}", importer_error)))
+            }
+            sync_error = self._sync_task.await_stop() => {
+                Err(Error::BlockSource(anyhow!("Sync task stopped unexpectedly: {:?}", sync_error)))
+            }
+        }
     }
 
     async fn drain(&mut self) -> Result<()> {

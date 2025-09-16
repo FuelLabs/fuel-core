@@ -114,8 +114,11 @@ where
         self.maybe_update_stop_height().await;
         if let Some(last_height) = self.maybe_stop_height {
             if self.next_height >= last_height {
-                tracing::info!("reached end height {}, stopping sync task", last_height);
-                return TaskNextAction::Stop;
+                tracing::info!(
+                    "reached end height {}, putting task into hibernation",
+                    last_height
+                );
+                futures::future::pending().await
             }
         }
         let next_height = self.next_height;
