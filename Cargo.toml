@@ -133,6 +133,7 @@ pretty_assertions = "1.4.0"
 primitive-types = { version = "0.12", default-features = false }
 prometheus-client = "0.22.0"
 proptest = "1.1"
+prost = "0.14.1"
 rand = "0.8"
 rayon = "1.10.0"
 # enable cookie store to support L7 sticky sessions
@@ -154,6 +155,9 @@ tokio = { version = "1.27", default-features = false }
 tokio-rayon = "2.1.0"
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", default-features = false }
+tonic = "0.14.2"
+tonic-prost = "0.14.2"
+tonic-prost-build = "0.14.2"
 tracing = "0.1"
 tracing-attributes = "0.1"
 tracing-subscriber = "0.3"

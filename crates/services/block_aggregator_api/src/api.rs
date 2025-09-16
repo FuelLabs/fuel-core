@@ -5,6 +5,8 @@ use crate::{
 use fuel_core_types::fuel_types::BlockHeight;
 use std::fmt;
 
+pub mod protobuf_adapter;
+
 /// The API for querying the block aggregator service.
 pub trait BlockAggregatorApi: Send + Sync {
     /// The type of the block range response.

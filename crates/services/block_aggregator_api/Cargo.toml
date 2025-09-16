@@ -13,6 +13,7 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 num_enum = { workspace = true }
+prost ={ workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true }
@@ -20,6 +21,8 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+tonic = { workspace = true }
+tonic-prost = { workspace = true }
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
@@ -28,3 +31,6 @@ fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
 postcard = { workspace = true }
 tokio-stream = { workspace = true }
 tracing-subscriber = { workspace = true }
+
+[build-dependencies]
+tonic-prost-build = { workspace = true }

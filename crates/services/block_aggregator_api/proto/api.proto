@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package blockaggregator;
+
+message BlockHeightRequest {}
+
+message BlockHeightResponse {
+  uint32 height = 1;
+}
+
+service BlockAggregator {
+  rpc GetBlockHeight (BlockHeightRequest) returns (BlockHeightResponse);
+}
