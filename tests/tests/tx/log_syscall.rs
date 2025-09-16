@@ -16,29 +16,26 @@ use rand::{
     SeedableRng,
     rngs::StdRng,
 };
-use std::{
-    process::{
-        Command,
-        Stdio,
+use std::process::Stdio;
+use tokio::{
+    io::{
+        AsyncBufReadExt,
+        BufReader,
     },
-    sync::mpsc::{
-        Receiver,
-        channel,
-    },
-    thread,
+    process::ChildStderr,
 };
 
 pub struct FuelCoreLogCapture {
     client: FuelClient,
-    child: std::process::Child,
-    _output_thread: thread::JoinHandle<()>,
-    output: Receiver<String>,
+    child: tokio::process::Child,
+    stderr: Option<ChildStderr>,
 }
+
 impl FuelCoreLogCapture {
     /// Starts a fuel-core process with the given extra arguments.
     /// Captures its stderr, and provides a client connected to it.
-    pub fn start(extra_args: &[&str]) -> Self {
-        let mut child = Command::new("cargo")
+    pub async fn start(extra_args: &[&str]) -> Self {
+        let mut child = tokio::process::Command::new("cargo")
             .args(&["run", "--bin", "fuel-core", "--", "run", "--port", "0"])
             .args(extra_args)
             .env("FUEL_TRACE", "1")
@@ -48,65 +45,65 @@ impl FuelCoreLogCapture {
             .spawn()
             .expect("failed to spawn process");
 
-        let (output_sender, output_receiver) = channel();
-        let (addr_sender, addr_receiver) = channel();
-
         let stderr = child.stderr.take().expect("stderr not captured");
-        let output_thread = thread::spawn(move || {
-            use std::io::{
-                BufRead,
-                BufReader,
-            };
-
+        let (addr, stderr) = tokio::spawn(async move {
             let re_addr =
                 regex::Regex::new(r"Binding GraphQL provider to (\S+)").unwrap();
 
-            // https://superuser.com/a/380778
-            let re_ansi_escape = regex::Regex::new(r"\x1b\[[0-9;]*[mGKHF]").unwrap();
-
             let reader = BufReader::new(stderr);
-            for line in reader.lines() {
-                let line = line.unwrap();
+            let mut lines = reader.lines();
+            while let Some(line) = lines.next_line().await.unwrap() {
                 eprintln!("{line}");
                 if let Some(m) = re_addr.captures(&line) {
-                    addr_sender.send(m[1].to_string()).unwrap();
+                    let stderr = lines.into_inner().into_inner();
+                    return (m[1].to_string(), stderr)
                 }
-
-                // Removes ANSI escape codes like colors.
-                // We don't want to enable any non-human-readable output, because
-                // the tests here ensure that some human-readable output is present.
-                // Assertions are easier to do without colors.
-                let line = re_ansi_escape.replace_all(&line, "").to_string();
-
-                output_sender.send(line).unwrap();
             }
-        });
+            panic!("Did not find address line in output");
+        })
+        .await
+        .unwrap();
 
-        let addr = addr_receiver.recv().unwrap();
         let client = FuelClient::new(format!("http://{}", addr)).unwrap();
 
         Self {
             child,
-            _output_thread: output_thread,
-            output: output_receiver,
+            stderr: Some(stderr),
             client,
         }
     }
 
     /// Reads output lines so far, non-blocking.
-    fn read_output_so_far(&self) -> Vec<String> {
-        let mut lines = Vec::new();
-        while let Ok(line) = self.output.try_recv() {
-            lines.push(line);
+    async fn read_output_so_far(mut self) -> Vec<String> {
+        self.child.kill().await.unwrap();
+        self.child.wait().await.unwrap();
+
+        let mut result = Vec::new();
+
+        let reader = BufReader::new(self.stderr.take().unwrap());
+        let mut lines = reader.lines();
+
+        // https://superuser.com/a/380778
+        let re_ansi_escape = regex::Regex::new(r"\x1b\[[0-9;]*[mGKHF]").unwrap();
+
+        while let Some(line) = lines.next_line().await.unwrap() {
+            eprintln!("{line}");
+            // Removes ANSI escape codes like colors.
+            // We don't want to enable any non-human-readable output, because
+            // the tests here ensure that some human-readable output is present.
+            // Assertions are easier to do without colors.
+            let line = re_ansi_escape.replace_all(&line, "").to_string();
+
+            result.push(line);
         }
-        lines
+
+        result
     }
 }
 
 impl Drop for FuelCoreLogCapture {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let _ = self.child.start_kill().unwrap();
     }
 }
 
@@ -235,7 +232,7 @@ impl TestCtx {
             args.push("--allow-syscall");
         }
 
-        let driver = FuelCoreLogCapture::start(&args);
+        let driver = FuelCoreLogCapture::start(&args).await;
 
         let chain_id = driver
             .client
@@ -254,7 +251,7 @@ impl TestCtx {
         })
     }
 
-    fn extract_logs_so_far(&self) -> Logs {
+    async fn extract_logs_so_far(self) -> Logs {
         let tx_id = self.tx_id;
         let anchor_verification_logs = format!("verification{{tx_id={tx_id}}}");
         let anchor_execution_logs = format!("execution{{tx_id={tx_id}}}");
@@ -267,7 +264,12 @@ impl TestCtx {
 
         let mut result = Logs::default();
 
-        let mut it = self.driver.read_output_so_far().into_iter().peekable();
+        let mut it = self
+            .driver
+            .read_output_so_far()
+            .await
+            .into_iter()
+            .peekable();
         loop {
             let Some(line) = it.next() else {
                 break;
@@ -336,7 +338,7 @@ async fn estimate_predicates__print_predicate_logs() {
         .unwrap();
 
     // Then
-    let logs = ctx.extract_logs_so_far();
+    let logs = ctx.extract_logs_so_far().await;
     assert!(
         logs.verification.is_empty(),
         "Found verification logs in output"
@@ -368,7 +370,7 @@ async fn dry_run__produces_syscall_logs_for_both_script_and_predicates()
     // Then
     result.expect("Transaction should be executed successfully");
 
-    let logs = ctx.extract_logs_so_far();
+    let logs = ctx.extract_logs_so_far().await;
 
     assert_eq!(logs.verification.len(), 2, "Expected 2 predicate logs");
     assert!(logs.verification[0].contains("[predicate 0"));
@@ -408,7 +410,7 @@ async fn submit_and_await_commit__produces_syscall_logs_for_all() -> anyhow::Res
     // Then
     result.expect("Transaction should be executed successfully");
 
-    let logs = ctx.extract_logs_so_far();
+    let logs = ctx.extract_logs_so_far().await;
 
     assert_eq!(logs.verification.len(), 2, "Expected 2 predicate logs");
     assert!(logs.verification[0].contains("[predicate 0"));
@@ -452,7 +454,7 @@ async fn submit_and_await_commit__syscall_logs_allow_special_characters()
     // Then
     result.expect("Transaction should be executed successfully");
 
-    let logs = ctx.extract_logs_so_far();
+    let logs = ctx.extract_logs_so_far().await;
 
     assert_eq!(logs.verification.len(), 2, "Expected 2 predicate log lines");
     assert!(logs.verification[0].contains("[predicate 0"));
@@ -483,7 +485,7 @@ async fn dry_run__syscall_logs_are_not_printed_when_none_are_present()
     // Then
     result.expect_err("Transaction execution should fail");
 
-    let logs = ctx.extract_logs_so_far();
+    let logs = ctx.extract_logs_so_far().await;
     assert!(
         logs.verification.is_empty(),
         "Expected no verification logs"
@@ -517,7 +519,7 @@ async fn submit_and_await_commit__syscall_logs_are_not_printed_when_none_are_pre
     // Then
     result.expect_err("Transaction execution should fail");
 
-    let logs = ctx.extract_logs_so_far();
+    let logs = ctx.extract_logs_so_far().await;
     assert!(
         logs.verification.is_empty(),
         "Expected no verification logs"
@@ -546,7 +548,7 @@ async fn dry_run__syscall_logs_cause_error_when_not_enabled() -> anyhow::Result<
     // Then
     result.expect_err("Transaction execution should fail");
 
-    let logs = ctx.extract_logs_so_far();
+    let logs = ctx.extract_logs_so_far().await;
     assert!(
         logs.verification.is_empty(),
         "Expected no verification logs"
@@ -580,7 +582,7 @@ async fn submit_and_await_commit__syscall_logs_cause_error_when_not_enabled()
     // Then
     result.expect_err("Transaction execution should fail");
 
-    let logs = ctx.extract_logs_so_far();
+    let logs = ctx.extract_logs_so_far().await;
     assert!(
         logs.verification.is_empty(),
         "Expected no verification logs"
