@@ -1,5 +1,22 @@
 syntax = "proto3";
 
+/*
+pub enum BlockAggregatorQuery<BlockRangeResponse> {
+    GetBlockRange {
+        first: BlockHeight,
+        last: BlockHeight,
+        response: tokio::sync::oneshot::Sender<BlockRangeResponse>,
+    },
+    GetCurrentHeight {
+        response: tokio::sync::oneshot::Sender<BlockHeight>,
+    },
+    // TODO: Do we need a way to unsubscribe or can we just see that the receiver is dropped?
+    NewBlockSubscription {
+        response: tokio::sync::mpsc::Sender<NewBlock>,
+    },
+}
+*/
+
 package blockaggregator;
 
 message BlockHeightRequest {}
@@ -8,6 +25,17 @@ message BlockHeightResponse {
   uint32 height = 1;
 }
 
+message BlockRangeRequest {
+  uint32 start = 1;
+  uint32 end = 2;
+}
+
+message Block {
+     uint32 height = 1;
+     bytes data = 2;
+}
+
 service BlockAggregator {
   rpc GetBlockHeight (BlockHeightRequest) returns (BlockHeightResponse);
+  rpc GetBlockRange (BlockRangeRequest) returns (stream Block);
 }

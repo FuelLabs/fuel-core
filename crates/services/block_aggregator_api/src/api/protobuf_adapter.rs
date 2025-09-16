@@ -7,10 +7,15 @@ use crate::{
     result::Result,
 };
 use async_trait::async_trait;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::Status;
 
 tonic::include_proto!("blockaggregator");
 
-use crate::result::Error;
+use crate::{
+    api::protobuf_adapter,
+    result::Error,
+};
 use block_aggregator_server::BlockAggregator;
 
 pub struct Server {
@@ -27,6 +32,7 @@ impl Server {
 
 #[async_trait]
 impl BlockAggregator for Server {
+    type GetBlockRangeStream = ReceiverStream<Result<protobuf_adapter::Block, Status>>;
     async fn get_block_height(
         &self,
         request: tonic::Request<BlockHeightRequest>,
@@ -47,6 +53,13 @@ impl BlockAggregator for Server {
                 e
             ))),
         }
+    }
+
+    async fn get_block_range(
+        &self,
+        request: tonic::Request<BlockRangeRequest>,
+    ) -> Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status> {
+        todo!()
     }
 }
 
@@ -99,7 +112,7 @@ mod tests {
     use fuel_core_types::fuel_types::BlockHeight;
 
     #[tokio::test]
-    async fn await_query__client_receives_expected_value() {
+    async fn await_query__get_current_height__client_receives_expected_value() {
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::DEBUG)
             .init();
@@ -136,5 +149,10 @@ mod tests {
 
         // assert client received expected value
         assert_eq!(res.into_inner().height, 42);
+    }
+
+    #[tokio::test]
+    async fn await_query__get_block_range__client_receives_expected_value() {
+        todo!()
     }
 }
