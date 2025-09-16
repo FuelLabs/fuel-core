@@ -46,9 +46,8 @@ where
     DB: StorageInspect<Transactions, Error = E>,
     E: std::fmt::Debug + Send,
 {
-    // TODO: How to handle errors from these tasks?
-    _importer_task: ServiceRunner<ImporterTask<Serializer>>,
-    _sync_task: ServiceRunner<SyncTask<Serializer, DB>>,
+    importer_task: ServiceRunner<ImporterTask<Serializer>>,
+    sync_task: ServiceRunner<SyncTask<Serializer, DB>>,
     /// Receive blocks from the importer and sync tasks
     receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent>,
 
@@ -91,8 +90,8 @@ where
         let sync_runner = ServiceRunner::new(sync_task);
         sync_runner.start().unwrap();
         Self {
-            _importer_task: importer_runner,
-            _sync_task: sync_runner,
+            importer_task: importer_runner,
+            sync_task: sync_runner,
             receiver,
             _error_marker: std::marker::PhantomData,
         }
@@ -117,10 +116,10 @@ where
             block_res = self.receiver.recv() => {
                 block_res.ok_or(Error::BlockSource(anyhow!("Block source channel closed")))
             }
-            importer_error = self._importer_task.await_stop() => {
+            importer_error = self.importer_task.await_stop() => {
                 Err(Error::BlockSource(anyhow!("Importer task stopped unexpectedly: {:?}", importer_error)))
             }
-            sync_error = self._sync_task.await_stop() => {
+            sync_error = self.sync_task.await_stop() => {
                 Err(Error::BlockSource(anyhow!("Sync task stopped unexpectedly: {:?}", sync_error)))
             }
         }
