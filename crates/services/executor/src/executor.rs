@@ -1635,6 +1635,8 @@ where
             outputs.as_slice(),
         )?;
         self.compute_state_of_not_utxo_outputs(
+            *coinbase_id,
+            core::slice::from_ref(input),
             outputs.as_mut_slice(),
             &record,
             &changes,
@@ -1654,6 +1656,7 @@ where
 
     fn update_tx_outputs<Tx>(
         &self,
+        tx_id: TxId,
         tx: &mut Tx,
         record: &[StorageReadReplayEvent],
         changes: &Changes,
@@ -1662,7 +1665,13 @@ where
         Tx: ExecutableTransaction,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(&mut outputs, record, changes)?;
+        self.compute_state_of_not_utxo_outputs(
+            tx_id,
+            tx.inputs(),
+            &mut outputs,
+            record,
+            changes,
+        )?;
         *tx.outputs_mut() = outputs;
         Ok(())
     }
@@ -1954,7 +1963,7 @@ where
             storage_tx.commit_changes(changes.clone())?;
         }
 
-        self.update_tx_outputs(&mut tx, &record, &changes)?;
+        self.update_tx_outputs(tx_id, &mut tx, &record, &changes)?;
         Ok((reverted, state, tx, receipts.to_vec()))
     }
 
@@ -2193,8 +2202,10 @@ where
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
 
-                    *balance_root = compute_balances_hash(record, &Changes::default());
-                    *state_root = compute_state_hash(record, &Changes::default());
+                    *balance_root =
+                        compute_balances_hash(contract_id, record, &Changes::default());
+                    *state_root =
+                        compute_state_hash(contract_id, record, &Changes::default());
                 }
                 _ => {}
             }
@@ -2209,14 +2220,31 @@ where
     /// In validation mode, compares the outputs with computed inputs.
     fn compute_state_of_not_utxo_outputs(
         &self,
+        tx_id: TxId,
+        inputs: &[Input],
         outputs: &mut [Output],
         record: &[StorageReadReplayEvent],
         changes: &Changes,
     ) -> ExecutorResult<()> {
         for output in outputs {
             if let Output::Contract(contract_output) = output {
-                contract_output.balance_root = compute_balances_hash(record, changes);
-                contract_output.state_root = compute_state_hash(record, changes);
+                let contract_id =
+                    if let Some(Input::Contract(input::contract::Contract {
+                        contract_id,
+                        ..
+                    })) = inputs.get(contract_output.input_index as usize)
+                    {
+                        contract_id
+                    } else {
+                        return Err(ExecutorError::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        })
+                    };
+
+                contract_output.balance_root =
+                    compute_balances_hash(contract_id, record, changes);
+                contract_output.state_root =
+                    compute_state_hash(contract_id, record, changes);
             }
         }
         Ok(())
