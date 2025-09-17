@@ -171,7 +171,7 @@ async fn can_build_message_proof() {
             block_height: message_block_height,
             time: Tai64::UNIX_EPOCH,
             result: None,
-            receipts,
+            receipts: std::sync::Arc::new(receipts),
             total_gas: 0,
             total_fee: 0,
         })

@@ -26,10 +26,9 @@ pub fn create_contract<R: Rng>(
     rng: &mut R,
 ) -> (Create, ContractId) {
     let salt: Salt = rng.r#gen();
-    let contract = Contract::from(contract_code);
-    let root = contract.root();
+    let root = Contract::root_from_code(contract_code);
     let state_root = Contract::default_state_root();
-    let contract_id = contract.id(&salt, &root, &state_root);
+    let contract_id = Contract::id(&salt, &root, &state_root);
 
     let tx = TransactionBuilder::create(contract_code.into(), salt, Default::default())
         .add_fee_input()

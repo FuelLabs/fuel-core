@@ -36,7 +36,6 @@ use fuel_core_types::{
     },
     fuel_tx::{
         ConsensusParameters,
-        Contract,
         StorageSlot,
     },
     fuel_types::{
@@ -327,7 +326,7 @@ where
     fn deploy_contract_with_id(
         &mut self,
         slots: &[StorageSlot],
-        contract: &Contract,
+        contract: &[u8],
         id: &ContractId,
     ) -> Result<(), Self::DataError> {
         self.storage_contract_insert(id, contract)?;

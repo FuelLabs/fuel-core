@@ -4,10 +4,7 @@ use crate::{
 };
 use fuel_core_types::{
     fuel_types::BlobId,
-    fuel_vm::{
-        BlobBytes,
-        BlobData,
-    },
+    fuel_vm::BlobData,
 };
 use serde::{
     Deserialize,
@@ -51,7 +48,7 @@ impl From<BlobConfig> for TableEntry<BlobData> {
     fn from(config: BlobConfig) -> Self {
         Self {
             key: config.blob_id,
-            value: BlobBytes(config.payload),
+            value: config.payload.into(),
         }
     }
 }

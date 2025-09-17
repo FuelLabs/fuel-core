@@ -197,7 +197,7 @@ impl From<&fuel_tx::Input> for Input {
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
                 predicate: HexString(predicate.to_vec()),
-                predicate_data: HexString(predicate_data.clone()),
+                predicate_data: HexString(predicate_data.clone().into_inner()),
             }),
             fuel_tx::Input::Contract(contract) => Input::Contract(contract.into()),
             fuel_tx::Input::MessageCoinSigned(
@@ -240,7 +240,7 @@ impl From<&fuel_tx::Input> for Input {
                 predicate_gas_used: (*predicate_gas_used).into(),
                 data: HexString(Default::default()),
                 predicate: HexString(predicate.to_vec()),
-                predicate_data: HexString(predicate_data.clone()),
+                predicate_data: HexString(predicate_data.clone().into_inner()),
             }),
             fuel_tx::Input::MessageDataSigned(
                 fuel_tx::input::message::MessageDataSigned {
@@ -259,7 +259,7 @@ impl From<&fuel_tx::Input> for Input {
                 nonce: Nonce(*nonce),
                 witness_index: *witness_index,
                 predicate_gas_used: 0.into(),
-                data: HexString(data.clone()),
+                data: HexString(data.clone().into_inner()),
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
             }),
@@ -282,9 +282,9 @@ impl From<&fuel_tx::Input> for Input {
                 nonce: Nonce(*nonce),
                 witness_index: Default::default(),
                 predicate_gas_used: (*predicate_gas_used).into(),
-                data: HexString(data.clone()),
+                data: HexString(data.clone().into_inner()),
                 predicate: HexString(predicate.to_vec()),
-                predicate_data: HexString(predicate_data.clone()),
+                predicate_data: HexString(predicate_data.clone().into_inner()),
             }),
         }
     }

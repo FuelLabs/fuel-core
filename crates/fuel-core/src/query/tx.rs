@@ -21,9 +21,10 @@ use futures::{
     StreamExt,
     TryStreamExt,
 };
+use std::sync::Arc;
 
 impl ReadView {
-    pub fn receipts(&self, tx_id: &TxId) -> StorageResult<Vec<Receipt>> {
+    pub fn receipts(&self, tx_id: &TxId) -> StorageResult<Arc<Vec<Receipt>>> {
         let status = self.tx_status(tx_id)?;
 
         let receipts = match status {

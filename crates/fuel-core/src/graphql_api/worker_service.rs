@@ -493,12 +493,12 @@ where
                         //  from the `fuel-tx` crate.
                         let salt = tx.salt();
                         let storage_slots = tx.storage_slots();
-                        let contract = Contract::try_from(tx)
-                            .map_err(|e| anyhow::anyhow!("{:?}", e))?;
-                        let contract_root = contract.root();
+                        let contract =
+                            tx.bytecode().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                        let contract_root = Contract::root_from_code(contract);
                         let state_root =
                             Contract::initial_state_root(storage_slots.iter());
-                        Ok::<_, StorageError>(contract.id(
+                        Ok::<_, StorageError>(Contract::id(
                             salt,
                             &contract_root,
                             &state_root,

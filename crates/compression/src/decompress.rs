@@ -66,7 +66,7 @@ pub mod fault_proving {
 
 #[cfg(feature = "fault-proving")]
 use fault_proving::DecompressDb;
-
+use fuel_core_types::fuel_types::bytes::Bytes;
 #[cfg(not(feature = "fault-proving"))]
 use not_fault_proving::DecompressDb;
 
@@ -254,7 +254,7 @@ where
         };
 
         if let Some(data) = message.data.as_mut_field() {
-            data.clone_from(&msg.data)
+            *data = Bytes::new(msg.data.clone());
         }
 
         Ok(message)
