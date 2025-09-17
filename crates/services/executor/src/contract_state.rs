@@ -28,6 +28,8 @@ use sha2::{
     Sha256,
 };
 
+/// Computes a hash of all contract balances that were read or modified.
+/// The hash is not dependent on the order of reads or writes.
 /// Leave `changes` empty when there are no changes yet, i.e. when computing state before execution
 pub fn compute_balances_hash(
     record: &[StorageReadReplayEvent],
@@ -93,6 +95,8 @@ pub fn compute_balances_hash(
     Bytes32::from(digest)
 }
 
+/// Computes a hash of all contract state slots that were read or modified.
+/// The hash is not dependent on the order of reads or writes.
 /// Leave `changes` empty when there are no changes yet, i.e. when computing state before execution
 pub fn compute_state_hash(
     record: &[StorageReadReplayEvent],
