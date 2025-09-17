@@ -249,8 +249,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
         instructions.extend(vec![
             op::movi(0x13, size),
             op::ldc(CONTRACT_ID_REGISTER, RegId::ZERO, 0x13, 0),
-            op::cfsi(size),
-            op::jmpb(RegId::ZERO, 1),
+            op::jmpb(RegId::ZERO, 0),
         ]);
         let id = format!("contract/ldc {:?}", size);
         runner
