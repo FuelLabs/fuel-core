@@ -109,7 +109,7 @@ mod block_target_gas_set;
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-const TARGET_BLOCK_GAS_LIMIT: u64 = 60_000_000;
+const TARGET_BLOCK_GAS_LIMIT: u64 = 1_000_000;
 const BASE: u64 = 100_000;
 
 pub struct SanityBenchmarkRunnerBuilder;
