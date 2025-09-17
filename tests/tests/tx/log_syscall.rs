@@ -23,7 +23,27 @@ use tokio::{
         BufReader,
     },
     process::ChildStderr,
+    sync::OnceCell,
 };
+
+static COMPILED: OnceCell<()> = OnceCell::const_new();
+
+async fn ensure_binary_built() {
+    COMPILED
+        .get_or_init(|| async {
+            if !tokio::process::Command::new("cargo")
+                .args(&["build", "--bin", "fuel-core"])
+                .current_dir(env!("CARGO_MANIFEST_DIR").strip_suffix("/tests").unwrap())
+                .status()
+                .await
+                .expect("failed to compile fuel-core binary")
+                .success()
+            {
+                panic!("Failed to compile fuel-core binary");
+            }
+        })
+        .await;
+}
 
 pub struct FuelCoreLogCapture {
     client: FuelClient,
@@ -35,8 +55,10 @@ impl FuelCoreLogCapture {
     /// Starts a fuel-core process with the given extra arguments.
     /// Captures its stderr, and provides a client connected to it.
     pub async fn start(extra_args: &[&str]) -> Self {
-        let mut child = tokio::process::Command::new("cargo")
-            .args(&["run", "--bin", "fuel-core", "--", "run", "--port", "0"])
+        ensure_binary_built().await;
+
+        let mut child = tokio::process::Command::new("target/debug/fuel-core")
+            .args(&["run", "--port", "0"])
             .args(extra_args)
             .env("FUEL_TRACE", "1")
             .env("RUST_LOG", "info")
