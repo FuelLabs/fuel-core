@@ -49,7 +49,7 @@ pub enum TransactionExecutionStatus {
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
         /// The receipts generated during execution of the transaction.
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction.
         total_gas: u64,
         /// The total fee paid by the transaction.
@@ -69,7 +69,7 @@ pub enum TransactionExecutionStatus {
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
         /// The receipts generated during execution of the transaction.
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction.
         total_gas: u64,
         /// The total fee paid by the transaction.
@@ -299,7 +299,7 @@ pub mod statuses {
         /// Result of executing the transaction for scripts
         pub program_state: Option<ProgramState>,
         /// The receipts generated during execution of the transaction
-        pub receipts: Vec<Receipt>,
+        pub receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction
         pub total_gas: u64,
         /// The total fee paid by the transaction
@@ -312,7 +312,7 @@ pub mod statuses {
                 block_height: Default::default(),
                 block_timestamp: Tai64::UNIX_EPOCH,
                 program_state: None,
-                receipts: Vec::new(),
+                receipts: Default::default(),
                 total_gas: 0,
                 total_fee: 0,
             }
@@ -330,7 +330,7 @@ pub mod statuses {
         /// The total fee paid by the transaction.
         pub total_fee: u64,
         /// Receipts produced by the transaction during execution.
-        pub receipts: Option<Vec<Receipt>>,
+        pub receipts: Option<Arc<Vec<Receipt>>>,
         /// Dynamic outputs produced by the transaction during execution.
         pub resolved_outputs: Option<Vec<(UtxoId, Output)>>,
     }
@@ -394,7 +394,7 @@ pub mod statuses {
         /// Result of executing the transaction for scripts
         pub program_state: Option<ProgramState>,
         /// The receipts generated during execution of the transaction
-        pub receipts: Vec<Receipt>,
+        pub receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction
         pub total_gas: u64,
         /// The total fee paid by the transaction
@@ -408,7 +408,7 @@ pub mod statuses {
                 block_timestamp: Tai64::UNIX_EPOCH,
                 reason: "Dummy reason".to_string(),
                 program_state: None,
-                receipts: Vec::new(),
+                receipts: Default::default(),
                 total_gas: 0,
                 total_fee: 0,
             }
@@ -426,7 +426,7 @@ pub mod statuses {
         /// The total fee paid by the transaction.
         pub total_fee: u64,
         /// Receipts produced by the transaction during execution.
-        pub receipts: Option<Vec<Receipt>>,
+        pub receipts: Option<Arc<Vec<Receipt>>>,
         /// Dynamic outputs produced by the transaction during execution.
         pub resolved_outputs: Option<Vec<(UtxoId, Output)>>,
         /// The reason why the transaction has failed

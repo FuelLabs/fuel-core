@@ -71,7 +71,7 @@ impl From<Vec<u8>> for ContractCode {
         let salt = VmBench::SALT;
         let storage_root = Contract::initial_state_root(slots.iter());
         let root = contract.root();
-        let id = contract.id(&salt, &root, &storage_root);
+        let id = Contract::id(&salt, &root, &storage_root);
 
         Self {
             contract,
@@ -220,7 +220,7 @@ impl VmBench {
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.r#gen(), rng.r#gen());
 
-        db.deploy_contract_with_id(&[], &contract, &id)?;
+        db.deploy_contract_with_id(&[], contract.as_ref(), &id)?;
 
         let data = id
             .iter()
@@ -430,7 +430,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&[], &code, &contract)?;
+            db.deploy_contract_with_id(&[], code.as_ref(), &contract)?;
         }
 
         if let Some(ContractCode {
@@ -458,7 +458,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&slots, &contract, &id)?;
+            db.deploy_contract_with_id(&slots, contract.as_ref(), &id)?;
         }
 
         if let Some(BlobCode { code, id }) = blob {
@@ -483,7 +483,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&[], &Contract::default(), &contract_id)?;
+            db.deploy_contract_with_id(&[], &vec![], &contract_id)?;
         }
         let transaction = mem::take(db.database_mut());
         let database = transaction.commit().expect("Failed to commit transaction");

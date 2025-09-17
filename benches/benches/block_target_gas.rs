@@ -306,7 +306,7 @@ fn service_with_many_contracts(
     state_size: u64,
     contracts: Vec<BenchContract>,
 ) -> (FuelService, tokio::runtime::Runtime) {
-    let rt = tokio::runtime::Builder::new_current_thread()
+    let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();

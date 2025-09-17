@@ -166,6 +166,7 @@ use alloc::borrow::Cow;
 use alloc::{
     format,
     string::ToString,
+    sync::Arc,
     vec,
     vec::Vec,
 };
@@ -1560,7 +1561,7 @@ where
             id: coinbase_id,
             result: TransactionExecutionResult::Success {
                 result: None,
-                receipts: vec![],
+                receipts: Default::default(),
                 total_gas: 0,
                 total_fee: 0,
             },
@@ -1667,7 +1668,7 @@ where
         &self,
         tx: &Tx,
         execution_data: &mut ExecutionData,
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         gas_price: Word,
         reverted: bool,
         state: ProgramState,
@@ -1814,7 +1815,7 @@ where
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
+    ) -> ExecutorResult<(bool, ProgramState, Tx, Arc<Vec<Receipt>>)>
     where
         Tx: ExecutableTransaction + Cacheable,
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
@@ -1851,75 +1852,76 @@ where
 
         let mut reverted;
 
-        let (state, mut tx, receipts) = if !self.options.dry_run {
-            let mut vm = Interpreter::<_, _, _, NotSupportedEcal,
+        let (state, mut tx, receipts) =
+            if !self.options.dry_run {
+                let vm = Interpreter::<_, _, _, NotSupportedEcal,
                 verification::Normal>::with_storage(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
             );
 
-            let vm_result: StateTransition<_> = vm
-                .transact(ready_tx)
-                .map_err(|error| ExecutorError::VmExecution {
-                    error: error.to_string(),
-                    transaction_id: tx_id,
-                })?
-                .into();
-            reverted = vm_result.should_revert();
+                let vm_result: StateTransition<_, _> = vm
+                    .into_transact(ready_tx)
+                    .map_err(|error| ExecutorError::VmExecution {
+                        error: error.to_string(),
+                        transaction_id: tx_id,
+                    })?;
+                reverted = vm_result.should_revert();
 
-            vm_result.into_inner()
-        } else {
-            let mut vm = Interpreter::<
-                _,
-                _,
-                _,
-                NotSupportedEcal,
-                verification::AttemptContinue,
-            >::with_storage(
-                memory,
-                vm_db,
-                InterpreterParams::new(gas_price, &self.consensus_params),
-            );
+                let (state, tx, receipts, _) = vm_result.into_inner();
 
-            let vm_result: StateTransition<_> = vm
-                .transact(ready_tx)
-                .map_err(|error| ExecutorError::VmExecution {
-                    error: error.to_string(),
-                    transaction_id: tx_id,
-                })?
-                .into();
-
-            reverted = vm_result.should_revert();
-
-            let (state, tx, mut receipts) = vm_result.into_inner();
-
-            // If transaction requires contract ids, then extend receipts with
-            // `PanicReason::ContractNotInInputs` for each missing contract id.
-            // The data like `$pc` or `$is` is not available in this case,
-            // because panic generated outside of the execution.
-            if !vm.verifier().missing_contract_inputs.is_empty() {
-                debug_assert!(self.options.dry_run);
-                reverted = true;
-
-                let reason = PanicInstruction::error(
-                    PanicReason::ContractNotInInputs,
-                    op::noop().into(),
+                (state, tx, Arc::new(receipts))
+            } else {
+                let vm = Interpreter::<
+                    _,
+                    _,
+                    _,
+                    NotSupportedEcal,
+                    verification::AttemptContinue,
+                >::with_storage(
+                    memory,
+                    vm_db,
+                    InterpreterParams::new(gas_price, &self.consensus_params),
                 );
 
-                for contract_id in &vm.verifier().missing_contract_inputs {
-                    receipts.push(Receipt::Panic {
-                        id: ContractId::zeroed(),
-                        reason,
-                        pc: 0,
-                        is: 0,
-                        contract_id: Some(*contract_id),
-                    });
-                }
-            }
+                let vm_result: StateTransition<_, _> = vm
+                    .into_transact(ready_tx)
+                    .map_err(|error| ExecutorError::VmExecution {
+                        error: error.to_string(),
+                        transaction_id: tx_id,
+                    })?;
 
-            (state, tx, receipts)
-        };
+                reverted = vm_result.should_revert();
+
+                let (state, tx, mut receipts, verifier) = vm_result.into_inner();
+
+                // If transaction requires contract ids, then extend receipts with
+                // `PanicReason::ContractNotInInputs` for each missing contract id.
+                // The data like `$pc` or `$is` is not available in this case,
+                // because panic generated outside of the execution.
+                if !verifier.missing_contract_inputs.is_empty() {
+                    debug_assert!(self.options.dry_run);
+                    reverted = true;
+
+                    let reason = PanicInstruction::error(
+                        PanicReason::ContractNotInInputs,
+                        op::noop().into(),
+                    );
+
+                    for contract_id in &verifier.missing_contract_inputs {
+                        receipts.push(Receipt::Panic {
+                            id: ContractId::zeroed(),
+                            reason,
+                            pc: 0,
+                            is: 0,
+                            contract_id: Some(*contract_id),
+                        });
+                    }
+                }
+
+                (state, tx, Arc::new(receipts))
+            };
 
         #[cfg(debug_assertions)]
         {
@@ -1940,7 +1942,7 @@ where
         }
 
         self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts.to_vec()))
+        Ok((reverted, state, tx, receipts))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -2103,7 +2105,7 @@ where
         );
         let max_fee = tx.max_fee_limit();
         let mut used_gas = 0;
-        for r in receipts {
+        for r in receipts.iter().rev() {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
                 break
