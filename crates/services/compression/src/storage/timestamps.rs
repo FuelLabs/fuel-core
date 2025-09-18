@@ -9,14 +9,10 @@ use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
     codec::postcard::Postcard,
-    merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
 };
 
-use super::column::{
-    CompressionColumn,
-    MerkleizedColumnOf,
-};
+use super::column::CompressionColumn;
 
 /// The metadata key used by `DaCompressionTemporalRegistryTimsetamps` table to
 /// keep track of when each key was last updated.
@@ -83,14 +79,6 @@ impl rand::distributions::Distribution<TimestampKeyspace>
 /// Table that indexes the timestamps.
 pub struct Timestamps;
 
-impl MerkleizedTableColumn for Timestamps {
-    type TableColumn = CompressionColumn;
-
-    fn table_column() -> Self::TableColumn {
-        Self::TableColumn::Timestamps
-    }
-}
-
 impl Mappable for Timestamps {
     type Key = Self::OwnedKey;
     type OwnedKey = TimestampKey;
@@ -100,10 +88,10 @@ impl Mappable for Timestamps {
 
 impl TableWithBlueprint for Timestamps {
     type Blueprint = Plain<Postcard, Postcard>;
-    type Column = MerkleizedColumnOf<Self>;
+    type Column = CompressionColumn;
 
     fn column() -> Self::Column {
-        Self::Column::TableColumn(Self::table_column())
+        Self::Column::Timestamps
     }
 }
 

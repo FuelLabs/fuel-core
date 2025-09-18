@@ -50,7 +50,6 @@ fault-proving = [
     "fuel-core-sync?/fault-proving",
     "fuel-core-importer/fault-proving",
     "fuel-core-poa/fault-proving",
-    "fuel-core-compression-service/fault-proving",
     "fuel-core-upgradable-executor/fault-proving",
 ]
 

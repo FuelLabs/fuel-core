@@ -5,6 +5,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(missing_docs)]
 #![deny(warnings)]
+#![allow(unexpected_cfgs)]
 
 /// Configuration for the compression service
 pub mod config;

@@ -468,7 +468,6 @@ mod tests {
             IteratorOverTable,
             changes_iterator::ChangesIterator,
         },
-        merkle::column::MerkleizedColumn,
         structured_storage::test::InMemoryStorage,
         transactional::{
             IntoTransaction,
@@ -492,9 +491,8 @@ mod tests {
         }
     }
 
-    type MockStorage = StorageTransaction<
-        InMemoryStorage<MerkleizedColumn<crate::storage::column::CompressionColumn>>,
-    >;
+    type MockStorage =
+        StorageTransaction<InMemoryStorage<crate::storage::column::CompressionColumn>>;
 
     fn test_storage() -> MockStorage {
         InMemoryStorage::default().into_transaction()
