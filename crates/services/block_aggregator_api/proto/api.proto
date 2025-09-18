@@ -34,7 +34,10 @@ message Block {
      bytes data = 1;
 }
 
+message NewBlockSubscriptionRequest {}
+
 service BlockAggregator {
   rpc GetBlockHeight (BlockHeightRequest) returns (BlockHeightResponse);
   rpc GetBlockRange (BlockRangeRequest) returns (stream Block);
+  rpc NewBlockSubscription (NewBlockSubscriptionRequest) returns (stream Block);
 }

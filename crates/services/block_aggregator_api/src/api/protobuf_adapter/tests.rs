@@ -1,12 +1,14 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    NewBlock,
     api::{
         BlockAggregatorApi,
         BlockAggregatorQuery,
         protobuf_adapter::{
             BlockHeightRequest,
             BlockRangeRequest,
+            NewBlockSubscriptionRequest,
             ProtobufAPI,
             block_aggregator_client::BlockAggregatorClient,
         },
@@ -20,19 +22,23 @@ use futures::{
     StreamExt,
     TryStreamExt,
 };
+use std::net::TcpListener;
+
+fn free_local_addr() -> String {
+    let listener = TcpListener::bind("[::1]:0").unwrap();
+    let addr = listener.local_addr().unwrap(); // OS picks a free port
+    format!("[::1]:{}", addr.port())
+}
 
 #[tokio::test]
 async fn await_query__get_current_height__client_receives_expected_value() {
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .init();
     // given
-    let path = "[::1]:50051";
+    let path = free_local_addr();
     let mut api = ProtobufAPI::new(path.to_string());
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // call get current height endpoint with client
-    let url = "http://[::1]:50051";
+    let url = format!("http://{}", path);
     let mut client = BlockAggregatorClient::connect(url.to_string())
         .await
         .expect("could not connect to server");
@@ -64,12 +70,12 @@ async fn await_query__get_current_height__client_receives_expected_value() {
 #[tokio::test]
 async fn await_query__get_block_range__client_receives_expected_value() {
     // given
-    let path = "[::1]:50051";
+    let path = free_local_addr();
     let mut api = ProtobufAPI::new(path.to_string());
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // call get current height endpoint with client
-    let url = "http://[::1]:50051";
+    let url = format!("http://{}", path);
     let mut client = BlockAggregatorClient::connect(url.to_string())
         .await
         .expect("could not connect to server");
@@ -109,6 +115,61 @@ async fn await_query__get_block_range__client_receives_expected_value() {
     tracing::info!("awaiting query");
     let response = handle.await.unwrap();
     let expected: Vec<Vec<u8>> = list.iter().map(|b| b.bytes().to_vec()).collect();
+    let actual: Vec<Vec<u8>> = response
+        .into_inner()
+        .try_collect::<Vec<_>>()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|b| b.data.to_vec())
+        .collect();
+
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn await_query__new_block_stream__client_receives_expected_value() {
+    // given
+    let path = free_local_addr();
+    let mut api = ProtobufAPI::new(path.to_string());
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // call get current height endpoint with client
+    let url = format!("http://{}", path);
+    let mut client = BlockAggregatorClient::connect(url.to_string())
+        .await
+        .expect("could not connect to server");
+    let request = NewBlockSubscriptionRequest {};
+    let handle = tokio::spawn(async move {
+        tracing::info!("querying with client");
+        client
+            .new_block_subscription(request)
+            .await
+            .expect("could not get height")
+    });
+
+    // when
+    tracing::info!("awaiting query");
+    let query = api.await_query().await.unwrap();
+
+    // then
+    let height1 = BlockHeight::new(0);
+    let height2 = BlockHeight::new(1);
+    let block1 = Block::new(Bytes::from(vec![0u8; 100]));
+    let block2 = Block::new(Bytes::from(vec![1u8; 100]));
+    let list = vec![(height1, block1), (height2, block2)];
+    if let BlockAggregatorQuery::NewBlockSubscription { response } = query {
+        tracing::info!("correct query received, sending response");
+        for (height, block) in list.clone() {
+            let new_block = NewBlock::new(height, block);
+            response.send(new_block).await.unwrap();
+        }
+    } else {
+        panic!("expected GetBlockRange query");
+    }
+    tracing::info!("awaiting query");
+    let response = handle.await.unwrap();
+    let expected: Vec<Vec<u8>> = list.iter().map(|(_, b)| b.bytes().to_vec()).collect();
     let actual: Vec<Vec<u8>> = response
         .into_inner()
         .try_collect::<Vec<_>>()

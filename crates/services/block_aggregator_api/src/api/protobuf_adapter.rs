@@ -8,17 +8,12 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::StreamExt;
-use std::cell::RefCell;
-use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 
 tonic::include_proto!("blockaggregator");
 
-use crate::{
-    api::protobuf_adapter,
-    result::Error,
-};
+use crate::result::Error;
 use block_aggregator_server::BlockAggregator;
 
 #[cfg(test)]
@@ -59,7 +54,7 @@ impl BlockAggregator for Server {
             ))),
         }
     }
-    type GetBlockRangeStream = ReceiverStream<Result<protobuf_adapter::Block, Status>>;
+    type GetBlockRangeStream = ReceiverStream<Result<Block, Status>>;
 
     async fn get_block_range(
         &self,
@@ -112,6 +107,36 @@ impl BlockAggregator for Server {
                 e
             ))),
         }
+    }
+
+    type NewBlockSubscriptionStream = ReceiverStream<Result<Block, Status>>;
+
+    async fn new_block_subscription(
+        &self,
+        request: tonic::Request<NewBlockSubscriptionRequest>,
+    ) -> Result<tonic::Response<Self::NewBlockSubscriptionStream>, tonic::Status> {
+        const ARB_CHANNEL_SIZE: usize = 100;
+        tracing::warn!("get_block_range: {:?}", request);
+        let (response, mut receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
+        let query = BlockAggregatorQuery::NewBlockSubscription { response };
+        self.query_sender
+            .send(query)
+            .await
+            .map_err(|e| Status::internal(format!("Failed to send query: {}", e)))?;
+
+        let (task_sender, task_receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
+        let _ = tokio::spawn(async move {
+            while let Some(nb) = receiver.recv().await {
+                let block = Block {
+                    data: nb.block.bytes().to_vec(),
+                };
+                if task_sender.send(Ok(block)).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        Ok(tonic::Response::new(ReceiverStream::new(task_receiver)))
     }
 }
 
