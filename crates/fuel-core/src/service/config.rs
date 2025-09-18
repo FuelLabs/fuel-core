@@ -65,8 +65,8 @@ pub struct Config {
     /// - Enables querying historical contract state and balances.
     pub historical_execution: bool,
     pub expensive_subscriptions: bool,
-    // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
+    pub allow_syscall: bool,
     pub native_executor_version: Option<StateTransitionBytecodeVersion>,
     #[cfg(feature = "parallel-executor")]
     pub executor_number_of_cores: NonZeroUsize,
@@ -184,6 +184,7 @@ impl Config {
             continue_on_error: false,
             debug: true,
             historical_execution: true,
+            allow_syscall: true,
             expensive_subscriptions: true,
             utxo_validation,
             native_executor_version: Some(native_executor_version),
