@@ -79,16 +79,12 @@ impl BlockAggregator for Server {
                     let (tx, rx) =
                         tokio::sync::mpsc::channel::<Result<Block, Status>>(16);
 
-                    // TODO: is this safe if we just drop the join handle?
                     let _ = tokio::spawn(async move {
                         let mut s = inner;
                         while let Some(block) = s.next().await {
-                            // Convert your internal `blocks::Block` into the protobuf `Block`.
                             let pb = Block {
                                 data: block.bytes().to_vec(),
                             };
-
-                            // If the receiver side was dropped, stop forwarding.
                             if tx.send(Ok(pb)).await.is_err() {
                                 break;
                             }
