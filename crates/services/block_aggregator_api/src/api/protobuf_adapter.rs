@@ -79,7 +79,7 @@ impl BlockAggregator for Server {
                     let (tx, rx) =
                         tokio::sync::mpsc::channel::<Result<Block, Status>>(16);
 
-                    let _ = tokio::spawn(async move {
+                    tokio::spawn(async move {
                         let mut s = inner;
                         while let Some(block) = s.next().await {
                             let pb = Block {
@@ -121,7 +121,7 @@ impl BlockAggregator for Server {
             .map_err(|e| Status::internal(format!("Failed to send query: {}", e)))?;
 
         let (task_sender, task_receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             while let Some(nb) = receiver.recv().await {
                 let block = Block {
                     data: nb.block.bytes().to_vec(),
