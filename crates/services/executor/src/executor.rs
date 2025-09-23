@@ -32,6 +32,7 @@ use fuel_core_storage::{
     },
     vm_storage::VmStorage,
 };
+use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -123,7 +124,6 @@ use fuel_core_types::{
             ExecutableTransaction,
             InterpreterParams,
             MemoryInstance,
-            NotSupportedEcal,
         },
         state::StateTransition,
         verification,
@@ -338,11 +338,8 @@ pub struct ExecutionOptions {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips signature and UTXO existence checks.
     pub forbid_fake_coins: bool,
-    /// Print execution backtraces if transaction execution reverts.
-    ///
-    /// Deprecated field. Do nothing. This fields exists for serialization and
-    /// deserialization compatibility.
-    pub backtrace: bool,
+    /// The flag allows the usage of syscall in the transaction.
+    pub allow_syscall: bool,
 }
 
 /// Per-block execution options
@@ -351,6 +348,7 @@ struct ExecutionOptionsInner {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips signature and UTXO existence checks.
     pub forbid_fake_coins: bool,
+    pub allow_syscall: bool,
     pub dry_run: bool,
 }
 
@@ -533,6 +531,7 @@ impl<R, TxWaiter, PreconfirmationSender>
             consensus_params,
             options: ExecutionOptionsInner {
                 forbid_fake_coins: options.forbid_fake_coins,
+                allow_syscall: options.allow_syscall,
                 dry_run,
             },
             new_tx_waiter,
@@ -1780,11 +1779,17 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
+        let ecal_handler = EcalLogCollector {
+            enabled: self.options.allow_syscall,
+            ..Default::default()
+        };
+
         checked_tx = checked_tx
             .check_predicates(
                 &CheckPredicateParams::from(&self.consensus_params),
                 memory,
                 storage_tx,
+                ecal_handler.clone(),
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
@@ -1792,6 +1797,11 @@ where
                 ))
             })?;
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+
+        // Note that the code above only executes predicates if the txpool didn't do so already.
+        ecal_handler.maybe_print_logs(
+            tracing::info_span!("verification", tx_id = % &checked_tx.id()),
+        );
 
         self.verify_inputs_exist_and_values_match(
             storage_tx,
@@ -1851,12 +1861,18 @@ where
 
         let mut reverted;
 
+        let ecal = EcalLogCollector {
+            enabled: self.options.allow_syscall,
+            ..Default::default()
+        };
+
         let (state, mut tx, receipts) = if !self.options.dry_run {
-            let mut vm = Interpreter::<_, _, _, NotSupportedEcal,
-                verification::Normal>::with_storage(
+            let mut vm = Interpreter::<_, _, _, EcalLogCollector,
+                verification::Normal>::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
+                ecal.clone(),
             );
 
             let vm_result: StateTransition<_> = vm
@@ -1866,6 +1882,7 @@ where
                     transaction_id: tx_id,
                 })?
                 .into();
+
             reverted = vm_result.should_revert();
 
             vm_result.into_inner()
@@ -1874,12 +1891,13 @@ where
                 _,
                 _,
                 _,
-                NotSupportedEcal,
+                EcalLogCollector,
                 verification::AttemptContinue,
-            >::with_storage(
+            >::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
+                ecal.clone(),
             );
 
             let vm_result: StateTransition<_> = vm
@@ -1920,6 +1938,8 @@ where
 
             (state, tx, receipts)
         };
+
+        ecal.maybe_print_logs(tracing::info_span!("execution", tx_id = % tx_id));
 
         #[cfg(debug_assertions)]
         {

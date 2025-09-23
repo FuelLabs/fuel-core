@@ -61,7 +61,7 @@ impl NewBlock {
         Self { height, block }
     }
 
-    pub fn decompose(self) -> (BlockHeight, Block) {
+    pub fn into_inner(self) -> (BlockHeight, Block) {
         (self.height, self.block)
     }
 }

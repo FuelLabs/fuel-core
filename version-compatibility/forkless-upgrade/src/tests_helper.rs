@@ -1,5 +1,19 @@
 #![allow(dead_code)]
-use latest_fuel_core_type::{
+use genesis_fuel_core_bin::FuelService as GenesisFuelService;
+use genesis_fuel_core_client::client::FuelClient as GenesisClient;
+use genesis_fuel_core_services::Service as _;
+use latest_fuel_core_bin::FuelService as LatestFuelService;
+use latest_fuel_core_client::client::FuelClient as LatestClient;
+use libp2p::PeerId;
+use rand::{
+    Rng,
+    prelude::StdRng,
+};
+use std::str::FromStr;
+use version_44_fuel_core_bin::FuelService as Version44FuelService;
+use version_44_fuel_core_client::client::FuelClient as Version44Client;
+use version_44_fuel_core_services as _;
+use version_44_fuel_core_type::{
     fuel_crypto::{
         SecretKey,
         fuel_types::ChainId,
@@ -16,21 +30,6 @@ use latest_fuel_core_type::{
         policies::Policies,
     },
 };
-
-use genesis_fuel_core_bin::FuelService as GenesisFuelService;
-use genesis_fuel_core_client::client::FuelClient as GenesisClient;
-use genesis_fuel_core_services::Service as _;
-use latest_fuel_core_bin::FuelService as LatestFuelService;
-use latest_fuel_core_client::client::FuelClient as LatestClient;
-use libp2p::PeerId;
-use rand::{
-    Rng,
-    prelude::StdRng,
-};
-use std::str::FromStr;
-use version_44_fuel_core_bin::FuelService as Version44FuelService;
-use version_44_fuel_core_client::client::FuelClient as Version44Client;
-use version_44_fuel_core_services as _;
 
 // Awful version compatibility hack.
 // `$bin_crate::cli::run::get_service` is async in the later versions of fuel-core-bin.
