@@ -128,7 +128,6 @@ where
                         },
                     }
                 });
-                // do more stuff
                 (id, block)
             }
             BlockSourceEvent::OldBlock(id, block) => (id, block),
