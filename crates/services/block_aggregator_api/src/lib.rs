@@ -21,15 +21,19 @@ pub mod result;
 pub mod block_range_response;
 
 pub mod integration {
+    use crate::{
+        BlockAggregator,
+        api::protobuf_adapter::ProtobufAPI,
+        blocks::importer_and_db_source::ImporterAndDbSource,
+        db::storage_db::StorageDB,
+    };
     use fuel_core_services::ServiceRunner;
-    use crate::api::protobuf_adapter::ProtobufAPI;
-    use crate::BlockAggregator;
-    use crate::blocks::importer_and_db_source::ImporterAndDbSource;
-    use crate::db::storage_db::StorageDB;
 
-    pub fn new_service() -> ServiceRunner<BlockAggregator<ProtobufAPI, StorageDB<()>, ImporterAndDbSource<(), (), ()>>> {
+    pub fn new_service() -> ServiceRunner<
+        BlockAggregator<ProtobufAPI, StorageDB<()>, ImporterAndDbSource<(), (), ()>>,
+    > {
         todo!()
-   }
+    }
 }
 #[cfg(test)]
 mod tests;
