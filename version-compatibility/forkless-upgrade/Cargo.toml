@@ -20,8 +20,8 @@ yamux = "=0.13.5"
 # Neutral deps
 fuel-core = { path = "../../crates/fuel-core", features = ["test-helpers"] }
 fuel-core-trace = { path = "../../crates/trace" }
-fuel-crypto = { version = "0.57.0" }
-fuel-tx = { version = "0.57.0", features = ["random"] }
+fuel-crypto = { version = "0.63.0" }
+fuel-tx = { version = "0.63.0", features = ["random"] }
 
 # Latest fuel-core
 latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", features = [
@@ -48,6 +48,9 @@ genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services
 version-44-fuel-core-bin = { version = "0.44.0", package = "fuel-core-bin", features = [
   "parquet",
   "p2p",
+] }
+version-44-fuel-core-type = { version = "0.44.0", package = "fuel-core-types", features = [
+  "test-helpers",
 ] }
 version-44-fuel-core-client = { version = "0.44.0", package = "fuel-core-client" }
 version-44-fuel-core-services = { version = "0.44.0", package = "fuel-core-services" }
