@@ -242,7 +242,7 @@ async fn run__new_block_subscription__sends_new_block() {
             .await
             .unwrap()
             .unwrap()
-            .decompose();
+            .into_inner();
     assert_eq!(expected_block, actual_block);
     assert_eq!(expected_height, actual_height);
 
