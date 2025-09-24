@@ -9,7 +9,11 @@ use super::{
     import_result_provider,
 };
 use crate::{
-    database::OnChainIterableKeyValueView,
+    database::{
+        Database,
+        OnChainIterableKeyValueView,
+        database_description::compression::CompressionDatabase,
+    },
     fuel_core_graphql_api::ports::{
         BlockProducerPort,
         ChainStateProvider,
@@ -41,7 +45,7 @@ use fuel_core_compression_service::storage::CompressedBlocks;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     Result as StorageResult,
-    blueprint::BlueprintCodec,
+    blueprint::BlueprintInspect,
     kv_store::KeyValueInspect,
     not_found,
     structured_storage::TableWithBlueprint,
@@ -299,8 +303,9 @@ impl DatabaseDaCompressedBlocks for CompressionServiceAdapter {
         use fuel_core_storage::codec::Encode;
 
         let encoded_height =
-            <<CompressedBlocks as TableWithBlueprint>::Blueprint as BlueprintCodec<
+            <<CompressedBlocks as TableWithBlueprint>::Blueprint as BlueprintInspect<
                 CompressedBlocks,
+                Database<CompressionDatabase>, /* in the future it would be nice to use a dummy impl, but it's not worth the effort rn */
             >>::KeyCodec::encode(height);
         let column = <CompressedBlocks as TableWithBlueprint>::column();
         self.storage()

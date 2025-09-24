@@ -23,18 +23,6 @@ pub mod merklized;
 pub mod plain;
 pub mod sparse;
 
-/// Describes how to encode/decode the key and value for the given mappable table.
-/// It is used by the blueprint to perform the actual encoding/decoding.
-pub trait BlueprintCodec<M>
-where
-    M: Mappable,
-{
-    /// The codec used to encode and decode storage key.
-    type KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>;
-    /// The codec used to encode and decode storage value.
-    type ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>;
-}
-
 /// This trait allows defining the agnostic implementation for all storage
 /// traits(`StorageInspect,` `StorageMutate,` etc) while the main logic is
 /// hidden inside the blueprint. It allows quickly adding support for new
@@ -42,13 +30,18 @@ where
 /// infrastructure in other places. It allows changing the blueprint on the
 /// fly in the definition of the table without affecting other areas of the codebase.
 ///
-/// The blueprint is responsible for encoding/decoding (usually it is done via `KeyCodec` and `ValueCodec`)
+/// The blueprint is responsible for encoding/decoding(usually it is done via `KeyCodec` and `ValueCodec`)
 /// the key and value and putting/extracting it to/from the storage.
-pub trait BlueprintInspect<M, S>: BlueprintCodec<M>
+pub trait BlueprintInspect<M, S>
 where
     M: Mappable,
     S: KeyValueInspect,
 {
+    /// The codec used to encode and decode storage key.
+    type KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>;
+    /// The codec used to encode and decode storage value.
+    type ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>;
+
     /// Checks if the value exists in the storage.
     fn exists(storage: &S, key: &M::Key, column: S::Column) -> StorageResult<bool> {
         let key_encoder = Self::KeyCodec::encode(key);
