@@ -1,5 +1,5 @@
 use crate::{
-    contract_state::{
+    contract_state_hash::{
         compute_balances_hash,
         compute_state_hash,
     },
@@ -11,17 +11,30 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
-    storage_access_recorder::StorageAccessRecorder,
+    storage_access_recorder::{
+        ContractAccesses,
+        StorageAccessRecorder,
+    },
 };
 use fuel_core_storage::{
+    ContractsAssetKey,
+    ContractsStateKey,
     StorageAsMut,
     StorageAsRef,
+    blueprint::BlueprintCodec,
+    codec::Decode,
     column::Column,
-    kv_store::KeyValueInspect,
+    kv_store::{
+        KeyValueInspect,
+        WriteOperation,
+    },
+    structured_storage::TableWithBlueprint,
     tables::{
         Coins,
         ConsensusParametersVersions,
+        ContractsAssets,
         ContractsLatestUtxo,
+        ContractsState,
         FuelBlocks,
         Messages,
         ProcessedTransactions,
@@ -32,6 +45,7 @@ use fuel_core_storage::{
         IntoTransaction,
         Modifiable,
         ReadTransaction,
+        ReferenceBytesKey,
         StorageTransaction,
         WriteTransaction,
     },
@@ -141,7 +155,6 @@ use fuel_core_types::{
             ExecutionResult,
             ForcedTransactionFailure,
             Result as ExecutorResult,
-            StorageReadReplayEvent,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -163,10 +176,16 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    collections::BTreeMap,
+};
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
+use alloc::{
+    borrow::Cow,
+    collections::BTreeMap,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -1425,7 +1444,11 @@ where
                 )?;
             }
 
-            self.compute_inputs(core::slice::from_mut(&mut input), storage_tx, &[])?;
+            self.compute_inputs(
+                core::slice::from_mut(&mut input),
+                storage_tx,
+                &Default::default(),
+            )?;
 
             let (input, output) = self.execute_mint_with_vm(
                 header,
@@ -1618,7 +1641,7 @@ where
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
 
         let (recorder, changes) = sub_block_db_commit.into_inner();
-        let record = core::mem::take(&mut *recorder.record.lock());
+        let record = core::mem::take(&mut *recorder.record.lock()).finalize(&changes);
 
         storage_tx.commit_changes(changes.clone())?;
 
@@ -1638,6 +1661,7 @@ where
             core::slice::from_ref(input),
             outputs.as_mut_slice(),
             &record,
+            storage_tx,
             &changes,
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
@@ -1653,15 +1677,17 @@ where
         Ok((input, output))
     }
 
-    fn update_tx_outputs<Tx>(
+    fn update_tx_outputs<Tx, T>(
         &self,
         tx_id: TxId,
         tx: &mut Tx,
-        record: &[StorageReadReplayEvent],
+        record: &BTreeMap<ContractId, ContractAccesses>,
+        db: &TxStorageTransaction<T>,
         changes: &Changes,
     ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
+        T: KeyValueInspect<Column = Column>,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
         self.compute_state_of_not_utxo_outputs(
@@ -1669,6 +1695,7 @@ where
             tx.inputs(),
             &mut outputs,
             record,
+            db,
             changes,
         )?;
         *tx.outputs_mut() = outputs;
@@ -1972,18 +1999,18 @@ where
             },
             changes,
         ) = sub_block_db_commit.into_inner();
-        let record = record.lock().clone();
+        let record = record.lock().clone().finalize(&changes);
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
         self.compute_inputs(tx.inputs_mut(), storage_tx_recovered, &record)?;
+        self.update_tx_outputs(tx_id, &mut tx, &record, storage_tx, &changes)?;
 
         // only commit state changes if execution was a success
         if !reverted {
             storage_tx.commit_changes(changes.clone())?;
         }
 
-        self.update_tx_outputs(tx_id, &mut tx, &record, &changes)?;
         Ok((reverted, state, tx, receipts.to_vec()))
     }
 
@@ -2181,7 +2208,7 @@ where
         &self,
         inputs: &mut [Input],
         db: &TxStorageTransaction<T>,
-        record: &[StorageReadReplayEvent],
+        record: &BTreeMap<ContractId, ContractAccesses>,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -2222,10 +2249,19 @@ where
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
 
-                    *balance_root =
-                        compute_balances_hash(contract_id, record, &Changes::default());
-                    *state_root =
-                        compute_state_hash(contract_id, record, &Changes::default());
+                    let empty = ContractAccesses::default();
+                    let for_contract = record.get(contract_id).unwrap_or(&empty);
+
+                    *balance_root = compute_balances_hash(&for_contract.assets, |key| {
+                        db.storage::<ContractsAssets>()
+                            .get(&ContractsAssetKey::new(contract_id, key))
+                            .map(|v| v.map_or(0, |c| c.into_owned()))
+                    })?;
+                    *state_root = compute_state_hash(&for_contract.slots, |key| {
+                        db.storage::<ContractsState>()
+                            .get(&ContractsStateKey::new(contract_id, key))
+                            .map(|v| v.map(|c| c.0.clone()))
+                    })?;
                 }
                 _ => {}
             }
@@ -2238,14 +2274,18 @@ where
     /// Computes all zeroed or variable outputs.
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
-    fn compute_state_of_not_utxo_outputs(
+    fn compute_state_of_not_utxo_outputs<T>(
         &self,
         tx_id: TxId,
         inputs: &[Input],
         outputs: &mut [Output],
-        record: &[StorageReadReplayEvent],
+        record: &BTreeMap<ContractId, ContractAccesses>,
+        db: &TxStorageTransaction<T>,
         changes: &Changes,
-    ) -> ExecutorResult<()> {
+    ) -> ExecutorResult<()>
+    where
+        T: KeyValueInspect<Column = Column>,
+    {
         for output in outputs {
             if let Output::Contract(contract_output) = output {
                 let contract_id =
@@ -2261,10 +2301,71 @@ where
                         })
                     };
 
-                contract_output.balance_root =
-                    compute_balances_hash(contract_id, record, changes);
-                contract_output.state_root =
-                    compute_state_hash(contract_id, record, changes);
+                let empty = ContractAccesses::default();
+                let for_contract = record.get(contract_id).unwrap_or(&empty);
+
+                let empty = BTreeMap::default();
+                let asset_changes = changes
+                    .get(&Column::ContractsAssets.as_u32())
+                    .unwrap_or(&empty);
+                let state_changes = changes
+                    .get(&Column::ContractsState.as_u32())
+                    .unwrap_or(&empty);
+
+                contract_output.balance_root = compute_balances_hash(
+                    &for_contract.assets,
+                    |key| {
+                        let column_key = ContractsAssetKey::new(contract_id, key);
+                        let column_key =
+                            ReferenceBytesKey::from(column_key.as_ref().to_vec());
+                        if let Some(changed_value) =
+                            asset_changes.get(&column_key).map(|value| {
+                                match value {
+                                    WriteOperation::Insert(v) => {
+                                        <<ContractsAssets as TableWithBlueprint>
+                                            ::Blueprint as BlueprintCodec<ContractsAssets>>
+                                            ::ValueCodec::decode(v)
+                                            .map_err(|err| ExecutorError::StorageError(err.to_string()))
+                                    },
+                                    WriteOperation::Remove => Ok(0),
+                                }
+                            })
+                        {
+                            return changed_value;
+                        }
+                        db.storage::<ContractsAssets>()
+                            .get(&ContractsAssetKey::new(contract_id, key))
+                            .map(|v| v.map_or(0, |c| c.into_owned()))
+                            .map_err(|err| ExecutorError::StorageError(err.to_string()))
+                    },
+                )?;
+                contract_output.state_root = compute_state_hash(
+                    &for_contract.slots,
+                    |key| {
+                        let column_key = ContractsStateKey::new(contract_id, key);
+                        let column_key =
+                            ReferenceBytesKey::from(column_key.as_ref().to_vec());
+                        if let Some(changed_value) =
+                            state_changes.get(&column_key).map(|value| {
+                                match value {
+                                    WriteOperation::Insert(v) => {
+                                        Some(<<ContractsState as TableWithBlueprint>
+                                            ::Blueprint as BlueprintCodec<ContractsState>>
+                                            ::ValueCodec::decode(v)
+                                            .map_err(|err| ExecutorError::StorageError(err.to_string())))
+                                    },
+                                    WriteOperation::Remove => None,
+                                }
+                            })
+                        {
+                            return changed_value.transpose();
+                        }
+                        db.storage::<ContractsState>()
+                            .get(&ContractsStateKey::new(contract_id, key))
+                            .map(|v| v.map(|c| c.0.clone()))
+                            .map_err(|err| ExecutorError::StorageError(err.to_string()))
+                    },
+                )?;
             }
         }
         Ok(())
