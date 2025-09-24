@@ -47,17 +47,17 @@ pub(crate) struct ReadsPerContract {
 }
 
 impl ReadsPerContract {
-    /// Mark some key as accessed without actually reading it.
+    /// Mark some key as accessed
     fn mark(&mut self, key: &[u8], column_id: u32) {
         if column_id == Column::ContractsAssets.as_u32() {
-            let key = ContractsAssetKey::from_slice(&key).unwrap();
+            let key = ContractsAssetKey::from_slice(key).unwrap();
             self.per_contract
                 .entry(*key.contract_id())
                 .or_default()
                 .assets
                 .insert(*key.asset_id());
         } else if column_id == Column::ContractsState.as_u32() {
-            let key = ContractsStateKey::from_slice(&key).unwrap();
+            let key = ContractsStateKey::from_slice(key).unwrap();
             self.per_contract
                 .entry(*key.contract_id())
                 .or_default()
@@ -116,13 +116,11 @@ where
         self.storage.get(key, column)
     }
 
-    /// Checks if the value exists in the storage.
     fn exists(&self, key: &[u8], column: Self::Column) -> StorageResult<bool> {
         self.mark(key, column.id());
         self.storage.exists(key, column)
     }
 
-    /// Returns the size of the value in the storage.
     fn size_of_value(
         &self,
         key: &[u8],
@@ -132,7 +130,6 @@ where
         self.storage.size_of_value(key, column)
     }
 
-    /// Reads the value from the storage into the `buf` and returns the whether the value exists.
     fn read(
         &self,
         key: &[u8],
