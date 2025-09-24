@@ -14,6 +14,7 @@ use crate::{
     StorageSize,
     StorageWrite,
     blueprint::{
+        BlueprintCodec,
         BlueprintInspect,
         BlueprintMutate,
         SupportsBatching,
@@ -362,10 +363,7 @@ where
         offset: usize,
         buf: &mut [u8],
     ) -> Result<bool, Self::Error> {
-        let key_encoder =
-            <M::Blueprint as BlueprintInspect<M, StructuredStorage<S>>>::KeyCodec::encode(
-                key,
-            );
+        let key_encoder = <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
         self.inner.read(
             key_bytes.as_ref(),
@@ -379,10 +377,7 @@ where
         &self,
         key: &<M as Mappable>::Key,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        let key_encoder =
-            <M::Blueprint as BlueprintInspect<M, StructuredStorage<S>>>::KeyCodec::encode(
-                key,
-            );
+        let key_encoder = <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
         self.inner
             .get(key_bytes.as_ref(), <M as TableWithBlueprint>::column())

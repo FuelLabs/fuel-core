@@ -11,7 +11,11 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
-    storage_access_recorder::StorageAccessRecorder,
+    storage_access_recorder::{
+        AccessedPerContract,
+        ContractAccesses,
+        StorageAccessRecorder,
+    },
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -141,7 +145,6 @@ use fuel_core_types::{
             ExecutionResult,
             ForcedTransactionFailure,
             Result as ExecutorResult,
-            StorageReadReplayEvent,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -510,7 +513,8 @@ where
 }
 
 type BlockStorageTransaction<T> = StorageTransaction<T>;
-type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
+pub(crate) type TxStorageTransaction<'a, T> =
+    StorageTransaction<&'a mut BlockStorageTransaction<T>>;
 
 #[derive(Clone, Debug)]
 pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
@@ -1425,7 +1429,11 @@ where
                 )?;
             }
 
-            self.compute_inputs(core::slice::from_mut(&mut input), storage_tx, &[])?;
+            self.compute_inputs(
+                core::slice::from_mut(&mut input),
+                storage_tx,
+                &AccessedPerContract::default(),
+            )?;
 
             let (input, output) = self.execute_mint_with_vm(
                 header,
@@ -1595,14 +1603,14 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        let mut storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
-
-        let mut sub_block_db_commit = storage_tx_record
+        let sub_block_db_commit = storage_tx
             .write_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
+        let mut storage_tx_record = StorageAccessRecorder::new(sub_block_db_commit);
+
         let mut vm_db = VmStorage::new(
-            &mut sub_block_db_commit,
+            &mut storage_tx_record,
             &header.consensus,
             &header.application,
             coinbase_contract_id,
@@ -1617,8 +1625,11 @@ where
         .map_err(|e| format!("{e}"))
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
 
-        let (recorder, changes) = sub_block_db_commit.into_inner();
-        let record = core::mem::take(&mut *recorder.record.lock());
+        let StorageAccessRecorder {
+            storage: sub_block_db_commit,
+            record,
+        } = storage_tx_record;
+        let changes = sub_block_db_commit.into_changes();
 
         storage_tx.commit_changes(changes.clone())?;
 
@@ -1637,8 +1648,7 @@ where
             *coinbase_id,
             core::slice::from_ref(input),
             outputs.as_mut_slice(),
-            &record,
-            &changes,
+            &record.lock().clone(),
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
             return Err(ExecutorError::Other(
@@ -1657,20 +1667,13 @@ where
         &self,
         tx_id: TxId,
         tx: &mut Tx,
-        record: &[StorageReadReplayEvent],
-        changes: &Changes,
+        record: &AccessedPerContract,
     ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(
-            tx_id,
-            tx.inputs(),
-            &mut outputs,
-            record,
-            changes,
-        )?;
+        self.compute_state_of_not_utxo_outputs(tx_id, tx.inputs(), &mut outputs, record)?;
         *tx.outputs_mut() = outputs;
         Ok(())
     }
@@ -1846,14 +1849,14 @@ where
     {
         let tx_id = checked_tx.id();
 
-        let storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
-
-        let mut sub_block_db_commit = storage_tx_record
+        let sub_block_db_commit = storage_tx
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
+        let mut storage_tx_record = StorageAccessRecorder::new(sub_block_db_commit);
+
         let vm_db = VmStorage::new(
-            &mut sub_block_db_commit,
+            &mut storage_tx_record,
             &header.consensus,
             &header.application,
             coinbase_contract_id,
@@ -1965,13 +1968,11 @@ where
 
         Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
-        let (
-            StorageAccessRecorder {
-                storage: storage_tx_recovered,
-                record,
-            },
-            changes,
-        ) = sub_block_db_commit.into_inner();
+        let StorageAccessRecorder {
+            storage: storage_tx_recovered,
+            record,
+        } = storage_tx_record;
+        let (storage_tx_recovered, changes) = storage_tx_recovered.into_inner();
         let record = record.lock().clone();
 
         // We always need to update inputs with storage state before execution,
@@ -1983,7 +1984,7 @@ where
             storage_tx.commit_changes(changes.clone())?;
         }
 
-        self.update_tx_outputs(tx_id, &mut tx, &record, &changes)?;
+        self.update_tx_outputs(tx_id, &mut tx, &record)?;
         Ok((reverted, state, tx, receipts.to_vec()))
     }
 
@@ -2181,7 +2182,7 @@ where
         &self,
         inputs: &mut [Input],
         db: &TxStorageTransaction<T>,
-        record: &[StorageReadReplayEvent],
+        record: &AccessedPerContract,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -2222,10 +2223,11 @@ where
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
 
-                    *balance_root =
-                        compute_balances_hash(contract_id, record, &Changes::default());
-                    *state_root =
-                        compute_state_hash(contract_id, record, &Changes::default());
+                    let empty = ContractAccesses::default();
+                    let accessed = record.per_contract.get(contract_id).unwrap_or(&empty);
+
+                    *balance_root = compute_balances_hash(accessed.assets_initial());
+                    *state_root = compute_state_hash(accessed.slots_initial());
                 }
                 _ => {}
             }
@@ -2243,8 +2245,7 @@ where
         tx_id: TxId,
         inputs: &[Input],
         outputs: &mut [Output],
-        record: &[StorageReadReplayEvent],
-        changes: &Changes,
+        record: &AccessedPerContract,
     ) -> ExecutorResult<()> {
         for output in outputs {
             if let Output::Contract(contract_output) = output {
@@ -2261,10 +2262,12 @@ where
                         })
                     };
 
+                let empty = ContractAccesses::default();
+                let accessed = record.per_contract.get(contract_id).unwrap_or(&empty);
+
                 contract_output.balance_root =
-                    compute_balances_hash(contract_id, record, changes);
-                contract_output.state_root =
-                    compute_state_hash(contract_id, record, changes);
+                    compute_balances_hash(accessed.assets_final());
+                contract_output.state_root = compute_state_hash(accessed.slots_final());
             }
         }
         Ok(())
