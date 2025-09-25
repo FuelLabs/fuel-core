@@ -7,6 +7,7 @@ use crate::{
     db::BlockAggregatorDB,
 };
 use fuel_core_services::{
+    RunnableService,
     RunnableTask,
     StateWatcher,
     TaskNextAction,
@@ -23,16 +24,73 @@ pub mod block_range_response;
 pub mod integration {
     use crate::{
         BlockAggregator,
-        api::protobuf_adapter::ProtobufAPI,
-        blocks::importer_and_db_source::ImporterAndDbSource,
-        db::storage_db::StorageDB,
+        api::{
+            BlockAggregatorApi,
+            protobuf_adapter::ProtobufAPI,
+        },
+        blocks::importer_and_db_source::{
+            BlockSerializer,
+            ImporterAndDbSource,
+        },
+        db::BlockAggregatorDB,
     };
-    use fuel_core_services::ServiceRunner;
+    use fuel_core_services::{
+        ServiceRunner,
+        stream::BoxStream,
+    };
+    use fuel_core_storage::{
+        StorageInspect,
+        tables::{
+            FuelBlocks,
+            Transactions,
+        },
+    };
+    use fuel_core_types::{
+        fuel_types::BlockHeight,
+        services::block_importer::SharedImportResult,
+    };
 
-    pub fn new_service() -> ServiceRunner<
-        BlockAggregator<ProtobufAPI, StorageDB<()>, ImporterAndDbSource<(), (), ()>>,
-    > {
-        todo!()
+    pub struct Config {
+        pub addr: String,
+    }
+
+    pub fn new_service<DB, S, OnchainDB, E>(
+        config: &Config,
+        db: DB,
+        serializer: S,
+        onchain_db: OnchainDB,
+        importer: BoxStream<SharedImportResult>,
+    ) -> ServiceRunner<
+        BlockAggregator<ProtobufAPI, DB, ImporterAndDbSource<S, OnchainDB, E>>,
+    >
+    where
+        DB: BlockAggregatorDB<
+            BlockRangeResponse = <ProtobufAPI as BlockAggregatorApi>::BlockRangeResponse,
+        >,
+        S: BlockSerializer + Clone + Send + Sync + 'static,
+        OnchainDB: Send + Sync,
+        OnchainDB: StorageInspect<FuelBlocks, Error = E>,
+        OnchainDB: StorageInspect<Transactions, Error = E>,
+        E: std::fmt::Debug + Send + Sync,
+    {
+        let url = config.addr.to_string();
+        let api = ProtobufAPI::new(url);
+        let db_starting_height = BlockHeight::from(0);
+        let db_ending_height = None;
+        let block_source = ImporterAndDbSource::new(
+            importer,
+            serializer,
+            onchain_db,
+            db_starting_height,
+            db_ending_height,
+        );
+        let block_aggregator = BlockAggregator {
+            query: api,
+            database: db,
+            block_source,
+            new_block_subscriptions: Vec::new(),
+        };
+        ServiceRunner::new(block_aggregator)
     }
 }
 #[cfg(test)]
@@ -87,5 +145,29 @@ where
             anyhow::anyhow!("Error draining block source during shutdown: {e:?}")
         })?;
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl<Api, DB, Blocks, BlockRange> RunnableService for BlockAggregator<Api, DB, Blocks>
+where
+    Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
+    DB: BlockAggregatorDB<BlockRangeResponse = BlockRange>,
+    Blocks: BlockSource,
+    BlockRange: Send,
+{
+    const NAME: &'static str = "BlockAggregatorService";
+    type SharedData = ();
+    type Task = Self;
+    type TaskParams = ();
+
+    fn shared_data(&self) -> Self::SharedData {}
+
+    async fn into_task(
+        self,
+        _state_watcher: &StateWatcher,
+        _params: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        Ok(self)
     }
 }
