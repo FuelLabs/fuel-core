@@ -3,7 +3,10 @@
 use super::*;
 use crate::{
     api::BlockAggregatorQuery,
-    blocks::Block,
+    blocks::{
+        Block,
+        BlockSourceEvent,
+    },
     result::{
         Error,
         Result,
@@ -22,9 +25,12 @@ use std::{
         Mutex,
     },
 };
-use tokio::sync::mpsc::{
-    Receiver,
-    Sender,
+use tokio::{
+    sync::mpsc::{
+        Receiver,
+        Sender,
+    },
+    time::error::Elapsed,
 };
 
 type BlockRangeResponse = BoxStream<Block>;
@@ -68,7 +74,7 @@ impl FakeDB {
 }
 
 impl BlockAggregatorDB for FakeDB {
-    type BlockRange = BlockRangeResponse;
+    type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(&mut self, id: BlockHeight, block: Block) -> Result<()> {
         self.map.lock().unwrap().insert(id, block);
@@ -104,11 +110,11 @@ impl BlockAggregatorDB for FakeDB {
 }
 
 struct FakeBlockSource {
-    blocks: Receiver<(BlockHeight, Block)>,
+    blocks: Receiver<BlockSourceEvent>,
 }
 
 impl FakeBlockSource {
-    fn new() -> (Self, Sender<(BlockHeight, Block)>) {
+    fn new() -> (Self, Sender<BlockSourceEvent>) {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
         let _self = Self { blocks: receiver };
         (_self, _sender)
@@ -116,7 +122,7 @@ impl FakeBlockSource {
 }
 
 impl BlockSource for FakeBlockSource {
-    async fn next_block(&mut self) -> Result<(BlockHeight, Block)> {
+    async fn next_block(&mut self) -> Result<BlockSourceEvent> {
         self.blocks.recv().await.ok_or(Error::BlockSource)
     }
 
@@ -171,7 +177,8 @@ async fn run__new_block_gets_added_to_db() {
     let mut watcher = StateWatcher::started();
 
     // when
-    source_sender.send((id, block.clone())).await.unwrap();
+    let event = BlockSourceEvent::NewBlock(id, block.clone());
+    source_sender.send(event).await.unwrap();
     let _ = srv.run(&mut watcher).await;
 
     // then
@@ -208,4 +215,78 @@ async fn run__get_current_height__returns_expected_height() {
 
     // cleanup
     drop(_block_sender);
+}
+
+#[tokio::test]
+async fn run__new_block_subscription__sends_new_block() {
+    let mut rng = StdRng::seed_from_u64(42);
+    // given
+    let (api, sender) = FakeApi::new();
+    let db = FakeDB::new();
+    let (source, source_sender) = FakeBlockSource::new();
+    let mut srv = BlockAggregator::new(api, db, source);
+
+    let expected_block = Block::random(&mut rng);
+    let expected_height = BlockHeight::from(123u32);
+    let mut watcher = StateWatcher::started();
+    let (query, response) = BlockAggregatorQuery::new_block_subscription();
+
+    // when
+    sender.send(query).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
+    let event = BlockSourceEvent::NewBlock(expected_height, expected_block.clone());
+    source_sender.send(event).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
+
+    // then
+    let (actual_height, actual_block) = await_response_with_timeout(response)
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(expected_block, actual_block);
+    assert_eq!(expected_height, actual_height);
+
+    // cleanup
+    drop(source_sender);
+}
+
+#[tokio::test]
+async fn run__new_block_subscription__does_not_send_syncing_blocks() {
+    let mut rng = StdRng::seed_from_u64(42);
+    // given
+    let (api, sender) = FakeApi::new();
+    let db = FakeDB::new();
+    let (source, source_sender) = FakeBlockSource::new();
+    let mut srv = BlockAggregator::new(api, db, source);
+
+    let block = Block::random(&mut rng);
+    let height = BlockHeight::from(123u32);
+    let mut watcher = StateWatcher::started();
+    let (query, response) = BlockAggregatorQuery::new_block_subscription();
+
+    // when
+    sender.send(query).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
+    let event = BlockSourceEvent::OldBlock(height, block);
+    source_sender.send(event).await.unwrap();
+    let _ = srv.run(&mut watcher).await;
+
+    // then
+    let res = await_response_with_timeout(response).await;
+    assert!(res.is_err(), "should have timed out");
+
+    // cleanup
+    drop(source_sender);
+}
+
+async fn await_response_with_timeout<T>(mut response: Receiver<T>) -> Result<T, Elapsed> {
+    tokio::time::timeout(tokio::time::Duration::from_secs(1), async {
+        loop {
+            if let Ok(result) = response.try_recv() {
+                return result;
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
 }

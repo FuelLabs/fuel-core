@@ -6,11 +6,16 @@ use std::fmt::Debug;
 /// Source from which blocks can be gathered for aggregation
 pub trait BlockSource: Send + Sync {
     /// Asynchronously fetch the next block and its height
-    fn next_block(&mut self)
-    -> impl Future<Output = Result<(BlockHeight, Block)>> + Send;
+    fn next_block(&mut self) -> impl Future<Output = Result<BlockSourceEvent>> + Send;
 
     /// Drain any remaining blocks from the source
     fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
+}
+
+#[derive(Debug)]
+pub enum BlockSourceEvent {
+    NewBlock(BlockHeight, Block),
+    OldBlock(BlockHeight, Block),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
