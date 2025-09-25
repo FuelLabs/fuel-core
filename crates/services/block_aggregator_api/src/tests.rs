@@ -233,7 +233,7 @@ async fn run__new_block_subscription__sends_new_block() {
     let expected_block = Block::random(&mut rng);
     let expected_height = BlockHeight::from(123u32);
     let mut watcher = StateWatcher::started();
-    let (query, mut response) = BlockAggregatorQuery::new_block_subscription();
+    let (query, response) = BlockAggregatorQuery::new_block_subscription();
 
     // when
     sender.send(query).await.unwrap();
@@ -266,7 +266,7 @@ async fn run__new_block_subscription__does_not_send_syncing_blocks() {
     let block = Block::random(&mut rng);
     let height = BlockHeight::from(123u32);
     let mut watcher = StateWatcher::started();
-    let (query, mut response) = BlockAggregatorQuery::new_block_subscription();
+    let (query, response) = BlockAggregatorQuery::new_block_subscription();
 
     // when
     sender.send(query).await.unwrap();
