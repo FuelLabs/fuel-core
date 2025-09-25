@@ -26,9 +26,12 @@ use std::{
         Mutex,
     },
 };
-use tokio::sync::mpsc::{
-    Receiver,
-    Sender,
+use tokio::{
+    sync::mpsc::{
+        Receiver,
+        Sender,
+    },
+    time::error::Elapsed,
 };
 
 type BlockRangeResponse = BoxStream<Block>;
@@ -284,4 +287,16 @@ async fn run__new_block_subscription__does_not_send_syncing_blocks() {
 
     // cleanup
     drop(source_sender);
+}
+
+async fn await_response_with_timeout<T>(mut response: Receiver<T>) -> Result<T, Elapsed> {
+    tokio::time::timeout(tokio::time::Duration::from_secs(1), async {
+        loop {
+            if let Ok(result) = response.try_recv() {
+                return result;
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        }
+    })
+    .await
 }
