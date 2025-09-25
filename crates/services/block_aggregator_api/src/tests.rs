@@ -243,13 +243,10 @@ async fn run__new_block_subscription__sends_new_block() {
     let _ = srv.run(&mut watcher).await;
 
     // then
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    let (actual_height, actual_block) =
-        tokio::time::timeout(tokio::time::Duration::from_secs(1), response.recv())
-            .await
-            .unwrap()
-            .unwrap()
-            .into_inner();
+    let (actual_height, actual_block) = await_response_with_timeout(response)
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(expected_block, actual_block);
     assert_eq!(expected_height, actual_height);
 
@@ -279,10 +276,7 @@ async fn run__new_block_subscription__does_not_send_syncing_blocks() {
     let _ = srv.run(&mut watcher).await;
 
     // then
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    let res =
-        tokio::time::timeout(tokio::time::Duration::from_millis(100), response.recv())
-            .await;
+    let res = await_response_with_timeout(response).await;
     assert!(res.is_err(), "should have timed out");
 
     // cleanup
