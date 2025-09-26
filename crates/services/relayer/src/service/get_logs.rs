@@ -66,7 +66,7 @@ where
                             .await
                             .map_err(|err| {
                                 let ProviderError::JsonRpcClientError(err) = err else {
-                                    return err
+                                    return err;
                                 };
 
                                 // Workaround because `QuorumError` obfuscates useful information
@@ -92,12 +92,13 @@ where
 }
 
 /// Write the logs to the database.
-pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
+pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<usize>
 where
     D: RelayerDb,
     S: futures::Stream<Item = Result<DownloadedLogs, ProviderError>>,
 {
     tokio::pin!(logs);
+    let mut persisted_logs = 0;
     while let Some(DownloadedLogs {
         start_height,
         last_height,
@@ -130,6 +131,8 @@ where
             unordered_events.entry(height).or_default().push(event);
         }
 
+        persisted_logs += unordered_events.len();
+
         let empty_events = Vec::new();
         for height in start_height..=last_height {
             let height: DaBlockHeight = height.into();
@@ -137,7 +140,7 @@ where
             database.insert_events(&height, events)?;
         }
     }
-    Ok(())
+    Ok(persisted_logs)
 }
 
 fn sort_events_by_log_index(events: Vec<Log>) -> anyhow::Result<Vec<Log>> {
