@@ -117,6 +117,9 @@ pub struct Task<P, D> {
     shutdown: StateWatcher,
     /// Retry on error
     retry_on_error: bool,
+    current_page_size: u64,
+    max_page_size: u64,
+    successful_log_writes: u64,
 }
 
 impl<P, D> NotInitializedTask<P, D>
@@ -168,6 +171,20 @@ where
         &mut self,
         eth_sync_gap: &state::EthSyncGap,
     ) -> anyhow::Result<()> {
+        const PAGE_GROW_FACTOR_NUM: u64 = 125;
+        const PAGE_GROW_FACTOR_DEN: u64 = 100;
+        const PAGE_SHRINK_FACTOR: u64 = 2;
+        const GROW_THRESHOLD: u64 = 50;
+
+        if self.successful_log_writes > GROW_THRESHOLD
+            && self.current_page_size < self.max_page_size
+        {
+            let grown = self.current_page_size.saturating_mul(PAGE_GROW_FACTOR_NUM)
+                / PAGE_GROW_FACTOR_DEN;
+            self.current_page_size = grown.min(self.max_page_size);
+            self.successful_log_writes = 0;
+        }
+
         let logs = download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
@@ -176,7 +193,19 @@ where
         );
         let logs = logs.take_until(self.shutdown.while_started());
 
-        write_logs(&mut self.database, logs).await
+        match write_logs(&mut self.database, logs).await {
+            Ok(persisted) => {
+                self.successful_log_writes =
+                    self.successful_log_writes.saturating_add(persisted as u64);
+                Ok(())
+            }
+            Err(err) => {
+                self.successful_log_writes = 0;
+                self.current_page_size =
+                    (self.current_page_size / PAGE_SHRINK_FACTOR).max(1);
+                Err(err)
+            }
+        }
     }
 
     fn update_synced(&self, state: &state::EthState) {
@@ -233,9 +262,12 @@ where
             synced,
             eth_node,
             database,
-            config,
             shutdown,
             retry_on_error,
+            current_page_size: config.log_page_size,
+            max_page_size: config.log_page_size,
+            successful_log_writes: 0,
+            config,
         };
 
         Ok(task)
