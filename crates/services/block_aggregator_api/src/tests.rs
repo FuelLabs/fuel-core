@@ -12,6 +12,7 @@ use crate::{
         Result,
     },
 };
+use anyhow::anyhow;
 use fuel_core_services::stream::BoxStream;
 use futures::StreamExt;
 use rand::{
@@ -123,7 +124,10 @@ impl FakeBlockSource {
 
 impl BlockSource for FakeBlockSource {
     async fn next_block(&mut self) -> Result<BlockSourceEvent> {
-        self.blocks.recv().await.ok_or(Error::BlockSource)
+        self.blocks
+            .recv()
+            .await
+            .ok_or(Error::BlockSource(anyhow!("Channel closed")))
     }
 
     async fn drain(&mut self) -> Result<()> {

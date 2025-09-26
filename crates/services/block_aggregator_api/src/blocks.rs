@@ -3,6 +3,8 @@ use bytes::Bytes;
 use fuel_core_types::fuel_types::BlockHeight;
 use std::fmt::Debug;
 
+pub mod importer_and_db_source;
+
 /// Source from which blocks can be gathered for aggregation
 pub trait BlockSource: Send + Sync {
     /// Asynchronously fetch the next block and its height
@@ -12,13 +14,13 @@ pub trait BlockSource: Send + Sync {
     fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Hash)]
 pub enum BlockSourceEvent {
     NewBlock(BlockHeight, Block),
     OldBlock(BlockHeight, Block),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Block {
     bytes: Bytes,
 }

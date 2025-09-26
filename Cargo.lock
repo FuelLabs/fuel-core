@@ -1398,6 +1398,7 @@ name = "block_aggregator_api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bytes",
  "enum-iterator",
  "fuel-core-services",
@@ -1405,11 +1406,14 @@ dependencies = [
  "fuel-core-types 0.46.0",
  "futures",
  "num_enum",
+ "postcard",
  "rand 0.8.5",
  "serde",
  "strum 0.25.0",
  "strum_macros 0.25.3",
+ "thiserror 2.0.12",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
 ]
