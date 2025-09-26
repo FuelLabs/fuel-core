@@ -98,7 +98,7 @@ where
     S: futures::Stream<Item = Result<DownloadedLogs, ProviderError>>,
 {
     tokio::pin!(logs);
-    let mut persisted_logs = 0;
+    let mut total_events_written = 0;
     while let Some(DownloadedLogs {
         start_height,
         last_height,
@@ -131,7 +131,8 @@ where
             unordered_events.entry(height).or_default().push(event);
         }
 
-        persisted_logs += unordered_events.len();
+        total_events_written =
+            total_events_written.saturating_add(unordered_events.len());
 
         let empty_events = Vec::new();
         for height in start_height..=last_height {
@@ -140,7 +141,7 @@ where
             database.insert_events(&height, events)?;
         }
     }
-    Ok(persisted_logs)
+    Ok(total_events_written)
 }
 
 fn sort_events_by_log_index(events: Vec<Log>) -> anyhow::Result<Vec<Log>> {

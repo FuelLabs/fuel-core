@@ -241,7 +241,7 @@ async fn page_size_increases_after_successful_threshold() {
         .await
         .unwrap();
 
-    relayer.successful_persisted_logs_counter = 60;
+    relayer.successful_log_writes = 60;
     relayer.current_page_size = 5;
 
     let eth_state = super::state::test_builder::TestDataSource {
@@ -256,7 +256,7 @@ async fn page_size_increases_after_successful_threshold() {
 
     assert!(result.is_ok());
     assert_eq!(relayer.current_page_size, 6);
-    assert_eq!(relayer.successful_persisted_logs_counter, 0);
+    assert_eq!(relayer.successful_log_writes, 0);
 }
 
 #[tokio::test]
@@ -293,7 +293,7 @@ async fn page_size_does_not_increase_below_threshold() {
         .await
         .unwrap();
 
-    relayer.successful_persisted_logs_counter = 40; // Below GROW_THRESHOLD (50)
+    relayer.successful_log_writes = 40; // Below GROW_THRESHOLD (50)
     relayer.current_page_size = 5;
 
     let eth_state = super::state::test_builder::TestDataSource {
@@ -323,7 +323,7 @@ async fn page_size_never_goes_below_one() {
         .unwrap();
 
     relayer.current_page_size = 1; // Already at minimum
-    relayer.successful_persisted_logs_counter = 30;
+    relayer.successful_log_writes = 30;
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 10,
@@ -353,7 +353,7 @@ async fn page_size_respects_maximum_limit() {
         .await
         .unwrap();
 
-    relayer.successful_persisted_logs_counter = 60;
+    relayer.successful_log_writes = 60;
     relayer.current_page_size = 18; // Close to max
 
     let eth_state = super::state::test_builder::TestDataSource {
