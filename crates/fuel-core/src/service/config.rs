@@ -76,6 +76,7 @@ pub struct Config {
     pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
+    pub rpc_config: fuel_block_aggregator_api::integration::Config,
     pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -156,6 +157,13 @@ impl Config {
 
         const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
 
+        let rpc_config = fuel_block_aggregator_api::integration::Config {
+            addr: std::net::SocketAddr::new(
+                std::net::Ipv4Addr::new(127, 0, 0, 1).into(),
+                1,
+            ),
+        };
+
         Self {
             graphql_config: GraphQLConfig {
                 addr: std::net::SocketAddr::new(
@@ -229,6 +237,7 @@ impl Config {
             time_until_synced: Duration::ZERO,
             production_timeout: Duration::from_secs(20),
             memory_pool_size: 4,
+            rpc_config,
         }
     }
 

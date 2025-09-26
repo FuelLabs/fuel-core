@@ -260,13 +260,20 @@ impl Importer {
         result: CommitInput,
     ) -> Result<(), Error> {
         let (sender, receiver) = oneshot::channel();
+
         let command = Commands::CommitResult {
             result,
             permit,
             callback: sender,
         };
         self.commands.send(command)?;
-        receiver.await?
+        tracing::error!("aaaa");
+        let res = tokio::time::timeout(Duration::from_secs(5), receiver)
+            .await
+            .expect("why this take so long?")?;
+        tracing::error!("kkkkkkk");
+        // receiver.await?
+        res
     }
 
     #[cfg(test)]

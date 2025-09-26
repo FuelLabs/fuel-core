@@ -148,11 +148,15 @@ impl ProtobufAPI {
         let server = Server::new(query_sender);
         let addr = url.parse().unwrap();
         let _server_task_handle = tokio::spawn(async move {
-            tonic::transport::Server::builder()
+            // TODO: Handle error
+            let res = tonic::transport::Server::builder()
                 .add_service(block_aggregator_server::BlockAggregatorServer::new(server))
                 .serve(addr)
-                .await
-                .unwrap();
+                .await;
+            match res {
+                Ok(_) => tracing::error!("ProtobufAPI server stopped"),
+                Err(e) => tracing::error!("ProtobufAPI server error: {}", e),
+            }
         });
         Self {
             _server_task_handle,

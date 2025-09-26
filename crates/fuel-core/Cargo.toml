@@ -86,6 +86,7 @@ fuel-core-tx-status-manager = { workspace = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 fuel-core-upgradable-executor = { workspace = true }
+fuel-block-aggregator-api = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }

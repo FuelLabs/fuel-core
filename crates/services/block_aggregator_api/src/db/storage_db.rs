@@ -103,7 +103,7 @@ where
     for<'b> StorageTransaction<&'b mut S>: StorageMutate<Blocks, Error = StorageError>,
     S: AtomicView<LatestView = T>,
     T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
-    StorageTransaction<T>: AtomicView + StorageInspect<Blocks, Error = StorageError>,
+    StorageTransaction<T>: StorageInspect<Blocks, Error = StorageError>,
 {
     type BlockRangeResponse = BlockRangeResponse;
 
