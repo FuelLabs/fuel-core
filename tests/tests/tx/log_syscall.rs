@@ -165,7 +165,6 @@ impl TestCtx {
 }
 
 fn extract_logs_so_far(tx_id: TxId, lines: Vec<String>) -> Logs {
-    tracing::info!("{lines:?}");
     let anchor_verification_logs = format!("verification{{tx_id={tx_id}}}");
     let anchor_execution_logs = format!("execution{{tx_id={tx_id}}}");
     let anchor_estimation_logs = format!("estimation{{tx_id={tx_id}}}");
