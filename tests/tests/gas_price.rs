@@ -78,7 +78,6 @@ use rand::{
 };
 use std::{
     self,
-    iter::repeat,
     ops::Deref,
     time::Duration,
 };
@@ -116,7 +115,7 @@ fn arb_large_tx<R: Rng + rand::CryptoRng>(
     rng: &mut R,
     asset_id: Option<AssetId>,
 ) -> Transaction {
-    let mut script: Vec<_> = repeat(op::noop()).take(10_000).collect();
+    let mut script: Vec<_> = std::iter::repeat_n(op::noop(), 10_000).collect();
     script.push(op::ret(RegId::ONE));
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);
@@ -139,7 +138,7 @@ fn arb_small_tx<R: Rng + rand::CryptoRng>(
     max_fee_limit: Word,
     rng: &mut R,
 ) -> Transaction {
-    let mut script: Vec<_> = repeat(op::noop()).take(10).collect();
+    let mut script: Vec<_> = std::iter::repeat_n(op::noop(), 10).collect();
     script.push(op::ret(RegId::ONE));
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);

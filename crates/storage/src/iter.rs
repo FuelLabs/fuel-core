@@ -1,7 +1,10 @@
 //! The module defines primitives that allow iterating of the storage.
 
 use crate::{
-    blueprint::BlueprintInspect,
+    blueprint::{
+        BlueprintCodec,
+        BlueprintInspect,
+    },
     codec::{
         Decode,
         Encode,
@@ -164,9 +167,10 @@ where
     where
         P: AsRef<[u8]>,
     {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
+        #[allow(clippy::redundant_closure)]
+        // false positive: https://github.com/rust-lang/rust-clippy/issues/14215
+        let encoder = start
+            .map(|start| <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(start));
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
@@ -179,10 +183,9 @@ where
         )
         .map(|res| {
             res.and_then(|key| {
-                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let key =
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(key.as_slice())
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok(key)
             })
         })
@@ -198,9 +201,10 @@ where
     where
         P: AsRef<[u8]>,
     {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
+        #[allow(clippy::redundant_closure)]
+        // false positive: https://github.com/rust-lang/rust-clippy/issues/14215
+        let encoder = start
+            .map(|start| <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(start));
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
@@ -213,15 +217,12 @@ where
         )
         .map(|val| {
             val.and_then(|(key, value)| {
-                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let key =
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(key.as_slice())
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 let value =
-                    <M::Blueprint as BlueprintInspect<M, Self>>::ValueCodec::decode(
-                        &value,
-                    )
-                    .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                    <M::Blueprint as BlueprintCodec<M>>::ValueCodec::decode(&value)
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok((key, value))
             })
         })

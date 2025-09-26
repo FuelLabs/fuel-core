@@ -4,6 +4,7 @@ use crate::{
     Mappable,
     Result as StorageResult,
     blueprint::{
+        BlueprintCodec,
         BlueprintInspect,
         plain::Plain,
         sparse::{
@@ -114,17 +115,11 @@ where
     type OwnedValue = <Table as Mappable>::OwnedValue;
 }
 
-type KeyCodec<Table, TC> =
-    <<Table as TableWithBlueprint>::Blueprint as BlueprintInspect<
-        Table,
-        DummyStorage<MerkleizedColumn<TC>>,
-    >>::KeyCodec;
+type KeyCodec<Table> =
+    <<Table as TableWithBlueprint>::Blueprint as BlueprintCodec<Table>>::KeyCodec;
 
-type ValueCodec<Table, TC> =
-    <<Table as TableWithBlueprint>::Blueprint as BlueprintInspect<
-        Table,
-        DummyStorage<MerkleizedColumn<TC>>,
-    >>::ValueCodec;
+type ValueCodec<Table> =
+    <<Table as TableWithBlueprint>::Blueprint as BlueprintCodec<Table>>::ValueCodec;
 
 impl<Table, TC> TableWithBlueprint for Merkleized<Table>
 where
@@ -134,8 +129,8 @@ where
     Table::Blueprint: BlueprintInspect<Table, DummyStorage<MerkleizedColumn<TC>>>,
 {
     type Blueprint = Sparse<
-        KeyCodec<Table, TC>,
-        ValueCodec<Table, TC>,
+        KeyCodec<Table>,
+        ValueCodec<Table>,
         MerkleMetadata<TC>,
         MerkleData<Table>,
         KeyConverter<Table>,

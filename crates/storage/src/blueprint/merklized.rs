@@ -11,6 +11,7 @@ use crate::{
     StorageInspect,
     StorageMutate,
     blueprint::{
+        BlueprintCodec,
         BlueprintInspect,
         BlueprintMutate,
         SupportsBatching,
@@ -122,6 +123,17 @@ where
     }
 }
 
+impl<M, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintCodec<M>
+    for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
+where
+    M: Mappable,
+    KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
+    ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
+{
+    type KeyCodec = KeyCodec;
+    type ValueCodec = ValueCodec;
+}
+
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintInspect<M, S>
     for Merklized<KeyCodec, ValueCodec, Metadata, Nodes, Encoder>
 where
@@ -130,8 +142,6 @@ where
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
 {
-    type KeyCodec = KeyCodec;
-    type ValueCodec = ValueCodec;
 }
 
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, Encoder> BlueprintMutate<M, S>
