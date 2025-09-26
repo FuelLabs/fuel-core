@@ -2,7 +2,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Block Aggregator API error")]
-    Api,
+    Api(anyhow::Error),
     #[error("Block Source error: {0}")]
     BlockSource(anyhow::Error),
     #[error("Database error: {0}")]
