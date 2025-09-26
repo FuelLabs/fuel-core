@@ -34,6 +34,8 @@ pub mod sync_service;
 #[cfg(test)]
 mod tests;
 
+pub mod serializer_adapter;
+
 pub trait BlockSerializer {
     fn serialize_block(&self, block: &FuelBlock) -> Result<Block>;
 }

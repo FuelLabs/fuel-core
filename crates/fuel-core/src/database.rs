@@ -84,6 +84,7 @@ use crate::state::{
 };
 use crate::{
     database::database_description::{
+        block_aggregator::BlockAggregatorDatabase,
         gas_price::GasPriceDatabase,
         indexation_availability,
     },
@@ -438,6 +439,12 @@ impl Modifiable for Database<GasPriceDatabase> {
             iter.iter_all_keys::<GasPriceMetadata>(Some(IterDirection::Reverse))
                 .try_collect()
         })
+    }
+}
+
+impl Modifiable for Database<BlockAggregatorDatabase> {
+    fn commit_changes(&mut self, _changes: Changes) -> StorageResult<()> {
+        todo!()
     }
 }
 

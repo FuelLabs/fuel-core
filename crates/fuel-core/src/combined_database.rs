@@ -10,6 +10,7 @@ use crate::{
         GenesisDatabase,
         Result as DatabaseResult,
         database_description::{
+            block_aggregator::BlockAggregatorDatabase,
             compression::CompressionDatabase,
             gas_price::GasPriceDatabase,
             off_chain::OffChain,
@@ -60,6 +61,7 @@ pub struct CombinedDatabase {
     relayer: Database<Relayer>,
     gas_price: Database<GasPriceDatabase>,
     compression: Database<CompressionDatabase>,
+    block_aggregation: Database<BlockAggregatorDatabase>,
 }
 
 impl CombinedDatabase {
@@ -69,6 +71,7 @@ impl CombinedDatabase {
         relayer: Database<Relayer>,
         gas_price: Database<GasPriceDatabase>,
         compression: Database<CompressionDatabase>,
+        block_aggregation: Database<BlockAggregatorDatabase>,
     ) -> Self {
         Self {
             on_chain,
@@ -76,6 +79,7 @@ impl CombinedDatabase {
             relayer,
             gas_price,
             compression,
+            block_aggregation,
         }
     }
 
@@ -240,12 +244,22 @@ impl CombinedDatabase {
                 ..database_config
             },
         )?;
+        let block_aggregation = Database::open_rocksdb(
+            path,
+            state_rewind_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
+
         Ok(Self {
             on_chain,
             off_chain,
             relayer,
             gas_price,
             compression,
+            block_aggregation,
         })
     }
 
@@ -261,6 +275,7 @@ impl CombinedDatabase {
             relayer: Default::default(),
             gas_price: Default::default(),
             compression: Default::default(),
+            block_aggregation: Default::default(),
         })
     }
 
@@ -306,6 +321,7 @@ impl CombinedDatabase {
             Database::in_memory(),
             Database::in_memory(),
             Database::in_memory(),
+            Database::in_memory(),
         )
     }
 
@@ -324,6 +340,10 @@ impl CombinedDatabase {
 
     pub fn compression(&self) -> &Database<CompressionDatabase> {
         &self.compression
+    }
+
+    pub fn block_aggregation(&self) -> &Database<BlockAggregatorDatabase> {
+        &self.block_aggregation
     }
 
     #[cfg(any(feature = "test-helpers", test))]

@@ -1439,35 +1439,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "block_aggregator_api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "enum-iterator",
- "fuel-core-services",
- "fuel-core-storage",
- "fuel-core-types 0.46.0",
- "futures",
- "num_enum",
- "postcard",
- "prost 0.14.1",
- "rand 0.8.5",
- "serde",
- "strum 0.25.0",
- "strum_macros 0.25.3",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "tonic 0.14.2",
- "tonic-prost",
- "tonic-prost-build",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "blocking"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3508,6 +3479,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-block-aggregator-api"
+version = "0.46.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "enum-iterator",
+ "fuel-core-services",
+ "fuel-core-storage",
+ "fuel-core-types 0.46.0",
+ "futures",
+ "num_enum",
+ "postcard",
+ "prost 0.14.1",
+ "rand 0.8.5",
+ "serde",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tonic 0.14.2",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fuel-compression"
 version = "0.63.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3532,6 +3532,7 @@ dependencies = [
  "cosmrs",
  "derive_more 0.99.20",
  "enum-iterator",
+ "fuel-block-aggregator-api",
  "fuel-core",
  "fuel-core-chain-config",
  "fuel-core-compression-service",
