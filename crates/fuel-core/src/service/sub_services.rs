@@ -461,9 +461,7 @@ pub fn init_sub_services(
         chain_name,
     };
 
-    let block_aggregator_config = fuel_block_aggregator_api::integration::Config {
-        addr: String::new(),
-    };
+    let block_aggregator_config = config.rpc_config.clone();
     let db = database.block_aggregation().clone();
     let db_adapter = StorageDB::new(db);
     let serializer = SerializerAdapter;

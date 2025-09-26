@@ -49,9 +49,11 @@ pub mod integration {
         fuel_types::BlockHeight,
         services::block_importer::SharedImportResult,
     };
+    use std::net::SocketAddr;
 
+    #[derive(Clone, Debug)]
     pub struct Config {
-        pub addr: String,
+        pub addr: SocketAddr,
     }
 
     pub fn new_service<DB, S, OnchainDB, E>(

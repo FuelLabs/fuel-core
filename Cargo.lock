@@ -3646,6 +3646,7 @@ dependencies = [
  "const_format",
  "dirs 4.0.0",
  "dotenvy",
+ "fuel-block-aggregator-api",
  "fuel-core",
  "fuel-core-chain-config",
  "fuel-core-metrics",
