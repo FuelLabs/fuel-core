@@ -32,6 +32,7 @@ tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-prost = { workspace = true }
 tracing = { workspace = true }
+log = "0.4.27"
 
 [build-dependencies]
 tonic-prost-build = { workspace = true }

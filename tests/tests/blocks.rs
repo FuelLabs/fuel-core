@@ -371,7 +371,7 @@ async fn missing_first_and_last_parameters_returns_an_error() {
     assert!(result.contains("The queries for the whole range is not supported"));
 }
 
-mod full_block {
+pub mod full_block {
     use super::*;
     use cynic::QueryBuilder;
     use fuel_core_client::client::{

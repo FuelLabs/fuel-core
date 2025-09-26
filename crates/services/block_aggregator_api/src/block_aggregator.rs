@@ -35,6 +35,7 @@ where
     }
 
     pub fn stop(&self) -> TaskNextAction {
+        tracing::error!("stopping");
         TaskNextAction::Stop
     }
 
@@ -43,6 +44,7 @@ where
         res: crate::result::Result<BlockAggregatorQuery<BlockRangeResponse>>,
     ) -> TaskNextAction {
         tracing::debug!("Handling query: {res:?}");
+        tracing::error!("Handling query: {res:?}");
         let query = try_or_stop!(res, |e| {
             tracing::error!("Error receiving query: {e:?}");
         });
@@ -109,6 +111,7 @@ where
         res: crate::result::Result<BlockSourceEvent>,
     ) -> TaskNextAction {
         tracing::debug!("Handling block: {res:?}");
+        tracing::error!("Handling block: {res:?}");
         let event = try_or_stop!(res, |e| {
             tracing::error!("Error receiving block from source: {e:?}");
         });

@@ -145,7 +145,6 @@ impl FuelService {
         )?;
 
         // initialize sub services
-        tracing::info!("Initializing sub services");
         database.sync_aux_db_heights(shutdown_listener)?;
 
         let block_production_ready_signal = ReadySignal::new();
@@ -374,6 +373,7 @@ impl FuelService {
                 .await?;
 
                 self.shared.block_importer.commit_result(result).await?;
+                tracing::error!("mouse mouse mouse");
             }
         }
 
@@ -393,7 +393,9 @@ impl FuelService {
     /// Start all sub services and await for them to start.
     pub async fn start_and_await(&self) -> anyhow::Result<State> {
         let watcher = self.runner.state_watcher();
+        tracing::error!("preparing genesis");
         self.prepare_genesis(&watcher).await?;
+        tracing::info!("starting fuel service");
         self.runner.start_and_await().await
     }
 
@@ -468,18 +470,23 @@ impl RunnableService for Task {
         watcher: &StateWatcher,
         params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        tracing::error!("Starting FuelService sub-services");
         let mut watcher = watcher.clone();
 
         for service in self.services.iter() {
+            tracing::error!("Starting FuelService sub-service");
             tokio::select! {
                 _ = watcher.wait_stopping_or_stopped() => {
+                    tracing::error!("FuelService stopped");
                     break;
                 }
                 result = service.start_and_await() => {
+                    tracing::error!("FuelService sub-services result: {:?}", result);
                     result?;
                 }
             }
         }
+        tracing::error!("All FuelService sub-services started");
 
         params.block_production_ready_signal.send_ready_signal();
 
@@ -575,7 +582,7 @@ mod tests {
         // -    gas price service
         // -    chain info provider
         #[allow(unused_mut)]
-        let mut expected_services = 7;
+        let mut expected_services = 8;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]

@@ -75,8 +75,8 @@ pub mod integration {
         OnchainDB: StorageInspect<Transactions, Error = E>,
         E: std::fmt::Debug + Send + Sync,
     {
-        let url = config.addr.to_string();
-        let api = ProtobufAPI::new(url);
+        let addr = config.addr.to_string();
+        let api = ProtobufAPI::new(addr);
         let db_starting_height = BlockHeight::from(0);
         let db_ending_height = None;
         let block_source = ImporterAndDbSource::new(
@@ -135,6 +135,7 @@ where
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tracing::debug!("BlockAggregator running");
+        tracing::error!("BlockAggregator running");
         tokio::select! {
             query_res = self.query.await_query() => self.handle_query(query_res).await,
             block_res = self.block_source.next_block() => self.handle_block(block_res).await,
@@ -170,6 +171,7 @@ where
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        tracing::error!("BlockAggregator into task");
         Ok(self)
     }
 }
