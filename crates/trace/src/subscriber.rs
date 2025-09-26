@@ -108,7 +108,8 @@ where
             let writer = MockWriter::new(buffer.clone());
             let dispatch = get_subscriber(writer.clone());
 
-            dispatcher::set_global_default(dispatch).unwrap();
+            dispatcher::set_global_default(dispatch)
+                .expect("Unable to set the global dispatcher");
 
             let result = f();
 
@@ -128,7 +129,7 @@ where
         Ok(Fork::Parent(pid)) => {
             drop(pipe_writer);
 
-            fork::waitpid(pid).unwrap();
+            fork::waitpid(pid).expect("failed to wait for child process");
 
             let mut serilized = vec![];
             pipe_reader
@@ -160,7 +161,7 @@ where
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
-            .unwrap()
+            .expect("failed to build tokio runtime to extract logs the future")
             .block_on(f)
     })
 }
