@@ -16,23 +16,10 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
-use std::net::{
-    SocketAddr,
-    TcpListener,
-};
-
-fn free_local_addr() -> SocketAddr {
-    let listener = TcpListener::bind("[::1]:0").unwrap();
-    listener.local_addr().unwrap() // OS picks a free port
-}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn get_block_range__can_get_serialized_block_from_rpc() {
-    // let _ = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::ERROR)
-    //     .try_init();
-    let mut config = Config::local_node();
-    config.rpc_config.addr = free_local_addr();
+    let config = Config::local_node();
     let rpc_url = config.rpc_config.addr.clone();
 
     let srv = FuelService::from_database(Database::default(), config.clone())

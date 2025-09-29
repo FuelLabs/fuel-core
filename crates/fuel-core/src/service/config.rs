@@ -1,5 +1,9 @@
 use clap::ValueEnum;
 use std::{
+    net::{
+        SocketAddr,
+        TcpListener,
+    },
     num::{
         NonZeroU32,
         NonZeroU64,
@@ -103,6 +107,12 @@ pub struct Config {
     pub memory_pool_size: usize,
 }
 
+#[cfg(feature = "test-helpers")]
+fn free_local_addr() -> SocketAddr {
+    let listener = TcpListener::bind("[::1]:0").unwrap();
+    listener.local_addr().unwrap() // OS picks a free port
+}
+
 impl Config {
     #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
@@ -158,10 +168,7 @@ impl Config {
         const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
 
         let rpc_config = fuel_block_aggregator_api::integration::Config {
-            addr: std::net::SocketAddr::new(
-                std::net::Ipv4Addr::new(127, 0, 0, 1).into(),
-                1,
-            ),
+            addr: free_local_addr(),
         };
 
         Self {
