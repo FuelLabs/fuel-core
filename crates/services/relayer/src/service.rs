@@ -106,13 +106,15 @@ struct AdaptivePageSizer {
     current: u64,
     max: u64,
     successful_rpc_calls: u64,
+    grow_threshold: u64,
 }
 
 impl AdaptivePageSizer {
-    fn new(current: u64, max: u64) -> Self {
+    fn new(current: u64, max: u64, grow_threshold: u64) -> Self {
         Self {
             current,
             max,
+            grow_threshold,
             successful_rpc_calls: 0,
         }
     }
@@ -121,13 +123,14 @@ impl AdaptivePageSizer {
         const PAGE_GROW_FACTOR_NUM: u64 = 125;
         const PAGE_GROW_FACTOR_DEN: u64 = 100;
         const PAGE_SHRINK_FACTOR: u64 = 2;
-        const GROW_THRESHOLD: u64 = 50;
+
         if rpc_error {
             self.successful_rpc_calls = 0;
             self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
         } else {
             self.successful_rpc_calls += successful_rpc_calls;
-            if self.successful_rpc_calls > GROW_THRESHOLD && self.current < self.max {
+            if self.successful_rpc_calls > self.grow_threshold && self.current < self.max
+            {
                 let grown = self.current.saturating_mul(PAGE_GROW_FACTOR_NUM)
                     / PAGE_GROW_FACTOR_DEN;
                 self.current = grown.min(self.max);
@@ -279,7 +282,7 @@ where
             retry_on_error,
         } = self;
         let adaptive_page_sizer =
-            AdaptivePageSizer::new(config.log_page_size, config.log_page_size);
+            AdaptivePageSizer::new(config.log_page_size, config.log_page_size, 50);
         let task = Task {
             synced,
             eth_node,
@@ -471,4 +474,66 @@ where
     let task = NotInitializedTask::new(eth_node, database, config, retry_on_error);
 
     CustomizableService::new(task)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adaptive_page_sizer_grows_when_threshold_exceeded() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(4, 10, grow_threshold);
+        sizer.update(grow_threshold + 1, false);
+        assert_eq!(sizer.page_size(), 5);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_does_not_grow_if_below_threshold() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(4, 10, grow_threshold);
+        sizer.update(grow_threshold - 10, false);
+        assert_eq!(sizer.page_size(), 4);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_does_not_grow_if_at_max() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(10, 10, grow_threshold);
+        sizer.update(grow_threshold + 1, false);
+        assert_eq!(sizer.page_size(), 10);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_shrinks_on_rpc_error() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(6, 10, grow_threshold);
+        sizer.update(grow_threshold + 1, true);
+        assert_eq!(sizer.page_size(), 3);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_never_goes_below_one() {
+        let mut sizer = AdaptivePageSizer::new(1, 10, 50);
+        sizer.update(0, true);
+        assert_eq!(sizer.page_size(), 1);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_resets_successful_calls_after_growth() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(0, 10, grow_threshold);
+        sizer.update(grow_threshold + 1, false);
+        assert_eq!(sizer.successful_rpc_calls, 0);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_accumulates_successful_calls_until_threshold() {
+        let mut sizer = AdaptivePageSizer::new(4, 10, 50);
+        sizer.update(20, false);
+        sizer.update(25, false);
+        assert_eq!(sizer.page_size(), 4);
+        sizer.update(10, false);
+        assert_eq!(sizer.page_size(), 5);
+    }
 }
