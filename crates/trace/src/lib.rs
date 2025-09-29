@@ -8,6 +8,8 @@ use tracing_subscriber::{
     fmt::format,
 };
 
+pub mod subscriber;
+
 #[ctor]
 pub static TRACE: () = {
     if let Ok(v) = var("FUEL_TRACE") {
