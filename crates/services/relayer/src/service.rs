@@ -199,12 +199,13 @@ where
                     self.successful_log_writes.saturating_add(persisted as u64);
                 Ok(())
             }
-            Err(err) => {
+            Err(WriteLogsError::Provider(e)) => {
                 self.successful_log_writes = 0;
                 self.current_page_size =
                     (self.current_page_size / PAGE_SHRINK_FACTOR).max(1);
-                Err(err)
+                Err(e.into())
             }
+            Err(other) => Err(other.into()),
         }
     }
 

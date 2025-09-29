@@ -91,14 +91,29 @@ where
     )
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum WriteLogsError {
+    #[error("provider error: {0}")]
+    Provider(#[from] ProviderError),
+
+    #[error("storage error: {0}")]
+    Database(fuel_core_storage::Error),
+
+    #[error("other error: {0}")]
+    Other(#[from] anyhow::Error),
+}
+
 /// Write the logs to the database.
-pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<usize>
+pub(crate) async fn write_logs<D, S>(
+    database: &mut D,
+    logs: S,
+) -> Result<usize, WriteLogsError>
 where
     D: RelayerDb,
     S: futures::Stream<Item = Result<DownloadedLogs, ProviderError>>,
 {
     tokio::pin!(logs);
-    let mut total_events_written = 0;
+    let mut total_events_written: usize = 0;
     while let Some(DownloadedLogs {
         start_height,
         last_height,
@@ -138,7 +153,9 @@ where
         for height in start_height..=last_height {
             let height: DaBlockHeight = height.into();
             let events = unordered_events.get(&height).unwrap_or(&empty_events);
-            database.insert_events(&height, events)?;
+            database
+                .insert_events(&height, events)
+                .map_err(WriteLogsError::Database)?;
         }
     }
     Ok(total_events_written)
