@@ -208,7 +208,7 @@ where
         }
     }
 
-    pub fn into_inner(&self) -> (&S, ReadsPerContract) {
+    pub fn as_inner(&self) -> (&S, ReadsPerContract) {
         (&self.storage, self.record.lock().clone())
     }
 

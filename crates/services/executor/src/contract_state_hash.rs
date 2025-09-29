@@ -38,7 +38,7 @@ pub fn compute_state_hash(accessed: &BTreeMap<Bytes32, Option<Vec<u8>>>) -> Byte
         if let Some(value) = value {
             hasher.update([1u8]);
             hasher.update((value.len() as Word).to_be_bytes());
-            hasher.update(&value);
+            hasher.update(value);
         } else {
             hasher.update([0u8]);
         }

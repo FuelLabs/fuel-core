@@ -1968,9 +1968,9 @@ where
         Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
         let (recorder, changes) = sub_block_db_commit.into_inner();
-        let (storage_tx_recovered, record) = recorder.into_inner();
+        let (storage_tx_recovered, record) = recorder.as_inner();
         let (state_before, state_after) =
-            record.finalize(&storage_tx_recovered, &changes)?;
+            record.finalize(storage_tx_recovered, &changes)?;
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
