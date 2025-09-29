@@ -1999,11 +1999,19 @@ where
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
         self.compute_inputs(tx.inputs_mut(), storage_tx_recovered, &record)?;
-        self.update_tx_outputs(tx_id, &mut tx, &record, storage_tx, &changes)?;
 
         // only commit state changes if execution was a success
         if !reverted {
+            self.update_tx_outputs(tx_id, &mut tx, &record, storage_tx, &changes)?;
             storage_tx.commit_changes(changes.clone())?;
+        } else {
+            self.update_tx_outputs(
+                tx_id,
+                &mut tx,
+                &record,
+                storage_tx,
+                &Changes::default(),
+            )?;
         }
 
         Ok((reverted, state, tx, receipts.to_vec()))
