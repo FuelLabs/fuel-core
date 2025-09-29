@@ -5,21 +5,26 @@ edition = "2024"
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 bytes = { workspace = true, features = ["serde"] }
 enum-iterator = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
+futures = { workspace = true }
 num_enum = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
-futures = { workspace = true }
+fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
+postcard = { workspace = true }
+tokio-stream = { workspace = true }
 tracing-subscriber = { workspace = true }
