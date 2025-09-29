@@ -128,7 +128,9 @@ impl AdaptivePageSizer {
             self.successful_rpc_calls = 0;
             self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
         } else {
-            self.successful_rpc_calls += successful_rpc_calls;
+            self.successful_rpc_calls = self
+                .successful_rpc_calls
+                .saturating_add(successful_rpc_calls);
             if self.successful_rpc_calls >= self.grow_threshold && self.current < self.max
             {
                 let grown = self.current.saturating_mul(PAGE_GROW_FACTOR_NUM)
@@ -213,6 +215,13 @@ where
     ) -> anyhow::Result<()> {
         let mut successful_rpc_calls: u64 = 0;
         let mut rpc_error: bool = false;
+
+        println!(
+            "Starting download with page size: {}",
+            self.adaptive_page_sizer.page_size()
+        );
+        println!("Sync gap: {:?}", eth_sync_gap);
+
         let logs = download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
@@ -220,12 +229,25 @@ where
             self.adaptive_page_sizer.page_size(),
         )
         .inspect(|result| match result {
-            Ok(_) => successful_rpc_calls += 1,
-            Err(_) => rpc_error = true,
+            Ok(downloaded) => {
+                successful_rpc_calls = successful_rpc_calls.saturating_add(1);
+                println!(
+                    "Successful RPC call #{}, blocks: {}..{}",
+                    successful_rpc_calls, downloaded.start_height, downloaded.last_height
+                );
+            }
+            Err(_) => {
+                rpc_error = true;
+                println!("RPC error encountered");
+            }
         });
 
         let logs = logs.take_until(self.shutdown.while_started());
         let result = write_logs(&mut self.database, logs).await;
+
+        println!("Total successful RPC calls: {}", successful_rpc_calls);
+        println!("Had RPC error: {}", rpc_error);
+
         self.adaptive_page_sizer
             .update(successful_rpc_calls, rpc_error);
         result
