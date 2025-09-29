@@ -129,7 +129,7 @@ impl AdaptivePageSizer {
             self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
         } else {
             self.successful_rpc_calls += successful_rpc_calls;
-            if self.successful_rpc_calls > self.grow_threshold && self.current < self.max
+            if self.successful_rpc_calls >= self.grow_threshold && self.current < self.max
             {
                 let grown = self.current.saturating_mul(PAGE_GROW_FACTOR_NUM)
                     / PAGE_GROW_FACTOR_DEN;

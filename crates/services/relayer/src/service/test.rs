@@ -233,8 +233,7 @@ async fn relayer_grows_page_size_on_success() {
         ..Default::default()
     };
 
-    let (_, shutdown) = tokio::sync::watch::channel(fuel_core_services::State::Started);
-    let shutdown = shutdown.into();
+    let shutdown = StateWatcher::started();
 
     let mut relayer = NotInitializedTask::new(eth_node, mock_db, config, false)
         .into_task(&shutdown, ())
@@ -260,4 +259,104 @@ async fn relayer_grows_page_size_on_success() {
     assert!(result.is_ok());
     assert_eq!(relayer.adaptive_page_sizer.page_size(), 6); // 5 * 125 / 100 = 6.25 → 6
     assert_eq!(relayer.adaptive_page_sizer.successful_rpc_calls, 0); // should reset
+}
+
+#[tokio::test]
+async fn relayer_respects_max_page_size_limit() {
+    // Setup: mock node returns valid logs
+    let eth_node = MockMiddleware::default();
+    let logs = vec![Log {
+        address: Default::default(),
+        block_number: Some(2.into()),
+        ..Default::default()
+    }];
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+
+    let mock_db = crate::mock_db::MockDb::default();
+    let config = Config {
+        log_page_size: 10, // max page size
+        ..Default::default()
+    };
+
+    let shutdown = StateWatcher::started();
+    let mut relayer = NotInitializedTask::new(eth_node, mock_db, config, false)
+        .into_task(&shutdown, ())
+        .await
+        .unwrap();
+
+    // Start at max page size with high success count
+    relayer.adaptive_page_sizer = AdaptivePageSizer::new(10, 10, 50);
+    relayer.adaptive_page_sizer.successful_rpc_calls = 60; // Above threshold
+
+    let eth_state = super::state::test_builder::TestDataSource {
+        eth_remote_finalized: 10,
+        eth_local_finalized: 1,
+    };
+    let eth_state = state::build_eth(&eth_state).await.unwrap();
+
+    // Act
+    let result = relayer
+        .download_logs(&eth_state.needs_to_sync_eth().unwrap())
+        .await;
+
+    // Assert - should stay at max, not exceed it
+    assert!(result.is_ok());
+    assert_eq!(relayer.adaptive_page_sizer.page_size(), 10);
+}
+
+#[tokio::test]
+async fn relayer_handles_multiple_successful_rpc_calls_per_download() {
+    // Setup: mock node returns logs that require multiple pages
+    let eth_node = MockMiddleware::default();
+    let logs_page1 = vec![
+        Log {
+            address: Default::default(),
+            block_number: Some(2.into()),
+            ..Default::default()
+        },
+        Log {
+            address: Default::default(),
+            block_number: Some(3.into()),
+            ..Default::default()
+        },
+    ];
+    let logs_page2 = vec![Log {
+        address: Default::default(),
+        block_number: Some(4.into()),
+        ..Default::default()
+    }];
+    eth_node.update_data(|data| data.logs_batch = vec![logs_page1, logs_page2]);
+
+    let mock_db = crate::mock_db::MockDb::default();
+    let config = Config {
+        log_page_size: 10,
+        ..Default::default()
+    };
+
+    let shutdown = StateWatcher::started();
+    let mut relayer = NotInitializedTask::new(eth_node, mock_db, config, false)
+        .into_task(&shutdown, ())
+        .await
+        .unwrap();
+
+    // Start with small page size to force multiple RPC calls
+    relayer.adaptive_page_sizer = AdaptivePageSizer::new(5, 10, 50);
+    relayer.adaptive_page_sizer.successful_rpc_calls = 45; // Close to threshold
+
+    let eth_state = super::state::test_builder::TestDataSource {
+        eth_remote_finalized: 10,
+        eth_local_finalized: 1,
+    };
+    let eth_state = state::build_eth(&eth_state).await.unwrap();
+
+    // Act
+    let result = relayer
+        .download_logs(&eth_state.needs_to_sync_eth().unwrap())
+        .await;
+
+    // Assert - should accumulate multiple successful calls
+    assert!(result.is_ok());
+    // Should have 2 successful RPC calls (for 2 pages)
+    assert_eq!(relayer.adaptive_page_sizer.successful_rpc_calls, 47); // 45 + 2
+    assert_eq!(relayer.adaptive_page_sizer.page_size(), 5); // Not enough to reach threshold yet
 }
