@@ -1,9 +1,9 @@
 #[cfg(feature = "std")]
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{
-    collections::BTreeSet,
+    collections::BTreeMap,
     vec::Vec,
 };
 
@@ -19,29 +19,23 @@ use sha2::{
 
 /// Computes a hash of all contract balances that were read or modified.
 /// The hash is not dependent on the order of reads or writes.
-pub fn compute_balances_hash<E>(
-    accessed: &BTreeSet<AssetId>,
-    get_value: impl Fn(&AssetId) -> Result<Word, E>,
-) -> Result<Bytes32, E> {
+pub fn compute_balances_hash(accessed: &BTreeMap<AssetId, Word>) -> Bytes32 {
     let mut hasher = Sha256::new();
-    for key in accessed {
+    for (key, value) in accessed {
         hasher.update(key);
-        hasher.update(get_value(key)?.to_be_bytes());
+        hasher.update(value.to_be_bytes());
     }
     let digest: [u8; 32] = hasher.finalize().into();
-    Ok(Bytes32::from(digest))
+    Bytes32::from(digest)
 }
 
 /// Computes a hash of all contract state slots that were read or modified.
 /// The hash is not dependent on the order of reads or writes.
-pub fn compute_state_hash<E>(
-    accessed: &BTreeSet<Bytes32>,
-    get_value: impl Fn(&Bytes32) -> Result<Option<Vec<u8>>, E>,
-) -> Result<Bytes32, E> {
+pub fn compute_state_hash(accessed: &BTreeMap<Bytes32, Option<Vec<u8>>>) -> Bytes32 {
     let mut hasher = Sha256::new();
-    for key in accessed {
+    for (key, value) in accessed {
         hasher.update(key);
-        if let Some(value) = get_value(key)? {
+        if let Some(value) = value {
             hasher.update([1u8]);
             hasher.update((value.len() as Word).to_be_bytes());
             hasher.update(&value);
@@ -50,5 +44,5 @@ pub fn compute_state_hash<E>(
         }
     }
     let digest: [u8; 32] = hasher.finalize().into();
-    Ok(Bytes32::from(digest))
+    Bytes32::from(digest)
 }

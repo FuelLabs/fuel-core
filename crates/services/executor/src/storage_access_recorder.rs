@@ -2,11 +2,21 @@ use fuel_core_storage::{
     ContractsAssetKey,
     ContractsStateKey,
     Result as StorageResult,
+    StorageAsRef,
+    StorageInspect,
+    blueprint::BlueprintCodec,
+    codec::Decode,
     column::Column,
     kv_store::{
         KeyValueInspect,
         StorageColumn,
         Value,
+        WriteOperation,
+    },
+    structured_storage::TableWithBlueprint,
+    tables::{
+        ContractsAssets,
+        ContractsState,
     },
     transactional::Changes,
 };
@@ -33,12 +43,19 @@ use alloc::{
         BTreeSet,
     },
     sync::Arc,
+    vec::Vec,
 };
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ContractAccesses {
     pub assets: BTreeSet<AssetId>,
     pub slots: BTreeSet<Bytes32>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ContractAccessesWithValues {
+    pub assets: BTreeMap<AssetId, u64>,
+    pub slots: BTreeMap<Bytes32, Option<Vec<u8>>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -66,17 +83,109 @@ impl ReadsPerContract {
         }
     }
 
-    /// Go through the changes of a transaction and mark all changed keys as accessed.
-    pub(crate) fn finalize(
+    /// Returns slot values before and after applying the changes
+    pub(crate) fn finalize<S>(
         mut self,
+        storage: S,
         changes: &Changes,
-    ) -> BTreeMap<ContractId, ContractAccesses> {
+    ) -> StorageResult<(
+        BTreeMap<ContractId, ContractAccessesWithValues>,
+        BTreeMap<ContractId, ContractAccessesWithValues>,
+    )>
+    where
+        S: StorageInspect<ContractsAssets, Error = fuel_core_storage::Error>
+            + StorageInspect<ContractsState, Error = fuel_core_storage::Error>
+            + StorageAsRef,
+    {
+        // Mark all changed keys as accessed
         for (change_column, change) in changes {
             for (key, _) in change.iter() {
                 self.mark(key, *change_column);
             }
         }
-        self.per_contract
+
+        // Fetch original values from the storage
+        let before: BTreeMap<ContractId, ContractAccessesWithValues> = self
+            .per_contract
+            .into_iter()
+            .map(|(contract_id, accesses)| {
+                let assets = accesses
+                    .assets
+                    .into_iter()
+                    .map(|asset_id| {
+                        let value = storage
+                            .storage::<ContractsAssets>()
+                            .get(&ContractsAssetKey::new(&contract_id, &asset_id))
+                            .map(|v| v.map_or(0, |c| c.into_owned()))?;
+                        Ok((asset_id, value))
+                    })
+                    .collect::<StorageResult<_>>()?;
+                let slots = accesses
+                    .slots
+                    .into_iter()
+                    .map(|slot_key| {
+                        let value = storage
+                            .storage::<ContractsState>()
+                            .get(&ContractsStateKey::new(&contract_id, &slot_key))
+                            .map(|v| v.map(|c| c.0.clone()))?;
+                        Ok((slot_key, value))
+                    })
+                    .collect::<StorageResult<_>>()?;
+                Ok((contract_id, ContractAccessesWithValues { assets, slots }))
+            })
+            .collect::<StorageResult<_>>()?;
+
+        // Update final values from the changes
+        let mut after: BTreeMap<ContractId, ContractAccessesWithValues> = before.clone();
+
+        for (key, value) in changes
+            .get(&Column::ContractsAssets.as_u32())
+            .iter()
+            .flat_map(|it| it.iter())
+        {
+            let key = ContractsAssetKey::from_slice(key).unwrap();
+            let entry = after
+                .get_mut(key.contract_id())
+                .expect("Inserted by marking step above")
+                .assets
+                .get_mut(key.asset_id())
+                .expect("Inserted by marking step above");
+            *entry = match value {
+                WriteOperation::Insert(v) => {
+                    <<ContractsAssets as TableWithBlueprint>
+                                            ::Blueprint as BlueprintCodec<ContractsAssets>>
+                                            ::ValueCodec::decode(v)?
+                }
+                WriteOperation::Remove => {
+                    0
+                }
+            }
+        }
+        for (key, value) in changes
+            .get(&Column::ContractsState.as_u32())
+            .iter()
+            .flat_map(|it| it.iter())
+        {
+            let key = ContractsStateKey::from_slice(key).unwrap();
+            let entry = after
+                .get_mut(key.contract_id())
+                .expect("Inserted by marking step above")
+                .slots
+                .get_mut(key.state_key())
+                .expect("Inserted by marking step above");
+            *entry = match value {
+                WriteOperation::Insert(v) => {
+                    Some(<<ContractsState as TableWithBlueprint>
+                                            ::Blueprint as BlueprintCodec<ContractsState>>
+                                            ::ValueCodec::decode(v)?)
+                }
+                WriteOperation::Remove => {
+                    None
+                }
+            };
+        }
+
+        Ok((before, after))
     }
 }
 
