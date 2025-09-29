@@ -1641,7 +1641,7 @@ where
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
 
         let (recorder, changes) = sub_block_db_commit.into_inner();
-        let record = core::mem::take(&mut *recorder.record.lock()).finalize(&changes);
+        let record = recorder.get_reads().finalize(&changes);
 
         storage_tx.commit_changes(changes.clone())?;
 
@@ -1992,14 +1992,9 @@ where
 
         Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
-        let (
-            StorageAccessRecorder {
-                storage: storage_tx_recovered,
-                record,
-            },
-            changes,
-        ) = sub_block_db_commit.into_inner();
-        let record = record.lock().clone().finalize(&changes);
+        let (recorder, changes) = sub_block_db_commit.into_inner();
+        let (storage_tx_recovered, record) = recorder.into_inner();
+        let record = record.finalize(&changes);
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.

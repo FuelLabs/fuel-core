@@ -99,6 +99,15 @@ where
         }
     }
 
+    pub fn into_inner(&self) -> (&S, ReadsPerContract) {
+        (&self.storage, self.record.lock().clone())
+    }
+
+    /// Get the recorded accesses so far.
+    pub fn get_reads(&self) -> ReadsPerContract {
+        self.record.lock().clone()
+    }
+
     /// Mark some key as accessed without actually reading it.
     fn mark(&self, key: &[u8], column_id: u32) {
         self.record.lock().mark(key, column_id);
