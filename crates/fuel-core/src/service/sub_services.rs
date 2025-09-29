@@ -463,9 +463,6 @@ pub fn init_sub_services(
     let serializer = SerializerAdapter;
     let onchain_db = database.on_chain().clone();
     let importer = importer_adapter.events_shared_result();
-    // let fake_importer =
-    //     fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending());
-
     let block_aggregator_rpc = fuel_block_aggregator_api::integration::new_service(
         &block_aggregator_config,
         db_adapter,

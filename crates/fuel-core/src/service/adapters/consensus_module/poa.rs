@@ -126,13 +126,11 @@ impl BlockImporter for BlockImporterAdapter {
         &self,
         result: UncommittedImporterResult<Changes>,
     ) -> anyhow::Result<()> {
-        tracing::error!("dog dog dog dog dog dog");
         let m = self
             .block_importer
             .commit_result(result)
             .await
             .map_err(Into::into);
-        tracing::error!("moo moo moo moo moo moo moo");
         m
     }
 

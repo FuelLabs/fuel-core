@@ -267,11 +267,9 @@ impl Importer {
             callback: sender,
         };
         self.commands.send(command)?;
-        tracing::error!("aaaa");
         let res = tokio::time::timeout(Duration::from_secs(5), receiver)
             .await
             .expect("why this take so long?")?;
-        tracing::error!("kkkkkkk");
         // receiver.await?
         res
     }
