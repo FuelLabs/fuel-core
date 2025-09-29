@@ -1,11 +1,18 @@
 #![allow(clippy::let_unit_value)]
 
-use std::sync::Arc;
-
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
+#[cfg(feature = "p2p")]
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
+    key_generator::Ed25519KeyGenerator,
+    trigger::TimeBasedTrigger,
+    tx_receiver::PreconfirmationsReceiver,
+};
 use fuel_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
     db::storage_db::StorageDB,
 };
+use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
     algorithm::AlgorithmV1,
     da_source_service::block_committer_costs::{
@@ -24,19 +31,8 @@ use fuel_core_storage::{
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
+use std::sync::Arc;
 use tokio::sync::Mutex;
-
-use fuel_core_compression_service::service::new_service as new_compression_service;
-
-#[cfg(feature = "relayer")]
-use crate::relayer::Config as RelayerConfig;
-
-#[cfg(feature = "p2p")]
-use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
-    key_generator::Ed25519KeyGenerator,
-    trigger::TimeBasedTrigger,
-    tx_receiver::PreconfirmationsReceiver,
-};
 
 use super::{
     DbType,
@@ -467,6 +463,8 @@ pub fn init_sub_services(
     let serializer = SerializerAdapter;
     let onchain_db = database.on_chain().clone();
     let importer = importer_adapter.events_shared_result();
+    // let fake_importer =
+    //     fuel_core_services::stream::IntoBoxStream::into_boxed(tokio_stream::pending());
 
     let block_aggregator_rpc = fuel_block_aggregator_api::integration::new_service(
         &block_aggregator_config,

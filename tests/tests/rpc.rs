@@ -83,7 +83,7 @@ fn free_local_addr() -> SocketAddr {
     listener.local_addr().unwrap() // OS picks a free port
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_block_range__can_get_serialized_block_from_rpc() {
     let _ = tracing_subscriber::fmt()
         .with_max_level(tracing::Level::ERROR)
@@ -96,14 +96,15 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
         .await
         .unwrap();
 
-    tracing::error!("starting graphql client");
+    tracing::error!("starting graphql client at {:?}", srv.bound_address);
     let graphql_client = FuelClient::from(srv.bound_address);
 
     let tx = Transaction::default_test_tx();
     tracing::error!("submitting transaction to create block");
     let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
 
-    let mut rpc_client = BlockAggregatorClient::connect(rpc_url.to_string())
+    let rpc_url = format!("http://{}", rpc_url);
+    let mut rpc_client = BlockAggregatorClient::connect(rpc_url)
         .await
         .expect("could not connect to server");
 

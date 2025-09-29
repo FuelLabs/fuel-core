@@ -443,8 +443,8 @@ impl Modifiable for Database<GasPriceDatabase> {
 }
 
 impl Modifiable for Database<BlockAggregatorDatabase> {
-    fn commit_changes(&mut self, _changes: Changes) -> StorageResult<()> {
-        todo!()
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        commit_changes_with_height_update(self, changes, |_iter| Ok(Vec::new()))
     }
 }
 
