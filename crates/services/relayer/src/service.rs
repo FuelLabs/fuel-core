@@ -102,6 +102,45 @@ pub struct NotInitializedTask<P, D> {
     retry_on_error: bool,
 }
 
+struct AdaptivePageSizer {
+    current: u64,
+    max: u64,
+    successful_rpc_calls: u64,
+}
+
+impl AdaptivePageSizer {
+    fn new(current: u64, max: u64) -> Self {
+        Self {
+            current,
+            max,
+            successful_rpc_calls: 0,
+        }
+    }
+
+    fn update(&mut self, successful_rpc_calls: u64, rpc_error: bool) {
+        const PAGE_GROW_FACTOR_NUM: u64 = 125;
+        const PAGE_GROW_FACTOR_DEN: u64 = 100;
+        const PAGE_SHRINK_FACTOR: u64 = 2;
+        const GROW_THRESHOLD: u64 = 50;
+        if rpc_error {
+            self.successful_rpc_calls = 0;
+            self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
+        } else {
+            self.successful_rpc_calls += successful_rpc_calls;
+            if self.successful_rpc_calls > GROW_THRESHOLD && self.current < self.max {
+                let grown = self.current.saturating_mul(PAGE_GROW_FACTOR_NUM)
+                    / PAGE_GROW_FACTOR_DEN;
+                self.current = grown.min(self.max);
+                self.successful_rpc_calls = 0;
+            }
+        }
+    }
+
+    fn page_size(&self) -> u64 {
+        self.current
+    }
+}
+
 /// The actual relayer background task that syncs with the DA layer.
 pub struct Task<P, D> {
     /// Sends signals when the relayer reaches consistency with the DA layer.
@@ -117,9 +156,7 @@ pub struct Task<P, D> {
     shutdown: StateWatcher,
     /// Retry on error
     retry_on_error: bool,
-    current_page_size: u64,
-    max_page_size: u64,
-    successful_log_writes: u64,
+    adaptive_page_sizer: AdaptivePageSizer,
 }
 
 impl<P, D> NotInitializedTask<P, D>
@@ -171,42 +208,24 @@ where
         &mut self,
         eth_sync_gap: &state::EthSyncGap,
     ) -> anyhow::Result<()> {
-        const PAGE_GROW_FACTOR_NUM: u64 = 125;
-        const PAGE_GROW_FACTOR_DEN: u64 = 100;
-        const PAGE_SHRINK_FACTOR: u64 = 2;
-        const GROW_THRESHOLD: u64 = 50;
-
-        if self.successful_log_writes > GROW_THRESHOLD
-            && self.current_page_size < self.max_page_size
-        {
-            let grown = self.current_page_size.saturating_mul(PAGE_GROW_FACTOR_NUM)
-                / PAGE_GROW_FACTOR_DEN;
-            self.current_page_size = grown.min(self.max_page_size);
-            self.successful_log_writes = 0;
-        }
-
+        let mut successful_rpc_calls: u64 = 0;
+        let mut rpc_error: bool = false;
         let logs = download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
             &self.eth_node,
-            self.config.log_page_size,
-        );
-        let logs = logs.take_until(self.shutdown.while_started());
+            self.adaptive_page_sizer.page_size(),
+        )
+        .inspect(|result| match result {
+            Ok(_) => successful_rpc_calls += 1,
+            Err(_) => rpc_error = true,
+        });
 
-        match write_logs(&mut self.database, logs).await {
-            Ok(persisted) => {
-                self.successful_log_writes =
-                    self.successful_log_writes.saturating_add(persisted as u64);
-                Ok(())
-            }
-            Err(WriteLogsError::Provider(e)) => {
-                self.successful_log_writes = 0;
-                self.current_page_size =
-                    (self.current_page_size / PAGE_SHRINK_FACTOR).max(1);
-                Err(e.into())
-            }
-            Err(other) => Err(other.into()),
-        }
+        let logs = logs.take_until(self.shutdown.while_started());
+        let result = write_logs(&mut self.database, logs).await;
+        self.adaptive_page_sizer
+            .update(successful_rpc_calls, rpc_error);
+        result
     }
 
     fn update_synced(&self, state: &state::EthState) {
@@ -259,15 +278,15 @@ where
             config,
             retry_on_error,
         } = self;
+        let adaptive_page_sizer =
+            AdaptivePageSizer::new(config.log_page_size, config.log_page_size);
         let task = Task {
             synced,
             eth_node,
             database,
             shutdown,
             retry_on_error,
-            current_page_size: config.log_page_size,
-            max_page_size: config.log_page_size,
-            successful_log_writes: 0,
+            adaptive_page_sizer,
             config,
         };
 
