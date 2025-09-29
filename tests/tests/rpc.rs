@@ -79,5 +79,9 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
         *actual_block.header().height()
     );
     // check txs
-    assert_eq!(2, actual_block.transactions().len());
+    let actual_tx = actual_block.transactions().first().unwrap();
+    let expected_opaque_tx = expected_block.transactions.first().unwrap().to_owned();
+    let expected_tx: Transaction = expected_opaque_tx.try_into().unwrap();
+
+    assert_eq!(&expected_tx, actual_tx);
 }
