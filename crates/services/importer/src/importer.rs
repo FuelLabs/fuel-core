@@ -267,11 +267,9 @@ impl Importer {
             callback: sender,
         };
         self.commands.send(command)?;
-        let res = tokio::time::timeout(Duration::from_secs(5), receiver)
+        tokio::time::timeout(Duration::from_secs(5), receiver)
             .await
-            .expect("why this take so long?")?;
-        // receiver.await?
-        res
+            .expect("why this take so long?")?
     }
 
     #[cfg(test)]

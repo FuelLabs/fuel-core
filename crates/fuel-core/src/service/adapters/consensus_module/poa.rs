@@ -126,12 +126,10 @@ impl BlockImporter for BlockImporterAdapter {
         &self,
         result: UncommittedImporterResult<Changes>,
     ) -> anyhow::Result<()> {
-        let m = self
-            .block_importer
+        self.block_importer
             .commit_result(result)
             .await
-            .map_err(Into::into);
-        m
+            .map_err(Into::into)
     }
 
     fn block_stream(&self) -> BoxStream<BlockImportInfo> {
