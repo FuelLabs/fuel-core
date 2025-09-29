@@ -19,6 +19,7 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
+log = "0.4.27"
 num_enum = { workspace = true }
 postcard = { workspace = true }
 prost = { workspace = true }
@@ -32,7 +33,6 @@ tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-prost = { workspace = true }
 tracing = { workspace = true }
-log = "0.4.27"
 
 [build-dependencies]
 tonic-prost-build = { workspace = true }

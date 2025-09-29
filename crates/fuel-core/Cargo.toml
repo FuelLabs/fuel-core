@@ -64,6 +64,7 @@ clap = { workspace = true, features = ["derive"] }
 cosmrs = { version = "0.21", optional = true }
 derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
+fuel-block-aggregator-api = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-compression-service = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
@@ -86,7 +87,6 @@ fuel-core-tx-status-manager = { workspace = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 fuel-core-upgradable-executor = { workspace = true }
-fuel-block-aggregator-api = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 hyper = { workspace = true }
