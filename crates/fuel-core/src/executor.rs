@@ -490,15 +490,15 @@ mod tests {
 
             let mut h = Sha256::new();
             h.update(consensus_parameters.base_asset_id().as_ref());
-            h.update(&0u64.to_be_bytes());
+            h.update(0u64.to_be_bytes());
             let input_balances_hash = Bytes32::new(h.finalize().into());
 
             let mut h = Sha256::new();
             h.update(consensus_parameters.base_asset_id().as_ref());
-            h.update(&expected_fee_amount_1.to_be_bytes());
+            h.update(expected_fee_amount_1.to_be_bytes());
             let output_balances_hash = Bytes32::new(h.finalize().into());
 
-            let empty_hash = Bytes32::new(Sha256::digest(&[]).into());
+            let empty_hash = Bytes32::new(Sha256::digest([]).into());
 
             if let Some(mint) = block.transactions()[1].as_mint() {
                 assert_eq!(
