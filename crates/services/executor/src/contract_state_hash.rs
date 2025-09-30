@@ -25,8 +25,7 @@ pub fn compute_balances_hash(accessed: &BTreeMap<AssetId, Word>) -> Bytes32 {
         hasher.update(key);
         hasher.update(value.to_be_bytes());
     }
-    let digest: [u8; 32] = hasher.finalize().into();
-    Bytes32::from(digest)
+    Bytes32::new(hasher.finalize().into())
 }
 
 /// Computes a hash of all contract state slots that were read or modified.
@@ -43,6 +42,5 @@ pub fn compute_state_hash(accessed: &BTreeMap<Bytes32, Option<Vec<u8>>>) -> Byte
             hasher.update([0u8]);
         }
     }
-    let digest: [u8; 32] = hasher.finalize().into();
-    Bytes32::from(digest)
+    Bytes32::new(hasher.finalize().into())
 }
