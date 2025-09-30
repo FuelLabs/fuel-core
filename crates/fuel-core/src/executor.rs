@@ -488,21 +488,32 @@ mod tests {
             assert!(expected_fee_amount_1 > 0);
             let first_mint;
 
+            let mut h = Sha256::new();
+            h.update(consensus_parameters.base_asset_id().as_ref());
+            h.update(&0u64.to_be_bytes());
+            let input_balances_hash = Bytes32::new(h.finalize().into());
+
+            let mut h = Sha256::new();
+            h.update(consensus_parameters.base_asset_id().as_ref());
+            h.update(&expected_fee_amount_1.to_be_bytes());
+            let output_balances_hash = Bytes32::new(h.finalize().into());
+
+            let empty_hash = Bytes32::new(Sha256::digest(&[]).into());
+
             if let Some(mint) = block.transactions()[1].as_mint() {
                 assert_eq!(
                     mint.tx_pointer(),
                     &TxPointer::new(*block.header().height(), 1)
                 );
-                let empty_sha: [u8; 32] = Sha256::digest([]).into();
                 assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
                 assert_eq!(mint.mint_amount(), &expected_fee_amount_1);
                 assert_eq!(mint.input_contract().contract_id, recipient);
-                assert_eq!(mint.input_contract().balance_root, Bytes32::new(empty_sha));
-                assert_eq!(mint.input_contract().state_root, Bytes32::new(empty_sha));
+                assert_eq!(mint.input_contract().balance_root, input_balances_hash);
+                assert_eq!(mint.input_contract().state_root, empty_hash);
                 assert_eq!(mint.input_contract().utxo_id, UtxoId::default());
                 assert_eq!(mint.input_contract().tx_pointer, TxPointer::default());
-                assert_ne!(mint.output_contract().balance_root, Bytes32::new(empty_sha));
-                assert_eq!(mint.output_contract().state_root, Bytes32::new(empty_sha));
+                assert_eq!(mint.output_contract().balance_root, output_balances_hash);
+                assert_eq!(mint.output_contract().state_root, empty_hash);
                 assert_eq!(mint.output_contract().input_index, 0);
                 first_mint = mint.clone();
             } else {
