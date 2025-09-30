@@ -4,7 +4,7 @@ use crate::{
         Block,
         BlockSource,
     },
-    db::BlockAggregatorDB,
+    db::BlockStorage,
 };
 use fuel_core_services::{
     RunnableService,
@@ -32,7 +32,7 @@ pub mod integration {
             BlockSerializer,
             ImporterAndDbSource,
         },
-        db::BlockAggregatorDB,
+        db::BlockStorage,
     };
     use fuel_core_services::{
         ServiceRunner,
@@ -66,7 +66,7 @@ pub mod integration {
         BlockAggregator<ProtobufAPI, DB, ImporterAndDbSource<S, OnchainDB, E>>,
     >
     where
-        DB: BlockAggregatorDB<
+        DB: BlockStorage<
             BlockRangeResponse = <ProtobufAPI as BlockAggregatorApi>::BlockRangeResponse,
         >,
         S: BlockSerializer + Clone + Send + Sync + 'static,
@@ -129,7 +129,7 @@ impl NewBlock {
 impl<Api, DB, Blocks, BlockRange> RunnableTask for BlockAggregator<Api, DB, Blocks>
 where
     Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
-    DB: BlockAggregatorDB<BlockRangeResponse = BlockRange>,
+    DB: BlockStorage<BlockRangeResponse = BlockRange>,
     Blocks: BlockSource,
     BlockRange: Send,
 {
@@ -154,7 +154,7 @@ where
 impl<Api, DB, Blocks, BlockRange> RunnableService for BlockAggregator<Api, DB, Blocks>
 where
     Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
-    DB: BlockAggregatorDB<BlockRangeResponse = BlockRange>,
+    DB: BlockStorage<BlockRangeResponse = BlockRange>,
     Blocks: BlockSource,
     BlockRange: Send,
 {

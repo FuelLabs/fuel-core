@@ -9,7 +9,7 @@ use crate::{
         BlockSource,
         BlockSourceEvent,
     },
-    db::BlockAggregatorDB,
+    db::BlockStorage,
 };
 use fuel_core_services::{
     TaskNextAction,
@@ -20,7 +20,7 @@ use fuel_core_types::fuel_types::BlockHeight;
 impl<Api, DB, Blocks, BlockRangeResponse> BlockAggregator<Api, DB, Blocks>
 where
     Api: BlockAggregatorApi<BlockRangeResponse = BlockRangeResponse>,
-    DB: BlockAggregatorDB<BlockRangeResponse = BlockRangeResponse>,
+    DB: BlockStorage<BlockRangeResponse = BlockRangeResponse>,
     Blocks: BlockSource,
     BlockRangeResponse: Send,
 {

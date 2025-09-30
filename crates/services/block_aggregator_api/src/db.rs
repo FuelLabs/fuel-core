@@ -4,10 +4,11 @@ use crate::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
+pub mod remote_cache;
 pub mod storage_db;
 
 /// The definition of the block aggregator database.
-pub trait BlockAggregatorDB: Send + Sync {
+pub trait BlockStorage: Send + Sync {
     /// The type used to report a range of blocks
     type BlockRangeResponse;
 
