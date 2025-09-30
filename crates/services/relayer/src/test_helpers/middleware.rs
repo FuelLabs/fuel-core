@@ -1,16 +1,18 @@
-use async_trait::async_trait;
-use ethers_core::types::{
+use alloy_primitives::{
+    B256,
+    TxHash,
+    U64,
+};
+use alloy_rpc_types_eth::{
     Block,
     BlockId,
     Filter,
-    H256,
     Log,
     SyncingStatus,
     Transaction,
     TransactionReceipt,
-    TxHash,
-    U64,
 };
+use async_trait::async_trait;
 use ethers_providers::{
     JsonRpcClient,
     Middleware,
@@ -130,7 +132,7 @@ impl Default for MockData {
     fn default() -> Self {
         let best_block = Block {
             hash: Some(
-                H256::from_str(
+                B256::from_str(
                     "0xa1ea3121940930f7e7b54506d80717f14c5163807951624c36354202a8bffda6",
                 )
                 .unwrap(),

@@ -6,14 +6,14 @@ use crate::{
     ports::RelayerDb,
     service::state::EthLocal,
 };
-use async_trait::async_trait;
-use core::time::Duration;
-use ethers_core::types::{
+use alloy_rpc_types_eth::{
     Filter,
     Log,
     SyncingStatus,
     ValueOrArray,
 };
+use async_trait::async_trait;
+use core::time::Duration;
 use ethers_providers::{
     Http,
     Middleware,

@@ -1,5 +1,5 @@
+use alloy_primitives::B256;
 use ethers_contract::EthEvent;
-use ethers_core::types::H256;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::Bytes20,
@@ -10,10 +10,10 @@ use std::{
     time::Duration,
 };
 
-pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
+pub(crate) static ETH_LOG_MESSAGE: Lazy<B256> =
     Lazy::new(crate::abi::bridge::MessageSentFilter::signature);
 
-pub(crate) static ETH_FORCED_TX: Lazy<H256> =
+pub(crate) static ETH_FORCED_TX: Lazy<B256> =
     Lazy::new(crate::abi::bridge::TransactionFilter::signature);
 
 // TODO: Move settlement fields into `ChainConfig` because it is part of the consensus.
@@ -80,7 +80,7 @@ mod tests {
             "0x03E4538018285e1c03CCce2F92C9538c87606911",
         )
         .unwrap();
-        let h160 = ethers_core::types::H160::from_str(
+        let h160 = alloy_primitives::Address::from_str(
             "0x03E4538018285e1c03CCce2F92C9538c87606911",
         )
         .unwrap();

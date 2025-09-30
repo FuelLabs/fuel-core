@@ -7,27 +7,22 @@ use crate::{
     config,
     log::EthEventLog,
 };
+use alloy_primitives::{
+    Address,
+    B256,
+    Bytes as EthersBytes,
+    Log,
+    U64,
+};
 use bytes::{
     Bytes,
     BytesMut,
 };
 use ethers_contract::EthEvent;
-use ethers_core::{
-    abi::Tokenize,
-    types::{
-        Bytes as EthersBytes,
-        H160,
-        H256,
-        Log,
-        U64,
-    },
-};
-use fuel_core_types::{
-    entities::{
-        Message,
-        RelayedTransaction,
-    },
-    fuel_types::Address,
+use ethers_core::abi::Tokenize;
+use fuel_core_types::entities::{
+    Message,
+    RelayedTransaction,
 };
 
 pub mod middleware;
@@ -114,10 +109,10 @@ pub fn eth_log_message(
     // 32 + 32 + 32 + dyn
 
     b.extend(owner.as_ref());
-    b.extend(H256::from_low_u64_be(nonce as u64).as_ref());
-    b.extend(H256::from_low_u64_be(amount as u64).as_ref());
-    b.extend(H256::from_low_u64_be(128).as_ref());
-    b.extend(H256::from_low_u64_be(data.len() as u64).as_ref());
+    b.extend(B256::from_low_u64_be(nonce as u64).as_ref());
+    b.extend(B256::from_low_u64_be(amount as u64).as_ref());
+    b.extend(B256::from_low_u64_be(128).as_ref());
+    b.extend(B256::from_low_u64_be(data.len() as u64).as_ref());
 
     // data takes as lest 32 bytes;
     let data_size = ((data.len() / 32) + 1) * 32;
@@ -131,12 +126,12 @@ pub fn eth_log_message(
     log_default(
         address,
         eth_block,
-        vec![*config::ETH_LOG_MESSAGE, H256::default(), H256::default()],
+        vec![*config::ETH_LOG_MESSAGE, B256::default(), B256::default()],
         BytesMut::from_iter(b).freeze(),
     )
 }
 
-fn log_default(address: H160, eth_block: u64, topics: Vec<H256>, data: Bytes) -> Log {
+fn log_default(address: Address, eth_block: u64, topics: Vec<B256>, data: Bytes) -> Log {
     Log {
         address,
         topics,
