@@ -1,9 +1,5 @@
 use clap::ValueEnum;
 use std::{
-    net::{
-        SocketAddr,
-        TcpListener,
-    },
     num::{
         NonZeroU32,
         NonZeroU64,
