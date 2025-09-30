@@ -2,12 +2,11 @@ use crate::{
     abi,
     config,
 };
-use anyhow::anyhow;
-use ethers_contract::EthEvent;
-use ethers_core::{
-    abi::RawLog,
-    types::Log,
+use alloy_rpc_types_eth::{
+    Log,
+    RawLog,
 };
+use anyhow::anyhow;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::{
@@ -107,10 +106,11 @@ fn parse_message_to_event(log: &Log) -> anyhow::Result<EthEventLog> {
     let raw_log = RawLog {
         topics: log.topics.clone(),
         data: log.data.to_vec(),
+        address: log.address().clone(),
     };
 
-    let message = abi::bridge::MessageSentFilter::decode_log(&raw_log)
-        .map_err(anyhow::Error::msg)?;
+    let message =
+        abi::bridge::MessageSent::decode_log(&raw_log).map_err(anyhow::Error::msg)?;
     let amount = message.amount;
     let data = message.data.to_vec();
     let mut nonce = Nonce::zeroed();
@@ -144,10 +144,11 @@ fn parse_forced_tx_to_event(log: &Log) -> anyhow::Result<EthEventLog> {
     let raw_log = RawLog {
         topics: log.topics.clone(),
         data: log.data.to_vec(),
+        address: log.address().clone(),
     };
 
-    let event = abi::bridge::TransactionFilter::decode_log(&raw_log)
-        .map_err(anyhow::Error::msg)?;
+    let event =
+        abi::bridge::Transaction::decode_log(&raw_log).map_err(anyhow::Error::msg)?;
 
     let mut nonce = Nonce::zeroed();
     event.nonce.to_big_endian(nonce.as_mut());

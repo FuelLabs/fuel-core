@@ -28,10 +28,7 @@ enum-iterator = { workspace = true }
 ethereum-types = "0.14.1"
 alloy-primitives = { version = "1.4.0", default-features = false }
 alloy-rpc-types-eth = "1.0.36"
-ethers-providers = { version = "2", default-features = false, features = [
-  "ws",
-  "rustls",
-] }
+alloy-sol-types = "1.4.0"
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }

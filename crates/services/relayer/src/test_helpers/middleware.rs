@@ -308,8 +308,8 @@ fn take_logs_based_on_filter(logs_batch: &[Vec<Log>], filter: &Filter) -> Vec<Lo
         .flat_map(|logs| {
             logs.iter().filter_map(|log| {
                 let r = match filter.address.as_ref()? {
-                    ethers_core::types::ValueOrArray::Value(v) => log.address == *v,
-                    ethers_core::types::ValueOrArray::Array(v) => {
+                    alloy_rpc_types_eth::ValueOrArray::Value(v) => log.address == *v,
+                    alloy_rpc_types_eth::ValueOrArray::Array(v) => {
                         v.iter().any(|v| log.address == *v)
                     }
                 };

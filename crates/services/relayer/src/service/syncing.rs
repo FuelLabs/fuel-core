@@ -1,4 +1,4 @@
-use ethers_core::types::U256;
+use alloy_primitives::B256;
 
 use super::*;
 
@@ -6,9 +6,9 @@ use super::*;
 mod tests;
 
 struct Status {
-    starting_block: U256,
-    current_block: U256,
-    highest_block: U256,
+    starting_block: B256,
+    current_block: B256,
+    highest_block: B256,
 }
 
 pub async fn wait_if_eth_syncing<P>(

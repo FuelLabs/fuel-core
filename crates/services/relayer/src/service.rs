@@ -9,7 +9,6 @@ use crate::{
 use alloy_rpc_types_eth::{
     Filter,
     Log,
-    SyncingStatus,
     ValueOrArray,
 };
 use async_trait::async_trait;
@@ -344,7 +343,7 @@ where
             _ = shutdown.while_started() => {
                 Err(anyhow::anyhow!("The relayer got a stop signal"))
             },
-            block = self.eth_node.get_block(ethers_core::types::BlockNumber::Finalized) => {
+            block = self.eth_node.get_block(alloy_rpc_types_eth::BlockNumberOrTag::Finalized) => {
                 let block_number = block.map_err(|err| anyhow::anyhow!("failed to get block from Eth node: {err:?}"))?
                     .and_then(|block| block.number)
                     .ok_or(anyhow::anyhow!("Block pending"))?
