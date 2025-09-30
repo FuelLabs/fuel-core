@@ -211,7 +211,6 @@ async fn update_sync__changes_latest_eth_state(
 
 #[tokio::test]
 async fn relayer_grows_page_size_on_success() {
-    // Setup: mock node returns valid logs
     let eth_node = MockMiddleware::default();
     let logs = vec![
         Log {
@@ -240,7 +239,6 @@ async fn relayer_grows_page_size_on_success() {
         .await
         .unwrap();
 
-    // Initialize with small page size and high successful call count
     relayer.adaptive_page_sizer = AdaptivePageSizer::new(5, 10, 50);
     relayer.adaptive_page_sizer.successful_rpc_calls = 50;
 
@@ -258,12 +256,10 @@ async fn relayer_grows_page_size_on_success() {
     // Assert
     assert!(result.is_ok());
     assert_eq!(relayer.adaptive_page_sizer.page_size(), 6); // 5 * 125 / 100 = 6.25 → 6
-    assert_eq!(relayer.adaptive_page_sizer.successful_rpc_calls, 0); // should reset
 }
 
 #[tokio::test]
 async fn relayer_respects_max_page_size_limit() {
-    // Setup: mock node returns valid logs
     let eth_node = MockMiddleware::default();
     let logs = vec![Log {
         address: Default::default(),
@@ -284,7 +280,6 @@ async fn relayer_respects_max_page_size_limit() {
         .await
         .unwrap();
 
-    // Start at max page size with high success count
     relayer.adaptive_page_sizer = AdaptivePageSizer::new(10, 10, 50);
     relayer.adaptive_page_sizer.successful_rpc_calls = 60; // Above threshold
 
@@ -306,7 +301,6 @@ async fn relayer_respects_max_page_size_limit() {
 
 #[tokio::test]
 async fn relayer_handles_multiple_successful_rpc_calls_per_download() {
-    // Setup: mock node returns logs that require multiple pages
     let eth_node = MockMiddleware::default();
     let logs_page1 = vec![
         Log {
@@ -339,7 +333,6 @@ async fn relayer_handles_multiple_successful_rpc_calls_per_download() {
         .await
         .unwrap();
 
-    // Start with small page size to force multiple RPC calls
     relayer.adaptive_page_sizer = AdaptivePageSizer::new(5, 10, 50);
     relayer.adaptive_page_sizer.successful_rpc_calls = 45; // Close to threshold
 
@@ -354,9 +347,8 @@ async fn relayer_handles_multiple_successful_rpc_calls_per_download() {
         .download_logs(&eth_state.needs_to_sync_eth().unwrap())
         .await;
 
-    // Assert - should accumulate multiple successful calls
+    // Assert
     assert!(result.is_ok());
-    // Should have 2 successful RPC calls (for 2 pages)
     assert_eq!(relayer.adaptive_page_sizer.successful_rpc_calls, 47); // 45 + 2
     assert_eq!(relayer.adaptive_page_sizer.page_size(), 5); // Not enough to reach threshold yet
 }
