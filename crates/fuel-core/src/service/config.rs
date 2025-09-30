@@ -1,4 +1,9 @@
 use clap::ValueEnum;
+#[cfg(feature = "test-helpers")]
+use std::net::{
+    SocketAddr,
+    TcpListener,
+};
 use std::{
     num::{
         NonZeroU32,
