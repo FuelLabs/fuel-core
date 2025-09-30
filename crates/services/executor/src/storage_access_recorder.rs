@@ -4,21 +4,24 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
     StorageInspect,
-    blueprint::BlueprintCodec,
-    codec::Decode,
     column::Column,
+    iter::{
+        IteratorOverTableWrites,
+        changes_iterator::ChangesIterator,
+    },
     kv_store::{
         KeyValueInspect,
         StorageColumn,
         Value,
-        WriteOperation,
     },
-    structured_storage::TableWithBlueprint,
     tables::{
         ContractsAssets,
         ContractsState,
     },
-    transactional::Changes,
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
 };
 use fuel_core_types::fuel_tx::{
     AssetId,
@@ -138,51 +141,28 @@ impl ReadsPerContract {
         // Update final values from the changes
         let mut after: BTreeMap<ContractId, ContractAccessesWithValues> = before.clone();
 
-        for (key, value) in changes
-            .get(&Column::ContractsAssets.as_u32())
-            .iter()
-            .flat_map(|it| it.iter())
-        {
-            let key = ContractsAssetKey::from_slice(key).unwrap();
+        let sc = StorageChanges::Changes(changes.clone());
+        let ci = ChangesIterator::new(&sc);
+
+        for item in ci.iter_all::<ContractsAssets>(None) {
+            let (key, value) = item?;
             let entry = after
                 .get_mut(key.contract_id())
                 .expect("Inserted by marking step above")
                 .assets
                 .get_mut(key.asset_id())
                 .expect("Inserted by marking step above");
-            *entry = match value {
-                WriteOperation::Insert(v) => {
-                    <<ContractsAssets as TableWithBlueprint>
-                                            ::Blueprint as BlueprintCodec<ContractsAssets>>
-                                            ::ValueCodec::decode(v)?
-                }
-                WriteOperation::Remove => {
-                    0
-                }
-            }
+            *entry = value.unwrap_or(0);
         }
-        for (key, value) in changes
-            .get(&Column::ContractsState.as_u32())
-            .iter()
-            .flat_map(|it| it.iter())
-        {
-            let key = ContractsStateKey::from_slice(key).unwrap();
+        for item in ci.iter_all::<ContractsState>(None) {
+            let (key, value) = item?;
             let entry = after
                 .get_mut(key.contract_id())
                 .expect("Inserted by marking step above")
                 .slots
                 .get_mut(key.state_key())
                 .expect("Inserted by marking step above");
-            *entry = match value {
-                WriteOperation::Insert(v) => {
-                    Some(<<ContractsState as TableWithBlueprint>
-                                            ::Blueprint as BlueprintCodec<ContractsState>>
-                                            ::ValueCodec::decode(v)?)
-                }
-                WriteOperation::Remove => {
-                    None
-                }
-            };
+            *entry = value.map(|data| data.0);
         }
 
         Ok((before, after))

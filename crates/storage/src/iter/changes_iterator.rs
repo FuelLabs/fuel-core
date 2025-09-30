@@ -6,9 +6,11 @@ use crate::{
         IntoBoxedIter,
         IterDirection,
         IterableStore,
+        IterableStoreWrites,
     },
     kv_store::{
         KVItem,
+        KVWriteItem,
         KeyValueInspect,
         StorageColumn,
         Value,
@@ -145,6 +147,95 @@ where
         // marked as `WriteOperation::Remove` in the value
         // copied as-is from the above function, but only to return keys
 
+        match self.changes {
+            StorageChanges::Changes(changes) => {
+                if let Some(tree) = changes.get(&column.id()) {
+                    crate::iter::iterator(tree, prefix, start, direction)
+                        .filter_map(|(key, value)| match value {
+                            WriteOperation::Insert(_) => Some(key.clone().into()),
+                            WriteOperation::Remove => None,
+                        })
+                        .map(Ok)
+                        .into_boxed()
+                } else {
+                    core::iter::empty().into_boxed()
+                }
+            }
+            StorageChanges::ChangesList(changes_list) => {
+                let column = column.id();
+
+                let mut iterators_list = Vec::with_capacity(changes_list.len());
+
+                for changes in changes_list.iter() {
+                    let iter = changes.get(&column).map(|tree| {
+                        crate::iter::iterator(tree, prefix, start, direction)
+                            .filter_map(|(key, value)| match value {
+                                WriteOperation::Insert(_) => Some(key.clone().into()),
+                                WriteOperation::Remove => None,
+                            })
+                            .map(Ok)
+                    });
+                    if let Some(iter) = iter {
+                        iterators_list.push(iter);
+                    }
+                }
+
+                iterators_list.into_iter().flatten().into_boxed()
+            }
+        }
+    }
+}
+
+impl<Column> IterableStoreWrites for ChangesIterator<'_, Column>
+where
+    Column: StorageColumn,
+{
+    fn iter_store_writes(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVWriteItem> {
+        match self.changes {
+            StorageChanges::Changes(changes) => {
+                if let Some(tree) = changes.get(&column.id()) {
+                    crate::iter::iterator(tree, prefix, start, direction)
+                        .map(|(key, value)| (key.clone().into(), value.clone()))
+                        .map(Ok)
+                        .into_boxed()
+                } else {
+                    core::iter::empty().into_boxed()
+                }
+            }
+            StorageChanges::ChangesList(changes_list) => {
+                let column = column.id();
+
+                let mut iterators_list = Vec::with_capacity(changes_list.len());
+
+                for changes in changes_list.iter() {
+                    let iter = changes.get(&column).map(|tree| {
+                        crate::iter::iterator(tree, prefix, start, direction)
+                            .map(|(key, value)| (key.clone().into(), value.clone()))
+                            .map(Ok)
+                    });
+                    if let Some(iter) = iter {
+                        iterators_list.push(iter);
+                    }
+                }
+
+                iterators_list.into_iter().flatten().into_boxed()
+            }
+        }
+    }
+
+    fn iter_store_write_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<crate::kv_store::KeyItem> {
         match self.changes {
             StorageChanges::Changes(changes) => {
                 if let Some(tree) = changes.get(&column.id()) {
