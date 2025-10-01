@@ -3840,6 +3840,8 @@ dependencies = [
  "tikv-jemallocator",
  "tokio",
  "toml 0.5.11",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -10067,6 +10069,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

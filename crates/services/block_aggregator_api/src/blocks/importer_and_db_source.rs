@@ -110,10 +110,6 @@ where
 {
     async fn next_block(&mut self) -> Result<BlockSourceEvent> {
         tracing::debug!("awaiting next block");
-        // self.receiver
-        //     .recv()
-        //     .await
-        //     .ok_or(Error::BlockSource(anyhow!("Block source channel closed")))
         tokio::select! {
             block_res = self.receiver.recv() => {
                 block_res.ok_or(Error::BlockSource(anyhow!("Block source channel closed")))
