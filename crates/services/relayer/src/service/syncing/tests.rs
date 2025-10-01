@@ -2,7 +2,7 @@ use fuel_core_relayer as _;
 use std::ops::RangeInclusive;
 
 use crate::test_helpers::middleware::{
-    MockMiddleware,
+    MockProvider,
     TriggerType,
 };
 
@@ -13,7 +13,7 @@ use test_case::test_case;
 
 #[tokio::test(start_paused = true)]
 async fn handles_syncing() {
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     eth_node.update_data(|data| {
         let status = SyncProgress {
             starting_block: 100.into(),

@@ -17,7 +17,7 @@ use fuel_core_relayer::{
     test_helpers::{
         EvtToLog,
         LogTestHelper,
-        middleware::MockMiddleware,
+        middleware::MockProvider,
     },
 };
 use fuel_core_services::Service;
@@ -27,7 +27,7 @@ fuel_core_trace::enable_tracing!();
 #[tokio::test(start_paused = true)]
 async fn can_set_da_height() {
     let mock_db = MockDb::default();
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     let da_block_height = 100u64;
@@ -53,7 +53,7 @@ async fn stop_service_at_the_begin() {
     mock_db
         .set_finalized_da_height_to_at_least(&0u64.into())
         .unwrap();
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(100.into()));
@@ -75,7 +75,7 @@ async fn stop_service_at_the_middle() {
     mock_db
         .set_finalized_da_height_to_at_least(&0u64.into())
         .unwrap();
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     eth_node.update_data(|data| data.best_block.number = Some(100.into()));
     let config = Config {
         log_page_size: 5,
@@ -275,7 +275,7 @@ fn transaction(max_gas: u64, block_number: u64, block_index: u64) -> Log {
 
 struct TestContext {
     mock_db: MockDb,
-    eth_node: MockMiddleware,
+    eth_node: MockProvider,
     config: Config,
 }
 
@@ -283,7 +283,7 @@ impl TestContext {
     fn new() -> Self {
         Self {
             mock_db: MockDb::default(),
-            eth_node: MockMiddleware::default(),
+            eth_node: MockProvider::default(),
             config: Config::default(),
         }
     }

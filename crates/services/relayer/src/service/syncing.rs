@@ -1,4 +1,5 @@
 use alloy_primitives::B256;
+use alloy_rpc_types_eth::SyncStatus;
 
 use super::*;
 
@@ -17,16 +18,16 @@ pub async fn wait_if_eth_syncing<P>(
     sync_log_freq: Duration,
 ) -> anyhow::Result<()>
 where
-    P: Middleware<Error = ProviderError> + 'static,
+    P: Provider + 'static,
 {
     let mut start = tokio::time::Instant::now();
     let mut loop_time = tokio::time::Instant::now();
-    while let SyncingStatus::IsSyncing(is_syncing) = get_status(eth_node).await? {
+    while let SyncStatus::Info(is_syncing) = get_status(eth_node).await? {
         if start.elapsed() > sync_log_freq {
             let status = Status {
-                starting_block: is_syncing.starting_block.as_u64().into(),
-                current_block: is_syncing.current_block.as_u64().into(),
-                highest_block: is_syncing.highest_block.as_u64().into(),
+                starting_block: is_syncing.starting_block.into(),
+                current_block: is_syncing.current_block.into(),
+                highest_block: is_syncing.highest_block.into(),
             };
             start = tokio::time::Instant::now();
             tracing::info!(
@@ -40,9 +41,9 @@ where
     Ok(())
 }
 
-async fn get_status<P>(eth_node: &P) -> anyhow::Result<SyncingStatus>
+async fn get_status<P>(eth_node: &P) -> anyhow::Result<SyncStatus>
 where
-    P: Middleware<Error = ProviderError> + 'static,
+    P: Provider + 'static,
 {
     match eth_node.syncing().await {
         Ok(s) => Ok(s),

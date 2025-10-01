@@ -47,7 +47,7 @@ use fuel_core_relayer::{
     test_helpers::{
         EvtToLog,
         LogTestHelper,
-        middleware::MockMiddleware,
+        middleware::MockProvider,
     },
 };
 use fuel_core_storage::{
@@ -113,7 +113,7 @@ async fn relayer_can_download_logs() {
     let mut config = Config::local_node();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
     let message = |nonce, block_number: u64| {
         make_message_event(
@@ -180,7 +180,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     // setup a real spendable message
@@ -313,7 +313,7 @@ async fn can_restart_node_with_relayer_data() {
     let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     // setup a real spendable message
@@ -419,7 +419,7 @@ fn make_message_event(
     log
 }
 
-async fn spawn_eth_node(eth_node: Arc<MockMiddleware>) -> EthNodeHandle {
+async fn spawn_eth_node(eth_node: Arc<MockProvider>) -> EthNodeHandle {
     // Construct our SocketAddr to listen on...
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
 
@@ -461,7 +461,7 @@ pub(crate) struct EthNodeHandle {
 }
 
 async fn handle(
-    mock: Arc<MockMiddleware>,
+    mock: Arc<MockProvider>,
     req: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
     let body = hyper::body::to_bytes(req).await.unwrap();
@@ -523,7 +523,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let mut config = Config::local_node();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
     const TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -729,7 +729,7 @@ async fn relayer_db_can_be_rewinded() {
     let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     let logs: Vec<_> = (1..=num_da_blocks)

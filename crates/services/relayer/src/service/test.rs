@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use crate::test_helpers::middleware::MockMiddleware;
+use crate::test_helpers::middleware::MockProvider;
 
 use futures::TryStreamExt;
 use test_case::test_case;
@@ -10,7 +10,7 @@ const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
 
 #[tokio::test]
 async fn can_download_logs() {
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let logs = vec![
         Log {
             address: Default::default(),
@@ -47,7 +47,7 @@ async fn can_download_logs() {
 
 #[tokio::test]
 async fn quorum_agrees_on_logs() {
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let logs = vec![
         Log {
             address: Default::default(),
@@ -96,8 +96,8 @@ async fn quorum_agrees_on_logs() {
 
 #[tokio::test]
 async fn quorum__disagree_on_logs() {
-    let eth_node_two_logs = MockMiddleware::default();
-    let eth_node_one_log = MockMiddleware::default();
+    let eth_node_two_logs = MockProvider::default();
+    let eth_node_one_log = MockProvider::default();
     let logs = vec![
         Log {
             address: Default::default(),
@@ -126,7 +126,7 @@ async fn quorum__disagree_on_logs() {
             // 2 logs
             .add_provider(WeightedProvider::new(eth_node_two_logs))
             // 0 logs
-            .add_provider(WeightedProvider::new(MockMiddleware::default()))
+            .add_provider(WeightedProvider::new(MockProvider::default()))
             // 1 log
             .add_provider(WeightedProvider::new(eth_node_one_log))
             .quorum(Quorum::Percentage(70))
@@ -166,7 +166,7 @@ async fn deploy_height_does_not_override() {
         da_deploy_height: 20u64.into(),
         ..Default::default()
     };
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
     let _ = relayer.into_task(&Default::default(), ()).await;
 
@@ -191,7 +191,7 @@ async fn update_sync__changes_latest_eth_state(
         da_deploy_height: STARTING_HEIGHT.into(),
         ..Default::default()
     };
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
     let shared = relayer.shared_data();
     let task = relayer.into_task(&Default::default(), ()).await.unwrap();

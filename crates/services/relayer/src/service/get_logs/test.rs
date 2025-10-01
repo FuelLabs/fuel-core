@@ -17,7 +17,7 @@ use crate::{
     test_helpers::{
         EvtToLog,
         middleware::{
-            MockMiddleware,
+            MockProvider,
             TriggerType,
         },
     },
@@ -172,7 +172,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         c: contracts,
         m: logs,
     } = input;
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
 
     eth_node.update_data(|data| {
         data.logs_batch = vec![logs];
