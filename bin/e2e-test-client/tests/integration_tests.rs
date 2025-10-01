@@ -50,6 +50,10 @@ async fn works_in_multinode_local_env() {
         fuel_tx::Input,
     };
 
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::ERROR)
+        .try_init();
+
     let config = dev_config();
     let mut rng = StdRng::seed_from_u64(line!() as u64);
     let secret = SecretKey::random(&mut rng);
@@ -78,8 +82,11 @@ async fn works_in_multinode_local_env() {
         ..Default::default()
     };
 
-    config.wallet_a.endpoint = Some(producer.node.bound_address.to_string());
-    config.wallet_b.endpoint = Some(validator.node.bound_address.to_string());
+    let producer_bound_addr = producer.node.bound_address.to_string();
+    let validator_bound_addr = validator.node.bound_address.to_string();
+
+    config.wallet_a.endpoint = Some(producer_bound_addr);
+    config.wallet_b.endpoint = Some(validator_bound_addr);
 
     // save config file
     let config = save_config_file(config);
