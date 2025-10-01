@@ -62,17 +62,7 @@ pub struct TestContext {
 
 impl TestContext {
     pub async fn new(config: SuiteConfig) -> Self {
-        tracing::error!(
-            "Alice Client Endpoint: {:?} or {:?}",
-            config.endpoint.clone(),
-            config.wallet_a.endpoint.clone(),
-        );
         let alice_client = Self::new_client(config.endpoint.clone(), &config.wallet_a);
-        tracing::error!(
-            "Bob Client Endpoint: {:?} or {:?}",
-            config.endpoint.clone(),
-            config.wallet_b.endpoint.clone(),
-        );
         let bob_client = Self::new_client(config.endpoint.clone(), &config.wallet_b);
         Self {
             alice: Wallet::new(config.wallet_a.secret, alice_client).await,

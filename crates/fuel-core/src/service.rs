@@ -479,7 +479,6 @@ impl RunnableService for Task {
                 }
             }
         }
-        tracing::error!("All FuelService sub-services started");
 
         params.block_production_ready_signal.send_ready_signal();
 
