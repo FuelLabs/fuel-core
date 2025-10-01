@@ -77,9 +77,7 @@ where
         if let Some(block) = maybe_block {
             let tx_ids = block.transactions();
             let txs = self.get_txs(tx_ids)?;
-            let block =
-                <fuel_core_types::blockchain::block::Block<TxId> as Clone>::clone(&block)
-                    .uncompress(txs);
+            let block = block.into_owned().uncompress(txs);
             Ok(Some(block))
         } else {
             Ok(None)
