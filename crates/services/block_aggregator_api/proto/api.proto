@@ -17,10 +17,17 @@ message Block {
      bytes data = 1;
 }
 
+message BlockResponse {
+  oneof payload {
+    Block literal = 1;
+    string remote = 2;
+  }
+}
+
 message NewBlockSubscriptionRequest {}
 
 service BlockAggregator {
   rpc GetBlockHeight (BlockHeightRequest) returns (BlockHeightResponse);
-  rpc GetBlockRange (BlockRangeRequest) returns (stream Block);
-  rpc NewBlockSubscription (NewBlockSubscriptionRequest) returns (stream Block);
+  rpc GetBlockRange (BlockRangeRequest) returns (stream BlockResponse);
+  rpc NewBlockSubscription (NewBlockSubscriptionRequest) returns (stream BlockResponse);
 }
