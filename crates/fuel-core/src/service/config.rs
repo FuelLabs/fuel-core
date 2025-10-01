@@ -109,7 +109,7 @@ pub struct Config {
 }
 
 #[cfg(feature = "test-helpers")]
-fn free_local_addr() -> SocketAddr {
+pub fn free_local_addr() -> SocketAddr {
     let listener = TcpListener::bind("[::1]:0").unwrap();
     listener.local_addr().unwrap() // OS picks a free port
 }
