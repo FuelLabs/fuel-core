@@ -483,7 +483,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             tx.add_input(input);
             tx.add_output(output);
 
-            db.deploy_contract_with_id(&[], &vec![], &contract_id)?;
+            db.deploy_contract_with_id(&[], &[], &contract_id)?;
         }
         let transaction = mem::take(db.database_mut());
         let database = transaction.commit().expect("Failed to commit transaction");

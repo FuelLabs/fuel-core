@@ -4214,6 +4214,7 @@ dependencies = [
  "fuel-core-types 0.46.0",
  "fuel-vm 0.62.0",
  "k256",
+ "parking_lot",
  "postcard",
  "rand 0.8.5",
  "secrecy",

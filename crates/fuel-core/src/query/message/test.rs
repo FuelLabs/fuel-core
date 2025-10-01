@@ -31,7 +31,7 @@ fn receipt(i: Option<u8>) -> Receipt {
             let recipient = Address::new([i; 32]);
             let amount = 0;
             let nonce = Nonce::new([i; 32]);
-            let data = Some(Vec::new());
+            let data = Some(Vec::new().into());
             Receipt::MessageOut {
                 len: 0,
                 digest: Bytes32::new([0; 32]),

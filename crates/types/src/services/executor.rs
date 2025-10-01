@@ -44,6 +44,8 @@ use alloc::{
 };
 use fuel_vm_private::prelude::Transaction;
 
+pub mod memory;
+
 /// The alias for executor result.
 pub type Result<T> = core::result::Result<T, Error>;
 /// The uncommitted result of the block production execution.

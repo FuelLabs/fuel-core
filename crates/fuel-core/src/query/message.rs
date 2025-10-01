@@ -441,7 +441,7 @@ mod tests {
                 nonce: 0.into(),
                 len: 32,
                 digest: Bytes32::default(),
-                data: Some(vec![i; 32]),
+                data: Some(vec![i; 32].into()),
             });
         }
         block.transactions_mut().push(valid_tx_id);
@@ -477,7 +477,7 @@ mod tests {
                 nonce: 0.into(),
                 len: 33,
                 digest: Bytes32::default(),
-                data: Some(vec![i; 33]),
+                data: Some(vec![i; 33].into()),
             });
         }
         database.insert_transaction_status(
