@@ -1,7 +1,10 @@
 #![allow(non_snake_case)]
 
 use crate::blocks::full_block::ClientExt;
-use fuel_block_aggregator_api::api::protobuf_adapter::block_aggregator_client::BlockAggregatorClient;
+use fuel_block_aggregator_api::api::protobuf_adapter::{
+    block_aggregator_client::BlockAggregatorClient,
+    block_response::Payload,
+};
 use fuel_core::{
     database::Database,
     service::{
@@ -48,7 +51,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
         start: 1,
         end: 1,
     };
-    let actual_bytes = rpc_client
+    let actual_bytes = if let Some(Payload::Literal(block)) = rpc_client
         .get_block_range(request.clone())
         .await
         .unwrap()
@@ -57,7 +60,12 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
         .await
         .unwrap()
         .unwrap()
-        .data;
+        .payload
+    {
+        block.data
+    } else {
+        panic!("expected literal block payload");
+    };
     let actual_block: Block<Transaction> = postcard::from_bytes(&actual_bytes).unwrap();
 
     // then
