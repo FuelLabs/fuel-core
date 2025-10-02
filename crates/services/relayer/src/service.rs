@@ -138,7 +138,7 @@ impl AdaptivePageSizer {
                 self.current = if grown > self.current {
                     grown.min(self.max)
                 } else {
-                    (self.current + 1).min(self.max)
+                    (self.current.saturating_add(1)).min(self.max)
                 };
             }
         }
