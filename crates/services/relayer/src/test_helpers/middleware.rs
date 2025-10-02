@@ -1,29 +1,22 @@
+use alloy_consensus::Header as ConsensusHeader;
 use alloy_primitives::{
     B256,
     TxHash,
     U64,
 };
+
 use alloy_rpc_types_eth::{
     Block,
     BlockId,
     Filter,
+    Header,
     Log,
-    SyncingStatus,
+    SyncStatus,
     Transaction,
     TransactionReceipt,
 };
 use async_trait::async_trait;
-use ethers_providers::{
-    JsonRpcClient,
-    Middleware,
-    Provider,
-    ProviderError,
-};
 use parking_lot::Mutex;
-use serde::{
-    Serialize,
-    de::DeserializeOwned,
-};
 use std::{
     fmt,
     fmt::Debug,
@@ -51,7 +44,7 @@ struct InnerState {
 
 #[derive(Debug)]
 pub struct MockData {
-    pub is_syncing: SyncingStatus,
+    pub is_syncing: SyncStatus,
     pub best_block: Block<TxHash>,
     pub logs_batch: Vec<Vec<Log>>,
     pub logs_batch_index: usize,
@@ -130,19 +123,28 @@ impl fmt::Debug for MockMiddleware {
 
 impl Default for MockData {
     fn default() -> Self {
-        let best_block = Block {
+        let header = Header {
             hash: Some(
                 B256::from_str(
                     "0xa1ea3121940930f7e7b54506d80717f14c5163807951624c36354202a8bffda6",
                 )
                 .unwrap(),
             ),
-            number: Some(U64::from(20i32)),
+            inner: ConsensusHeader {
+                number: Some(U64::from(20)),
+                ..Default::default()
+            },
             ..Default::default()
         };
+
+        let best_block = Block {
+            header,
+            ..Default::default()
+        };
+
         MockData {
             best_block,
-            is_syncing: SyncingStatus::IsFalse,
+            is_syncing: SyncStatus::False,
             logs_batch: Vec::new(),
             logs_batch_index: 0,
         }
@@ -260,7 +262,7 @@ impl Middleware for MockMiddleware {
     }
 
     /// Needs for initial sync of relayer
-    async fn syncing(&self) -> Result<SyncingStatus, Self::Error> {
+    async fn syncing(&self) -> Result<SyncStatus, Self::Error> {
         tokio::task::yield_now().await;
         self.before_event(TriggerType::Syncing);
         let r = Ok(self.update_data(|data| data.is_syncing.clone()));
