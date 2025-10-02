@@ -135,8 +135,11 @@ impl AdaptivePageSizer {
             {
                 let grown = self.current.saturating_mul(PAGE_GROW_FACTOR_NUM)
                     / PAGE_GROW_FACTOR_DEN;
-                self.current = grown.min(self.max);
-                self.successful_rpc_calls = 0;
+                self.current = if grown > self.current {
+                    grown.min(self.max)
+                } else {
+                    (self.current + 1).min(self.max)
+                };
             }
         }
     }
@@ -216,12 +219,6 @@ where
         let mut successful_rpc_calls: u64 = 0;
         let mut rpc_error: bool = false;
 
-        println!(
-            "Starting download with page size: {}",
-            self.adaptive_page_sizer.page_size()
-        );
-        println!("Sync gap: {:?}", eth_sync_gap);
-
         let logs = download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
@@ -229,24 +226,16 @@ where
             self.adaptive_page_sizer.page_size(),
         )
         .inspect(|result| match result {
-            Ok(downloaded) => {
+            Ok(_) => {
                 successful_rpc_calls = successful_rpc_calls.saturating_add(1);
-                println!(
-                    "Successful RPC call #{}, blocks: {}..{}",
-                    successful_rpc_calls, downloaded.start_height, downloaded.last_height
-                );
             }
             Err(_) => {
                 rpc_error = true;
-                println!("RPC error encountered");
             }
         });
 
         let logs = logs.take_until(self.shutdown.while_started());
         let result = write_logs(&mut self.database, logs).await;
-
-        println!("Total successful RPC calls: {}", successful_rpc_calls);
-        println!("Had RPC error: {}", rpc_error);
 
         self.adaptive_page_sizer
             .update(successful_rpc_calls, rpc_error);
@@ -557,5 +546,13 @@ mod tests {
         assert_eq!(sizer.page_size(), 4);
         sizer.update(10, false);
         assert_eq!(sizer.page_size(), 5);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_grows_by_one_if_growth_factor_stalls() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(2, 10, grow_threshold);
+        sizer.update(grow_threshold + 1, false);
+        assert_eq!(sizer.page_size(), 3, "Page size should grow by at least 1");
     }
 }
