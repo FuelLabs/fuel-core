@@ -60,7 +60,7 @@ impl BlockAggregator for Server {
         &self,
         request: tonic::Request<BlockRangeRequest>,
     ) -> Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status> {
-        tracing::warn!("get_block_range: {:?}", request);
+        tracing::debug!("get_block_range: {:?}", request);
         let req = request.into_inner();
         let (response, receiver) = tokio::sync::oneshot::channel();
         let query = BlockAggregatorQuery::GetBlockRange {
