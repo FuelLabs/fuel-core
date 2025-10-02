@@ -1,5 +1,4 @@
 use alloy_primitives::B256;
-use ethers_contract::EthEvent;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::Bytes20,
@@ -11,10 +10,10 @@ use std::{
 };
 
 pub(crate) static ETH_LOG_MESSAGE: Lazy<B256> =
-    Lazy::new(crate::abi::bridge::MessageSentFilter::signature);
+    Lazy::new(|| crate::abi::bridge::MessageSent::signature());
 
 pub(crate) static ETH_FORCED_TX: Lazy<B256> =
-    Lazy::new(crate::abi::bridge::TransactionFilter::signature);
+    Lazy::new(|| crate::abi::bridge::Transaction::signature());
 
 // TODO: Move settlement fields into `ChainConfig` because it is part of the consensus.
 #[derive(Clone, Debug)]

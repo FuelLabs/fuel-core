@@ -10,16 +10,12 @@ use crate::{
 use alloy_primitives::{
     Address,
     B256,
-    Bytes as EthersBytes,
-    Log,
-    U64,
+    LogData,
 };
 use bytes::{
     Bytes,
     BytesMut,
 };
-use ethers_contract::EthEvent;
-use ethers_core::abi::Tokenize;
 use fuel_core_types::entities::{
     Message,
     RelayedTransaction,
@@ -52,52 +48,20 @@ impl LogTestHelper for Log {
     }
 }
 
-impl EvtToLog for crate::abi::bridge::MessageSentFilter {
+impl EvtToLog for crate::abi::bridge::MessageSent {
     fn into_log(self) -> Log {
-        event_to_log(self, &crate::abi::bridge::MESSAGESENT_ABI)
+        self.into_rpc_log()
     }
 }
 
-impl EvtToLog for crate::abi::bridge::TransactionFilter {
+impl EvtToLog for crate::abi::bridge::Transaction {
     fn into_log(self) -> Log {
-        event_to_log(self, &crate::abi::bridge::MESSAGESENT_ABI)
-    }
-}
-
-pub fn event_to_log<E>(event: E, abi: &ethers_core::abi::Abi) -> Log
-where
-    E: EthEvent,
-    E: Tokenize,
-{
-    let e = abi.event(&<E as EthEvent>::name()).unwrap();
-    let mut topics = vec![E::signature()];
-    let mut data = vec![];
-    for (t, indexed) in event
-        .into_tokens()
-        .into_iter()
-        .zip(e.inputs.iter().map(|ep| ep.indexed))
-    {
-        if indexed {
-            let bytes = ethers_core::abi::encode(&[t]);
-            if bytes.len() == 32 {
-                let t: [u8; 32] = bytes.try_into().unwrap();
-                topics.push(t.into());
-            } else {
-                todo!("Hash the encoded bytes as Keccak256")
-            }
-        } else {
-            data.push(t);
-        }
-    }
-    Log {
-        topics,
-        data: ethers_core::abi::encode(&data[..]).into(),
-        ..Default::default()
+        self.into_rpc_log()
     }
 }
 
 pub fn eth_log_message(
-    address: H160,
+    address: Address,
     eth_block: u64,
     owner: Address,
     nonce: u32,
@@ -131,19 +95,20 @@ pub fn eth_log_message(
     )
 }
 
+use alloy_rpc_types_eth::Log;
 fn log_default(address: Address, eth_block: u64, topics: Vec<B256>, data: Bytes) -> Log {
     Log {
-        address,
-        topics,
-        data: EthersBytes(data),
+        inner: alloy_primitives::Log {
+            address,
+            data: LogData::new_unchecked(topics, data),
+        },
         block_hash: None,
-        block_number: Some(U64([eth_block])),
+        block_number: Some(eth_block),
         transaction_hash: None,
         transaction_index: None,
         log_index: None,
-        transaction_log_index: None,
-        log_type: None,
         removed: Some(false),
+        block_timestamp: None,
     }
 }
 
