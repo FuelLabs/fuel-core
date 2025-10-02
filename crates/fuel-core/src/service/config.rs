@@ -81,6 +81,7 @@ pub struct Config {
     pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
+    #[cfg(feature = "rpc")]
     pub rpc_config: fuel_block_aggregator_api::integration::Config,
     pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
@@ -168,6 +169,7 @@ impl Config {
 
         const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
 
+        #[cfg(feature = "rpc")]
         let rpc_config = fuel_block_aggregator_api::integration::Config {
             addr: free_local_addr(),
         };
@@ -245,6 +247,7 @@ impl Config {
             time_until_synced: Duration::ZERO,
             production_timeout: Duration::from_secs(20),
             memory_pool_size: 4,
+            #[cfg(feature = "rpc")]
             rpc_config,
         }
     }

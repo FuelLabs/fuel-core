@@ -784,6 +784,7 @@ impl Command {
                 status_cache_ttl: status_cache_ttl.into(),
                 metrics: metrics.is_enabled(Module::TxStatusManager),
             },
+            #[cfg(feature = "rpc")]
             rpc_config,
         };
         Ok(config)

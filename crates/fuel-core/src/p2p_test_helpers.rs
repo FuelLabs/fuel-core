@@ -1,5 +1,7 @@
 //! # Helpers for creating networks of nodes
 
+#[cfg(feature = "rpc")]
+use crate::service::config::free_local_addr;
 use crate::{
     chain_config::{
         CoinConfig,
@@ -15,7 +17,6 @@ use crate::{
     service::{
         Config,
         FuelService,
-        config::free_local_addr,
     },
 };
 use fuel_core_chain_config::{
@@ -358,8 +359,10 @@ pub async fn make_nodes(
 
     let mut producers = Vec::with_capacity(producers_with_txs.len());
     for (i, s) in producers_with_txs.into_iter().enumerate() {
-        let mut config = config.clone();
-        config.rpc_config.addr = free_local_addr();
+        #[cfg(feature = "rpc")]
+        {
+            config.rpc_config.addr = free_local_addr();
+        }
         let name = s.as_ref().map_or(String::new(), |s| s.0.name.clone());
         let overrides = s
             .clone()
@@ -424,8 +427,10 @@ pub async fn make_nodes(
 
     let mut validators = vec![];
     for (i, s) in validators_setup.into_iter().enumerate() {
-        let mut config = config.clone();
-        config.rpc_config.addr = free_local_addr();
+        #[cfg(feature = "rpc")]
+        {
+            config.rpc_config.addr = crate::service::config::free_local_addr();
+        }
         let name = s.as_ref().map_or(String::new(), |s| s.name.clone());
         let overrides = s
             .clone()

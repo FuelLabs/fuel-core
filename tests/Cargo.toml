@@ -26,6 +26,7 @@ fault-proving = [
     "fuel-core-compression-service/fault-proving",
     "fuel-core-benches/fault-proving",
 ]
+rpc = ["fuel-core/rpc", "fuel-core-bin/rpc"]
 
 [dependencies]
 anyhow = { workspace = true }
