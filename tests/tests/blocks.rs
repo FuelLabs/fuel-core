@@ -17,6 +17,7 @@ use fuel_core_client::client::{
     },
     types::TransactionStatus,
 };
+use fuel_core_executor::executor::max_tx_count;
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     StorageAsMut,
@@ -27,12 +28,17 @@ use fuel_core_storage::{
     transactional::WriteTransaction,
     vm_storage::VmStorageRequirements,
 };
+use fuel_core_txpool::config::{
+    HeavyWorkConfig,
+    PoolLimits,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
     },
     fuel_tx::*,
+    fuel_types::BlockHeight,
     secrecy::ExposeSecret,
     signer::SignMode,
     tai64::Tai64,
@@ -42,16 +48,19 @@ use itertools::{
     Itertools,
     rev,
 };
+use rand::{
+    SeedableRng,
+    prelude::StdRng,
+};
 use rstest::rstest;
 use std::{
     ops::Deref,
     time::Duration,
 };
-use test_helpers::send_graph_ql_query;
-
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
+use test_helpers::{
+    client_ext::ClientExt,
+    make_tx,
+    send_graph_ql_query,
 };
 
 #[tokio::test]
@@ -370,170 +379,94 @@ async fn missing_first_and_last_parameters_returns_an_error() {
     let result = send_graph_ql_query(&url, query).await;
     assert!(result.contains("The queries for the whole range is not supported"));
 }
+#[tokio::test]
+async fn get_full_block_with_tx() {
+    let srv = FuelService::from_database(Database::default(), Config::local_node())
+        .await
+        .unwrap();
 
-pub mod full_block {
-    use super::*;
-    use cynic::QueryBuilder;
-    use fuel_core_client::client::{
-        FuelClient,
-        schema::{
-            BlockId,
-            U32,
-            block::{
-                BlockByHeightArgs,
-                BlockByHeightArgsFields,
-                Consensus,
-                Header,
-            },
-            schema,
-            tx::OpaqueTransaction,
+    let client = FuelClient::from(srv.bound_address);
+    let tx = Transaction::default_test_tx();
+    client.submit_and_await_commit(&tx).await.unwrap();
+
+    let block = client.full_block_by_height(1).await.unwrap().unwrap();
+    assert_eq!(block.header.height.0, 1);
+    assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
+}
+
+#[tokio::test]
+async fn too_many_transactions_are_split_in_blocks() {
+    // Given
+    let max_gas_limit = 50_000_000;
+    let mut rng = StdRng::seed_from_u64(2322);
+
+    let local_node_config = Config::local_node();
+    let txpool = fuel_core_txpool::config::Config {
+        pool_limits: PoolLimits {
+            max_txs: 2_000_000,
+            max_gas: u64::MAX,
+            max_bytes_size: usize::MAX,
         },
+        heavy_work: HeavyWorkConfig {
+            number_threads_to_verify_transactions: 4,
+            number_threads_p2p_sync: 0,
+            size_of_verification_queue: u16::MAX as usize,
+            size_of_p2p_sync_queue: 1,
+        },
+        ..local_node_config.txpool
     };
-    use fuel_core_executor::executor::max_tx_count;
-    use fuel_core_txpool::config::{
-        HeavyWorkConfig,
-        PoolLimits,
+    let chain_config = local_node_config.snapshot_reader.chain_config().clone();
+    let mut consensus_parameters = chain_config.consensus_parameters;
+    consensus_parameters.set_block_gas_limit(u64::MAX);
+    consensus_parameters
+        .set_block_transaction_size_limit(u64::MAX)
+        .expect("should be able to set the limit");
+    let snapshot_reader = local_node_config.snapshot_reader.with_chain_config(
+        fuel_core::chain_config::ChainConfig {
+            consensus_parameters,
+            ..chain_config
+        },
+    );
+
+    let patched_node_config = Config {
+        block_production: Trigger::Never,
+        txpool,
+        snapshot_reader,
+        ..local_node_config
     };
-    use fuel_core_types::fuel_types::BlockHeight;
 
-    #[derive(cynic::QueryFragment, Debug)]
-    #[cynic(
-        schema_path = "../crates/client/assets/schema.sdl",
-        graphql_type = "Query",
-        variables = "BlockByHeightArgs"
-    )]
-    pub struct FullBlockByHeightQuery {
-        #[arguments(height: $height)]
-        pub block: Option<FullBlock>,
+    let srv = FuelService::new_node(patched_node_config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let tx_count: u64 = max_tx_count() as u64 + 100;
+    let txs = (1..=tx_count)
+        .map(|i| make_tx(&mut rng, i, max_gas_limit))
+        .collect_vec();
+
+    // When
+    for tx in txs.iter() {
+        let _tx_id = client.submit(tx).await.unwrap();
     }
 
-    #[derive(cynic::QueryFragment, Debug)]
-    #[cynic(
-        schema_path = "../crates/client/assets/schema.sdl",
-        graphql_type = "Block"
-    )]
-    #[allow(dead_code)]
-    pub struct FullBlock {
-        pub id: BlockId,
-        pub header: Header,
-        pub consensus: Consensus,
-        pub transactions: Vec<OpaqueTransaction>,
-    }
+    // Then
+    let _last_block_height: u32 = client.produce_blocks(2, None).await.unwrap().into();
+    let second_last_block = client
+        .block_by_height(BlockHeight::from(1))
+        .await
+        .unwrap()
+        .expect("Second last block should be defined");
+    let last_block = client
+        .block_by_height(BlockHeight::from(2))
+        .await
+        .unwrap()
+        .expect("Last Block should be defined");
 
-    #[async_trait::async_trait]
-    pub trait ClientExt {
-        async fn full_block_by_height(
-            &self,
-            height: u32,
-        ) -> std::io::Result<Option<FullBlock>>;
-    }
-
-    #[async_trait::async_trait]
-    impl ClientExt for FuelClient {
-        async fn full_block_by_height(
-            &self,
-            height: u32,
-        ) -> std::io::Result<Option<FullBlock>> {
-            let query = FullBlockByHeightQuery::build(BlockByHeightArgs {
-                height: Some(U32(height)),
-            });
-
-            let block = self.query(query).await?.block;
-
-            Ok(block)
-        }
-    }
-
-    #[tokio::test]
-    async fn get_full_block_with_tx() {
-        let srv = FuelService::from_database(Database::default(), Config::local_node())
-            .await
-            .unwrap();
-
-        let client = FuelClient::from(srv.bound_address);
-        let tx = Transaction::default_test_tx();
-        client.submit_and_await_commit(&tx).await.unwrap();
-
-        let block = client.full_block_by_height(1).await.unwrap().unwrap();
-        assert_eq!(block.header.height.0, 1);
-        assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
-    }
-
-    #[tokio::test]
-    async fn too_many_transactions_are_split_in_blocks() {
-        // Given
-        let max_gas_limit = 50_000_000;
-        let mut rng = StdRng::seed_from_u64(2322);
-
-        let local_node_config = Config::local_node();
-        let txpool = fuel_core_txpool::config::Config {
-            pool_limits: PoolLimits {
-                max_txs: 2_000_000,
-                max_gas: u64::MAX,
-                max_bytes_size: usize::MAX,
-            },
-            heavy_work: HeavyWorkConfig {
-                number_threads_to_verify_transactions: 4,
-                number_threads_p2p_sync: 0,
-                size_of_verification_queue: u16::MAX as usize,
-                size_of_p2p_sync_queue: 1,
-            },
-            ..local_node_config.txpool
-        };
-        let chain_config = local_node_config.snapshot_reader.chain_config().clone();
-        let mut consensus_parameters = chain_config.consensus_parameters;
-        consensus_parameters.set_block_gas_limit(u64::MAX);
-        consensus_parameters
-            .set_block_transaction_size_limit(u64::MAX)
-            .expect("should be able to set the limit");
-        let snapshot_reader = local_node_config.snapshot_reader.with_chain_config(
-            fuel_core::chain_config::ChainConfig {
-                consensus_parameters,
-                ..chain_config
-            },
-        );
-
-        let patched_node_config = Config {
-            block_production: Trigger::Never,
-            txpool,
-            snapshot_reader,
-            ..local_node_config
-        };
-
-        let srv = FuelService::new_node(patched_node_config).await.unwrap();
-        let client = FuelClient::from(srv.bound_address);
-
-        let tx_count: u64 = max_tx_count() as u64 + 100;
-        let txs = (1..=tx_count)
-            .map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit))
-            .collect_vec();
-
-        // When
-        for tx in txs.iter() {
-            let _tx_id = client.submit(tx).await.unwrap();
-        }
-
-        // Then
-        let _last_block_height: u32 =
-            client.produce_blocks(2, None).await.unwrap().into();
-        let second_last_block = client
-            .block_by_height(BlockHeight::from(1))
-            .await
-            .unwrap()
-            .expect("Second last block should be defined");
-        let last_block = client
-            .block_by_height(BlockHeight::from(2))
-            .await
-            .unwrap()
-            .expect("Last Block should be defined");
-
-        assert_eq!(
-            second_last_block.transactions.len(),
-            max_tx_count() as usize + 1 // Mint transaction for one block
-        );
-        assert_eq!(
-            last_block.transactions.len(),
-            (tx_count as usize - (max_tx_count() as usize)) + 1 /* Mint transaction for second block */
-        );
-    }
+    assert_eq!(
+        second_last_block.transactions.len(),
+        max_tx_count() as usize + 1 // Mint transaction for one block
+    );
+    assert_eq!(
+        last_block.transactions.len(),
+        (tx_count as usize - (max_tx_count() as usize)) + 1 /* Mint transaction for second block */
+    );
 }
