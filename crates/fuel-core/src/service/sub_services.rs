@@ -460,6 +460,7 @@ pub fn init_sub_services(
 
     #[cfg(feature = "rpc")]
     let block_aggregator_rpc = {
+        tracing::error!("rpc addr: {}", config.rpc_config.addr);
         let block_aggregator_config = config.rpc_config.clone();
         let db = database.block_aggregation().clone();
         let db_adapter = StorageDB::new(db);
