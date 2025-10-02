@@ -140,6 +140,7 @@ impl AdaptivePageSizer {
                 } else {
                     (self.current.saturating_add(1)).min(self.max)
                 };
+                self.successful_rpc_calls = 0;
             }
         }
     }
