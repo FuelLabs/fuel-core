@@ -11,6 +11,7 @@ use crate::{
             NewBlockSubscriptionRequest,
             ProtobufAPI,
             block_aggregator_client::BlockAggregatorClient,
+            block_response::Payload,
         },
     },
     block_range_response::BlockRangeResponse,
@@ -121,7 +122,13 @@ async fn await_query__get_block_range__client_receives_expected_value() {
         .await
         .unwrap()
         .into_iter()
-        .map(|b| b.data.to_vec())
+        .map(|b| {
+            if let Some(Payload::Literal(inner)) = b.payload {
+                inner.data.to_vec()
+            } else {
+                panic!("unexpected response type")
+            }
+        })
         .collect();
 
     assert_eq!(expected, actual);
@@ -176,7 +183,13 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
         .await
         .unwrap()
         .into_iter()
-        .map(|b| b.data.to_vec())
+        .map(|b| {
+            if let Some(Payload::Literal(inner)) = b.payload {
+                inner.data.to_vec()
+            } else {
+                panic!("unexpected response type")
+            }
+        })
         .collect();
 
     assert_eq!(expected, actual);

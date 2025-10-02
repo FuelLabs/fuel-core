@@ -574,6 +574,9 @@ mod tests {
         // -    gas price service
         // -    chain info provider
         #[allow(unused_mut)]
+        #[cfg(not(feature = "rpc"))]
+        let mut expected_services = 7;
+        #[cfg(feature = "rpc")]
         let mut expected_services = 8;
 
         // Relayer service is disabled with `Config::local_node`.

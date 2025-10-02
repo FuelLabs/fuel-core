@@ -26,6 +26,7 @@ relayer = ["fuel-core/relayer", "dep:url"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
 rocksdb = ["fuel-core/rocksdb"]
 rocksdb-production = ["fuel-core/rocksdb-production", "rocksdb"]
+rpc = ["fuel-core/rpc"]
 # features to enable in production, but increase build times
 production = [
     "env",

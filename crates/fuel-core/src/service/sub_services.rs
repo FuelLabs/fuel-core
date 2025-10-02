@@ -8,6 +8,7 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
     trigger::TimeBasedTrigger,
     tx_receiver::PreconfirmationsReceiver,
 };
+#[cfg(feature = "rpc")]
 use fuel_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
     db::storage_db::StorageDB,
@@ -457,19 +458,22 @@ pub fn init_sub_services(
         chain_name,
     };
 
-    let block_aggregator_config = config.rpc_config.clone();
-    let db = database.block_aggregation().clone();
-    let db_adapter = StorageDB::new(db);
-    let serializer = SerializerAdapter;
-    let onchain_db = database.on_chain().clone();
-    let importer = importer_adapter.events_shared_result();
-    let block_aggregator_rpc = fuel_block_aggregator_api::integration::new_service(
-        &block_aggregator_config,
-        db_adapter,
-        serializer,
-        onchain_db,
-        importer,
-    );
+    #[cfg(feature = "rpc")]
+    let block_aggregator_rpc = {
+        let block_aggregator_config = config.rpc_config.clone();
+        let db = database.block_aggregation().clone();
+        let db_adapter = StorageDB::new(db);
+        let serializer = SerializerAdapter;
+        let onchain_db = database.on_chain().clone();
+        let importer = importer_adapter.events_shared_result();
+        fuel_block_aggregator_api::integration::new_service(
+            &block_aggregator_config,
+            db_adapter,
+            serializer,
+            onchain_db,
+            importer,
+        )
+    };
 
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
         *genesis_block.header().height(),
@@ -535,6 +539,7 @@ pub fn init_sub_services(
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
     services.push(Box::new(tx_status_manager));
+    #[cfg(feature = "rpc")]
     services.push(Box::new(block_aggregator_rpc));
 
     if let Some(compression_service) = compression_service {

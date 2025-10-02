@@ -54,13 +54,13 @@ impl BlockAggregator for Server {
             ))),
         }
     }
-    type GetBlockRangeStream = ReceiverStream<Result<Block, Status>>;
+    type GetBlockRangeStream = ReceiverStream<Result<BlockResponse, Status>>;
 
     async fn get_block_range(
         &self,
         request: tonic::Request<BlockRangeRequest>,
     ) -> Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status> {
-        tracing::warn!("get_block_range: {:?}", request);
+        tracing::debug!("get_block_range: {:?}", request);
         let req = request.into_inner();
         let (response, receiver) = tokio::sync::oneshot::channel();
         let query = BlockAggregatorQuery::GetBlockRange {
@@ -77,7 +77,7 @@ impl BlockAggregator for Server {
             Ok(block_range_response) => match block_range_response {
                 BlockRangeResponse::Literal(inner) => {
                     let (tx, rx) =
-                        tokio::sync::mpsc::channel::<Result<Block, Status>>(16);
+                        tokio::sync::mpsc::channel::<Result<BlockResponse, Status>>(16);
 
                     tokio::spawn(async move {
                         let mut s = inner;
@@ -85,7 +85,10 @@ impl BlockAggregator for Server {
                             let pb = Block {
                                 data: block.bytes().to_vec(),
                             };
-                            if tx.send(Ok(pb)).await.is_err() {
+                            let response = BlockResponse {
+                                payload: Some(block_response::Payload::Literal(pb)),
+                            };
+                            if tx.send(Ok(response)).await.is_err() {
                                 break;
                             }
                         }
@@ -105,7 +108,7 @@ impl BlockAggregator for Server {
         }
     }
 
-    type NewBlockSubscriptionStream = ReceiverStream<Result<Block, Status>>;
+    type NewBlockSubscriptionStream = ReceiverStream<Result<BlockResponse, Status>>;
 
     async fn new_block_subscription(
         &self,
@@ -126,7 +129,10 @@ impl BlockAggregator for Server {
                 let block = Block {
                     data: nb.block.bytes().to_vec(),
                 };
-                if task_sender.send(Ok(block)).await.is_err() {
+                let response = BlockResponse {
+                    payload: Some(block_response::Payload::Literal(block)),
+                };
+                if task_sender.send(Ok(response)).await.is_err() {
                     break;
                 }
             }
