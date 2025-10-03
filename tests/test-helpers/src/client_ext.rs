@@ -1,6 +1,4 @@
-use super::*;
 use cynic::QueryBuilder;
-use fuel_core::upgradable_executor::native_executor::executor::max_tx_count;
 use fuel_core_client::client::{
     FuelClient,
     schema::{
@@ -16,11 +14,6 @@ use fuel_core_client::client::{
         tx::OpaqueTransaction,
     },
 };
-use fuel_core_txpool::config::{
-    HeavyWorkConfig,
-    PoolLimits,
-};
-use fuel_core_types::fuel_types::BlockHeight;
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(

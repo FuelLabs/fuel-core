@@ -144,6 +144,7 @@ impl BlockAggregator for Server {
 
 pub struct ProtobufAPI {
     _server_task_handle: tokio::task::JoinHandle<()>,
+    shutdown_sender: Option<tokio::sync::oneshot::Sender<()>>,
     query_receiver: tokio::sync::mpsc::Receiver<BlockAggregatorQuery<BlockRangeResponse>>,
 }
 
@@ -153,16 +154,26 @@ impl ProtobufAPI {
             tokio::sync::mpsc::channel::<BlockAggregatorQuery<BlockRangeResponse>>(100);
         let server = Server::new(query_sender);
         let addr = url.parse().unwrap();
+        let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
         let _server_task_handle = tokio::spawn(async move {
-            // TODO: Handle error
-            tonic::transport::Server::builder()
-                .add_service(block_aggregator_server::BlockAggregatorServer::new(server))
-                .serve(addr)
-                .await
-                .unwrap()
+            let service = tonic::transport::Server::builder()
+                .add_service(block_aggregator_server::BlockAggregatorServer::new(server));
+            tokio::select! {
+                res = service.serve(addr) => {
+                    if let Err(e) = res {
+                        tracing::error!("BlockAggregator tonic server error: {}", e);
+                    } else {
+                        tracing::info!("BlockAggregator tonic server stopped");
+                    }
+                },
+                _ = shutdown_receiver => {
+                    tracing::info!("Shutting down BlockAggregator tonic server");
+                },
+            }
         });
         Self {
             _server_task_handle,
+            shutdown_sender: Some(shutdown_sender),
             query_receiver,
         }
     }
@@ -183,4 +194,10 @@ impl BlockAggregatorApi for ProtobufAPI {
     }
 }
 
-pub struct ProtobufClient;
+impl Drop for ProtobufAPI {
+    fn drop(&mut self) {
+        if let Some(shutdown_sender) = self.shutdown_sender.take() {
+            let _ = shutdown_sender.send(());
+        }
+    }
+}

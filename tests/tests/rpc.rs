@@ -23,7 +23,7 @@ use test_helpers::client_ext::ClientExt;
 #[tokio::test(flavor = "multi_thread")]
 async fn get_block_range__can_get_serialized_block_from_rpc() {
     let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr.clone();
+    let rpc_url = config.rpc_config.addr;
 
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
@@ -52,7 +52,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
         end: 1,
     };
     let actual_bytes = if let Some(Payload::Literal(block)) = rpc_client
-        .get_block_range(request.clone())
+        .get_block_range(request)
         .await
         .unwrap()
         .into_inner()
@@ -84,7 +84,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
 #[tokio::test(flavor = "multi_thread")]
 async fn get_block_height__can_get_value_from_rpc() {
     let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr.clone();
+    let rpc_url = config.rpc_config.addr;
 
     // given
     let srv = FuelService::from_database(Database::default(), config.clone())
@@ -118,7 +118,7 @@ async fn get_block_height__can_get_value_from_rpc() {
 #[tokio::test(flavor = "multi_thread")]
 async fn new_block_subscription__can_get_expect_block() {
     let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr.clone();
+    let rpc_url = config.rpc_config.addr;
 
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
@@ -136,7 +136,7 @@ async fn new_block_subscription__can_get_expect_block() {
     let request =
         fuel_block_aggregator_api::api::protobuf_adapter::NewBlockSubscriptionRequest {};
     let mut stream = rpc_client
-        .new_block_subscription(request.clone())
+        .new_block_subscription(request)
         .await
         .unwrap()
         .into_inner();

@@ -267,9 +267,7 @@ impl Importer {
             callback: sender,
         };
         self.commands.send(command)?;
-        tokio::time::timeout(Duration::from_secs(5), receiver)
-            .await
-            .expect("why this take so long?")?
+        receiver.await?
     }
 
     #[cfg(test)]
@@ -522,6 +520,8 @@ where
                 }
             }
         }
+        let a = 100;
+        let _ = a;
     }
 
     /// Prepares the block for committing. It includes the execution of the block,
