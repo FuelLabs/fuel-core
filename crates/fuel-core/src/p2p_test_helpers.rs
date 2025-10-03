@@ -504,11 +504,6 @@ pub fn make_config(
         node_config.rpc_config.addr = free_local_addr();
     }
 
-    tracing::error!(
-        "Creating node config for node: {}, {}",
-        name,
-        node_config.rpc_config.addr
-    );
     if let Some(min_gas_price) = config_overrides.min_exec_gas_price {
         node_config.gas_price_config.min_exec_gas_price = min_gas_price;
     }
