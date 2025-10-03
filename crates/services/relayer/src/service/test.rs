@@ -1,5 +1,8 @@
 #![allow(non_snake_case)]
-use crate::test_helpers::middleware::MockMiddleware;
+use crate::test_helpers::{
+    middleware::MockMiddleware,
+    page_sizer::IdentityPageSizer,
+};
 
 use futures::TryStreamExt;
 use test_case::test_case;
@@ -36,7 +39,7 @@ async fn can_download_logs() {
         &eth_state.needs_to_sync_eth().unwrap(),
         contracts,
         &eth_node,
-        DEFAULT_LOG_PAGE_SIZE,
+        &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
     .map_ok(|logs| logs.logs)
     .try_concat()
@@ -83,7 +86,7 @@ async fn quorum_agrees_on_logs() {
         &eth_state.needs_to_sync_eth().unwrap(),
         contracts,
         &provider,
-        DEFAULT_LOG_PAGE_SIZE,
+        &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
     .map_ok(|logs| logs.logs)
     .try_concat()
@@ -139,7 +142,7 @@ async fn quorum__disagree_on_logs() {
         &eth_state.needs_to_sync_eth().unwrap(),
         contracts,
         &provider,
-        DEFAULT_LOG_PAGE_SIZE,
+        &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
     .map_ok(|logs| logs.logs)
     .try_concat()
@@ -239,8 +242,8 @@ async fn relayer_grows_page_size_on_success() {
         .await
         .unwrap();
 
-    relayer.adaptive_page_sizer = AdaptivePageSizer::new(5, 10, 50);
-    relayer.adaptive_page_sizer.successful_rpc_calls = 50;
+    relayer.page_sizer = AdaptivePageSizer::new(5, 10, 50, 10_000);
+    relayer.page_sizer.successful_rpc_calls = 50;
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 10,
@@ -255,7 +258,7 @@ async fn relayer_grows_page_size_on_success() {
 
     // Assert
     assert!(result.is_ok());
-    assert_eq!(relayer.adaptive_page_sizer.page_size(), 6); // 5 * 125 / 100 = 6.25 → 6
+    assert_eq!(relayer.page_sizer.page_size(), 6); // 5 * 125 / 100 = 6.25 → 6
 }
 
 #[tokio::test]
@@ -280,8 +283,8 @@ async fn relayer_respects_max_page_size_limit() {
         .await
         .unwrap();
 
-    relayer.adaptive_page_sizer = AdaptivePageSizer::new(10, 10, 50);
-    relayer.adaptive_page_sizer.successful_rpc_calls = 60; // Above threshold
+    relayer.page_sizer = AdaptivePageSizer::new(10, 10, 50, 10_000);
+    relayer.page_sizer.successful_rpc_calls = 60; // Above threshold
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 10,
@@ -296,7 +299,7 @@ async fn relayer_respects_max_page_size_limit() {
 
     // Assert - should stay at max, not exceed it
     assert!(result.is_ok());
-    assert_eq!(relayer.adaptive_page_sizer.page_size(), 10);
+    assert_eq!(relayer.page_sizer.page_size(), 10);
 }
 
 #[tokio::test]
@@ -333,8 +336,8 @@ async fn relayer_handles_multiple_successful_rpc_calls_per_download() {
         .await
         .unwrap();
 
-    relayer.adaptive_page_sizer = AdaptivePageSizer::new(5, 10, 50);
-    relayer.adaptive_page_sizer.successful_rpc_calls = 45; // Close to threshold
+    relayer.page_sizer = AdaptivePageSizer::new(5, 10, 50, 10_000);
+    relayer.page_sizer.successful_rpc_calls = 45; // Close to threshold
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 10,
@@ -349,6 +352,6 @@ async fn relayer_handles_multiple_successful_rpc_calls_per_download() {
 
     // Assert
     assert!(result.is_ok());
-    assert_eq!(relayer.adaptive_page_sizer.successful_rpc_calls, 47); // 45 + 2
-    assert_eq!(relayer.adaptive_page_sizer.page_size(), 5); // Not enough to reach threshold yet
+    assert_eq!(relayer.page_sizer.successful_rpc_calls, 47); // 45 + 2
+    assert_eq!(relayer.page_sizer.page_size(), 5); // Not enough to reach threshold yet
 }
