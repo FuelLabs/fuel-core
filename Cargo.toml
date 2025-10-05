@@ -52,7 +52,7 @@ homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
-rust-version = "1.86.0"
+rust-version = "1.90.0"
 version = "0.46.0"
 
 [workspace.dependencies]
