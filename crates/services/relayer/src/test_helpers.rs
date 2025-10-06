@@ -7,21 +7,12 @@ use crate::{
     // config,
     log::EthEventLog,
 };
-// use alloy_primitives::{
-//     Address,
-//     B256,
-//     LogData,
-// };
-// use bytes::{
-//     Bytes,
-//     BytesMut,
-// };
 use fuel_core_types::entities::{
     Message,
     RelayedTransaction,
 };
 
-// pub mod middleware;
+pub mod provider;
 
 pub trait LogTestHelper {
     fn to_msg(&self) -> Message;

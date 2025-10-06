@@ -15,7 +15,7 @@ include-quorum-tests = []
 
 test-helpers = [
   # "bytes",
-  # "parking_lot",
+   "parking_lot",
   "thiserror",
   "fuel-core-types/test-helpers",
 ]
@@ -25,18 +25,19 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 # bytes = { version = "1.1", optional = true }
 enum-iterator = { workspace = true }
-ethereum-types = "0.14.1"
+ethereum-types = "0.15.1"
 alloy-primitives = { version = "1.4.0", default-features = false }
 alloy-rpc-types-eth = "1.0.36"
 alloy-sol-types = "1.4.0"
-#alloy-consensus = "1.0.37"
+alloy-rpc-client = "1.0.37"
+alloy-consensus = "1.0.37"
 alloy-provider = "1.0.37"
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 once_cell = { workspace = true }
-# parking_lot = { workspace = true, optional = true }
+ parking_lot = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true, optional = true }
