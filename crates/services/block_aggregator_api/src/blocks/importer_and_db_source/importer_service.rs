@@ -18,21 +18,21 @@ use fuel_core_types::{
 use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
 
-pub struct ImporterTask<Serializer> {
+pub struct ImporterTask<Serializer, B> {
     importer: BoxStream<SharedImportResult>,
     serializer: Serializer,
-    block_return_sender: Sender<BlockSourceEvent>,
+    block_return_sender: Sender<BlockSourceEvent<B>>,
     new_end_sender: Option<tokio::sync::oneshot::Sender<BlockHeight>>,
 }
 
-impl<Serializer> ImporterTask<Serializer>
+impl<Serializer, B> ImporterTask<Serializer, B>
 where
     Serializer: BlockSerializer + Send,
 {
     pub fn new(
         importer: BoxStream<SharedImportResult>,
         serializer: Serializer,
-        block_return: Sender<BlockSourceEvent>,
+        block_return: Sender<BlockSourceEvent<B>>,
         new_end_sender: Option<tokio::sync::oneshot::Sender<BlockHeight>>,
     ) -> Self {
         Self {
@@ -43,7 +43,7 @@ where
         }
     }
 }
-impl<Serializer> RunnableTask for ImporterTask<Serializer>
+impl<Serializer> RunnableTask for ImporterTask<Serializer, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync,
 {
@@ -61,7 +61,7 @@ where
     }
 }
 
-impl<Serializer> ImporterTask<Serializer>
+impl<Serializer> ImporterTask<Serializer, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync,
 {
@@ -110,7 +110,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<Serializer> RunnableService for ImporterTask<Serializer>
+impl<Serializer> RunnableService for ImporterTask<Serializer, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
 {

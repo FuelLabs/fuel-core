@@ -28,16 +28,16 @@ use fuel_core_types::{
 use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 
-pub struct SyncTask<Serializer, DB> {
+pub struct SyncTask<Serializer, DB, B> {
     serializer: Serializer,
-    block_return_sender: Sender<BlockSourceEvent>,
+    block_return_sender: Sender<BlockSourceEvent<B>>,
     db: DB,
     next_height: BlockHeight,
     maybe_stop_height: Option<BlockHeight>,
     new_ending_height: tokio::sync::oneshot::Receiver<BlockHeight>,
 }
 
-impl<Serializer, DB, E> SyncTask<Serializer, DB>
+impl<Serializer, DB, E> SyncTask<Serializer, DB, Serializer::Block>
 where
     Serializer: BlockSerializer + Send,
     DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
@@ -46,7 +46,7 @@ where
 {
     pub fn new(
         serializer: Serializer,
-        block_return: Sender<BlockSourceEvent>,
+        block_return: Sender<BlockSourceEvent<Serializer::Block>>,
         db: DB,
         db_starting_height: BlockHeight,
         db_ending_height: Option<BlockHeight>,
@@ -101,9 +101,10 @@ where
     }
 }
 
-impl<Serializer, DB, E> RunnableTask for SyncTask<Serializer, DB>
+impl<Serializer, DB, E> RunnableTask for SyncTask<Serializer, DB, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync,
+    Serializer::Block: Send + Sync + 'static,
     DB: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
     DB: StorageInspect<Transactions, Error = E> + Send + 'static,
@@ -146,7 +147,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<Serializer, DB, E> RunnableService for SyncTask<Serializer, DB>
+impl<Serializer, DB, E> RunnableService for SyncTask<Serializer, DB, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
     DB: Send + Sync + 'static,

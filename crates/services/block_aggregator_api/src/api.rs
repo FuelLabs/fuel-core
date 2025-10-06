@@ -11,14 +11,17 @@ pub mod protobuf_adapter;
 pub trait BlockAggregatorApi: Send + Sync {
     /// The type of the block range response.
     type BlockRangeResponse;
+    type Block;
 
     /// Awaits the next query to the block aggregator service.
     fn await_query(
         &mut self,
-    ) -> impl Future<Output = Result<BlockAggregatorQuery<Self::BlockRangeResponse>>> + Send;
+    ) -> impl Future<
+        Output = Result<BlockAggregatorQuery<Self::BlockRangeResponse, Self::Block>>,
+    > + Send;
 }
 
-pub enum BlockAggregatorQuery<BlockRangeResponse> {
+pub enum BlockAggregatorQuery<BlockRangeResponse, Block> {
     GetBlockRange {
         first: BlockHeight,
         last: BlockHeight,
@@ -29,11 +32,11 @@ pub enum BlockAggregatorQuery<BlockRangeResponse> {
     },
     // TODO: Do we need a way to unsubscribe or can we just see that the receiver is dropped?
     NewBlockSubscription {
-        response: tokio::sync::mpsc::Sender<NewBlock>,
+        response: tokio::sync::mpsc::Sender<Block>,
     },
 }
 
-impl<T> fmt::Debug for BlockAggregatorQuery<T> {
+impl<T, B> fmt::Debug for BlockAggregatorQuery<T, B> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BlockAggregatorQuery::GetBlockRange { first, last, .. } => f
@@ -52,7 +55,7 @@ impl<T> fmt::Debug for BlockAggregatorQuery<T> {
 }
 
 #[cfg(test)]
-impl<T> BlockAggregatorQuery<T> {
+impl<T, B> BlockAggregatorQuery<T, B> {
     pub fn get_block_range<H: Into<BlockHeight>>(
         first: H,
         last: H,
@@ -74,7 +77,7 @@ impl<T> BlockAggregatorQuery<T> {
         (query, receiver)
     }
 
-    pub fn new_block_subscription() -> (Self, tokio::sync::mpsc::Receiver<NewBlock>) {
+    pub fn new_block_subscription() -> (Self, tokio::sync::mpsc::Receiver<B>) {
         const ARBITRARY_CHANNEL_SIZE: usize = 10;
         let (sender, receiver) = tokio::sync::mpsc::channel(ARBITRARY_CHANNEL_SIZE);
         let query = Self::NewBlockSubscription { response: sender };

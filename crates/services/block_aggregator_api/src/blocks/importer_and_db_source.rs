@@ -37,7 +37,8 @@ mod tests;
 pub mod serializer_adapter;
 
 pub trait BlockSerializer {
-    fn serialize_block(&self, block: &FuelBlock) -> Result<Block>;
+    type Block;
+    fn serialize_block(&self, block: &FuelBlock) -> Result<Self::Block>;
 }
 
 pub struct ImporterAndDbSource<Serializer, DB, E>
@@ -48,10 +49,10 @@ where
     DB: StorageInspect<Transactions, Error = E>,
     E: std::fmt::Debug + Send,
 {
-    importer_task: ServiceRunner<ImporterTask<Serializer>>,
-    sync_task: ServiceRunner<SyncTask<Serializer, DB>>,
+    importer_task: ServiceRunner<ImporterTask<Serializer, Serializer::Block>>,
+    sync_task: ServiceRunner<SyncTask<Serializer, DB, Serializer::Block>>,
     /// Receive blocks from the importer and sync tasks
-    receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent>,
+    receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent<Serializer::Block>>,
 
     _error_marker: std::marker::PhantomData<E>,
 }
@@ -108,7 +109,9 @@ where
     DB: StorageInspect<Transactions, Error = E>,
     E: std::fmt::Debug + Send + Sync,
 {
-    async fn next_block(&mut self) -> Result<BlockSourceEvent> {
+    type Block = Serializer::Block;
+
+    async fn next_block(&mut self) -> Result<BlockSourceEvent<Self::Block>> {
         tracing::debug!("awaiting next block");
         tokio::select! {
             block_res = self.receiver.recv() => {

@@ -5,17 +5,17 @@ use crate::{
     api::{
         BlockAggregatorApi,
         BlockAggregatorQuery,
-        protobuf_adapter::{
-            BlockHeightRequest,
-            BlockRangeRequest,
-            NewBlockSubscriptionRequest,
-            ProtobufAPI,
-            block_aggregator_client::BlockAggregatorClient,
-            block_response::Payload,
-        },
+        protobuf_adapter::ProtobufAPI,
     },
     block_range_response::BlockRangeResponse,
     blocks::Block,
+    protobuf_types::{
+        BlockHeightRequest,
+        BlockRangeRequest,
+        NewBlockSubscriptionRequest,
+        block_aggregator_client::BlockAggregatorClient,
+        block_response::Payload,
+    },
 };
 use bytes::Bytes;
 use fuel_core_types::fuel_types::BlockHeight;
