@@ -1,20 +1,13 @@
 use fuel_core_relayer as _;
-// use std::ops::RangeInclusive;
+use std::ops::RangeInclusive;
 
 // use crate::test_helpers::middleware::{
 //     MockProvider,
 //     TriggerType,
 // };
 
-// use super::*;
-
-// use ethers_core::types::SyncProgress;
-// use test_case::test_case;
-
-#[tokio::test]
-async fn khar() {
-    assert!(true)
-}
+use super::*;
+use test_case::test_case;
 
 // #[tokio::test(start_paused = true)]
 // async fn handles_syncing() {
@@ -85,21 +78,21 @@ async fn khar() {
 //     );
 // }
 
-// #[allow(clippy::reversed_empty_ranges)]
-// #[test_case(status(0..=0, 0) => "from 0 to 0 currently at 0. 100% Done.")]
-// #[test_case(status(0..=100, 0) => "from 0 to 100 currently at 0. 0% Done.")]
-// #[test_case(status(50..=100, 75) => "from 50 to 100 currently at 75. 50% Done.")]
-// #[test_case(status(50..=150, 150) => "from 50 to 150 currently at 150. 100% Done.")]
-// #[test_case(status(50..=49, 50) => "from 50 to 49 currently at 50. 100% Done.")]
-// #[test_case(status(50..=50, 51) => "from 50 to 50 currently at 51. 100% Done.")]
-// fn test_status(s: Status) -> String {
-//     s.to_string()
-// }
+#[allow(clippy::reversed_empty_ranges)]
+#[test_case(status(0..=0, 0) => "from 0 to 0 currently at 0. 100% Done.")]
+#[test_case(status(0..=100, 0) => "from 0 to 100 currently at 0. 0% Done.")]
+#[test_case(status(50..=100, 75) => "from 50 to 100 currently at 75. 50% Done.")]
+#[test_case(status(50..=150, 150) => "from 50 to 150 currently at 150. 100% Done.")]
+#[test_case(status(50..=49, 50) => "from 50 to 49 currently at 50. 100% Done.")]
+#[test_case(status(50..=50, 51) => "from 50 to 50 currently at 51. 100% Done.")]
+fn test_status(s: Status) -> String {
+    s.to_string()
+}
 
-// fn status(r: RangeInclusive<u64>, c: u64) -> Status {
-//     Status {
-//         starting_block: (*r.start()).into(),
-//         highest_block: (*r.end()).into(),
-//         current_block: c.into(),
-//     }
-// }
+fn status(r: RangeInclusive<u64>, c: u64) -> Status {
+    Status {
+        starting_block: U256::from(*r.start()),
+        highest_block: U256::from(*r.end()),
+        current_block: U256::from(c),
+    }
+}
