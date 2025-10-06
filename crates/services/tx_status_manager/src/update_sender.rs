@@ -104,7 +104,6 @@ pub trait SendStatus {
     fn is_closed(&self) -> bool;
 
     /// Check if the receiver is full.
-    #[allow(dead_code)]
     fn is_full(&self) -> bool;
 }
 
