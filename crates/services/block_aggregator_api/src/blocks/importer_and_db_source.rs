@@ -104,6 +104,7 @@ where
 impl<Serializer, DB, E> BlockSource for ImporterAndDbSource<Serializer, DB, E>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
+    <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
     DB: Send + Sync,
     DB: StorageInspect<FuelBlocks, Error = E>,
     DB: StorageInspect<Transactions, Error = E>,

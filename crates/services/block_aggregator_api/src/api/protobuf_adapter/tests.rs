@@ -1,5 +1,9 @@
 #![allow(non_snake_case)]
 
+use crate::protobuf_types::block_aggregator_client::{
+    BlockAggregatorClient as ProtoBlockAggregatorClient,
+    BlockAggregatorClient,
+};
 use crate::{
     NewBlock,
     api::{
@@ -13,7 +17,7 @@ use crate::{
         BlockHeightRequest,
         BlockRangeRequest,
         NewBlockSubscriptionRequest,
-        block_aggregator_client::BlockAggregatorClient,
+        // block_aggregator_client::BlockAggregatorClient,
         block_response::Payload,
     },
 };
@@ -40,7 +44,7 @@ async fn await_query__get_current_height__client_receives_expected_value() {
 
     // call get current height endpoint with client
     let url = format!("http://{}", path);
-    let mut client = BlockAggregatorClient::connect(url.to_string())
+    let mut client = ProtoBlockAggregatorClient::connect(url.to_string())
         .await
         .expect("could not connect to server");
     let handle = tokio::spawn(async move {
@@ -77,7 +81,7 @@ async fn await_query__get_block_range__client_receives_expected_value() {
 
     // call get current height endpoint with client
     let url = format!("http://{}", path);
-    let mut client = BlockAggregatorClient::connect(url.to_string())
+    let mut client = ProtoBlockAggregatorClient::connect(url.to_string())
         .await
         .expect("could not connect to server");
     let request = BlockRangeRequest { start: 0, end: 1 };

@@ -28,6 +28,7 @@ pub struct ImporterTask<Serializer, B> {
 impl<Serializer, B> ImporterTask<Serializer, B>
 where
     Serializer: BlockSerializer + Send,
+    <Serializer as BlockSerializer>::Block: Send,
 {
     pub fn new(
         importer: BoxStream<SharedImportResult>,
@@ -46,6 +47,7 @@ where
 impl<Serializer> RunnableTask for ImporterTask<Serializer, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync,
+    <Serializer as BlockSerializer>::Block: Send,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
