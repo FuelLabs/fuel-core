@@ -117,6 +117,7 @@ pub struct Task<P, D> {
 
 impl<P, D> NotInitializedTask<P, D>
 where
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     /// Create a new relayer task.
