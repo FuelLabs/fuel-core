@@ -17,6 +17,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Compression and decompression of Fuel blocks for DA storage."
 
+[lints]
+workspace = true
+
 [features]
 test-helpers = [
     "dep:rand",

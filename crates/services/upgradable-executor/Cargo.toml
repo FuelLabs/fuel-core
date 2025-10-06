@@ -11,6 +11,9 @@ rust-version = { workspace = true }
 description = "Fuel Block Upgradable Executor"
 build = "build.rs"
 
+[lints]
+workspace = true
+
 [features]
 default = ["std"]
 std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]

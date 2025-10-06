@@ -11,6 +11,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Create to create command line utilities for fuel-core key management"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }

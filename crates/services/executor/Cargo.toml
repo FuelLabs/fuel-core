@@ -10,6 +10,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Block Executor"
 
+[lints]
+workspace = true
+
 [features]
 default = ["std"]
 std = ["fuel-core-types/std", "fuel-core-storage/std"]

@@ -11,6 +11,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel metrics"
 
+[lints]
+workspace = true
+
 [dependencies]
 once_cell = { workspace = true }
 parking_lot = { workspace = true }

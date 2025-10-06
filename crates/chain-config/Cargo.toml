@@ -11,6 +11,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Chain config types"
 
+[lints]
+workspace = true
+
 [features]
 std = [
     "itertools/use_std",

@@ -11,6 +11,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel client networking"
 
+[lints]
+workspace = true
+
 [features]
 test-helpers = ["fuel-core-types/test-helpers"]
 fault-proving = [

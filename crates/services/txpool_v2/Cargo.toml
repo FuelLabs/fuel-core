@@ -11,6 +11,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Transaction pool that manages transactions and their dependencies."
 
+[lints]
+workspace = true
+
 [features]
 test-helpers = ["fuel-core-types/test-helpers", "fuel-core-storage/test-helpers"]
 

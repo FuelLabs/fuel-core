@@ -11,6 +11,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 
+[lints]
+workspace = true
+
 [features]
 default = ["rocksdb", "serde"]
 serde = ["dep:serde_with"]

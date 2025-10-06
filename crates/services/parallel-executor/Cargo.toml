@@ -10,6 +10,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Block Parallel Executor"
 
+[lints]
+workspace = true
+
 [features]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
 

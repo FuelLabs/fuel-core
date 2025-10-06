@@ -19,6 +19,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 
+[lints]
+workspace = true
+
 [dependencies]
 ctor = "0.1"
 fork = "0.2.0"

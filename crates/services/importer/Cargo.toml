@@ -10,6 +10,9 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Block Importer"
 
+[lints]
+workspace = true
+
 [features]
 test-helpers = [
     "dep:mockall",
