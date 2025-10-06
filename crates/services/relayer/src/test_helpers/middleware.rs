@@ -5,6 +5,7 @@ use alloy_primitives::{
     U64,
 };
 
+use alloy_provider::Provider;
 use alloy_rpc_types_eth::{
     Block,
     BlockId,
@@ -27,7 +28,6 @@ use thiserror::Error;
 
 #[derive(Clone)]
 pub struct MockMiddleware {
-    pub inner: Box<Option<Provider<MockMiddleware>>>,
     data: Arc<parking_lot::Mutex<InnerState>>,
     before_event: Arc<Mutex<Option<EventFn>>>,
     after_event: Arc<Mutex<Option<EventFn>>>,

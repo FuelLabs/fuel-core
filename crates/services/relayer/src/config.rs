@@ -1,4 +1,5 @@
 use alloy_primitives::B256;
+use alloy_sol_types::SolEvent;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_types::Bytes20,
@@ -10,10 +11,10 @@ use std::{
 };
 
 pub(crate) static ETH_LOG_MESSAGE: Lazy<B256> =
-    Lazy::new(|| crate::abi::bridge::MessageSent::signature());
+    Lazy::new(|| crate::abi::bridge::MessageSent::SIGNATURE_HASH);
 
 pub(crate) static ETH_FORCED_TX: Lazy<B256> =
-    Lazy::new(|| crate::abi::bridge::Transaction::signature());
+    Lazy::new(|| crate::abi::bridge::Transaction::SIGNATURE_HASH);
 
 // TODO: Move settlement fields into `ChainConfig` because it is part of the consensus.
 #[derive(Clone, Debug)]
@@ -72,7 +73,7 @@ impl Default for Config {
 mod tests {
 
     #[test]
-    fn conversion_str_h160_bytes() {
+    fn bytes20_and_address_str_conversion_equivalence() {
         use std::str::FromStr;
 
         let bytes20 = fuel_core_types::fuel_types::Bytes20::from_str(
@@ -83,6 +84,6 @@ mod tests {
             "0x03E4538018285e1c03CCce2F92C9538c87606911",
         )
         .unwrap();
-        assert_eq!(bytes20.as_slice(), h160.as_bytes());
+        assert_eq!(bytes20.as_slice(), h160.as_slice());
     }
 }

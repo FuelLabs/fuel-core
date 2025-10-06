@@ -17,17 +17,18 @@ default = ["fuel-core/default"]
 only-p2p = ["fuel-core-p2p"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
 fault-proving = [
-    "fuel-core/fault-proving",
-    "fuel-core-types/fault-proving",
-    "fuel-core-storage/fault-proving",
-    "fuel-core-upgradable-executor/fault-proving",
-    "fuel-core-poa/fault-proving",
-    "fuel-core-compression/fault-proving",
-    "fuel-core-compression-service/fault-proving",
-    "fuel-core-benches/fault-proving",
+  "fuel-core/fault-proving",
+  "fuel-core-types/fault-proving",
+  "fuel-core-storage/fault-proving",
+  "fuel-core-upgradable-executor/fault-proving",
+  "fuel-core-poa/fault-proving",
+  "fuel-core-compression/fault-proving",
+  "fuel-core-compression-service/fault-proving",
+  "fuel-core-benches/fault-proving",
 ]
 
 [dependencies]
+alloy-primitives = "1.4.0"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-config = { version = "1.1.7", features = [
@@ -36,7 +37,6 @@ aws-config = { version = "1.1.7", features = [
 aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true }
 cynic = { workspace = true }
-ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
   "smt",
   "p2p",

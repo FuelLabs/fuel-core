@@ -32,7 +32,6 @@ use fuel_core_types::{
     entities::Message,
 };
 use futures::StreamExt;
-use std::convert::TryInto;
 use tokio::sync::watch;
 
 use self::{
@@ -369,6 +368,7 @@ where
 {
     let url = config
         .relayer
+        .as_ref()
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "Tried to start Relayer without setting an eth_client in the config"
@@ -379,7 +379,8 @@ where
             anyhow::anyhow!(
                 "Tried to start Relayer without setting an eth_client in the config"
             )
-        })?;
+        })?
+        .clone();
 
     let eth_node = RootProvider::<Ethereum>::new_http(url);
     let retry_on_error = true;
