@@ -23,10 +23,16 @@ use fuel_core_storage::{
         StorageChanges,
     },
 };
-use fuel_core_types::fuel_tx::{
-    AssetId,
-    Bytes32,
-    ContractId,
+use fuel_core_types::{
+    fuel_tx::{
+        AssetId,
+        Bytes32,
+        ContractId,
+    },
+    services::executor::{
+        ContractAccessesWithValues,
+        StorageAccessesWithValues,
+    },
 };
 use parking_lot::Mutex;
 
@@ -46,24 +52,17 @@ use alloc::{
         BTreeSet,
     },
     sync::Arc,
-    vec::Vec,
 };
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct ContractAccesses {
+pub(crate) struct StorageAccesses {
     pub assets: BTreeSet<AssetId>,
     pub slots: BTreeSet<Bytes32>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct ContractAccessesWithValues {
-    pub assets: BTreeMap<AssetId, u64>,
-    pub slots: BTreeMap<Bytes32, Option<Vec<u8>>>,
-}
-
-#[derive(Debug, Clone, Default)]
 pub(crate) struct ReadsPerContract {
-    pub per_contract: BTreeMap<ContractId, ContractAccesses>,
+    pub per_contract: BTreeMap<ContractId, StorageAccesses>,
 }
 
 impl ReadsPerContract {
@@ -91,10 +90,7 @@ impl ReadsPerContract {
         mut self,
         storage: S,
         changes: &Changes,
-    ) -> StorageResult<(
-        BTreeMap<ContractId, ContractAccessesWithValues>,
-        BTreeMap<ContractId, ContractAccessesWithValues>,
-    )>
+    ) -> StorageResult<(ContractAccessesWithValues, ContractAccessesWithValues)>
     where
         S: StorageInspect<ContractsAssets, Error = fuel_core_storage::Error>
             + StorageInspect<ContractsState, Error = fuel_core_storage::Error>
@@ -108,7 +104,7 @@ impl ReadsPerContract {
         }
 
         // Fetch original values from the storage
-        let before: BTreeMap<ContractId, ContractAccessesWithValues> = self
+        let before: BTreeMap<ContractId, StorageAccessesWithValues> = self
             .per_contract
             .into_iter()
             .map(|(contract_id, accesses)| {
@@ -134,12 +130,12 @@ impl ReadsPerContract {
                         Ok((slot_key, value))
                     })
                     .collect::<StorageResult<_>>()?;
-                Ok((contract_id, ContractAccessesWithValues { assets, slots }))
+                Ok((contract_id, StorageAccessesWithValues { assets, slots }))
             })
             .collect::<StorageResult<_>>()?;
 
         // Update final values from the changes
-        let mut after: BTreeMap<ContractId, ContractAccessesWithValues> = before.clone();
+        let mut after: BTreeMap<ContractId, StorageAccessesWithValues> = before.clone();
 
         let sc = StorageChanges::Changes(changes.clone());
         let ci = ChangesIterator::new(&sc);
