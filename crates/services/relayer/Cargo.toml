@@ -11,6 +11,8 @@ rust-version = { workspace = true }
 description = "Fuel Relayer"
 
 [features]
+include-quorum-tests = []
+
 test-helpers = [
   # "bytes",
   # "parking_lot",
