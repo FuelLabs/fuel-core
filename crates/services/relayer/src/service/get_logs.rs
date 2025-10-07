@@ -3,7 +3,6 @@ use alloy_primitives::Address;
 use alloy_provider::transport::TransportError;
 use fuel_core_types::{
     entities::RelayedTransaction,
-    fuel_types::Bytes20,
     services::relayer::Event,
 };
 use futures::TryStreamExt;
@@ -21,7 +20,7 @@ pub struct DownloadedLogs {
 /// Download the logs from the DA layer.
 pub(crate) fn download_logs<'a, P>(
     eth_sync_gap: &state::EthSyncGap,
-    contracts: Vec<Bytes20>,
+    contracts: Vec<Address>,
     eth_node: &'a P,
     page_size: u64,
 ) -> impl futures::Stream<Item = Result<DownloadedLogs, TransportError>> + 'a + use<'a, P>

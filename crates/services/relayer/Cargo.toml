@@ -22,7 +22,6 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 # bytes = { version = "1.1", optional = true }
 enum-iterator = { workspace = true }
-ethereum-types = "0.15.1"
 alloy-primitives = { version = "1.4.0", default-features = false }
 alloy-rpc-types-eth = "1.0.36"
 alloy-sol-types = "1.4.0"
