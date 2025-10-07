@@ -18,10 +18,10 @@ impl BlockSerializer for SerializerAdapter {
     type Block = ProtoBlock;
 
     fn serialize_block(&self, block: &FuelBlock) -> crate::result::Result<Self::Block> {
-        // let bytes_vec = to_allocvec(block).map_err(|e| {
-        //     Error::BlockSource(anyhow!("failed to serialize block: {}", e))
-        // })?;
-        // Ok(crate::blocks::Block::from(bytes_vec))
-        todo!()
+        let data = to_allocvec(block).map_err(|e| {
+            Error::BlockSource(anyhow!("failed to serialize block: {}", e))
+        })?;
+        let pb = ProtoBlock { data };
+        Ok(pb)
     }
 }
