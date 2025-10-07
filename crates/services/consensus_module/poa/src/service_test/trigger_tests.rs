@@ -158,7 +158,7 @@ async fn instant_trigger_produces_block_instantly() {
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
 
     ctx.new_txs_notifier.send_replace(());
 
@@ -179,7 +179,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
     ctx.new_txs_notifier.send_replace(());
 
     // Make sure no blocks are produced yet
@@ -237,7 +237,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second()
-    -> anyhow::Result<()> {
+-> anyhow::Result<()> {
     // given
     let config = Config {
         trigger: Trigger::Interval {
@@ -300,7 +300,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
 
     // Brackets to release the lock.
     {
@@ -347,7 +347,7 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
     ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
@@ -377,7 +377,7 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_is_lagging() {
 
 #[tokio::test]
 async fn interval_trigger_produces_blocks_with_current_time_when_block_production_is_lagging()
-{
+ {
     // Given
 
     let block_time = Duration::from_secs(10);
@@ -389,7 +389,7 @@ async fn interval_trigger_produces_blocks_with_current_time_when_block_productio
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
     ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
@@ -447,7 +447,7 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
     ctx.new_txs_notifier.send_replace(());
     let start_time = ctx.now();
 
@@ -488,7 +488,7 @@ async fn interval_trigger_even_if_queued_tx_events() {
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
     let block_creation_notifier = Arc::new(Notify::new());
     tokio::task::spawn({
         let notifier = ctx.new_txs_notifier.clone();
@@ -519,7 +519,7 @@ async fn open_trigger__produce_blocks_in_time() {
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
     time::sleep(offset).await;
 
     for _ in 0..10 {
@@ -559,7 +559,7 @@ async fn open_trigger__produce_blocks_with_correct_time() {
         metrics: false,
         ..Default::default()
     })
-        .await;
+    .await;
     let expected_first_block_time = ctx.now().0.checked_add(open_time.as_secs()).unwrap();
     let expected_second_block_time = expected_first_block_time
         .checked_add(open_time.as_secs())
