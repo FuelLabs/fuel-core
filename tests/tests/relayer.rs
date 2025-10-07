@@ -1,4 +1,13 @@
-use alloy_primitives::{IntoLogData, U256};
+use alloy_primitives::{
+    IntoLogData,
+    U256,
+};
+use alloy_rpc_types_eth::{
+    BlockId,
+    BlockNumberOrTag,
+    Log,
+    SyncStatus,
+};
 use clap::Parser;
 use fuel_core::{
     chain_config::Randomize,
@@ -34,7 +43,6 @@ use fuel_core_client::client::{
         TransactionStatus,
     },
 };
-use alloy_rpc_types_eth::{BlockId, BlockNumberOrTag, Log, SyncStatus};
 use fuel_core_poa::service::Mode;
 use fuel_core_relayer::{
     ports::Transactional,
@@ -399,14 +407,20 @@ fn make_message_event(
 ) -> Log {
     let message = fuel_core_relayer::bridge::MessageSent {
         nonce: U256::from_be_slice(nonce.as_slice()),
-        sender: sender.map(|v| alloy_primitives::FixedBytes::from_slice(&v)).unwrap_or_default(),
-        recipient: recipient.map(|v| alloy_primitives::FixedBytes::from_slice(&v)).unwrap_or_default(),
+        sender: sender
+            .map(|v| alloy_primitives::FixedBytes::from_slice(&v))
+            .unwrap_or_default(),
+        recipient: recipient
+            .map(|v| alloy_primitives::FixedBytes::from_slice(&v))
+            .unwrap_or_default(),
         amount: amount.unwrap_or_default(),
         data: data.map(Into::into).unwrap_or_default(),
     };
     Log {
         inner: alloy_primitives::Log {
-            address: fuel_core_relayer::test_helpers::convert_to_address(contract_address.as_slice()),
+            address: fuel_core_relayer::test_helpers::convert_to_address(
+                contract_address.as_slice(),
+            ),
             data: message.into_log_data(),
         },
         block_hash: None,
@@ -476,7 +490,10 @@ async fn handle(
     let method = o.get("method").unwrap().as_str().unwrap();
     let r = match method {
         "eth_getBlockByNumber" => {
-            let r = mock.get_block(BlockId::Number(BlockNumberOrTag::Number(id))).await.unwrap();
+            let r = mock
+                .get_block(BlockId::Number(BlockNumberOrTag::Number(id)))
+                .await
+                .unwrap();
             json!({ "id": id, "jsonrpc": "2.0", "result": r })
         }
         "eth_syncing" => {

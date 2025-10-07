@@ -1,4 +1,20 @@
 #![allow(clippy::arithmetic_side_effects)]
+use crate::{
+    abi::bridge::{
+        MessageSent,
+        Transaction,
+    },
+    service::state::EthSyncGap,
+    test_helpers::provider::{
+        MockProvider,
+        TriggerType,
+    },
+};
+use alloy_primitives::{
+    IntoLogData,
+    U256,
+};
+use alloy_provider::transport::TransportError;
 use std::{
     ops::RangeInclusive,
     sync::atomic::{
@@ -6,23 +22,7 @@ use std::{
         AtomicUsize,
     },
 };
-use alloy_provider::transport::TransportError;
-use alloy_primitives::{IntoLogData, U256};
-use crate::{
-    abi::bridge::{
-        MessageSent,
-        Transaction,
-    },
-    service::state::EthSyncGap,
-    test_helpers::{
-        provider::{
-            MockProvider,
-            TriggerType,
-        },
-    },
-};
 use test_case::test_case;
-
 
 use super::*;
 

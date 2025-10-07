@@ -1,11 +1,13 @@
 #![cfg(feature = "test-helpers")]
 #![allow(non_snake_case)]
 
-use alloy_primitives::{IntoLogData, U256};
+use alloy_primitives::{
+    IntoLogData,
+    U256,
+};
 use alloy_rpc_types_eth::Log;
-use fuel_core_relayer::test_helpers::provider::MockProvider;
-use fuel_core_relayer::test_helpers::LogTestHelper;
 use fuel_core_relayer::{
+    Config,
     bridge::{
         MessageSent,
         Transaction,
@@ -13,7 +15,10 @@ use fuel_core_relayer::{
     mock_db::MockDb,
     new_service_test,
     ports::RelayerDb,
-    Config,
+    test_helpers::{
+        LogTestHelper,
+        provider::MockProvider,
+    },
 };
 use fuel_core_services::Service;
 

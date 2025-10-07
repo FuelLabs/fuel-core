@@ -1,10 +1,10 @@
 use crate::test_helpers::provider::TriggerType;
+use alloy_rpc_types_eth::SyncInfo;
 use fuel_core_relayer as _;
 use std::ops::RangeInclusive;
-use alloy_rpc_types_eth::SyncInfo;
 
-use crate::test_helpers::provider::MockProvider;
 use super::*;
+use crate::test_helpers::provider::MockProvider;
 use test_case::test_case;
 
 #[tokio::test(start_paused = true)]

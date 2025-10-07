@@ -1,8 +1,10 @@
 #![allow(non_snake_case)]
 
-use crate::ports::RelayerDb;
-use crate::service::NotInitializedTask;
-use crate::Config;
+use crate::{
+    Config,
+    ports::RelayerDb,
+    service::NotInitializedTask,
+};
 use fuel_core_services::RunnableService;
 use futures::TryStreamExt;
 use test_case::test_case;
@@ -11,11 +13,17 @@ use super::*;
 
 const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
 
-use crate::service::download_logs;
-use crate::service::state;
-use crate::test_helpers::provider::MockProvider;
-use alloy_provider::mock::Asserter;
-use alloy_provider::ProviderBuilder;
+use crate::{
+    service::{
+        download_logs,
+        state,
+    },
+    test_helpers::provider::MockProvider,
+};
+use alloy_provider::{
+    ProviderBuilder,
+    mock::Asserter,
+};
 use alloy_rpc_types_eth::Log;
 
 #[tokio::test]
@@ -47,10 +55,10 @@ async fn can_download_logs() {
         &provider,
         DEFAULT_LOG_PAGE_SIZE,
     )
-        .map_ok(|logs| logs.logs)
-        .try_concat()
-        .await
-        .unwrap();
+    .map_ok(|logs| logs.logs)
+    .try_concat()
+    .await
+    .unwrap();
 
     assert_eq!(result, logs);
 }

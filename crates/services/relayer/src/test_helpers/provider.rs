@@ -1,16 +1,38 @@
-use std::fmt;
-use std::fmt::Debug;
-use std::sync::Arc;
-use alloy_consensus::{Signed};
-use alloy_provider::mock::Asserter;
-use alloy_primitives::{BlockNumber, Signature, TxHash, U64};
-use alloy_provider::{DynProvider, EthGetBlock, Provider, ProviderBuilder, ProviderCall, RootProvider};
-use alloy_provider::network::Ethereum;
-use alloy_provider::transport::TransportResult;
+use alloy_consensus::Signed;
+use alloy_primitives::{
+    BlockNumber,
+    Signature,
+    TxHash,
+    U64,
+};
+use alloy_provider::{
+    DynProvider,
+    EthGetBlock,
+    Provider,
+    ProviderBuilder,
+    ProviderCall,
+    RootProvider,
+    mock::Asserter,
+    network::Ethereum,
+    transport::TransportResult,
+};
 use alloy_rpc_client::NoParams;
-use alloy_rpc_types_eth::{Block, BlockId, Filter, Header, Log, SyncStatus, TransactionReceipt};
+use alloy_rpc_types_eth::{
+    Block,
+    BlockId,
+    Filter,
+    Header,
+    Log,
+    SyncStatus,
+    TransactionReceipt,
+};
 use async_trait::async_trait;
 use parking_lot::Mutex;
+use std::{
+    fmt,
+    fmt::Debug,
+    sync::Arc,
+};
 
 pub type EventFn = Box<dyn for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync>;
 pub type OverrideFn = Box<dyn FnMut(&mut MockData) + Send + Sync>;
@@ -32,7 +54,9 @@ pub struct MockData {
 impl Default for MockData {
     fn default() -> Self {
         let header = Header {
-            hash: "0xa1ea3121940930f7e7b54506d80717f14c5163807951624c36354202a8bffda6".parse().unwrap(),
+            hash: "0xa1ea3121940930f7e7b54506d80717f14c5163807951624c36354202a8bffda6"
+                .parse()
+                .unwrap(),
             inner: alloy_consensus::Header {
                 number: 20,
                 ..Default::default()
@@ -84,8 +108,14 @@ impl Debug for InnerState {
 
 impl MockProvider {
     pub fn new(asserter: Asserter) -> Self {
-        let provider = alloy_provider::ProviderBuilder::new().connect_mocked_client(asserter.clone()).erased();
-        Self { inner: Box::new(provider), asserter, ..Default::default() }
+        let provider = alloy_provider::ProviderBuilder::new()
+            .connect_mocked_client(asserter.clone())
+            .erased();
+        Self {
+            inner: Box::new(provider),
+            asserter,
+            ..Default::default()
+        }
     }
 
     fn before_event(&self, trigger: TriggerType<'_>) {
@@ -137,7 +167,9 @@ impl Provider for MockProvider {
         unreachable!()
     }
 
-    fn get_block_number(&self) -> ProviderCall<alloy_rpc_client::NoParams, U64, BlockNumber> {
+    fn get_block_number(
+        &self,
+    ) -> ProviderCall<alloy_rpc_client::NoParams, U64, BlockNumber> {
         let this = self;
         let _ = this.before_event(TriggerType::GetBlockNumber);
         let r = self.update_data(|data| data.best_block.number());
@@ -146,7 +178,10 @@ impl Provider for MockProvider {
         self.inner.get_block_number()
     }
 
-    fn get_block(&self, block: BlockId) -> EthGetBlock<<Ethereum as alloy_provider::Network>::BlockResponse> {
+    fn get_block(
+        &self,
+        block: BlockId,
+    ) -> EthGetBlock<<Ethereum as alloy_provider::Network>::BlockResponse> {
         self.before_event(TriggerType::GetBlock(block));
         let r = Some(self.update_data(|data| data.best_block.clone()));
         self.after_event(TriggerType::GetBlock(block));
@@ -175,7 +210,13 @@ impl Provider for MockProvider {
     //     self.inner.get_transaction_by_hash(hash)
     // }
 
-    fn get_transaction_receipt(&self, hash: TxHash) -> ProviderCall<(TxHash,), Option<<Ethereum as alloy_provider::Network>::ReceiptResponse>> {
+    fn get_transaction_receipt(
+        &self,
+        hash: TxHash,
+    ) -> ProviderCall<
+        (TxHash,),
+        Option<<Ethereum as alloy_provider::Network>::ReceiptResponse>,
+    > {
         let sig = Signature::test_signature();
         let tx = alloy_consensus::TxEnvelope::Legacy(Signed::new_unchecked(
             alloy_consensus::TxLegacy::default(),
@@ -219,7 +260,11 @@ impl Default for MockProvider {
         // address that you'll be sending transactions from
         let asserter = Asserter::new();
         Self {
-            inner: Box::new(ProviderBuilder::new().connect_mocked_client(asserter.clone()).erased()),
+            inner: Box::new(
+                ProviderBuilder::new()
+                    .connect_mocked_client(asserter.clone())
+                    .erased(),
+            ),
             asserter,
             data: Arc::new(Mutex::new(InnerState::default())),
             before_event: Arc::new(Mutex::new(None)),
@@ -251,9 +296,8 @@ fn take_logs_based_on_filter(logs_batch: &[Vec<Log>], filter: &Filter) -> Vec<Lo
     logs_batch
         .iter()
         .flat_map(|logs| {
-            logs.iter().filter_map(|log| {
-                filter.rpc_matches(log).then_some(log)
-            })
+            logs.iter()
+                .filter_map(|log| filter.rpc_matches(log).then_some(log))
         })
         .cloned()
         .collect()

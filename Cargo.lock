@@ -4340,7 +4340,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "enum-iterator",
- "fuel-core-relayer",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-trace",
@@ -4355,7 +4354,6 @@ dependencies = [
  "test-case",
  "tokio",
  "tracing",
- "url",
 ]
 
 [[package]]

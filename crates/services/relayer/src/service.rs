@@ -167,7 +167,11 @@ where
     ) -> anyhow::Result<()> {
         let logs = download_logs(
             eth_sync_gap,
-            self.config.eth_v2_listening_contracts.iter().map(|addr| alloy_primitives::Address::from_slice(addr.as_slice())).collect(),
+            self.config
+                .eth_v2_listening_contracts
+                .iter()
+                .map(|addr| alloy_primitives::Address::from_slice(addr.as_slice()))
+                .collect(),
             &self.eth_node,
             self.config.log_page_size,
         );
