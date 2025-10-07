@@ -29,7 +29,7 @@ async fn can_set_da_height() {
     let mock_db = MockDb::default();
     let da_block_height = 100u64;
     let eth_node = MockProvider::default();
-    eth_node.update_data(|data| data.best_block.header.number = da_block_height.into());
+    eth_node.update_data(|data| data.best_block.header.number = da_block_height);
 
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
     relayer.start_and_await().await.unwrap();
@@ -264,11 +264,11 @@ fn message(nonce: u64, block_number: u64, block_index: u64) -> Log {
             data: log_data.clone(),
         },
         block_hash: None,
-        block_number: Some(block_number.into()),
+        block_number: Some(block_number),
         block_timestamp: None,
         transaction_hash: None,
         transaction_index: None,
-        log_index: Some(block_index.into()),
+        log_index: Some(block_index),
         removed: false,
     }
 }
@@ -286,11 +286,11 @@ fn transaction(max_gas: u64, block_number: u64, block_index: u64) -> Log {
             data: log_data.clone(),
         },
         block_hash: None,
-        block_number: Some(block_number.into()),
+        block_number: Some(block_number),
         block_timestamp: None,
         transaction_hash: None,
         transaction_index: None,
-        log_index: Some(block_index.into()),
+        log_index: Some(block_index),
         removed: false,
     }
 }

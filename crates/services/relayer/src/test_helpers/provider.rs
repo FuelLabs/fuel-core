@@ -171,7 +171,7 @@ impl Provider for MockProvider {
         &self,
     ) -> ProviderCall<alloy_rpc_client::NoParams, U64, BlockNumber> {
         let this = self;
-        let _ = this.before_event(TriggerType::GetBlockNumber);
+        this.before_event(TriggerType::GetBlockNumber);
         let r = self.update_data(|data| data.best_block.number());
         self.after_event(TriggerType::GetBlockNumber);
         self.asserter.push_success(&r);
@@ -196,7 +196,7 @@ impl Provider for MockProvider {
             self.update_data(|data| take_logs_based_on_filter(&data.logs_batch, filter));
         self.after_event(TriggerType::GetLogs(filter));
         self.asserter.push_success(&r);
-        self.inner.get_logs(&filter).await
+        self.inner.get_logs(filter).await
     }
 
     // fn get_transaction_by_hash(&self, hash: TxHash) -> ProviderCall<(TxHash,), Option<<Ethereum as alloy_provider::Network>::TransactionResponse>> {
@@ -295,10 +295,8 @@ pub enum TriggerType<'a> {
 fn take_logs_based_on_filter(logs_batch: &[Vec<Log>], filter: &Filter) -> Vec<Log> {
     logs_batch
         .iter()
-        .flat_map(|logs| {
-            logs.iter()
-                .filter_map(|log| filter.rpc_matches(log).then_some(log))
-        })
+        .flatten()
+        .filter(|log| filter.rpc_matches(log))
         .cloned()
         .collect()
 }

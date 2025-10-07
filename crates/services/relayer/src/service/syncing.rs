@@ -25,9 +25,9 @@ where
     while let SyncStatus::Info(is_syncing) = get_status(eth_node).await? {
         if start.elapsed() > sync_log_freq {
             let status = Status {
-                starting_block: is_syncing.starting_block.into(),
-                current_block: is_syncing.current_block.into(),
-                highest_block: is_syncing.highest_block.into(),
+                starting_block: is_syncing.starting_block,
+                current_block: is_syncing.current_block,
+                highest_block: is_syncing.highest_block,
             };
             start = tokio::time::Instant::now();
             tracing::info!(

@@ -58,11 +58,11 @@ fn message(nonce: u64, block_number: u64, contract_address: u32, log_index: u64)
             data: log_data.clone(),
         },
         block_hash: None,
-        block_number: Some(block_number.into()),
+        block_number: Some(block_number),
         block_timestamp: None,
         transaction_hash: None,
         transaction_index: None,
-        log_index: Some(log_index.into()),
+        log_index: Some(log_index),
         removed: false,
     }
 }
@@ -93,7 +93,7 @@ fn transaction(nonce: u64, block_number: u64, contract_address: u32, index: u64)
             data: log_data.clone(),
         },
         block_hash: None,
-        block_number: Some(block_number.into()),
+        block_number: Some(block_number),
         block_timestamp: None,
         transaction_hash: None,
         transaction_index: None,
@@ -192,7 +192,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
 
     eth_node.update_data(|data| {
         data.logs_batch = vec![logs];
-        data.best_block.header.number = (*eth_gap.end()).into();
+        data.best_block.header.number = *eth_gap.end();
     });
     let count = std::sync::Arc::new(AtomicUsize::new(0));
     let num_calls = count.clone();

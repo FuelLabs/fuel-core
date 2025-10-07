@@ -397,7 +397,7 @@ where
                 "Tried to start Relayer without setting an eth_client in the config"
             )
         })?
-        .get(0)
+        .first()
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "Tried to start Relayer without setting an eth_client in the config"
