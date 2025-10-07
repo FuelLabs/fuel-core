@@ -14,10 +14,10 @@ description = "Fuel Relayer"
 test-helpers = ["parking_lot", "fuel-core-types/test-helpers"]
 
 [dependencies]
-alloy-consensus = "1.0.37"
+alloy-consensus = { version = "1.0.37", default-features = false }
 alloy-primitives = { version = "1.4.0", default-features = false }
-alloy-provider = "1.0.37"
-alloy-rpc-client = "1.0.37"
+alloy-provider = { version = "1.0.37", default-features = false, features = ["reqwest-rustls-tls"] }
+alloy-rpc-client = { version = "1.0.37", default-features = false }
 alloy-rpc-types-eth = "1.0.36"
 alloy-sol-types = "1.4.0"
 anyhow = { workspace = true }
