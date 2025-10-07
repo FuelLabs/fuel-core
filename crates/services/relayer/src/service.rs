@@ -1,15 +1,19 @@
 //! This module handles bridge communications between the fuel node and the data availability layer.
 
+use self::{
+    get_logs::*,
+    run::RelayerData,
+};
 use crate::{
-    Config,
     log::EthEventLog,
     ports::RelayerDb,
     service::state::EthLocal,
+    Config,
 };
 use alloy_provider::{
+    network::Ethereum,
     Provider,
     RootProvider,
-    network::Ethereum,
 };
 use alloy_rpc_types_eth::{
     BlockId,
@@ -33,11 +37,7 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use tokio::sync::watch;
-
-use self::{
-    get_logs::*,
-    run::RelayerData,
-};
+use url::Url;
 
 mod get_logs;
 mod run;
@@ -74,7 +74,7 @@ type Synced = watch::Receiver<SyncState>;
 type NotifySynced = watch::Sender<SyncState>;
 
 /// The alias of runnable relayer service.
-pub type Service<D> = CustomizableService<RootProvider<Ethereum>, D>;
+pub type Service<D> = CustomizableService<FuelEthProvider, D>;
 type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
 /// The shared state of the relayer task.
@@ -82,6 +82,24 @@ type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 pub struct SharedState {
     /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
+}
+
+pub struct FuelEthProvider {
+    provider: RootProvider<Ethereum>,
+}
+
+impl FuelEthProvider {
+    fn new(url: Url) -> Self {
+        Self {
+            provider: RootProvider::<Ethereum>::new_http(url),
+        }
+    }
+}
+
+impl Provider for FuelEthProvider {
+    fn root(&self) -> &RootProvider<Ethereum> {
+        &self.provider
+    }
 }
 
 /// Not initialized version of the [`Task`].
@@ -262,7 +280,7 @@ where
                     .sync_minimum_duration
                     .saturating_sub(now.elapsed()),
             )
-            .await;
+                .await;
         }
 
         match result {
@@ -387,7 +405,7 @@ where
         })?
         .clone();
 
-    let eth_node = RootProvider::<Ethereum>::new_http(url);
+    let eth_node = FuelEthProvider::new(url);
     let retry_on_error = true;
     Ok(new_service_internal(
         eth_node,
