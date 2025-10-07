@@ -13,6 +13,7 @@ const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
 
 use crate::service::download_logs;
 use crate::service::state;
+use crate::test_helpers::provider::MockProvider;
 use alloy_provider::mock::Asserter;
 use alloy_provider::ProviderBuilder;
 use alloy_rpc_types_eth::Log;
@@ -174,9 +175,8 @@ async fn deploy_height_does_not_override() {
         da_deploy_height: 20u64.into(),
         ..Default::default()
     };
-    let asserter = Asserter::new();
-    let provider = ProviderBuilder::new().connect_mocked_client(asserter);
-    let relayer = NotInitializedTask::new(provider, mock_db.clone(), config, false);
+    let eth_node = MockProvider::default();
+    let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
     let _ = relayer.into_task(&Default::default(), ()).await;
 
     assert_eq!(*mock_db.get_finalized_da_height().unwrap(), 50);
