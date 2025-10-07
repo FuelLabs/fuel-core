@@ -6,12 +6,12 @@ use fuel_core::{
     database::database_description::DatabaseHeight,
     p2p_test_helpers::*,
     service::{
-        Config,
-        FuelService,
         config::{
             DaCompressionConfig,
             DaCompressionMode,
         },
+        Config,
+        FuelService,
     },
     state::{
         historical_rocksdb::StateRewindPolicy,
@@ -22,12 +22,12 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    FuelClient,
     types::TransactionStatus,
+    FuelClient,
 };
 use fuel_core_compression::{
-    VersionedCompressedBlock,
     decompress::decompress,
+    VersionedCompressedBlock,
 };
 use fuel_core_compression_service::temporal_registry::{
     CompressionStorageWrapper,
@@ -40,8 +40,8 @@ use fuel_core_storage::transactional::{
 };
 use fuel_core_types::{
     fuel_asm::{
-        RegId,
         op,
+        RegId,
     },
     fuel_crypto::SecretKey,
     fuel_tx::{
@@ -53,8 +53,8 @@ use fuel_core_types::{
     signer::SignMode,
 };
 use rand::{
-    SeedableRng,
     rngs::StdRng,
+    SeedableRng,
 };
 use std::str::FromStr;
 use test_helpers::{
@@ -134,8 +134,8 @@ async fn can_fetch_da_compressed_block_from_graphql() {
         db_tx,
         block,
     )
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     let block_from_on_chain_db = db
         .on_chain()
@@ -184,7 +184,7 @@ async fn da_compressed_blocks_are_available_from_non_block_producing_nodes() {
         [Some(ValidatorSetup::new(pub_key).with_name("Bob"))],
         Some(config),
     )
-    .await;
+        .await;
 
     let producer = producers.pop().unwrap();
     let mut validator = validators.pop().unwrap();
@@ -264,7 +264,7 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
 }
 
 #[tokio::test]
-async fn da_compression__db_can_be_rewinded() {
+async fn da_compression__db_can_be_rewound() {
     // given
     let rollback_target_height = 0;
     let blocks_to_produce = 10;
@@ -302,7 +302,7 @@ async fn da_compression__db_can_be_rewinded() {
             columns_policy: ColumnsPolicy::Lazy,
         },
     )
-    .expect("Failed to create database");
+        .expect("Failed to create database");
 
     let compression_db_block_height_after_rollback =
         db.compression().latest_height_from_metadata().unwrap();

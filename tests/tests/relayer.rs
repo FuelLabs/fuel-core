@@ -32,7 +32,6 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::{
-    FuelClient,
     pagination::{
         PageDirection,
         PaginationRequest,
@@ -42,19 +41,20 @@ use fuel_core_client::client::{
         RelayedTransactionStatus as ClientRelayedTransactionStatus,
         TransactionStatus,
     },
+    FuelClient,
 };
 use fuel_core_poa::service::Mode;
 use fuel_core_relayer::{
     ports::Transactional,
     test_helpers::{
-        LogTestHelper,
         provider::MockProvider,
+        LogTestHelper,
     },
 };
 use fuel_core_storage::{
+    tables::Messages,
     StorageAsMut,
     StorageAsRef,
-    tables::Messages,
 };
 use fuel_core_types::{
     entities::relayer::transaction::RelayedTransactionStatus as FuelRelayedTransactionStatus,
@@ -68,19 +68,19 @@ use fuel_core_types::{
 };
 use fuel_types::Bytes20;
 use hyper::{
-    Body,
-    Request,
-    Response,
-    Server,
     service::{
         make_service_fn,
         service_fn,
     },
+    Body,
+    Request,
+    Response,
+    Server,
 };
 use rand::{
+    prelude::StdRng,
     Rng,
     SeedableRng,
-    prelude::StdRng,
 };
 use serde_json::json;
 use std::{
@@ -357,7 +357,7 @@ async fn can_restart_node_with_relayer_data() {
             Default::default(),
             DatabaseConfig::config_for_tests(),
         )
-        .unwrap();
+            .unwrap();
 
         let service = FuelService::from_combined_database(database, config.clone())
             .await
@@ -382,7 +382,7 @@ async fn can_restart_node_with_relayer_data() {
             Default::default(),
             DatabaseConfig::config_for_tests(),
         )
-        .unwrap();
+            .unwrap();
         let service = FuelService::from_combined_database(database, config)
             .await
             .unwrap();
@@ -639,7 +639,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
             }
         }
     })
-    .await;
+        .await;
     if result.is_err() {
         panic!("Off-chain worker didn't process balances within timeout")
     }
@@ -731,7 +731,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
             asset_id: base_asset_id,
             collected_amount: 100,
         }
-        .to_str_error_string()
+            .to_str_error_string()
     );
 
     srv.send_stop_signal_and_await_shutdown().await.unwrap();
@@ -739,7 +739,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
 }
 
 #[tokio::test]
-async fn relayer_db_can_be_rewinded() {
+async fn relayer_db_can_be_rewound() {
     // Given
     let rollback_target_height = 0;
     let num_da_blocks = 10;
@@ -782,7 +782,7 @@ async fn relayer_db_can_be_rewinded() {
                 columns_policy: ColumnsPolicy::Lazy,
             },
         )
-        .expect("Failed to create database")
+            .expect("Failed to create database")
     };
 
     let driver = FuelCoreDriver::spawn_feeless_with_directory(
@@ -798,8 +798,8 @@ async fn relayer_db_can_be_rewinded() {
             &relayer_url,
         ],
     )
-    .await
-    .unwrap();
+        .await
+        .unwrap();
     let srv = &driver.node;
 
     let client = FuelClient::from(srv.bound_address);

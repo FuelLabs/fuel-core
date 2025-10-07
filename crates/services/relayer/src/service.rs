@@ -5,15 +5,15 @@ use self::{
     run::RelayerData,
 };
 use crate::{
+    Config,
     log::EthEventLog,
     ports::RelayerDb,
     service::state::EthLocal,
-    Config,
 };
 use alloy_provider::{
-    network::Ethereum,
     Provider,
     RootProvider,
+    network::Ethereum,
 };
 use alloy_rpc_types_eth::{
     BlockId,
@@ -280,7 +280,7 @@ where
                     .sync_minimum_duration
                     .saturating_sub(now.elapsed()),
             )
-                .await;
+            .await;
         }
 
         match result {
