@@ -1,10 +1,9 @@
 #![allow(non_snake_case)]
-// use crate::test_helpers::middleware::MockProvider;
 
 use crate::ports::RelayerDb;
-use fuel_core_services::RunnableService;
 use crate::service::NotInitializedTask;
 use crate::Config;
+use fuel_core_services::RunnableService;
 use futures::TryStreamExt;
 use test_case::test_case;
 
@@ -14,9 +13,9 @@ const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
 
 use crate::service::download_logs;
 use crate::service::state;
-use alloy_rpc_types_eth::Log;
 use alloy_provider::mock::Asserter;
 use alloy_provider::ProviderBuilder;
+use alloy_rpc_types_eth::Log;
 
 #[tokio::test]
 async fn can_download_logs() {
@@ -47,14 +46,15 @@ async fn can_download_logs() {
         &provider,
         DEFAULT_LOG_PAGE_SIZE,
     )
-    .map_ok(|logs| logs.logs)
-    .try_concat()
-    .await
-    .unwrap();
+        .map_ok(|logs| logs.logs)
+        .try_concat()
+        .await
+        .unwrap();
 
     assert_eq!(result, logs);
 }
 
+// FIXME: Enable this test when we have a quorum provider
 // #[tokio::test]
 // async fn quorum_agrees_on_logs() {
 //     let asserter = Asserter::new();
@@ -103,6 +103,7 @@ async fn can_download_logs() {
 //     assert_eq!(result, logs);
 // }
 
+// FIXME: Enable this test when we have a quorum provider
 // #[tokio::test]
 // async fn quorum__disagree_on_logs() {
 //     let eth_node_two_logs = MockProvider::default();
@@ -183,10 +184,14 @@ async fn deploy_height_does_not_override() {
 
 const STARTING_HEIGHT: u64 = 2;
 
-#[test_case(6, 6, SyncState::Synced(6u64.into()); "if local is up to date with remote, then fully synced state")]
-#[test_case(6, 100, SyncState::Synced(100u64.into()); "if local is somehow ahead of remote, then fully synced state")]
-#[test_case(6, 5, SyncState::PartiallySynced(5u64.into()); "if local is behind remote, then partially synced state")]
-#[test_case(6, 0, SyncState::PartiallySynced(0u64.into()); "if local is set to starting height, then partially synced state")]
+#[test_case(6, 6, SyncState::Synced(6u64.into()); "if local is up to date with remote, then fully synced state"
+)]
+#[test_case(6, 100, SyncState::Synced(100u64.into()); "if local is somehow ahead of remote, then fully synced state"
+)]
+#[test_case(6, 5, SyncState::PartiallySynced(5u64.into()); "if local is behind remote, then partially synced state"
+)]
+#[test_case(6, 0, SyncState::PartiallySynced(0u64.into()); "if local is set to starting height, then partially synced state"
+)]
 #[tokio::test]
 async fn update_sync__changes_latest_eth_state(
     remote: u64,
