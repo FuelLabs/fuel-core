@@ -4456,6 +4456,8 @@ name = "fuel-core-tests"
 version = "0.0.0"
 dependencies = [
  "alloy-primitives",
+ "alloy-provider",
+ "alloy-rpc-types-eth",
  "anyhow",
  "async-trait",
  "aws-config",
