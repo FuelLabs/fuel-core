@@ -14,8 +14,434 @@ message BlockRangeRequest {
 }
 
 message Block {
-     bytes data = 1;
+  oneof versioned_block {
+    V1Block v1 = 1;
+  }
 }
+
+message V1Block {
+  Header header = 1;
+  repeated Transaction transactions = 2;
+}
+
+message Header {
+  oneof versioned_header {
+    V1Header v1 = 1;
+  }
+}
+
+// pub struct BlockHeaderV1 {
+//    /// The application header.
+//    pub(crate) application: ApplicationHeader<GeneratedApplicationFieldsV1>,
+//    /// The consensus header.
+//    pub(crate) consensus: ConsensusHeader<GeneratedConsensusFields>,
+//    /// The header metadata calculated during creation.
+//    /// The field is pub(crate) to enforce the use of the [`PartialBlockHeader::generate`] method.
+//    #[cfg_attr(feature = "serde", serde(skip))]
+//    #[educe(PartialEq(ignore))]
+//    pub(crate) metadata: Option<BlockHeaderMetadata>,
+//}
+message V1Header {
+  uint32 version = 1;
+  bytes previous_block_hash = 2;
+  bytes merkle_root = 3;
+  uint32 timestamp = 4;
+  uint32 bits = 5;
+  uint32 nonce = 6;
+}
+
+// pub enum Transaction {
+//    Script(Script),
+//    Create(Create),
+//    Mint(Mint),
+//    Upgrade(Upgrade),
+//    Upload(Upload),
+//    Blob(Blob),
+//}
+message Transaction {
+  oneof variant {
+    ScriptTx script = 1;
+//    CreateTx create = 2;
+//    MintTx mint = 3;
+//    UpgradeTx upgrade = 4;
+//    UploadTx upload = 5;
+//    BlobTx blob = 6;
+  }
+}
+
+// pub struct ChargeableTransaction<Body, MetadataBody>
+//where
+//    Body: BodyConstraints,
+//{
+//    pub(crate) body: Body,
+//    pub(crate) policies: Policies,
+//    pub(crate) inputs: Vec<Input>,
+//    pub(crate) outputs: Vec<Output>,
+//    pub(crate) witnesses: Vec<Witness>,
+//    #[serde(skip)]
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    #[educe(PartialEq(ignore))]
+//    #[educe(Hash(ignore))]
+//    #[canonical(skip)]
+//    pub(crate) metadata: Option<ChargeableMetadata<MetadataBody>>,
+//}
+// pub struct ScriptBody {
+//    pub(crate) script_gas_limit: Word,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub(crate) receipts_root: Bytes32,
+//    pub(crate) script: ScriptCode,
+//    #[educe(Debug(method(fmt_truncated_hex::<16>)))]
+//    pub(crate) script_data: Vec<u8>,
+//}
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
+//pub struct ScriptMetadata {
+//    pub script_data_offset: usize,
+//}
+message ScriptTx {
+  uint32 script_gas_limit = 1;
+  bytes receipts_root = 2;
+  bytes script = 3;
+  bytes script_data = 4;
+  Policies policies = 5;
+  repeated Input inputs = 6;
+  repeated Output outputs = 7;
+  repeated bytes witnesses = 8;
+  ScriptMetadata metadata = 9;
+}
+
+// pub struct Policies {
+//    /// A bitmask that indicates what policies are set.
+//    bits: PoliciesBits,
+//    /// The array of policy values.
+//    values: [Word; POLICIES_NUMBER],
+//}
+message Policies {
+  uint32 bits = 1;
+  repeated uint32 values = 2;
+}
+
+// pub enum Input {
+//    CoinSigned(CoinSigned),
+//    CoinPredicate(CoinPredicate),
+//    Contract(Contract),
+//    MessageCoinSigned(MessageCoinSigned),
+//    MessageCoinPredicate(MessageCoinPredicate),
+//    MessageDataSigned(MessageDataSigned),
+//    MessageDataPredicate(MessageDataPredicate),
+//}
+message Input {
+  oneof variant {
+    CoinSignedInput coin_signed = 1;
+    CoinPredicateInput coin_predicate = 2;
+    ContractInput contract = 3;
+    MessageCoinSignedInput message_coin_signed = 4;
+    MessageCoinPredicateInput message_coin_predicate = 5;
+    MessageDataSignedInput message_data_signed = 6;
+    MessageDataPredicateInput message_data_predicate = 7;
+  }
+}
+
+// pub struct Coin<Specification>
+//where
+//    Specification: CoinSpecification,
+//{
+//    pub utxo_id: UtxoId,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub owner: Address,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub amount: Word,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub asset_id: AssetId,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub tx_pointer: TxPointer,
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub witness_index: Specification::Witness,
+//    /// Exact amount of gas used by the predicate.
+//    /// If the predicate consumes different amount of gas,
+//    /// it's considered to be false.
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub predicate_gas_used: Specification::PredicateGasUsed,
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub predicate: Specification::Predicate,
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub predicate_data: Specification::PredicateData,
+//}
+// impl CoinSpecification for Signed {
+//    type Predicate = Empty<PredicateCode>;
+//    type PredicateData = Empty<Vec<u8>>;
+//    type PredicateGasUsed = Empty<Word>;
+//    type Witness = u16;
+//}
+message CoinSignedInput {
+  UtxoId utxo_id = 1;
+  bytes owner = 2;
+  uint32 amount = 3;
+  bytes asset_id = 4;
+  bytes tx_pointer = 5;
+  uint32 witness_index = 6;
+  uint32 predicate_gas_used = 7;
+  bytes predicate = 8;
+  bytes predicate_data = 9;
+}
+
+//impl CoinSpecification for Predicate {
+//    type Predicate = PredicateCode;
+//    type PredicateData = Vec<u8>;
+//    type PredicateGasUsed = Word;
+//    type Witness = Empty<u16>;
+//}
+message CoinPredicateInput {
+  UtxoId utxo_id = 1;
+  bytes owner = 2;
+  uint32 amount = 3;
+  bytes asset_id = 4;
+  bytes tx_pointer = 5;
+  uint32 witness_index = 6;
+  uint32 predicate_gas_used = 7;
+  bytes predicate = 8;
+  bytes predicate_data = 9;
+}
+
+// pub struct Contract {
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub utxo_id: UtxoId,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub balance_root: Bytes32,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub state_root: Bytes32,
+//    /// Pointer to transction that last modified the contract state.
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub tx_pointer: TxPointer,
+//    pub contract_id: ContractId,
+//}
+message ContractInput {
+  UtxoId utxo_id = 1;
+  bytes balance_root = 2;
+  bytes state_root = 3;
+  bytes tx_pointer = 4;
+  bytes contract_id = 5;
+}
+
+// pub struct Message<Specification>
+//where
+//    Specification: MessageSpecification,
+//{
+//    /// The sender from the L1 chain.
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub sender: Address,
+//    /// The receiver on the `Fuel` chain.
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub recipient: Address,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub amount: Word,
+//    // Unique identifier of the message
+//    pub nonce: Nonce,
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub witness_index: Specification::Witness,
+//    /// Exact amount of gas used by the predicate.
+//    /// If the predicate consumes different amount of gas,
+//    /// it's considered to be false.
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub predicate_gas_used: Specification::PredicateGasUsed,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub data: Specification::Data,
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub predicate: Specification::Predicate,
+//    #[educe(Debug(method(fmt_as_field)))]
+//    pub predicate_data: Specification::PredicateData,
+//}
+//     pub struct MessageCoin<UsageRules>(core::marker::PhantomData<UsageRules>);
+//
+//    impl MessageSpecification for MessageCoin<Signed> {
+//        type Data = Empty<Vec<u8>>;
+//        type Predicate = Empty<PredicateCode>;
+//        type PredicateData = Empty<Vec<u8>>;
+//        type PredicateGasUsed = Empty<Word>;
+//        type Witness = u16;
+//    }
+message MessageCoinSignedInput {
+  bytes sender = 1;
+  bytes recipient = 2;
+  uint32 amount = 3;
+  uint32 nonce = 4;
+  uint32 witness_index = 5;
+  uint32 predicate_gas_used = 6;
+  bytes data = 7;
+  bytes predicate = 8;
+  bytes predicate_data = 9;
+}
+
+// impl MessageSpecification for MessageCoin<Predicate> {
+//        type Data = Empty<Vec<u8>>;
+//        type Predicate = PredicateCode;
+//        type PredicateData = Vec<u8>;
+//        type PredicateGasUsed = Word;
+//        type Witness = Empty<u16>;
+//    }
+message MessageCoinPredicateInput {
+  bytes sender = 1;
+  bytes recipient = 2;
+  uint32 amount = 3;
+  uint32 nonce = 4;
+  uint32 witness_index = 5;
+  uint32 predicate_gas_used = 6;
+  bytes data = 7;
+  bytes predicate = 8;
+  bytes predicate_data = 9;
+}
+
+// pub type MessageDataSigned = Message<specifications::MessageData<specifications::Signed>>;
+message MessageDataSignedInput {
+  bytes sender = 1;
+  bytes recipient = 2;
+  uint32 amount = 3;
+  uint32 nonce = 4;
+  uint32 witness_index = 5;
+  uint32 predicate_gas_used = 6;
+  bytes data = 7;
+  bytes predicate = 8;
+  bytes predicate_data = 9;
+}
+
+// pub type MessageDataPredicate =
+//    Message<specifications::MessageData<specifications::Predicate>>;
+message MessageDataPredicateInput {
+  bytes sender = 1;
+  bytes recipient = 2;
+  uint32 amount = 3;
+  uint32 nonce = 4;
+  uint32 witness_index = 5;
+  uint32 predicate_gas_used = 6;
+  bytes data = 7;
+  bytes predicate = 8;
+  bytes predicate_data = 9;
+}
+
+// pub enum Output {
+//    Coin {
+//        to: Address,
+//        amount: Word,
+//        asset_id: AssetId,
+//    },
+//
+//    Contract(Contract),
+//
+//    Change {
+//        to: Address,
+//        #[cfg_attr(feature = "da-compression", compress(skip))]
+//        amount: Word,
+//        asset_id: AssetId,
+//    },
+//
+//    Variable {
+//        #[cfg_attr(feature = "da-compression", compress(skip))]
+//        to: Address,
+//        #[cfg_attr(feature = "da-compression", compress(skip))]
+//        amount: Word,
+//        #[cfg_attr(feature = "da-compression", compress(skip))]
+//        asset_id: AssetId,
+//    },
+//
+//    ContractCreated {
+//        contract_id: ContractId,
+//        state_root: Bytes32,
+//    },
+//}
+message Output {
+  oneof variant {
+    CoinOutput coin = 1;
+    ContractOutput contract = 2;
+    ChangeOutput change = 3;
+    VariableOutput variable = 4;
+    ContractCreatedOutput contract_created = 5;
+  }
+}
+message CoinOutput {
+  bytes to = 1;
+  uint32 amount = 2;
+  bytes asset_id = 3;
+}
+message ContractOutput {
+  bytes contract_id = 1;
+  bytes state_root = 2;
+}
+message ChangeOutput {
+  bytes to = 1;
+  uint32 amount = 2;
+  bytes asset_id = 3;
+}
+message VariableOutput {
+  bytes to = 1;
+  uint32 amount = 2;
+  bytes asset_id = 3;
+}
+message ContractCreatedOutput {
+  bytes contract_id = 1;
+  bytes state_root = 2;
+}
+
+// pub struct UtxoId {
+//    /// transaction id
+//    tx_id: TxId,
+//    /// output index
+//    output_index: u16,
+//}
+message UtxoId {
+  bytes tx_id = 1;
+  uint32 output_index = 2;
+}
+
+
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+//pub struct ChargeableMetadata<Body> {
+//    pub common: CommonMetadata,
+//    pub body: Body,
+//}
+// pub struct ScriptBody {
+//    pub(crate) script_gas_limit: Word,
+//    #[cfg_attr(feature = "da-compression", compress(skip))]
+//    pub(crate) receipts_root: Bytes32,
+//    pub(crate) script: ScriptCode,
+//    #[educe(Debug(method(fmt_truncated_hex::<16>)))]
+//    pub(crate) script_data: Vec<u8>,
+//}
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+//pub struct CommonMetadata {
+//    pub id: Bytes32,
+//    pub inputs_offset: usize,
+//    pub inputs_offset_at: Vec<usize>,
+//    pub inputs_predicate_offset_at: Vec<Option<(usize, usize)>>,
+//    pub outputs_offset: usize,
+//    pub outputs_offset_at: Vec<usize>,
+//    pub witnesses_offset: usize,
+//    pub witnesses_offset_at: Vec<usize>,
+//}
+
+message ScriptMetadata {
+  bytes id = 1;
+  uint32 inputs_offset = 2;
+  repeated uint32 inputs_offset_at = 3;
+  repeated PredicateOffset inputs_predicate_offset_at = 4;
+  uint32 outputs_offset = 5;
+  repeated uint32 outputs_offset_at = 6;
+  uint32 witnesses_offset = 7;
+  repeated uint32 witnesses_offset_at = 8;
+  uint32 script_gas_limit = 9;
+  bytes receipts_root = 10;
+  bytes script = 11;
+  bytes script_data = 12;
+}
+
+message PredicateOffset {
+  optional InnerPredicateOffset offset = 1;
+}
+
+message InnerPredicateOffset {
+  uint32 offset = 1;
+  uint32 length = 2;
+}
+
 
 message BlockResponse {
   oneof payload {
