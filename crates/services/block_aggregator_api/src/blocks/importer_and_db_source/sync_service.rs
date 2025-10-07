@@ -150,6 +150,7 @@ where
 impl<Serializer, DB, E> RunnableService for SyncTask<Serializer, DB, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
+    <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
     DB: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
     DB: StorageInspect<Transactions, Error = E> + Send + 'static,

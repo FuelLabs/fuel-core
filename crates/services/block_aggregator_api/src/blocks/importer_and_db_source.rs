@@ -44,6 +44,7 @@ pub trait BlockSerializer {
 pub struct ImporterAndDbSource<Serializer, DB, E>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
+    <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
     DB: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = E>,
     DB: StorageInspect<Transactions, Error = E>,
@@ -60,6 +61,7 @@ where
 impl<Serializer, DB, E> ImporterAndDbSource<Serializer, DB, E>
 where
     Serializer: BlockSerializer + Clone + Send + Sync + 'static,
+    <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = E> + Send + Sync,
     DB: StorageInspect<Transactions, Error = E> + Send + 'static,
     E: std::fmt::Debug + Send,

@@ -115,6 +115,7 @@ where
 impl<Serializer> RunnableService for ImporterTask<Serializer, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
+    <Serializer as BlockSerializer>::Block: Send + 'static,
 {
     const NAME: &'static str = "BlockSourceImporterTask";
     type SharedData = ();

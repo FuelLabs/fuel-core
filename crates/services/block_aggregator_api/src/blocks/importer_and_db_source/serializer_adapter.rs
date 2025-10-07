@@ -6,6 +6,7 @@ use crate::{
     result::Error,
 };
 
+use crate::protobuf_types::Block as ProtoBlock;
 use anyhow::anyhow;
 use fuel_core_types::blockchain::block::Block as FuelBlock;
 use postcard::to_allocvec;
@@ -14,10 +15,13 @@ use postcard::to_allocvec;
 pub struct SerializerAdapter;
 
 impl BlockSerializer for SerializerAdapter {
-    fn serialize_block(&self, block: &FuelBlock) -> crate::result::Result<Block> {
-        let bytes_vec = to_allocvec(block).map_err(|e| {
-            Error::BlockSource(anyhow!("failed to serialize block: {}", e))
-        })?;
-        Ok(crate::blocks::Block::from(bytes_vec))
+    type Block = ProtoBlock;
+
+    fn serialize_block(&self, block: &FuelBlock) -> crate::result::Result<Self::Block> {
+        // let bytes_vec = to_allocvec(block).map_err(|e| {
+        //     Error::BlockSource(anyhow!("failed to serialize block: {}", e))
+        // })?;
+        // Ok(crate::blocks::Block::from(bytes_vec))
+        todo!()
     }
 }

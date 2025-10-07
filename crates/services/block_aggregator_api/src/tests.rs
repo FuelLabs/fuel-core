@@ -48,7 +48,7 @@ impl<T, B> FakeApi<T, B> {
     }
 }
 
-impl<T: Send, B> BlockAggregatorApi for FakeApi<T, B> {
+impl<T: Send, B: Send> BlockAggregatorApi for FakeApi<T, B> {
     type BlockRangeResponse = T;
     type Block = B;
     async fn await_query(&mut self) -> Result<BlockAggregatorQuery<T, B>> {
@@ -247,12 +247,8 @@ async fn run__new_block_subscription__sends_new_block() {
     let _ = srv.run(&mut watcher).await;
 
     // then
-    let (actual_height, actual_block) = await_response_with_timeout(response)
-        .await
-        .unwrap()
-        .into_inner();
+    let actual_block = await_response_with_timeout(response).await.unwrap();
     assert_eq!(expected_block, actual_block);
-    assert_eq!(expected_height, actual_height);
 
     // cleanup
     drop(source_sender);

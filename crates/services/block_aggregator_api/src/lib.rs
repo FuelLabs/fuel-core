@@ -78,8 +78,9 @@ pub mod integration {
     where
         DB: BlockAggregatorDB<
             BlockRangeResponse = <ProtobufAPI as BlockAggregatorApi>::BlockRangeResponse,
+            Block = ProtoBlock,
         >,
-        S: BlockSerializer + Clone + Send + Sync + 'static,
+        S: BlockSerializer<Block=ProtoBlock> + Clone + Send + Sync + 'static,
         OnchainDB: Send + Sync,
         OnchainDB: StorageInspect<FuelBlocks, Error = E>,
         OnchainDB: StorageInspect<Transactions, Error = E>,
@@ -127,11 +128,11 @@ pub struct NewBlock {
 }
 
 impl NewBlock {
-    pub fn new(height: BlockHeight, block: Block) -> Self {
+    pub fn new(height: BlockHeight, block: ProtoBlock) -> Self {
         Self { height, block }
     }
 
-    pub fn into_inner(self) -> (BlockHeight, Block) {
+    pub fn into_inner(self) -> (BlockHeight, ProtoBlock) {
         (self.height, self.block)
     }
 }

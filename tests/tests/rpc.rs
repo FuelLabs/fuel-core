@@ -1,8 +1,11 @@
 #![allow(non_snake_case)]
 
-use fuel_block_aggregator_api::api::protobuf_adapter::{
-    block_aggregator_client::BlockAggregatorClient,
-    block_response::Payload,
+use fuel_block_aggregator_api::protobuf_types::{
+    BlockHeightRequest as ProtoBlockHeightRequest,
+    BlockRangeRequest as ProtoBlockRangeRequest,
+    NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+    block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
+    block_response::Payload as ProtoPayload,
 };
 use fuel_core::{
     database::Database,
@@ -35,7 +38,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
     let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
 
     let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = BlockAggregatorClient::connect(rpc_url)
+    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
         .await
         .expect("could not connect to server");
 
@@ -47,11 +50,8 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
     let header = expected_block.header;
 
     // when
-    let request = fuel_block_aggregator_api::api::protobuf_adapter::BlockRangeRequest {
-        start: 1,
-        end: 1,
-    };
-    let actual_bytes = if let Some(Payload::Literal(block)) = rpc_client
+    let request = ProtoBlockRangeRequest { start: 1, end: 1 };
+    let actual_bytes = if let Some(ProtoPayload::Literal(block)) = rpc_client
         .get_block_range(request)
         .await
         .unwrap()
@@ -97,12 +97,12 @@ async fn get_block_height__can_get_value_from_rpc() {
     let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
 
     let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = BlockAggregatorClient::connect(rpc_url)
+    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
         .await
         .expect("could not connect to server");
 
     // when
-    let request = fuel_block_aggregator_api::api::protobuf_adapter::BlockHeightRequest {};
+    let request = ProtoBlockHeightRequest {};
     let expected_height = 1;
     let actual_height = rpc_client
         .get_block_height(request)
@@ -129,12 +129,11 @@ async fn new_block_subscription__can_get_expect_block() {
     let tx = Transaction::default_test_tx();
 
     let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = BlockAggregatorClient::connect(rpc_url)
+    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
         .await
         .expect("could not connect to server");
 
-    let request =
-        fuel_block_aggregator_api::api::protobuf_adapter::NewBlockSubscriptionRequest {};
+    let request = ProtoNewBlockSubscriptionRequest {};
     let mut stream = rpc_client
         .new_block_subscription(request)
         .await
@@ -147,7 +146,7 @@ async fn new_block_subscription__can_get_expect_block() {
         .await
         .unwrap();
     let actual_bytes =
-        if let Some(Payload::Literal(block)) = next.unwrap().unwrap().payload {
+        if let Some(ProtoPayload::Literal(block)) = next.unwrap().unwrap().payload {
             block.data
         } else {
             panic!("expected literal block payload");

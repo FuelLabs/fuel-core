@@ -1,8 +1,11 @@
 #![allow(non_snake_case)]
 
-use crate::protobuf_types::block_aggregator_client::{
-    BlockAggregatorClient as ProtoBlockAggregatorClient,
-    BlockAggregatorClient,
+use crate::protobuf_types::{
+    Block as ProtoBlock,
+    block_aggregator_client::{
+        BlockAggregatorClient as ProtoBlockAggregatorClient,
+        BlockAggregatorClient,
+    },
 };
 use crate::{
     NewBlock,
@@ -98,8 +101,14 @@ async fn await_query__get_block_range__client_receives_expected_value() {
     let query = api.await_query().await.unwrap();
 
     // then
-    let block1 = Block::new(Bytes::from(vec![0u8; 100]));
-    let block2 = Block::new(Bytes::from(vec![1u8; 100]));
+    // let block1 = Block::new(Bytes::from(vec![0u8; 100]));
+    // let block2 = Block::new(Bytes::from(vec![1u8; 100]));
+    let block1 = ProtoBlock {
+        data: vec![0u8; 100],
+    };
+    let block2 = ProtoBlock {
+        data: vec![1u8; 100],
+    };
     let list = vec![block1, block2];
     // return response through query's channel
     if let BlockAggregatorQuery::GetBlockRange {
@@ -119,7 +128,7 @@ async fn await_query__get_block_range__client_receives_expected_value() {
     }
     tracing::info!("awaiting query");
     let response = handle.await.unwrap();
-    let expected: Vec<Vec<u8>> = list.iter().map(|b| b.bytes().to_vec()).collect();
+    let expected: Vec<Vec<u8>> = list.iter().map(|b| b.data.to_vec()).collect();
     let actual: Vec<Vec<u8>> = response
         .into_inner()
         .try_collect::<Vec<_>>()
@@ -166,13 +175,19 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     // then
     let height1 = BlockHeight::new(0);
     let height2 = BlockHeight::new(1);
-    let block1 = Block::new(Bytes::from(vec![0u8; 100]));
-    let block2 = Block::new(Bytes::from(vec![1u8; 100]));
+    // let block1 = Block::new(Bytes::from(vec![0u8; 100]));
+    // let block2 = Block::new(Bytes::from(vec![1u8; 100]));
+    let block1 = ProtoBlock {
+        data: vec![0u8; 100],
+    };
+    let block2 = ProtoBlock {
+        data: vec![1u8; 100],
+    };
     let list = vec![(height1, block1), (height2, block2)];
     if let BlockAggregatorQuery::NewBlockSubscription { response } = query {
         tracing::info!("correct query received, sending response");
         for (height, block) in list.clone() {
-            let new_block = NewBlock::new(height, block);
+            let new_block = block;
             response.send(new_block).await.unwrap();
         }
     } else {
@@ -180,7 +195,7 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     }
     tracing::info!("awaiting query");
     let response = handle.await.unwrap();
-    let expected: Vec<Vec<u8>> = list.iter().map(|(_, b)| b.bytes().to_vec()).collect();
+    let expected: Vec<Vec<u8>> = list.iter().map(|(_, b)| b.data.to_vec()).collect();
     let actual: Vec<Vec<u8>> = response
         .into_inner()
         .try_collect::<Vec<_>>()

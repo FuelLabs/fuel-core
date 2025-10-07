@@ -34,6 +34,8 @@ use std::sync::Arc;
 pub struct MockSerializer;
 
 impl BlockSerializer for MockSerializer {
+    type Block = Block;
+
     fn serialize_block(&self, block: &FuelBlock) -> Result<Block> {
         let bytes_vec = to_allocvec(block).map_err(|e| {
             Error::BlockSource(anyhow!("failed to serialize block: {}", e))

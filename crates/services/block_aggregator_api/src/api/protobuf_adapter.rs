@@ -1,4 +1,7 @@
-use crate::protobuf_types::block_aggregator_server::BlockAggregator;
+use crate::protobuf_types::block_aggregator_server::{
+    BlockAggregator,
+    BlockAggregatorServer as ProtoBlockAggregatorServer,
+};
 use crate::{
     api::{
         BlockAggregatorApi,

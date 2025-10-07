@@ -97,7 +97,7 @@ impl<S> StorageDB<S> {
     }
 }
 
-impl<S, T, B> BlockAggregatorDB for StorageDB<S>
+impl<S, T> BlockAggregatorDB for StorageDB<S>
 where
     S: Modifiable + std::fmt::Debug,
     S: KeyValueInspect<Column = Column>,
