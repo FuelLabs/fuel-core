@@ -17,14 +17,14 @@ default = ["fuel-core/default"]
 only-p2p = ["fuel-core-p2p"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
 fault-proving = [
-  "fuel-core/fault-proving",
-  "fuel-core-types/fault-proving",
-  "fuel-core-storage/fault-proving",
-  "fuel-core-upgradable-executor/fault-proving",
-  "fuel-core-poa/fault-proving",
-  "fuel-core-compression/fault-proving",
-  "fuel-core-compression-service/fault-proving",
-  "fuel-core-benches/fault-proving",
+    "fuel-core/fault-proving",
+    "fuel-core-types/fault-proving",
+    "fuel-core-storage/fault-proving",
+    "fuel-core-upgradable-executor/fault-proving",
+    "fuel-core-poa/fault-proving",
+    "fuel-core-compression/fault-proving",
+    "fuel-core-compression-service/fault-proving",
+    "fuel-core-benches/fault-proving",
 ]
 
 [dependencies]
@@ -94,8 +94,8 @@ url = { workspace = true }
 
 [dev-dependencies]
 alloy-primitives = "1.4.0"
-alloy-rpc-types-eth = "1.0.37"
 alloy-provider = "1.0.37"
+alloy-rpc-types-eth = "1.0.37"
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
 pretty_assertions = "1.4"
 proptest = { workspace = true }
