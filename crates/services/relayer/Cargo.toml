@@ -11,7 +11,7 @@ rust-version = { workspace = true }
 description = "Fuel Relayer"
 
 [features]
-test-helpers = ["parking_lot", "fuel-core-types/test-helpers"]
+test-helpers = ["parking_lot", "fuel-core-types/test-helpers", "alloy-consensus/default"]
 
 [dependencies]
 alloy-consensus = { version = "1.0.37", default-features = false }
