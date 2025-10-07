@@ -11,12 +11,9 @@ rust-version = { workspace = true }
 description = "Fuel Relayer"
 
 [features]
-include-quorum-tests = []
-
 test-helpers = [
   # "bytes",
    "parking_lot",
-  "thiserror",
   "fuel-core-types/test-helpers",
 ]
 
@@ -40,7 +37,6 @@ once_cell = { workspace = true }
  parking_lot = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
 url = { workspace = true }

@@ -87,6 +87,6 @@ use alloy_rpc_types_eth::Log;
 //     }
 // }
 
-pub fn convert_to_address(bytes: &[u8]) -> ethereum_types::Address {
-    ethereum_types::Address::from_slice(bytes)
+pub fn convert_to_address(bytes: &[u8]) -> alloy_primitives::Address {
+    alloy_primitives::Address::from_slice(bytes)
 }
