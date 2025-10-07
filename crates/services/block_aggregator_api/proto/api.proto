@@ -150,7 +150,7 @@ message Transaction {
 //    pub script_data_offset: usize,
 //}
 message ScriptTx {
-  uint32 script_gas_limit = 1;
+  uint64 script_gas_limit = 1;
   bytes receipts_root = 2;
   bytes script = 3;
   bytes script_data = 4;
@@ -169,7 +169,7 @@ message ScriptTx {
 //}
 message Policies {
   uint32 bits = 1;
-  repeated uint32 values = 2;
+  repeated uint64 values = 2;
 }
 
 // pub enum Input {
@@ -227,11 +227,11 @@ message Input {
 message CoinSignedInput {
   UtxoId utxo_id = 1;
   bytes owner = 2;
-  uint32 amount = 3;
+  uint64 amount = 3;
   bytes asset_id = 4;
   bytes tx_pointer = 5;
   uint32 witness_index = 6;
-  uint32 predicate_gas_used = 7;
+  uint64 predicate_gas_used = 7;
   bytes predicate = 8;
   bytes predicate_data = 9;
 }
@@ -245,11 +245,11 @@ message CoinSignedInput {
 message CoinPredicateInput {
   UtxoId utxo_id = 1;
   bytes owner = 2;
-  uint32 amount = 3;
+  uint64 amount = 3;
   bytes asset_id = 4;
   bytes tx_pointer = 5;
   uint32 witness_index = 6;
-  uint32 predicate_gas_used = 7;
+  uint64 predicate_gas_used = 7;
   bytes predicate = 8;
   bytes predicate_data = 9;
 }
@@ -315,10 +315,10 @@ message ContractInput {
 message MessageCoinSignedInput {
   bytes sender = 1;
   bytes recipient = 2;
-  uint32 amount = 3;
+  uint64 amount = 3;
   uint32 nonce = 4;
   uint32 witness_index = 5;
-  uint32 predicate_gas_used = 6;
+  uint64 predicate_gas_used = 6;
   bytes data = 7;
   bytes predicate = 8;
   bytes predicate_data = 9;
@@ -334,10 +334,10 @@ message MessageCoinSignedInput {
 message MessageCoinPredicateInput {
   bytes sender = 1;
   bytes recipient = 2;
-  uint32 amount = 3;
+  uint64 amount = 3;
   uint32 nonce = 4;
   uint32 witness_index = 5;
-  uint32 predicate_gas_used = 6;
+  uint64 predicate_gas_used = 6;
   bytes data = 7;
   bytes predicate = 8;
   bytes predicate_data = 9;
@@ -347,10 +347,10 @@ message MessageCoinPredicateInput {
 message MessageDataSignedInput {
   bytes sender = 1;
   bytes recipient = 2;
-  uint32 amount = 3;
+  uint64 amount = 3;
   uint32 nonce = 4;
   uint32 witness_index = 5;
-  uint32 predicate_gas_used = 6;
+  uint64 predicate_gas_used = 6;
   bytes data = 7;
   bytes predicate = 8;
   bytes predicate_data = 9;
@@ -361,10 +361,10 @@ message MessageDataSignedInput {
 message MessageDataPredicateInput {
   bytes sender = 1;
   bytes recipient = 2;
-  uint32 amount = 3;
+  uint64 amount = 3;
   uint32 nonce = 4;
   uint32 witness_index = 5;
-  uint32 predicate_gas_used = 6;
+  uint64 predicate_gas_used = 6;
   bytes data = 7;
   bytes predicate = 8;
   bytes predicate_data = 9;
@@ -411,7 +411,7 @@ message Output {
 }
 message CoinOutput {
   bytes to = 1;
-  uint32 amount = 2;
+  uint64 amount = 2;
   bytes asset_id = 3;
 }
 message ContractOutput {
@@ -420,12 +420,12 @@ message ContractOutput {
 }
 message ChangeOutput {
   bytes to = 1;
-  uint32 amount = 2;
+  uint64 amount = 2;
   bytes asset_id = 3;
 }
 message VariableOutput {
   bytes to = 1;
-  uint32 amount = 2;
+  uint64 amount = 2;
   bytes asset_id = 3;
 }
 message ContractCreatedOutput {
@@ -479,7 +479,7 @@ message ScriptMetadata {
   repeated uint32 outputs_offset_at = 6;
   uint32 witnesses_offset = 7;
   repeated uint32 witnesses_offset_at = 8;
-  uint32 script_gas_limit = 9;
+  uint64 script_gas_limit = 9;
   bytes receipts_root = 10;
   bytes script = 11;
   bytes script_data = 12;
