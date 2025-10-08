@@ -296,7 +296,10 @@ fn take_logs_based_on_filter(logs_batch: &[Vec<Log>], filter: &Filter) -> Vec<Lo
     logs_batch
         .iter()
         .flatten()
-        .filter(|log| filter.rpc_matches(log))
+        .filter(|log| {
+            filter.matches_address(log.address())
+                && filter.matches_block_range(log.block_number.unwrap())
+        })
         .cloned()
         .collect()
 }
