@@ -27,6 +27,7 @@ message V1Block {
 message Header {
   oneof versioned_header {
     V1Header v1 = 1;
+    V2Header v2 = 2;
   }
 }
 
@@ -100,6 +101,37 @@ message V1Header {
   bytes time = 11;
   bytes application_hash = 12;
   optional bytes block_id = 13;
+}
+
+// pub struct GeneratedApplicationFieldsV2 {
+//    /// Number of transactions in this block.
+//    pub transactions_count: u16,
+//    /// Number of message receipts in this block.
+//    pub message_receipt_count: u32,
+//    /// Merkle root of transactions.
+//    pub transactions_root: Bytes32,
+//    /// Merkle root of message receipts in this block.
+//    pub message_outbox_root: Bytes32,
+//    /// Root hash of all imported events from L1
+//    pub event_inbox_root: Bytes32,
+//    /// TxID commitment
+//    pub tx_id_commitment: Bytes32,
+//}
+message V2Header {
+  uint32 da_height = 1;
+  uint32 consensus_parameters_version = 2;
+  uint32 state_transition_bytecode_version = 3;
+  uint32 transactions_count = 4;
+  uint32 message_receipt_count = 5;
+  bytes transactions_root = 6;
+  bytes message_outbox_root = 7;
+  bytes event_inbox_root = 8;
+  bytes tx_id_commitment = 9;
+  bytes prev_root = 10;
+  uint32 height = 11;
+  bytes time = 12;
+  bytes application_hash = 13;
+  optional bytes block_id = 14;
 }
 
 // pub enum Transaction {

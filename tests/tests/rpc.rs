@@ -65,9 +65,10 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
         panic!("expected literal block payload");
     };
     let ProtoVersionedBlock::V1(v1_block) = actual_block.versioned_block.unwrap();
-    let ProtoVersionedHeader::V1(v1_header) =
-        v1_block.header.unwrap().versioned_header.unwrap();
-    let actual_height = v1_header.height;
+    let actual_height = match v1_block.header.unwrap().versioned_header.unwrap() {
+        ProtoVersionedHeader::V1(v1_header) => v1_header.height,
+        ProtoVersionedHeader::V2(v2_header) => v2_header.height,
+    };
     // then
     assert_eq!(expected_header.height.0, actual_height);
 }
@@ -144,9 +145,10 @@ async fn new_block_subscription__can_get_expect_block() {
         };
 
     let ProtoVersionedBlock::V1(v1_block) = actual_block.versioned_block.unwrap();
-    let ProtoVersionedHeader::V1(v1_header) =
-        v1_block.header.unwrap().versioned_header.unwrap();
-    let actual_height = v1_header.height;
+    let actual_height = match v1_block.header.unwrap().versioned_header.unwrap() {
+        ProtoVersionedHeader::V1(v1_header) => v1_header.height,
+        ProtoVersionedHeader::V2(v2_header) => v2_header.height,
+    };
     // then
     let expected_height = 1;
     assert_eq!(expected_height, actual_height);

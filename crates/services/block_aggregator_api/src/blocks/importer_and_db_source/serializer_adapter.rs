@@ -8,6 +8,7 @@ use crate::{
         Transaction as ProtoTransaction,
         V1Block as ProtoV1Block,
         V1Header as ProtoV1Header,
+        V2Header as ProtoV2Header,
         block::VersionedBlock as ProtoVersionedBlock,
         header::VersionedHeader as ProtoVersionedHeader,
         transaction::Variant as ProtoTransactionVariant,
@@ -82,6 +83,30 @@ fn proto_header_from_header(header: BlockHeader) -> ProtoHeader {
             };
 
             ProtoVersionedHeader::V1(proto_v1_header)
+        }
+        BlockHeader::V2(header) => {
+            let application = *header.application();
+            let generated = application.generated;
+
+            let proto_v2_header = ProtoV2Header {
+                da_height: saturating_u64_to_u32(application.da_height.0),
+                consensus_parameters_version: application.consensus_parameters_version,
+                state_transition_bytecode_version: application
+                    .state_transition_bytecode_version,
+                transactions_count: u32::from(generated.transactions_count),
+                message_receipt_count: generated.message_receipt_count,
+                transactions_root: bytes32_to_vec(&generated.transactions_root),
+                message_outbox_root: bytes32_to_vec(&generated.message_outbox_root),
+                event_inbox_root: bytes32_to_vec(&generated.event_inbox_root),
+                tx_id_commitment: bytes32_to_vec(&generated.tx_id_commitment),
+                prev_root: bytes32_to_vec(&consensus.prev_root),
+                height: u32::from(consensus.height),
+                time: consensus.time.0.to_be_bytes().to_vec(),
+                application_hash: bytes32_to_vec(&consensus.generated.application_hash),
+                block_id: Some(block_id.as_slice().to_vec()),
+            };
+
+            ProtoVersionedHeader::V2(proto_v2_header)
         }
     };
 
