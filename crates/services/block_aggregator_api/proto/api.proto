@@ -293,7 +293,7 @@ message CoinPredicateInput {
 //    pub balance_root: Bytes32,
 //    #[cfg_attr(feature = "da-compression", compress(skip))]
 //    pub state_root: Bytes32,
-//    /// Pointer to transction that last modified the contract state.
+//    /// Pointer to transaction that last modified the contract state.
 //    #[cfg_attr(feature = "da-compression", compress(skip))]
 //    pub tx_pointer: TxPointer,
 //    pub contract_id: ContractId,
