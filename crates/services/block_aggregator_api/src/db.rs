@@ -1,7 +1,4 @@
-use crate::{
-    blocks::Block,
-    result::Result,
-};
+use crate::result::Result;
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub mod storage_db;

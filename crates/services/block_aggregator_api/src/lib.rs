@@ -1,9 +1,6 @@
 use crate::{
     api::BlockAggregatorApi,
-    blocks::{
-        Block,
-        BlockSource,
-    },
+    blocks::BlockSource,
     db::BlockAggregatorDB,
 };
 use fuel_core_services::{
@@ -61,6 +58,7 @@ pub mod integration {
         pub addr: SocketAddr,
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn new_service<DB, S, OnchainDB, E>(
         config: &Config,
         db: DB,

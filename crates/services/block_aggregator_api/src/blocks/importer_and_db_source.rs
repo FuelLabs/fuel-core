@@ -1,6 +1,5 @@
 use crate::{
     blocks::{
-        Block,
         BlockSource,
         BlockSourceEvent,
         importer_and_db_source::importer_service::ImporterTask,

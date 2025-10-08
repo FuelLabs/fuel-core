@@ -1,6 +1,5 @@
 use crate::{
     block_range_response::BlockRangeResponse,
-    blocks::Block,
     db::{
         BlockAggregatorDB,
         storage_db::table::Column,

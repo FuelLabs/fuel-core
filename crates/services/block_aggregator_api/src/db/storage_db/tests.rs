@@ -1,43 +1,45 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use crate::db::storage_db::table::Column;
+use crate::{
+    blocks::importer_and_db_source::{
+        BlockSerializer,
+        serializer_adapter::SerializerAdapter,
+    },
+    db::storage_db::table::Column,
+};
 use fuel_core_storage::{
     StorageAsRef,
     structured_storage::test::InMemoryStorage,
     transactional::IntoTransaction,
 };
 use fuel_core_types::{
-    ed25519::signature::rand_core::SeedableRng,
+    blockchain::block::Block as FuelBlock,
+    fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
-use rand::{
-    Rng,
-    rngs::StdRng,
-};
 
 fn database() -> StorageTransaction<InMemoryStorage<Column>> {
     InMemoryStorage::default().into_transaction()
 }
 
-fn random_proto_block(rng: &mut StdRng) -> ProtoBlock {
-    const ARB_SIZE: usize = 1000;
-    let mut data = vec![0u8; ARB_SIZE];
-    rng.fill(&mut data[..]);
-    ProtoBlock { data }
+fn proto_block_with_height(height: BlockHeight) -> ProtoBlock {
+    let serializer_adapter = SerializerAdapter;
+    let mut default_block = FuelBlock::<Transaction>::default();
+    default_block.header_mut().set_block_height(height);
+    serializer_adapter
+        .serialize_block(&FuelBlock::default())
+        .unwrap()
 }
 
 #[tokio::test]
 async fn store_block__adds_to_storage() {
-    let mut rng = StdRng::seed_from_u64(666);
     // given
     let db = database();
     let mut adapter = StorageDB::new(db);
     let height = BlockHeight::from(1u32);
-    let mut data = vec![0u8; 1000];
-    rng.fill(&mut data[..]);
-    let expected = ProtoBlock { data };
+    let expected = proto_block_with_height(height);
 
     // when
     adapter.store_block(height, expected.clone()).await.unwrap();
@@ -55,16 +57,15 @@ async fn store_block__adds_to_storage() {
 
 #[tokio::test]
 async fn get_block__can_get_expected_range() {
-    let mut rng = StdRng::seed_from_u64(666);
     // given
     let mut db = database();
     let height_1 = BlockHeight::from(1u32);
     let height_2 = BlockHeight::from(2u32);
     let height_3 = BlockHeight::from(3u32);
 
-    let expected_1 = random_proto_block(&mut rng);
-    let expected_2 = random_proto_block(&mut rng);
-    let expected_3 = random_proto_block(&mut rng);
+    let expected_1 = proto_block_with_height(height_1);
+    let expected_2 = proto_block_with_height(height_2);
+    let expected_3 = proto_block_with_height(height_3);
 
     let mut tx = db.write_transaction();
     tx.storage_as_mut::<Blocks>()
@@ -95,16 +96,11 @@ async fn get_block__can_get_expected_range() {
 
 #[tokio::test]
 async fn store_block__updates_the_highest_continuous_block_if_contiguous() {
-    let mut rng = StdRng::seed_from_u64(666);
     // given
     let db = database();
     let mut adapter = StorageDB::new_with_height(db, BlockHeight::from(0u32));
     let height = BlockHeight::from(1u32);
-    // // let expected = Block::random(&mut rng);
-    // let mut data = vec![0u8; 1000];
-    // rng.fill(&mut data[..]);
-    // let expected = ProtoBlock { data };
-    let expected = random_proto_block(&mut rng);
+    let expected = proto_block_with_height(height);
 
     // when
     adapter.store_block(height, expected.clone()).await.unwrap();
@@ -117,14 +113,12 @@ async fn store_block__updates_the_highest_continuous_block_if_contiguous() {
 
 #[tokio::test]
 async fn store_block__does_not_update_the_highest_continuous_block_if_not_contiguous() {
-    let mut rng = StdRng::seed_from_u64(666);
     // given
     let db = database();
     let starting_height = BlockHeight::from(0u32);
     let mut adapter = StorageDB::new_with_height(db, starting_height);
     let height = BlockHeight::from(2u32);
-    // let expected = Block::random(&mut rng);
-    let expected = random_proto_block(&mut rng);
+    let expected = proto_block_with_height(height);
 
     // when
     adapter.store_block(height, expected.clone()).await.unwrap();
@@ -137,7 +131,6 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
 
 #[tokio::test]
 async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
-    let mut rng = StdRng::seed_from_u64(666);
     // given
     let db = database();
     let starting_height = BlockHeight::from(0u32);
@@ -148,7 +141,7 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
         let height = BlockHeight::from(height);
         orphaned_height = Some(height);
         // let block = Block::random(&mut rng);
-        let block = random_proto_block(&mut rng);
+        let block = proto_block_with_height(height);
         adapter.store_block(height, block).await.unwrap();
     }
     let expected = starting_height;
@@ -157,8 +150,7 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
 
     // when
     let height = BlockHeight::from(1u32);
-    // let expected = Block::random(&mut rng);
-    let some_block = random_proto_block(&mut rng);
+    let some_block = proto_block_with_height(height);
     adapter
         .store_block(height, some_block.clone())
         .await

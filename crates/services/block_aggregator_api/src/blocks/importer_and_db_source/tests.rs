@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use super::*;
+use crate::blocks::Block;
 use ::postcard::to_allocvec;
 use fuel_core_services::stream::{
     IntoBoxStream,

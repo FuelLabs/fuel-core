@@ -1,7 +1,4 @@
-use crate::{
-    NewBlock,
-    result::Result,
-};
+use crate::result::Result;
 use fuel_core_types::fuel_types::BlockHeight;
 use std::fmt;
 

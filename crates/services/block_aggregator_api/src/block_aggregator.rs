@@ -1,6 +1,5 @@
 use crate::{
     BlockAggregator,
-    NewBlock,
     api::{
         BlockAggregatorApi,
         BlockAggregatorQuery,
@@ -8,7 +7,6 @@ use crate::{
     blocks::{
         BlockSource,
         BlockSourceEvent,
-        importer_and_db_source::importer_service::ImporterTask,
     },
     db::BlockAggregatorDB,
 };
@@ -17,7 +15,6 @@ use fuel_core_services::{
     try_or_stop,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use postcard::Serializer;
 
 impl<Api, DB, Blocks, BlockRangeResponse> BlockAggregator<Api, DB, Blocks, Blocks::Block>
 where
