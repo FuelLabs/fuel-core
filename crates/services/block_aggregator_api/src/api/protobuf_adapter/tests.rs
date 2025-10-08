@@ -7,25 +7,20 @@ use crate::{
         protobuf_adapter::ProtobufAPI,
     },
     block_range_response::BlockRangeResponse,
-    protobuf_types::{
-        BlockHeightRequest,
-        BlockRangeRequest,
-        NewBlockSubscriptionRequest,
-        // block_aggregator_client::BlockAggregatorClient,
-        block_response::Payload,
-    },
-};
-use crate::{
     blocks::importer_and_db_source::{
         BlockSerializer,
         serializer_adapter::SerializerAdapter,
     },
     protobuf_types::{
         Block as ProtoBlock,
+        BlockHeightRequest,
+        BlockRangeRequest,
+        NewBlockSubscriptionRequest,
         block_aggregator_client::{
             BlockAggregatorClient as ProtoBlockAggregatorClient,
             BlockAggregatorClient,
         },
+        block_response::Payload,
     },
 };
 use fuel_core_types::{
@@ -108,14 +103,6 @@ async fn await_query__get_block_range__client_receives_expected_value() {
 
     // then
     let serializer_adapter = SerializerAdapter;
-    // let block1 = Block::new(Bytes::from(vec![0u8; 100]));
-    // let block2 = Block::new(Bytes::from(vec![1u8; 100]));
-    // let block1 = ProtoBlock {
-    //     data: vec![0u8; 100],
-    // };
-    // let block2 = ProtoBlock {
-    //     data: vec![1u8; 100],
-    // };
     let fuel_block_1 = FuelBlock::default();
     let mut fuel_block_2 = FuelBlock::default();
     let block_height_2 = fuel_block_1.header().height().succ().unwrap();

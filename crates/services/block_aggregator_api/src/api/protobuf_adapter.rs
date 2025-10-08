@@ -1,7 +1,3 @@
-use crate::protobuf_types::block_aggregator_server::{
-    BlockAggregator,
-    BlockAggregatorServer as ProtoBlockAggregatorServer,
-};
 use crate::{
     api::{
         BlockAggregatorApi,
@@ -15,10 +11,10 @@ use crate::{
         BlockRangeRequest as ProtoBlockRangeRequest,
         BlockResponse as ProtoBlockResponse,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
-        // block_aggregator_server::{
-        //     BlockAggregator as ProtoBlockAggregator,
-        //     BlockAggregatorServer as ProtoBlockAggregatorServer,
-        // },
+        block_aggregator_server::{
+            BlockAggregator,
+            BlockAggregatorServer as ProtoBlockAggregatorServer,
+        },
         block_response as proto_block_response,
     },
     result::{

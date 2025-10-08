@@ -28,9 +28,7 @@ fn proto_block_with_height(height: BlockHeight) -> ProtoBlock {
     let serializer_adapter = SerializerAdapter;
     let mut default_block = FuelBlock::<Transaction>::default();
     default_block.header_mut().set_block_height(height);
-    serializer_adapter
-        .serialize_block(&FuelBlock::default())
-        .unwrap()
+    serializer_adapter.serialize_block(&default_block).unwrap()
 }
 
 #[tokio::test]
@@ -140,7 +138,6 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
     for height in 2..=10u32 {
         let height = BlockHeight::from(height);
         orphaned_height = Some(height);
-        // let block = Block::random(&mut rng);
         let block = proto_block_with_height(height);
         adapter.store_block(height, block).await.unwrap();
     }
