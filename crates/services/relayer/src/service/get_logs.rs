@@ -64,7 +64,10 @@ where
                             .await
                             .map_err(|err| {
                                 let ProviderError::JsonRpcClientError(err) = err else {
-                                    page_sizer.update(0, true);
+                                    // We optimistically reduce the page size for any rpc error,
+                                    // to reduce the work to check if it is actually
+                                    // because of "too many logs"
+                                    page_sizer.update(RpcOutcome::Error);
                                     return err;
                                 };
 
@@ -75,7 +78,9 @@ where
                             })
                             .map(|logs| {
                                 // First, update the adaptive page sizer, to have the updated page size.
-                                page_sizer.update(logs.len() as u64, false);
+                                page_sizer.update(RpcOutcome::Success {
+                                    logs_downloaded: logs.len() as u64,
+                                });
 
                                 // Reduce the size, using the new page size.
                                 let page =

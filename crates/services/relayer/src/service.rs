@@ -102,6 +102,11 @@ pub struct NotInitializedTask<P, D> {
     retry_on_error: bool,
 }
 
+pub enum RpcOutcome {
+    Success { logs_downloaded: u64 },
+    Error,
+}
+
 /// A trait for controlling the number of blocks queried per RPC call when downloading logs.
 /// Implementations may adapt the block range based on feedback from previous calls.
 pub trait PageSizer {
@@ -110,7 +115,7 @@ pub trait PageSizer {
     /// This method should be called after each log-fetching RPC call to allow the sizer
     /// to adjust its block range strategy. It receives the number of logs downloaded and
     /// whether the RPC call resulted in an error.
-    fn update(&mut self, logs_downloaded: u64, rpc_error: bool);
+    fn update(&mut self, outcome: RpcOutcome);
 
     /// Returns the current number of blocks to include in the next RPC query.
     fn page_size(&self) -> u64;
@@ -137,26 +142,36 @@ impl AdaptivePageSizer {
 }
 
 impl PageSizer for AdaptivePageSizer {
-    fn update(&mut self, logs_downloaded: u64, rpc_error: bool) {
+    fn update(&mut self, outcome: RpcOutcome) {
         const PAGE_GROW_FACTOR_NUM: u64 = 125;
         const PAGE_GROW_FACTOR_DEN: u64 = 100;
         const PAGE_SHRINK_FACTOR: u64 = 2;
 
-        if rpc_error || logs_downloaded > self.max_logs_per_rpc {
-            self.successful_rpc_calls = 0;
-            self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
-        } else {
-            self.successful_rpc_calls = self.successful_rpc_calls.saturating_add(1);
-            if self.successful_rpc_calls >= self.grow_threshold && self.current < self.max
-            {
-                let grown = self.current.saturating_mul(PAGE_GROW_FACTOR_NUM)
-                    / PAGE_GROW_FACTOR_DEN;
-                self.current = if grown > self.current {
-                    grown.min(self.max)
-                } else {
-                    (self.current.saturating_add(1)).min(self.max)
-                };
+        match outcome {
+            RpcOutcome::Error => {
                 self.successful_rpc_calls = 0;
+                self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
+            }
+            RpcOutcome::Success { logs_downloaded }
+                if logs_downloaded > self.max_logs_per_rpc =>
+            {
+                self.successful_rpc_calls = 0;
+                self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
+            }
+            _ => {
+                self.successful_rpc_calls = self.successful_rpc_calls.saturating_add(1);
+                if self.successful_rpc_calls >= self.grow_threshold
+                    && self.current < self.max
+                {
+                    let grown = self.current.saturating_mul(PAGE_GROW_FACTOR_NUM)
+                        / PAGE_GROW_FACTOR_DEN;
+                    self.current = if grown > self.current {
+                        grown.min(self.max)
+                    } else {
+                        (self.current.saturating_add(1)).min(self.max)
+                    };
+                    self.successful_rpc_calls = 0;
+                }
             }
         }
     }
@@ -236,23 +251,12 @@ where
         &mut self,
         eth_sync_gap: &state::EthSyncGap,
     ) -> anyhow::Result<()> {
-        let mut successful_rpc_calls: u64 = 0;
-        let mut rpc_error: bool = false;
-
         let logs = download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
             &self.eth_node,
             &mut self.page_sizer,
-        )
-        .inspect(|result| match result {
-            Ok(_) => {
-                successful_rpc_calls = successful_rpc_calls.saturating_add(1);
-            }
-            Err(_) => {
-                rpc_error = true;
-            }
-        });
+        );
 
         let logs = logs.take_until(self.shutdown.while_started());
         write_logs(&mut self.database, logs).await
@@ -519,9 +523,13 @@ mod tests {
         let grow_threshold = 50;
         let mut sizer = AdaptivePageSizer::new(4, 10, grow_threshold, 10_000);
         for _ in 0..grow_threshold {
-            sizer.update(100, false);
+            sizer.update(RpcOutcome::Success {
+                logs_downloaded: 100,
+            });
         }
-        sizer.update(100, false);
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 100,
+        });
         assert_eq!(sizer.page_size(), 5);
     }
 
@@ -530,7 +538,9 @@ mod tests {
         let grow_threshold = 50;
         let mut sizer = AdaptivePageSizer::new(4, 10, grow_threshold, 10_000);
         for _ in 0..grow_threshold - 10 {
-            sizer.update(100, false);
+            sizer.update(RpcOutcome::Success {
+                logs_downloaded: 100,
+            });
         }
         assert_eq!(sizer.page_size(), 4);
     }
@@ -540,7 +550,9 @@ mod tests {
         let grow_threshold = 50;
         let mut sizer = AdaptivePageSizer::new(10, 10, grow_threshold, 10_000);
         for _ in 0..grow_threshold + 1 {
-            sizer.update(100, false);
+            sizer.update(RpcOutcome::Success {
+                logs_downloaded: 100,
+            });
         }
         assert_eq!(sizer.page_size(), 10);
     }
@@ -549,21 +561,23 @@ mod tests {
     fn adaptive_page_sizer_shrinks_on_rpc_error() {
         let grow_threshold = 50;
         let mut sizer = AdaptivePageSizer::new(6, 10, grow_threshold, 10_000);
-        sizer.update(100, true);
+        sizer.update(RpcOutcome::Error);
         assert_eq!(sizer.page_size(), 3);
     }
 
     #[test]
     fn adaptive_page_sizer_shrinks_on_excessive_logs() {
         let mut sizer = AdaptivePageSizer::new(6, 10, 50, 100);
-        sizer.update(101, false);
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 101,
+        });
         assert_eq!(sizer.page_size(), 3);
     }
 
     #[test]
     fn adaptive_page_sizer_never_goes_below_one() {
         let mut sizer = AdaptivePageSizer::new(1, 10, 50, 10_000);
-        sizer.update(0, true);
+        sizer.update(RpcOutcome::Error);
         assert_eq!(sizer.page_size(), 1);
     }
 
@@ -573,9 +587,15 @@ mod tests {
         let max_logs_per_rpc = 100;
         let mut sizer = AdaptivePageSizer::new(2, 10, grow_threshold, max_logs_per_rpc);
 
-        sizer.update(50, false);
-        sizer.update(60, false);
-        sizer.update(70, false); // triggers growth
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 50,
+        });
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 60,
+        });
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 70,
+        }); // triggers growth
 
         assert_eq!(sizer.successful_rpc_calls, 0, "Should reset after growth");
     }
@@ -586,11 +606,17 @@ mod tests {
         let max_logs_per_rpc = 100;
         let mut sizer = AdaptivePageSizer::new(4, 10, grow_threshold, max_logs_per_rpc);
 
-        sizer.update(20, false);
-        sizer.update(25, false);
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 20,
+        });
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 25,
+        });
         assert_eq!(sizer.page_size(), 4); // not yet grown
 
-        sizer.update(30, false); // threshold reached
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 30,
+        }); // threshold reached
         assert_eq!(sizer.page_size(), 5);
     }
 
@@ -599,9 +625,13 @@ mod tests {
         let grow_threshold = 50;
         let mut sizer = AdaptivePageSizer::new(2, 10, grow_threshold, 10_000);
         for _ in 0..grow_threshold {
-            sizer.update(100, false);
+            sizer.update(RpcOutcome::Success {
+                logs_downloaded: 100,
+            });
         }
-        sizer.update(100, false);
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 100,
+        });
         assert_eq!(sizer.page_size(), 3, "Page size should grow by at least 1");
     }
 
@@ -612,7 +642,9 @@ mod tests {
         let mut sizer = AdaptivePageSizer::new(6, 10, grow_threshold, max_logs_per_rpc);
 
         // Simulate a successful RPC call that returns more logs than allowed
-        sizer.update(max_logs_per_rpc + 1, false);
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: max_logs_per_rpc + 1,
+        });
 
         // Expect the page size to shrink
         assert_eq!(

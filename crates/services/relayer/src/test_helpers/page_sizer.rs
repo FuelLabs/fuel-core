@@ -1,4 +1,7 @@
-use crate::service::PageSizer;
+use crate::service::{
+    PageSizer,
+    RpcOutcome,
+};
 
 pub struct IdentityPageSizer {
     page_size: u64,
@@ -11,7 +14,7 @@ impl IdentityPageSizer {
 }
 
 impl PageSizer for IdentityPageSizer {
-    fn update(&mut self, _downloaded_logs_count: u64, _rpc_error: bool) {
+    fn update(&mut self, _: RpcOutcome) {
         // No-op: always returns the same page size
     }
 
