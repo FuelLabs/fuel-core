@@ -30,6 +30,9 @@ pub struct Config {
     /// Number of pages or blocks containing logs that
     /// should be downloaded in a single call to the da layer
     pub log_page_size: u64,
+    /// Maximum number of logs allowed in a single RPC response.
+    /// If exceeded, the page size will be reduced.
+    pub max_logs_per_rpc: u64,
     /// This throttles the background relayer loop to
     /// at least this duration to prevent spamming the DA node.
     pub sync_minimum_duration: Duration,
@@ -47,6 +50,7 @@ pub struct Config {
 #[allow(missing_docs)]
 impl Config {
     pub const DEFAULT_LOG_PAGE_SIZE: u64 = 10_000;
+    pub const DEFAULT_MAX_LOGS_PER_RPC: u64 = 10_000;
     pub const DEFAULT_DA_DEPLOY_HEIGHT: u64 = 0;
     pub const DEFAULT_SYNC_MINIMUM_DURATION: Duration = Duration::from_secs(5);
     pub const DEFAULT_SYNCING_CALL_FREQ: Duration = Duration::from_secs(5);
@@ -62,6 +66,7 @@ impl Default for Config {
                 Bytes20::from_str("0x03E4538018285e1c03CCce2F92C9538c87606911").unwrap(),
             ],
             log_page_size: Self::DEFAULT_LOG_PAGE_SIZE,
+            max_logs_per_rpc: Self::DEFAULT_MAX_LOGS_PER_RPC,
             sync_minimum_duration: Self::DEFAULT_SYNC_MINIMUM_DURATION,
             syncing_call_frequency: Self::DEFAULT_SYNCING_CALL_FREQ,
             syncing_log_frequency: Self::DEFAULT_SYNCING_LOG_FREQ,
