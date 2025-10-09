@@ -105,7 +105,7 @@ where
     T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
     StorageTransaction<T>: AtomicView + StorageInspect<Blocks, Error = StorageError>,
 {
-    type BlockRange = BlockRangeResponse;
+    type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(&mut self, height: BlockHeight, block: Block) -> Result<()> {
         self.update_highest_contiguous_block(height);

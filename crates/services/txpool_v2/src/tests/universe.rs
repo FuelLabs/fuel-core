@@ -315,6 +315,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 let tx = Arc::new(tx);
                 pool.write()
@@ -357,6 +358,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 pool.write()
                     .insert(Arc::new(tx), &self.mock_db)
@@ -398,6 +400,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 pool.write()
                     .insert(Arc::new(tx), &self.mock_db)

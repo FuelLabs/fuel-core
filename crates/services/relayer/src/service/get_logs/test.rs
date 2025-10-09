@@ -20,6 +20,7 @@ use crate::{
             MockMiddleware,
             TriggerType,
         },
+        page_sizer::IdentityPageSizer,
     },
 };
 use test_case::test_case;
@@ -190,7 +191,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         &EthSyncGap::new(*eth_gap.start(), *eth_gap.end()),
         contracts,
         &eth_node,
-        DEFAULT_LOG_PAGE_SIZE,
+        &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
     .map_ok(|logs| logs.logs)
     .try_concat()

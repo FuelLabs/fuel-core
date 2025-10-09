@@ -34,6 +34,7 @@ members = [
     "crates/services/upgradable-executor",
     "crates/services/upgradable-executor/wasm-executor",
     "crates/storage",
+    "crates/syscall",
     "crates/trace",
     "crates/types",
     "tests",
@@ -103,6 +104,7 @@ fuel-core-services = { version = "0.46.0", path = "./crates/services" }
 fuel-core-shared-sequencer = { version = "0.46.0", path = "crates/services/shared-sequencer" }
 fuel-core-storage = { version = "0.46.0", path = "./crates/storage", default-features = false }
 fuel-core-sync = { version = "0.46.0", path = "./crates/services/sync" }
+fuel-core-syscall = { version = "0.46.0", path = "./crates/syscall", default-features = false }
 fuel-core-trace = { version = "0.46.0", path = "./crates/trace" }
 fuel-core-tx-status-manager = { version = "0.46.0", path = "./crates/services/tx_status_manager" }
 fuel-core-txpool = { version = "0.46.0", path = "./crates/services/txpool_v2" }
@@ -112,7 +114,7 @@ fuel-core-wasm-executor = { version = "0.46.0", path = "./crates/services/upgrad
 fuel-gas-price-algorithm = { version = "0.46.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.62.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.63.0", package = "fuel-vm", default-features = false }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14.26" }

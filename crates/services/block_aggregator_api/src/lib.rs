@@ -1,8 +1,5 @@
 use crate::{
-    api::{
-        BlockAggregatorApi,
-        BlockAggregatorQuery,
-    },
+    api::BlockAggregatorApi,
     blocks::{
         Block,
         BlockSource,
@@ -13,10 +10,8 @@ use fuel_core_services::{
     RunnableTask,
     StateWatcher,
     TaskNextAction,
-    try_or_stop,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use result::Result;
 
 pub mod api;
 pub mod blocks;
@@ -28,6 +23,8 @@ pub mod block_range_response;
 #[cfg(test)]
 mod tests;
 
+pub mod block_aggregator;
+
 // TODO: this doesn't need to limited to the blocks,
 //   but we can change the name later
 /// The Block Aggregator service, which aggregates blocks from a source and stores them in a database
@@ -36,12 +33,28 @@ pub struct BlockAggregator<Api, DB, Blocks> {
     query: Api,
     database: DB,
     block_source: Blocks,
+    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<NewBlock>>,
+}
+
+pub struct NewBlock {
+    height: BlockHeight,
+    block: Block,
+}
+
+impl NewBlock {
+    pub fn new(height: BlockHeight, block: Block) -> Self {
+        Self { height, block }
+    }
+
+    pub fn into_inner(self) -> (BlockHeight, Block) {
+        (self.height, self.block)
+    }
 }
 
 impl<Api, DB, Blocks, BlockRange> RunnableTask for BlockAggregator<Api, DB, Blocks>
 where
     Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
-    DB: BlockAggregatorDB<BlockRange = BlockRange>,
+    DB: BlockAggregatorDB<BlockRangeResponse = BlockRange>,
     Blocks: BlockSource,
     BlockRange: Send,
 {
@@ -59,95 +72,5 @@ where
             anyhow::anyhow!("Error draining block source during shutdown: {e:?}")
         })?;
         Ok(())
-    }
-}
-
-impl<Api, DB, Blocks, BlockRange> BlockAggregator<Api, DB, Blocks>
-where
-    Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
-    DB: BlockAggregatorDB<BlockRange = BlockRange>,
-    Blocks: BlockSource,
-    BlockRange: Send,
-{
-    pub fn new(query: Api, database: DB, block_source: Blocks) -> Self {
-        Self {
-            query,
-            database,
-            block_source,
-        }
-    }
-
-    pub fn stop(&self) -> TaskNextAction {
-        TaskNextAction::Stop
-    }
-
-    pub async fn handle_query(
-        &mut self,
-        res: Result<BlockAggregatorQuery<BlockRange>>,
-    ) -> TaskNextAction {
-        tracing::debug!("Handling query: {res:?}");
-        let query = try_or_stop!(res, |e| {
-            tracing::error!("Error receiving query: {e:?}");
-        });
-        match query {
-            BlockAggregatorQuery::GetBlockRange {
-                first,
-                last,
-                response,
-            } => {
-                self.handle_get_block_range_query(first, last, response)
-                    .await
-            }
-            BlockAggregatorQuery::GetCurrentHeight { response } => {
-                self.handle_get_current_height_query(response).await
-            }
-        }
-    }
-
-    async fn handle_get_block_range_query(
-        &mut self,
-        first: BlockHeight,
-        last: BlockHeight,
-        response: tokio::sync::oneshot::Sender<BlockRange>,
-    ) -> TaskNextAction {
-        let res = self.database.get_block_range(first, last).await;
-        let block_stream = try_or_stop!(res, |e| {
-            tracing::error!("Error getting block range from database: {e:?}");
-        });
-        let res = response.send(block_stream);
-        try_or_stop!(res, |_| {
-            tracing::error!("Error sending block range response");
-        });
-        TaskNextAction::Continue
-    }
-
-    async fn handle_get_current_height_query(
-        &mut self,
-        response: tokio::sync::oneshot::Sender<BlockHeight>,
-    ) -> TaskNextAction {
-        let res = self.database.get_current_height().await;
-        let height = try_or_stop!(res, |e| {
-            tracing::error!("Error getting current height from database: {e:?}");
-        });
-        let res = response.send(height);
-        try_or_stop!(res, |_| {
-            tracing::error!("Error sending current height response");
-        });
-        TaskNextAction::Continue
-    }
-
-    pub async fn handle_block(
-        &mut self,
-        res: Result<(BlockHeight, Block)>,
-    ) -> TaskNextAction {
-        tracing::debug!("Handling block: {res:?}");
-        let (id, block) = try_or_stop!(res, |e| {
-            tracing::error!("Error receiving block from source: {e:?}");
-        });
-        let res = self.database.store_block(id, block).await;
-        try_or_stop!(res, |e| {
-            tracing::error!("Error storing block in database: {e:?}");
-        });
-        TaskNextAction::Continue
     }
 }

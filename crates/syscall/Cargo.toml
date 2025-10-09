@@ -1,0 +1,28 @@
+[package]
+authors = { workspace = true }
+categories = ["cryptography::cryptocurrencies"]
+description = "Fuel core syscall support"
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = [
+    "blockchain",
+    "cryptocurrencies",
+    "fuel-client",
+    "fuel-core",
+    "syscall",
+]
+license = { workspace = true }
+name = "fuel-core-syscall"
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+
+[features]
+default = ["std"]
+alloc = ["fuel-core-types/alloc"]
+std = ["alloc", "fuel-core-types/std"]
+
+[dependencies]
+fuel-core-types = { workspace = true }
+parking_lot = { workspace = true }
+tracing = { workspace = true }

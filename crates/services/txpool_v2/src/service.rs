@@ -173,6 +173,7 @@ where
 {
     chain_id: ChainId,
     utxo_validation: bool,
+    allow_syscall: bool,
     subscriptions: Subscriptions,
     verification: Arc<Verification<View>>,
     p2p: Arc<P2P>,
@@ -463,6 +464,7 @@ where
         let current_height_reader = self.current_height_reader.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
+        let allow_syscall = self.allow_syscall;
         let tx_status_manager = self.tx_status_manager.clone();
 
         let insert_transaction_thread_pool_op = move || {
@@ -477,6 +479,7 @@ where
                 transaction,
                 current_height,
                 utxo_validation,
+                allow_syscall,
             );
 
             if metrics {
@@ -782,6 +785,7 @@ where
 
     let service_channel_limits = config.service_channel_limits;
     let utxo_validation = config.utxo_validation;
+    let allow_syscall = config.allow_syscall;
     let tx_status_manager = Arc::new(tx_status_manager);
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
@@ -815,6 +819,7 @@ where
     Service::new(Task {
         chain_id,
         utxo_validation,
+        allow_syscall,
         subscriptions,
         verification: Arc::new(verification),
         transaction_verifier_process,

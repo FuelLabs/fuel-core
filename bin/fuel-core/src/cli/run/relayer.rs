@@ -36,6 +36,11 @@ pub struct RelayerArgs {
     #[clap(long = "relayer-log-page-size", default_value_t = Config::DEFAULT_LOG_PAGE_SIZE, env)]
     pub log_page_size: u64,
 
+    /// The maximum number of logs that can be returned in a single RPC call.
+    /// Used by the page sizer to shrink the block range if this threshold is exceeded.
+    #[clap(long = "relayer-max-logs-per-rpc", default_value_t = Config::DEFAULT_MAX_LOGS_PER_RPC, env)]
+    pub max_logs_per_rpc: u64,
+
     /// The minimum duration that the relayer polling loop
     /// will take before running again. If this is too low the DA layer
     /// risks being spammed.
@@ -61,6 +66,7 @@ impl RelayerArgs {
             relayer: self.relayer,
             eth_v2_listening_contracts: self.eth_v2_listening_contracts,
             log_page_size: self.log_page_size,
+            max_logs_per_rpc: self.max_logs_per_rpc,
             sync_minimum_duration: self.sync_minimum_duration.into(),
             syncing_call_frequency: self.syncing_call_frequency.into(),
             syncing_log_frequency: self.syncing_log_frequency.into(),

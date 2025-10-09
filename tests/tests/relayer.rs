@@ -721,7 +721,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
 }
 
 #[tokio::test]
-async fn relayer_db_can_be_rewinded() {
+async fn relayer_db_can_be_rewound() {
     // Given
     let rollback_target_height = 0;
     let num_da_blocks = 10;
