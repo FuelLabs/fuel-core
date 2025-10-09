@@ -1,13 +1,17 @@
 #![allow(clippy::arithmetic_side_effects)]
+use super::*;
 use crate::{
     abi::bridge::{
         MessageSent,
         Transaction,
     },
     service::state::EthSyncGap,
-    test_helpers::provider::{
-        MockProvider,
-        TriggerType,
+    test_helpers::{
+        page_sizer::IdentityPageSizer,
+        provider::{
+            MockProvider,
+            TriggerType,
+        },
     },
 };
 use alloy_primitives::{
@@ -23,8 +27,6 @@ use std::{
     },
 };
 use test_case::test_case;
-
-use super::*;
 
 fn messages_n(n: u64, nonce_offset: u64) -> Vec<Log> {
     messages(nonce_offset..=n + nonce_offset, 0..=n, 0..=0)
@@ -206,7 +208,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         &EthSyncGap::new(*eth_gap.start(), *eth_gap.end()),
         contracts,
         &eth_node,
-        DEFAULT_LOG_PAGE_SIZE,
+        &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
     .map_ok(|logs| logs.logs)
     .try_concat()

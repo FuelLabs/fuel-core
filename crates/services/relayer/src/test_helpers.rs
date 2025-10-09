@@ -10,6 +10,7 @@ use fuel_core_types::entities::{
     RelayedTransaction,
 };
 
+pub mod page_sizer;
 pub mod provider;
 
 pub trait LogTestHelper {
