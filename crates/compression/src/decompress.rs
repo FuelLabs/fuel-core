@@ -303,6 +303,7 @@ mod tests {
         Serialize,
     };
 
+    #[allow(dead_code)]
     pub struct MockDb;
     impl HistoryLookup for MockDb {
         fn utxo_id(&self, _: CompressedUtxoId) -> anyhow::Result<UtxoId> {
