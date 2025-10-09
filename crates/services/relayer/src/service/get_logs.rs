@@ -17,19 +17,20 @@ pub struct DownloadedLogs {
 }
 
 /// Download the logs from the DA layer.
-pub(crate) fn download_logs<'a, P>(
+pub(crate) fn download_logs<'a, P, S>(
     eth_sync_gap: &state::EthSyncGap,
     contracts: Vec<Bytes20>,
     eth_node: &'a P,
-    page_size: u64,
-) -> impl futures::Stream<Item = Result<DownloadedLogs, ProviderError>> + 'a + use<'a, P>
+    page_sizer: &'a mut S,
+) -> impl futures::Stream<Item = Result<DownloadedLogs, ProviderError>> + 'a + use<'a, P, S>
 where
     P: Middleware<Error = ProviderError> + 'static,
+    S: PageSizer + 'static + Send,
 {
     // Create a stream of paginated logs.
     futures::stream::try_unfold(
-        eth_sync_gap.page(page_size),
-        move |page: Option<state::EthSyncPage>| {
+        (eth_sync_gap.page(page_sizer.page_size()), page_sizer),
+        move |(page, page_sizer)| {
             let contracts = contracts
                 .iter()
                 .map(|c| ethereum_types::Address::from_slice(c.as_slice()))
@@ -57,16 +58,17 @@ where
                         let oldest_block = page.oldest();
                         let latest_block = page.latest();
 
-                        // Reduce the page.
-                        let page = page.reduce();
-
                         // Get the logs and return the reduced page.
                         eth_node
                             .get_logs(&filter)
                             .await
                             .map_err(|err| {
                                 let ProviderError::JsonRpcClientError(err) = err else {
-                                    return err
+                                    // We optimistically reduce the page size for any rpc error,
+                                    // to reduce the work to check if it is actually
+                                    // because of "too many logs"
+                                    page_sizer.update(RpcOutcome::Error);
+                                    return err;
                                 };
 
                                 // Workaround because `QuorumError` obfuscates useful information
@@ -75,13 +77,21 @@ where
                                 ))
                             })
                             .map(|logs| {
+                                // First, update the adaptive page sizer, to have the updated page size.
+                                page_sizer.update(RpcOutcome::Success {
+                                    logs_downloaded: logs.len() as u64,
+                                });
+
+                                // Reduce the size, using the new page size.
+                                let page =
+                                    page.advance_and_resize(page_sizer.page_size());
                                 Some((
                                     DownloadedLogs {
                                         start_height: oldest_block,
                                         last_height: latest_block,
                                         logs,
                                     },
-                                    page,
+                                    (page, page_sizer),
                                 ))
                             })
                     }
