@@ -1,5 +1,10 @@
-use alloy_consensus::Signed;
+use alloy_consensus::{
+    Signed,
+    TxEip4844,
+    transaction::Recovered,
+};
 use alloy_primitives::{
+    Address,
     BlockNumber,
     Signature,
     TxHash,
@@ -24,6 +29,7 @@ use alloy_rpc_types_eth::{
     Header,
     Log,
     SyncStatus,
+    Transaction,
     TransactionReceipt,
 };
 use async_trait::async_trait;
@@ -161,6 +167,10 @@ impl MockProvider {
     }
 }
 
+async fn simulate_network_latency() {
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+}
+
 #[async_trait]
 impl Provider for MockProvider {
     fn root(&self) -> &RootProvider<Ethereum> {
@@ -182,15 +192,25 @@ impl Provider for MockProvider {
         &self,
         block: BlockId,
     ) -> EthGetBlock<<Ethereum as alloy_provider::Network>::BlockResponse> {
-        self.before_event(TriggerType::GetBlock(block));
-        let r = Some(self.update_data(|data| data.best_block.clone()));
-        self.after_event(TriggerType::GetBlock(block));
-        self.asserter.push_success(&r);
-        self.inner.get_block(block)
+        let cloned = self.clone();
+        EthGetBlock::new_provider(
+            block,
+            Box::new(move |_| {
+                let cloned = cloned.clone();
+                ProviderCall::BoxedFuture(Box::pin(async move {
+                    simulate_network_latency().await;
+                    cloned.before_event(TriggerType::GetBlock(block));
+                    let r = Some(cloned.update_data(|data| data.best_block.clone()));
+                    cloned.after_event(TriggerType::GetBlock(block));
+                    cloned.asserter.push_success(&r);
+                    cloned.inner.get_block(block).await
+                }))
+            }),
+        )
     }
 
     async fn get_logs(&self, filter: &Filter) -> TransportResult<Vec<Log>> {
-        tokio::task::yield_now().await;
+        simulate_network_latency().await;
         self.before_event(TriggerType::GetLogs(filter));
         let r =
             self.update_data(|data| take_logs_based_on_filter(&data.logs_batch, filter));
@@ -199,16 +219,34 @@ impl Provider for MockProvider {
         self.inner.get_logs(filter).await
     }
 
-    // fn get_transaction_by_hash(&self, hash: TxHash) -> ProviderCall<(TxHash,), Option<<Ethereum as alloy_provider::Network>::TransactionResponse>> {
-    //     let txn: Transaction<TxEnvelope> = Transaction {
-    //         block_number: Some(self.update_data(|data| data.best_block.number())),
-    //         inner:
-    //         block_hash: Some(hash),
-    //         ..Default::default()
-    //     };
-    //     self.asserter.push_success(&txn);
-    //     self.inner.get_transaction_by_hash(hash)
-    // }
+    fn get_transaction_by_hash(
+        &self,
+        hash: TxHash,
+    ) -> ProviderCall<
+        (TxHash,),
+        Option<<Ethereum as alloy_provider::Network>::TransactionResponse>,
+    > {
+        let block_number = Some(self.update_data(|data| data.best_block.number()));
+        let cloned_hash = hash;
+        let cloned = self.clone();
+
+        ProviderCall::BoxedFuture(Box::pin(async move {
+            simulate_network_latency().await;
+            let envelope = TxEip4844::default();
+            let signer = Address::ZERO;
+            let inner = Recovered::new_unchecked(envelope, signer);
+            let txn = Transaction {
+                block_number,
+                transaction_index: None,
+                inner,
+                block_hash: Some(cloned_hash),
+                effective_gas_price: None,
+            };
+
+            cloned.asserter.push_success(&txn);
+            cloned.inner.get_transaction_by_hash(cloned_hash).await
+        }))
+    }
 
     fn get_transaction_receipt(
         &self,
@@ -246,11 +284,15 @@ impl Provider for MockProvider {
     }
 
     fn syncing(&self) -> ProviderCall<NoParams, SyncStatus> {
-        self.before_event(TriggerType::Syncing);
-        let r = self.update_data(|data| data.is_syncing.clone());
-        self.after_event(TriggerType::Syncing);
-        self.asserter.push_success(&r);
-        self.inner.syncing()
+        let cloned = self.clone();
+        ProviderCall::BoxedFuture(Box::pin(async move {
+            simulate_network_latency().await;
+            cloned.before_event(TriggerType::Syncing);
+            let r = cloned.update_data(|data| data.is_syncing.clone());
+            cloned.after_event(TriggerType::Syncing);
+            cloned.asserter.push_success(&r);
+            cloned.inner.syncing().await
+        }))
     }
 }
 
