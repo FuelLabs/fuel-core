@@ -171,6 +171,7 @@ fn into_checked_txs(txs: &[&Transaction]) -> Vec<CheckedTransaction> {
         .collect()
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct MockPreconfirmationSender;
 
