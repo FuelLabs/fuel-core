@@ -11,9 +11,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Chain config types"
 
-[lints]
-workspace = true
-
 [features]
 std = [
     "itertools/use_std",
@@ -68,3 +65,6 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 strum = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+
+[lints]
+workspace = true

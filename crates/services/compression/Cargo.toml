@@ -9,9 +9,6 @@ license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
 
-[lints]
-workspace = true
-
 [features]
 test-helpers = [
     "fuel-core-services/test-helpers",
@@ -53,3 +50,6 @@ tracing = { workspace = true }
 [dev-dependencies]
 fuel-core-compression-service = { path = ".", features = ["test-helpers"] }
 tokio-stream = { workspace = true }
+
+[lints]
+workspace = true

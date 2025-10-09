@@ -17,9 +17,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "The crates contains databases used by Fuel core protocol."
 
-[lints]
-workspace = true
-
 [features]
 test-helpers = []
 backup = []
@@ -33,3 +30,6 @@ fuel-core-types = { workspace = true, features = ["std"] }
 
 [dev-dependencies]
 fuel-core-trace = { path = "../trace" }
+
+[lints]
+workspace = true

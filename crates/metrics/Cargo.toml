@@ -11,9 +11,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel metrics"
 
-[lints]
-workspace = true
-
 [dependencies]
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
@@ -26,3 +23,6 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[lints]
+workspace = true

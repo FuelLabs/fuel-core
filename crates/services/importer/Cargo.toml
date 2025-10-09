@@ -10,9 +10,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Block Importer"
 
-[lints]
-workspace = true
-
 [features]
 test-helpers = [
     "dep:mockall",
@@ -36,3 +33,6 @@ tracing = { workspace = true }
 fuel-core-trace = { path = "./../../trace" }
 fuel-core-types = { path = "./../../types", features = ["test-helpers"] }
 test-case = { workspace = true }
+
+[lints]
+workspace = true

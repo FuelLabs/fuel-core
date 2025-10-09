@@ -11,9 +11,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Tx client and schema specification."
 
-[lints]
-workspace = true
-
 [features]
 std = ["fuel-core-types/std"]
 default = ["subscriptions", "std"]
@@ -62,3 +59,6 @@ fuel-core-types = { workspace = true, features = [
   "test-helpers",
 ] }
 insta = { workspace = true }
+
+[lints]
+workspace = true

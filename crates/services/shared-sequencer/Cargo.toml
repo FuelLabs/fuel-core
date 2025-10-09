@@ -11,9 +11,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 
-[lints]
-workspace = true
-
 [features]
 test-helpers = []
 
@@ -36,3 +33,6 @@ tendermint-rpc = { version = "0.36", features = ["http-client"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
+
+[lints]
+workspace = true

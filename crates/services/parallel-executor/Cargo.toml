@@ -10,9 +10,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Block Parallel Executor"
 
-[lints]
-workspace = true
-
 [features]
 wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
 
@@ -29,3 +26,6 @@ anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers", "serde"] }
 rand = { workspace = true }
+
+[lints]
+workspace = true

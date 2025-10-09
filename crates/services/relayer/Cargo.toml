@@ -10,9 +10,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Fuel Relayer"
 
-[lints]
-workspace = true
-
 [features]
 test-helpers = [
     "bytes",
@@ -61,3 +58,6 @@ mockall = { workspace = true }
 rand = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["macros", "test-util"] }
+
+[lints]
+workspace = true

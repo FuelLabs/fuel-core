@@ -17,9 +17,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 
-[lints]
-workspace = true
-
 [features]
 default = ["std"]
 alloc = ["fuel-core-types/alloc"]
@@ -29,3 +26,6 @@ std = ["alloc", "fuel-core-types/std"]
 fuel-core-types = { workspace = true }
 parking_lot = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

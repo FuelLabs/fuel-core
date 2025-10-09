@@ -11,9 +11,6 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 description = "Transaction pool that manages transactions and their dependencies."
 
-[lints]
-workspace = true
-
 [features]
 test-helpers = ["fuel-core-types/test-helpers", "fuel-core-storage/test-helpers"]
 
@@ -43,3 +40,6 @@ rand = { workspace = true }
 tokio = { workspace = true, features = ["sync", "test-util"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
+
+[lints]
+workspace = true
