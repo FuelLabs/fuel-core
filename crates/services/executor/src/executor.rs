@@ -159,6 +159,9 @@ use tracing::{
 #[cfg(feature = "std")]
 use std::borrow::Cow;
 
+#[cfg(not(feature = "alloc"))]
+use std::sync::Arc;
+
 #[cfg(not(feature = "std"))]
 use alloc::borrow::Cow;
 
@@ -1878,27 +1881,28 @@ where
         };
 
         let (state, mut tx, receipts) = if !self.options.dry_run {
-            let mut vm = Interpreter::<_, _, _, EcalLogCollector,
-                verification::Normal>::with_storage_and_ecal(
+            let vm = Interpreter::<_, _, _, EcalLogCollector, verification::Normal>::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
                 ecal.clone(),
             );
 
-            let vm_result: StateTransition<_, _> = vm
-                .into_transact(ready_tx)
-                .map_err(|error| ExecutorError::VmExecution {
-                    error: error.to_string(),
-                    transaction_id: tx_id,
-                })?
-                .into();
+            let vm_result: StateTransition<_, _> =
+                vm.into_transact(ready_tx).map_err(|error| {
+                    ExecutorError::VmExecution {
+                        error: error.to_string(),
+                        transaction_id: tx_id,
+                    }
+                })?;
 
             reverted = vm_result.should_revert();
 
-            vm_result.into_inner()
+            let (state, tx, receipts, _) = vm_result.into_inner();
+
+            (state, tx, Arc::new(receipts))
         } else {
-            let mut vm = Interpreter::<
+            let vm = Interpreter::<
                 _,
                 _,
                 _,
@@ -1911,43 +1915,44 @@ where
                 ecal.clone(),
             );
 
-                let vm_result: StateTransition<_, _> = vm
-                    .into_transact(ready_tx)
-                    .map_err(|error| ExecutorError::VmExecution {
+            let vm_result: StateTransition<_, _> =
+                vm.into_transact(ready_tx).map_err(|error| {
+                    ExecutorError::VmExecution {
                         error: error.to_string(),
                         transaction_id: tx_id,
-                    })?;
-
-                reverted = vm_result.should_revert();
-
-                let (state, tx, mut receipts, verifier) = vm_result.into_inner();
-
-                // If transaction requires contract ids, then extend receipts with
-                // `PanicReason::ContractNotInInputs` for each missing contract id.
-                // The data like `$pc` or `$is` is not available in this case,
-                // because panic generated outside of the execution.
-                if !verifier.missing_contract_inputs.is_empty() {
-                    debug_assert!(self.options.dry_run);
-                    reverted = true;
-
-                    let reason = PanicInstruction::error(
-                        PanicReason::ContractNotInInputs,
-                        op::noop().into(),
-                    );
-
-                    for contract_id in &verifier.missing_contract_inputs {
-                        receipts.push(Receipt::Panic {
-                            id: ContractId::zeroed(),
-                            reason,
-                            pc: 0,
-                            is: 0,
-                            contract_id: Some(*contract_id),
-                        });
                     }
-                }
+                })?;
 
-                (state, tx, Arc::new(receipts))
-            };
+            reverted = vm_result.should_revert();
+
+            let (state, tx, mut receipts, verifier) = vm_result.into_inner();
+
+            // If transaction requires contract ids, then extend receipts with
+            // `PanicReason::ContractNotInInputs` for each missing contract id.
+            // The data like `$pc` or `$is` is not available in this case,
+            // because panic generated outside of the execution.
+            if !verifier.missing_contract_inputs.is_empty() {
+                debug_assert!(self.options.dry_run);
+                reverted = true;
+
+                let reason = PanicInstruction::error(
+                    PanicReason::ContractNotInInputs,
+                    op::noop().into(),
+                );
+
+                for contract_id in &verifier.missing_contract_inputs {
+                    receipts.push(Receipt::Panic {
+                        id: ContractId::zeroed(),
+                        reason,
+                        pc: 0,
+                        is: 0,
+                        contract_id: Some(*contract_id),
+                    });
+                }
+            }
+
+            (state, tx, Arc::new(receipts))
+        };
 
         ecal.maybe_print_logs(tracing::info_span!("execution", tx_id = % tx_id));
 
