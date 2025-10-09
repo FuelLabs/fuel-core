@@ -168,7 +168,7 @@ impl MockProvider {
 }
 
 async fn simulate_network_latency() {
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    tokio::task::yield_now().await;
 }
 
 #[async_trait]
