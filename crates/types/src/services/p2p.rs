@@ -279,6 +279,7 @@ pub struct HeartbeatData {
 
 /// Type that represents the networkable transaction pool
 /// It serializes from an Arc pool transaction and deserializes to a transaction
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkableTransactionPool {
     /// A transaction pool transaction
