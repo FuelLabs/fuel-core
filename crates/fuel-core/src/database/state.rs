@@ -189,8 +189,9 @@ mod tests {
                 .expect("Should get a state from seq database")
                 .unwrap()
                 .into_owned();
-            assert_eq!(init_value.0, value);
-            assert_eq!(seq_value.0, value);
+            let value = value.into();
+            assert_eq!(init_value, value);
+            assert_eq!(seq_value, value);
         }
     }
 
@@ -242,7 +243,7 @@ mod tests {
                 .into_iter()
                 .map(|(key, value)| ContractStateConfig {
                     key: *key.state_key(),
-                    value: value.0,
+                    value: value.into(),
                 })
                 .collect();
 

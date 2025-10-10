@@ -352,7 +352,7 @@ async fn can_get_message_proof() {
         let contract = Contract::from(bytecode.as_ref());
         let root = contract.root();
         let state_root = Contract::initial_state_root(std::iter::empty());
-        let id = contract.id(&salt, &root, &state_root);
+        let id = Contract::id(&salt, &root, &state_root);
         let output = Output::contract_created(id, state_root);
 
         // Create the contract deploy transaction.

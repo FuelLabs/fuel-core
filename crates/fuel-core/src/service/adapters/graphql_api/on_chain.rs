@@ -134,7 +134,7 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
         contract: ContractId,
     ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>> {
         self.iter_all_by_prefix::<ContractsState, _>(Some(contract))
-            .map(|res| res.map(|(key, value)| (*key.state_key(), value.0)))
+            .map(|res| res.map(|(key, value)| (*key.state_key(), value.0.into_inner())))
             .into_boxed()
     }
 
@@ -183,7 +183,7 @@ impl OnChainDatabaseAt for OnChainKeyValueView {
                 let value = self
                     .storage::<ContractsState>()
                     .get(&double_key)?
-                    .map(|v| v.into_owned().0);
+                    .map(|v| v.into_owned().0.into_inner());
 
                 Ok(value.map(|v| (key, v)))
             })
