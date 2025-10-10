@@ -581,10 +581,10 @@ where
     }
 
     fn is_runnable_script(&self) -> bool {
-        if let Some(script) = self.tx.as_script() {
-            if !script.script().is_empty() {
-                return true
-            }
+        if let Some(script) = self.tx.as_script()
+            && !script.script().is_empty()
+        {
+            return true
         }
         false
     }
@@ -841,13 +841,12 @@ where
                             contract_id,
                             ..
                         } = receipt
+                            && reason.reason() == &PanicReason::ContractNotInInputs
                         {
-                            if reason.reason() == &PanicReason::ContractNotInInputs {
-                                let contract_id = contract_id.ok_or_else(|| {
-                                    anyhow::anyhow!("missing contract id")
-                                })?;
-                                contracts_not_in_inputs.push(contract_id);
-                            }
+                            let contract_id = contract_id.ok_or_else(|| {
+                                anyhow::anyhow!("missing contract id")
+                            })?;
+                            contracts_not_in_inputs.push(contract_id);
                         }
                     }
                 }

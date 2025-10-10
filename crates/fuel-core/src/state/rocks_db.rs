@@ -513,9 +513,7 @@ where
                         .create_cf(&name, &family)
                         .expect("Couldn't create column family");
 
-                    let family = self.db.cf_handle(&name).expect("invalid column state");
-
-                    family
+                    self.db.cf_handle(&name).expect("invalid column state")
                 }
                 _ => {
                     panic!("Columns in the DB should have been created on DB opening");

@@ -229,7 +229,7 @@ fn main() {
             //     start_insertion.elapsed().as_millis()
             // );
             client.produce_blocks(1, None).await.unwrap();
-            let block = srv
+            srv
                 .shared
                 .database
                 .on_chain()
@@ -237,8 +237,7 @@ fn main() {
                 .unwrap()
                 .get_sealed_block_by_height(&1.into())
                 .unwrap()
-                .unwrap();
-            block
+                .unwrap()
         }
     });
 

@@ -308,7 +308,7 @@ fn take_logs_based_on_filter(logs_batch: &[Vec<Log>], filter: &Filter) -> Vec<Lo
                 let r = match filter.address.as_ref()? {
                     ethers_core::types::ValueOrArray::Value(v) => log.address == *v,
                     ethers_core::types::ValueOrArray::Array(v) => {
-                        v.iter().any(|v| log.address == *v)
+                        v.contains(&log.address)
                     }
                 };
                 let log_block_num = log.block_number?;

@@ -43,7 +43,7 @@ where
 
     fn encode<'a>(&self, value: &'a T) -> Result<Self::Encoder<'a>, Self::Error> {
         Ok(Cow::Owned(postcard::to_allocvec(value).map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, e.to_string())
+            io::Error::other(e.to_string())
         })?))
     }
 }
@@ -56,7 +56,7 @@ where
 
     fn decode(&self, bytes: &[u8]) -> Result<T, Self::Error> {
         postcard::from_bytes(bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 }
 
