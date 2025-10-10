@@ -473,20 +473,24 @@ impl FuelClient {
             .body(json_query)
             .method("POST".to_string())
             .header("content-type", "application/json")
-            .map_err(|e| io::Error::other(format!("Failed to add header to client {e:?}")))?;
+            .map_err(|e| {
+                io::Error::other(format!("Failed to add header to client {e:?}"))
+            })?;
         if let Some(password) = url.password() {
             let username = url.username();
             let credentials = format!("{}:{}", username, password);
             let authorization = format!("Basic {}", BASE64_STANDARD.encode(credentials));
             client_builder = client_builder
                 .header("Authorization", &authorization)
-                .map_err(|e| io::Error::other(format!("Failed to add header to client {e:?}")))?;
+                .map_err(|e| {
+                    io::Error::other(format!("Failed to add header to client {e:?}"))
+                })?;
         }
 
         if let Some(value) = self.cookie.deref().cookies(&self.url) {
-            let value = value
-                .to_str()
-                .map_err(|e| io::Error::other(format!("Unable convert header value to string {e:?}")))?;
+            let value = value.to_str().map_err(|e| {
+                io::Error::other(format!("Unable convert header value to string {e:?}"))
+            })?;
             client_builder = client_builder
                 .header(reqwest::header::COOKIE.as_str(), value)
                 .map_err(|e| {
@@ -537,9 +541,9 @@ impl FuelClient {
                                             _ => Some(Ok(Event::ResponseData(resp))),
                                         }
                                     }
-                                    Err(e) => {
-                                        Some(Err(io::Error::other(format!("Decode error: {e:?}"))))
-                                    }
+                                    Err(e) => Some(Err(io::Error::other(format!(
+                                        "Decode error: {e:?}"
+                                    )))),
                                 }
                             }
                             Err(e) => {
@@ -549,7 +553,9 @@ impl FuelClient {
                     }
                     Ok(es::SSE::Connected(_)) => Some(Ok(Event::Connected)),
                     Ok(_) => None,
-                    Err(e) => Some(Err(io::Error::other(format!("Graphql error: {e:?}")))),
+                    Err(e) => {
+                        Some(Err(io::Error::other(format!("Graphql error: {e:?}"))))
+                    }
                 };
                 futures::future::ready(r)
             });
@@ -922,10 +928,9 @@ impl FuelClient {
             },
         );
 
-        let status = stream
-            .next()
-            .await
-            .ok_or_else(|| io::Error::other("Failed to get status from the submission"))??;
+        let status = stream.next().await.ok_or_else(|| {
+            io::Error::other("Failed to get status from the submission")
+        })??;
 
         Ok(status)
     }
@@ -962,10 +967,9 @@ impl FuelClient {
             },
         );
 
-        let status = stream
-            .next()
-            .await
-            .ok_or_else(|| io::Error::other("Failed to get status from the submission"))??;
+        let status = stream.next().await.ok_or_else(|| {
+            io::Error::other("Failed to get status from the submission")
+        })??;
 
         Ok(status)
     }
@@ -1074,7 +1078,9 @@ impl FuelClient {
             |r: io::Result<schema::block::NewBlocksSubscription>| {
                 let result: fuel_core_types::services::block_importer::ImportResult =
                     postcard::from_bytes(r?.new_blocks.0.0.as_slice()).map_err(|e| {
-                        io::Error::other(format!("Failed to deserialize ImportResult: {e:?}"))
+                        io::Error::other(format!(
+                            "Failed to deserialize ImportResult: {e:?}"
+                        ))
                     })?;
                 Result::<_, io::Error>::Ok(result)
             },

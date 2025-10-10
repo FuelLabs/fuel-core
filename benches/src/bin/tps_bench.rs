@@ -229,8 +229,7 @@ fn main() {
             //     start_insertion.elapsed().as_millis()
             // );
             client.produce_blocks(1, None).await.unwrap();
-            srv
-                .shared
+            srv.shared
                 .database
                 .on_chain()
                 .latest_view()

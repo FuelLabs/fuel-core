@@ -138,9 +138,7 @@ where
         let mut reverse_changes = Changes::default();
 
         for (column, column_changes) in changes {
-            let results = self
-                .db
-                .multi_get(*column, column_changes.keys())?;
+            let results = self.db.multi_get(*column, column_changes.keys())?;
 
             let entry = reverse_changes
                 .entry(*column)
@@ -576,9 +574,7 @@ where
         {
             let all_changes = match changes {
                 StorageChanges::Changes(changes) => changes,
-                StorageChanges::ChangesList(list) => {
-                    list.into_iter().flatten().collect()
-                }
+                StorageChanges::ChangesList(list) => list.into_iter().flatten().collect(),
             };
             let mut storage_transaction = StorageTransaction::transaction(
                 &self.db,

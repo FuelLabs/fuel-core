@@ -207,16 +207,14 @@ impl PendingPool {
                     }
                 }
                 if let Some(missing_input) = missing_inputs.first()
-                    && let Err(e) = notification_sender.try_send(PoolNotification::ErrorInsertion {
-                        tx_id: tx.id(),
-                        source: insertion_source,
-                        error: missing_input.into(),
-                    })
+                    && let Err(e) =
+                        notification_sender.try_send(PoolNotification::ErrorInsertion {
+                            tx_id: tx.id(),
+                            source: insertion_source,
+                            error: missing_input.into(),
+                        })
                 {
-                    tracing::error!(
-                        "Failed to send error insertion notification: {}",
-                        e
-                    );
+                    tracing::error!("Failed to send error insertion notification: {}", e);
                 }
             }
             self.ttl_check.pop_back();

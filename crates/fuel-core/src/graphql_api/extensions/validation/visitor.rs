@@ -758,15 +758,15 @@ fn visit_input_value<'a, V: Visitor<'a>>(
         }
         Value::Object(values) => {
             if let Some(expected_type) = expected_ty
-                && let MetaTypeName::Named(expected_type) = expected_type.unwrap_non_null()
+                && let MetaTypeName::Named(expected_type) =
+                    expected_type.unwrap_non_null()
                 && let Some(MetaType::InputObject { input_fields, .. }) = ctx
                     .registry
                     .types
                     .get(MetaTypeName::concrete_typename(expected_type))
             {
                 for (item_key, item_value) in values {
-                    if let Some(input_value) = input_fields.get(item_key.as_str())
-                    {
+                    if let Some(input_value) = input_fields.get(item_key.as_str()) {
                         visit_input_value(
                             v,
                             ctx,

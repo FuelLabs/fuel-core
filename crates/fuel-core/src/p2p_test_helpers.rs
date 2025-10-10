@@ -370,11 +370,7 @@ pub async fn make_nodes(
         } else {
             name
         };
-        let mut node_config = make_config(
-            node_name,
-            config.clone(),
-            overrides,
-        );
+        let mut node_config = make_config(node_name, config.clone(), overrides);
 
         let mut test_txs = Vec::with_capacity(0);
 
@@ -438,11 +434,7 @@ pub async fn make_nodes(
         } else {
             name
         };
-        let mut node_config = make_config(
-            node_name,
-            config.clone(),
-            overrides,
-        );
+        let mut node_config = make_config(node_name, config.clone(), overrides);
         node_config.block_production = Trigger::Never;
         node_config.consensus_signer = SignMode::Unavailable;
 

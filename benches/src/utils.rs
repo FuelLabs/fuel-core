@@ -45,8 +45,9 @@ impl Drop for ShallowTempDir {
 
         if should_clean_up
             && let Err(e) = std::fs::remove_dir_all(&self.path)
-            && !std::thread::panicking() {
-                panic!("Failed to remove ShallowTempDir: {}", e);
+            && !std::thread::panicking()
+        {
+            panic!("Failed to remove ShallowTempDir: {}", e);
         }
     }
 }
