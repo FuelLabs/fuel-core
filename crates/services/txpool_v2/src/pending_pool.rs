@@ -449,7 +449,7 @@ mod tests {
         let contract = Contract::from(bytecode.clone());
         let contract_root = contract.root();
         let state_root = Contract::default_state_root();
-        let contract_id = contract.id(&Default::default(), &contract_root, &state_root);
+        let contract_id = Contract::id(&Default::default(), &contract_root, &state_root);
         let mut dependency_tx = TransactionBuilder::create(
             bytecode.into(),
             Default::default(),
