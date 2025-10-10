@@ -11,7 +11,4 @@ fuel-core-types = { path = "../../crates/types", features = [
   "test-helpers",
 ] }
 
-[lints]
-workspace = true
-
 [workspace]
