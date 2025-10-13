@@ -9,7 +9,6 @@ pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
     let contract_id = ContractId::zeroed();
     let asset_id = AssetId::zeroed();
     let script_data = script_data(&contract_id, &asset_id);
-    let mut shared_runner_builder = SanityBenchmarkRunnerBuilder::new_shared(contract_id);
 
     // flag
     run(
@@ -25,12 +24,18 @@ pub fn run_other(group: &mut BenchmarkGroup<WallTime>) {
     {
         let contract_instructions = vec![op::gm(0x10, 1), op::jmpb(RegId::ZERO, 0)];
 
+        let mut runner =
+            SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {
+                contract_id,
+                bytecode: Some(contract_instructions.into_iter().collect()),
+            });
+
         let mut instructions = setup_instructions();
         instructions.extend(vec![op::call(0x10, RegId::ZERO, 0x11, 0x12)]);
 
         let id = "other/gm";
-        shared_runner_builder
-            .build_with_new_contract(contract_instructions)
+        runner
+            .build()
             .run(id, group, instructions, script_data.clone());
     }
 
