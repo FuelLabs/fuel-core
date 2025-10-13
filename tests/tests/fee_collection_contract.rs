@@ -63,7 +63,7 @@ async fn setup(rng: &mut StdRng) -> TestContext {
     let contract = Contract::from(contract);
     let root = contract.root();
     let state_root = Contract::default_state_root();
-    let contract_id = contract.id(&salt, &root, &state_root);
+    let contract_id = Contract::id(&salt, &root, &state_root);
     let mut create_tx = TransactionBuilder::create(witness.clone(), salt, vec![])
         .add_fee_input()
         .add_output(Output::contract_created(contract_id, state_root))

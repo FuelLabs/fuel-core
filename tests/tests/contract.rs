@@ -91,7 +91,7 @@ async fn calling_the_contract_with_enabled_utxo_validation_is_successful() {
         let balance_root = Contract::default_state_root();
         let state_root = Contract::default_state_root();
 
-        let contract_id = contract.id(&salt, &code_root, &state_root);
+        let contract_id = Contract::id(&salt, &code_root, &state_root);
         let output = Output::contract_created(contract_id, state_root);
         let create_tx = TransactionBuilder::create(bytecode, salt, vec![])
             .add_unsigned_coin_input(
@@ -287,7 +287,7 @@ async fn can_get_message_proof() {
     let contract = Contract::from(bytecode.as_ref());
     let root = contract.root();
     let state_root = Contract::initial_state_root(std::iter::empty());
-    let id = contract.id(&salt, &root, &state_root);
+    let id = Contract::id(&salt, &root, &state_root);
     let output = Output::contract_created(id, state_root);
 
     // Create the contract deploy transaction.

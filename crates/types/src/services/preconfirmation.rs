@@ -12,8 +12,11 @@ use tai64::Tai64;
 #[cfg(not(feature = "std"))]
 use alloc::{
     string::String,
+    sync::Arc,
     vec::Vec,
 };
+#[cfg(feature = "std")]
+use std::sync::Arc;
 
 /// A collection of pre-confirmations that have been signed by a delegate
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,7 +57,7 @@ pub enum PreconfirmationStatus {
         /// The total fee paid by the transaction.
         total_fee: u64,
         /// Receipts produced by the transaction during execution.
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         /// Dynamic outputs produced by the transaction during execution.
         outputs: Vec<(UtxoId, Output)>,
     },
@@ -67,7 +70,7 @@ pub enum PreconfirmationStatus {
         /// The total fee paid by the transaction.
         total_fee: u64,
         /// Receipts produced by the transaction during execution.
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         /// Dynamic outputs produced by the transaction during execution.
         outputs: Vec<(UtxoId, Output)>,
     },
