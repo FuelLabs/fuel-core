@@ -260,6 +260,7 @@ impl Importer {
         result: CommitInput,
     ) -> Result<(), Error> {
         let (sender, receiver) = oneshot::channel();
+
         let command = Commands::CommitResult {
             result,
             permit,
@@ -519,6 +520,8 @@ where
                 }
             }
         }
+        let a = 100;
+        let _ = a;
     }
 
     /// Prepares the block for committing. It includes the execution of the block,

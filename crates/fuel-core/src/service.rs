@@ -145,7 +145,6 @@ impl FuelService {
         )?;
 
         // initialize sub services
-        tracing::info!("Initializing sub services");
         database.sync_aux_db_heights(shutdown_listener)?;
 
         let block_production_ready_signal = ReadySignal::new();
@@ -190,6 +189,7 @@ impl FuelService {
     ) -> anyhow::Result<Self> {
         let combined_database = CombinedDatabase::new(
             database,
+            Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),
@@ -574,7 +574,10 @@ mod tests {
         // -    gas price service
         // -    chain info provider
         #[allow(unused_mut)]
+        #[cfg(not(feature = "rpc"))]
         let mut expected_services = 7;
+        #[cfg(feature = "rpc")]
+        let mut expected_services = 8;
 
         // Relayer service is disabled with `Config::local_node`.
         // #[cfg(feature = "relayer")]
