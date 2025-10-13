@@ -1,0 +1,12 @@
+[package]
+name = "fuel-provider"
+authors = { workspace = true }
+categories = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "fuel", "quorum", "provider"]
+license = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+description = "Fuel provider"

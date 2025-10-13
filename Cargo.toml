@@ -14,6 +14,7 @@ members = [
     "crates/fuel-gas-price-algorithm",
     "crates/keygen",
     "crates/metrics",
+    "crates/provider",
     "crates/services",
     "crates/services/block_aggregator_api",
     "crates/services/compression",
@@ -60,8 +61,8 @@ version = "0.46.0"
 # Common dependencies
 anyhow = "1.0"
 async-graphql = { version = "=7.0.15", features = [
-  "graphiql",
-  "tracing",
+    "graphiql",
+    "tracing",
 ], default-features = false }
 async-graphql-value = { version = "=7.0.15" }
 async-trait = "0.1"
@@ -74,10 +75,10 @@ derive_more = { version = "0.99" }
 ed25519 = { version = "2.2.3", default-features = false }
 ed25519-dalek = { version = "2.1.1", default-features = false }
 educe = { version = "0.6", default-features = false, features = [
-  "Eq",
-  "PartialEq",
-  "Hash",
-  "Debug",
+    "Eq",
+    "PartialEq",
+    "Hash",
+    "Debug",
 ] }
 enum-iterator = "1.2"
 enum_dispatch = "0.3.13"
@@ -139,8 +140,8 @@ rand = "0.8"
 rayon = "1.10.0"
 # enable cookie store to support L7 sticky sessions
 reqwest = { version = "0.12.0", default-features = false, features = [
-  "rustls-tls",
-  "cookies",
+    "rustls-tls",
+    "cookies",
 ] }
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
