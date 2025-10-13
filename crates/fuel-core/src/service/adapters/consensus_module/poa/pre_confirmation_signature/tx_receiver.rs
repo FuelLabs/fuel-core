@@ -73,7 +73,7 @@ mod tests {
                     tx_pointer: Default::default(),
                     total_gas: 0,
                     total_fee: 0,
-                    receipts: vec![],
+                    receipts: Default::default(),
                     outputs: vec![],
                 },
             },

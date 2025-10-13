@@ -116,10 +116,27 @@ impl From<EthSyncGap> for RangeInclusive<u64> {
 }
 
 impl EthSyncPage {
-    /// Reduce the pagination to the next page window or end.
-    pub fn reduce(mut self) -> Option<Self> {
+    /// Advances the pagination window by the current page size.
+    /// Returns `None` if the resulting page is empty or exceeds the sync boundary.
+    pub fn advance(mut self) -> Option<Self> {
         self.current = self.current.start().saturating_add(self.size)
             ..=self.current.end().saturating_add(self.size).min(self.end);
+        (!self.is_empty()).then_some(self)
+    }
+
+    /// Advances the pagination window using the current page size,
+    /// then updates the internal page size to `new_page_size` for future windows.
+    ///
+    /// This ensures continuity in block range pagination and avoids gaps
+    /// when dynamically adjusting the page size.
+    pub fn advance_and_resize(mut self, new_page_size: u64) -> Option<Self> {
+        self.current = self.current.start().saturating_add(self.size)
+            ..=self
+                .current
+                .end()
+                .saturating_add(new_page_size)
+                .min(self.end);
+        self.size = new_page_size;
         (!self.is_empty()).then_some(self)
     }
 

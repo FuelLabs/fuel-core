@@ -70,7 +70,7 @@ fn test_page_reduce(
 ) -> Option<(u64, u64)> {
     let mut page = eth_page_gap.page(size)?;
     for _ in 0..reduce_count {
-        page = page.reduce()?;
+        page = page.advance()?;
     }
     Some((page.oldest(), page.latest()))
 }
