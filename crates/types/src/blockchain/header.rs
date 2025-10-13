@@ -195,6 +195,25 @@ impl BlockHeader {
             },
         }
     }
+
+    /// Alias the consensus header into an empty one.
+    pub fn as_empty_consensus_header(&self) -> ConsensusHeader<Empty> {
+        match self {
+            BlockHeader::V1(header) => ConsensusHeader {
+                prev_root: header.consensus().prev_root,
+                height: header.consensus().height,
+                time: header.consensus().time,
+                generated: Empty {},
+            },
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => ConsensusHeader {
+                prev_root: header.consensus().prev_root,
+                height: header.consensus().height,
+                time: header.consensus().time,
+                generated: Empty {},
+            },
+        }
+    }
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
