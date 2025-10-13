@@ -78,7 +78,7 @@ async fn asset_info_mint_burn() {
     let contract = Contract::from(bytecode.as_ref());
     let root = contract.root();
     let state_root = Contract::initial_state_root(std::iter::empty());
-    let contract_id = contract.id(&salt, &root, &state_root);
+    let contract_id = Contract::id(&salt, &root, &state_root);
     let output = Output::contract_created(contract_id, state_root);
 
     // Create the contract deploy transaction.

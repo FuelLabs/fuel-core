@@ -22,6 +22,7 @@ use crate::utils::{
 use fuel_core_executor::executor::ExecutionInstance;
 use fuel_core_types::{
     blockchain::block::Block,
+    fuel_vm::interpreter::MemoryInstance,
     services::{
         block_producer::Components,
         executor::Error as ExecutorError,
@@ -88,11 +89,8 @@ pub fn execute_without_commit(input_len: u32) -> ReturnType {
         }
     };
 
-    let instance = ExecutionInstance {
-        relayer: WasmRelayer {},
-        database: WasmStorage {},
-        options,
-    };
+    let instance =
+        ExecutionInstance::new(WasmRelayer, WasmStorage, options, MemoryInstance::new());
 
     match block {
         WasmDeserializationBlockTypes::DryRun(c) => execute_dry_run(instance, c),
@@ -102,7 +100,7 @@ pub fn execute_without_commit(input_len: u32) -> ReturnType {
 }
 
 fn execute_dry_run(
-    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    instance: ExecutionInstance<WasmRelayer, WasmStorage, MemoryInstance>,
     block: Components<WasmTxSource>,
 ) -> ReturnType {
     let result = instance
@@ -113,7 +111,7 @@ fn execute_dry_run(
 }
 
 fn execute_production(
-    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    instance: ExecutionInstance<WasmRelayer, WasmStorage, MemoryInstance>,
     block: Components<WasmTxSource>,
 ) -> ReturnType {
     let result = instance
@@ -124,7 +122,7 @@ fn execute_production(
 }
 
 fn execute_validation(
-    instance: ExecutionInstance<WasmRelayer, WasmStorage>,
+    instance: ExecutionInstance<WasmRelayer, WasmStorage, MemoryInstance>,
     block: Block,
 ) -> ReturnType {
     ReturnType::Validation(instance.validate_without_commit(&block).map_err(Into::into))

@@ -162,7 +162,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
     let (message_block_height, (sender, recipient, nonce, amount, data)) = match database.transaction_status(&transaction_id) {
         Ok(TransactionExecutionStatus::Success { block_height, receipts, .. }) => (
             block_height,
-            receipts.into_iter()
+            receipts.iter()
             .find_map(|r| match r {
                 Receipt::MessageOut {
                     sender,
@@ -172,7 +172,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
                     data,
                     ..
                 } if r.nonce() == Some(&desired_nonce) => {
-                    Some((sender, recipient, nonce, amount, data))
+                    Some((*sender, *recipient, *nonce, *amount, data.clone()))
                 }
                 _ => None,
             })
@@ -256,7 +256,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         recipient,
         nonce,
         amount,
-        data,
+        data: data.into_inner(),
     })
 }
 
@@ -266,7 +266,7 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
     message_block_txs: &[Bytes32],
 ) -> StorageResult<MerkleProof> {
     // Get the message receipts from the block.
-    let leaves: Vec<Vec<Receipt>> = message_block_txs
+    let leaves: Vec<_> = message_block_txs
         .iter()
         .filter_map(|id| match database.transaction_status(id) {
             Ok(TransactionExecutionStatus::Success { receipts, .. }) => {
@@ -278,11 +278,11 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
             Err(err) => Some(Err(err)),
         })
         .try_collect()?;
-    let leaves = leaves.into_iter()
+    let leaves = leaves.iter()
         // Flatten the receipts after filtering on output messages
         // and mapping to message ids.
         .flat_map(|receipts|
-            receipts.into_iter().filter_map(|r| r.message_id()));
+            receipts.iter().filter_map(|r| r.message_id()));
 
     // Build the merkle proof from the above iterator.
     let mut tree = MerkleTree::new();
@@ -338,8 +338,6 @@ pub fn message_status(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use fuel_core_storage::not_found;
     use fuel_core_types::{
         blockchain::block::CompressedBlock,
@@ -357,6 +355,7 @@ mod tests {
         services::transaction_status::TransactionExecutionStatus,
         tai64::Tai64,
     };
+    use std::collections::HashMap;
 
     use super::{
         MessageProofData,
@@ -442,7 +441,7 @@ mod tests {
                 nonce: 0.into(),
                 len: 32,
                 digest: Bytes32::default(),
-                data: Some(vec![i; 32]),
+                data: Some(vec![i; 32].into()),
             });
         }
         block.transactions_mut().push(valid_tx_id);
@@ -452,7 +451,7 @@ mod tests {
             TransactionExecutionStatus::Success {
                 time: Tai64::UNIX_EPOCH,
                 block_height,
-                receipts: valid_tx_receipts.clone(),
+                receipts: std::sync::Arc::new(valid_tx_receipts.clone()),
                 total_fee: 0,
                 total_gas: 0,
                 result: None,
@@ -478,7 +477,7 @@ mod tests {
                 nonce: 0.into(),
                 len: 33,
                 digest: Bytes32::default(),
-                data: Some(vec![i; 33]),
+                data: Some(vec![i; 33].into()),
             });
         }
         database.insert_transaction_status(
@@ -489,7 +488,7 @@ mod tests {
                 result: None,
                 total_fee: 0,
                 total_gas: 0,
-                receipts: invalid_tx_receipts.clone(),
+                receipts: std::sync::Arc::new(invalid_tx_receipts.clone()),
             },
         );
         database.insert_receipts(invalid_tx_id, invalid_tx_receipts.clone());
