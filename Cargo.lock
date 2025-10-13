@@ -4313,6 +4313,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-provider"
+version = "0.46.0"
+dependencies = [
+ "alloy-provider",
+ "url",
+]
+
+[[package]]
 name = "fuel-core-relayer"
 version = "0.46.0"
 dependencies = [
@@ -4325,6 +4333,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "enum-iterator",
+ "fuel-core-provider",
  "fuel-core-relayer",
  "fuel-core-services",
  "fuel-core-storage",
@@ -4728,10 +4737,6 @@ dependencies = [
  "serde",
  "sha2 0.10.9",
 ]
-
-[[package]]
-name = "fuel-provider"
-version = "0.46.0"
 
 [[package]]
 name = "fuel-sequencer-proto"

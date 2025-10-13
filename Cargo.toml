@@ -106,6 +106,7 @@ fuel-core-p2p = { version = "0.46.0", path = "./crates/services/p2p" }
 fuel-core-parallel-executor = { version = "0.46.0", path = "./crates/services/parallel-executor" }
 fuel-core-poa = { version = "0.46.0", path = "./crates/services/consensus_module/poa" }
 fuel-core-producer = { version = "0.46.0", path = "./crates/services/producer" }
+fuel-core-provider = { version = "0.46.0", path = "./crates/provider" }
 fuel-core-relayer = { version = "0.46.0", path = "./crates/services/relayer" }
 fuel-core-services = { version = "0.46.0", path = "./crates/services" }
 fuel-core-shared-sequencer = { version = "0.46.0", path = "crates/services/shared-sequencer" }

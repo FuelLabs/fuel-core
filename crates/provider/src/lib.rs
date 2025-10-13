@@ -1,14 +1,14 @@
+pub use alloy_provider::Provider;
 use alloy_provider::{
-    network::Ethereum,
-    Provider,
     RootProvider,
+    network::Ethereum,
 };
 pub struct FuelEthProvider {
     provider: RootProvider<Ethereum>,
 }
 
 impl FuelEthProvider {
-    fn new(url: Url) -> Self {
+    pub fn new(url: url::Url) -> Self {
         Self {
             provider: RootProvider::<Ethereum>::new_http(url),
         }

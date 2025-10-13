@@ -1,5 +1,5 @@
 [package]
-name = "fuel-provider"
+name = "fuel-core-provider"
 authors = { workspace = true }
 categories = { workspace = true }
 edition = { workspace = true }
@@ -10,3 +10,7 @@ repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
 description = "Fuel provider"
+
+[dependencies]
+alloy-provider = { workspace = true }
+url = { workspace = true }

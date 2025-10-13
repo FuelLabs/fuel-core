@@ -28,6 +28,7 @@ alloy-sol-types = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 enum-iterator = { workspace = true }
+fuel-core-provider = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
