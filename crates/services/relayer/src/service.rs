@@ -5,10 +5,10 @@ use self::{
     run::RelayerData,
 };
 use crate::{
-    Config,
     log::EthEventLog,
     ports::RelayerDb,
     service::state::EthLocal,
+    Config,
 };
 use alloy_rpc_types_eth::{
     BlockId,
@@ -19,6 +19,7 @@ use alloy_rpc_types_eth::{
 };
 use async_trait::async_trait;
 use core::time::Duration;
+use fuel_core_provider::quorum::{Quorum, QuorumProvider, WeightedProvider};
 use fuel_core_provider::{
     FuelEthProvider,
     Provider,
@@ -72,7 +73,7 @@ type Synced = watch::Receiver<SyncState>;
 type NotifySynced = watch::Sender<SyncState>;
 
 /// The alias of runnable relayer service.
-pub type Service<D> = CustomizableService<FuelEthProvider, D>;
+pub type Service<D> = CustomizableService<QuorumProvider, D>;
 type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
 /// The shared state of the relayer task.
@@ -147,11 +148,11 @@ impl PageSizer for AdaptivePageSizer {
                 self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
             }
             RpcOutcome::Success { logs_downloaded }
-                if logs_downloaded > self.max_logs_per_rpc =>
-            {
-                self.successful_rpc_calls = 0;
-                self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
-            }
+            if logs_downloaded > self.max_logs_per_rpc =>
+                {
+                    self.successful_rpc_calls = 0;
+                    self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
+                }
             _ => {
                 self.successful_rpc_calls = self.successful_rpc_calls.saturating_add(1);
                 if self.successful_rpc_calls >= self.grow_threshold
@@ -351,7 +352,7 @@ where
                     .sync_minimum_duration
                     .saturating_sub(now.elapsed()),
             )
-            .await;
+                .await;
         }
 
         match result {
@@ -462,23 +463,18 @@ pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
     D: RelayerDb + 'static,
 {
-    let url = config
+    let urls = config
         .relayer
-        .as_ref()
+        .clone()
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "Tried to start Relayer without setting an eth_client in the config"
             )
         })?
-        .first()
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Tried to start Relayer without setting an eth_client in the config"
-            )
-        })?
-        .clone();
+        .into_iter()
+        .map(|url| WeightedProvider::new(FuelEthProvider::new(url)));
 
-    let eth_node = FuelEthProvider::new(url);
+    let eth_node = QuorumProvider::new(Quorum::All, urls);
     let retry_on_error = true;
     Ok(new_service_internal(
         eth_node,

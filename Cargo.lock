@@ -4317,6 +4317,7 @@ name = "fuel-core-provider"
 version = "0.46.0"
 dependencies = [
  "alloy-provider",
+ "futures",
  "url",
 ]
 

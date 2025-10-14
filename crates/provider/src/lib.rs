@@ -1,7 +1,8 @@
 pub use alloy_provider::Provider;
+pub mod quorum;
 use alloy_provider::{
-    RootProvider,
     network::Ethereum,
+    RootProvider,
 };
 pub struct FuelEthProvider {
     provider: RootProvider<Ethereum>,

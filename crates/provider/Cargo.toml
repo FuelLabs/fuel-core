@@ -14,3 +14,4 @@ description = "Fuel provider"
 [dependencies]
 alloy-provider = { workspace = true }
 url = { workspace = true }
+futures = { workspace = true }
