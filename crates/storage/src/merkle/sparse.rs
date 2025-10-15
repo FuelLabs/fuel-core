@@ -87,7 +87,7 @@ where
     type InputKey = <Table as Mappable>::Key;
     type OutputKey = u32;
 
-    fn primary_key(_: &Self::InputKey) -> Cow<Self::OutputKey> {
+    fn primary_key(_: &Self::InputKey) -> Cow<'_, Self::OutputKey> {
         Cow::Owned(Table::column().id())
     }
 }

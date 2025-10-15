@@ -487,11 +487,11 @@ where
         }
     }
 
-    fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily> {
+    fn cf(&self, column: Description::Column) -> Arc<BoundColumnFamily<'_>> {
         self.cf_u32(column.id())
     }
 
-    fn cf_u32(&self, column: u32) -> Arc<BoundColumnFamily> {
+    fn cf_u32(&self, column: u32) -> Arc<BoundColumnFamily<'_>> {
         let family = self.db.cf_handle(&Self::col_name(column));
 
         match family {
@@ -681,7 +681,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<T::Item>>
+    ) -> BoxedIter<'_, StorageResult<T::Item>>
     where
         T: ExtractItem,
     {
@@ -1012,7 +1012,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         self._iter_store::<KeyAndValue>(column, prefix, start, direction)
     }
 
@@ -1022,7 +1022,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIter<'_, KeyItem> {
         self._iter_store::<KeyOnly>(column, prefix, start, direction)
     }
 }
