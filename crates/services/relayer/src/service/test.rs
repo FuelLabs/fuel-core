@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    Config,
     ports::RelayerDb,
     service::NotInitializedTask,
+    Config,
 };
 use fuel_core_services::RunnableService;
 use futures::TryStreamExt;
@@ -24,8 +24,8 @@ use crate::{
     },
 };
 use alloy_provider::{
-    ProviderBuilder,
     mock::Asserter,
+    ProviderBuilder,
 };
 use alloy_rpc_types_eth::Log;
 
@@ -58,16 +58,16 @@ async fn can_download_logs() {
         &provider,
         &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
-    .map_ok(|logs| logs.logs)
-    .try_concat()
-    .await
-    .unwrap();
+        .map_ok(|logs| logs.logs)
+        .try_concat()
+        .await
+        .unwrap();
 
     // Then
     assert_eq!(result, logs);
 }
 
-// FIXME: Enable this test when we have a quorum provider
+// FIXME: Enable this test in #3113
 // #[tokio::test]
 // async fn quorum_agrees_on_logs() {
 //     let asserter = Asserter::new();
@@ -116,7 +116,7 @@ async fn can_download_logs() {
 //     assert_eq!(result, logs);
 // }
 
-// FIXME: Enable this test when we have a quorum provider
+// FIXME: Enable this test in #3113
 // #[tokio::test]
 // async fn quorum__disagree_on_logs() {
 //     let eth_node_two_logs = MockProvider::default();

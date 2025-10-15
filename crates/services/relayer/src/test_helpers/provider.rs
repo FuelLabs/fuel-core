@@ -88,7 +88,7 @@ impl Default for MockData {
 pub struct MockProvider {
     inner: Box<DynProvider>,
     asserter: Asserter,
-    data: Arc<parking_lot::Mutex<InnerState>>,
+    data: Arc<Mutex<InnerState>>,
     before_event: Arc<Mutex<Option<EventFn>>>,
     after_event: Arc<Mutex<Option<EventFn>>>,
 }
