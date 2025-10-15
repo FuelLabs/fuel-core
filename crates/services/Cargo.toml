@@ -29,6 +29,3 @@ tracing = { workspace = true }
 fuel-core-services = { path = ".", features = ["sync-processor"] }
 futures = { workspace = true }
 mockall = { workspace = true }
-
-[lints]
-workspace = true

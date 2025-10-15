@@ -38,6 +38,3 @@ tracing = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-trace = { path = "../../trace" }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-
-[lints]
-workspace = true

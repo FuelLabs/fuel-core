@@ -40,6 +40,3 @@ rand = { workspace = true }
 tokio = { workspace = true, features = ["sync", "test-util"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }
-
-[lints]
-workspace = true

@@ -65,6 +65,3 @@ aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 fuel-core-types = { path = ".", features = ["test-helpers", "serde"] }
 postcard = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
-
-[lints]
-workspace = true

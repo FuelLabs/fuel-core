@@ -59,6 +59,3 @@ fuel-core-types = { workspace = true, features = [
   "test-helpers",
 ] }
 insta = { workspace = true }
-
-[lints]
-workspace = true

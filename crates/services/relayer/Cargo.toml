@@ -58,6 +58,3 @@ mockall = { workspace = true }
 rand = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["macros", "test-util"] }
-
-[lints]
-workspace = true

@@ -65,9 +65,6 @@ tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 
-[lints]
-workspace = true
-
 [[bench]]
 harness = false
 name = "import"

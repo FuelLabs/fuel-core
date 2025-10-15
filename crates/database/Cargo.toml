@@ -30,6 +30,3 @@ fuel-core-types = { workspace = true, features = ["std"] }
 
 [dev-dependencies]
 fuel-core-trace = { path = "../trace" }
-
-[lints]
-workspace = true

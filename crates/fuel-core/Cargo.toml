@@ -137,6 +137,3 @@ test-case = { workspace = true }
 test-strategy = { workspace = true }
 tokio-test = "0.4.4"
 tracing-subscriber = { workspace = true }
-
-[lints]
-workspace = true

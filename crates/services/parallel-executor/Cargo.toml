@@ -26,6 +26,3 @@ anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers", "serde"] }
 rand = { workspace = true }
-
-[lints]
-workspace = true

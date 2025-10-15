@@ -50,6 +50,3 @@ tracing = { workspace = true }
 [dev-dependencies]
 fuel-core-compression-service = { path = ".", features = ["test-helpers"] }
 tokio-stream = { workspace = true }
-
-[lints]
-workspace = true

@@ -64,6 +64,3 @@ fuel-core-wasm-executor = { workspace = true, optional = true, default-features 
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
-
-[lints]
-workspace = true

@@ -28,6 +28,3 @@ fuel-core-types = { workspace = true, features = ["std"] }
 [dev-dependencies]
 fuel-core-types = { path = "../../types", features = ["test-helpers"] }
 test-case = { workspace = true }
-
-[lints]
-workspace = true

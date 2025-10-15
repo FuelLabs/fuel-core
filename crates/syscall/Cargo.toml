@@ -26,6 +26,3 @@ std = ["alloc", "fuel-core-types/std"]
 fuel-core-types = { workspace = true }
 parking_lot = { workspace = true }
 tracing = { workspace = true }
-
-[lints]
-workspace = true
