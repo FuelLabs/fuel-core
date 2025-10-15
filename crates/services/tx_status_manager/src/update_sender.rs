@@ -104,7 +104,7 @@ pub trait SendStatus {
     fn is_closed(&self) -> bool;
 
     /// Check if the receiver is full.
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn is_full(&self) -> bool;
 }
 
@@ -182,6 +182,7 @@ where
         self.stream.is_closed()
     }
 
+    #[cfg(test)]
     fn is_full(&self) -> bool {
         self.tx.is_full()
     }
@@ -200,6 +201,7 @@ impl SendStatus for mpsc::Sender<TxStatusMessage> {
         self.is_closed()
     }
 
+    #[cfg(test)]
     fn is_full(&self) -> bool {
         self.capacity() == 0
     }
@@ -324,6 +326,7 @@ where
         (**self).is_closed()
     }
 
+    #[cfg(test)]
     fn is_full(&self) -> bool {
         (**self).is_full()
     }
