@@ -453,7 +453,7 @@ fn persist_transaction_status<T>(
 where
     T: OffChainDatabaseTransaction,
 {
-    for TransactionExecutionStatus { id, result } in import_result.tx_status.iter() {
+    for TransactionExecutionStatus { id, result, .. } in import_result.tx_status.iter() {
         let status =
             from_executor_to_status(&import_result.sealed_block.entity, result.clone());
 

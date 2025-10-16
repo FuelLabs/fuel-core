@@ -22,6 +22,7 @@ use crate::{
         ValidityError,
     },
     fuel_types::{
+        AssetId,
         BlockHeight,
         Bytes32,
         ContractId,
@@ -36,8 +37,12 @@ use crate::{
     services::Uncommitted,
 };
 
+#[cfg(not(feature = "alloc"))]
+use std::collections::BTreeMap;
+
 #[cfg(feature = "alloc")]
 use alloc::{
+    collections::BTreeMap,
     string::String,
     sync::Arc,
     vec::Vec,
@@ -59,6 +64,7 @@ pub type UncommittedValidationResult<DatabaseTransaction> =
 /// The result of transactions execution for block production.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
+#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
 pub struct ExecutionResult<E = Error> {
     /// Created block during the execution of transactions. It contains only valid transactions.
     pub block: Block,
@@ -67,20 +73,10 @@ pub struct ExecutionResult<E = Error> {
     pub skipped_transactions: Vec<(TxId, E)>,
     /// The status of the transactions execution included into the block.
     pub tx_status: Vec<TransactionExecutionStatus>,
+    /// Storage state before and after executing each tx, for all accessed contracts.
+    pub tx_storage_states: Vec<(ContractAccessesWithValues, ContractAccessesWithValues)>,
     /// The list of all events generated during the execution of the block.
     pub events: Vec<Event>,
-}
-
-#[cfg(any(test, feature = "test-helpers"))]
-impl<E> Default for ExecutionResult<E> {
-    fn default() -> Self {
-        Self {
-            block: Block::default(),
-            skipped_transactions: Default::default(),
-            tx_status: Default::default(),
-            events: Default::default(),
-        }
-    }
 }
 
 /// The result of the validation of the block.
@@ -99,6 +95,7 @@ impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {
         self,
         block: Block,
         skipped_transactions: Vec<(TxId, Error)>,
+        tx_storage_states: Vec<(ContractAccessesWithValues, ContractAccessesWithValues)>,
     ) -> UncommittedResult<DatabaseTransaction> {
         let Self {
             result: ValidationResult { tx_status, events },
@@ -110,6 +107,7 @@ impl<DatabaseTransaction> UncommittedValidationResult<DatabaseTransaction> {
                 skipped_transactions,
                 tx_status,
                 events,
+                tx_storage_states,
             },
             changes,
         )
@@ -153,6 +151,21 @@ pub enum Event {
         failure: String,
     },
 }
+
+/// Storage accesses, both reads and writes, with associated values.
+/// A separate instance of this struct is kept for before and after execution.
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct StorageAccessesWithValues {
+    /// Contract balances by asset id.
+    pub assets: BTreeMap<AssetId, u64>,
+    /// Contract storage slots by slot key.
+    pub slots: BTreeMap<Bytes32, Option<Vec<u8>>>,
+}
+
+/// Storage accesses per contract, both reads and writes, with associated values.
+/// A separate instance of this struct is kept for before and after execution.
+pub type ContractAccessesWithValues = BTreeMap<ContractId, StorageAccessesWithValues>;
 
 /// Known failure modes for processing forced transactions
 #[derive(Debug, derive_more::Display)]

@@ -378,6 +378,7 @@ where
                 skipped_transactions,
                 tx_status,
                 events,
+                ..
             },
             changes,
         ) = self
@@ -438,6 +439,7 @@ where
                 skipped_transactions,
                 tx_status,
                 events,
+                ..
             },
             changes,
         ) = self

@@ -113,7 +113,10 @@ impl DefaultContext {
                 Ok(UncommittedResult::new(
                     ExecutionResult {
                         block,
-                        ..Default::default()
+                        skipped_transactions: Default::default(),
+                        tx_status: Default::default(),
+                        tx_storage_states: Default::default(),
+                        events: Default::default(),
                     },
                     Default::default(),
                 ))

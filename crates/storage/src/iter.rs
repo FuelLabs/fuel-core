@@ -1,7 +1,10 @@
 //! The module defines primitives that allow iterating of the storage.
 
 use crate::{
-    blueprint::BlueprintInspect,
+    blueprint::{
+        BlueprintCodec,
+        BlueprintInspect,
+    },
     codec::{
         Decode,
         Encode,
@@ -9,8 +12,10 @@ use crate::{
     },
     kv_store::{
         KVItem,
+        KVWriteItem,
         KeyItem,
         KeyValueInspect,
+        WriteOperation,
     },
     structured_storage::TableWithBlueprint,
     transactional::ReferenceBytesKey,
@@ -123,6 +128,58 @@ where
     }
 }
 
+/// A trait for iterating over writes to a store.
+#[impl_tools::autoimpl(for<T: trait> &T, &mut T, Box<T>)]
+pub trait IterableStoreWrites: KeyValueInspect {
+    /// Returns an iterator over the values in the storage.
+    fn iter_store_writes(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVWriteItem>;
+
+    /// Returns an iterator over keys in the storage.
+    fn iter_store_write_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem>;
+}
+
+#[cfg(feature = "std")]
+impl<T> IterableStoreWrites for std::sync::Arc<T>
+where
+    T: IterableStoreWrites,
+{
+    fn iter_store_writes(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KVWriteItem> {
+        use core::ops::Deref;
+        self.deref()
+            .iter_store_writes(column, prefix, start, direction)
+    }
+
+    fn iter_store_write_keys(
+        &self,
+        column: Self::Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<KeyItem> {
+        use core::ops::Deref;
+        self.deref()
+            .iter_store_write_keys(column, prefix, start, direction)
+    }
+}
+
 /// A trait for iterating over the `Mappable` table.
 pub trait IterableTable<M>
 where
@@ -164,9 +221,10 @@ where
     where
         P: AsRef<[u8]>,
     {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
+        #[allow(clippy::redundant_closure)]
+        // false positive: https://github.com/rust-lang/rust-clippy/issues/14215
+        let encoder = start
+            .map(|start| <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(start));
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
@@ -179,10 +237,9 @@ where
         )
         .map(|res| {
             res.and_then(|key| {
-                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let key =
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(key.as_slice())
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok(key)
             })
         })
@@ -198,9 +255,10 @@ where
     where
         P: AsRef<[u8]>,
     {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
+        #[allow(clippy::redundant_closure)]
+        // false positive: https://github.com/rust-lang/rust-clippy/issues/14215
+        let encoder = start
+            .map(|start| <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(start));
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
@@ -213,15 +271,12 @@ where
         )
         .map(|val| {
             val.and_then(|(key, value)| {
-                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let key =
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(key.as_slice())
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 let value =
-                    <M::Blueprint as BlueprintInspect<M, Self>>::ValueCodec::decode(
-                        &value,
-                    )
-                    .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                    <M::Blueprint as BlueprintCodec<M>>::ValueCodec::decode(&value)
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok((key, value))
             })
         })
@@ -339,6 +394,228 @@ pub trait IteratorOverTable {
 }
 
 impl<S> IteratorOverTable for S {}
+
+/// A trait for iterating over writes to a `Mappable` table.
+pub trait IterableTableWrites<M>
+where
+    M: Mappable,
+{
+    /// Returns an iterator over the all keys in the table with a prefix after a specific start key.
+    fn iter_table_writes_keys<P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        P: AsRef<[u8]>;
+
+    /// Returns an iterator over the all entries in the table with a prefix after a specific start key.
+    #[allow(clippy::type_complexity)]
+    fn iter_table_writes<P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<(M::OwnedKey, Option<M::OwnedValue>)>>
+    where
+        P: AsRef<[u8]>;
+}
+
+impl<Column, M, S> IterableTableWrites<M> for S
+where
+    M: TableWithBlueprint<Column = Column>,
+    M::Blueprint: BlueprintInspect<M, S>,
+    S: IterableStoreWrites<Column = Column>,
+{
+    fn iter_table_writes_keys<P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<crate::Result<M::OwnedKey>>
+    where
+        P: AsRef<[u8]>,
+    {
+        #[allow(clippy::redundant_closure)]
+        // false positive: https://github.com/rust-lang/rust-clippy/issues/14215
+        let encoder = start
+            .map(|start| <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(start));
+
+        let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
+
+        IterableStoreWrites::iter_store_write_keys(
+            self,
+            M::column(),
+            prefix.as_ref().map(|p| p.as_ref()),
+            start.as_ref().map(|cow| cow.as_ref()),
+            direction.unwrap_or_default(),
+        )
+        .map(|res| {
+            res.and_then(|key| {
+                let key =
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(key.as_slice())
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                Ok(key)
+            })
+        })
+        .into_boxed()
+    }
+
+    fn iter_table_writes<P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<(M::OwnedKey, Option<M::OwnedValue>)>>
+    where
+        P: AsRef<[u8]>,
+    {
+        #[allow(clippy::redundant_closure)]
+        // false positive: https://github.com/rust-lang/rust-clippy/issues/14215
+        let encoder = start
+            .map(|start| <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(start));
+
+        let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
+
+        IterableStoreWrites::iter_store_writes(
+            self,
+            M::column(),
+            prefix.as_ref().map(|p| p.as_ref()),
+            start.as_ref().map(|cow| cow.as_ref()),
+            direction.unwrap_or_default(),
+        )
+        .map(|val| {
+            val.and_then(|(key, value)| {
+                let key =
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(key.as_slice())
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let value = match value {
+                    WriteOperation::Insert(value) => Some(
+                        <M::Blueprint as BlueprintCodec<M>>::ValueCodec::decode(&value)
+                            .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?,
+                    ),
+                    WriteOperation::Remove => None,
+                };
+                Ok((key, value))
+            })
+        })
+        .into_boxed()
+    }
+}
+
+/// A helper trait to provide a user-friendly API over table iteration.
+#[allow(clippy::type_complexity)]
+pub trait IteratorOverTableWrites {
+    /// Returns an iterator over the all keys in the table.
+    fn iter_all_keys<M>(
+        &self,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        Self: IterableTableWrites<M>,
+    {
+        self.iter_all_filtered_keys::<M, [u8; 0]>(None, None, direction)
+    }
+
+    /// Returns an iterator over the all keys in the table with the specified prefix.
+    fn iter_all_by_prefix_keys<M, P>(
+        &self,
+        prefix: Option<P>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        P: AsRef<[u8]>,
+        Self: IterableTableWrites<M>,
+    {
+        self.iter_all_filtered_keys::<M, P>(prefix, None, None)
+    }
+
+    /// Returns an iterator over the all keys in the table after a specific start key.
+    fn iter_all_by_start_keys<M>(
+        &self,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        Self: IterableTableWrites<M>,
+    {
+        self.iter_all_filtered_keys::<M, [u8; 0]>(None, start, direction)
+    }
+
+    /// Returns an iterator over the all keys in the table with a prefix after a specific start key.
+    fn iter_all_filtered_keys<M, P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    where
+        M: Mappable,
+        P: AsRef<[u8]>,
+        Self: IterableTableWrites<M>,
+    {
+        self.iter_table_writes_keys(prefix, start, direction)
+    }
+
+    /// Returns an iterator over the all entries in the table.
+    fn iter_all<M>(
+        &self,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<(M::OwnedKey, Option<M::OwnedValue>)>>
+    where
+        M: Mappable,
+        Self: IterableTableWrites<M>,
+    {
+        self.iter_all_filtered::<M, [u8; 0]>(None, None, direction)
+    }
+
+    /// Returns an iterator over the all entries in the table with the specified prefix.
+    fn iter_all_by_prefix<M, P>(
+        &self,
+        prefix: Option<P>,
+    ) -> BoxedIter<super::Result<(M::OwnedKey, Option<M::OwnedValue>)>>
+    where
+        M: Mappable,
+        P: AsRef<[u8]>,
+        Self: IterableTableWrites<M>,
+    {
+        self.iter_all_filtered::<M, P>(prefix, None, None)
+    }
+
+    /// Returns an iterator over the all entries in the table after a specific start key.
+    #[allow(clippy::type_complexity)]
+    fn iter_all_by_start<M>(
+        &self,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<(M::OwnedKey, Option<M::OwnedValue>)>>
+    where
+        M: Mappable,
+        Self: IterableTableWrites<M>,
+    {
+        self.iter_all_filtered::<M, [u8; 0]>(None, start, direction)
+    }
+
+    /// Returns an iterator over the all entries in the table with a prefix after a specific start key.
+    fn iter_all_filtered<M, P>(
+        &self,
+        prefix: Option<P>,
+        start: Option<&M::Key>,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<super::Result<(M::OwnedKey, Option<M::OwnedValue>)>>
+    where
+        M: Mappable,
+        P: AsRef<[u8]>,
+        Self: IterableTableWrites<M>,
+    {
+        self.iter_table_writes(prefix, start, direction)
+    }
+}
+
+impl<S> IteratorOverTableWrites for S {}
 
 /// Returns an iterator over the values in the `BTreeMap`.
 pub fn iterator<'a, V>(

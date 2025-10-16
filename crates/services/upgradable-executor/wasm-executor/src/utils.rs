@@ -153,6 +153,7 @@ pub fn convert_to_v1_execution_result(
                 block,
                 skipped_transactions,
                 tx_status,
+                tx_storage_states,
                 events,
             } = result;
 
@@ -165,6 +166,7 @@ pub fn convert_to_v1_execution_result(
                 block,
                 skipped_transactions,
                 tx_status,
+                tx_storage_states,
                 events,
             };
 
@@ -184,6 +186,7 @@ pub fn convert_from_v1_execution_result(
                 block,
                 skipped_transactions,
                 tx_status,
+                tx_storage_states,
                 events,
             } = result;
 
@@ -196,6 +199,7 @@ pub fn convert_from_v1_execution_result(
                 block,
                 skipped_transactions,
                 tx_status,
+                tx_storage_states,
                 events,
             };
 
@@ -219,6 +223,7 @@ pub fn convert_from_v0_execution_result(
                 block,
                 skipped_transactions,
                 tx_status,
+                tx_storage_states,
                 events,
             } = result;
 
@@ -231,6 +236,7 @@ pub fn convert_from_v0_execution_result(
                 block,
                 skipped_transactions,
                 tx_status,
+                tx_storage_states,
                 events,
             };
 

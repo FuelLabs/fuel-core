@@ -1,4 +1,8 @@
 use crate::{
+    contract_state_hash::{
+        compute_balances_hash,
+        compute_state_hash,
+    },
     ports::{
         MaybeCheckedTransaction,
         NewTxWaiterPort,
@@ -7,6 +11,7 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
+    storage_access_recorder::StorageAccessRecorder,
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -131,11 +136,13 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
+            ContractAccessesWithValues,
             Error as ExecutorError,
             Event as ExecutorEvent,
             ExecutionResult,
             ForcedTransactionFailure,
             Result as ExecutorResult,
+            StorageAccessesWithValues,
             TransactionExecutionResult,
             TransactionExecutionStatus,
             TransactionValidityError,
@@ -312,6 +319,7 @@ pub struct ExecutionData {
     found_mint: bool,
     message_ids: Vec<MessageId>,
     tx_status: Vec<TransactionExecutionStatus>,
+    tx_storage_states: Vec<(ContractAccessesWithValues, ContractAccessesWithValues)>,
     events: Vec<ExecutorEvent>,
     changes: Changes,
     pub skipped_transactions: Vec<(TxId, ExecutorError)>,
@@ -320,19 +328,7 @@ pub struct ExecutionData {
 
 impl ExecutionData {
     pub fn new() -> Self {
-        ExecutionData {
-            coinbase: 0,
-            used_gas: 0,
-            used_size: 0,
-            tx_count: 0,
-            found_mint: false,
-            message_ids: Vec::new(),
-            tx_status: Vec::new(),
-            events: Vec::new(),
-            changes: Default::default(),
-            skipped_transactions: Vec::new(),
-            event_inbox_root: Default::default(),
-        }
+        Self::default()
     }
 }
 
@@ -415,6 +411,7 @@ where
             changes,
             events,
             tx_status,
+            tx_storage_states,
             skipped_transactions,
             coinbase,
             used_gas,
@@ -442,6 +439,7 @@ where
             block,
             skipped_transactions,
             tx_status,
+            tx_storage_states,
             events,
         };
 
@@ -877,12 +875,12 @@ where
         gas_price: Word,
         coinbase_contract_id: ContractId,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<()>
+    ) -> ExecutorResult<(ContractAccessesWithValues, ContractAccessesWithValues)>
     where
         W: KeyValueInspect<Column = Column>,
     {
         let tx_count = execution_data.tx_count;
-        let tx = {
+        let (tx, storage_before, storage_after) = {
             let mut tx_st_transaction = storage_tx
                 .write_transaction()
                 .with_policy(ConflictPolicy::Overwrite);
@@ -906,7 +904,7 @@ where
             .checked_add(1)
             .ok_or(ExecutorError::TooManyTransactions)?;
 
-        Ok(())
+        Ok((storage_before, storage_after))
     }
 
     #[tracing::instrument(skip_all)]
@@ -1274,7 +1272,11 @@ where
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<Transaction>
+    ) -> ExecutorResult<(
+        Transaction,
+        ContractAccessesWithValues,
+        ContractAccessesWithValues,
+    )>
     where
         T: KeyValueInspect<Column = Column>,
     {
@@ -1405,7 +1407,11 @@ where
         gas_price: Word,
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
-    ) -> ExecutorResult<Transaction>
+    ) -> ExecutorResult<(
+        Transaction,
+        ContractAccessesWithValues,
+        ContractAccessesWithValues,
+    )>
     where
         T: KeyValueInspect<Column = Column>,
     {
@@ -1417,39 +1423,41 @@ where
         let (mut mint, _) = checked_mint.into();
 
         Self::check_gas_price(&mint, gas_price)?;
-        if mint.input_contract().contract_id == ContractId::zeroed() {
-            Self::verify_mint_for_empty_contract(&mint)?;
-        } else {
-            Self::check_mint_amount(&mint, execution_data.coinbase)?;
+        let (storage_before, storage_after) =
+            if mint.input_contract().contract_id == ContractId::zeroed() {
+                Self::verify_mint_for_empty_contract(&mint)?;
+                (Default::default(), Default::default())
+            } else {
+                Self::check_mint_amount(&mint, execution_data.coinbase)?;
 
-            let input = mint.input_contract().clone();
-            let mut input = Input::Contract(input);
+                let mut input = Input::Contract(mint.input_contract().clone());
 
-            if self.options.forbid_fake_coins {
-                self.verify_inputs_exist_and_values_match(
-                    storage_tx,
-                    core::slice::from_ref(&input),
-                    header.da_height,
-                )?;
-            }
+                if self.options.forbid_fake_coins {
+                    self.verify_inputs_exist_and_values_match(
+                        storage_tx,
+                        core::slice::from_ref(&input),
+                        header.da_height,
+                    )?;
+                }
 
-            self.compute_inputs(core::slice::from_mut(&mut input), storage_tx)?;
+                let (input, output, storage_before, storage_after) = self
+                    .execute_mint_with_vm(
+                        header,
+                        coinbase_contract_id,
+                        execution_data,
+                        storage_tx,
+                        &coinbase_id,
+                        &mut mint,
+                        &mut input,
+                    )?;
 
-            let (input, output) = self.execute_mint_with_vm(
-                header,
-                coinbase_contract_id,
-                execution_data,
-                storage_tx,
-                &coinbase_id,
-                &mut mint,
-                &mut input,
-            )?;
+                *mint.input_contract_mut() = input;
+                *mint.output_contract_mut() = output;
+                (storage_before, storage_after)
+            };
 
-            *mint.input_contract_mut() = input;
-            *mint.output_contract_mut() = output;
-        }
-
-        Self::store_mint_tx(mint, execution_data, coinbase_id, storage_tx)
+        let tx = Self::store_mint_tx(mint, execution_data, coinbase_id, storage_tx)?;
+        Ok((tx, storage_before, storage_after))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1462,7 +1470,11 @@ where
         execution_data: &mut ExecutionData,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<Transaction>
+    ) -> ExecutorResult<(
+        Transaction,
+        ContractAccessesWithValues,
+        ContractAccessesWithValues,
+    )>
     where
         Tx: ExecutableTransaction + Cacheable + Send + Sync + 'static,
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
@@ -1474,14 +1486,15 @@ where
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
-        let (reverted, state, tx, receipts) = self.attempt_tx_execution_with_vm(
-            checked_tx,
-            header,
-            coinbase_contract_id,
-            gas_price,
-            storage_tx,
-            memory,
-        )?;
+        let (reverted, state, tx, receipts, storage_before, storage_after) = self
+            .attempt_tx_execution_with_vm(
+                checked_tx,
+                header,
+                coinbase_contract_id,
+                gas_price,
+                storage_tx,
+                memory,
+            )?;
 
         self.spend_input_utxos(tx.inputs(), storage_tx, reverted, execution_data)?;
 
@@ -1508,7 +1521,7 @@ where
             tx_id,
         )?;
 
-        Ok(tx.into())
+        Ok((tx.into(), storage_before, storage_after))
     }
 
     fn check_mint_amount(mint: &Mint, expected_amount: u64) -> ExecutorResult<()> {
@@ -1599,11 +1612,18 @@ where
         coinbase_id: &TxId,
         mint: &mut Mint,
         input: &mut Input,
-    ) -> ExecutorResult<(input::contract::Contract, output::contract::Contract)>
+    ) -> ExecutorResult<(
+        input::contract::Contract,
+        output::contract::Contract,
+        ContractAccessesWithValues,
+        ContractAccessesWithValues,
+    )>
     where
         T: KeyValueInspect<Column = Column>,
     {
-        let mut sub_block_db_commit = storage_tx
+        let mut storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
+
+        let mut sub_block_db_commit = storage_tx_record
             .write_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -1622,7 +1642,16 @@ where
         )
         .map_err(|e| format!("{e}"))
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
-        sub_block_db_commit.commit()?;
+
+        let (recorder, changes) = sub_block_db_commit.into_inner();
+        let (state_before, state_after) = recorder
+            .get_reads()
+            .finalize(&storage_tx, &changes)
+            .map_err(|err| ExecutorError::StorageError(err.to_string()))?;
+
+        self.compute_inputs(core::slice::from_mut(input), storage_tx, &state_before)?;
+
+        storage_tx.commit_changes(changes.clone())?;
 
         let block_height = *header.height();
         let output = *mint.output_contract();
@@ -1636,10 +1665,10 @@ where
             outputs.as_slice(),
         )?;
         self.compute_state_of_not_utxo_outputs(
-            outputs.as_mut_slice(),
-            core::slice::from_ref(input),
             *coinbase_id,
-            storage_tx,
+            core::slice::from_ref(input),
+            outputs.as_mut_slice(),
+            &state_after,
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
             return Err(ExecutorError::Other(
@@ -1651,26 +1680,20 @@ where
                 "The output of the `Mint` transaction is not a contract".to_string(),
             ))
         };
-        Ok((input, output))
+        Ok((input, output, state_before, state_after))
     }
 
-    fn update_tx_outputs<Tx, T>(
+    fn update_tx_outputs<Tx>(
         &self,
-        storage_tx: &TxStorageTransaction<T>,
         tx_id: TxId,
         tx: &mut Tx,
+        record: &ContractAccessesWithValues,
     ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
-        T: KeyValueInspect<Column = Column>,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(
-            &mut outputs,
-            tx.inputs(),
-            tx_id,
-            storage_tx,
-        )?;
+        self.compute_state_of_not_utxo_outputs(tx_id, tx.inputs(), &mut outputs, record)?;
         *tx.outputs_mut() = outputs;
         Ok(())
     }
@@ -1838,7 +1861,14 @@ where
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<(bool, ProgramState, Tx, Arc<Vec<Receipt>>)>
+    ) -> ExecutorResult<(
+        bool,
+        ProgramState,
+        Tx,
+        Arc<Vec<Receipt>>,
+        ContractAccessesWithValues,
+        ContractAccessesWithValues,
+    )>
     where
         Tx: ExecutableTransaction + Cacheable,
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
@@ -1846,7 +1876,9 @@ where
     {
         let tx_id = checked_tx.id();
 
-        let mut sub_block_db_commit = storage_tx
+        let storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
+
+        let mut sub_block_db_commit = storage_tx_record
             .read_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
@@ -1964,18 +1996,24 @@ where
 
         Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
+        let (recorder, changes) = sub_block_db_commit.into_inner();
+        let (storage_tx_recovered, record) = recorder.as_inner();
+        let (state_before, state_after) =
+            record.finalize(storage_tx_recovered, &changes)?;
+
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
-        self.compute_inputs(tx.inputs_mut(), storage_tx)?;
+        self.compute_inputs(tx.inputs_mut(), storage_tx_recovered, &state_before)?;
 
         // only commit state changes if execution was a success
         if !reverted {
-            let changes = sub_block_db_commit.into_changes();
-            storage_tx.commit_changes(changes)?;
+            self.update_tx_outputs(tx_id, &mut tx, &state_after)?;
+            storage_tx.commit_changes(changes.clone())?;
+        } else {
+            self.update_tx_outputs(tx_id, &mut tx, &state_before)?;
         }
 
-        self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts))
+        Ok((reverted, state, tx, receipts, state_before, state_after))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -2172,6 +2210,7 @@ where
         &self,
         inputs: &mut [Input],
         db: &TxStorageTransaction<T>,
+        record: &ContractAccessesWithValues,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -2211,8 +2250,12 @@ where
                         contract.validated_utxo(self.options.forbid_fake_coins)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
-                    *balance_root = contract.balance_root()?;
-                    *state_root = contract.state_root()?;
+
+                    let empty = StorageAccessesWithValues::default();
+                    let for_contract = record.get(contract_id).unwrap_or(&empty);
+
+                    *balance_root = compute_balances_hash(&for_contract.assets);
+                    *state_root = compute_state_hash(&for_contract.slots);
                 }
                 _ => {}
             }
@@ -2225,16 +2268,13 @@ where
     /// Computes all zeroed or variable outputs.
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
-    fn compute_state_of_not_utxo_outputs<T>(
+    fn compute_state_of_not_utxo_outputs(
         &self,
-        outputs: &mut [Output],
-        inputs: &[Input],
         tx_id: TxId,
-        db: &TxStorageTransaction<T>,
-    ) -> ExecutorResult<()>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
+        inputs: &[Input],
+        outputs: &mut [Output],
+        record: &ContractAccessesWithValues,
+    ) -> ExecutorResult<()> {
         for output in outputs {
             if let Output::Contract(contract_output) = output {
                 let contract_id =
@@ -2250,9 +2290,12 @@ where
                         })
                     };
 
-                let contract = ContractRef::new(db, *contract_id);
-                contract_output.balance_root = contract.balance_root()?;
-                contract_output.state_root = contract.state_root()?;
+                let empty = StorageAccessesWithValues::default();
+                let for_contract = record.get(contract_id).unwrap_or(&empty);
+
+                contract_output.balance_root =
+                    compute_balances_hash(&for_contract.assets);
+                contract_output.state_root = compute_state_hash(&for_contract.slots);
             }
         }
         Ok(())
