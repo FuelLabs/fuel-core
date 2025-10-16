@@ -88,7 +88,7 @@ impl Default for MockData {
 pub struct MockProvider {
     inner: Box<DynProvider>,
     asserter: Asserter,
-    data: Arc<parking_lot::Mutex<InnerState>>,
+    data: Arc<Mutex<InnerState>>,
     before_event: Arc<Mutex<Option<EventFn>>>,
     after_event: Arc<Mutex<Option<EventFn>>>,
 }
@@ -143,18 +143,18 @@ impl MockProvider {
     }
 
     /// Set a callback before an event.
-    pub fn set_before_event(
-        &self,
-        f: impl for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync + 'static,
-    ) {
+    pub fn set_before_event<F>(&self, f: F)
+    where
+        F: for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync + 'static,
+    {
         *self.before_event.lock() = Some(Box::new(f));
     }
 
     /// Set a callback after an event.
-    pub fn set_after_event(
-        &self,
-        f: impl for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync + 'static,
-    ) {
+    pub fn set_after_event<F>(&self, f: F)
+    where
+        F: for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync + 'static,
+    {
         *self.after_event.lock() = Some(Box::new(f));
     }
 

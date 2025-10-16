@@ -67,7 +67,7 @@ async fn can_download_logs() {
     assert_eq!(result, logs);
 }
 
-// FIXME: Enable this test when we have a quorum provider
+// FIXME: Enable this test in #3113
 // #[tokio::test]
 // async fn quorum_agrees_on_logs() {
 //     let asserter = Asserter::new();
@@ -116,7 +116,7 @@ async fn can_download_logs() {
 //     assert_eq!(result, logs);
 // }
 
-// FIXME: Enable this test when we have a quorum provider
+// FIXME: Enable this test in #3113
 // #[tokio::test]
 // async fn quorum__disagree_on_logs() {
 //     let eth_node_two_logs = MockProvider::default();

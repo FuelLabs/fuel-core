@@ -82,7 +82,7 @@ impl TryFrom<&Log> for EthEventLog {
 
     fn try_from(log: &Log) -> Result<Self, Self::Error> {
         if log.topics().is_empty() {
-            return Err(anyhow!("Topic list is empty"))
+            return Err(anyhow!("Topic list is empty"));
         }
 
         let log = match log.topics()[0] {
@@ -96,9 +96,17 @@ impl TryFrom<&Log> for EthEventLog {
 }
 
 fn parse_message_to_event(log: &Log) -> anyhow::Result<EthEventLog> {
+    let block_number = log
+        .block_number
+        .ok_or(anyhow!("Log missing block height"))?;
+
     // event has 3 indexed fields, so it should have 4 topics
-    if log.topics().len() != 4 {
-        return Err(anyhow!("Malformed topics for Message"))
+    if log.topics().len() != abi::bridge::MESSAGE_SENT_TOPIC_COUNT {
+        return Err(anyhow!(
+            "Malformed topics for Message. expected: {}, found: {}",
+            abi::bridge::MESSAGE_SENT_TOPIC_COUNT,
+            log.topics().len()
+        ));
     }
 
     let message =
@@ -118,17 +126,22 @@ fn parse_message_to_event(log: &Log) -> anyhow::Result<EthEventLog> {
         // Safety: logs without block numbers are rejected by
         // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
         // If block_number is none, that means the log is pending.
-        da_height: DaBlockHeight::from(
-            log.block_number
-                .ok_or(anyhow!("Log missing block height"))?,
-        ),
+        da_height: DaBlockHeight::from(block_number),
     }))
 }
 
 fn parse_forced_tx_to_event(log: &Log) -> anyhow::Result<EthEventLog> {
+    let block_number = log
+        .block_number
+        .ok_or(anyhow!("Log missing block height"))?;
+
     // event has one indexed field, so there are 2 topics
-    if log.topics().len() != 2 {
-        return Err(anyhow!("Malformed topics for forced Transaction"))
+    if log.topics().len() != abi::bridge::TRANSACTION_TOPIC_COUNT {
+        return Err(anyhow!(
+            "Malformed topics for transaction. expected: {}, found: {}",
+            abi::bridge::TRANSACTION_TOPIC_COUNT,
+            log.topics().len()
+        ));
     }
 
     let event =
@@ -145,9 +158,6 @@ fn parse_forced_tx_to_event(log: &Log) -> anyhow::Result<EthEventLog> {
         // Safety: logs without block numbers are rejected by
         // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
         // If block_number is none, that means the log is pending.
-        da_height: DaBlockHeight::from(
-            log.block_number
-                .ok_or(anyhow!("Log missing block height"))?,
-        ),
+        da_height: DaBlockHeight::from(block_number),
     }))
 }
