@@ -37,9 +37,12 @@ use fuel_core_types::{
         TransactionExecutionStatus,
     },
 };
-use std::convert::{
-    TryFrom,
-    TryInto,
+use std::{
+    convert::{
+        TryFrom,
+        TryInto,
+    },
+    sync::Arc,
 };
 
 pub mod transparent_receipt;
@@ -364,7 +367,7 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                     .collect::<Result<Vec<fuel_tx::Receipt>, _>>()?;
                 TransactionExecutionResult::Success {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
-                    receipts,
+                    receipts: Arc::new(receipts),
                     total_gas: s.total_gas.0,
                     total_fee: s.total_fee.0,
                 }
@@ -377,7 +380,7 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                     .collect::<Result<Vec<fuel_tx::Receipt>, _>>()?;
                 TransactionExecutionResult::Failed {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
-                    receipts,
+                    receipts: Arc::new(receipts),
                     total_gas: s.total_gas.0,
                     total_fee: s.total_fee.0,
                 }
