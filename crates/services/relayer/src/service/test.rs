@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    Config,
     ports::RelayerDb,
     service::NotInitializedTask,
-    Config,
 };
 use fuel_core_services::RunnableService;
 use futures::TryStreamExt;
@@ -24,8 +24,8 @@ use crate::{
     },
 };
 use alloy_provider::{
-    mock::Asserter,
     ProviderBuilder,
+    mock::Asserter,
 };
 use alloy_rpc_types_eth::Log;
 
@@ -58,10 +58,10 @@ async fn can_download_logs() {
         &provider,
         &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
-        .map_ok(|logs| logs.logs)
-        .try_concat()
-        .await
-        .unwrap();
+    .map_ok(|logs| logs.logs)
+    .try_concat()
+    .await
+    .unwrap();
 
     // Then
     assert_eq!(result, logs);
