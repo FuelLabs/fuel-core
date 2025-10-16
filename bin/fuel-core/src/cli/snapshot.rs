@@ -229,8 +229,6 @@ fn open_db(
 #[cfg(test)]
 mod tests {
 
-    use std::iter::repeat_with;
-
     use fuel_core::{
         fuel_core_graphql_api::storage::transactions::{
             OwnedTransactionIndexKey,
@@ -299,6 +297,10 @@ mod tests {
         SeedableRng,
         rngs::StdRng,
         seq::SliceRandom,
+    };
+    use std::{
+        iter::repeat_with,
+        sync::Arc,
     };
     use test_case::test_case;
 
@@ -519,12 +521,12 @@ mod tests {
                 block_height: self.rng.r#gen(),
                 time: Tai64(self.rng.r#gen::<u32>().into()),
                 result: None,
-                receipts: vec![Receipt::Return {
+                receipts: Arc::new(vec![Receipt::Return {
                     id: self.rng.r#gen(),
                     val: self.rng.r#gen(),
                     pc: self.rng.r#gen(),
                     is: self.rng.r#gen(),
-                }],
+                }]),
                 total_gas: self.rng.r#gen(),
                 total_fee: self.rng.r#gen(),
             };

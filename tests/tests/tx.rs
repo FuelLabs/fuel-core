@@ -145,7 +145,7 @@ async fn dry_run_create() {
     let contract = Contract::from(contract_code.clone());
     let root = contract.root();
     let state_root = Contract::default_state_root();
-    let contract_id = contract.id(&salt, &root, &state_root);
+    let contract_id = Contract::id(&salt, &root, &state_root);
 
     let tx = TransactionBuilder::create(contract_code.into(), salt, vec![])
         .add_fee_input()

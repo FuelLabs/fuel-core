@@ -3219,7 +3219,7 @@ mod tests {
                 recipient,
                 nonce,
                 amount,
-                data: data.unwrap_or_default(),
+                data: data.unwrap_or_default().into(),
                 da_height: 1u64.into(),
             })
             .message_id()

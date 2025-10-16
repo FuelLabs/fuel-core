@@ -170,6 +170,9 @@ use std::{
     collections::BTreeMap,
 };
 
+#[cfg(not(feature = "alloc"))]
+use std::sync::Arc;
+
 #[cfg(not(feature = "std"))]
 use alloc::{
     borrow::Cow,
@@ -180,9 +183,11 @@ use alloc::{
 use alloc::{
     format,
     string::ToString,
+    sync::Arc,
     vec,
     vec::Vec,
 };
+use fuel_core_types::fuel_vm::interpreter::Memory;
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
@@ -369,22 +374,25 @@ struct ExecutionOptionsInner {
 /// The executor instance performs block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
 #[derive(Clone, Debug)]
-pub struct ExecutionInstance<R, D> {
+pub struct ExecutionInstance<R, D, M> {
     pub relayer: R,
     pub database: D,
     pub options: ExecutionOptions,
+    memory: M,
 }
 
-impl<R, D> ExecutionInstance<R, D>
+impl<R, D, M> ExecutionInstance<R, D, M>
 where
     R: RelayerPort,
     D: KeyValueInspect<Column = Column>,
+    M: Memory,
 {
-    pub fn new(relayer: R, database: D, options: ExecutionOptions) -> Self {
+    pub fn new(relayer: R, database: D, options: ExecutionOptions, memory: M) -> Self {
         Self {
             relayer,
             database,
             options,
+            memory,
         }
     }
 
@@ -401,7 +409,7 @@ where
     {
         let consensus_params_version = components.consensus_parameters_version();
 
-        let (block_executor, storage_tx) = self.into_executor(
+        let (block_executor, storage_tx, mut memory) = self.into_executor(
             consensus_params_version,
             new_tx_waiter,
             preconfirmation_sender,
@@ -411,8 +419,9 @@ where
         #[cfg(feature = "fault-proving")]
         let chain_id = block_executor.consensus_params.chain_id();
 
-        let (partial_block, execution_data) =
-            block_executor.execute(components, storage_tx).await?;
+        let (partial_block, execution_data) = block_executor
+            .execute(components, storage_tx, memory.as_mut())
+            .await?;
 
         let ExecutionData {
             message_ids,
@@ -458,7 +467,7 @@ where
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version();
-        let (block_executor, storage_tx) = self.into_executor(
+        let (block_executor, storage_tx, mut memory) = self.into_executor(
             consensus_params_version,
             TimeoutOnlyTxWaiter,
             TransparentPreconfirmationSender,
@@ -473,7 +482,7 @@ where
             events,
             changes,
             ..
-        } = block_executor.validate_block(block, storage_tx)?;
+        } = block_executor.validate_block(block, storage_tx, memory.as_mut())?;
 
         let finalized_block_id = block.id();
 
@@ -487,13 +496,14 @@ where
         Ok(UncommittedValidationResult::new(result, changes))
     }
 
+    #[allow(clippy::type_complexity)]
     fn into_executor<N, P>(
         self,
         consensus_params_version: ConsensusParametersVersion,
         new_tx_waiter: N,
         preconfirmation_sender: P,
         dry_run: bool,
-    ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)> {
+    ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>, M)> {
         let storage_tx = self
             .database
             .into_transaction()
@@ -513,7 +523,7 @@ where
             preconfirmation_sender,
             dry_run,
         )?;
-        Ok((executor, storage_tx))
+        Ok((executor, storage_tx, self.memory))
     }
 }
 
@@ -564,15 +574,18 @@ where
         self,
         components: Components<TxSource>,
         block_storage_tx: BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column>,
     {
         if self.options.dry_run {
-            self.dry_run_block(components, block_storage_tx).await
+            self.dry_run_block(components, block_storage_tx, memory)
+                .await
         } else {
-            self.produce_block(components, block_storage_tx).await
+            self.produce_block(components, block_storage_tx, memory)
+                .await
         }
     }
 
@@ -582,6 +595,7 @@ where
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
@@ -590,14 +604,13 @@ where
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
-        let mut memory = MemoryInstance::new();
 
         self.process_l1_txs(
             &mut partial_block,
             components.coinbase_recipient,
             &mut block_storage_tx,
             &mut data,
-            &mut memory,
+            memory,
         )?;
 
         loop {
@@ -606,7 +619,7 @@ where
                 &components,
                 &mut block_storage_tx,
                 &mut data,
-                &mut memory,
+                memory,
             )
             .await?;
             match self.new_tx_waiter.wait_for_new_transactions().await {
@@ -622,7 +635,7 @@ where
             &components,
             &mut block_storage_tx,
             &mut data,
-            &mut memory,
+            memory,
         )?;
         debug_assert!(data.found_mint, "Mint transaction is not found");
 
@@ -691,6 +704,7 @@ where
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
@@ -705,7 +719,7 @@ where
             &components,
             &mut block_storage_tx,
             &mut data,
-            &mut MemoryInstance::new(),
+            memory,
         )
         .await?;
 
@@ -914,6 +928,7 @@ where
         mut self,
         block: &Block,
         mut block_storage_tx: StorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<ExecutionData>
     where
         D: KeyValueInspect<Column = Column>,
@@ -923,7 +938,6 @@ where
         let partial_header = PartialBlockHeader::from(block.header());
         let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
         let transactions = block.transactions();
-        let mut memory = MemoryInstance::new();
 
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(transactions)?;
@@ -933,7 +947,7 @@ where
             coinbase_contract_id,
             &mut block_storage_tx,
             &mut data,
-            &mut memory,
+            memory,
         )?;
         let processed_l1_tx_count = partial_block.transactions.len();
 
@@ -947,7 +961,7 @@ where
                 maybe_checked_tx,
                 gas_price,
                 coinbase_contract_id,
-                &mut memory,
+                memory,
             )?;
         }
 
@@ -1570,7 +1584,7 @@ where
             id: coinbase_id,
             result: TransactionExecutionResult::Success {
                 result: None,
-                receipts: vec![],
+                receipts: Default::default(),
                 total_gas: 0,
                 total_fee: 0,
             },
@@ -1682,7 +1696,7 @@ where
         &self,
         tx: &Tx,
         execution_data: &mut ExecutionData,
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         gas_price: Word,
         reverted: bool,
         state: ProgramState,
@@ -1840,7 +1854,7 @@ where
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
+    ) -> ExecutorResult<(bool, ProgramState, Tx, Arc<Vec<Receipt>>)>
     where
         Tx: ExecutableTransaction + Cacheable,
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
@@ -1885,27 +1899,28 @@ where
         };
 
         let (state, mut tx, receipts) = if !self.options.dry_run {
-            let mut vm = Interpreter::<_, _, _, EcalLogCollector,
-                verification::Normal>::with_storage_and_ecal(
+            let vm = Interpreter::<_, _, _, EcalLogCollector, verification::Normal>::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
                 ecal.clone(),
             );
 
-            let vm_result: StateTransition<_> = vm
-                .transact(ready_tx)
-                .map_err(|error| ExecutorError::VmExecution {
-                    error: error.to_string(),
-                    transaction_id: tx_id,
-                })?
-                .into();
+            let vm_result: StateTransition<_, _> =
+                vm.into_transact(ready_tx).map_err(|error| {
+                    ExecutorError::VmExecution {
+                        error: error.to_string(),
+                        transaction_id: tx_id,
+                    }
+                })?;
 
             reverted = vm_result.should_revert();
 
-            vm_result.into_inner()
+            let (state, tx, receipts, _) = vm_result.into_inner();
+
+            (state, tx, Arc::new(receipts))
         } else {
-            let mut vm = Interpreter::<
+            let vm = Interpreter::<
                 _,
                 _,
                 _,
@@ -1918,23 +1933,23 @@ where
                 ecal.clone(),
             );
 
-            let vm_result: StateTransition<_> = vm
-                .transact(ready_tx)
-                .map_err(|error| ExecutorError::VmExecution {
-                    error: error.to_string(),
-                    transaction_id: tx_id,
-                })?
-                .into();
+            let vm_result: StateTransition<_, _> =
+                vm.into_transact(ready_tx).map_err(|error| {
+                    ExecutorError::VmExecution {
+                        error: error.to_string(),
+                        transaction_id: tx_id,
+                    }
+                })?;
 
             reverted = vm_result.should_revert();
 
-            let (state, tx, mut receipts) = vm_result.into_inner();
+            let (state, tx, mut receipts, verifier) = vm_result.into_inner();
 
             // If transaction requires contract ids, then extend receipts with
             // `PanicReason::ContractNotInInputs` for each missing contract id.
             // The data like `$pc` or `$is` is not available in this case,
             // because panic generated outside of the execution.
-            if !vm.verifier().missing_contract_inputs.is_empty() {
+            if !verifier.missing_contract_inputs.is_empty() {
                 debug_assert!(self.options.dry_run);
                 reverted = true;
 
@@ -1943,7 +1958,7 @@ where
                     op::noop().into(),
                 );
 
-                for contract_id in &vm.verifier().missing_contract_inputs {
+                for contract_id in &verifier.missing_contract_inputs {
                     receipts.push(Receipt::Panic {
                         id: ContractId::zeroed(),
                         reason,
@@ -1954,7 +1969,7 @@ where
                 }
             }
 
-            (state, tx, receipts)
+            (state, tx, Arc::new(receipts))
         };
 
         ecal.maybe_print_logs(tracing::info_span!("execution", tx_id = % tx_id));
@@ -1984,7 +1999,7 @@ where
             self.update_tx_outputs(tx_id, &mut tx, &state_before)?;
         }
 
-        Ok((reverted, state, tx, receipts.to_vec()))
+        Ok((reverted, state, tx, receipts))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -2147,7 +2162,7 @@ where
         );
         let max_fee = tx.max_fee_limit();
         let mut used_gas = 0;
-        for r in receipts {
+        for r in receipts.iter().rev() {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
                 break

@@ -130,7 +130,7 @@ impl ReadsPerContract {
                         let value = storage
                             .storage::<ContractsState>()
                             .get(&ContractsStateKey::new(&contract_id, &slot_key))
-                            .map(|v| v.map(|c| c.0.clone()))?;
+                            .map(|v| v.map(|c| c.0.to_vec()))?;
                         Ok((slot_key, value))
                     })
                     .collect::<StorageResult<_>>()?;
@@ -162,7 +162,7 @@ impl ReadsPerContract {
                 .slots
                 .get_mut(key.state_key())
                 .expect("Inserted by marking step above");
-            *entry = value.map(|data| data.0);
+            *entry = value.map(|data| data.0.to_vec());
         }
 
         Ok((before, after))
