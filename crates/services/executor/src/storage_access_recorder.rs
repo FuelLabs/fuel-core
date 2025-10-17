@@ -1,3 +1,4 @@
+use core::cell::RefCell;
 use fuel_core_storage::{
     ContractsAssetKey,
     ContractsStateKey,
@@ -5,10 +6,7 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
     column::Column,
-    iter::{
-        IteratorOverTableWrites,
-        changes_iterator::ChangesIterator,
-    },
+    iter::changes_iterator::ChangesIterator,
     kv_store::{
         KeyValueInspect,
         StorageColumn,
@@ -28,15 +26,11 @@ use fuel_core_types::fuel_tx::{
     Bytes32,
     ContractId,
 };
-use parking_lot::Mutex;
 
 #[cfg(feature = "std")]
-use std::{
-    collections::{
-        BTreeMap,
-        BTreeSet,
-    },
-    sync::Arc,
+use std::collections::{
+    BTreeMap,
+    BTreeSet,
 };
 
 #[cfg(not(feature = "std"))]
@@ -45,7 +39,6 @@ use alloc::{
         BTreeMap,
         BTreeSet,
     },
-    sync::Arc,
     vec::Vec,
 };
 
@@ -57,7 +50,7 @@ pub(crate) struct ContractAccesses {
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ContractAccessesWithValues {
-    pub assets: BTreeMap<AssetId, u64>,
+    pub assets: BTreeMap<AssetId, Option<u64>>,
     pub slots: BTreeMap<Bytes32, Option<Vec<u8>>>,
 }
 
@@ -88,7 +81,7 @@ impl ReadsPerContract {
 
     /// Returns slot values before and after applying the changes
     pub(crate) fn finalize<S>(
-        mut self,
+        self,
         storage: S,
         changes: &Changes,
     ) -> StorageResult<(
@@ -97,16 +90,8 @@ impl ReadsPerContract {
     )>
     where
         S: StorageInspect<ContractsAssets, Error = fuel_core_storage::Error>
-            + StorageInspect<ContractsState, Error = fuel_core_storage::Error>
-            + StorageAsRef,
+            + StorageInspect<ContractsState, Error = fuel_core_storage::Error>,
     {
-        // Mark all changed keys as accessed
-        for (change_column, change) in changes {
-            for (key, _) in change.iter() {
-                self.mark(key, *change_column);
-            }
-        }
-
         // Fetch original values from the storage
         let before: BTreeMap<ContractId, ContractAccessesWithValues> = self
             .per_contract
@@ -119,7 +104,7 @@ impl ReadsPerContract {
                         let value = storage
                             .storage::<ContractsAssets>()
                             .get(&ContractsAssetKey::new(&contract_id, &asset_id))
-                            .map(|v| v.map_or(0, |c| c.into_owned()))?;
+                            .map(|v| v.map(|c| c.into_owned()))?;
                         Ok((asset_id, value))
                     })
                     .collect::<StorageResult<_>>()?;
@@ -130,7 +115,12 @@ impl ReadsPerContract {
                         let value = storage
                             .storage::<ContractsState>()
                             .get(&ContractsStateKey::new(&contract_id, &slot_key))
-                            .map(|v| v.map(|c| c.0.to_vec()))?;
+                            .map(|v| {
+                                v.map(|c| {
+                                    let bytes: Vec<u8> = c.into_owned().into();
+                                    bytes
+                                })
+                            })?;
                         Ok((slot_key, value))
                     })
                     .collect::<StorageResult<_>>()?;
@@ -139,30 +129,32 @@ impl ReadsPerContract {
             .collect::<StorageResult<_>>()?;
 
         // Update final values from the changes
-        let mut after: BTreeMap<ContractId, ContractAccessesWithValues> = before.clone();
+        let mut after: BTreeMap<ContractId, ContractAccessesWithValues> =
+            Default::default();
 
         let sc = StorageChanges::Changes(changes.clone());
         let ci = ChangesIterator::new(&sc);
 
-        for item in ci.iter_all::<ContractsAssets>(None) {
+        for item in ci.iter_all_writes::<ContractsAssets>(None) {
             let (key, value) = item?;
             let entry = after
-                .get_mut(key.contract_id())
-                .expect("Inserted by marking step above")
+                .entry(*key.contract_id())
+                .or_default()
                 .assets
-                .get_mut(key.asset_id())
-                .expect("Inserted by marking step above");
-            *entry = value.unwrap_or(0);
+                .entry(*key.asset_id())
+                .or_default();
+
+            *entry = value;
         }
-        for item in ci.iter_all::<ContractsState>(None) {
+        for item in ci.iter_all_writes::<ContractsState>(None) {
             let (key, value) = item?;
             let entry = after
-                .get_mut(key.contract_id())
-                .expect("Inserted by marking step above")
+                .entry(*key.contract_id())
+                .or_default()
                 .slots
-                .get_mut(key.state_key())
-                .expect("Inserted by marking step above");
-            *entry = value.map(|data| data.0.to_vec());
+                .entry(*key.state_key())
+                .or_default();
+            *entry = value.map(|data| data.into());
         }
 
         Ok((before, after))
@@ -174,7 +166,7 @@ where
     S: KeyValueInspect,
 {
     pub storage: S,
-    pub record: Arc<Mutex<ReadsPerContract>>,
+    pub record: RefCell<ReadsPerContract>,
 }
 
 impl<S> StorageAccessRecorder<S>
@@ -188,18 +180,13 @@ where
         }
     }
 
-    pub fn as_inner(&self) -> (&S, ReadsPerContract) {
-        (&self.storage, self.record.lock().clone())
-    }
-
-    /// Get the recorded accesses so far.
-    pub fn get_reads(&self) -> ReadsPerContract {
-        self.record.lock().clone()
+    pub fn into_inner(self) -> (S, ReadsPerContract) {
+        (self.storage, self.record.take())
     }
 
     /// Mark some key as accessed without actually reading it.
     fn mark(&self, key: &[u8], column_id: u32) {
-        self.record.lock().mark(key, column_id);
+        self.record.borrow_mut().mark(key, column_id);
     }
 }
 

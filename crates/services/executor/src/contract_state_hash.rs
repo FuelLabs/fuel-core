@@ -19,11 +19,16 @@ use sha2::{
 
 /// Computes a hash of all contract balances that were read or modified.
 /// The hash is not dependent on the order of reads or writes.
-pub fn compute_balances_hash(accessed: &BTreeMap<AssetId, Word>) -> Bytes32 {
+pub fn compute_balances_hash(accessed: &BTreeMap<AssetId, Option<Word>>) -> Bytes32 {
     let mut hasher = Sha256::new();
     for (key, value) in accessed {
         hasher.update(key);
-        hasher.update(value.to_be_bytes());
+        if let Some(value) = value {
+            hasher.update([1u8]);
+            hasher.update(value.to_be_bytes());
+        } else {
+            hasher.update([0u8]);
+        }
     }
     Bytes32::new(hasher.finalize().into())
 }

@@ -490,11 +490,12 @@ mod tests {
 
             let mut h = Sha256::new();
             h.update(consensus_parameters.base_asset_id().as_ref());
-            h.update(0u64.to_be_bytes());
+            h.update([0u8]);
             let input_balances_hash = Bytes32::new(h.finalize().into());
 
             let mut h = Sha256::new();
             h.update(consensus_parameters.base_asset_id().as_ref());
+            h.update([1u8]);
             h.update(expected_fee_amount_1.to_be_bytes());
             let output_balances_hash = Bytes32::new(h.finalize().into());
 
@@ -1868,10 +1869,9 @@ mod tests {
         } = executor.produce_and_commit(block).unwrap();
 
         assert!(
-            tx_status.iter().all(|s| (matches!(
-                s.result,
-                TransactionExecutionResult::Success { .. }
-            )))
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. }))
         );
 
         let executed_tx = block.transactions()[1].as_script().unwrap();
@@ -1882,7 +1882,7 @@ mod tests {
         // Input balances: 0 of asset_id [2; 32]
         let mut hasher = Sha256::new();
         hasher.update(asset_id);
-        hasher.update(0u64.to_be_bytes()); // balance
+        hasher.update([0u8]);
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
         assert_eq!(
             executed_tx.inputs()[0].balance_root(),
@@ -1892,6 +1892,7 @@ mod tests {
         // Output balances: 100 of asset_id [2; 32]
         let mut hasher = Sha256::new();
         hasher.update(asset_id);
+        hasher.update([1u8]);
         hasher.update(100u64.to_be_bytes()); // balance
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
         assert_eq!(
@@ -2025,7 +2026,7 @@ mod tests {
         // Input balances: 0 of asset_id [2; 32]
         let mut hasher = Sha256::new();
         hasher.update(asset_id);
-        hasher.update(0u64.to_be_bytes()); // balance
+        hasher.update([0u8]);
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
         assert_eq!(
             executed_tx.inputs()[0].balance_root(),
@@ -2035,6 +2036,7 @@ mod tests {
         // Output balances: 100 of asset_id [2; 32]
         let mut hasher = Sha256::new();
         hasher.update(asset_id);
+        hasher.update([1u8]);
         hasher.update(100u64.to_be_bytes()); // balance
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
         assert_eq!(
@@ -2391,7 +2393,7 @@ mod tests {
         // Input balances: 0 of asset_id [2; 32] for both contracts
         let mut hasher = Sha256::new();
         hasher.update(asset_id);
-        hasher.update(0u64.to_be_bytes()); // balance
+        hasher.update([0u8]);
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
         assert_eq!(
             executed_tx.inputs()[0].balance_root(),
@@ -2405,6 +2407,7 @@ mod tests {
         // Output balances: 100 of asset_id [2; 32] for both contracts
         let mut hasher = Sha256::new();
         hasher.update(asset_id);
+        hasher.update([1u8]);
         hasher.update(100u64.to_be_bytes()); // balance
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
         assert_eq!(
@@ -2460,6 +2463,7 @@ mod tests {
         // Input balance: 100 of asset_id [2; 32]
         let mut hasher = Sha256::new();
         hasher.update(asset_id);
+        hasher.update([1u8]);
         hasher.update(100u64.to_be_bytes()); // balance
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
         assert_eq!(
@@ -2470,6 +2474,7 @@ mod tests {
         // Output balance: 200 of asset_id [2; 32]
         let mut hasher = Sha256::new();
         hasher.update(asset_id);
+        hasher.update([1u8]);
         hasher.update(200u64.to_be_bytes()); // balance
         let expected_balance_root: [u8; 32] = hasher.finalize().into();
         assert_eq!(

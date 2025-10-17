@@ -34,7 +34,6 @@ use fuel_core_storage::{
         ConflictPolicy,
         IntoTransaction,
         Modifiable,
-        ReadTransaction,
         StorageTransaction,
         WriteTransaction,
     },
@@ -1614,10 +1613,10 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        let mut storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
+        let storage_tx_record = StorageAccessRecorder::new(storage_tx);
 
         let mut sub_block_db_commit = storage_tx_record
-            .write_transaction()
+            .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
         let mut vm_db = VmStorage::new(
@@ -1637,8 +1636,8 @@ where
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
 
         let (recorder, changes) = sub_block_db_commit.into_inner();
-        let (state_before, state_after) = recorder
-            .get_reads()
+        let (storage_tx, reads) = recorder.into_inner();
+        let (state_before, state_after) = reads
             .finalize(&storage_tx, &changes)
             .map_err(|err| ExecutorError::StorageError(err.to_string()))?;
 
@@ -1865,7 +1864,7 @@ where
         let storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
 
         let mut sub_block_db_commit = storage_tx_record
-            .read_transaction()
+            .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
         let vm_db = VmStorage::new(
@@ -1983,9 +1982,9 @@ where
         Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
         let (recorder, changes) = sub_block_db_commit.into_inner();
-        let (storage_tx_recovered, record) = recorder.as_inner();
-        let (state_before, state_after) =
-            record.finalize(storage_tx_recovered, &changes)?;
+        let (storage_tx_recovered, record) = recorder.into_inner();
+        let (state_before, mut state_after) =
+            record.finalize(&storage_tx_recovered, &changes)?;
 
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
@@ -1993,11 +1992,12 @@ where
 
         // only commit state changes if execution was a success
         if !reverted {
-            self.update_tx_outputs(tx_id, &mut tx, &state_after)?;
-            storage_tx.commit_changes(changes.clone())?;
+            storage_tx.commit_changes(changes)?;
         } else {
-            self.update_tx_outputs(tx_id, &mut tx, &state_before)?;
+            state_after = Default::default();
         }
+
+        self.update_tx_outputs(tx_id, &mut tx, &state_after)?;
 
         Ok((reverted, state, tx, receipts))
     }
