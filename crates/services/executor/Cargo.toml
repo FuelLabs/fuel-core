@@ -32,6 +32,7 @@ fuel-core-types = { workspace = true, default-features = false, features = [
 ] }
 parking_lot = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true, default-features = false }
 tracing = { workspace = true }
 
 [dev-dependencies]

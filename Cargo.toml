@@ -145,6 +145,7 @@ reqwest = { version = "0.12.0", default-features = false, features = [
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
+sha2 = { version = "0.10", default-features = false }
 strum = { version = "0.25" }
 strum_macros = "0.25"
 tempfile = "3.4"
