@@ -9,10 +9,7 @@ use crate::{
         V1Block as ProtoV1Block,
         V1Header as ProtoV1Header,
         V2Header as ProtoV2Header,
-        block::{
-            VersionedBlock as ProtoVersionedBlock,
-            VersionedBlock,
-        },
+        block::VersionedBlock as ProtoVersionedBlock,
         header::VersionedHeader as ProtoVersionedHeader,
         transaction::Variant as ProtoTransactionVariant,
     },
@@ -24,10 +21,12 @@ use crate::{
 use anyhow::anyhow;
 #[cfg(feature = "fault-proving")]
 use fuel_core_types::blockchain::header::BlockHeaderV2;
+#[cfg(all(test, feature = "fault-proving"))]
+use fuel_core_types::fuel_types::ChainId;
+
 use fuel_core_types::{
     blockchain::{
         block::Block as FuelBlock,
-        consensus,
         header::{
             ApplicationHeader,
             BlockHeader,
@@ -55,7 +54,6 @@ use fuel_core_types::{
         },
         policies::PolicyType,
     },
-    fuel_types::ChainId,
     tai64,
 };
 
@@ -140,7 +138,7 @@ fn proto_v2_header_from_v2_header(
     let generated = application.generated;
 
     ProtoV2Header {
-        da_height: saturating_u64_to_u32(application.da_height.0),
+        da_height: application.da_height.0,
         consensus_parameters_version: application.consensus_parameters_version,
         state_transition_bytecode_version: application.state_transition_bytecode_version,
         transactions_count: u32::from(generated.transactions_count),
@@ -151,7 +149,7 @@ fn proto_v2_header_from_v2_header(
         tx_id_commitment: bytes32_to_vec(&generated.tx_id_commitment),
         prev_root: bytes32_to_vec(&consensus.prev_root),
         height: u32::from(consensus.height),
-        time: consensus.time.0.to_be_bytes().to_vec(),
+        time: consensus.time.0,
         application_hash: bytes32_to_vec(&consensus.generated.application_hash),
         block_id: Some(block_id.as_slice().to_vec()),
     }
@@ -210,10 +208,6 @@ fn bytes32_to_vec(bytes: &fuel_core_types::fuel_types::Bytes32) -> Vec<u8> {
     bytes.as_ref().to_vec()
 }
 
-fn saturating_u64_to_u32(value: u64) -> u32 {
-    value.min(u32::MAX as u64) as u32
-}
-
 #[cfg(test)]
 pub fn fuel_block_from_protobuf(proto_block: ProtoBlock) -> Result<FuelBlock> {
     let versioned_block = proto_block
@@ -231,7 +225,7 @@ pub fn fuel_block_from_protobuf(proto_block: ProtoBlock) -> Result<FuelBlock> {
         }
     };
     let txs = match versioned_block {
-        VersionedBlock::V1(v1_inner) => v1_inner
+        ProtoVersionedBlock::V1(v1_inner) => v1_inner
             .transactions
             .iter()
             .map(tx_from_proto_tx)
@@ -259,7 +253,7 @@ pub fn partial_header_from_proto_header(
     Ok(partial_header)
 }
 
-pub fn tx_from_proto_tx(proto_tx: &ProtoTransaction) -> Result<FuelTransaction> {
+pub fn tx_from_proto_tx(_proto_tx: &ProtoTransaction) -> Result<FuelTransaction> {
     todo!()
 }
 
@@ -278,8 +272,7 @@ pub fn proto_header_to_empty_application_header(
             Ok(app_header)
         }
         Some(ProtoVersionedHeader::V2(header)) => {
-            cfg!(feature = "fault-proving");
-            {
+            if cfg!(feature = "fault-proving") {
                 let app_header = ApplicationHeader {
                     da_height: DaBlockHeight::from(header.da_height),
                     consensus_parameters_version: header.consensus_parameters_version,
@@ -287,10 +280,8 @@ pub fn proto_header_to_empty_application_header(
                         .state_transition_bytecode_version,
                     generated: Empty {},
                 };
-                return Ok(app_header);
-            }
-            cfg!(not(feature = "fault-proving"));
-            {
+                Ok(app_header)
+            } else {
                 Err(anyhow!("V2 headers require the 'fault-proving' feature"))
                     .map_err(Error::Serialization)
             }
@@ -317,8 +308,7 @@ pub fn proto_header_to_empty_consensus_header(
             Ok(consensus_header)
         }
         Some(ProtoVersionedHeader::V2(header)) => {
-            cfg!(feature = "fault-proving");
-            {
+            if cfg!(feature = "fault-proving") {
                 let consensus_header = ConsensusHeader {
                     prev_root: *Bytes32::from_bytes_ref_checked(&header.prev_root)
                         .ok_or(Error::Serialization(anyhow!(
@@ -328,10 +318,8 @@ pub fn proto_header_to_empty_consensus_header(
                     time: tai64::Tai64(header.time),
                     generated: Empty {},
                 };
-                return Ok(consensus_header);
-            }
-            cfg!(not(feature = "fault-proving"));
-            {
+                Ok(consensus_header)
+            } else {
                 Err(anyhow!("V2 headers require the 'fault-proving' feature"))
                     .map_err(Error::Serialization)
             }
@@ -341,6 +329,7 @@ pub fn proto_header_to_empty_consensus_header(
     }
 }
 
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use super::*;
