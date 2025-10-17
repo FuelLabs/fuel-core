@@ -2,7 +2,7 @@ use crate::{
     block_range_response::BlockRangeResponse,
     blocks::Block,
     db::{
-        BlockAggregatorDB,
+        BlockStorage,
         storage_db::table::Column,
     },
     result::{
@@ -96,7 +96,7 @@ impl<S> StorageDB<S> {
     }
 }
 
-impl<S, T> BlockAggregatorDB for StorageDB<S>
+impl<S, T> BlockStorage for StorageDB<S>
 where
     S: Modifiable + std::fmt::Debug,
     S: KeyValueInspect<Column = Column>,

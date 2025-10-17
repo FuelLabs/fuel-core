@@ -74,7 +74,7 @@ impl FakeDB {
     }
 }
 
-impl BlockAggregatorDB for FakeDB {
+impl BlockStorage for FakeDB {
     type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(&mut self, id: BlockHeight, block: Block) -> Result<()> {
