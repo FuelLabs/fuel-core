@@ -133,6 +133,20 @@ impl BlockHeader {
         }
     }
 
+    /// Setter for the transactions count
+    #[cfg(feature = "test-helpers")]
+    pub fn set_transactions_count(&mut self, count: u16) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.application_mut().generated.transactions_count = count
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.application_mut().generated.transactions_count = count
+            }
+        }
+    }
+
     /// Getter for the message receipt count
     pub fn message_receipt_count(&self) -> u32 {
         match self {

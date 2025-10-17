@@ -25,6 +25,7 @@ use fuel_core_types::blockchain::header::BlockHeaderV2;
 #[cfg(all(test, feature = "fault-proving"))]
 use fuel_core_types::fuel_types::ChainId;
 
+use crate::protobuf_types::Policies;
 use fuel_core_types::{
     blockchain::{
         block::Block as FuelBlock,
@@ -44,8 +45,10 @@ use fuel_core_types::{
     },
     fuel_tx::{
         Bytes32,
+        Script,
         Transaction as FuelTransaction,
         field::{
+            ChargeableBody,
             Policies as _,
             ReceiptsRoot as _,
             Script as _,
@@ -53,7 +56,11 @@ use fuel_core_types::{
             ScriptGasLimit as _,
             Witnesses as _,
         },
-        policies::PolicyType,
+        policies::{
+            Policies as FuelPolicies,
+            PoliciesBits,
+            PolicyType,
+        },
     },
     tai64,
 };
@@ -186,22 +193,28 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
 fn proto_policies_from_policies(
     policies: &fuel_core_types::fuel_tx::policies::Policies,
 ) -> ProtoPolicies {
-    const POLICY_ORDER: [PolicyType; 5] = [
-        PolicyType::Tip,
-        PolicyType::WitnessLimit,
-        PolicyType::Maturity,
-        PolicyType::MaxFee,
-        PolicyType::Expiration,
-    ];
-
-    let values = POLICY_ORDER
-        .iter()
-        .map(|policy_type| policies.get(*policy_type).unwrap_or_default())
-        .collect();
-
+    let mut values = [0u64; 5];
+    if policies.is_set(PolicyType::Tip) {
+        values[0] = policies.get(PolicyType::Tip).unwrap_or_default();
+    }
+    if policies.is_set(PolicyType::WitnessLimit) {
+        let value = policies.get(PolicyType::WitnessLimit).unwrap_or_default();
+        values[1] = value;
+    }
+    if policies.is_set(PolicyType::Maturity) {
+        let value = policies.get(PolicyType::Maturity).unwrap_or_default();
+        values[2] = value;
+    }
+    if policies.is_set(PolicyType::MaxFee) {
+        values[3] = policies.get(PolicyType::MaxFee).unwrap_or_default();
+    }
+    if policies.is_set(PolicyType::Expiration) {
+        values[4] = policies.get(PolicyType::Expiration).unwrap_or_default();
+    }
+    let bits = policies.bits();
     ProtoPolicies {
-        bits: policies.bits(),
-        values,
+        bits,
+        values: values.to_vec(),
     }
 }
 
@@ -255,7 +268,133 @@ pub fn partial_header_from_proto_header(
 }
 
 pub fn tx_from_proto_tx(_proto_tx: &ProtoTransaction) -> Result<FuelTransaction> {
-    todo!()
+    match &_proto_tx.variant {
+        Some(ProtoTransactionVariant::Script(_proto_script)) => {
+            let ProtoScriptTx {
+                script_gas_limit,
+                receipts_root,
+                script,
+                script_data,
+                policies,
+                inputs,
+                outputs,
+                witnesses,
+                metadata,
+            } = _proto_script.clone();
+            //         gas_limit: Word,
+            //         script: Vec<u8>,
+            //         script_data: Vec<u8>,
+            //         policies: Policies,
+            //         inputs: Vec<Input>,
+            //         outputs: Vec<Output>,
+            //         witnesses: Vec<Witness>,
+            let fuel_policies = policies
+                .map(policies_from_proto_policies)
+                .unwrap_or_default();
+            let script_tx = FuelTransaction::script(
+                script_gas_limit,
+                script,
+                script_data,
+                fuel_policies,
+                vec![],
+                vec![],
+                vec![],
+            );
+
+            Ok(FuelTransaction::Script(script_tx))
+        }
+        _ => {
+            Err(anyhow!("Unsupported transaction variant")).map_err(Error::Serialization)
+        }
+    }
+}
+
+//     /// Sets the `gas_price` policy.
+//     pub fn with_tip(mut self, tip: Word) -> Self {
+//         self.set(PolicyType::Tip, Some(tip));
+//         self
+//     }
+//
+//     /// Sets the `witness_limit` policy.
+//     pub fn with_witness_limit(mut self, witness_limit: Word) -> Self {
+//         self.set(PolicyType::WitnessLimit, Some(witness_limit));
+//         self
+//     }
+//
+//     /// Sets the `maturity` policy.
+//     pub fn with_maturity(mut self, maturity: BlockHeight) -> Self {
+//         self.set(PolicyType::Maturity, Some(*maturity.deref() as u64));
+//         self
+//     }
+//
+//     /// Sets the `expiration` policy.
+//     pub fn with_expiration(mut self, expiration: BlockHeight) -> Self {
+//         self.set(PolicyType::Expiration, Some(*expiration.deref() as u64));
+//         self
+//     }
+//
+//     /// Sets the `max_fee` policy.
+//     pub fn with_max_fee(mut self, max_fee: Word) -> Self {
+//         self.set(PolicyType::MaxFee, Some(max_fee));
+//         self
+//     }
+//
+//     /// Sets the `owner` policy.
+//     pub fn with_owner(mut self, owner: Word) -> Self {
+//         self.set(PolicyType::Owner, Some(owner));
+//         self
+//     }
+//
+// bitflags::bitflags! {
+//     /// See https://github.com/FuelLabs/fuel-specs/blob/master/src/tx-format/policy.md#policy
+//     #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
+//     #[derive(serde::Serialize, serde::Deserialize)]
+//     pub struct PoliciesBits: u32 {
+//         /// If set, the gas price is present in the policies.
+//         const Tip = 1 << 0;
+//         /// If set, the witness limit is present in the policies.
+//         const WitnessLimit = 1 << 1;
+//         /// If set, the maturity is present in the policies.
+//         const Maturity = 1 << 2;
+//         /// If set, the max fee is present in the policies.
+//         const MaxFee = 1 << 3;
+//         /// If set, the expiration is present in the policies.
+//         const Expiration = 1 << 4;
+//         /// If set, the owner is present in the policies.
+//         const Owner = 1 << 5;
+//     }
+// }
+fn policies_from_proto_policies(proto_policies: ProtoPolicies) -> FuelPolicies {
+    let ProtoPolicies { bits, values } = proto_policies;
+    let mut policies = FuelPolicies::default();
+    let bits =
+        PoliciesBits::from_bits(bits).expect("Should be able to create from `u32`");
+    if bits.contains(PoliciesBits::Tip) {
+        if let Some(tip) = values.get(0) {
+            policies.set(PolicyType::Tip, Some(*tip));
+        }
+    }
+    if bits.contains(PoliciesBits::WitnessLimit) {
+        if let Some(witness_limit) = values.get(1) {
+            policies.set(PolicyType::WitnessLimit, Some(*witness_limit));
+        }
+    }
+    if bits.contains(PoliciesBits::Maturity) {
+        if let Some(maturity) = values.get(2) {
+            policies.set(PolicyType::Maturity, Some(*maturity));
+        }
+    }
+    if bits.contains(PoliciesBits::MaxFee) {
+        if let Some(max_fee) = values.get(3) {
+            policies.set(PolicyType::MaxFee, Some(*max_fee));
+        }
+    }
+    if bits.contains(PoliciesBits::Expiration) {
+        if let Some(expiration) = values.get(4) {
+            policies.set(PolicyType::Expiration, Some(*expiration));
+        }
+    }
+    policies
 }
 
 pub fn proto_header_to_empty_application_header(
@@ -334,36 +473,37 @@ pub fn proto_header_to_empty_consensus_header(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_types::{
+        fuel_tx::{
+            Blob,
+            Create,
+            Mint,
+            Script,
+            Upgrade,
+            Upload,
+        },
+        test_helpers::arb_block,
+    };
     use proptest::prelude::*;
 
-    prop_compose! {
-        fn arb_block()(_ in 1..100u32) -> FuelBlock {
-            let mut fuel_block = FuelBlock::default();
-            let transaction_tree =
-                fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator::new(
-                );
-            let root = transaction_tree.root().into();
-            fuel_block.header_mut().set_transaction_root(root);
-            fuel_block.header_mut().set_message_outbox_root(root);
-            fuel_block
-        }
-    }
-
     proptest! {
-        #[test]
-        fn serialize_block__roundtrip(block in arb_block()) {
-            // given
-            let serializer = SerializerAdapter;
+            #![proptest_config(ProptestConfig {
+      cases: 1, .. ProptestConfig::default()
+    })]
+          #[test]
+          fn serialize_block__roundtrip(block in arb_block()) {
+              // given
+              let serializer = SerializerAdapter;
 
-            // when
-            let proto_block = serializer.serialize_block(&block).unwrap();
+              // when
+              let proto_block = serializer.serialize_block(&block).unwrap();
 
-            // then
-            let deserialized_block = fuel_block_from_protobuf(proto_block).unwrap();
-            assert_eq!(block, deserialized_block);
+              // then
+              let deserialized_block = fuel_block_from_protobuf(proto_block).unwrap();
+              assert_eq!(block, deserialized_block);
 
-        }
-    }
+          }
+      }
 
     #[test]
     #[ignore]

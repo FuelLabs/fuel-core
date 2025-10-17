@@ -4307,6 +4307,7 @@ dependencies = [
  "k256",
  "parking_lot",
  "postcard",
+ "proptest",
  "rand 0.8.5",
  "secrecy",
  "serde",
