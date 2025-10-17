@@ -2032,7 +2032,7 @@ mod tests {
         );
 
         // Output balances: 100 of asset_id [2; 32]
-        let expected_balance_root: [u8; 32] = Sha256::digest(&[]).into();
+        let expected_balance_root: [u8; 32] = Sha256::digest([]).into();
         assert_eq!(
             executed_tx.outputs()[0].balance_root(),
             Some(&Bytes32::new(expected_balance_root))
@@ -2049,7 +2049,7 @@ mod tests {
         );
 
         // Output state: slot tx_id with value 1
-        let expected_state_root: [u8; 32] = Sha256::digest(&[]).into();
+        let expected_state_root: [u8; 32] = Sha256::digest([]).into();
         assert_eq!(
             executed_tx.outputs()[0].state_root(),
             Some(&Bytes32::new(expected_state_root))
