@@ -334,24 +334,38 @@ pub fn proto_header_to_empty_consensus_header(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    prop_compose! {
+        fn arb_block()(_ in 1..100u32) -> FuelBlock {
+            let mut fuel_block = FuelBlock::default();
+            let transaction_tree =
+                fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator::new(
+                );
+            let root = transaction_tree.root().into();
+            fuel_block.header_mut().set_transaction_root(root);
+            fuel_block.header_mut().set_message_outbox_root(root);
+            fuel_block
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn serialize_block__roundtrip(block in arb_block()) {
+            // given
+            let serializer = SerializerAdapter;
+
+            // when
+            let proto_block = serializer.serialize_block(&block).unwrap();
+
+            // then
+            let deserialized_block = fuel_block_from_protobuf(proto_block).unwrap();
+            assert_eq!(block, deserialized_block);
+
+        }
+    }
 
     #[test]
-    fn serialize_block__roundtrip() {
-        // given
-        let serializer = SerializerAdapter;
-        let mut fuel_block = FuelBlock::default();
-        let transaction_tree =
-            fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator::new(
-            );
-        let root = transaction_tree.root().into();
-        fuel_block.header_mut().set_transaction_root(root);
-        fuel_block.header_mut().set_message_outbox_root(root);
-
-        // when
-        let proto_block = serializer.serialize_block(&fuel_block).unwrap();
-
-        // then
-        let deserialized_block = fuel_block_from_protobuf(proto_block).unwrap();
-        assert_eq!(fuel_block, deserialized_block);
-    }
+    #[ignore]
+    fn _dummy() {}
 }

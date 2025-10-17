@@ -3505,6 +3505,7 @@ dependencies = [
  "log",
  "num_enum",
  "postcard",
+ "proptest",
  "prost 0.14.1",
  "rand 0.8.5",
  "serde",
