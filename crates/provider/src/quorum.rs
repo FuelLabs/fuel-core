@@ -1,6 +1,8 @@
-use crate::test_helpers::provider::MockProvider;
+use crate::FuelProvider;
+use alloy_consensus::private::alloy_eips::BlockId;
 use alloy_provider::transport::{TransportError, TransportErrorKind};
-use alloy_provider::Provider;
+use alloy_provider::{EthGetBlock, Provider};
+use alloy_rpc_types_eth::Block;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -119,11 +121,6 @@ impl<T> QuorumProviderBuilder<T> {
 }
 
 #[async_trait]
-pub trait FuelProvider: Send + Sync {
-    async fn get_block_number(&self) -> Result<u64, TransportError>;
-}
-
-#[async_trait]
 impl FuelProvider for QuorumProvider<Box<dyn Provider>> {
     async fn get_block_number(&self) -> Result<u64, TransportError> {
         let futures: Vec<_> = self.providers.iter().map(|p| p.inner.get_block_number()).collect();
@@ -140,6 +137,10 @@ impl FuelProvider for QuorumProvider<Box<dyn Provider>> {
         } else {
             Err(TransportErrorKind::custom_str("Quorum not met".into()))
         }
+    }
+
+    async fn get_block(&self, block: BlockId) -> EthGetBlock<Block> {
+        todo!()
     }
 }
 
