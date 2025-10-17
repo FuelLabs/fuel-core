@@ -11,18 +11,11 @@ rust-version = { workspace = true }
 description = "Fuel Relayer"
 
 [features]
-test-helpers = [
-    "parking_lot",
-    "fuel-core-types/test-helpers",
-    "alloy-consensus",
-    "alloy-rpc-client/reqwest",
-]
+test-helpers = []
 
 [dependencies]
-alloy-consensus = { workspace = true, optional = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
-alloy-rpc-client = { workspace = true, optional = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-sol-types = { workspace = true }
 anyhow = { workspace = true }
@@ -34,7 +27,6 @@ fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 once_cell = { workspace = true }
-parking_lot = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

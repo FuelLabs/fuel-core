@@ -5,10 +5,10 @@ use self::{
     run::RelayerData,
 };
 use crate::{
-    Config,
     log::EthEventLog,
     ports::RelayerDb,
     service::state::EthLocal,
+    Config,
 };
 use alloy_rpc_types_eth::{
     BlockId,
@@ -20,13 +20,13 @@ use alloy_rpc_types_eth::{
 use async_trait::async_trait;
 use core::time::Duration;
 use fuel_core_provider::{
-    FuelEthProvider,
-    Provider,
     quorum::{
         Quorum,
         QuorumProvider,
         WeightedProvider,
     },
+    FuelEthProvider,
+    Provider,
 };
 use fuel_core_services::{
     RunnableService,
@@ -77,7 +77,7 @@ type Synced = watch::Receiver<SyncState>;
 type NotifySynced = watch::Sender<SyncState>;
 
 /// The alias of runnable relayer service.
-pub type Service<D> = CustomizableService<QuorumProvider, D>;
+pub type Service<D> = CustomizableService<QuorumProvider<FuelEthProvider>, D>;
 type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
 /// The shared state of the relayer task.
@@ -152,11 +152,11 @@ impl PageSizer for AdaptivePageSizer {
                 self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
             }
             RpcOutcome::Success { logs_downloaded }
-                if logs_downloaded > self.max_logs_per_rpc =>
-            {
-                self.successful_rpc_calls = 0;
-                self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
-            }
+            if logs_downloaded > self.max_logs_per_rpc =>
+                {
+                    self.successful_rpc_calls = 0;
+                    self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
+                }
             _ => {
                 self.successful_rpc_calls = self.successful_rpc_calls.saturating_add(1);
                 if self.successful_rpc_calls >= self.grow_threshold
@@ -356,7 +356,7 @@ where
                     .sync_minimum_duration
                     .saturating_sub(now.elapsed()),
             )
-            .await;
+                .await;
         }
 
         match result {
@@ -476,7 +476,7 @@ where
             )
         })?
         .into_iter()
-        .map(|url| WeightedProvider::new(FuelEthProvider::new(url)));
+        .map(|url| WeightedProvider::new(Box::new(FuelEthProvider::new(url))));
 
     let eth_node = QuorumProvider::new(Quorum::All, urls);
     let retry_on_error = true;

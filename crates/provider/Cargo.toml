@@ -11,7 +11,25 @@ rust-version = { workspace = true }
 version = { workspace = true }
 description = "Fuel provider"
 
+#[features]
+#test-helpers = [
+#    "parking_lot",
+#    "fuel-core-types/test-helpers",
+#    "alloy-consensus",
+#    "alloy-rpc-client/reqwest",
+#    "alloy-primitives",
+#    "alloy-rpc-types-eth"
+#]
+
 [dependencies]
+alloy-primitives = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
+alloy-consensus = { workspace = true }
+alloy-rpc-client = { workspace = true }
 alloy-provider = { workspace = true }
 futures = { workspace = true }
 url = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }

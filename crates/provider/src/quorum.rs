@@ -1,8 +1,9 @@
-use alloy_provider::{
-    Provider,
-    RootProvider,
-    network::Ethereum,
-};
+use crate::test_helpers::provider::MockProvider;
+use alloy_provider::transport::{TransportError, TransportErrorKind};
+use alloy_provider::Provider;
+use async_trait::async_trait;
+use std::collections::HashMap;
+use thiserror::Error;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub enum Quorum {
@@ -48,6 +49,7 @@ impl Quorum {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct QuorumProvider<T = Box<dyn Provider>> {
     quorum: Quorum,
     providers: Vec<WeightedProvider<T>>,
@@ -92,7 +94,7 @@ impl<T> QuorumProviderBuilder<T> {
     }
     pub fn add_providers(
         mut self,
-        providers: impl IntoIterator<Item = WeightedProvider<T>>,
+        providers: impl IntoIterator<Item=WeightedProvider<T>>,
     ) -> Self {
         for provider in providers {
             self.providers.push(provider);
@@ -116,6 +118,31 @@ impl<T> QuorumProviderBuilder<T> {
     }
 }
 
+#[async_trait]
+pub trait FuelProvider: Send + Sync {
+    async fn get_block_number(&self) -> Result<u64, TransportError>;
+}
+
+#[async_trait]
+impl FuelProvider for QuorumProvider<Box<dyn Provider>> {
+    async fn get_block_number(&self) -> Result<u64, TransportError> {
+        let futures: Vec<_> = self.providers.iter().map(|p| p.inner.get_block_number()).collect();
+        let results = futures::future::join_all(futures).await;
+        let agreement_map = self.calculate_agreement_weight(&results);
+        let agreed_weight = self.quorum_weight;
+        if let Some(best_value) = agreement_map
+            .iter()
+            .filter(|&(_, &weight)| weight >= agreed_weight)
+            .max_by_key(|&(_, &weight)| weight)
+            .map(|(&best_value, _)| best_value)
+        {
+            Ok(*best_value)
+        } else {
+            Err(TransportErrorKind::custom_str("Quorum not met".into()))
+        }
+    }
+}
+
 impl<T> QuorumProvider<T> {
     /// Convenience method for creating a `QuorumProviderBuilder` with same `JsonRpcClient` types
     pub fn builder() -> QuorumProviderBuilder<T> {
@@ -126,7 +153,7 @@ impl<T> QuorumProvider<T> {
     /// providers
     pub fn new(
         quorum: Quorum,
-        providers: impl IntoIterator<Item = WeightedProvider<T>>,
+        providers: impl IntoIterator<Item=WeightedProvider<T>>,
     ) -> Self {
         Self::builder()
             .add_providers(providers)
@@ -149,11 +176,65 @@ impl<T> QuorumProvider<T> {
         self.providers.push(provider);
         self.quorum_weight = self.quorum.weight(&self.providers)
     }
+
+    // Calculate total weight of providers that agree on a value
+    fn calculate_agreement_weight<'a, V: Eq + std::hash::Hash>(
+        &self,
+        results: &'a [Result<V, TransportError>],
+    ) -> HashMap<&'a V, u64> {
+        let mut agreement_map = HashMap::new();
+
+        for (i, result) in results.iter().enumerate() {
+            if let Ok(value) = result {
+                *agreement_map.entry(value).or_insert(0) += self.providers[i].weight;
+            }
+        }
+
+        agreement_map
+    }
 }
 
-impl Provider for QuorumProvider<Box<dyn Provider>> {
-    fn root(&self) -> &RootProvider<Ethereum> {
-        // TODO: Fix me
-        &self.providers.first().unwrap().inner.root()
+#[derive(Error, Debug)]
+/// Error thrown when sending an HTTP request
+pub enum QuorumError {
+    #[error("No Quorum reached.")]
+    /// NoQuorumReached
+    NoQuorumReached {
+        /// Returned responses
+        //values: Vec<Value>,
+        /// Returned errors
+        errors: Vec<TransportError>,
+    },
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+    use crate::test_helpers::provider::MockProvider;
+    use alloy_provider::mock::Asserter;
+    use alloy_provider::Provider;
+    #[test]
+    fn khar() {
+        assert_eq!(1, 1);
+    }
+
+    #[tokio::test]
+    async fn test_quorum() {
+        let num = 5u64;
+        let value = 42u64;
+        let mut providers: Vec<WeightedProvider<Box<dyn Provider>>> = Vec::new();
+
+        for _ in 0..num {
+            let asserter = Asserter::new();
+            asserter.push_success(&value);
+            let mock = MockProvider::new(asserter);
+            providers.push(WeightedProvider::new(Box::new(mock)));
+        }
+
+        let quorum = QuorumProvider::builder().add_providers(providers).quorum(Quorum::Majority).build();
+
+        let blk = quorum.get_block_number().await.unwrap();
+        assert_eq!(blk, value);
     }
 }

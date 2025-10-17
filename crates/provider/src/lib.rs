@@ -1,9 +1,13 @@
 pub use alloy_provider::Provider;
 pub mod quorum;
 use alloy_provider::{
-    RootProvider,
     network::Ethereum,
+    RootProvider,
 };
+
+//#[cfg(any(test, feature = "test-helpers"))]
+pub mod test_helpers;
+
 pub struct FuelEthProvider {
     provider: RootProvider<Ethereum>,
 }

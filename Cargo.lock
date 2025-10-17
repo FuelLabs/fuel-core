@@ -4316,8 +4316,16 @@ dependencies = [
 name = "fuel-core-provider"
 version = "0.46.0"
 dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
  "alloy-provider",
+ "alloy-rpc-client",
+ "alloy-rpc-types-eth",
+ "async-trait",
  "futures",
+ "parking_lot",
+ "thiserror 2.0.12",
+ "tokio",
  "url",
 ]
 
@@ -4325,10 +4333,8 @@ dependencies = [
 name = "fuel-core-relayer"
 version = "0.46.0"
 dependencies = [
- "alloy-consensus",
  "alloy-primitives",
  "alloy-provider",
- "alloy-rpc-client",
  "alloy-rpc-types-eth",
  "alloy-sol-types",
  "anyhow",
@@ -4343,7 +4349,6 @@ dependencies = [
  "futures",
  "mockall",
  "once_cell",
- "parking_lot",
  "rand 0.8.5",
  "strum 0.25.0",
  "strum_macros 0.25.3",
