@@ -288,6 +288,19 @@ impl BlockHeader {
         }
     }
 
+    /// Set the message outbox root for the header
+    pub fn set_message_outbox_root(&mut self, root: Bytes32) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_message_outbox_root(root);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_message_outbox_root(root);
+            }
+        }
+    }
+
     /// Set the consensus parameters version
     pub fn set_consensus_parameters_version(
         &mut self,

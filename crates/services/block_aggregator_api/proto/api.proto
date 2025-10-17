@@ -88,7 +88,7 @@ message Header {
 //    id: BlockId,
 //}
 message V1Header {
-  uint32 da_height = 1;
+  uint64 da_height = 1;
   uint32 consensus_parameters_version = 2;
   uint32 state_transition_bytecode_version = 3;
   uint32 transactions_count = 4;
@@ -98,7 +98,7 @@ message V1Header {
   bytes event_inbox_root = 8;
   bytes prev_root = 9;
   uint32 height = 10;
-  bytes time = 11;
+  uint64 time = 11;
   bytes application_hash = 12;
   optional bytes block_id = 13;
 }
@@ -118,7 +118,7 @@ message V1Header {
 //    pub tx_id_commitment: Bytes32,
 //}
 message V2Header {
-  uint32 da_height = 1;
+  uint64 da_height = 1;
   uint32 consensus_parameters_version = 2;
   uint32 state_transition_bytecode_version = 3;
   uint32 transactions_count = 4;
@@ -129,7 +129,7 @@ message V2Header {
   bytes tx_id_commitment = 9;
   bytes prev_root = 10;
   uint32 height = 11;
-  bytes time = 12;
+  uint64 time = 12;
   bytes application_hash = 13;
   optional bytes block_id = 14;
 }
