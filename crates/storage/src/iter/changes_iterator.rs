@@ -201,7 +201,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVWriteItem> {
+    ) -> BoxedIter<'_, KVWriteItem> {
         match self.changes {
             StorageChanges::Changes(changes) => {
                 if let Some(tree) = changes.get(&column.id()) {
@@ -239,7 +239,7 @@ where
     pub fn iter_all_writes<M>(
         &self,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<StorageResult<(M::OwnedKey, Option<M::OwnedValue>)>>
+    ) -> BoxedIter<'_, StorageResult<(M::OwnedKey, Option<M::OwnedValue>)>>
     where
         M: Mappable,
         M: TableWithBlueprint<Column = Column>,

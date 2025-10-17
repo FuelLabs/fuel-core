@@ -1689,10 +1689,9 @@ mod tests {
 
         // Ensure all txs succeeded.
         assert!(
-            tx_status.iter().all(|s| (matches!(
-                s.result,
-                TransactionExecutionResult::Success { .. }
-            )))
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. }))
         );
 
         // Assert the balance and state roots are same before and after execution.
@@ -2141,10 +2140,9 @@ mod tests {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
         assert!(
-            tx_status.iter().all(|s| (matches!(
-                s.result,
-                TransactionExecutionResult::Success { .. }
-            )))
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. }))
         );
 
         let executed_tx = block.transactions()[1].as_script().unwrap();
@@ -2504,10 +2502,9 @@ mod tests {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
         assert!(
-            tx_status.iter().all(|s| (matches!(
-                s.result,
-                TransactionExecutionResult::Success { .. }
-            )))
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. }))
         );
 
         // Check resulting roots
