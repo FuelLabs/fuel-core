@@ -52,20 +52,20 @@ pub trait MessageQueryData: Send + Sync {
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Nonce>>;
+    ) -> BoxedIter<'_, StorageResult<Nonce>>;
 
     fn owned_messages(
         &self,
         owner: &Address,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Message>>;
+    ) -> BoxedIter<'_, StorageResult<Message>>;
 
     fn all_messages(
         &self,
         start_message_id: Option<Nonce>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<Message>>;
+    ) -> BoxedIter<'_, StorageResult<Message>>;
 }
 
 impl ReadView {
