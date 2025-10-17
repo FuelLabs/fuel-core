@@ -182,13 +182,12 @@ impl NetworkBehaviour for Behaviour {
                     dial.peer_id,
                     dial.error
                 );
-                if let Some(peer_id) = dial.peer_id {
-                    if self.pending_connections.remove(&dial.connection_id)
-                        && !self.connected_reserved_nodes.contains(&peer_id)
-                    {
-                        self.reserved_nodes_to_connect
-                            .push_back((Instant::now(), peer_id));
-                    }
+                if let Some(peer_id) = dial.peer_id
+                    && self.pending_connections.remove(&dial.connection_id)
+                    && !self.connected_reserved_nodes.contains(&peer_id)
+                {
+                    self.reserved_nodes_to_connect
+                        .push_back((Instant::now(), peer_id));
                 }
             }
             _ => {}
@@ -211,26 +210,26 @@ impl NetworkBehaviour for Behaviour {
             return Poll::Ready(event)
         }
 
-        if let Some((instant, peer_id)) = self.reserved_nodes_to_connect.front() {
-            if instant.elapsed() > Duration::from_secs(HEALTH_CHECK_INTERVAL_IN_SECONDS) {
-                let peer_id = *peer_id;
-                self.reserved_nodes_to_connect.pop_front();
-                // The initial DNS address can be replaced with a real IP, but when
-                // the node disconnects, the IP may change. Using initial multiaddrs
-                // here allows you to reconnect and get a new IP again.
-                let multiaddrs = self
-                    .reserved_nodes_multiaddr
-                    .get(&peer_id)
-                    .expect("Multiaddr is always available")
-                    .clone();
-                let opts = DialOpts::peer_id(peer_id)
-                    .condition(PeerCondition::DisconnectedAndNotDialing)
-                    .addresses(multiaddrs)
-                    .build();
-                self.pending_connections.insert(opts.connection_id());
+        if let Some((instant, peer_id)) = self.reserved_nodes_to_connect.front()
+            && instant.elapsed() > Duration::from_secs(HEALTH_CHECK_INTERVAL_IN_SECONDS)
+        {
+            let peer_id = *peer_id;
+            self.reserved_nodes_to_connect.pop_front();
+            // The initial DNS address can be replaced with a real IP, but when
+            // the node disconnects, the IP may change. Using initial multiaddrs
+            // here allows you to reconnect and get a new IP again.
+            let multiaddrs = self
+                .reserved_nodes_multiaddr
+                .get(&peer_id)
+                .expect("Multiaddr is always available")
+                .clone();
+            let opts = DialOpts::peer_id(peer_id)
+                .condition(PeerCondition::DisconnectedAndNotDialing)
+                .addresses(multiaddrs)
+                .build();
+            self.pending_connections.insert(opts.connection_id());
 
-                return Poll::Ready(ToSwarm::Dial { opts })
-            }
+            return Poll::Ready(ToSwarm::Dial { opts })
         }
 
         if self.decay_interval.poll_tick(cx).is_ready() {

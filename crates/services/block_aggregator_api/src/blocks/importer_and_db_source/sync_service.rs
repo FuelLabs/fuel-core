@@ -112,14 +112,14 @@ where
 {
     async fn run(&mut self, _watcher: &mut StateWatcher) -> TaskNextAction {
         self.maybe_update_stop_height().await;
-        if let Some(last_height) = self.maybe_stop_height {
-            if self.next_height >= last_height {
-                tracing::info!(
-                    "reached end height {}, putting task into hibernation",
-                    last_height
-                );
-                futures::future::pending().await
-            }
+        if let Some(last_height) = self.maybe_stop_height
+            && self.next_height >= last_height
+        {
+            tracing::info!(
+                "reached end height {}, putting task into hibernation",
+                last_height
+            );
+            futures::future::pending().await
         }
         let next_height = self.next_height;
         let res = self.get_block(&next_height);

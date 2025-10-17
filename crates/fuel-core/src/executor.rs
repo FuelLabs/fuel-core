@@ -1228,10 +1228,10 @@ mod tests {
             producer.produce_and_commit(block.into()).unwrap();
 
         // modify change amount
-        if let Transaction::Script(script) = &mut block.transactions_mut()[0] {
-            if let Output::Change { amount, .. } = &mut script.outputs_mut()[0] {
-                *amount = fake_output_amount
-            }
+        if let Transaction::Script(script) = &mut block.transactions_mut()[0]
+            && let Output::Change { amount, .. } = &mut script.outputs_mut()[0]
+        {
+            *amount = fake_output_amount
         }
 
         // then
@@ -2887,13 +2887,12 @@ mod tests {
             .unwrap()
             .into_result();
         // Corrupt the utxo_id of the contract output
-        if let Transaction::Script(script) = &mut second_block.transactions_mut()[0] {
-            if let Input::Contract(contract::Contract { utxo_id, .. }) =
+        if let Transaction::Script(script) = &mut second_block.transactions_mut()[0]
+            && let Input::Contract(contract::Contract { utxo_id, .. }) =
                 &mut script.inputs_mut()[0]
-            {
-                // use a previously valid contract id which isn't the correct one for this block
-                *utxo_id = UtxoId::new(tx_id, 0);
-            }
+        {
+            // use a previously valid contract id which isn't the correct one for this block
+            *utxo_id = UtxoId::new(tx_id, 0);
         }
 
         let verifier = create_executor(db, Default::default());

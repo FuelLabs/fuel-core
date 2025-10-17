@@ -96,7 +96,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         match self.changes {
             StorageChanges::Changes(changes) => {
                 if let Some(tree) = changes.get(&column.id()) {
@@ -145,7 +145,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<crate::kv_store::KeyItem> {
+    ) -> BoxedIter<'_, crate::kv_store::KeyItem> {
         // We cannot define iter_store_keys appropriately for the `ChangesIterator`,
         // because we have to filter out the keys that were removed, which are
         // marked as `WriteOperation::Remove` in the value

@@ -52,7 +52,7 @@ homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
-rust-version = "1.86.0"
+rust-version = "1.90.0"
 version = "0.46.0"
 
 [workspace.dependencies]
@@ -114,7 +114,7 @@ fuel-core-wasm-executor = { version = "0.46.0", path = "./crates/services/upgrad
 fuel-gas-price-algorithm = { version = "0.46.0", path = "crates/fuel-gas-price-algorithm" }
 
 # Fuel dependencies
-fuel-vm-private = { version = "0.64.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.65.0", package = "fuel-vm", default-features = false }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14.26" }

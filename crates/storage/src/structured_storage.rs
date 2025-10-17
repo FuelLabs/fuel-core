@@ -227,7 +227,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         self.inner.iter_store(column, prefix, start, direction)
     }
 
@@ -237,7 +237,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIter<'_, KeyItem> {
         self.inner.iter_store_keys(column, prefix, start, direction)
     }
 }
@@ -259,7 +259,7 @@ where
 {
     type Error = StorageError;
 
-    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
+    fn get(&self, key: &M::Key) -> Result<Option<Cow<'_, M::OwnedValue>>, Self::Error> {
         <M as TableWithBlueprint>::Blueprint::get(self, key, M::column())
             .map(|value| value.map(Cow::Owned))
     }

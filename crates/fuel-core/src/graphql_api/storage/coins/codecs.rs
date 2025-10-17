@@ -54,7 +54,7 @@ pub enum SerializedCoinsToSpendIndexKey {
 }
 
 impl Encoder for SerializedCoinsToSpendIndexKey {
-    fn as_bytes(&self) -> Cow<[u8]> {
+    fn as_bytes(&self) -> Cow<'_, [u8]> {
         match self {
             SerializedCoinsToSpendIndexKey::Coin(bytes) => Cow::Borrowed(bytes),
             SerializedCoinsToSpendIndexKey::Message(bytes) => Cow::Borrowed(bytes),

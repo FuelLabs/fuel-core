@@ -85,7 +85,7 @@ pub trait IterableStore: KeyValueInspect {
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem>;
+    ) -> BoxedIter<'_, KVItem>;
 
     /// Returns an iterator over keys in the storage.
     fn iter_store_keys(
@@ -94,7 +94,7 @@ pub trait IterableStore: KeyValueInspect {
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem>;
+    ) -> BoxedIter<'_, KeyItem>;
 }
 
 #[cfg(feature = "std")]
@@ -108,7 +108,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         use core::ops::Deref;
         self.deref().iter_store(column, prefix, start, direction)
     }
@@ -119,7 +119,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIter<'_, KeyItem> {
         use core::ops::Deref;
         self.deref()
             .iter_store_keys(column, prefix, start, direction)
@@ -137,7 +137,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         P: AsRef<[u8]>;
 
@@ -147,7 +147,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         P: AsRef<[u8]>;
 }
@@ -163,7 +163,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<crate::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, crate::Result<M::OwnedKey>>
     where
         P: AsRef<[u8]>,
     {
@@ -197,7 +197,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         P: AsRef<[u8]>,
     {
@@ -236,7 +236,7 @@ pub trait IteratorOverTable {
     fn iter_all_keys<M>(
         &self,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -248,7 +248,7 @@ pub trait IteratorOverTable {
     fn iter_all_by_prefix_keys<M, P>(
         &self,
         prefix: Option<P>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -262,7 +262,7 @@ pub trait IteratorOverTable {
         &self,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -276,7 +276,7 @@ pub trait IteratorOverTable {
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -289,7 +289,7 @@ pub trait IteratorOverTable {
     fn iter_all<M>(
         &self,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -301,7 +301,7 @@ pub trait IteratorOverTable {
     fn iter_all_by_prefix<M, P>(
         &self,
         prefix: Option<P>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -315,7 +315,7 @@ pub trait IteratorOverTable {
         &self,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -329,7 +329,7 @@ pub trait IteratorOverTable {
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         P: AsRef<[u8]>,

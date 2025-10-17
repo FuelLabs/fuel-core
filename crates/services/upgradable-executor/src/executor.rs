@@ -939,15 +939,13 @@ where
             .enumerate()
             .map(|(i, (status, tx))| {
                 let tx_index = u16::try_from(i).unwrap_or(u16::MAX);
-                let preconfirmation_status =
-                    convert_tx_execution_result_to_preconfirmation(
-                        tx,
-                        status.id,
-                        &status.result,
-                        *execution_result.block.header().height(),
-                        tx_index,
-                    );
-                preconfirmation_status
+                convert_tx_execution_result_to_preconfirmation(
+                    tx,
+                    status.id,
+                    &status.result,
+                    *execution_result.block.header().height(),
+                    tx_index,
+                )
             })
             .collect::<Vec<_>>();
 

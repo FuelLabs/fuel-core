@@ -363,17 +363,17 @@ impl FuelService {
 
     async fn prepare_genesis(&self, watcher: &StateWatcher) -> anyhow::Result<()> {
         // check if chain is initialized
-        if let Err(err) = self.shared.database.on_chain().latest_view()?.get_genesis() {
-            if err.is_not_found() {
-                let result = genesis::execute_genesis_block(
-                    watcher.clone(),
-                    &self.shared.config,
-                    &self.shared.database,
-                )
-                .await?;
+        if let Err(err) = self.shared.database.on_chain().latest_view()?.get_genesis()
+            && err.is_not_found()
+        {
+            let result = genesis::execute_genesis_block(
+                watcher.clone(),
+                &self.shared.config,
+                &self.shared.database,
+            )
+            .await?;
 
-                self.shared.block_importer.commit_result(result).await?;
-            }
+            self.shared.block_importer.commit_result(result).await?;
         }
 
         // repopulate missing tables

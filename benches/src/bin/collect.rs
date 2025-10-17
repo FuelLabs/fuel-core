@@ -139,12 +139,6 @@ pub enum Cost {
     Dependent(DependentCost),
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-struct Sample {
-    throughput: u64,
-    time: u64,
-}
-
 fn main() {
     let Args {
         baseline,
