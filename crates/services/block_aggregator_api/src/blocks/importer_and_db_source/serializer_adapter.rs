@@ -1,3 +1,5 @@
+#[cfg(feature = "fault-proving")]
+use crate::protobuf_types::V2Header as ProtoV2Header;
 use crate::{
     blocks::importer_and_db_source::BlockSerializer,
     protobuf_types::{
@@ -8,7 +10,6 @@ use crate::{
         Transaction as ProtoTransaction,
         V1Block as ProtoV1Block,
         V1Header as ProtoV1Header,
-        V2Header as ProtoV2Header,
         block::VersionedBlock as ProtoVersionedBlock,
         header::VersionedHeader as ProtoVersionedHeader,
         transaction::Variant as ProtoTransactionVariant,
