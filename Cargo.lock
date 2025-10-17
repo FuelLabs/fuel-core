@@ -3868,6 +3868,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "sha2 0.10.9",
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "tempfile",
@@ -4135,6 +4136,7 @@ dependencies = [
  "fuel-core-types 0.46.0",
  "parking_lot",
  "serde",
+ "sha2 0.10.9",
  "tracing",
 ]
 

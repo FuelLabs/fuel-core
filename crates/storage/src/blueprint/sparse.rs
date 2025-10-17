@@ -12,6 +12,7 @@ use crate::{
     StorageInspect,
     StorageMutate,
     blueprint::{
+        BlueprintCodec,
         BlueprintInspect,
         BlueprintMutate,
         SupportsBatching,
@@ -166,6 +167,17 @@ where
     }
 }
 
+impl<M, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> BlueprintCodec<M>
+    for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
+where
+    M: Mappable,
+    KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
+    ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
+{
+    type KeyCodec = KeyCodec;
+    type ValueCodec = ValueCodec;
+}
+
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> BlueprintInspect<M, S>
     for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
@@ -174,8 +186,6 @@ where
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
 {
-    type KeyCodec = KeyCodec;
-    type ValueCodec = ValueCodec;
 }
 
 impl<M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter> BlueprintMutate<M, S>
@@ -273,11 +283,6 @@ where
     }
 }
 
-type NodeKeyCodec<S, Nodes> =
-    <<Nodes as TableWithBlueprint>::Blueprint as BlueprintInspect<Nodes, S>>::KeyCodec;
-type NodeValueCodec<S, Nodes> =
-    <<Nodes as TableWithBlueprint>::Blueprint as BlueprintInspect<Nodes, S>>::ValueCodec;
-
 impl<Column, M, S, KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
     SupportsBatching<M, S> for Sparse<KeyCodec, ValueCodec, Metadata, Nodes, KeyConverter>
 where
@@ -347,10 +352,14 @@ where
         )?;
 
         let nodes = nodes.iter().map(|(key, value)| {
-            let key = NodeKeyCodec::<S, Nodes>::encode(key)
-                .as_bytes()
-                .into_owned();
-            let value = NodeValueCodec::<S, Nodes>::encode_as_value(value);
+            let key = <<Nodes as TableWithBlueprint>::Blueprint as BlueprintCodec<
+                Nodes,
+            >>::KeyCodec::encode(key)
+            .as_bytes()
+            .into_owned();
+            let value = <<Nodes as TableWithBlueprint>::Blueprint as BlueprintCodec<
+                Nodes,
+            >>::ValueCodec::encode_as_value(value);
             (key, WriteOperation::Insert(value))
         });
         storage.batch_write(Nodes::column(), nodes)?;
