@@ -275,7 +275,7 @@ where
         &self,
         tx: ArcPoolTx,
         persistent_storage: &impl TxPoolPersistentStorage,
-    ) -> Result<CanStoreTransaction<S>, InsertionErrorType> {
+    ) -> Result<CanStoreTransaction<'_, S>, InsertionErrorType> {
         if tx.max_gas() == 0 {
             return Err(InsertionErrorType::Error(Error::InputValidation(
                 InputValidationError::MaxGasZero,

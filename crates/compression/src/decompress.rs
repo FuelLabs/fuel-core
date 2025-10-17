@@ -282,91 +282,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::ports::{
-        EvictorDb,
-        TemporalRegistry,
-    };
-
     use super::*;
-    use fuel_core_types::{
-        fuel_compression::RegistryKey,
-        fuel_tx::{
-            Address,
-            AssetId,
-            ContractId,
-            ScriptCode,
-            input::PredicateCode,
-        },
-    };
     use serde::{
         Deserialize,
         Serialize,
     };
-
-    pub struct MockDb;
-    impl HistoryLookup for MockDb {
-        fn utxo_id(&self, _: CompressedUtxoId) -> anyhow::Result<UtxoId> {
-            unimplemented!()
-        }
-
-        fn coin(&self, _: UtxoId) -> anyhow::Result<crate::ports::CoinInfo> {
-            unimplemented!()
-        }
-
-        fn message(
-            &self,
-            _: fuel_core_types::fuel_types::Nonce,
-        ) -> anyhow::Result<crate::ports::MessageInfo> {
-            unimplemented!()
-        }
-    }
-    macro_rules! mock_temporal {
-        ($type:ty) => {
-            impl TemporalRegistry<$type> for MockDb {
-                fn read_registry(&self, _key: &RegistryKey) -> anyhow::Result<$type> {
-                    unimplemented!()
-                }
-
-                fn read_timestamp(&self, _key: &RegistryKey) -> anyhow::Result<Tai64> {
-                    unimplemented!()
-                }
-
-                fn write_registry(
-                    &mut self,
-                    _key: &RegistryKey,
-                    _value: &$type,
-                    _timestamp: Tai64,
-                ) -> anyhow::Result<()> {
-                    unimplemented!()
-                }
-
-                fn registry_index_lookup(
-                    &self,
-                    _value: &$type,
-                ) -> anyhow::Result<Option<RegistryKey>> {
-                    unimplemented!()
-                }
-            }
-
-            impl EvictorDb<$type> for MockDb {
-                fn set_latest_assigned_key(
-                    &mut self,
-                    _key: RegistryKey,
-                ) -> anyhow::Result<()> {
-                    unimplemented!()
-                }
-
-                fn get_latest_assigned_key(&self) -> anyhow::Result<Option<RegistryKey>> {
-                    unimplemented!()
-                }
-            }
-        };
-    }
-    mock_temporal!(Address);
-    mock_temporal!(AssetId);
-    mock_temporal!(ContractId);
-    mock_temporal!(ScriptCode);
-    mock_temporal!(PredicateCode);
 
     #[tokio::test]
     async fn decompress_block_with_unknown_version() {

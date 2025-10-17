@@ -321,7 +321,7 @@ pub fn from_strings_errors_to_std_error(errors: Vec<String>) -> io::Error {
             s.push_str(e.as_str());
             s
         });
-    io::Error::new(io::ErrorKind::Other, e)
+    io::Error::other(e)
 }
 
 impl FuelClient {
@@ -364,24 +364,21 @@ impl FuelClient {
             .extensions
             .as_ref()
             .and_then(|e| e.current_stf_version)
+            && let Ok(mut c) = self.chain_state_info.current_stf_version.lock()
         {
-            if let Ok(mut c) = self.chain_state_info.current_stf_version.lock() {
-                *c = Some(current_sft_version);
-            }
+            *c = Some(current_sft_version);
         }
 
         if let Some(current_consensus_parameters_version) = response
             .extensions
             .as_ref()
             .and_then(|e| e.current_consensus_parameters_version)
-        {
-            if let Ok(mut c) = self
+            && let Ok(mut c) = self
                 .chain_state_info
                 .current_consensus_parameters_version
                 .lock()
-            {
-                *c = Some(current_consensus_parameters_version);
-            }
+        {
+            *c = Some(current_consensus_parameters_version);
         }
 
         let inner_required_height = match &self.require_height {
@@ -389,17 +386,16 @@ impl FuelClient {
             ConsistencyPolicy::Manual { .. } => None,
         };
 
-        if let Some(inner_required_height) = inner_required_height {
-            if let Some(current_fuel_block_height) = response
+        if let Some(inner_required_height) = inner_required_height
+            && let Some(current_fuel_block_height) = response
                 .extensions
                 .as_ref()
                 .and_then(|e| e.current_fuel_block_height)
-            {
-                let mut lock = inner_required_height.lock().expect("Mutex poisoned");
+        {
+            let mut lock = inner_required_height.lock().expect("Mutex poisoned");
 
-                if current_fuel_block_height >= lock.unwrap_or_default() {
-                    *lock = Some(current_fuel_block_height);
-                }
+            if current_fuel_block_height >= lock.unwrap_or_default() {
+                *lock = Some(current_fuel_block_height);
             }
         }
     }
@@ -420,7 +416,7 @@ impl FuelClient {
             .post(self.url.clone())
             .run_fuel_graphql(fuel_operation)
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            .map_err(io::Error::other)?;
 
         self.decode_response(response)
     }
@@ -431,17 +427,13 @@ impl FuelClient {
     {
         self.update_chain_state_info(&response);
 
-        if let Some(failed) = response
+        if response
             .extensions
             .as_ref()
             .and_then(|e| e.fuel_block_height_precondition_failed)
+            == Some(true)
         {
-            if failed {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "The required block height was not met",
-                ));
-            }
+            return Err(io::Error::other("The required block height was not met"));
         }
 
         let response = response.response;
@@ -451,7 +443,7 @@ impl FuelClient {
             (_, Some(e)) => Err(from_strings_errors_to_std_error(
                 e.into_iter().map(|e| e.message).collect(),
             )),
-            _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
+            _ => Err(io::Error::other("Invalid response")),
         }
     }
 
@@ -477,20 +469,12 @@ impl FuelClient {
 
         let json_query = serde_json::to_string(&fuel_operation)?;
         let mut client_builder = es::ClientBuilder::for_url(url.as_str())
-            .map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Failed to start client {e:?}"),
-                )
-            })?
+            .map_err(|e| io::Error::other(format!("Failed to start client {e:?}")))?
             .body(json_query)
             .method("POST".to_string())
             .header("content-type", "application/json")
             .map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Failed to add header to client {e:?}"),
-                )
+                io::Error::other(format!("Failed to add header to client {e:?}"))
             })?;
         if let Some(password) = url.password() {
             let username = url.username();
@@ -499,27 +483,20 @@ impl FuelClient {
             client_builder = client_builder
                 .header("Authorization", &authorization)
                 .map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Failed to add header to client {e:?}"),
-                    )
+                    io::Error::other(format!("Failed to add header to client {e:?}"))
                 })?;
         }
 
         if let Some(value) = self.cookie.deref().cookies(&self.url) {
             let value = value.to_str().map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Unable convert header value to string {e:?}"),
-                )
+                io::Error::other(format!("Unable convert header value to string {e:?}"))
             })?;
             client_builder = client_builder
                 .header(reqwest::header::COOKIE.as_str(), value)
                 .map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Failed to add header from `reqwest` to client {e:?}"),
-                    )
+                    io::Error::other(format!(
+                        "Failed to add header from `reqwest` to client {e:?}"
+                    ))
                 })?;
         }
 
@@ -564,24 +541,21 @@ impl FuelClient {
                                             _ => Some(Ok(Event::ResponseData(resp))),
                                         }
                                     }
-                                    Err(e) => Some(Err(io::Error::new(
-                                        io::ErrorKind::Other,
-                                        format!("Decode error: {e:?}"),
-                                    ))),
+                                    Err(e) => Some(Err(io::Error::other(format!(
+                                        "Decode error: {e:?}"
+                                    )))),
                                 }
                             }
-                            Err(e) => Some(Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!("Json error: {e:?}"),
-                            ))),
+                            Err(e) => {
+                                Some(Err(io::Error::other(format!("Json error: {e:?}"))))
+                            }
                         }
                     }
                     Ok(es::SSE::Connected(_)) => Some(Ok(Event::Connected)),
                     Ok(_) => None,
-                    Err(e) => Some(Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Graphql error: {e:?}"),
-                    ))),
+                    Err(e) => {
+                        Some(Err(io::Error::other(format!("Graphql error: {e:?}"))))
+                    }
                 };
                 futures::future::ready(r)
             });
@@ -608,10 +582,7 @@ impl FuelClient {
             }
             Some(Err(e)) => return Err(e),
             None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Subscription stream ended unexpectedly",
-                ));
+                return Err(io::Error::other("Subscription stream ended unexpectedly"));
             }
         };
 
@@ -957,10 +928,9 @@ impl FuelClient {
             },
         );
 
-        let status = stream.next().await.ok_or(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to get status from the submission",
-        ))??;
+        let status = stream.next().await.ok_or_else(|| {
+            io::Error::other("Failed to get status from the submission")
+        })??;
 
         Ok(status)
     }
@@ -997,10 +967,9 @@ impl FuelClient {
             },
         );
 
-        let status = stream.next().await.ok_or(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to get status from the submission",
-        ))??;
+        let status = stream.next().await.ok_or_else(|| {
+            io::Error::other("Failed to get status from the submission")
+        })??;
 
         Ok(status)
     }
@@ -1109,10 +1078,9 @@ impl FuelClient {
             |r: io::Result<schema::block::NewBlocksSubscription>| {
                 let result: fuel_core_types::services::block_importer::ImportResult =
                     postcard::from_bytes(r?.new_blocks.0.0.as_slice()).map_err(|e| {
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Failed to deserialize ImportResult: {e:?}"),
-                        )
+                        io::Error::other(format!(
+                            "Failed to deserialize ImportResult: {e:?}"
+                        ))
                     })?;
                 Result::<_, io::Error>::Ok(result)
             },
@@ -1382,10 +1350,9 @@ impl FuelClient {
         if let Some(Ok(status)) = status_result {
             Ok(status)
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to get status for transaction {status_result:?}"),
-            ))
+            Err(io::Error::other(format!(
+                "Failed to get status for transaction {status_result:?}"
+            )))
         }
     }
 

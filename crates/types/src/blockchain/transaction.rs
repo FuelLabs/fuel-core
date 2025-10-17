@@ -29,17 +29,17 @@ use alloc::{
 /// Extension trait for transactions.
 pub trait TransactionExt {
     /// Returns the inputs of the transaction.
-    fn inputs(&self) -> Cow<[Input]>;
+    fn inputs(&self) -> Cow<'_, [Input]>;
 
     /// Returns the outputs of the transaction.
-    fn outputs(&self) -> Cow<[Output]>;
+    fn outputs(&self) -> Cow<'_, [Output]>;
 
     /// Returns the maximum gas of the transaction.
     fn max_gas(&self, consensus_params: &ConsensusParameters) -> ExecutorResult<u64>;
 }
 
 impl TransactionExt for Transaction {
-    fn inputs(&self) -> Cow<[Input]> {
+    fn inputs(&self) -> Cow<'_, [Input]> {
         match self {
             Transaction::Script(tx) => Cow::Borrowed(tx.inputs()),
             Transaction::Create(tx) => Cow::Borrowed(tx.inputs()),
@@ -65,7 +65,7 @@ impl TransactionExt for Transaction {
         }
     }
 
-    fn outputs(&self) -> Cow<[Output]> {
+    fn outputs(&self) -> Cow<'_, [Output]> {
         match self {
             Transaction::Script(tx) => Cow::Borrowed(tx.outputs()),
             Transaction::Create(tx) => Cow::Borrowed(tx.outputs()),
@@ -78,7 +78,7 @@ impl TransactionExt for Transaction {
 }
 
 impl TransactionExt for CheckedTransaction {
-    fn inputs(&self) -> Cow<[Input]> {
+    fn inputs(&self) -> Cow<'_, [Input]> {
         match self {
             CheckedTransaction::Script(tx) => Cow::Borrowed(tx.transaction().inputs()),
             CheckedTransaction::Create(tx) => Cow::Borrowed(tx.transaction().inputs()),
@@ -89,7 +89,7 @@ impl TransactionExt for CheckedTransaction {
         }
     }
 
-    fn outputs(&self) -> Cow<[Output]> {
+    fn outputs(&self) -> Cow<'_, [Output]> {
         match self {
             CheckedTransaction::Script(tx) => Cow::Borrowed(tx.transaction().outputs()),
             CheckedTransaction::Create(tx) => Cow::Borrowed(tx.transaction().outputs()),
