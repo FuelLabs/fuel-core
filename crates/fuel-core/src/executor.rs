@@ -1928,6 +1928,135 @@ mod tests {
     }
 
     #[test]
+    fn contracts_balance_and_state_roots_are_zero_after_reverted_execution() {
+        // Values in inputs and outputs are random. If the execution of the transaction that
+        // modifies the state and the balance is successful, it should update roots.
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        // Create a contract that modifies the state
+        let (create, contract_id) = create_contract(
+            // Increment the slot matching the tx id by one
+            vec![
+                op::srw(0x10, 0x29, RegId::ZERO),
+                op::addi(0x10, 0x10, 1),
+                op::sww(RegId::ZERO, 0x29, 0x10),
+                op::ret(1),
+            ]
+            .into_iter()
+            .collect::<Vec<u8>>()
+            .as_slice(),
+            &mut rng,
+        );
+
+        let transfer_amount = 100 as Word;
+        let asset_id = AssetId::from([2; 32]);
+        let (script, _) = script_with_data_offset!(
+            data_offset,
+            vec![
+                // Set register `0x10` to `Call`
+                op::movi(0x10, data_offset + AssetId::LEN as u32),
+                // Set register `0x11` with offset to data that contains `asset_id`
+                op::movi(0x11, data_offset),
+                // Set register `0x12` with `transfer_amount`
+                op::movi(0x12, transfer_amount as u32),
+                op::call(0x10, 0x12, 0x11, RegId::CGAS),
+                // Revert the execution
+                op::rvrt(RegId::ONE),
+            ],
+            TxParameters::DEFAULT.tx_offset()
+        );
+
+        let script_data: Vec<u8> = [
+            asset_id.as_ref(),
+            Call::new(contract_id, 0, 0).to_bytes().as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+
+        let modify_balance_and_state_tx = TxBuilder::new(2322)
+            .script_gas_limit(10000)
+            .coin_input(AssetId::zeroed(), 10000)
+            .start_script(script, script_data)
+            .contract_input(contract_id)
+            .coin_input(asset_id, transfer_amount)
+            .fee_input()
+            .contract_output(&contract_id)
+            .build()
+            .transaction()
+            .clone();
+        let db = Database::default();
+
+        let mut executor = create_executor(
+            db.clone(),
+            Config {
+                forbid_fake_coins_default: false,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: 1.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![create.into(), modify_balance_and_state_tx.into()],
+        };
+
+        let ExecutionResult {
+            block, tx_status, ..
+        } = executor.produce_and_commit(block).unwrap();
+
+        assert!(matches!(
+            tx_status[1].result,
+            TransactionExecutionResult::Failed { .. }
+        ));
+
+        let executed_tx = block.transactions()[1].as_script().unwrap();
+        let tx_id = executed_tx.id(&ConsensusParameters::standard().chain_id());
+
+        // Check resulting roots
+
+        // Input balances: 0 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([0u8]);
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Output balances: 100 of asset_id [2; 32]
+        let expected_balance_root: [u8; 32] = Sha256::digest(&[]).into();
+        assert_eq!(
+            executed_tx.outputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Input state: empty slot tx_id
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id); // the slot key that is modified
+        hasher.update([0u8]); // the slot did not contain any value
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+
+        // Output state: slot tx_id with value 1
+        let expected_state_root: [u8; 32] = Sha256::digest(&[]).into();
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+    }
+
+    #[test]
     fn contracts_balance_and_state_roots_updated_correctly_with_multiple_modifications() {
         // Values in inputs and outputs are random. If the execution of the transaction that
         // modifies the state and the balance is successful, it should update roots.
