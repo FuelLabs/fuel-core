@@ -74,7 +74,7 @@ impl BlockAggregator for Server {
         &self,
         request: tonic::Request<ProtoBlockRangeRequest>,
     ) -> Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status> {
-        tracing::debug!("get_block_range: {:?}", request);
+        const ARB_LITERAL_BLOCK_BUFFER_SIZE: usize = 100;
         let req = request.into_inner();
         let (response, receiver) = tokio::sync::oneshot::channel();
         let query = BlockAggregatorQuery::GetBlockRange {
@@ -92,7 +92,7 @@ impl BlockAggregator for Server {
                 BlockRangeResponse::Literal(inner) => {
                     let (tx, rx) = tokio::sync::mpsc::channel::<
                         Result<ProtoBlockResponse, Status>,
-                    >(16);
+                    >(ARB_LITERAL_BLOCK_BUFFER_SIZE);
 
                     tokio::spawn(async move {
                         let mut s = inner;
