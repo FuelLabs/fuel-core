@@ -1,5 +1,8 @@
-use alloy_provider::network::Ethereum;
-use alloy_provider::{Provider, RootProvider};
+use alloy_provider::{
+    Provider,
+    RootProvider,
+    network::Ethereum,
+};
 
 #[derive(Debug, Default, Copy, Clone)]
 pub enum Quorum {
@@ -75,7 +78,10 @@ pub struct QuorumProviderBuilder<T> {
 
 impl<T> Default for QuorumProviderBuilder<T> {
     fn default() -> Self {
-        Self { quorum: Default::default(), providers: Vec::new() }
+        Self {
+            quorum: Default::default(),
+            providers: Vec::new(),
+        }
     }
 }
 
@@ -86,7 +92,7 @@ impl<T> QuorumProviderBuilder<T> {
     }
     pub fn add_providers(
         mut self,
-        providers: impl IntoIterator<Item=WeightedProvider<T>>,
+        providers: impl IntoIterator<Item = WeightedProvider<T>>,
     ) -> Self {
         for provider in providers {
             self.providers.push(provider);
@@ -102,7 +108,11 @@ impl<T> QuorumProviderBuilder<T> {
 
     pub fn build(self) -> QuorumProvider<T> {
         let quorum_weight = self.quorum.weight(&self.providers);
-        QuorumProvider { quorum: self.quorum, quorum_weight, providers: self.providers }
+        QuorumProvider {
+            quorum: self.quorum,
+            quorum_weight,
+            providers: self.providers,
+        }
     }
 }
 
@@ -114,8 +124,14 @@ impl<T> QuorumProvider<T> {
 
     /// Instantiate a new `QuorumProvider` from a [`Quorum`] and a set of
     /// providers
-    pub fn new(quorum: Quorum, providers: impl IntoIterator<Item=WeightedProvider<T>>) -> Self {
-        Self::builder().add_providers(providers).quorum(quorum).build()
+    pub fn new(
+        quorum: Quorum,
+        providers: impl IntoIterator<Item = WeightedProvider<T>>,
+    ) -> Self {
+        Self::builder()
+            .add_providers(providers)
+            .quorum(quorum)
+            .build()
     }
 
     /// Return a reference to the weighted providers
