@@ -214,10 +214,8 @@ pub fn run(c: &mut Criterion) {
     );
 
     {
-        let mut start_key = Bytes32::zeroed();
-        // The checkpoint was initialized with entries starting `0..STATE_SIZE`.
-        // We want to write new entry to the database, so the starting key is far.
-        start_key.as_mut()[0] = 255;
+        // We want to write entry from the checkpoint, so the starting key is zero.
+        let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![
@@ -283,10 +281,8 @@ pub fn run(c: &mut Criterion) {
     let mut swwq = c.benchmark_group("swwq");
 
     for i in linear_short.clone() {
-        let mut start_key = Bytes32::zeroed();
-        // The checkpoint was initialized with entries starting `0..STATE_SIZE`.
-        // We want to write new entries to the database, so the starting key is far.
-        start_key.as_mut()[0] = 255;
+        // We want to write entry from the checkpoint, so the starting key is zero.
+        let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
 
         let post_call = vec![
@@ -579,9 +575,10 @@ pub fn run(c: &mut Criterion) {
         VmBench::contract_using_db(
             rng,
             db.to_vm_database(),
-            op::mint(RegId::ONE, RegId::ZERO),
+            op::mint(RegId::ONE, RegId::HP),
         )
         .expect("failed to prepare contract")
+        .prepend_prepare_script(vec![op::movi(0x10, 32), op::aloc(0x10)])
         .with_call_receipts(receipts_ctx.clone()),
     );
 
