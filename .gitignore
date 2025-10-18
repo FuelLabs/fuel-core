@@ -18,5 +18,6 @@ package-lock.json
 package.json
 bin/fuel-core/chainspec/local-testnet/state_transition_bytecode.wasm
 .DS_Store
+.fueldb/
 
 local-testnet/

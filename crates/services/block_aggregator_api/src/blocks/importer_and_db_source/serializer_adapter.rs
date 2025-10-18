@@ -4,33 +4,61 @@ use crate::{
     blocks::importer_and_db_source::BlockSerializer,
     protobuf_types::{
         Block as ProtoBlock,
+        CoinSignedInput as ProtoCoinSignedInput,
         Header as ProtoHeader,
+        Input as ProtoInput,
         Policies as ProtoPolicies,
         ScriptTransaction as ProtoScriptTx,
         Transaction as ProtoTransaction,
+        UtxoId as ProtoUtxoId,
         V1Block as ProtoV1Block,
         V1Header as ProtoV1Header,
         block::VersionedBlock as ProtoVersionedBlock,
         header::VersionedHeader as ProtoVersionedHeader,
         transaction::Variant as ProtoTransactionVariant,
     },
+    result::{
+        Error,
+        Result,
+    },
 };
+use anyhow::anyhow;
 #[cfg(feature = "fault-proving")]
 use fuel_core_types::blockchain::header::BlockHeaderV2;
+#[cfg(all(test, feature = "fault-proving"))]
+use fuel_core_types::fuel_types::ChainId;
+
 use fuel_core_types::{
     blockchain::{
         block::Block as FuelBlock,
         header::{
+            ApplicationHeader,
             BlockHeader,
             BlockHeaderV1,
             ConsensusHeader,
             GeneratedConsensusFields,
+            PartialBlockHeader,
         },
-        primitives::BlockId,
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+            Empty,
+        },
     },
     fuel_tx::{
+        Address,
+        Bytes32,
+        Input,
+        MessageId,
+        Receipt,
+        Script,
         Transaction as FuelTransaction,
+        UtxoId,
         field::{
+            ChargeableBody,
+            Inputs,
+            Maturity,
+            Owner,
             Policies as _,
             ReceiptsRoot as _,
             Script as _,
@@ -38,8 +66,13 @@ use fuel_core_types::{
             ScriptGasLimit as _,
             Witnesses as _,
         },
-        policies::PolicyType,
+        policies::{
+            Policies as FuelPolicies,
+            PoliciesBits,
+            PolicyType,
+        },
     },
+    tai64,
 };
 
 #[derive(Clone)]
@@ -97,7 +130,7 @@ fn proto_v1_header_from_v1_header(
     let generated = application.generated;
 
     ProtoV1Header {
-        da_height: saturating_u64_to_u32(application.da_height.0),
+        da_height: application.da_height.0,
         consensus_parameters_version: application.consensus_parameters_version,
         state_transition_bytecode_version: application.state_transition_bytecode_version,
         transactions_count: u32::from(generated.transactions_count),
@@ -107,7 +140,7 @@ fn proto_v1_header_from_v1_header(
         event_inbox_root: bytes32_to_vec(&generated.event_inbox_root),
         prev_root: bytes32_to_vec(&consensus.prev_root),
         height: u32::from(consensus.height),
-        time: consensus.time.0.to_be_bytes().to_vec(),
+        time: consensus.time.0,
         application_hash: bytes32_to_vec(&consensus.generated.application_hash),
         block_id: Some(block_id.as_slice().to_vec()),
     }
@@ -123,19 +156,19 @@ fn proto_v2_header_from_v2_header(
     let generated = application.generated;
 
     ProtoV2Header {
-        da_height: saturating_u64_to_u32(application.da_height.0),
+        da_height: application.da_height.0,
         consensus_parameters_version: application.consensus_parameters_version,
         state_transition_bytecode_version: application.state_transition_bytecode_version,
         transactions_count: u32::from(generated.transactions_count),
         message_receipt_count: generated.message_receipt_count,
-        transactions_root: bytes32_to_vec(&generated.transactions_root),
-        message_outbox_root: bytes32_to_vec(&generated.message_outbox_root),
-        event_inbox_root: bytes32_to_vec(&generated.event_inbox_root),
-        tx_id_commitment: bytes32_to_vec(&generated.tx_id_commitment),
-        prev_root: bytes32_to_vec(&consensus.prev_root),
+        transactions_root: bytes32_to_bytes(&generated.transactions_root),
+        message_outbox_root: bytes32_to_bytes(&generated.message_outbox_root),
+        event_inbox_root: bytes32_to_bytes(&generated.event_inbox_root),
+        tx_id_commitment: bytes32_to_bytes(&generated.tx_id_commitment),
+        prev_root: bytes32_to_bytes(&consensus.prev_root),
         height: u32::from(consensus.height),
-        time: consensus.time.0.to_be_bytes().to_vec(),
-        application_hash: bytes32_to_vec(&consensus.generated.application_hash),
+        time: consensus.time.0,
+        application_hash: bytes32_to_bytes(&consensus.generated.application_hash),
         block_id: Some(block_id.as_slice().to_vec()),
     }
 }
@@ -149,7 +182,12 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
                 script: script.script().clone(),
                 script_data: script.script_data().clone(),
                 policies: Some(proto_policies_from_policies(script.policies())),
-                inputs: Vec::new(),
+                inputs: script
+                    .inputs()
+                    .iter()
+                    .cloned()
+                    .map(proto_input_from_input)
+                    .collect(),
                 outputs: Vec::new(),
                 witnesses: script
                     .witnesses()
@@ -167,25 +205,58 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
     }
 }
 
+fn proto_input_from_input(input: Input) -> ProtoInput {
+    match input {
+        Input::CoinSigned(coin_signed) => ProtoInput {
+            variant: Some(crate::protobuf_types::input::Variant::CoinSigned(
+                ProtoCoinSignedInput {
+                    utxo_id: Some(ProtoUtxoId {
+                        tx_id: coin_signed.utxo_id.tx_id().as_ref().to_vec(),
+                        output_index: coin_signed.utxo_id.output_index().into(),
+                    }),
+                    owner: coin_signed.owner.as_ref().to_vec(),
+                    amount: coin_signed.amount,
+                    asset_id: coin_signed.asset_id.as_ref().to_vec(),
+                    tx_pointer: Some(crate::protobuf_types::TxPointer {
+                        block_height: coin_signed.tx_pointer.block_height().into(),
+                        tx_index: coin_signed.tx_pointer.tx_index().into(),
+                    }),
+                    witness_index: coin_signed.witness_index.into(),
+                    predicate_gas_used: 0,
+                    predicate: vec![],
+                    predicate_data: vec![],
+                },
+            )),
+        },
+        _ => ProtoInput { variant: None },
+    }
+}
+
 fn proto_policies_from_policies(
     policies: &fuel_core_types::fuel_tx::policies::Policies,
 ) -> ProtoPolicies {
-    const POLICY_ORDER: [PolicyType; 5] = [
-        PolicyType::Tip,
-        PolicyType::WitnessLimit,
-        PolicyType::Maturity,
-        PolicyType::MaxFee,
-        PolicyType::Expiration,
-    ];
-
-    let values = POLICY_ORDER
-        .iter()
-        .map(|policy_type| policies.get(*policy_type).unwrap_or_default())
-        .collect();
-
+    let mut values = [0u64; 5];
+    if policies.is_set(PolicyType::Tip) {
+        values[0] = policies.get(PolicyType::Tip).unwrap_or_default();
+    }
+    if policies.is_set(PolicyType::WitnessLimit) {
+        let value = policies.get(PolicyType::WitnessLimit).unwrap_or_default();
+        values[1] = value;
+    }
+    if policies.is_set(PolicyType::Maturity) {
+        let value = policies.get(PolicyType::Maturity).unwrap_or_default();
+        values[2] = value;
+    }
+    if policies.is_set(PolicyType::MaxFee) {
+        values[3] = policies.get(PolicyType::MaxFee).unwrap_or_default();
+    }
+    if policies.is_set(PolicyType::Expiration) {
+        values[4] = policies.get(PolicyType::Expiration).unwrap_or_default();
+    }
+    let bits = policies.bits();
     ProtoPolicies {
-        bits: policies.bits(),
-        values,
+        bits,
+        values: values.to_vec(),
     }
 }
 
@@ -193,6 +264,366 @@ fn bytes32_to_vec(bytes: &fuel_core_types::fuel_types::Bytes32) -> Vec<u8> {
     bytes.as_ref().to_vec()
 }
 
-fn saturating_u64_to_u32(value: u64) -> u32 {
-    value.min(u32::MAX as u64) as u32
+#[cfg(test)]
+pub fn fuel_block_from_protobuf(
+    proto_block: ProtoBlock,
+    msg_ids: &[MessageId],
+) -> Result<FuelBlock> {
+    let versioned_block = proto_block
+        .versioned_block
+        .ok_or_else(|| anyhow::anyhow!("Missing protobuf versioned_block"))
+        .map_err(Error::Serialization)?;
+    let partial_header = match &versioned_block {
+        ProtoVersionedBlock::V1(v1_block) => {
+            let proto_header = v1_block
+                .header
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("Missing protobuf header"))
+                .map_err(Error::Serialization)?;
+            partial_header_from_proto_header(proto_header)?
+        }
+    };
+    let txs = match versioned_block {
+        ProtoVersionedBlock::V1(v1_inner) => v1_inner
+            .transactions
+            .iter()
+            .map(tx_from_proto_tx)
+            .collect::<Result<_>>()?,
+    };
+    FuelBlock::new(
+        partial_header,
+        txs,
+        msg_ids,
+        Bytes32::default(),
+        #[cfg(feature = "fault-proving")]
+        &ChainId::default(),
+    )
+    .map_err(|e| anyhow!(e))
+    .map_err(Error::Serialization)
+}
+
+pub fn partial_header_from_proto_header(
+    proto_header: ProtoHeader,
+) -> Result<PartialBlockHeader> {
+    let partial_header = PartialBlockHeader {
+        consensus: proto_header_to_empty_consensus_header(&proto_header)?,
+        application: proto_header_to_empty_application_header(&proto_header)?,
+    };
+    Ok(partial_header)
+}
+
+pub fn tx_from_proto_tx(_proto_tx: &ProtoTransaction) -> Result<FuelTransaction> {
+    match &_proto_tx.variant {
+        Some(ProtoTransactionVariant::Script(_proto_script)) => {
+            let ProtoScriptTx {
+                script_gas_limit,
+                receipts_root,
+                script,
+                script_data,
+                policies,
+                inputs,
+                outputs,
+                witnesses,
+                metadata,
+            } = _proto_script.clone();
+            let fuel_policies = policies
+                .map(policies_from_proto_policies)
+                .unwrap_or_default();
+            let mut script_tx = FuelTransaction::script(
+                script_gas_limit,
+                script.to_vec(),
+                script_data.to_vec(),
+                fuel_policies,
+                inputs
+                    .iter()
+                    .map(input_from_proto_input)
+                    .collect::<Result<Vec<_>>>()?,
+                vec![],
+                vec![],
+            );
+            *script_tx.receipts_root_mut() = Bytes32::try_from(receipts_root.as_ref())
+                .map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert receipts_root to Bytes32: {}",
+                        e
+                    ))
+                })?;
+
+            Ok(FuelTransaction::Script(script_tx))
+        }
+        _ => {
+            Err(anyhow!("Unsupported transaction variant")).map_err(Error::Serialization)
+        }
+    }
+}
+
+fn input_from_proto_input(proto_input: &ProtoInput) -> Result<Input> {
+    match &proto_input.variant {
+        Some(crate::protobuf_types::input::Variant::CoinSigned(proto_coin_signed)) => {
+            let proto_utxo_id = proto_coin_signed
+                .utxo_id
+                .as_ref()
+                .ok_or(Error::Serialization(anyhow!("Missing utxo_id")))?;
+            let utxo_id = UtxoId::new(
+                Bytes32::try_from(proto_utxo_id.tx_id.as_slice()).map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert tx_id to Bytes32: {}",
+                        e
+                    ))
+                })?,
+                proto_utxo_id.output_index.try_into().map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert output_index to u8: {}",
+                        e
+                    ))
+                })?,
+            );
+            let owner =
+                Address::try_from(proto_coin_signed.owner.as_slice()).map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert owner to Address: {}",
+                        e
+                    ))
+                })?;
+            let amount = proto_coin_signed.amount;
+            let asset_id = fuel_core_types::fuel_types::AssetId::try_from(
+                proto_coin_signed.asset_id.as_slice(),
+            )
+            .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let tx_index: u16 = u16::try_from(
+                proto_coin_signed
+                    .tx_pointer
+                    .ok_or(Error::Serialization(anyhow!("Missing tx_pointer")))?
+                    .tx_index,
+            )
+            .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let tx_pointer = fuel_core_types::fuel_tx::TxPointer::new(
+                proto_coin_signed
+                    .tx_pointer
+                    .as_ref()
+                    .map(|tp| tp.block_height.into())
+                    .unwrap_or_default(),
+                tx_index,
+            );
+            let witness_index =
+                proto_coin_signed.witness_index.try_into().map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert witness_index to Specification::Witness: {}",
+                        e
+                    ))
+                })?;
+
+            let input = Input::coin_signed(
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+                witness_index,
+            );
+            Ok(input)
+        }
+        _ => Err(anyhow!("Unsupported input variant")).map_err(Error::Serialization),
+    }
+}
+
+//     /// Sets the `gas_price` policy.
+//     pub fn with_tip(mut self, tip: Word) -> Self {
+//         self.set(PolicyType::Tip, Some(tip));
+//         self
+//     }
+//
+//     /// Sets the `witness_limit` policy.
+//     pub fn with_witness_limit(mut self, witness_limit: Word) -> Self {
+//         self.set(PolicyType::WitnessLimit, Some(witness_limit));
+//         self
+//     }
+//
+//     /// Sets the `maturity` policy.
+//     pub fn with_maturity(mut self, maturity: BlockHeight) -> Self {
+//         self.set(PolicyType::Maturity, Some(*maturity.deref() as u64));
+//         self
+//     }
+//
+//     /// Sets the `expiration` policy.
+//     pub fn with_expiration(mut self, expiration: BlockHeight) -> Self {
+//         self.set(PolicyType::Expiration, Some(*expiration.deref() as u64));
+//         self
+//     }
+//
+//     /// Sets the `max_fee` policy.
+//     pub fn with_max_fee(mut self, max_fee: Word) -> Self {
+//         self.set(PolicyType::MaxFee, Some(max_fee));
+//         self
+//     }
+//
+//     /// Sets the `owner` policy.
+//     pub fn with_owner(mut self, owner: Word) -> Self {
+//         self.set(PolicyType::Owner, Some(owner));
+//         self
+//     }
+//
+// bitflags::bitflags! {
+//     /// See https://github.com/FuelLabs/fuel-specs/blob/master/src/tx-format/policy.md#policy
+//     #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
+//     #[derive(serde::Serialize, serde::Deserialize)]
+//     pub struct PoliciesBits: u32 {
+//         /// If set, the gas price is present in the policies.
+//         const Tip = 1 << 0;
+//         /// If set, the witness limit is present in the policies.
+//         const WitnessLimit = 1 << 1;
+//         /// If set, the maturity is present in the policies.
+//         const Maturity = 1 << 2;
+//         /// If set, the max fee is present in the policies.
+//         const MaxFee = 1 << 3;
+//         /// If set, the expiration is present in the policies.
+//         const Expiration = 1 << 4;
+//         /// If set, the owner is present in the policies.
+//         const Owner = 1 << 5;
+//     }
+// }
+fn policies_from_proto_policies(proto_policies: ProtoPolicies) -> FuelPolicies {
+    let ProtoPolicies { bits, values } = proto_policies;
+    let mut policies = FuelPolicies::default();
+    let bits =
+        PoliciesBits::from_bits(bits).expect("Should be able to create from `u32`");
+    if bits.contains(PoliciesBits::Tip) {
+        if let Some(tip) = values.get(0) {
+            policies.set(PolicyType::Tip, Some(*tip));
+        }
+    }
+    if bits.contains(PoliciesBits::WitnessLimit) {
+        if let Some(witness_limit) = values.get(1) {
+            policies.set(PolicyType::WitnessLimit, Some(*witness_limit));
+        }
+    }
+    if bits.contains(PoliciesBits::Maturity) {
+        if let Some(maturity) = values.get(2) {
+            policies.set(PolicyType::Maturity, Some(*maturity));
+        }
+    }
+    if bits.contains(PoliciesBits::MaxFee) {
+        if let Some(max_fee) = values.get(3) {
+            policies.set(PolicyType::MaxFee, Some(*max_fee));
+        }
+    }
+    if bits.contains(PoliciesBits::Expiration) {
+        if let Some(expiration) = values.get(4) {
+            policies.set(PolicyType::Expiration, Some(*expiration));
+        }
+    }
+    policies
+}
+
+pub fn proto_header_to_empty_application_header(
+    proto_header: &ProtoHeader,
+) -> Result<ApplicationHeader<Empty>> {
+    match proto_header.versioned_header.clone() {
+        Some(ProtoVersionedHeader::V1(header)) => {
+            let app_header = ApplicationHeader {
+                da_height: DaBlockHeight::from(header.da_height),
+                consensus_parameters_version: header.consensus_parameters_version,
+                state_transition_bytecode_version: header
+                    .state_transition_bytecode_version,
+                generated: Empty {},
+            };
+            Ok(app_header)
+        }
+        Some(ProtoVersionedHeader::V2(header)) => {
+            if cfg!(feature = "fault-proving") {
+                let app_header = ApplicationHeader {
+                    da_height: DaBlockHeight::from(header.da_height),
+                    consensus_parameters_version: header.consensus_parameters_version,
+                    state_transition_bytecode_version: header
+                        .state_transition_bytecode_version,
+                    generated: Empty {},
+                };
+                Ok(app_header)
+            } else {
+                Err(anyhow!("V2 headers require the 'fault-proving' feature"))
+                    .map_err(Error::Serialization)
+            }
+        }
+        None => Err(anyhow!("Missing protobuf versioned_header"))
+            .map_err(Error::Serialization),
+    }
+}
+
+/// Alias the consensus header into an empty one.
+pub fn proto_header_to_empty_consensus_header(
+    proto_header: &ProtoHeader,
+) -> Result<ConsensusHeader<Empty>> {
+    match proto_header.versioned_header.clone() {
+        Some(ProtoVersionedHeader::V1(header)) => {
+            let consensus_header = ConsensusHeader {
+                prev_root: *Bytes32::from_bytes_ref_checked(&header.prev_root).ok_or(
+                    Error::Serialization(anyhow!("Could create `Bytes32` from bytes")),
+                )?,
+                height: header.height.into(),
+                time: tai64::Tai64(header.time),
+                generated: Empty {},
+            };
+            Ok(consensus_header)
+        }
+        Some(ProtoVersionedHeader::V2(header)) => {
+            if cfg!(feature = "fault-proving") {
+                let consensus_header = ConsensusHeader {
+                    prev_root: *Bytes32::from_bytes_ref_checked(&header.prev_root)
+                        .ok_or(Error::Serialization(anyhow!(
+                            "Could create `Bytes32` from bytes"
+                        )))?,
+                    height: header.height.into(),
+                    time: tai64::Tai64(header.time),
+                    generated: Empty {},
+                };
+                Ok(consensus_header)
+            } else {
+                Err(anyhow!("V2 headers require the 'fault-proving' feature"))
+                    .map_err(Error::Serialization)
+            }
+        }
+        None => Err(anyhow!("Missing protobuf versioned_header"))
+            .map_err(Error::Serialization),
+    }
+}
+
+#[allow(non_snake_case)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_types::{
+        fuel_tx::{
+            Blob,
+            Create,
+            Mint,
+            Script,
+            Upgrade,
+            Upload,
+        },
+        test_helpers::arb_block,
+    };
+    use proptest::prelude::*;
+
+    proptest! {
+            #![proptest_config(ProptestConfig {
+      cases: 1, .. ProptestConfig::default()
+    })]
+          #[test]
+          fn serialize_block__roundtrip((block, msg_ids) in arb_block()) {
+              // given
+              let serializer = SerializerAdapter;
+
+              // when
+              let proto_block = serializer.serialize_block(&block).unwrap();
+
+              // then
+              let deserialized_block = fuel_block_from_protobuf(proto_block, &msg_ids).unwrap();
+              assert_eq!(block, deserialized_block);
+
+          }
+      }
+
+    #[test]
+    #[ignore]
+    fn _dummy() {}
 }

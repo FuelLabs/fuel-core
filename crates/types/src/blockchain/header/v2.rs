@@ -155,6 +155,11 @@ impl BlockHeaderV2 {
         self.recalculate_metadata();
     }
 
+    pub(crate) fn set_message_outbox_root(&mut self, root: crate::fuel_tx::Bytes32) {
+        self.application_mut().generated.message_outbox_root = root;
+        self.recalculate_metadata();
+    }
+
     pub(crate) fn set_da_height(
         &mut self,
         da_height: crate::blockchain::primitives::DaBlockHeight,

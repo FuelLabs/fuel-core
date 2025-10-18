@@ -53,6 +53,7 @@ fuel-vm-private = { workspace = true, default-features = false, features = [
 ] }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 parking_lot = { workspace = true }
+proptest = { workspace = true }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
