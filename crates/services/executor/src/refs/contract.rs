@@ -5,8 +5,16 @@ use fuel_core_storage::{
     MerkleRoot,
     StorageAsRef,
     StorageInspect,
+    iter::{
+        IterableStore,
+        IteratorOverTable,
+    },
     not_found,
-    tables::ContractsLatestUtxo,
+    tables::{
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsState,
+    },
 };
 use fuel_core_types::{
     fuel_crypto::Hasher,
@@ -24,6 +32,11 @@ use std::borrow::Cow;
 
 #[cfg(not(feature = "std"))]
 use alloc::borrow::Cow;
+
+use crate::contract_state_hash::{
+    compute_balances_hash,
+    compute_state_hash,
+};
 
 /// The wrapper around `contract_id` to simplify work with `Contract` in the database.
 pub struct ContractRef<Database> {
@@ -86,15 +99,35 @@ where
     }
 }
 
-impl<Database> ContractRef<Database> {
-    pub fn balance_root(&self) -> Result<Bytes32, StorageError> {
-        Ok(Bytes32::zeroed())
+impl<Database> ContractRef<Database>
+where
+    Database: IterableStore<Column = fuel_core_storage::column::Column>,
+{
+    fn balance_root(&self) -> Result<Bytes32, StorageError> {
+        Ok(compute_balances_hash(
+            &self
+                .database
+                .iter_all_by_prefix::<ContractsAssets, _>(Some(self.contract_id))
+                .map(|res| res.map(|(key, value)| (key.asset_id().clone(), Some(value))))
+                .collect::<Result<_, _>>()?,
+        ))
     }
 }
 
-impl<Database> ContractRef<Database> {
-    pub fn state_root(&self) -> Result<Bytes32, StorageError> {
-        Ok(Bytes32::zeroed())
+impl<Database> ContractRef<Database>
+where
+    Database: IterableStore<Column = fuel_core_storage::column::Column>,
+{
+    fn state_root(&self) -> Result<Bytes32, StorageError> {
+        Ok(compute_state_hash(
+            &self
+                .database
+                .iter_all_by_prefix::<ContractsState, _>(Some(self.contract_id))
+                .map(|res| {
+                    res.map(|(key, value)| (key.state_key().clone(), Some(value.into())))
+                })
+                .collect::<Result<_, _>>()?,
+        ))
     }
 }
 
@@ -115,6 +148,7 @@ where
 impl<'a, Database> ContractRef<&'a Database>
 where
     &'a Database: ContractStorageTrait<InnerError = StorageError>,
+    &'a Database: IterableStore<Column = fuel_core_storage::column::Column>,
 {
     /// Returns the state root of the whole contract.
     pub fn root(&self) -> anyhow::Result<MerkleRoot> {
