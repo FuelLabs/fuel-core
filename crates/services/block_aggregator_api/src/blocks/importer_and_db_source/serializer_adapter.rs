@@ -4,10 +4,13 @@ use crate::{
     blocks::importer_and_db_source::BlockSerializer,
     protobuf_types::{
         Block as ProtoBlock,
+        CoinSignedInput as ProtoCoinSignedInput,
         Header as ProtoHeader,
+        Input as ProtoInput,
         Policies as ProtoPolicies,
         ScriptTransaction as ProtoScriptTx,
         Transaction as ProtoTransaction,
+        UtxoId as ProtoUtxoId,
         V1Block as ProtoV1Block,
         V1Header as ProtoV1Header,
         block::VersionedBlock as ProtoVersionedBlock,
@@ -25,7 +28,6 @@ use fuel_core_types::blockchain::header::BlockHeaderV2;
 #[cfg(all(test, feature = "fault-proving"))]
 use fuel_core_types::fuel_types::ChainId;
 
-use crate::protobuf_types::Policies;
 use fuel_core_types::{
     blockchain::{
         block::Block as FuelBlock,
@@ -44,13 +46,19 @@ use fuel_core_types::{
         },
     },
     fuel_tx::{
+        Address,
         Bytes32,
+        Input,
         MessageId,
         Receipt,
         Script,
         Transaction as FuelTransaction,
+        UtxoId,
         field::{
             ChargeableBody,
+            Inputs,
+            Maturity,
+            Owner,
             Policies as _,
             ReceiptsRoot as _,
             Script as _,
@@ -174,7 +182,12 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
                 script: script.script().clone(),
                 script_data: script.script_data().clone(),
                 policies: Some(proto_policies_from_policies(script.policies())),
-                inputs: Vec::new(),
+                inputs: script
+                    .inputs()
+                    .iter()
+                    .cloned()
+                    .map(proto_input_from_input)
+                    .collect(),
                 outputs: Vec::new(),
                 witnesses: script
                     .witnesses()
@@ -189,6 +202,33 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
             }
         }
         _ => ProtoTransaction { variant: None },
+    }
+}
+
+fn proto_input_from_input(input: Input) -> ProtoInput {
+    match input {
+        Input::CoinSigned(coin_signed) => ProtoInput {
+            variant: Some(crate::protobuf_types::input::Variant::CoinSigned(
+                ProtoCoinSignedInput {
+                    utxo_id: Some(ProtoUtxoId {
+                        tx_id: coin_signed.utxo_id.tx_id().as_ref().to_vec(),
+                        output_index: coin_signed.utxo_id.output_index().into(),
+                    }),
+                    owner: coin_signed.owner.as_ref().to_vec(),
+                    amount: coin_signed.amount,
+                    asset_id: coin_signed.asset_id.as_ref().to_vec(),
+                    tx_pointer: Some(crate::protobuf_types::TxPointer {
+                        block_height: coin_signed.tx_pointer.block_height().into(),
+                        tx_index: coin_signed.tx_pointer.tx_index().into(),
+                    }),
+                    witness_index: coin_signed.witness_index.into(),
+                    predicate_gas_used: 0,
+                    predicate: vec![],
+                    predicate_data: vec![],
+                },
+            )),
+        },
+        _ => ProtoInput { variant: None },
     }
 }
 
@@ -294,7 +334,10 @@ pub fn tx_from_proto_tx(_proto_tx: &ProtoTransaction) -> Result<FuelTransaction>
                 script.to_vec(),
                 script_data.to_vec(),
                 fuel_policies,
-                vec![],
+                inputs
+                    .iter()
+                    .map(input_from_proto_input)
+                    .collect::<Result<Vec<_>>>()?,
                 vec![],
                 vec![],
             );
@@ -311,6 +354,76 @@ pub fn tx_from_proto_tx(_proto_tx: &ProtoTransaction) -> Result<FuelTransaction>
         _ => {
             Err(anyhow!("Unsupported transaction variant")).map_err(Error::Serialization)
         }
+    }
+}
+
+fn input_from_proto_input(proto_input: &ProtoInput) -> Result<Input> {
+    match &proto_input.variant {
+        Some(crate::protobuf_types::input::Variant::CoinSigned(proto_coin_signed)) => {
+            let proto_utxo_id = proto_coin_signed
+                .utxo_id
+                .as_ref()
+                .ok_or(Error::Serialization(anyhow!("Missing utxo_id")))?;
+            let utxo_id = UtxoId::new(
+                Bytes32::try_from(proto_utxo_id.tx_id.as_slice()).map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert tx_id to Bytes32: {}",
+                        e
+                    ))
+                })?,
+                proto_utxo_id.output_index.try_into().map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert output_index to u8: {}",
+                        e
+                    ))
+                })?,
+            );
+            let owner =
+                Address::try_from(proto_coin_signed.owner.as_slice()).map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert owner to Address: {}",
+                        e
+                    ))
+                })?;
+            let amount = proto_coin_signed.amount;
+            let asset_id = fuel_core_types::fuel_types::AssetId::try_from(
+                proto_coin_signed.asset_id.as_slice(),
+            )
+            .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let tx_index: u16 = u16::try_from(
+                proto_coin_signed
+                    .tx_pointer
+                    .ok_or(Error::Serialization(anyhow!("Missing tx_pointer")))?
+                    .tx_index,
+            )
+            .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let tx_pointer = fuel_core_types::fuel_tx::TxPointer::new(
+                proto_coin_signed
+                    .tx_pointer
+                    .as_ref()
+                    .map(|tp| tp.block_height.into())
+                    .unwrap_or_default(),
+                tx_index,
+            );
+            let witness_index =
+                proto_coin_signed.witness_index.try_into().map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert witness_index to Specification::Witness: {}",
+                        e
+                    ))
+                })?;
+
+            let input = Input::coin_signed(
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                tx_pointer,
+                witness_index,
+            );
+            Ok(input)
+        }
+        _ => Err(anyhow!("Unsupported input variant")).map_err(Error::Serialization),
     }
 }
 

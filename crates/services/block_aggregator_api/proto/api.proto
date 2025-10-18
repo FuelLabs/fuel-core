@@ -261,7 +261,7 @@ message CoinSignedInput {
   bytes owner = 2;
   uint64 amount = 3;
   bytes asset_id = 4;
-  bytes tx_pointer = 5;
+  TxPointer tx_pointer = 5;
   uint32 witness_index = 6;
   uint64 predicate_gas_used = 7;
   bytes predicate = 8;
@@ -474,6 +474,11 @@ message ContractCreatedOutput {
 message UtxoId {
   bytes tx_id = 1;
   uint32 output_index = 2;
+}
+
+message TxPointer {
+  uint32 block_height = 1;
+  uint32 tx_index = 2;
 }
 
 
