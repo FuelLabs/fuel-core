@@ -3,7 +3,10 @@ use clap::{
     builder::ArgPredicate::IsPresent,
 };
 use fuel_core::{
-    relayer::Config,
+    relayer::{
+        Address,
+        Config,
+    },
     types::blockchain::primitives::DaBlockHeight,
 };
 use fuel_core_types::fuel_types::Bytes20;
@@ -28,7 +31,8 @@ pub struct RelayerArgs {
     pub eth_v2_listening_contracts: Vec<Bytes20>,
 
     /// Number of da block that the contract is deployed at.
-    #[clap(long = "relayer-da-deploy-height", default_value_t = Config::DEFAULT_DA_DEPLOY_HEIGHT, env)]
+    #[clap(long = "relayer-da-deploy-height", default_value_t = Config::DEFAULT_DA_DEPLOY_HEIGHT, env
+    )]
     pub da_deploy_height: u64,
 
     /// Number of pages or blocks containing logs that
@@ -38,7 +42,8 @@ pub struct RelayerArgs {
 
     /// The maximum number of logs that can be returned in a single RPC call.
     /// Used by the page sizer to shrink the block range if this threshold is exceeded.
-    #[clap(long = "relayer-max-logs-per-rpc", default_value_t = Config::DEFAULT_MAX_LOGS_PER_RPC, env)]
+    #[clap(long = "relayer-max-logs-per-rpc", default_value_t = Config::DEFAULT_MAX_LOGS_PER_RPC, env
+    )]
     pub max_logs_per_rpc: u64,
 
     /// The minimum duration that the relayer polling loop
@@ -58,13 +63,17 @@ impl RelayerArgs {
     pub fn into_config(self) -> Option<Config> {
         if !self.enable_relayer {
             tracing::info!("Relayer service disabled");
-            return None
+            return None;
         }
 
         let config = Config {
             da_deploy_height: DaBlockHeight(self.da_deploy_height),
             relayer: self.relayer,
-            eth_v2_listening_contracts: self.eth_v2_listening_contracts,
+            eth_v2_listening_contracts: self
+                .eth_v2_listening_contracts
+                .iter()
+                .map(|addr| Address::from_slice(addr.as_slice()))
+                .collect(),
             log_page_size: self.log_page_size,
             max_logs_per_rpc: self.max_logs_per_rpc,
             sync_minimum_duration: self.sync_minimum_duration.into(),
@@ -89,9 +98,12 @@ mod tests {
     }
 
     #[test_case(&[""] => Ok(None); "no args")]
-    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap()])); "one relayer")]
-    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com", "--relayer=https://test2.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap(), url::Url::parse("https://test2.com").unwrap()])); "two relayers in different args")]
-    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com,https://test2.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap(), url::Url::parse("https://test2.com").unwrap()])); "two relayers in same arg")]
+    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap()])); "one relayer"
+    )]
+    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com", "--relayer=https://test2.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap(), url::Url::parse("https://test2.com").unwrap()])); "two relayers in different args"
+    )]
+    #[test_case(&["", "--enable-relayer", "--relayer=https://test.com,https://test2.com"] => Ok(Some(vec![url::Url::parse("https://test.com").unwrap(), url::Url::parse("https://test2.com").unwrap()])); "two relayers in same arg"
+    )]
     fn parse_relayer_urls(args: &[&str]) -> Result<Option<Vec<url::Url>>, String> {
         let command: Command =
             Command::try_parse_from(args).map_err(|e| e.to_string())?;

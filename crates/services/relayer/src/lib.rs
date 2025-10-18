@@ -25,11 +25,11 @@ pub use abi::*;
 #[cfg(any(test, feature = "test-helpers"))]
 pub use service::new_service_test;
 
-pub use config::Config;
-pub use ethers_core::types::{
-    H160,
-    H256,
+pub use alloy_primitives::{
+    Address,
+    B256,
 };
+pub use config::Config;
 pub use service::{
     Service,
     SharedState,
