@@ -144,7 +144,7 @@ message V2Header {
 //}
 message Transaction {
   oneof variant {
-    ScriptTx script = 1;
+    ScriptTransaction script = 1;
 //    CreateTx create = 2;
 //    MintTx mint = 3;
 //    UpgradeTx upgrade = 4;
@@ -181,7 +181,7 @@ message Transaction {
 //pub struct ScriptMetadata {
 //    pub script_data_offset: usize,
 //}
-message ScriptTx {
+message ScriptTransaction {
   uint64 script_gas_limit = 1;
   bytes receipts_root = 2;
   bytes script = 3;

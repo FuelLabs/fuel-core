@@ -6,7 +6,7 @@ use crate::{
         Block as ProtoBlock,
         Header as ProtoHeader,
         Policies as ProtoPolicies,
-        ScriptTx as ProtoScriptTx,
+        ScriptTransaction as ProtoScriptTx,
         Transaction as ProtoTransaction,
         V1Block as ProtoV1Block,
         V1Header as ProtoV1Header,
