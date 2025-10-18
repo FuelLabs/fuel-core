@@ -38,7 +38,6 @@ clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
-  "smt",
   "p2p",
   "relayer",
   "wasm-executor",

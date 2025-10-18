@@ -45,9 +45,6 @@ fn build_wasm() {
         bin_dir,
     ];
 
-    #[cfg(feature = "smt")]
-    args.extend(["--features".to_owned(), "smt".to_owned()]);
-
     #[cfg(feature = "fault-proving")]
     args.extend(["--features".to_owned(), "fault-proving".to_owned()]);
 
