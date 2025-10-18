@@ -14,8 +14,9 @@ RUN apt-get update && \
     lld \
     clang \
     libclang-dev \
+    cmake \
     && xx-apt-get update  \
-    && xx-apt-get install -y libc6-dev g++ binutils \
+    && xx-apt-get install -y libc6-dev g++ binutils cmake \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
