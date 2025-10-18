@@ -13,7 +13,16 @@ use crate::{
         Script,
         Transaction,
         TransactionBuilder,
+        field::{
+            Policies as _,
+            ReceiptsRoot,
+            Script as _,
+            ScriptData as _,
+            ScriptGasLimit,
+        },
+        policies::Policies,
     },
+    fuel_types::BlockHeight,
     fuel_vm::{
         Contract,
         Salt,
@@ -63,10 +72,51 @@ fn arb_txs() -> impl Strategy<Value = Vec<Transaction>> {
     prop::collection::vec(tx_strategy, 1..2)
 }
 
+//     pub(crate) body: Body,
+//     pub(crate) policies: Policies,
+//     pub(crate) inputs: Vec<Input>,
+//     pub(crate) outputs: Vec<Output>,
+//     pub(crate) witnesses: Vec<Witness>,
+//     pub(crate) metadata: Option<ChargeableMetadata<MetadataBody>>,
+// body
+//     pub(crate) script_gas_limit: Word,
+//     pub(crate) receipts_root: Bytes32,
+//     pub(crate) script: ScriptCode,
+//     pub(crate) script_data: Bytes,
 prop_compose! {
-    fn arb_script_tx()(_: u32) -> Transaction {
-        let script = Script::default();
+    fn arb_script_tx()(
+        script_gas_limit in 1..10000u64,
+        recipts_root in any::<[u8; 32]>(),
+        script_bytes in prop::collection::vec(any::<u8>(), 0..100),
+        script_data in prop::collection::vec(any::<u8>(), 0..100),
+        policies in arb_policies(),
+        // inputs in arb_inputs(),
+        // outputs in arb_outputs(),
+        // witnesses in arb_witnesses(),
+    ) -> Transaction {
+        let mut script = Script::default();
+        *script.script_gas_limit_mut() = script_gas_limit;
+        *script.receipts_root_mut() = recipts_root.into();
+        *script.script_mut() = script_bytes;
+        *script.script_data_mut() = script_data.into();
+        *script.policies_mut() = policies;
+        // *script.inputs_mut() = inputs;
+        // *script.outputs_mut() = outputs;
+        // *script.witnesses_mut() = witnesses;
+
         Transaction::Script(script)
+    }
+}
+
+prop_compose! {
+    fn arb_policies()(
+        maturity in prop::option::of(0..100u32),
+    ) -> Policies {
+        let mut policies = Policies::new();
+        if let Some(inner) = maturity {
+            policies = policies.with_maturity(BlockHeight::new(inner));
+        }
+        policies
     }
 }
 

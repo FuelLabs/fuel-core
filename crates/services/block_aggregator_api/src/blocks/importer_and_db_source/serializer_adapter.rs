@@ -46,6 +46,7 @@ use fuel_core_types::{
     fuel_tx::{
         Bytes32,
         MessageId,
+        Receipt,
         Script,
         Transaction as FuelTransaction,
         field::{
@@ -152,14 +153,14 @@ fn proto_v2_header_from_v2_header(
         state_transition_bytecode_version: application.state_transition_bytecode_version,
         transactions_count: u32::from(generated.transactions_count),
         message_receipt_count: generated.message_receipt_count,
-        transactions_root: bytes32_to_vec(&generated.transactions_root),
-        message_outbox_root: bytes32_to_vec(&generated.message_outbox_root),
-        event_inbox_root: bytes32_to_vec(&generated.event_inbox_root),
-        tx_id_commitment: bytes32_to_vec(&generated.tx_id_commitment),
-        prev_root: bytes32_to_vec(&consensus.prev_root),
+        transactions_root: bytes32_to_bytes(&generated.transactions_root),
+        message_outbox_root: bytes32_to_bytes(&generated.message_outbox_root),
+        event_inbox_root: bytes32_to_bytes(&generated.event_inbox_root),
+        tx_id_commitment: bytes32_to_bytes(&generated.tx_id_commitment),
+        prev_root: bytes32_to_bytes(&consensus.prev_root),
         height: u32::from(consensus.height),
         time: consensus.time.0,
-        application_hash: bytes32_to_vec(&consensus.generated.application_hash),
+        application_hash: bytes32_to_bytes(&consensus.generated.application_hash),
         block_id: Some(block_id.as_slice().to_vec()),
     }
 }
@@ -285,25 +286,25 @@ pub fn tx_from_proto_tx(_proto_tx: &ProtoTransaction) -> Result<FuelTransaction>
                 witnesses,
                 metadata,
             } = _proto_script.clone();
-            //         gas_limit: Word,
-            //         script: Vec<u8>,
-            //         script_data: Vec<u8>,
-            //         policies: Policies,
-            //         inputs: Vec<Input>,
-            //         outputs: Vec<Output>,
-            //         witnesses: Vec<Witness>,
             let fuel_policies = policies
                 .map(policies_from_proto_policies)
                 .unwrap_or_default();
-            let script_tx = FuelTransaction::script(
+            let mut script_tx = FuelTransaction::script(
                 script_gas_limit,
-                script,
-                script_data,
+                script.to_vec(),
+                script_data.to_vec(),
                 fuel_policies,
                 vec![],
                 vec![],
                 vec![],
             );
+            *script_tx.receipts_root_mut() = Bytes32::try_from(receipts_root.as_ref())
+                .map_err(|e| {
+                    Error::Serialization(anyhow!(
+                        "Could not convert receipts_root to Bytes32: {}",
+                        e
+                    ))
+                })?;
 
             Ok(FuelTransaction::Script(script_tx))
         }
