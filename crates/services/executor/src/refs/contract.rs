@@ -103,12 +103,12 @@ impl<Database> ContractRef<Database>
 where
     Database: IterableStore<Column = fuel_core_storage::column::Column>,
 {
-    fn balance_root(&self) -> Result<Bytes32, StorageError> {
+    pub fn balance_root(&self) -> Result<Bytes32, StorageError> {
         Ok(compute_balances_hash(
             &self
                 .database
                 .iter_all_by_prefix::<ContractsAssets, _>(Some(self.contract_id))
-                .map(|res| res.map(|(key, value)| (key.asset_id(), Some(value))))
+                .map(|res| res.map(|(key, value)| (*key.asset_id(), Some(value))))
                 .collect::<Result<_, _>>()?,
         ))
     }
@@ -118,12 +118,12 @@ impl<Database> ContractRef<Database>
 where
     Database: IterableStore<Column = fuel_core_storage::column::Column>,
 {
-    fn state_root(&self) -> Result<Bytes32, StorageError> {
+    pub fn state_root(&self) -> Result<Bytes32, StorageError> {
         Ok(compute_state_hash(
             &self
                 .database
                 .iter_all_by_prefix::<ContractsState, _>(Some(self.contract_id))
-                .map(|res| res.map(|(key, value)| (key.state_key(), Some(value.into()))))
+                .map(|res| res.map(|(key, value)| (*key.state_key(), Some(value.into()))))
                 .collect::<Result<_, _>>()?,
         ))
     }
