@@ -71,16 +71,29 @@ prop_compose! {
 }
 
 prop_compose! {
+    fn arb_msg_id()(inner in any::<[u8; 32]>()) -> MessageId {
+        MessageId::new(inner)
+    }
+}
+
+#[allow(unused)]
+fn arb_msg_ids() -> impl Strategy<Value = Vec<MessageId>> {
+    prop::collection::vec(arb_msg_id(), 0..10usize)
+}
+
+prop_compose! {
     /// Generate an arbitrary block with a variable number of transactions
-    pub fn arb_block()(txs in arb_txs()) -> Block {
+    pub fn arb_block()(
+        txs in arb_txs(),
+        msg_ids in arb_msg_ids(),
+    ) -> (Block, Vec<MessageId>) {
         let mut fuel_block = Block::default();
         *fuel_block.transactions_mut() = txs;
         let count = fuel_block.transactions().len() as u16;
         fuel_block.header_mut().set_transactions_count(count);
         let tx_root = generate_txns_root(fuel_block.transactions());
         fuel_block.header_mut().set_transaction_root(tx_root);
-        let ids: Vec<MessageId> = Vec::new();
-        let msg_root = ids
+        let msg_root = msg_ids
             .iter()
             .fold(MerkleRootCalculator::new(), |mut tree, id| {
                 tree.push(id.as_ref());
@@ -89,7 +102,8 @@ prop_compose! {
             .root()
             .into();
         fuel_block.header_mut().set_message_outbox_root(msg_root);
+        fuel_block.header_mut().set_message_receipt_count(msg_ids.len() as u32);
         fuel_block.header_mut().recalculate_metadata();
-        fuel_block
+        (fuel_block, msg_ids)
     }
 }

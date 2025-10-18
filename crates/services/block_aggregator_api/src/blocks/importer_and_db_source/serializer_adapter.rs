@@ -45,6 +45,7 @@ use fuel_core_types::{
     },
     fuel_tx::{
         Bytes32,
+        MessageId,
         Script,
         Transaction as FuelTransaction,
         field::{
@@ -223,7 +224,10 @@ fn bytes32_to_vec(bytes: &fuel_core_types::fuel_types::Bytes32) -> Vec<u8> {
 }
 
 #[cfg(test)]
-pub fn fuel_block_from_protobuf(proto_block: ProtoBlock) -> Result<FuelBlock> {
+pub fn fuel_block_from_protobuf(
+    proto_block: ProtoBlock,
+    msg_ids: &[MessageId],
+) -> Result<FuelBlock> {
     let versioned_block = proto_block
         .versioned_block
         .ok_or_else(|| anyhow::anyhow!("Missing protobuf versioned_block"))
@@ -248,7 +252,7 @@ pub fn fuel_block_from_protobuf(proto_block: ProtoBlock) -> Result<FuelBlock> {
     FuelBlock::new(
         partial_header,
         txs,
-        &[],
+        msg_ids,
         Bytes32::default(),
         #[cfg(feature = "fault-proving")]
         &ChainId::default(),
@@ -491,7 +495,7 @@ mod tests {
       cases: 1, .. ProptestConfig::default()
     })]
           #[test]
-          fn serialize_block__roundtrip(block in arb_block()) {
+          fn serialize_block__roundtrip((block, msg_ids) in arb_block()) {
               // given
               let serializer = SerializerAdapter;
 
@@ -499,7 +503,7 @@ mod tests {
               let proto_block = serializer.serialize_block(&block).unwrap();
 
               // then
-              let deserialized_block = fuel_block_from_protobuf(proto_block).unwrap();
+              let deserialized_block = fuel_block_from_protobuf(proto_block, &msg_ids).unwrap();
               assert_eq!(block, deserialized_block);
 
           }

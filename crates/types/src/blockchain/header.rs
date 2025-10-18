@@ -315,6 +315,19 @@ impl BlockHeader {
         }
     }
 
+    /// Set the message receipt count
+    pub fn set_message_receipt_count(&mut self, count: u32) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_message_receipt_count(count);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_message_outbox_count(count);
+            }
+        }
+    }
+
     /// Set the consensus parameters version
     pub fn set_consensus_parameters_version(
         &mut self,
