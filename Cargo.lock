@@ -3585,6 +3585,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "snmalloc-rs",
  "strum 0.25.0",
  "strum_macros 0.25.3",
  "test-helpers",
@@ -3625,10 +3626,10 @@ dependencies = [
  "rlimit",
  "serde",
  "serde_json",
+ "snmalloc-rs",
  "strum 0.25.0",
  "tempfile",
  "test-case",
- "tikv-jemallocator",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -3783,9 +3784,9 @@ dependencies = [
  "libtest-mimic",
  "serde",
  "serde_json",
+ "snmalloc-rs",
  "tempfile",
  "test-helpers",
- "tikv-jemallocator",
  "tokio",
  "toml 0.5.11",
 ]
@@ -9274,6 +9275,24 @@ dependencies = [
  "async-process",
  "blocking",
  "futures-lite",
+]
+
+[[package]]
+name = "snmalloc-rs"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb317153089fdfa4d8a2eec059d40a5a23c3bde43995ea23b19121c3f621e74a"
+dependencies = [
+ "snmalloc-sys",
+]
+
+[[package]]
+name = "snmalloc-sys"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "065fea53d32bb77bc36cca466cb191f2e5216ebfd0ed360b1d64889ee6e559ea"
+dependencies = [
+ "cmake",
 ]
 
 [[package]]

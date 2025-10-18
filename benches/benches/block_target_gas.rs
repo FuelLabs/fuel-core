@@ -105,9 +105,9 @@ mod utils;
 
 mod block_target_gas_set;
 
-// Use Jemalloc during benchmarks
+// Use SnMalloc during benchmarks
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 
 const TARGET_BLOCK_GAS_LIMIT: u64 = 1_000_000;
 const BASE: u64 = 100_000;

@@ -50,9 +50,9 @@ use std::{
     time::Duration,
 };
 
-// Use Jemalloc during benchmarks
+// Use SnMalloc during benchmarks
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 
 fn setup<D>(db: &mut D, contract: &ContractId, n: usize)
 where

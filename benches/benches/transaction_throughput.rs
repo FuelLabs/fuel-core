@@ -66,9 +66,10 @@ use test_helpers::builder::{
     local_chain_config,
 };
 
-// Use Jemalloc during benchmarks
+// Use SnMalloc during benchmarks
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
+// static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn bench_txs<F>(group_id: &str, c: &mut Criterion, f: F)
 where

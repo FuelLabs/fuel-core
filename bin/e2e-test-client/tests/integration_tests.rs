@@ -21,9 +21,9 @@ use std::{
 };
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
-// Use Jemalloc
+// Use SnMalloc
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn works_in_local_env() {

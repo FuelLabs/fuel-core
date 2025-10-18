@@ -145,13 +145,13 @@ reqwest = { version = "0.12.0", default-features = false, features = [
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
+snmalloc-rs = { version = "0.3.8" }
 strum = { version = "0.25" }
 strum_macros = "0.25"
 tempfile = "3.4"
 test-case = "3.3"
 test-strategy = "0.3"
 thiserror = "2.0.12"
-tikv-jemallocator = "0.5"
 tokio = { version = "1.27", default-features = false }
 tokio-rayon = "2.1.0"
 tokio-stream = "0.1"

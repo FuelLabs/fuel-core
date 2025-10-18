@@ -58,10 +58,11 @@ rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = "0.9.13"
+snmalloc-rs = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 test-helpers = { path = "../tests/test-helpers" }
-tikv-jemallocator = { workspace = true }
+tikv-jemallocator = { version = "0.5" }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 

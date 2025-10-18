@@ -21,9 +21,9 @@ use fuel_core_storage::transactional::IntoTransaction;
 use fuel_core_types::fuel_asm::Instruction;
 use vm_set::*;
 
-// Use Jemalloc during benchmarks
+// Use SnMalloc during benchmarks
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 
 pub fn run_group_ref<I>(group: &mut BenchmarkGroup<WallTime>, id: I, bench: VmBench)
 where

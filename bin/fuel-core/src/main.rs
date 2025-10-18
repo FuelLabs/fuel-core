@@ -1,6 +1,6 @@
-// Use Jemalloc for main binary
+// Use SnMalloc for main binary
 #[global_allocator]
-static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 
 use fuel_core_bin::cli;
 
