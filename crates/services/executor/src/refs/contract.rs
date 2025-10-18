@@ -108,7 +108,7 @@ where
             &self
                 .database
                 .iter_all_by_prefix::<ContractsAssets, _>(Some(self.contract_id))
-                .map(|res| res.map(|(key, value)| (key.asset_id().clone(), Some(value))))
+                .map(|res| res.map(|(key, value)| (key.asset_id(), Some(value))))
                 .collect::<Result<_, _>>()?,
         ))
     }
@@ -123,9 +123,7 @@ where
             &self
                 .database
                 .iter_all_by_prefix::<ContractsState, _>(Some(self.contract_id))
-                .map(|res| {
-                    res.map(|(key, value)| (key.state_key().clone(), Some(value.into())))
-                })
+                .map(|res| res.map(|(key, value)| (key.state_key(), Some(value.into()))))
                 .collect::<Result<_, _>>()?,
         ))
     }
