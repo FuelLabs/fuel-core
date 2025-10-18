@@ -10,6 +10,9 @@ rust-version = { workspace = true }
 description = "Block Aggregator API Service for Fuel Core"
 build = "build.rs"
 
+[features]
+fault-proving = ["fuel-core-types/fault-proving"]
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
@@ -22,7 +25,7 @@ futures = { workspace = true }
 log = "0.4.27"
 num_enum = { workspace = true }
 postcard = { workspace = true }
-prost = { workspace = true }
+prost = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true }
