@@ -1,10 +1,14 @@
 use crate::{
-    blockchain::block::Block,
+    blockchain::{
+        block::Block,
+        header::generate_txns_root,
+    },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         ContractId,
         Create,
         Finalizable,
+        MessageId,
         Output,
         Script,
         Transaction,
@@ -67,18 +71,25 @@ prop_compose! {
 }
 
 prop_compose! {
-    /// Generate arbitrary blocks with a variable number of transactions
-    pub fn arb_block()(_ in 1..100u32, txs in arb_txs()) -> Block {
+    /// Generate an arbitrary block with a variable number of transactions
+    pub fn arb_block()(txs in arb_txs()) -> Block {
         let mut fuel_block = Block::default();
         *fuel_block.transactions_mut() = txs;
         let count = fuel_block.transactions().len() as u16;
         fuel_block.header_mut().set_transactions_count(count);
-        let transaction_tree =
-            MerkleRootCalculator::new(
-            );
-        let root = transaction_tree.root().into();
-        fuel_block.header_mut().set_transaction_root(root);
-        fuel_block.header_mut().set_message_outbox_root(root);
+        let tx_root = generate_txns_root(fuel_block.transactions());
+        fuel_block.header_mut().set_transaction_root(tx_root);
+        let ids: Vec<MessageId> = Vec::new();
+        let msg_root = ids
+            .iter()
+            .fold(MerkleRootCalculator::new(), |mut tree, id| {
+                tree.push(id.as_ref());
+                tree
+            })
+            .root()
+            .into();
+        fuel_block.header_mut().set_message_outbox_root(msg_root);
+        fuel_block.header_mut().recalculate_metadata();
         fuel_block
     }
 }

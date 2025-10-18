@@ -720,7 +720,8 @@ impl PartialBlockHeader {
     }
 }
 
-fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
+/// Generate the transactions root from the list of transactions.
+pub fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
     let transaction_ids = transactions.iter().map(|tx| tx.to_bytes());
     // Generate the transaction merkle root.
     let mut transaction_tree =
