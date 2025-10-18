@@ -4482,6 +4482,7 @@ dependencies = [
  "reqwest 0.12.15",
  "rstest",
  "serde_json",
+ "spki",
  "tempfile",
  "test-case",
  "test-helpers",

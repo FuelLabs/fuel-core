@@ -499,7 +499,7 @@ mod tests {
             h.update(expected_fee_amount_1.to_be_bytes());
             let output_balances_hash = Bytes32::new(h.finalize().into());
 
-            let empty_hash = Bytes32::new(Sha256::digest([]).into());
+            let empty_hash = Bytes32::zeroed();
 
             if let Some(mint) = block.transactions()[1].as_mint() {
                 assert_eq!(
@@ -1696,22 +1696,21 @@ mod tests {
 
         // Assert the balance and state roots are same before and after execution.
         let executed_tx = block.transactions()[1].as_script().unwrap();
-        let empty: [u8; 32] = Sha256::digest([]).into();
         assert_eq!(
             executed_tx.inputs()[0].state_root(),
-            Some(&Bytes32::new(empty))
+            Some(&Bytes32::zeroed())
         );
         assert_eq!(
             executed_tx.inputs()[0].balance_root(),
-            Some(&Bytes32::new(empty))
+            Some(&Bytes32::zeroed())
         );
         assert_eq!(
             executed_tx.outputs()[0].state_root(),
-            Some(&Bytes32::new(empty))
+            Some(&Bytes32::zeroed())
         );
         assert_eq!(
             executed_tx.outputs()[0].balance_root(),
-            Some(&Bytes32::new(empty))
+            Some(&Bytes32::zeroed())
         );
     }
 
@@ -1773,14 +1772,13 @@ mod tests {
         );
 
         // Both balance and state roots are empty, and should match hash of empty data.
-        let empty: [u8; 32] = Sha256::digest([]).into();
         assert_eq!(
             executed_tx.inputs()[0].balance_root(),
-            Some(&Bytes32::new(empty))
+            Some(&Bytes32::zeroed())
         );
         assert_eq!(
             executed_tx.inputs()[0].state_root(),
-            Some(&Bytes32::new(empty))
+            Some(&Bytes32::zeroed())
         );
     }
 
@@ -2031,10 +2029,9 @@ mod tests {
         );
 
         // Output balances: 100 of asset_id [2; 32]
-        let expected_balance_root: [u8; 32] = Sha256::digest([]).into();
         assert_eq!(
             executed_tx.outputs()[0].balance_root(),
-            Some(&Bytes32::new(expected_balance_root))
+            Some(&Bytes32::zeroed())
         );
 
         // Input state: empty slot tx_id
@@ -2048,10 +2045,9 @@ mod tests {
         );
 
         // Output state: slot tx_id with value 1
-        let expected_state_root: [u8; 32] = Sha256::digest([]).into();
         assert_eq!(
             executed_tx.outputs()[0].state_root(),
-            Some(&Bytes32::new(expected_state_root))
+            Some(&Bytes32::zeroed())
         );
     }
 
@@ -2315,22 +2311,21 @@ mod tests {
         // Check resulting roots
 
         // Input/Output balances for both txs: None
-        let expected_balance_root: [u8; 32] = Sha256::digest([]).into();
         assert_eq!(
             executed_tx_1.inputs()[0].balance_root(),
-            Some(&Bytes32::new(expected_balance_root))
+            Some(&Bytes32::zeroed())
         );
         assert_eq!(
             executed_tx_1.outputs()[0].balance_root(),
-            Some(&Bytes32::new(expected_balance_root))
+            Some(&Bytes32::zeroed())
         );
         assert_eq!(
             executed_tx_2.inputs()[0].balance_root(),
-            Some(&Bytes32::new(expected_balance_root))
+            Some(&Bytes32::zeroed())
         );
         assert_eq!(
             executed_tx_2.outputs()[0].balance_root(),
-            Some(&Bytes32::new(expected_balance_root))
+            Some(&Bytes32::zeroed())
         );
 
         // Input state for tx 1: empty slots
