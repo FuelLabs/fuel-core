@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package blockaggregator;
+
+message BlockHeightRequest {}
+
+message BlockHeightResponse {
+  uint32 height = 1;
+}
+
+message BlockRangeRequest {
+  uint32 start = 1;
+  uint32 end = 2;
+}
+
+message Block {
+     bytes data = 1;
+}
+
+message BlockResponse {
+  oneof payload {
+    Block literal = 1;
+    string remote = 2;
+  }
+}
+
+message NewBlockSubscriptionRequest {}
+
+service BlockAggregator {
+  rpc GetBlockHeight (BlockHeightRequest) returns (BlockHeightResponse);
+  rpc GetBlockRange (BlockRangeRequest) returns (stream BlockResponse);
+  rpc NewBlockSubscription (NewBlockSubscriptionRequest) returns (stream BlockResponse);
+}
