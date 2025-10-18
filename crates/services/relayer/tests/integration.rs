@@ -6,6 +6,7 @@ use alloy_primitives::{
     U256,
 };
 use alloy_rpc_types_eth::Log;
+use fuel_core_provider::test_helpers::provider::MockProvider;
 use fuel_core_relayer::{
     Config,
     bridge::{
@@ -15,10 +16,7 @@ use fuel_core_relayer::{
     mock_db::MockDb,
     new_service_test,
     ports::RelayerDb,
-    test_helpers::{
-        LogTestHelper,
-        provider::MockProvider,
-    },
+    test_helpers::LogTestHelper,
 };
 use fuel_core_services::Service;
 
