@@ -1,5 +1,5 @@
-mod transport;
 pub mod provider;
+mod transport;
 
 use crate::quorum::transport::WeightedTransport;
 use alloy_json_rpc::ResponsePacket;
@@ -62,4 +62,3 @@ pub enum QuorumError {
         errors: Vec<TransportError>,
     },
 }
-

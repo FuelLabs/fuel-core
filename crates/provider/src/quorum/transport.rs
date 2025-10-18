@@ -1,9 +1,24 @@
-use crate::quorum::{Quorum, QuorumError};
-use alloy_json_rpc::{RequestPacket, ResponsePacket, RpcError};
-use alloy_transport::{BoxTransport, IntoBoxTransport, TransportError, TransportErrorKind};
+use crate::quorum::{
+    Quorum,
+    QuorumError,
+};
+use alloy_json_rpc::{
+    RequestPacket,
+    ResponsePacket,
+    RpcError,
+};
+use alloy_transport::{
+    BoxTransport,
+    IntoBoxTransport,
+    TransportError,
+    TransportErrorKind,
+};
 use futures::FutureExt;
-use std::collections::HashMap;
-use std::{pin::Pin, task::Poll};
+use std::{
+    collections::HashMap,
+    pin::Pin,
+    task::Poll,
+};
 use tower::Service;
 
 #[derive(Clone)]
@@ -21,7 +36,7 @@ impl QuorumTransport {
 
     pub fn new(
         quorum: Quorum,
-        transports: impl IntoIterator<Item=WeightedTransport>,
+        transports: impl IntoIterator<Item = WeightedTransport>,
     ) -> Self {
         Self::builder()
             .add_transports(transports)
@@ -61,11 +76,16 @@ impl QuorumTransport {
     }
 }
 
-
 impl Service<RequestPacket> for QuorumTransport {
     type Response = ResponsePacket;
     type Error = RpcError<TransportErrorKind>;
-    type Future = Pin<Box<dyn Future<Output=Result<ResponsePacket, RpcError<TransportErrorKind>>> + Send + 'static>>;
+    type Future = Pin<
+        Box<
+            dyn Future<Output = Result<ResponsePacket, RpcError<TransportErrorKind>>>
+                + Send
+                + 'static,
+        >,
+    >;
 
     fn poll_ready(
         &mut self,
@@ -83,9 +103,7 @@ impl Service<RequestPacket> for QuorumTransport {
 
         let quorum_request = QuorumRequest::new(self.clone(), requests);
 
-        Box::pin(async move {
-            quorum_request.await
-        })
+        Box::pin(async move { quorum_request.await })
     }
 }
 
@@ -127,7 +145,7 @@ impl QuorumTransportBuilder {
     }
     pub fn add_transports(
         mut self,
-        providers: impl IntoIterator<Item=WeightedTransport>,
+        providers: impl IntoIterator<Item = WeightedTransport>,
     ) -> Self {
         for provider in providers {
             self.transports.push(provider);
@@ -161,8 +179,13 @@ pub struct QuorumRequest<'a> {
     requests: Vec<PendingRequest<'a>>,
 }
 
-type PendingRequest<'a> =
-Pin<Box<dyn Future<Output=Result<ResponsePacket, RpcError<TransportErrorKind>>> + 'a + Send>>;
+type PendingRequest<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<ResponsePacket, RpcError<TransportErrorKind>>>
+            + 'a
+            + Send,
+    >,
+>;
 
 impl<'a> QuorumRequest<'a> {
     fn new(inner: QuorumTransport, requests: Vec<PendingRequest<'a>>) -> Self {
@@ -223,7 +246,9 @@ impl<'a> Future for QuorumRequest<'a> {
                 .map(|r| r.0)
                 .collect();
             let errors = std::mem::take(&mut this.errors);
-            Poll::Ready(Err(TransportErrorKind::custom(Box::new(QuorumError::NoQuorumReached { values, errors }))))
+            Poll::Ready(Err(TransportErrorKind::custom(Box::new(
+                QuorumError::NoQuorumReached { values, errors },
+            ))))
         } else {
             Poll::Pending
         }
@@ -233,7 +258,8 @@ impl<'a> Future for QuorumRequest<'a> {
 fn compare_response_packets(a: &ResponsePacket, b: &ResponsePacket) -> bool {
     match (a, b) {
         (ResponsePacket::Single(response1), ResponsePacket::Single(response2)) => {
-            serde_json::to_string(response1).unwrap() == serde_json::to_string(response2).unwrap()
+            serde_json::to_string(response1).unwrap()
+                == serde_json::to_string(response2).unwrap()
         }
         _ => todo!(),
     }
@@ -265,9 +291,13 @@ mod tests {
             transports.push(WeightedTransport::new(mock_transport));
         }
 
-        let mut quorum = QuorumTransport::builder().add_transports(transports).quorum(Quorum::Majority).build();
+        let mut quorum = QuorumTransport::builder()
+            .add_transports(transports)
+            .quorum(Quorum::Majority)
+            .build();
 
-        let request: Request<()> = Request::new("eth_getBlockNumber", alloy_json_rpc::Id::None, ());
+        let request: Request<()> =
+            Request::new("eth_getBlockNumber", alloy_json_rpc::Id::None, ());
         let response = quorum
             .call(RequestPacket::Single(request.try_into().unwrap()))
             .await

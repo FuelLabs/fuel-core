@@ -22,19 +22,19 @@ description = "Fuel provider"
 #]
 
 [dependencies]
-alloy-primitives = { workspace = true }
-alloy-rpc-types-eth = { workspace = true }
 alloy-consensus = { workspace = true }
-alloy-rpc-client = { workspace = true }
-alloy-json-rpc = "1.0.41"
-alloy-transport = "1.0.41"
-alloy-transport-http = "1.0.41"
+alloy-json-rpc = { workspace = true }
+alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
-futures = { workspace = true }
-url = { workspace = true }
-thiserror = { workspace = true }
-parking_lot = { workspace = true }
+alloy-rpc-client = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
+alloy-transport = { workspace = true }
+alloy-transport-http = { workspace = true }
 async-trait = { workspace = true }
+futures = { workspace = true }
+parking_lot = { workspace = true }
+serde_json = "1.0.140"
+thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = "0.5.2"
-serde_json = "1.0.140"
+url = { workspace = true }
