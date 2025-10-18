@@ -19,7 +19,7 @@ use sha2::{
 
 /// Computes a hash of all contract balances that were read or modified.
 /// The hash is not dependent on the order of reads or writes.
-/// For backwards compatbility, the hash of an empty set is `Bytes32::zeroed()`,
+/// For backwards compatibility, the hash of an empty set is `Bytes32::zeroed()`,
 /// so that current mainnet genesis block remains valid.
 /// This is still breaking change for any network that any contract has non-empty starting balances.
 pub fn compute_balances_hash(accessed: &BTreeMap<AssetId, Option<Word>>) -> Bytes32 {
@@ -42,7 +42,7 @@ pub fn compute_balances_hash(accessed: &BTreeMap<AssetId, Option<Word>>) -> Byte
 
 /// Computes a hash of all contract state slots that were read or modified.
 /// The hash is not dependent on the order of reads or writes.
-/// For backwards compatbility, the hash of an empty set is `Bytes32::zeroed()`,
+/// For backwards compatibility, the hash of an empty set is `Bytes32::zeroed()`,
 /// so that current mainnet genesis block remains valid.
 /// This is still breaking change for any network that any contract has non-empty starting slots.
 pub fn compute_state_hash(accessed: &BTreeMap<Bytes32, Option<Vec<u8>>>) -> Bytes32 {
