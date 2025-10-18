@@ -26,6 +26,9 @@ alloy-primitives = { workspace = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-consensus = { workspace = true }
 alloy-rpc-client = { workspace = true }
+alloy-json-rpc = "1.0.41"
+alloy-transport = "1.0.41"
+alloy-transport-http = "1.0.41"
 alloy-provider = { workspace = true }
 futures = { workspace = true }
 url = { workspace = true }
@@ -33,3 +36,5 @@ thiserror = { workspace = true }
 parking_lot = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
+tower = "0.5.2"
+serde_json = "1.0.140"

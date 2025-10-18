@@ -10,6 +10,7 @@ use crate::{
     service::state::EthLocal,
     Config,
 };
+use alloy_provider::Provider;
 use alloy_rpc_types_eth::{
     BlockId,
     BlockNumberOrTag,
@@ -19,11 +20,9 @@ use alloy_rpc_types_eth::{
 };
 use async_trait::async_trait;
 use core::time::Duration;
-use fuel_core_provider::{quorum::{
-    Quorum,
-    QuorumProvider,
-    WeightedProvider,
-}, FuelEthProvider, FuelProvider};
+use fuel_core_provider::{
+    Quorum, QuorumProvider,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -198,7 +197,7 @@ pub struct Task<P, D, S> {
 
 impl<P, D> NotInitializedTask<P, D>
 where
-    P: FuelProvider + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     /// Create a new relayer task.
@@ -222,7 +221,7 @@ where
 
 impl<P, D, S> RelayerData for Task<P, D, S>
 where
-    P: FuelProvider + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
     S: PageSizer + 'static + Send + Sync,
 {
@@ -284,7 +283,7 @@ where
 #[async_trait]
 impl<P, D> RunnableService for NotInitializedTask<P, D>
 where
-    P: FuelProvider + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     const NAME: &'static str = "Relayer";
@@ -334,7 +333,7 @@ where
 
 impl<P, D, S> RunnableTask for Task<P, D, S>
 where
-    P: FuelProvider + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
     S: PageSizer + 'static + Send + Sync,
 {
@@ -425,7 +424,7 @@ impl SharedState {
 
 impl<P, D, S> state::EthRemote for Task<P, D, S>
 where
-    P: FuelProvider,
+    P: Provider,
     D: RelayerDb + 'static,
     S: PageSizer + 'static + Send + Sync,
 {
@@ -436,7 +435,7 @@ where
             _ = shutdown.while_started() => {
                 Err(anyhow::anyhow!("The relayer got a stop signal"))
             },
-            block = self.eth_node.get_block(BlockId::Number(BlockNumberOrTag::Finalized)).await => {
+            block = self.eth_node.get_block(BlockId::Number(BlockNumberOrTag::Finalized)) => {
                 let block = block.map_err(|err| anyhow::anyhow!("Failed to fetch finalized block: {err:?}"))?;
                 let number = block
                     .map(|b| b.header.number)
@@ -449,7 +448,7 @@ where
 
 impl<P, D, S> EthLocal for Task<P, D, S>
 where
-    P: FuelProvider,
+    P: Provider,
     D: RelayerDb + 'static,
     S: PageSizer + 'static + Send + Sync,
 {
@@ -470,10 +469,7 @@ where
             anyhow::anyhow!(
                 "Tried to start Relayer without setting an eth_client in the config"
             )
-        })?
-        .into_iter()
-        .map(|url| WeightedProvider::new(Box::new(FuelEthProvider::new(url))))
-        .collect();
+        })?;
 
     let eth_node = QuorumProvider::new(Quorum::All, urls);
     let retry_on_error = true;
@@ -493,7 +489,7 @@ pub fn new_service_test<P, D>(
     config: Config,
 ) -> CustomizableService<P, D>
 where
-    P: FuelProvider + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     let retry_on_fail = false;
@@ -507,7 +503,7 @@ fn new_service_internal<P, D>(
     retry_on_error: bool,
 ) -> CustomizableService<P, D>
 where
-    P: FuelProvider + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     let task = NotInitializedTask::new(eth_node, database, config, retry_on_error);

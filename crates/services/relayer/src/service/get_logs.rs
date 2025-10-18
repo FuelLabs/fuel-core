@@ -4,6 +4,7 @@ use alloy_provider::transport::{
     TransportError,
     TransportErrorKind,
 };
+use alloy_provider::Provider;
 use fuel_core_types::{
     entities::RelayedTransaction,
     services::relayer::Event,
@@ -26,7 +27,7 @@ pub(crate) fn download_logs<'a, P, S>(
     contracts: Vec<Address>,
     eth_node: &'a P,
     page_sizer: &'a mut S,
-) -> impl futures::Stream<Item = Result<DownloadedLogs, TransportError>> + 'a + use<'a, P, S>
+) -> impl futures::Stream<Item=Result<DownloadedLogs, TransportError>> + 'a + use < 'a, P, S >
 where
     P: Provider + 'static,
     S: PageSizer + 'static + Send,
@@ -106,14 +107,14 @@ where
 pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
     D: RelayerDb,
-    S: futures::Stream<Item = Result<DownloadedLogs, TransportError>>,
+    S: futures::Stream<Item=Result<DownloadedLogs, TransportError>>,
 {
     tokio::pin!(logs);
     while let Some(DownloadedLogs {
-        start_height,
-        last_height,
-        logs: events,
-    }) = logs.try_next().await?
+                       start_height,
+                       last_height,
+                       logs: events,
+                   }) = logs.try_next().await?
     {
         let mut unordered_events = HashMap::<DaBlockHeight, Vec<Event>>::new();
         let sorted_events = sort_events_by_log_index(events)?;
