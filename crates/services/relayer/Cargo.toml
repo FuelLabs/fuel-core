@@ -11,7 +11,7 @@ rust-version = { workspace = true }
 description = "Fuel Relayer"
 
 [features]
-test-helpers = []
+test-helpers = ["fuel-core-provider"]
 
 [dependencies]
 alloy-primitives = { workspace = true }
@@ -21,7 +21,7 @@ alloy-sol-types = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 enum-iterator = { workspace = true }
-fuel-core-provider = { workspace = true }
+fuel-core-provider = { workspace = true, optional = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
@@ -34,6 +34,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+fuel-core-provider = { path = "../../provider" }
 fuel-core-relayer = { path = "", features = ["test-helpers"] }
 fuel-core-services = { path = "../../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "../../storage", features = ["test-helpers"] }

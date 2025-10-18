@@ -5,6 +5,7 @@ use crate::{
     ports::RelayerDb,
     service::NotInitializedTask,
 };
+use fuel_core_provider::test_helpers::provider::MockProvider;
 use fuel_core_services::RunnableService;
 use futures::TryStreamExt;
 use test_case::test_case;
@@ -18,10 +19,7 @@ use crate::{
         download_logs,
         state,
     },
-    test_helpers::{
-        page_sizer::IdentityPageSizer,
-        provider::MockProvider,
-    },
+    test_helpers::page_sizer::IdentityPageSizer,
 };
 use alloy_provider::{
     ProviderBuilder,

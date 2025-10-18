@@ -57,6 +57,7 @@ fuel-core-p2p = { path = "../crates/services/p2p", features = [
     "test-helpers",
 ], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
+fuel-core-provider = { path = "../crates/provider" }
 fuel-core-relayer = { path = "../crates/services/relayer", features = [
     "test-helpers",
 ] }

@@ -6,19 +6,17 @@ use crate::{
         Transaction,
     },
     service::state::EthSyncGap,
-    test_helpers::{
-        page_sizer::IdentityPageSizer,
-        provider::{
-            MockProvider,
-            TriggerType,
-        },
-    },
+    test_helpers::page_sizer::IdentityPageSizer,
 };
 use alloy_primitives::{
     IntoLogData,
     U256,
 };
 use alloy_provider::transport::TransportError;
+use fuel_core_provider::test_helpers::provider::{
+    MockProvider,
+    TriggerType,
+};
 use std::{
     ops::RangeInclusive,
     sync::atomic::{
