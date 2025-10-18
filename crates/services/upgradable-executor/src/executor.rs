@@ -260,7 +260,8 @@ impl<S, R> Executor<S, R> {
         ("0-44-0", 29),
         // We are skipping 0-45-0 because it was not published.
         ("0-45-1", 30),
-        ("0-46-0", LATEST_STATE_TRANSITION_VERSION),
+        ("0-46-0", 31),
+        ("0-47-0", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
@@ -939,15 +940,13 @@ where
             .enumerate()
             .map(|(i, (status, tx))| {
                 let tx_index = u16::try_from(i).unwrap_or(u16::MAX);
-                let preconfirmation_status =
-                    convert_tx_execution_result_to_preconfirmation(
-                        tx,
-                        status.id,
-                        &status.result,
-                        *execution_result.block.header().height(),
-                        tx_index,
-                    );
-                preconfirmation_status
+                convert_tx_execution_result_to_preconfirmation(
+                    tx,
+                    status.id,
+                    &status.result,
+                    *execution_result.block.header().height(),
+                    tx_index,
+                )
             })
             .collect::<Vec<_>>();
 

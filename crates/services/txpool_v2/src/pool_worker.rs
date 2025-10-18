@@ -81,10 +81,10 @@ impl Drop for PoolWorkerInterface {
             .thread_management_sender
             .send(ThreadManagementRequest::Stop);
 
-        if let Some(handle) = self.handle.take() {
-            if handle.join().is_err() {
-                tracing::error!("Failed to join pool worker thread");
-            }
+        if let Some(handle) = self.handle.take()
+            && handle.join().is_err()
+        {
+            tracing::error!("Failed to join pool worker thread");
         }
     }
 }

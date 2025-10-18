@@ -1,7 +1,10 @@
 //! The module defines primitives that allow iterating of the storage.
 
 use crate::{
-    blueprint::BlueprintInspect,
+    blueprint::{
+        BlueprintCodec,
+        BlueprintInspect,
+    },
     codec::{
         Decode,
         Encode,
@@ -82,7 +85,7 @@ pub trait IterableStore: KeyValueInspect {
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem>;
+    ) -> BoxedIter<'_, KVItem>;
 
     /// Returns an iterator over keys in the storage.
     fn iter_store_keys(
@@ -91,7 +94,7 @@ pub trait IterableStore: KeyValueInspect {
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem>;
+    ) -> BoxedIter<'_, KeyItem>;
 }
 
 #[cfg(feature = "std")]
@@ -105,7 +108,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         use core::ops::Deref;
         self.deref().iter_store(column, prefix, start, direction)
     }
@@ -116,7 +119,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIter<'_, KeyItem> {
         use core::ops::Deref;
         self.deref()
             .iter_store_keys(column, prefix, start, direction)
@@ -134,7 +137,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         P: AsRef<[u8]>;
 
@@ -144,7 +147,7 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         P: AsRef<[u8]>;
 }
@@ -160,13 +163,14 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<crate::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, crate::Result<M::OwnedKey>>
     where
         P: AsRef<[u8]>,
     {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
+        #[allow(clippy::redundant_closure)]
+        // false positive: https://github.com/rust-lang/rust-clippy/issues/14215
+        let encoder = start
+            .map(|start| <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(start));
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
@@ -179,10 +183,9 @@ where
         )
         .map(|res| {
             res.and_then(|key| {
-                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let key =
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(key.as_slice())
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok(key)
             })
         })
@@ -194,13 +197,14 @@ where
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         P: AsRef<[u8]>,
     {
-        let encoder = start.map(|start| {
-            <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::encode(start)
-        });
+        #[allow(clippy::redundant_closure)]
+        // false positive: https://github.com/rust-lang/rust-clippy/issues/14215
+        let encoder = start
+            .map(|start| <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(start));
 
         let start = encoder.as_ref().map(|encoder| encoder.as_bytes());
 
@@ -213,15 +217,12 @@ where
         )
         .map(|val| {
             val.and_then(|(key, value)| {
-                let key = <M::Blueprint as BlueprintInspect<M, Self>>::KeyCodec::decode(
-                    key.as_slice(),
-                )
-                .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                let key =
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(key.as_slice())
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 let value =
-                    <M::Blueprint as BlueprintInspect<M, Self>>::ValueCodec::decode(
-                        &value,
-                    )
-                    .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                    <M::Blueprint as BlueprintCodec<M>>::ValueCodec::decode(&value)
+                        .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
                 Ok((key, value))
             })
         })
@@ -235,7 +236,7 @@ pub trait IteratorOverTable {
     fn iter_all_keys<M>(
         &self,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -247,7 +248,7 @@ pub trait IteratorOverTable {
     fn iter_all_by_prefix_keys<M, P>(
         &self,
         prefix: Option<P>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -261,7 +262,7 @@ pub trait IteratorOverTable {
         &self,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -275,7 +276,7 @@ pub trait IteratorOverTable {
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<M::OwnedKey>>
+    ) -> BoxedIter<'_, super::Result<M::OwnedKey>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -288,7 +289,7 @@ pub trait IteratorOverTable {
     fn iter_all<M>(
         &self,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -300,7 +301,7 @@ pub trait IteratorOverTable {
     fn iter_all_by_prefix<M, P>(
         &self,
         prefix: Option<P>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         P: AsRef<[u8]>,
@@ -314,7 +315,7 @@ pub trait IteratorOverTable {
         &self,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         Self: IterableTable<M>,
@@ -328,7 +329,7 @@ pub trait IteratorOverTable {
         prefix: Option<P>,
         start: Option<&M::Key>,
         direction: Option<IterDirection>,
-    ) -> BoxedIter<super::Result<(M::OwnedKey, M::OwnedValue)>>
+    ) -> BoxedIter<'_, super::Result<(M::OwnedKey, M::OwnedValue)>>
     where
         M: Mappable,
         P: AsRef<[u8]>,

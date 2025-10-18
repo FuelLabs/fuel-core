@@ -43,12 +43,11 @@ impl Drop for ShallowTempDir {
                 v.parse::<bool>().unwrap_or(default_db_clean_up)
             });
 
-        if should_clean_up {
-            if let Err(e) = std::fs::remove_dir_all(&self.path) {
-                if !std::thread::panicking() {
-                    panic!("Failed to remove ShallowTempDir: {}", e);
-                }
-            }
+        if should_clean_up
+            && let Err(e) = std::fs::remove_dir_all(&self.path)
+            && !std::thread::panicking()
+        {
+            panic!("Failed to remove ShallowTempDir: {}", e);
         }
     }
 }

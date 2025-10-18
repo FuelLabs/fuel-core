@@ -6,6 +6,50 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.47.0]
+
+### Breaking
+- [3014](https://github.com/FuelLabs/fuel-core/pull/3014): Extend `CoinConfig` to also support being configured with private keys.
+- [3050](https://github.com/FuelLabs/fuel-core/pull/3050): - Used a new `fuel-vm 0.64.0` release which brings breaking changes: https://github.com/FuelLabs/fuel-vm/releases/tag/v0.64.0
+  - The default gas cost has been changed according to new optimizations and a new benchmark machine for a local node.
+  - Receipts now are behind an `Arc` pointer to avoid unnecessary cloning. It affects transaction states and preconfirmations.
+  - The `deploy_contract_with_id` now works with `[u8]` instead of the `Contract` type.
+- [3083](https://github.com/FuelLabs/fuel-core/pull/3083): Disable gossip subscription for transactions by default. It can be enabled using --subscribe-to-transactions flag.
+- [3094](https://github.com/FuelLabs/fuel-core/pull/3094): Fixed the bug where we charged for additional 40 entries on the GraphQL query
+- [3099](https://github.com/FuelLabs/fuel-core/pull/3099): Use hash-based `balance_root` and `state_root` fields in tx inputs and outputs
+- [3110](https://github.com/FuelLabs/fuel-core/pull/3110): Bump Rust version to 1.90.0 and fuel-vm to 0.65.0
+- [3117](https://github.com/FuelLabs/fuel-core/pull/3117): The algorithm to calculate the genesis state root and the balance root was changed to not use SMTs. This change doesn't affect mainnet, testnet, and devnet, because these networks didn't use any balances or storage slots in the state config. But the change is breaking for anyone who used them.
+
+### Added
+- [3023](https://github.com/FuelLabs/fuel-core/pull/3023): Add a method to wait for `gas_price` to finish syncing upon receiving a new block, and modify the test accordingly.
+- [3049](https://github.com/FuelLabs/fuel-core/pull/3049): Support awaiting of DA block height on pre defined block production.
+- [3050](https://github.com/FuelLabs/fuel-core/pull/3050): A new benchmarking group for `niop` operations in the `alu.rs` file. The changes add comprehensive benchmarks for various operations (`ADD`, `SUB`, `MUL`, `EXP`, `SLL`, `XNOR`) across different operand widths (`U8`, `U16`, `U32`)
+  
+  ### Additions to benchmarking:
+  
+  * A new `niop` benchmarking group was added to evaluate the performance of narrow integer operations (`niop`) with different operand widths (`U8`, `U16`, `U32`).
+  * Introduced the `niop_bench` macro to simplify the creation of benchmarks for operations like `ADD`, `SUB`, `MUL`, `EXP`, `SLL`, and `XNOR`.
+  * Benchmarks iterate over generated operand pairs for each width, ensuring a variety of test cases for each operation.
+- [3059](https://github.com/FuelLabs/fuel-core/pull/3059): Enable debug logging in predicates and scripts using ECAL. Upgrades fuel-vm to 0.63.0.
+- [3085](https://github.com/FuelLabs/fuel-core/pull/3085): Add scaffolding for the new block aggregator service
+- [3092](https://github.com/FuelLabs/fuel-core/pull/3092): Add adapter for the block aggregator DB
+- [3096](https://github.com/FuelLabs/fuel-core/pull/3096): Add subscription manager for core service
+- [3097](https://github.com/FuelLabs/fuel-core/pull/3097): Add block source adapter using fuel storage and block importer
+
+### Changed
+- [3050](https://github.com/FuelLabs/fuel-core/pull/3050): Actualized benchmarks with the performance of the network. With this change we should be able to run benchmarks on nightly bases.
+  
+  Added several optimizations to the code base:
+  - Executor now reuses the memory instance between blocks production and validation avoiding allocations.
+  - Receipts are not cloned anymore from the VM. Instead, they are extracted from the VM and stored ina s shared pointer.
+  - The gas usage for script is discovered in a faster way.
+  - `Create` transaction doesn't require a cloning of the contract bytecode anymore to calculate its `ContractId`.
+  - Serialization and deserialization of the bytes became much faster for canonical, `postcard`, `bincode` codecs.
+- [3104](https://github.com/FuelLabs/fuel-core/pull/3104): Automatically adjust relayer log page size to prevent sync failures from oversized Ethereum RPC responses.
+
+### Removed
+- [3117](https://github.com/FuelLabs/fuel-core/pull/3117): Removed SMT usage from STF and benchmarks. 
+
 ## [Version 0.46.0]
 
 ### Breaking

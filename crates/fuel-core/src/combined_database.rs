@@ -454,22 +454,22 @@ impl CombinedDatabase {
                 ));
             }
 
-            if let Some(gas_price_chain_height) = gas_price_chain_height {
-                if gas_price_chain_height < target_block_height {
-                    return Err(anyhow::anyhow!(
-                        "gas-price database height({gas_price_chain_height}) \
-                        is less than target height({target_block_height})"
-                    ));
-                }
+            if let Some(gas_price_chain_height) = gas_price_chain_height
+                && gas_price_chain_height < target_block_height
+            {
+                return Err(anyhow::anyhow!(
+                    "gas-price database height({gas_price_chain_height}) \
+                    is less than target height({target_block_height})"
+                ));
             }
 
-            if let Some(compression_db_height) = compression_db_height {
-                if compression_db_height < target_block_height {
-                    return Err(anyhow::anyhow!(
-                        "compression database height({compression_db_height}) \
-                        is less than target height({target_block_height})"
-                    ));
-                }
+            if let Some(compression_db_height) = compression_db_height
+                && compression_db_height < target_block_height
+            {
+                return Err(anyhow::anyhow!(
+                    "compression database height({compression_db_height}) \
+                    is less than target height({target_block_height})"
+                ));
             }
 
             if on_chain_height > target_block_height {
@@ -480,16 +480,16 @@ impl CombinedDatabase {
                 self.off_chain().rollback_last_block()?;
             }
 
-            if let Some(gas_price_chain_height) = gas_price_chain_height {
-                if gas_price_chain_height > target_block_height {
-                    self.gas_price().rollback_last_block()?;
-                }
+            if let Some(gas_price_chain_height) = gas_price_chain_height
+                && gas_price_chain_height > target_block_height
+            {
+                self.gas_price().rollback_last_block()?;
             }
 
-            if let Some(compression_db_height) = compression_db_height {
-                if compression_db_height > target_block_height {
-                    self.compression().rollback_last_block()?;
-                }
+            if let Some(compression_db_height) = compression_db_height
+                && compression_db_height > target_block_height
+            {
+                self.compression().rollback_last_block()?;
             }
         }
 
@@ -520,19 +520,19 @@ impl CombinedDatabase {
                 break;
             }
 
-            if let Some(relayer_db_height) = relayer_db_height {
-                if relayer_db_height < target_da_height {
-                    return Err(anyhow::anyhow!(
-                        "relayer database height({relayer_db_height}) \
-                        is less than target height({target_da_height})"
-                    ));
-                }
+            if let Some(relayer_db_height) = relayer_db_height
+                && relayer_db_height < target_da_height
+            {
+                return Err(anyhow::anyhow!(
+                    "relayer database height({relayer_db_height}) \
+                    is less than target height({target_da_height})"
+                ));
             }
 
-            if let Some(relayer_db_height) = relayer_db_height {
-                if relayer_db_height > target_da_height {
-                    self.relayer().rollback_last_block()?;
-                }
+            if let Some(relayer_db_height) = relayer_db_height
+                && relayer_db_height > target_da_height
+            {
+                self.relayer().rollback_last_block()?;
             }
         }
 
@@ -565,17 +565,17 @@ impl CombinedDatabase {
             let gas_price_height = self.gas_price().latest_height_from_metadata()?;
 
             // Handle off-chain rollback if necessary
-            if let Some(off_height) = off_chain_height {
-                if off_height > on_chain_height {
-                    self.off_chain().rollback_last_block()?;
-                }
+            if let Some(off_height) = off_chain_height
+                && off_height > on_chain_height
+            {
+                self.off_chain().rollback_last_block()?;
             }
 
             // Handle gas price rollback if necessary
-            if let Some(gas_height) = gas_price_height {
-                if gas_height > on_chain_height {
-                    self.gas_price().rollback_last_block()?;
-                }
+            if let Some(gas_height) = gas_price_height
+                && gas_height > on_chain_height
+            {
+                self.gas_price().rollback_last_block()?;
             }
 
             // If both off-chain and gas price heights are synced, break
