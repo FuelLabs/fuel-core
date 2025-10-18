@@ -1,9 +1,7 @@
+pub use alloy_primitives::Address;
 use alloy_primitives::B256;
 use alloy_sol_types::SolEvent;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_types::Bytes20,
-};
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use once_cell::sync::Lazy;
 use std::{
     str::FromStr,
@@ -26,7 +24,7 @@ pub struct Config {
     pub relayer: Option<Vec<url::Url>>,
     // TODO: Create `EthAddress` into `fuel_core_types`.
     /// Ethereum contract address.
-    pub eth_v2_listening_contracts: Vec<Bytes20>,
+    pub eth_v2_listening_contracts: Vec<Address>,
     /// Number of pages or blocks containing logs that
     /// should be downloaded in a single call to the da layer
     pub log_page_size: u64,
@@ -63,7 +61,7 @@ impl Default for Config {
             da_deploy_height: DaBlockHeight::from(Self::DEFAULT_DA_DEPLOY_HEIGHT),
             relayer: None,
             eth_v2_listening_contracts: vec![
-                Bytes20::from_str("0x03E4538018285e1c03CCce2F92C9538c87606911").unwrap(),
+                Address::from_str("0x03E4538018285e1c03CCce2F92C9538c87606911").unwrap(),
             ],
             log_page_size: Self::DEFAULT_LOG_PAGE_SIZE,
             max_logs_per_rpc: Self::DEFAULT_MAX_LOGS_PER_RPC,
@@ -76,7 +74,6 @@ impl Default for Config {
 }
 
 mod tests {
-
     #[test]
     fn bytes20_and_address_str_conversion_equivalence() {
         use std::str::FromStr;
