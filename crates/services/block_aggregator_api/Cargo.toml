@@ -2,6 +2,8 @@
 name = "block_aggregator_api"
 version = "0.1.0"
 edition = "2024"
+description = "Block Aggregator API for Fuel Core"
+license = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
