@@ -1,5 +1,5 @@
 [package]
-name = "block_aggregator_api"
+name = "fuel-core-block-aggregator-api"
 description = "Block Aggregator API for Fuel Core"
 version = { workspace = true }
 authors = { workspace = true }
