@@ -66,7 +66,6 @@ use fuel_core_types::{
         Nonce,
     },
 };
-use fuel_types::Bytes20;
 use hyper::{
     Body,
     Request,
@@ -398,7 +397,7 @@ async fn can_restart_node_with_relayer_data() {
 fn make_message_event(
     nonce: Nonce,
     block_number: u64,
-    contract_address: Bytes20,
+    contract_address: alloy_primitives::Address,
     sender: Option<[u8; 32]>,
     recipient: Option<[u8; 32]>,
     amount: Option<u64>,
@@ -418,9 +417,7 @@ fn make_message_event(
     };
     Log {
         inner: alloy_primitives::Log {
-            address: fuel_core_relayer::test_helpers::convert_to_address(
-                contract_address.as_slice(),
-            ),
+            address: contract_address,
             data: message.into_log_data(),
         },
         block_hash: None,
@@ -847,7 +844,7 @@ async fn relayer_db_can_be_rewound() {
 fn setup_messages(
     messages: &[MessageKind],
     recipient: &Address,
-    contract_address: &Bytes20,
+    contract_address: &alloy_primitives::Address,
 ) -> Vec<Log> {
     const SENDER: Address = Address::zeroed();
 
