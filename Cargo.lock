@@ -1394,31 +1394,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "block_aggregator_api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bytes",
- "enum-iterator",
- "fuel-core-services",
- "fuel-core-storage",
- "fuel-core-types 0.47.0",
- "futures",
- "num_enum",
- "postcard",
- "rand 0.8.5",
- "serde",
- "strum 0.25.0",
- "strum_macros 0.25.3",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "blocking"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3634,6 +3609,31 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+]
+
+[[package]]
+name = "fuel-core-block-aggregator-api"
+version = "0.47.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "enum-iterator",
+ "fuel-core-services",
+ "fuel-core-storage",
+ "fuel-core-types 0.47.0",
+ "futures",
+ "num_enum",
+ "postcard",
+ "rand 0.8.5",
+ "serde",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
