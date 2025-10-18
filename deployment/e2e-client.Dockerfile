@@ -5,7 +5,7 @@ WORKDIR /build/
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-    && apt-get install -y libclang-dev \
+    && apt-get install -y libclang-dev cmake \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
