@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 - [3023](https://github.com/FuelLabs/fuel-core/pull/3023): Add a method to wait for `gas_price` to finish syncing upon receiving a new block, and modify the test accordingly.
-- [3049](https://github.com/FuelLabs/fuel-core/pull/3049): Support awating of DA block height on pre defined block production.
+- [3049](https://github.com/FuelLabs/fuel-core/pull/3049): Support awaiting of DA block height on pre defined block production.
 - [3050](https://github.com/FuelLabs/fuel-core/pull/3050): A new benchmarking group for `niop` operations in the `alu.rs` file. The changes add comprehensive benchmarks for various operations (`ADD`, `SUB`, `MUL`, `EXP`, `SLL`, `XNOR`) across different operand widths (`U8`, `U16`, `U32`)
   
   ### Additions to benchmarking:
