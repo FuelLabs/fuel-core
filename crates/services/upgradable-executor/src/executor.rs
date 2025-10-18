@@ -72,6 +72,7 @@ use fuel_core_types::services::executor::UncommittedResult;
 
 #[cfg(feature = "wasm-executor")]
 use fuel_core_executor::executor::convert_tx_execution_result_to_preconfirmation;
+use fuel_core_types::services::executor::memory::MemoryPool;
 #[cfg(feature = "wasm-executor")]
 use fuel_core_types::{
     fuel_types::Bytes32,
@@ -141,6 +142,16 @@ pub struct Executor<S, R> {
     pub storage_view_provider: S,
     pub relayer_view_provider: R,
     pub config: Arc<Config>,
+    /// Pools of VM memory instances for reuse.
+    /// In the code we don't allow more than 1 active block production.
+    produce_block_pool: MemoryPool,
+    /// Pools of VM memory instances for reuse.
+    /// In the code we don't allow more than 1 active block validation.
+    validate_block_pool: MemoryPool,
+    /// Pools of VM memory instances for reuse.
+    /// In theory this pool is unlimited, and the caller of the `dry_run` is responsible
+    /// for not spawning too many dry runs in parallel.
+    dry_run_pool: MemoryPool,
     #[cfg(feature = "wasm-executor")]
     engine: wasmtime::Engine,
     #[cfg(feature = "wasm-executor")]
@@ -248,7 +259,8 @@ impl<S, R> Executor<S, R> {
         ("0-43-2", 28),
         ("0-44-0", 29),
         // We are skipping 0-45-0 because it was not published.
-        ("0-45-1", LATEST_STATE_TRANSITION_VERSION),
+        ("0-45-1", 30),
+        ("0-46-0", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(
@@ -283,6 +295,9 @@ impl<S, R> Executor<S, R> {
             storage_view_provider,
             relayer_view_provider,
             config: Arc::new(config),
+            produce_block_pool: Default::default(),
+            validate_block_pool: Default::default(),
+            dry_run_pool: Default::default(),
             #[cfg(feature = "wasm-executor")]
             engine: private::default_engine().clone(),
             #[cfg(feature = "wasm-executor")]
@@ -308,6 +323,9 @@ impl<S, R> Executor<S, R> {
             storage_view_provider,
             relayer_view_provider,
             config: Arc::new(config),
+            produce_block_pool: Default::default(),
+            validate_block_pool: Default::default(),
+            dry_run_pool: Default::default(),
             engine: engine.clone(),
             execution_strategy: ExecutionStrategy::Wasm {
                 module: module.clone(),
@@ -472,7 +490,7 @@ where
 
         let options = ExecutionOptions {
             forbid_fake_coins,
-            backtrace: false,
+            allow_syscall: self.config.allow_syscall,
         };
 
         let component = Components {
@@ -576,21 +594,31 @@ where
         let previous_block_height = block.header().height().pred();
         let relayer = self.relayer_view_provider.latest_view()?;
 
+        let memory = self.dry_run_pool.take_raw();
+
         let storage_rec = if let Some(previous_block_height) = previous_block_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             let database = StorageAccessRecorder::new(database);
             let database_rec = database.record.clone();
 
-            let executor =
-                ExecutionInstance::new(relayer, database, self.config.as_ref().into());
+            let executor = ExecutionInstance::new(
+                relayer,
+                database,
+                self.config.as_ref().into(),
+                memory,
+            );
             let _ = executor.validate_without_commit(block)?;
             database_rec
         } else {
             let database = self.storage_view_provider.latest_view()?;
             let database = StorageAccessRecorder::new(database);
             let database_rec = database.record.clone();
-            let executor =
-                ExecutionInstance::new(relayer, database, self.config.as_ref().into());
+            let executor = ExecutionInstance::new(
+                relayer,
+                database,
+                self.config.as_ref().into(),
+                memory,
+            );
             let _ = executor.validate_without_commit(block)?;
             database_rec
         };
@@ -911,15 +939,13 @@ where
             .enumerate()
             .map(|(i, (status, tx))| {
                 let tx_index = u16::try_from(i).unwrap_or(u16::MAX);
-                let preconfirmation_status =
-                    convert_tx_execution_result_to_preconfirmation(
-                        tx,
-                        status.id,
-                        &status.result,
-                        *execution_result.block.header().height(),
-                        tx_index,
-                    );
-                preconfirmation_status
+                convert_tx_execution_result_to_preconfirmation(
+                    tx,
+                    status.id,
+                    &status.result,
+                    *execution_result.block.header().height(),
+                    tx_index,
+                )
             })
             .collect::<Vec<_>>();
 
@@ -1010,13 +1036,18 @@ where
         };
 
         let mut storage_rec = Default::default();
+        let memory = if mode.is_dry_run() {
+            self.dry_run_pool.take_raw()
+        } else {
+            self.produce_block_pool.take_raw()
+        };
 
         let result = if let Some(previous_block_height) = db_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
             if mode.record_storage_reads() {
                 let database = StorageAccessRecorder::new(database);
                 storage_rec = database.record.clone();
-                ExecutionInstance::new(relayer, database, options)
+                ExecutionInstance::new(relayer, database, options, memory)
                     .produce_without_commit(
                         block,
                         mode.is_dry_run(),
@@ -1025,7 +1056,7 @@ where
                     )
                     .await
             } else {
-                ExecutionInstance::new(relayer, database, options)
+                ExecutionInstance::new(relayer, database, options, memory)
                     .produce_without_commit(
                         block,
                         mode.is_dry_run(),
@@ -1039,7 +1070,7 @@ where
             if mode.record_storage_reads() {
                 let database = StorageAccessRecorder::new(database);
                 storage_rec = database.record.clone();
-                ExecutionInstance::new(relayer, database, options)
+                ExecutionInstance::new(relayer, database, options, memory)
                     .produce_without_commit(
                         block,
                         mode.is_dry_run(),
@@ -1048,7 +1079,7 @@ where
                     )
                     .await
             } else {
-                ExecutionInstance::new(relayer, database, options)
+                ExecutionInstance::new(relayer, database, options, memory)
                     .produce_without_commit(
                         block,
                         mode.is_dry_run(),
@@ -1076,13 +1107,15 @@ where
         let previous_block_height = block.header().height().pred();
         let relayer = self.relayer_view_provider.latest_view()?;
 
+        let memory = self.validate_block_pool.take_raw();
+
         if let Some(previous_block_height) = previous_block_height {
             let database = self.storage_view_provider.view_at(&previous_block_height)?;
-            ExecutionInstance::new(relayer, database, options)
+            ExecutionInstance::new(relayer, database, options, memory)
                 .validate_without_commit(block)
         } else {
             let database = self.storage_view_provider.latest_view()?;
-            ExecutionInstance::new(relayer, database, options)
+            ExecutionInstance::new(relayer, database, options, memory)
                 .validate_without_commit(block)
         }
     }

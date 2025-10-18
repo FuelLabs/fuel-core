@@ -46,7 +46,6 @@ use fuel_core_txpool::{
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
-        memory::MemoryPool,
         pruner::TransactionPruner,
         subscriptions::Subscriptions,
         verifications::Verification,
@@ -71,6 +70,7 @@ use fuel_core_types::{
     },
     services::{
         block_importer::SharedImportResult,
+        executor::memory::MemoryPool,
         p2p::{
             GossipData,
             GossipsubMessageAcceptance,
@@ -106,7 +106,6 @@ use tokio::{
     time::MissedTickBehavior,
 };
 
-pub(crate) mod memory;
 mod pruner;
 mod subscriptions;
 pub(crate) mod verifications;
@@ -174,6 +173,7 @@ where
 {
     chain_id: ChainId,
     utxo_validation: bool,
+    allow_syscall: bool,
     subscriptions: Subscriptions,
     verification: Arc<Verification<View>>,
     p2p: Arc<P2P>,
@@ -377,10 +377,10 @@ where
                         response_channel,
                         tx,
                     } => {
-                        if let Some(channel) = response_channel {
-                            if channel.send(Ok(())).is_err() {
-                                tracing::error!("Failed to send the response to the RPC");
-                            }
+                        if let Some(channel) = response_channel
+                            && channel.send(Ok(())).is_err()
+                        {
+                            tracing::error!("Failed to send the response to the RPC");
                         }
                         if let Err(e) = self.p2p.broadcast_transaction(tx) {
                             tracing::error!("Failed to broadcast transaction: {}", e);
@@ -464,6 +464,7 @@ where
         let current_height_reader = self.current_height_reader.clone();
         let tx_id = transaction.id(&self.chain_id);
         let utxo_validation = self.utxo_validation;
+        let allow_syscall = self.allow_syscall;
         let tx_status_manager = self.tx_status_manager.clone();
 
         let insert_transaction_thread_pool_op = move || {
@@ -478,6 +479,7 @@ where
                 transaction,
                 current_height,
                 utxo_validation,
+                allow_syscall,
             );
 
             if metrics {
@@ -783,6 +785,7 @@ where
 
     let service_channel_limits = config.service_channel_limits;
     let utxo_validation = config.utxo_validation;
+    let allow_syscall = config.allow_syscall;
     let tx_status_manager = Arc::new(tx_status_manager);
     let txpool = Pool::new(
         GraphStorage::new(GraphConfig {
@@ -816,6 +819,7 @@ where
     Service::new(Task {
         chain_id,
         utxo_validation,
+        allow_syscall,
         subscriptions,
         verification: Arc::new(verification),
         transaction_verifier_process,

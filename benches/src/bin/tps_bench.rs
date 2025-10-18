@@ -174,7 +174,7 @@ fn main() {
                         output_index: utxo_id.output_index(),
                         tx_pointer_block_height: tx_pointer.block_height(),
                         tx_pointer_tx_idx: tx_pointer.tx_index(),
-                        owner,
+                        owner: owner.into(),
                         amount,
                         asset_id,
                     })
@@ -229,16 +229,14 @@ fn main() {
             //     start_insertion.elapsed().as_millis()
             // );
             client.produce_blocks(1, None).await.unwrap();
-            let block = srv
-                .shared
+            srv.shared
                 .database
                 .on_chain()
                 .latest_view()
                 .unwrap()
                 .get_sealed_block_by_height(&1.into())
                 .unwrap()
-                .unwrap();
-            block
+                .unwrap()
         }
     });
 

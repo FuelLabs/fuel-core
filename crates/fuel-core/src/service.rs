@@ -96,6 +96,8 @@ pub struct SharedState {
     pub config: Config,
     /// The compression service shared data.
     pub compression: Option<fuel_core_compression_service::service::SharedData>,
+    /// The gas price service shared data.
+    pub gas_price_service: fuel_core_gas_price_service::v1::service::SharedData,
 }
 
 pub struct FuelService {
@@ -244,6 +246,13 @@ impl FuelService {
         Ok(())
     }
 
+    /// Waits until the gas price service has synced
+    /// with current l2 block height
+    pub async fn await_gas_price_synced(&self) -> anyhow::Result<()> {
+        let _ = &self.runner.shared.gas_price_service.await_synced().await?;
+        Ok(())
+    }
+
     fn make_database_compatible_with_config<Shutdown>(
         combined_database: &mut CombinedDatabase,
         config: &Config,
@@ -354,17 +363,17 @@ impl FuelService {
 
     async fn prepare_genesis(&self, watcher: &StateWatcher) -> anyhow::Result<()> {
         // check if chain is initialized
-        if let Err(err) = self.shared.database.on_chain().latest_view()?.get_genesis() {
-            if err.is_not_found() {
-                let result = genesis::execute_genesis_block(
-                    watcher.clone(),
-                    &self.shared.config,
-                    &self.shared.database,
-                )
-                .await?;
+        if let Err(err) = self.shared.database.on_chain().latest_view()?.get_genesis()
+            && err.is_not_found()
+        {
+            let result = genesis::execute_genesis_block(
+                watcher.clone(),
+                &self.shared.config,
+                &self.shared.database,
+            )
+            .await?;
 
-                self.shared.block_importer.commit_result(result).await?;
-            }
+            self.shared.block_importer.commit_result(result).await?;
         }
 
         // repopulate missing tables

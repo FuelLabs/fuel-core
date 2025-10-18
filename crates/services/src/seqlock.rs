@@ -79,7 +79,7 @@ impl<T: Copy> SeqLockReader<T> {
             let start = lock.sequence.load(Ordering::Acquire);
 
             // if odd, write in progress
-            if start % 2 != 0 {
+            if !start.is_multiple_of(2) {
                 std::thread::yield_now();
                 continue;
             }
@@ -98,7 +98,7 @@ impl<T: Copy> SeqLockReader<T> {
             let end = lock.sequence.load(Ordering::Acquire);
 
             // if value changed, retry
-            if start == end && start % 2 == 0 {
+            if start == end && start.is_multiple_of(2) {
                 return data;
             }
         }

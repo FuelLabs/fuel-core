@@ -1,4 +1,8 @@
 use crate::{
+    contract_state_hash::{
+        compute_balances_hash,
+        compute_state_hash,
+    },
     ports::{
         MaybeCheckedTransaction,
         NewTxWaiterPort,
@@ -7,6 +11,10 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
+    storage_access_recorder::{
+        ContractAccessesWithValues,
+        StorageAccessRecorder,
+    },
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -26,12 +34,12 @@ use fuel_core_storage::{
         ConflictPolicy,
         IntoTransaction,
         Modifiable,
-        ReadTransaction,
         StorageTransaction,
         WriteTransaction,
     },
     vm_storage::VmStorage,
 };
+use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_types::{
     blockchain::{
         block::{
@@ -123,7 +131,6 @@ use fuel_core_types::{
             ExecutableTransaction,
             InterpreterParams,
             MemoryInstance,
-            NotSupportedEcal,
         },
         state::StateTransition,
         verification,
@@ -157,18 +164,29 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    collections::BTreeMap,
+};
+
+#[cfg(not(feature = "alloc"))]
+use std::sync::Arc;
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
+use alloc::{
+    borrow::Cow,
+    collections::BTreeMap,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::{
     format,
     string::ToString,
+    sync::Arc,
     vec,
     vec::Vec,
 };
+use fuel_core_types::fuel_vm::interpreter::Memory;
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
@@ -338,11 +356,8 @@ pub struct ExecutionOptions {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips signature and UTXO existence checks.
     pub forbid_fake_coins: bool,
-    /// Print execution backtraces if transaction execution reverts.
-    ///
-    /// Deprecated field. Do nothing. This fields exists for serialization and
-    /// deserialization compatibility.
-    pub backtrace: bool,
+    /// The flag allows the usage of syscall in the transaction.
+    pub allow_syscall: bool,
 }
 
 /// Per-block execution options
@@ -351,28 +366,32 @@ struct ExecutionOptionsInner {
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips signature and UTXO existence checks.
     pub forbid_fake_coins: bool,
+    pub allow_syscall: bool,
     pub dry_run: bool,
 }
 
 /// The executor instance performs block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
 #[derive(Clone, Debug)]
-pub struct ExecutionInstance<R, D> {
+pub struct ExecutionInstance<R, D, M> {
     pub relayer: R,
     pub database: D,
     pub options: ExecutionOptions,
+    memory: M,
 }
 
-impl<R, D> ExecutionInstance<R, D>
+impl<R, D, M> ExecutionInstance<R, D, M>
 where
     R: RelayerPort,
     D: KeyValueInspect<Column = Column>,
+    M: Memory,
 {
-    pub fn new(relayer: R, database: D, options: ExecutionOptions) -> Self {
+    pub fn new(relayer: R, database: D, options: ExecutionOptions, memory: M) -> Self {
         Self {
             relayer,
             database,
             options,
+            memory,
         }
     }
 
@@ -389,7 +408,7 @@ where
     {
         let consensus_params_version = components.consensus_parameters_version();
 
-        let (block_executor, storage_tx) = self.into_executor(
+        let (block_executor, storage_tx, mut memory) = self.into_executor(
             consensus_params_version,
             new_tx_waiter,
             preconfirmation_sender,
@@ -399,8 +418,9 @@ where
         #[cfg(feature = "fault-proving")]
         let chain_id = block_executor.consensus_params.chain_id();
 
-        let (partial_block, execution_data) =
-            block_executor.execute(components, storage_tx).await?;
+        let (partial_block, execution_data) = block_executor
+            .execute(components, storage_tx, memory.as_mut())
+            .await?;
 
         let ExecutionData {
             message_ids,
@@ -446,7 +466,7 @@ where
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         let consensus_params_version = block.header().consensus_parameters_version();
-        let (block_executor, storage_tx) = self.into_executor(
+        let (block_executor, storage_tx, mut memory) = self.into_executor(
             consensus_params_version,
             TimeoutOnlyTxWaiter,
             TransparentPreconfirmationSender,
@@ -461,7 +481,7 @@ where
             events,
             changes,
             ..
-        } = block_executor.validate_block(block, storage_tx)?;
+        } = block_executor.validate_block(block, storage_tx, memory.as_mut())?;
 
         let finalized_block_id = block.id();
 
@@ -475,13 +495,14 @@ where
         Ok(UncommittedValidationResult::new(result, changes))
     }
 
+    #[allow(clippy::type_complexity)]
     fn into_executor<N, P>(
         self,
         consensus_params_version: ConsensusParametersVersion,
         new_tx_waiter: N,
         preconfirmation_sender: P,
         dry_run: bool,
-    ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>)> {
+    ) -> ExecutorResult<(BlockExecutor<R, N, P>, StorageTransaction<D>, M)> {
         let storage_tx = self
             .database
             .into_transaction()
@@ -501,7 +522,7 @@ where
             preconfirmation_sender,
             dry_run,
         )?;
-        Ok((executor, storage_tx))
+        Ok((executor, storage_tx, self.memory))
     }
 }
 
@@ -533,6 +554,7 @@ impl<R, TxWaiter, PreconfirmationSender>
             consensus_params,
             options: ExecutionOptionsInner {
                 forbid_fake_coins: options.forbid_fake_coins,
+                allow_syscall: options.allow_syscall,
                 dry_run,
             },
             new_tx_waiter,
@@ -551,15 +573,18 @@ where
         self,
         components: Components<TxSource>,
         block_storage_tx: BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
         D: KeyValueInspect<Column = Column>,
     {
         if self.options.dry_run {
-            self.dry_run_block(components, block_storage_tx).await
+            self.dry_run_block(components, block_storage_tx, memory)
+                .await
         } else {
-            self.produce_block(components, block_storage_tx).await
+            self.produce_block(components, block_storage_tx, memory)
+                .await
         }
     }
 
@@ -569,6 +594,7 @@ where
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
@@ -577,14 +603,13 @@ where
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
         let mut data = ExecutionData::new();
-        let mut memory = MemoryInstance::new();
 
         self.process_l1_txs(
             &mut partial_block,
             components.coinbase_recipient,
             &mut block_storage_tx,
             &mut data,
-            &mut memory,
+            memory,
         )?;
 
         loop {
@@ -593,7 +618,7 @@ where
                 &components,
                 &mut block_storage_tx,
                 &mut data,
-                &mut memory,
+                memory,
             )
             .await?;
             match self.new_tx_waiter.wait_for_new_transactions().await {
@@ -609,7 +634,7 @@ where
             &components,
             &mut block_storage_tx,
             &mut data,
-            &mut memory,
+            memory,
         )?;
         debug_assert!(data.found_mint, "Mint transaction is not found");
 
@@ -678,6 +703,7 @@ where
         mut self,
         components: Components<TxSource>,
         mut block_storage_tx: BlockStorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<(PartialFuelBlock, ExecutionData)>
     where
         TxSource: TransactionsSource,
@@ -692,7 +718,7 @@ where
             &components,
             &mut block_storage_tx,
             &mut data,
-            &mut MemoryInstance::new(),
+            memory,
         )
         .await?;
 
@@ -901,6 +927,7 @@ where
         mut self,
         block: &Block,
         mut block_storage_tx: StorageTransaction<D>,
+        memory: &mut MemoryInstance,
     ) -> ExecutorResult<ExecutionData>
     where
         D: KeyValueInspect<Column = Column>,
@@ -910,7 +937,6 @@ where
         let partial_header = PartialBlockHeader::from(block.header());
         let mut partial_block = PartialFuelBlock::new(partial_header, vec![]);
         let transactions = block.transactions();
-        let mut memory = MemoryInstance::new();
 
         let (gas_price, coinbase_contract_id) =
             Self::get_coinbase_info_from_mint_tx(transactions)?;
@@ -920,7 +946,7 @@ where
             coinbase_contract_id,
             &mut block_storage_tx,
             &mut data,
-            &mut memory,
+            memory,
         )?;
         let processed_l1_tx_count = partial_block.transactions.len();
 
@@ -934,7 +960,7 @@ where
                 maybe_checked_tx,
                 gas_price,
                 coinbase_contract_id,
-                &mut memory,
+                memory,
             )?;
         }
 
@@ -1409,8 +1435,7 @@ where
         } else {
             Self::check_mint_amount(&mint, execution_data.coinbase)?;
 
-            let input = mint.input_contract().clone();
-            let mut input = Input::Contract(input);
+            let mut input = Input::Contract(mint.input_contract().clone());
 
             if self.options.forbid_fake_coins {
                 self.verify_inputs_exist_and_values_match(
@@ -1419,8 +1444,6 @@ where
                     header.da_height,
                 )?;
             }
-
-            self.compute_inputs(core::slice::from_mut(&mut input), storage_tx)?;
 
             let (input, output) = self.execute_mint_with_vm(
                 header,
@@ -1560,7 +1583,7 @@ where
             id: coinbase_id,
             result: TransactionExecutionResult::Success {
                 result: None,
-                receipts: vec![],
+                receipts: Default::default(),
                 total_gas: 0,
                 total_fee: 0,
             },
@@ -1590,8 +1613,10 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        let mut sub_block_db_commit = storage_tx
-            .write_transaction()
+        let storage_tx_record = StorageAccessRecorder::new(storage_tx);
+
+        let mut sub_block_db_commit = storage_tx_record
+            .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
         let mut vm_db = VmStorage::new(
@@ -1609,7 +1634,16 @@ where
         )
         .map_err(|e| format!("{e}"))
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
-        sub_block_db_commit.commit()?;
+
+        let (recorder, changes) = sub_block_db_commit.into_inner();
+        let (storage_tx, reads) = recorder.into_inner();
+        let (state_before, state_after) = reads
+            .finalize(&storage_tx, &changes)
+            .map_err(|err| ExecutorError::StorageError(err.to_string()))?;
+
+        self.compute_inputs(core::slice::from_mut(input), storage_tx, &state_before)?;
+
+        storage_tx.commit_changes(changes.clone())?;
 
         let block_height = *header.height();
         let output = *mint.output_contract();
@@ -1623,10 +1657,10 @@ where
             outputs.as_slice(),
         )?;
         self.compute_state_of_not_utxo_outputs(
-            outputs.as_mut_slice(),
-            core::slice::from_ref(input),
             *coinbase_id,
-            storage_tx,
+            core::slice::from_ref(input),
+            outputs.as_mut_slice(),
+            &state_after,
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
             return Err(ExecutorError::Other(
@@ -1641,23 +1675,17 @@ where
         Ok((input, output))
     }
 
-    fn update_tx_outputs<Tx, T>(
+    fn update_tx_outputs<Tx>(
         &self,
-        storage_tx: &TxStorageTransaction<T>,
         tx_id: TxId,
         tx: &mut Tx,
+        record: &BTreeMap<ContractId, ContractAccessesWithValues>,
     ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
-        T: KeyValueInspect<Column = Column>,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(
-            &mut outputs,
-            tx.inputs(),
-            tx_id,
-            storage_tx,
-        )?;
+        self.compute_state_of_not_utxo_outputs(tx_id, tx.inputs(), &mut outputs, record)?;
         *tx.outputs_mut() = outputs;
         Ok(())
     }
@@ -1667,7 +1695,7 @@ where
         &self,
         tx: &Tx,
         execution_data: &mut ExecutionData,
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         gas_price: Word,
         reverted: bool,
         state: ProgramState,
@@ -1780,11 +1808,17 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
+        let ecal_handler = EcalLogCollector {
+            enabled: self.options.allow_syscall,
+            ..Default::default()
+        };
+
         checked_tx = checked_tx
             .check_predicates(
                 &CheckPredicateParams::from(&self.consensus_params),
                 memory,
                 storage_tx,
+                ecal_handler.clone(),
             )
             .map_err(|e| {
                 ExecutorError::TransactionValidity(TransactionValidityError::Validation(
@@ -1792,6 +1826,11 @@ where
                 ))
             })?;
         debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+
+        // Note that the code above only executes predicates if the txpool didn't do so already.
+        ecal_handler.maybe_print_logs(
+            tracing::info_span!("verification", tx_id = % &checked_tx.id()),
+        );
 
         self.verify_inputs_exist_and_values_match(
             storage_tx,
@@ -1814,7 +1853,7 @@ where
         gas_price: Word,
         storage_tx: &mut TxStorageTransaction<T>,
         memory: &mut MemoryInstance,
-    ) -> ExecutorResult<(bool, ProgramState, Tx, Vec<Receipt>)>
+    ) -> ExecutorResult<(bool, ProgramState, Tx, Arc<Vec<Receipt>>)>
     where
         Tx: ExecutableTransaction + Cacheable,
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
@@ -1822,8 +1861,10 @@ where
     {
         let tx_id = checked_tx.id();
 
-        let mut sub_block_db_commit = storage_tx
-            .read_transaction()
+        let storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
+
+        let mut sub_block_db_commit = storage_tx_record
+            .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
         let vm_db = VmStorage::new(
@@ -1851,54 +1892,63 @@ where
 
         let mut reverted;
 
+        let ecal = EcalLogCollector {
+            enabled: self.options.allow_syscall,
+            ..Default::default()
+        };
+
         let (state, mut tx, receipts) = if !self.options.dry_run {
-            let mut vm = Interpreter::<_, _, _, NotSupportedEcal,
-                verification::Normal>::with_storage(
+            let vm = Interpreter::<_, _, _, EcalLogCollector, verification::Normal>::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
+                ecal.clone(),
             );
 
-            let vm_result: StateTransition<_> = vm
-                .transact(ready_tx)
-                .map_err(|error| ExecutorError::VmExecution {
-                    error: error.to_string(),
-                    transaction_id: tx_id,
-                })?
-                .into();
+            let vm_result: StateTransition<_, _> =
+                vm.into_transact(ready_tx).map_err(|error| {
+                    ExecutorError::VmExecution {
+                        error: error.to_string(),
+                        transaction_id: tx_id,
+                    }
+                })?;
+
             reverted = vm_result.should_revert();
 
-            vm_result.into_inner()
+            let (state, tx, receipts, _) = vm_result.into_inner();
+
+            (state, tx, Arc::new(receipts))
         } else {
-            let mut vm = Interpreter::<
+            let vm = Interpreter::<
                 _,
                 _,
                 _,
-                NotSupportedEcal,
+                EcalLogCollector,
                 verification::AttemptContinue,
-            >::with_storage(
+            >::with_storage_and_ecal(
                 memory,
                 vm_db,
                 InterpreterParams::new(gas_price, &self.consensus_params),
+                ecal.clone(),
             );
 
-            let vm_result: StateTransition<_> = vm
-                .transact(ready_tx)
-                .map_err(|error| ExecutorError::VmExecution {
-                    error: error.to_string(),
-                    transaction_id: tx_id,
-                })?
-                .into();
+            let vm_result: StateTransition<_, _> =
+                vm.into_transact(ready_tx).map_err(|error| {
+                    ExecutorError::VmExecution {
+                        error: error.to_string(),
+                        transaction_id: tx_id,
+                    }
+                })?;
 
             reverted = vm_result.should_revert();
 
-            let (state, tx, mut receipts) = vm_result.into_inner();
+            let (state, tx, mut receipts, verifier) = vm_result.into_inner();
 
             // If transaction requires contract ids, then extend receipts with
             // `PanicReason::ContractNotInInputs` for each missing contract id.
             // The data like `$pc` or `$is` is not available in this case,
             // because panic generated outside of the execution.
-            if !vm.verifier().missing_contract_inputs.is_empty() {
+            if !verifier.missing_contract_inputs.is_empty() {
                 debug_assert!(self.options.dry_run);
                 reverted = true;
 
@@ -1907,7 +1957,7 @@ where
                     op::noop().into(),
                 );
 
-                for contract_id in &vm.verifier().missing_contract_inputs {
+                for contract_id in &verifier.missing_contract_inputs {
                     receipts.push(Receipt::Panic {
                         id: ContractId::zeroed(),
                         reason,
@@ -1918,8 +1968,10 @@ where
                 }
             }
 
-            (state, tx, receipts)
+            (state, tx, Arc::new(receipts))
         };
+
+        ecal.maybe_print_logs(tracing::info_span!("execution", tx_id = % tx_id));
 
         #[cfg(debug_assertions)]
         {
@@ -1929,18 +1981,25 @@ where
 
         Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
+        let (recorder, changes) = sub_block_db_commit.into_inner();
+        let (storage_tx_recovered, record) = recorder.into_inner();
+        let (state_before, mut state_after) =
+            record.finalize(&storage_tx_recovered, &changes)?;
+
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
-        self.compute_inputs(tx.inputs_mut(), storage_tx)?;
+        self.compute_inputs(tx.inputs_mut(), storage_tx_recovered, &state_before)?;
 
         // only commit state changes if execution was a success
         if !reverted {
-            let changes = sub_block_db_commit.into_changes();
             storage_tx.commit_changes(changes)?;
+        } else {
+            state_after = Default::default();
         }
 
-        self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
-        Ok((reverted, state, tx, receipts.to_vec()))
+        self.update_tx_outputs(tx_id, &mut tx, &state_after)?;
+
+        Ok((reverted, state, tx, receipts))
     }
 
     fn verify_inputs_exist_and_values_match<T>(
@@ -2103,7 +2162,7 @@ where
         );
         let max_fee = tx.max_fee_limit();
         let mut used_gas = 0;
-        for r in receipts {
+        for r in receipts.iter().rev() {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
                 break
@@ -2137,6 +2196,7 @@ where
         &self,
         inputs: &mut [Input],
         db: &TxStorageTransaction<T>,
+        record: &BTreeMap<ContractId, ContractAccessesWithValues>,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -2176,8 +2236,12 @@ where
                         contract.validated_utxo(self.options.forbid_fake_coins)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
-                    *balance_root = contract.balance_root()?;
-                    *state_root = contract.state_root()?;
+
+                    let empty = ContractAccessesWithValues::default();
+                    let for_contract = record.get(contract_id).unwrap_or(&empty);
+
+                    *balance_root = compute_balances_hash(&for_contract.assets);
+                    *state_root = compute_state_hash(&for_contract.slots);
                 }
                 _ => {}
             }
@@ -2190,16 +2254,13 @@ where
     /// Computes all zeroed or variable outputs.
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
-    fn compute_state_of_not_utxo_outputs<T>(
+    fn compute_state_of_not_utxo_outputs(
         &self,
-        outputs: &mut [Output],
-        inputs: &[Input],
         tx_id: TxId,
-        db: &TxStorageTransaction<T>,
-    ) -> ExecutorResult<()>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
+        inputs: &[Input],
+        outputs: &mut [Output],
+        record: &BTreeMap<ContractId, ContractAccessesWithValues>,
+    ) -> ExecutorResult<()> {
         for output in outputs {
             if let Output::Contract(contract_output) = output {
                 let contract_id =
@@ -2215,9 +2276,12 @@ where
                         })
                     };
 
-                let contract = ContractRef::new(db, *contract_id);
-                contract_output.balance_root = contract.balance_root()?;
-                contract_output.state_root = contract.state_root()?;
+                let empty = ContractAccessesWithValues::default();
+                let for_contract = record.get(contract_id).unwrap_or(&empty);
+
+                contract_output.balance_root =
+                    compute_balances_hash(&for_contract.assets);
+                contract_output.state_root = compute_state_hash(&for_contract.slots);
             }
         }
         Ok(())

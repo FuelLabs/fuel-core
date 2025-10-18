@@ -21,8 +21,8 @@ fuel-core-types = { workspace = true, features = ["std", "serde"] }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true }
-tokio = { workspace = true }
-tokio-stream = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tokio-stream = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

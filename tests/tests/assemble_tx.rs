@@ -259,16 +259,16 @@ async fn assemble_transaction__finds_another_input_if_inputs_not_spendable() {
     let amount = Word::MAX / 2;
     let sender = Address::default();
     let message = MessageConfig {
-        sender: sender.clone(),
-        recipient: recipient.clone(),
-        nonce: nonce.clone(),
+        sender,
+        recipient,
+        nonce,
         amount,
         data: data.clone(),
         ..Default::default()
     };
     let second_message = MessageConfig {
-        sender: sender.clone(),
-        recipient: recipient.clone(),
+        sender,
+        recipient,
         nonce: [2; 32].into(),
         amount: Word::MAX / 2,
         data: vec![],
@@ -330,9 +330,9 @@ async fn assemble_transaction__transfer_non_based_asset() {
     assert_ne!(base_asset_id, non_base_asset_id);
 
     // Given
-    state_config.coins[0].owner = owner;
+    state_config.coins[0].owner = owner.into();
     state_config.coins[0].asset_id = base_asset_id;
-    state_config.coins[1].owner = owner;
+    state_config.coins[1].owner = owner.into();
     state_config.coins[1].asset_id = non_base_asset_id;
 
     let mut config = Config::local_node_with_configs(chain_config, state_config);
@@ -390,9 +390,9 @@ async fn assemble_transaction__adds_change_output_for_non_required_non_base_bala
     assert_ne!(base_asset_id, non_base_asset_id);
 
     // Given
-    state_config.coins[0].owner = owner;
+    state_config.coins[0].owner = owner.into();
     state_config.coins[0].asset_id = base_asset_id;
-    state_config.coins[1].owner = owner;
+    state_config.coins[1].owner = owner.into();
     state_config.coins[1].asset_id = non_base_asset_id;
 
     let mut config = Config::local_node_with_configs(chain_config, state_config);

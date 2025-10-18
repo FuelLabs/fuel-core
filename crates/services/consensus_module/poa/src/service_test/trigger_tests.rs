@@ -474,7 +474,7 @@ async fn interval_trigger_produces_blocks_in_the_future_when_time_rewinds() {
     // The fist block should be produced after the given block time.
     assert_eq!(first_block_time, start_time + block_time.as_secs());
 
-    // Even though the real time clock rewinded, the second block is produced with a future timestamp
+    // Even though the real time clock rewound, the second block is produced with a future timestamp
     // similarly to how it works when time is lagging.
     assert_eq!(second_block_time, start_time + block_time.as_secs() * 2);
 }

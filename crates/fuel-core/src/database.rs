@@ -603,7 +603,7 @@ fn update_metadata<Description>(
 where
     Description: DatabaseDescription,
 {
-    let updated_metadata = match maybe_current_metadata.as_ref() {
+    match maybe_current_metadata.as_ref() {
         Some(metadata) => match metadata.as_ref() {
             DatabaseMetadata::V1 { .. } => DatabaseMetadata::V1 {
                 version: Description::version(),
@@ -623,8 +623,7 @@ where
             height: new_height,
             indexation_availability: indexation_availability::<Description>(None),
         },
-    };
-    updated_metadata
+    }
 }
 
 #[cfg(feature = "rocksdb")]

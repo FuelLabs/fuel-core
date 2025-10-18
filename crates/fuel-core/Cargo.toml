@@ -80,6 +80,7 @@ fuel-core-services = { workspace = true }
 fuel-core-shared-sequencer = { workspace = true, optional = true }
 fuel-core-storage = { workspace = true }
 fuel-core-sync = { workspace = true, optional = true }
+fuel-core-syscall = { workspace = true }
 fuel-core-tx-status-manager = { workspace = true }
 fuel-core-txpool = { workspace = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
@@ -131,6 +132,7 @@ fuel-core-upgradable-executor = { workspace = true, features = [
   "test-helpers",
 ] }
 proptest = { workspace = true }
+sha2 = { workspace = true, features = ["default"] }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
 tokio-test = "0.4.4"

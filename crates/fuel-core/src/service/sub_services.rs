@@ -11,6 +11,7 @@ use fuel_core_gas_price_service::v1::{
         BlockCommitterHttpApi,
     },
     metadata::V1AlgorithmConfig,
+    service::SharedData,
     uninitialized_task::new_gas_price_service_v1,
 };
 
@@ -190,6 +191,7 @@ pub fn init_sub_services(
 
     let upgradable_executor_config = fuel_core_upgradable_executor::config::Config {
         forbid_fake_coins_default: config.utxo_validation,
+        allow_syscall: config.allow_syscall,
         native_executor_version: config.native_executor_version,
         allow_historical_execution: config.historical_execution,
     };
@@ -264,7 +266,11 @@ pub fn init_sub_services(
         da_source,
         database.on_chain().clone(),
     )?;
-    let (gas_price_algo, latest_gas_price) = gas_price_service_v1.shared.clone();
+    let SharedData {
+        gas_price_algo,
+        latest_gas_price,
+        ..
+    } = gas_price_service_v1.shared.clone();
     let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
         latest_gas_price,
         DEFAULT_GAS_PRICE_CHANGE_PERCENT,
@@ -431,6 +437,7 @@ pub fn init_sub_services(
         on_chain_database: database.on_chain().clone(),
         off_chain_database: database.off_chain().clone(),
         continue_on_error: config.continue_on_error,
+        block_subscriptions_queue: config.graphql_config.block_subscriptions_queue,
         consensus_parameters: &chain_config.consensus_parameters,
     };
     let graphql_worker =
@@ -443,6 +450,8 @@ pub fn init_sub_services(
         utxo_validation: config.utxo_validation,
         debug: config.debug,
         historical_execution: config.historical_execution,
+        allow_syscall: config.allow_syscall,
+        expensive_subscriptions: config.expensive_subscriptions,
         max_tx: config.txpool.pool_limits.max_txs,
         max_gas: config.txpool.pool_limits.max_gas,
         max_size: config.txpool.pool_limits.max_bytes_size,
@@ -482,6 +491,7 @@ pub fn init_sub_services(
         config: config.clone(),
         tx_status_manager: tx_status_manager_adapter,
         compression: compression_service.as_ref().map(|c| c.shared.clone()),
+        gas_price_service: gas_price_service_v1.shared.clone(),
     };
 
     #[allow(unused_mut)]

@@ -221,7 +221,7 @@ impl fuel_core_producer::ports::BlockProducerDatabase for OnChainIterableKeyValu
         self.latest_height().ok()
     }
 
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<'_, CompressedBlock>> {
         self.storage::<FuelBlocks>()
             .get(height)?
             .ok_or(not_found!(FuelBlocks))

@@ -32,7 +32,7 @@ mod smt {
         type InputKey = <ContractsAssets as Mappable>::Key;
         type OutputKey = <ContractsAssetsMerkleMetadata as Mappable>::Key;
 
-        fn primary_key(key: &Self::InputKey) -> Cow<Self::OutputKey> {
+        fn primary_key(key: &Self::InputKey) -> Cow<'_, Self::OutputKey> {
             Cow::Borrowed(key.contract_id())
         }
     }

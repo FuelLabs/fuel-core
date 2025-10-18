@@ -332,6 +332,7 @@ mod tests {
     };
     use fuel_core_producer::ports::BlockProducerDatabase;
     use fuel_core_storage::{
+        ContractsStateData,
         StorageAsRef,
         tables::{
             Coins,
@@ -469,12 +470,12 @@ mod tests {
                     output_index: alice_output_index,
                     tx_pointer_block_height: alice_block_created,
                     tx_pointer_tx_idx: alice_block_created_tx_idx,
-                    owner: alice,
+                    owner: alice.into(),
                     amount: alice_value,
                     asset_id: asset_id_alice,
                 },
                 CoinConfig {
-                    owner: bob,
+                    owner: bob.into(),
                     amount: bob_value,
                     asset_id: asset_id_bob,
                     ..Default::default()
@@ -554,7 +555,8 @@ mod tests {
                 .unwrap()
                 .expect("Expect a state entry to exist")
                 .into_owned();
-            assert_eq!(state.value, ret.0)
+            let value: ContractsStateData = state.value.into();
+            assert_eq!(value, ret)
         }
     }
 

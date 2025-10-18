@@ -126,13 +126,13 @@ pub trait OffChainDatabase: Send + Sync {
         owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>>;
+    ) -> BoxedIter<'_, StorageResult<(TxPointer, TxId)>>;
 
     fn coins_to_spend_index(
         &self,
         owner: &Address,
         asset_id: &AssetId,
-    ) -> CoinsToSpendIndexIter;
+    ) -> CoinsToSpendIndexIter<'_>;
 
     fn contract_salt(&self, contract_id: &ContractId) -> StorageResult<Salt>;
 
@@ -228,17 +228,17 @@ pub trait DatabaseContracts:
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<ContractBalance>>;
+    ) -> BoxedIter<'_, StorageResult<ContractBalance>>;
 
     fn contract_storage_slots(
         &self,
         contract: ContractId,
-    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>>;
+    ) -> BoxedIter<'_, StorageResult<(Bytes32, Vec<u8>)>>;
 
     fn contract_storage_balances(
         &self,
         contract: ContractId,
-    ) -> BoxedIter<StorageResult<ContractBalance>>;
+    ) -> BoxedIter<'_, StorageResult<ContractBalance>>;
 }
 
 /// Trait that specifies all the getters required for chain metadata.
@@ -263,6 +263,10 @@ pub trait TxStatusManager: Send + Sync {
         &self,
         tx_id: TxId,
     ) -> anyhow::Result<BoxStream<TxStatusMessage>>;
+
+    fn subscribe_txs_updates(
+        &self,
+    ) -> anyhow::Result<BoxStream<anyhow::Result<(TxId, TransactionStatus)>>>;
 }
 
 #[async_trait]
@@ -491,13 +495,13 @@ pub trait OnChainDatabaseAt: Send + Sync {
         &self,
         contract_id: ContractId,
         storage_slots: Vec<Bytes32>,
-    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>>;
+    ) -> BoxedIter<'_, StorageResult<(Bytes32, Vec<u8>)>>;
 
     fn contract_balance_values(
         &self,
         contract_id: ContractId,
         assets: Vec<AssetId>,
-    ) -> BoxedIter<StorageResult<ContractBalance>>;
+    ) -> BoxedIter<'_, StorageResult<ContractBalance>>;
 }
 
 pub trait OffChainDatabaseAt: Send + Sync {}

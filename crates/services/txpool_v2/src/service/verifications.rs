@@ -10,9 +10,9 @@ use crate::{
         TxPoolPersistentStorage,
         WasmChecker,
     },
-    service::memory::MemoryPool,
 };
 use fuel_core_storage::transactional::AtomicView;
+use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
@@ -40,9 +40,12 @@ use fuel_core_types::{
             Memory,
         },
     },
-    services::txpool::{
-        Metadata,
-        PoolTransaction,
+    services::{
+        executor::memory::MemoryPool,
+        txpool::{
+            Metadata,
+            PoolTransaction,
+        },
     },
 };
 use std::sync::Arc;
@@ -66,6 +69,7 @@ where
         tx: Transaction,
         current_height: BlockHeight,
         utxo_validation: bool,
+        allow_syscall: bool,
     ) -> Result<PoolTransaction, Error> {
         let (version, consensus_params) =
             self.chain_state_info_provider.latest_consensus_parameters();
@@ -99,6 +103,7 @@ where
                 self.memory_pool.take_raw(),
                 &view,
                 utxo_validation,
+                allow_syscall,
             )?;
 
         fully_verified_tx.into_pool_transaction(metadata)
@@ -183,6 +188,7 @@ impl InputDependenciesVerifiedTx {
         memory: impl Memory,
         view: &View,
         utxo_validation: bool,
+        allow_syscall: bool,
     ) -> Result<FullyVerifiedTx, Error>
     where
         View: TxPoolPersistentStorage,
@@ -193,17 +199,26 @@ impl InputDependenciesVerifiedTx {
             tx = tx.check_signatures(&consensus_params.chain_id())?;
 
             let parameters = CheckPredicateParams::from(consensus_params);
-            tx = tx.check_predicates(&parameters, memory, view)?;
+
+            let ecal_handler = EcalLogCollector {
+                enabled: allow_syscall,
+                ..Default::default()
+            };
+
+            tx = tx.check_predicates(&parameters, memory, view, ecal_handler.clone())?;
+
+            ecal_handler
+                .maybe_print_logs(tracing::info_span!("verification", tx_id = % tx.id()));
 
             debug_assert!(tx.checks().contains(Checks::all()));
         }
 
-        if let Transaction::Upgrade(upgrade) = tx.transaction() {
-            if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
-                wasm_checker
-                    .validate_uploaded_wasm(root)
-                    .map_err(Error::WasmValidity)?;
-            }
+        if let Transaction::Upgrade(upgrade) = tx.transaction()
+            && let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose()
+        {
+            wasm_checker
+                .validate_uploaded_wasm(root)
+                .map_err(Error::WasmValidity)?;
         }
 
         Ok(FullyVerifiedTx(tx))

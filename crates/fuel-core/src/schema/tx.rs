@@ -20,6 +20,7 @@ use crate::{
     graphql_api::{
         database::ReadView,
         ports::MemoryPool,
+        require_expensive_subscriptions,
     },
     query::{
         TxnStatusChangeState,
@@ -67,6 +68,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     iter::IterDirection,
 };
+use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
@@ -301,8 +303,8 @@ impl TxQuery {
 
     #[graphql(complexity = "{\
         query_costs().storage_iterator\
-        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        + first.unwrap_or_default() as usize * (child_complexity + query_costs().storage_read) \
+        + last.unwrap_or_default() as usize * (child_complexity + query_costs().storage_read) \
     }")]
     async fn transactions_by_owner(
         &self,
@@ -718,6 +720,29 @@ impl TxStatusSubscription {
         .map_err(async_graphql::Error::from))
     }
 
+    #[graphql(name = "alpha__preconfirmations")]
+    async fn preconfirmations<'a>(
+        &self,
+        ctx: &'a Context<'a>,
+    ) -> async_graphql::Result<
+        impl Stream<Item = async_graphql::Result<TransactionStatus>> + 'a + use<'a>,
+    > {
+        use futures::StreamExt;
+
+        require_expensive_subscriptions(ctx)?;
+
+        let tx_status_manager = ctx.data_unchecked::<DynTxStatusManager>();
+        let stream = tx_status_manager.subscribe_txs_updates()?;
+
+        let stream = stream.map(|result| {
+            result
+                .map(|(id, status)| TransactionStatus::new(id, status))
+                .map_err(Into::into)
+        });
+
+        Ok(stream)
+    }
+
     /// Submits transaction to the `TxPool` and await either success or failure.
     #[graphql(complexity = "query_costs().submit_and_await + child_complexity")]
     async fn submit_and_await<'a>(
@@ -1001,9 +1026,24 @@ impl ContextExt for Context<'_> {
         let memory_pool = self.data_unchecked::<SharedMemoryPool>();
         let memory = memory_pool.get_memory().await;
 
+        let config = self.data_unchecked::<GraphQLConfig>();
+        let allow_syscall = config.allow_syscall;
+
         let parameters = CheckPredicateParams::from(params.as_ref());
         let tx = tokio_rayon::spawn_fifo(move || {
-            let result = tx.estimate_predicates(&parameters, memory, &query);
+            let ecal = EcalLogCollector {
+                enabled: allow_syscall,
+                ..Default::default()
+            };
+
+            let chain_id = params.chain_id();
+
+            let result =
+                tx.estimate_predicates_ecal(&parameters, memory, &query, ecal.clone());
+
+            ecal.maybe_print_logs(
+                tracing::info_span!("estimation", tx_id = % &tx.id(&chain_id)),
+            );
             result.map(|_| tx)
         })
         .await
