@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.47.1]
+
+### Fixed
+- [3119](https://github.com/FuelLabs/fuel-core/pull/3119): Add missing description and license in cargo manifest
+
 ## [Version 0.47.0]
 
 ### Breaking
