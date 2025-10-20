@@ -212,13 +212,16 @@ impl<'a> Future for QuorumRequest<'a> {
         if this.requests.is_empty() {
             // No more requests and no quorum reached
             this.responses.sort_by(|a, b| b.1.cmp(&a.1));
-            let values = std::mem::take(&mut this.responses)
+            let values: Vec<_> = std::mem::take(&mut this.responses)
                 .into_iter()
                 .map(|r| r.0)
                 .collect();
             let errors = std::mem::take(&mut this.errors);
             Poll::Ready(Err(TransportErrorKind::custom(Box::new(
-                QuorumError::NoQuorumReached { values, errors },
+                QuorumError::NoQuorumReached {
+                    values: values.into(),
+                    errors: errors.into(),
+                },
             ))))
         } else {
             Poll::Pending

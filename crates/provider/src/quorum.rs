@@ -4,10 +4,13 @@ mod transport;
 use crate::quorum::transport::WeightedTransport;
 use alloy_json_rpc::ResponsePacket;
 use alloy_provider::transport::TransportError;
-use std::num::{
-    NonZeroU8,
-    NonZeroU64,
-    NonZeroUsize,
+use std::{
+    num::{
+        NonZeroU8,
+        NonZeroU64,
+        NonZeroUsize,
+    },
+    sync::Arc,
 };
 use thiserror::Error;
 
@@ -62,8 +65,8 @@ pub enum QuorumError {
     /// NoQuorumReached
     NoQuorumReached {
         /// Returned responses
-        values: Vec<ResponsePacket>,
+        values: Arc<[ResponsePacket]>,
         /// Returned errors
-        errors: Vec<TransportError>,
+        errors: Arc<[TransportError]>,
     },
 }
