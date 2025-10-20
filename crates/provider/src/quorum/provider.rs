@@ -1,14 +1,14 @@
 use crate::{
+    Quorum,
     quorum::transport::{
         QuorumTransport,
         WeightedTransport,
     },
-    Quorum,
 };
 use alloy_provider::{
-    network::Ethereum,
     Provider,
     RootProvider,
+    network::Ethereum,
 };
 use alloy_rpc_client::RpcClient;
 use alloy_transport::IntoBoxTransport;
@@ -87,19 +87,19 @@ impl Provider for QuorumProvider {
 #[cfg(test)]
 mod tests {
     use crate::{
-        quorum::transport::WeightedTransport,
         Quorum,
         QuorumProvider,
+        quorum::transport::WeightedTransport,
     };
     use alloy_json_rpc::ErrorPayload;
     use alloy_primitives::private::serde::Serialize;
     use alloy_provider::Provider;
     use alloy_transport::{
+        IntoBoxTransport,
         mock::{
             Asserter,
             MockTransport,
         },
-        IntoBoxTransport,
     };
 
     #[tokio::test]
