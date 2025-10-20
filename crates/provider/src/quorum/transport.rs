@@ -63,7 +63,7 @@ impl Service<RequestPacket> for QuorumTransport {
 
         let quorum_request = QuorumRequest::new(self.clone(), requests);
 
-        Box::pin(async move { quorum_request.await })
+        Box::pin(quorum_request)
     }
 }
 
@@ -175,7 +175,7 @@ impl<'a> Future for QuorumRequest<'a> {
                     if let Some((_, weight)) = this
                         .responses
                         .iter_mut()
-                        .find(|(v, _)| compare_response_packets(&val, &v))
+                        .find(|(v, _)| compare_response_packets(&val, v))
                     {
                         // add the weight to equal response value
                         *weight += response_weight;

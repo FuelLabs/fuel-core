@@ -93,9 +93,9 @@ tracing-subscriber = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-alloy-primitives = "1.4.0"
-alloy-provider = { version = "1.0.37", default-features = false, features = ["reqwest-rustls-tls"] }
-alloy-rpc-types-eth = "1.0.37"
+alloy-primitives = { workspace = true }
+alloy-provider = { workspace = true, default-features = false, features = ["reqwest-rustls-tls"] }
+alloy-rpc-types-eth = { workspace = true }
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
 pretty_assertions = "1.4"
 proptest = { workspace = true }

@@ -5,5 +5,5 @@ pub use quorum::{
     *,
 };
 
-//#[cfg(any(test, feature = "test-helpers"))]
+#[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;

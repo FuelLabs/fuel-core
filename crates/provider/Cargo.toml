@@ -11,28 +11,27 @@ rust-version = { workspace = true }
 version = { workspace = true }
 description = "Fuel provider"
 
-#[features]
-#test-helpers = [
-#    "parking_lot",
-#    "fuel-core-types/test-helpers",
-#    "alloy-consensus",
-#    "alloy-rpc-client/reqwest",
-#    "alloy-primitives",
-#    "alloy-rpc-types-eth"
-#]
+[features]
+test-helpers = [
+    "parking_lot",
+    "alloy-consensus",
+    "alloy-rpc-client/reqwest",
+    "alloy-primitives",
+    "alloy-rpc-types-eth",
+]
 
 [dependencies]
-alloy-consensus = { workspace = true }
+alloy-consensus = { workspace = true, optional = true }
 alloy-json-rpc = { workspace = true }
-alloy-primitives = { workspace = true }
+alloy-primitives = { workspace = true, optional = true }
 alloy-provider = { workspace = true }
 alloy-rpc-client = { workspace = true }
-alloy-rpc-types-eth = { workspace = true }
+alloy-rpc-types-eth = { workspace = true, optional = true }
 alloy-transport = { workspace = true }
 alloy-transport-http = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
-parking_lot = { workspace = true }
+parking_lot = { workspace = true, optional = true }
 serde_json = "1.0.140"
 thiserror = { workspace = true }
 tokio = { workspace = true }
