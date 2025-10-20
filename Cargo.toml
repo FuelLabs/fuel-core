@@ -59,15 +59,15 @@ version = "0.47.1"
 [workspace.dependencies]
 
 # Common dependencies
-alloy-consensus = { version = "1.0.41", default-features = false }
-alloy-json-rpc = { version = "1.0.41", default-features = false }
+alloy-consensus = { version = "1.0.37", default-features = false }
+alloy-json-rpc = { version = "1.0.37", default-features = false }
 alloy-primitives = { version = "1.4.0", default-features = false }
-alloy-provider = { version = "1.0.41", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
-alloy-rpc-client = { version = "1.0.41", default-features = false, features = ["reqwest"] }
-alloy-rpc-types-eth = "1.0.41"
+alloy-provider = { version = "1.0.37", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
+alloy-rpc-client = { version = "1.0.37", default-features = false, features = ["reqwest"] }
+alloy-rpc-types-eth = "1.0.37"
 alloy-sol-types = "1.4.0"
-alloy-transport = { version = "1.0.41", default-features = false }
-alloy-transport-http = { version = "1.0.41", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
+alloy-transport = { version = "1.0.37", default-features = false }
+alloy-transport-http = { version = "1.0.37", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
 anyhow = "1.0"
 async-graphql = { version = "=7.0.15", features = [
     "graphiql",

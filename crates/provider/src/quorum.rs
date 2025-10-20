@@ -4,6 +4,10 @@ mod transport;
 use crate::quorum::transport::WeightedTransport;
 use alloy_json_rpc::ResponsePacket;
 use alloy_provider::transport::TransportError;
+use std::num::{
+    NonZeroU8,
+    NonZeroU64,
+};
 use thiserror::Error;
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -18,13 +22,13 @@ pub enum Quorum {
     /// exceeds the given percentage of the total weight.
     ///
     /// NOTE: this must be less than `100u8`
-    Percentage(u8),
+    Percentage(NonZeroU8),
     /// The quorum is reached when the given number of provider agree
     /// The configured weight is ignored in this case.
     ProviderCount(usize),
     /// The quorum is reached once the accumulated weight of the matching return
     /// exceeds this weight.
-    Weight(u64),
+    Weight(NonZeroU64),
 }
 
 impl Quorum {
@@ -37,7 +41,7 @@ impl Quorum {
                 total / 2 + rem
             }
             Quorum::Percentage(p) => {
-                providers.iter().map(|p| p.weight).sum::<u64>() * (p as u64) / 100
+                providers.iter().map(|p| p.weight).sum::<u64>() * (p.get() as u64) / 100
             }
             Quorum::ProviderCount(num) => {
                 // take the lowest `num` weights
@@ -45,7 +49,7 @@ impl Quorum {
                 weights.sort_unstable();
                 weights.into_iter().take(num).sum()
             }
-            Quorum::Weight(w) => w,
+            Quorum::Weight(w) => w.get(),
         }
     }
 }

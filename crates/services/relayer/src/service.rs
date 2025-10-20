@@ -465,7 +465,7 @@ where
         )
     })?;
 
-    let eth_node = QuorumProvider::new(Quorum::All, urls);
+    let eth_node = QuorumProvider::new(Quorum::Majority, urls);
     let retry_on_error = true;
     Ok(new_service_internal(
         eth_node,

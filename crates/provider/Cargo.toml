@@ -9,7 +9,7 @@ license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
 version = { workspace = true }
-description = "Fuel provider"
+description = "Fuel L1 Provider"
 
 [features]
 test-helpers = [
@@ -36,3 +36,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = "0.5.2"
 url = { workspace = true }
+
+[dev-dependencies]
+fuel-core-provider = { path = "", features = ["test-helpers"] }
+

@@ -54,10 +54,10 @@ impl Service<RequestPacket> for QuorumTransport {
     fn call(&mut self, req: RequestPacket) -> Self::Future {
         let requests = self
             .transports
-            .iter()
+            .iter_mut()
             .enumerate()
             .map(|(id, transport)| PendingRequest {
-                future: transport.inner.clone().call(req.clone()),
+                future: transport.inner.call(req.clone()),
                 id,
             })
             .collect::<Vec<_>>();
@@ -91,7 +91,7 @@ pub struct QuorumTransportBuilder {
 }
 
 impl QuorumTransportBuilder {
-    pub fn add_transports(
+    pub fn with_transports(
         mut self,
         providers: impl IntoIterator<Item = WeightedTransport>,
     ) -> Self {
@@ -102,7 +102,7 @@ impl QuorumTransportBuilder {
     }
 
     /// Set the kind of quorum
-    pub fn quorum(mut self, quorum: Quorum) -> Self {
+    pub fn with_quorum(mut self, quorum: Quorum) -> Self {
         self.quorum = quorum;
         self
     }
@@ -153,7 +153,7 @@ impl<'a> QuorumRequest<'a> {
     fn new(inner: QuorumTransport, requests: Vec<PendingRequest<'a>>) -> Self {
         Self {
             responses: Vec::new(),
-            errors: Vec::new(),
+            errors: Vec::with_capacity(inner.transports.len()),
             inner,
             requests,
         }

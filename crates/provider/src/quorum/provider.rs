@@ -35,8 +35,8 @@ impl QuorumProvider {
             })
             .collect();
         let transport = QuorumTransport::builder()
-            .quorum(quorum)
-            .add_transports(transports)
+            .with_quorum(quorum)
+            .with_transports(transports)
             .build();
         let inner = RootProvider::new(RpcClient::new(transport, false));
         Self { inner }
@@ -54,12 +54,12 @@ pub struct QuorumProviderBuilder {
 }
 
 impl QuorumProviderBuilder {
-    pub fn quorum(mut self, quorum: Quorum) -> Self {
+    pub fn with_quorum(mut self, quorum: Quorum) -> Self {
         self.quorum = quorum;
         self
     }
 
-    pub fn urls(mut self, urls: Vec<Url>) -> Self {
+    pub fn with_urls(mut self, urls: Vec<Url>) -> Self {
         self.transports.extend(urls.into_iter().map(|url| {
             WeightedTransport::new(
                 alloy_transport_http::Http::new(url).into_box_transport(),
@@ -68,22 +68,22 @@ impl QuorumProviderBuilder {
         self
     }
 
-    pub fn add_mocked_transport(mut self, asserter: Asserter) -> Self {
+    pub fn with_mocked_transport(mut self, asserter: Asserter) -> Self {
         self.transports.push(WeightedTransport::new(
             MockTransport::new(asserter).into_box_transport(),
         ));
         self
     }
 
-    pub fn transports(mut self, transports: Vec<WeightedTransport>) -> Self {
+    pub fn with_transports(mut self, transports: Vec<WeightedTransport>) -> Self {
         self.transports.extend(transports);
         self
     }
 
     pub fn build(self) -> QuorumProvider {
         let transport = QuorumTransport::builder()
-            .quorum(self.quorum)
-            .add_transports(self.transports)
+            .with_quorum(self.quorum)
+            .with_transports(self.transports)
             .build();
 
         let inner = RootProvider::new(RpcClient::new(transport, false));
@@ -105,7 +105,6 @@ mod tests {
         quorum::transport::WeightedTransport,
     };
     use alloy_json_rpc::ErrorPayload;
-    use alloy_primitives::private::serde::Serialize;
     use alloy_provider::Provider;
     use alloy_transport::{
         IntoBoxTransport,
@@ -114,6 +113,7 @@ mod tests {
             MockTransport,
         },
     };
+    use std::num::NonZeroU64;
 
     #[tokio::test]
     async fn test_quorum_provider_majority_success() {
@@ -121,22 +121,22 @@ mod tests {
 
         let transports = vec![
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
             ),
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
             ),
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
             ),
         ];
 
         let provider = QuorumProvider::builder()
-            .quorum(Quorum::Majority)
-            .transports(transports)
+            .with_quorum(Quorum::Majority)
+            .with_transports(transports)
             .build();
 
         let block_number = provider.get_block_number().await.unwrap();
@@ -150,22 +150,22 @@ mod tests {
 
         let transports = vec![
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
             ),
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
             ),
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
             ),
         ];
 
         let provider = QuorumProvider::builder()
-            .quorum(Quorum::All)
-            .transports(transports)
+            .with_quorum(Quorum::All)
+            .with_transports(transports)
             .build();
 
         let block_number = provider.get_block_number().await.unwrap();
@@ -178,24 +178,24 @@ mod tests {
 
         let transports = vec![
             WeightedTransport::with_weight(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
                 2,
             ),
             WeightedTransport::with_weight(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
                 3,
             ),
             WeightedTransport::with_weight(
-                MockTransport::new(failed_asserter()).into_box_transport(),
+                MockTransport::new(failing_asserter()).into_box_transport(),
                 2,
             ),
         ];
 
         let provider = QuorumProvider::builder()
-            .quorum(Quorum::Weight(5))
-            .transports(transports)
+            .with_quorum(Quorum::Weight(NonZeroU64::new(2).unwrap()))
+            .with_transports(transports)
             .build();
 
         let block_number = provider.get_block_number().await.unwrap();
@@ -208,24 +208,24 @@ mod tests {
 
         let transports = vec![
             WeightedTransport::with_weight(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
                 10,
             ),
             WeightedTransport::with_weight(
-                MockTransport::new(successful_asserter(&EXPECTED_BLOCK_NUMBER))
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
                     .into_box_transport(),
                 1,
             ),
             WeightedTransport::with_weight(
-                MockTransport::new(failed_asserter()).into_box_transport(),
+                MockTransport::new(failing_asserter()).into_box_transport(),
                 1,
             ),
         ];
 
         let provider = QuorumProvider::builder()
-            .quorum(Quorum::ProviderCount(2))
-            .transports(transports)
+            .with_quorum(Quorum::ProviderCount(2))
+            .with_transports(transports)
             .build();
 
         let block_number = provider.get_block_number().await.unwrap();
@@ -233,38 +233,92 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_quorum_provider_failure() {
+    async fn test_quorum_provider_all_with_one_failure() {
         let value1 = 1u64;
         let value2 = 2u64;
 
         let transports = vec![
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&value1)).into_box_transport(),
+                MockTransport::new(successful_asserter_u64(&value1)).into_box_transport(),
             ),
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&value2)).into_box_transport(),
+                MockTransport::new(successful_asserter_u64(&value2)).into_box_transport(),
             ),
             WeightedTransport::new(
-                MockTransport::new(successful_asserter(&value2)).into_box_transport(),
+                MockTransport::new(successful_asserter_u64(&value2)).into_box_transport(),
             ),
         ];
 
         let provider = QuorumProvider::builder()
-            .quorum(Quorum::All)
-            .transports(transports)
+            .with_quorum(Quorum::All)
+            .with_transports(transports)
             .build();
 
         let result = provider.get_block_number().await;
         assert!(result.is_err());
     }
 
-    fn successful_asserter<R: Serialize>(response: &R) -> Asserter {
+    #[tokio::test]
+    async fn test_quorum_provider_majority_with_one_failure() {
+        const EXPECTED_BLOCK_NUMBER: u64 = 43;
+
+        let transports = vec![
+            WeightedTransport::new(
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
+                    .into_box_transport(),
+            ),
+            WeightedTransport::new(
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
+                    .into_box_transport(),
+            ),
+            WeightedTransport::new(
+                MockTransport::new(failing_asserter()).into_box_transport(),
+            ),
+        ];
+
+        let provider = QuorumProvider::builder()
+            .with_quorum(Quorum::Majority)
+            .with_transports(transports)
+            .build();
+
+        let block_number = provider.get_block_number().await;
+        assert_eq!(block_number.unwrap(), EXPECTED_BLOCK_NUMBER);
+    }
+
+    #[tokio::test]
+    async fn test_quorum_provider_majority_with_one_different_value() {
+        const EXPECTED_BLOCK_NUMBER: u64 = 43;
+
+        let transports = vec![
+            WeightedTransport::new(
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
+                    .into_box_transport(),
+            ),
+            WeightedTransport::new(
+                MockTransport::new(successful_asserter_u64(&EXPECTED_BLOCK_NUMBER))
+                    .into_box_transport(),
+            ),
+            WeightedTransport::new(
+                MockTransport::new(successful_asserter_u64(&1)).into_box_transport(),
+            ),
+        ];
+
+        let provider = QuorumProvider::builder()
+            .with_quorum(Quorum::Majority)
+            .with_transports(transports)
+            .build();
+
+        let block_number = provider.get_block_number().await;
+        assert_eq!(block_number.unwrap(), EXPECTED_BLOCK_NUMBER);
+    }
+
+    fn successful_asserter_u64(response: &u64) -> Asserter {
         let asserter = Asserter::new();
         asserter.push_success(response);
         asserter
     }
 
-    fn failed_asserter() -> Asserter {
+    fn failing_asserter() -> Asserter {
         let asserter = Asserter::new();
         asserter.push_failure(ErrorPayload::internal_error());
         asserter

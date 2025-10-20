@@ -9,6 +9,7 @@ use alloy_primitives::LogData;
 use fuel_core_provider::test_helpers::provider::MockProvider;
 use fuel_core_services::RunnableService;
 use futures::TryStreamExt;
+use std::num::NonZeroU8;
 use test_case::test_case;
 
 use super::*;
@@ -70,7 +71,6 @@ async fn can_download_logs() {
     assert_eq!(result, logs);
 }
 
-// FIXME: Enable this test in #3113
 #[tokio::test]
 async fn quorum_agrees_on_logs() {
     let asserter = Asserter::new();
@@ -94,9 +94,9 @@ async fn quorum_agrees_on_logs() {
 
     // Given
     let provider = QuorumProvider::builder()
-        .add_mocked_transport(asserter.clone())
-        .add_mocked_transport(asserter.clone())
-        .quorum(Quorum::Majority)
+        .with_mocked_transport(asserter.clone())
+        .with_mocked_transport(asserter.clone())
+        .with_quorum(Quorum::Majority)
         .build();
     let contracts = vec![Default::default()];
 
@@ -145,12 +145,12 @@ async fn quorum__disagree_on_logs() {
     let provider = QuorumProvider::builder()
         // 3 different providers with 3 different logs
         // 2 logs
-        .add_mocked_transport(asserter_with_two_logs)
+        .with_mocked_transport(asserter_with_two_logs)
         // 0 logs
-        .add_mocked_transport(Asserter::new())
+        .with_mocked_transport(Asserter::new())
         // 1 log
-        .add_mocked_transport(asserter_with_one_log)
-        .quorum(Quorum::Percentage(70))
+        .with_mocked_transport(asserter_with_one_log)
+        .with_quorum(Quorum::Percentage(NonZeroU8::new(70).unwrap()))
         .build();
     let contracts = vec![Default::default()];
 
