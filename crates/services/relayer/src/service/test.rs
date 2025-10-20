@@ -168,7 +168,6 @@ async fn quorum__disagree_on_logs() {
 
     match provider_error {
         Err(TransportError::Transport(TransportErrorKind::Custom(e))) => {
-            println!("SAEED: {e}");
             assert!(
                 e.to_string().starts_with(
                     "eth provider failed to get logs: Custom(NoQuorumReached"

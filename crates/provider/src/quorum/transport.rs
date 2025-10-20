@@ -4,7 +4,9 @@ use crate::quorum::{
 };
 use alloy_json_rpc::{
     RequestPacket,
+    Response,
     ResponsePacket,
+    ResponsePayload,
     RpcError,
 };
 use alloy_transport::{
@@ -215,12 +217,30 @@ impl<'a> Future for QuorumRequest<'a> {
     }
 }
 
+fn compare_responses(first: &Response, second: &Response) -> bool {
+    if (first.id != second.id) {
+        return false;
+    }
+    match (&first.payload, &second.payload) {
+        (ResponsePayload::Success(first), ResponsePayload::Success(second)) => {
+            first.get() == second.get()
+        }
+        (ResponsePayload::Failure(first), ResponsePayload::Failure(second)) => {
+            first.code == second.code
+        }
+        _ => false,
+    }
+}
+
 fn compare_response_packets(a: &ResponsePacket, b: &ResponsePacket) -> bool {
     match (a, b) {
-        (ResponsePacket::Single(response1), ResponsePacket::Single(response2)) => {
-            serde_json::to_string(response1).unwrap()
-                == serde_json::to_string(response2).unwrap()
+        (ResponsePacket::Single(first), ResponsePacket::Single(second)) => {
+            compare_responses(first, second)
         }
-        _ => todo!(),
+        (ResponsePacket::Batch(first), ResponsePacket::Batch(second)) => first
+            .iter()
+            .zip(second)
+            .all(|(a, b)| compare_responses(a, b)),
+        _ => false,
     }
 }
