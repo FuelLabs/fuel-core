@@ -32,7 +32,6 @@ alloy-transport-http = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true, optional = true }
-serde_json = "1.0.140"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = "0.5.2"
