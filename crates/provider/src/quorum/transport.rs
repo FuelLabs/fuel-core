@@ -30,26 +30,6 @@ impl QuorumTransport {
     pub fn builder() -> QuorumTransportBuilder {
         QuorumTransportBuilder::default()
     }
-
-    pub fn new(
-        quorum: Quorum,
-        transports: impl IntoIterator<Item=WeightedTransport>,
-    ) -> Self {
-        Self::builder()
-            .add_transports(transports)
-            .quorum(quorum)
-            .build()
-    }
-
-    /// Return a reference to the weighted providers
-    pub fn providers(&self) -> &[WeightedTransport] {
-        &self.transports
-    }
-
-    /// The weight at which the provider reached a quorum
-    pub fn quorum_weight(&self) -> u64 {
-        self.quorum_weight
-    }
 }
 
 impl Service<RequestPacket> for QuorumTransport {
@@ -57,9 +37,9 @@ impl Service<RequestPacket> for QuorumTransport {
     type Error = RpcError<TransportErrorKind>;
     type Future = Pin<
         Box<
-            dyn Future<Output=Result<ResponsePacket, RpcError<TransportErrorKind>>>
-            + Send
-            + 'static,
+            dyn Future<Output = Result<ResponsePacket, RpcError<TransportErrorKind>>>
+                + Send
+                + 'static,
         >,
     >;
 
@@ -112,7 +92,7 @@ pub struct QuorumTransportBuilder {
 impl QuorumTransportBuilder {
     pub fn add_transports(
         mut self,
-        providers: impl IntoIterator<Item=WeightedTransport>,
+        providers: impl IntoIterator<Item = WeightedTransport>,
     ) -> Self {
         for provider in providers {
             self.transports.push(provider);
@@ -147,9 +127,9 @@ pub struct QuorumRequest<'a> {
 
 type PendingRequestFuture<'a> = Pin<
     Box<
-        dyn Future<Output=Result<ResponsePacket, RpcError<TransportErrorKind>>>
-        + 'a
-        + Send,
+        dyn Future<Output = Result<ResponsePacket, RpcError<TransportErrorKind>>>
+            + 'a
+            + Send,
     >,
 >;
 
@@ -160,11 +140,13 @@ struct PendingRequest<'a> {
 
 impl Future for PendingRequest<'_> {
     type Output = Result<ResponsePacket, RpcError<TransportErrorKind>>;
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+    fn poll(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Self::Output> {
         self.future.as_mut().poll(cx)
     }
 }
-
 
 impl<'a> QuorumRequest<'a> {
     fn new(inner: QuorumTransport, requests: Vec<PendingRequest<'a>>) -> Self {
@@ -249,8 +231,10 @@ mod tests {
     use super::*;
     use alloy_json_rpc::Request;
     use alloy_provider::mock::Asserter;
-    use alloy_transport::mock::MockTransport;
-    use alloy_transport::IntoBoxTransport;
+    use alloy_transport::{
+        IntoBoxTransport,
+        mock::MockTransport,
+    };
 
     #[tokio::test]
     async fn test_quorum_all_requires_all() {
