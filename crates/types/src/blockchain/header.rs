@@ -79,6 +79,15 @@ impl BlockHeader {
         }
     }
 
+    /// Get the application portion of the header.
+    pub fn application(&self) -> &ApplicationHeader<GeneratedApplicationFieldsV1> {
+        match self {
+            BlockHeader::V1(header) => header.application(),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => header.application(),
+        }
+    }
+
     /// Get the consensus portion of the header.
     pub fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
         match self {

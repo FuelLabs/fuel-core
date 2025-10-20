@@ -227,19 +227,20 @@ fn arb_msg_ids() -> impl Strategy<Value = Vec<MessageId>> {
 }
 
 prop_compose! {
+    // pub struct ConsensusHeader<Generated> {
+    //     pub prev_root: Bytes32,
+    //     pub height: BlockHeight,
+    //     pub time: Tai64,
+    //     pub generated: Generated,
+    // }
     fn arb_consensus_header()(
         prev_root in any::<[u8; 32]>(),
         time in any::<u64>(),
-        application_hash in any::<[u8; 32]>(),
     ) -> crate::blockchain::header::ConsensusHeader<GeneratedConsensusFields> {
         let mut consensus_header = crate::blockchain::header::ConsensusHeader::default();
         consensus_header.height = BlockHeight::new(0);
         consensus_header.prev_root = prev_root.into();
         consensus_header.time = Tai64(time);
-        let generated = GeneratedConsensusFields {
-            application_hash: application_hash.into(),
-        };
-        consensus_header.generated = generated;
         consensus_header
     }
 }
@@ -263,28 +264,30 @@ prop_compose! {
     /// Generate an arbitrary block with a variable number of transactions
     pub fn arb_block()(
         txs in arb_txs(),
-        //
         da_height in any::<u64>(),
         consensus_parameter_version in any::<u32>(),
         state_transition_bytecode_version in any::<u32>(),
-        //
         msg_ids in arb_msg_ids(),
         event_root in any::<[u8; 32]>(),
-        time in any::<u64>(),
-        height in any::<u32>(),
-        consensus_header in arb_consensus_header(),
+        mut consensus_header in arb_consensus_header(),
     ) -> (Block, Vec<MessageId>, Bytes32) {
         // pub struct BlockV1<TransactionRepresentation = Transaction> {
         //     header: BlockHeader,
         //     transactions: Vec<TransactionRepresentation>,
         // }
         let mut fuel_block = Block::default();
+
+        // include txs first to be included in calculations
         *fuel_block.transactions_mut() = txs;
+
+        // Header
         // pub struct BlockHeaderV1 {
         //     pub(crate) application: ApplicationHeader<GeneratedApplicationFieldsV1>,
         //     pub(crate) consensus: ConsensusHeader<GeneratedConsensusFields>,
         //     pub(crate) metadata: Option<BlockHeaderMetadata>,
         // }
+
+        // Application
         // pub struct ApplicationHeader<Generated> {
         //     pub da_height: DaBlockHeight,
         //     pub consensus_parameters_version: ConsensusParametersVersion,
@@ -303,10 +306,6 @@ prop_compose! {
         //     pub event_inbox_root: Bytes32,
         // }
         let count = fuel_block.transactions().len() as u16;
-        fuel_block.header_mut().set_transactions_count(count);
-        fuel_block.header_mut().set_message_receipt_count(msg_ids.len() as u32);
-        let tx_root = generate_txns_root(fuel_block.transactions());
-        fuel_block.header_mut().set_transaction_root(tx_root);
         let msg_root = msg_ids
             .iter()
             .fold(MerkleRootCalculator::new(), |mut tree, id| {
@@ -315,14 +314,18 @@ prop_compose! {
             })
             .root()
             .into();
+        let tx_root = generate_txns_root(fuel_block.transactions());
         let event_root = event_root.into();
+        fuel_block.header_mut().set_transactions_count(count);
+        fuel_block.header_mut().set_message_receipt_count(msg_ids.len() as u32);
+        fuel_block.header_mut().set_transaction_root(tx_root);
+        fuel_block.header_mut().set_message_outbox_root(msg_root);
         fuel_block.header_mut().set_event_inbox_root(event_root);
 
-        //
-        fuel_block.header_mut().set_time(Tai64(time));
-        fuel_block.header_mut().set_block_height(BlockHeight::new(height));
+        // Consensus
+        let application_hash = fuel_block.header().application().hash();
+        consensus_header.generated.application_hash = application_hash;
         fuel_block.header_mut().set_consensus_header(consensus_header);
-        fuel_block.header_mut().set_message_outbox_root(msg_root);
         (fuel_block, msg_ids, event_root)
     }
 }
