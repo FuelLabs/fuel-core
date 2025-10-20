@@ -209,7 +209,8 @@ Human logging can be disabled with the environment variable `HUMAN_LOGGING=false
 ## Debugging
 
 See the guide on [debugging](docs/developers/debugging.md) for an overview on running a debug build of a local node.
-
+## Welcome to UTXO Model
+Fuel's UTXO model enables parallel execution (vs account-based)—new devs, dive into the Sway lang tutorial for your first contract! 🚀
 ## Docker & Kubernetes
 
 ```sh
