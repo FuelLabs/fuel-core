@@ -79,7 +79,7 @@ ENV DB_PATH="${DB_PATH}"
 WORKDIR /root/
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
