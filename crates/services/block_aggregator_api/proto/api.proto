@@ -142,6 +142,8 @@ message V2Header {
 //    Upload(Upload),
 //    Blob(Blob),
 //}
+// TODO: implement other transaction types
+// https://github.com/FuelLabs/fuel-core/issues/3122
 message Transaction {
   oneof variant {
     ScriptTransaction script = 1;
