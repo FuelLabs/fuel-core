@@ -268,6 +268,7 @@ fn bytes32_to_vec(bytes: &fuel_core_types::fuel_types::Bytes32) -> Vec<u8> {
 pub fn fuel_block_from_protobuf(
     proto_block: ProtoBlock,
     msg_ids: &[MessageId],
+    event_inbox_root: Bytes32,
 ) -> Result<FuelBlock> {
     let versioned_block = proto_block
         .versioned_block
@@ -294,7 +295,7 @@ pub fn fuel_block_from_protobuf(
         partial_header,
         txs,
         msg_ids,
-        Bytes32::default(),
+        event_inbox_root,
         #[cfg(feature = "fault-proving")]
         &ChainId::default(),
     )
@@ -609,7 +610,7 @@ mod tests {
       cases: 1, .. ProptestConfig::default()
     })]
           #[test]
-          fn serialize_block__roundtrip((block, msg_ids) in arb_block()) {
+          fn serialize_block__roundtrip((block, msg_ids, event_inbox_root) in arb_block()) {
               // given
               let serializer = SerializerAdapter;
 
@@ -617,7 +618,7 @@ mod tests {
               let proto_block = serializer.serialize_block(&block).unwrap();
 
               // then
-              let deserialized_block = fuel_block_from_protobuf(proto_block, &msg_ids).unwrap();
+              let deserialized_block = fuel_block_from_protobuf(proto_block, &msg_ids, event_inbox_root).unwrap();
               assert_eq!(block, deserialized_block);
 
           }

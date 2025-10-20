@@ -328,6 +328,19 @@ impl BlockHeader {
         }
     }
 
+    /// Set the event inbox root for the header
+    pub fn set_event_inbox_root(&mut self, root: Bytes32) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_event_inbox_root(root);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_event_inbox_root(root);
+            }
+        }
+    }
+
     /// Set the consensus parameters version
     pub fn set_consensus_parameters_version(
         &mut self,
@@ -340,6 +353,22 @@ impl BlockHeader {
             #[cfg(feature = "fault-proving")]
             BlockHeader::V2(header) => {
                 header.set_consensus_parameters_version(version);
+            }
+        }
+    }
+
+    /// Set the state transition bytecode version
+    pub fn set_state_transition_bytecode_version(
+        &mut self,
+        version: StateTransitionBytecodeVersion,
+    ) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_stf_version(version);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_stf_version(version);
             }
         }
     }

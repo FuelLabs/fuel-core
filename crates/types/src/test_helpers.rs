@@ -1,10 +1,15 @@
 use crate::{
     blockchain::{
         block::Block,
-        header::generate_txns_root,
+        header::{
+            GeneratedConsensusFields,
+            generate_txns_root,
+        },
+        primitives::DaBlockHeight,
     },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
+        Bytes32,
         ContractId,
         Create,
         Finalizable,
@@ -35,6 +40,7 @@ use crate::{
 };
 use proptest::prelude::*;
 use rand::Rng;
+use tai64::Tai64;
 
 /// Helper function to create a contract creation transaction
 /// from a given contract bytecode.
@@ -221,15 +227,84 @@ fn arb_msg_ids() -> impl Strategy<Value = Vec<MessageId>> {
 }
 
 prop_compose! {
+    fn arb_consensus_header()(
+        prev_root in any::<[u8; 32]>(),
+        time in any::<u64>(),
+        application_hash in any::<[u8; 32]>(),
+    ) -> crate::blockchain::header::ConsensusHeader<GeneratedConsensusFields> {
+        let mut consensus_header = crate::blockchain::header::ConsensusHeader::default();
+        consensus_header.height = BlockHeight::new(0);
+        consensus_header.prev_root = prev_root.into();
+        consensus_header.time = Tai64(time);
+        let generated = GeneratedConsensusFields {
+            application_hash: application_hash.into(),
+        };
+        consensus_header.generated = generated;
+        consensus_header
+    }
+}
+
+// message V1Header {
+//   uint64 da_height = 1;
+//   uint32 consensus_parameters_version = 2;
+//   uint32 state_transition_bytecode_version = 3;
+//   uint32 transactions_count = 4;
+//   uint32 message_receipt_count = 5;
+//   bytes transactions_root = 6;
+//   bytes message_outbox_root = 7;
+//   bytes event_inbox_root = 8;
+//   bytes prev_root = 9;
+//   uint32 height = 10;
+//   uint64 time = 11;
+//   bytes application_hash = 12;
+//   optional bytes block_id = 13;
+// }
+prop_compose! {
     /// Generate an arbitrary block with a variable number of transactions
     pub fn arb_block()(
         txs in arb_txs(),
+        //
+        da_height in any::<u64>(),
+        consensus_parameter_version in any::<u32>(),
+        state_transition_bytecode_version in any::<u32>(),
+        //
         msg_ids in arb_msg_ids(),
-    ) -> (Block, Vec<MessageId>) {
+        event_root in any::<[u8; 32]>(),
+        time in any::<u64>(),
+        height in any::<u32>(),
+        consensus_header in arb_consensus_header(),
+    ) -> (Block, Vec<MessageId>, Bytes32) {
+        // pub struct BlockV1<TransactionRepresentation = Transaction> {
+        //     header: BlockHeader,
+        //     transactions: Vec<TransactionRepresentation>,
+        // }
         let mut fuel_block = Block::default();
         *fuel_block.transactions_mut() = txs;
+        // pub struct BlockHeaderV1 {
+        //     pub(crate) application: ApplicationHeader<GeneratedApplicationFieldsV1>,
+        //     pub(crate) consensus: ConsensusHeader<GeneratedConsensusFields>,
+        //     pub(crate) metadata: Option<BlockHeaderMetadata>,
+        // }
+        // pub struct ApplicationHeader<Generated> {
+        //     pub da_height: DaBlockHeight,
+        //     pub consensus_parameters_version: ConsensusParametersVersion,
+        //     pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
+        //     pub generated: Generated,
+        // }
+        fuel_block.header_mut().set_da_height(DaBlockHeight(da_height));
+        fuel_block.header_mut().set_consensus_parameters_version(consensus_parameter_version);
+        fuel_block.header_mut().set_state_transition_bytecode_version(state_transition_bytecode_version);
+
+        // pub struct GeneratedApplicationFieldsV1 {
+        //     pub transactions_count: u16,
+        //     pub message_receipt_count: u32,
+        //     pub transactions_root: Bytes32,
+        //     pub message_outbox_root: Bytes32,
+        //     pub event_inbox_root: Bytes32,
+        // }
         let count = fuel_block.transactions().len() as u16;
         fuel_block.header_mut().set_transactions_count(count);
+        fuel_block.header_mut().set_message_receipt_count(msg_ids.len() as u32);
         let tx_root = generate_txns_root(fuel_block.transactions());
         fuel_block.header_mut().set_transaction_root(tx_root);
         let msg_root = msg_ids
@@ -240,9 +315,14 @@ prop_compose! {
             })
             .root()
             .into();
+        let event_root = event_root.into();
+        fuel_block.header_mut().set_event_inbox_root(event_root);
+
+        //
+        fuel_block.header_mut().set_time(Tai64(time));
+        fuel_block.header_mut().set_block_height(BlockHeight::new(height));
+        fuel_block.header_mut().set_consensus_header(consensus_header);
         fuel_block.header_mut().set_message_outbox_root(msg_root);
-        fuel_block.header_mut().set_message_receipt_count(msg_ids.len() as u32);
-        fuel_block.header_mut().recalculate_metadata();
-        (fuel_block, msg_ids)
+        (fuel_block, msg_ids, event_root)
     }
 }
