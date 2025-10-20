@@ -39,4 +39,3 @@ url = { workspace = true }
 
 [dev-dependencies]
 fuel-core-provider = { path = "", features = ["test-helpers"] }
-

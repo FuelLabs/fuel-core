@@ -15,15 +15,17 @@ use alloy_transport::{
     TransportErrorKind,
 };
 use futures::FutureExt;
+use parking_lot::Mutex;
 use std::{
     pin::Pin,
+    sync::Arc,
     task::Poll,
 };
 use tower::Service;
 
 #[derive(Clone)]
 pub struct QuorumTransport {
-    transports: Vec<WeightedTransport>,
+    transports: Arc<[WeightedTransport]>,
     quorum_weight: u64,
 }
 
@@ -47,17 +49,17 @@ impl Service<RequestPacket> for QuorumTransport {
     fn poll_ready(
         &mut self,
         _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        std::task::Poll::Ready(Ok(()))
+    ) -> Poll<Result<(), Self::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: RequestPacket) -> Self::Future {
         let requests = self
             .transports
-            .iter_mut()
+            .iter()
             .enumerate()
             .map(|(id, transport)| PendingRequest {
-                future: transport.inner.call(req.clone()),
+                future: transport.inner.lock().call(req.clone()),
                 id,
             })
             .collect::<Vec<_>>();
@@ -68,23 +70,29 @@ impl Service<RequestPacket> for QuorumTransport {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct WeightedTransport {
-    inner: BoxTransport,
+    inner: Mutex<BoxTransport>,
     pub weight: u64,
 }
 
 impl WeightedTransport {
     pub fn new(inner: BoxTransport) -> Self {
-        Self { inner, weight: 1 }
+        Self {
+            inner: Mutex::new(inner),
+            weight: 1,
+        }
     }
 
     pub fn with_weight(inner: BoxTransport, weight: u64) -> Self {
-        Self { inner, weight }
+        Self {
+            inner: Mutex::new(inner),
+            weight,
+        }
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct QuorumTransportBuilder {
     quorum: Quorum,
     transports: Vec<WeightedTransport>,
@@ -110,7 +118,7 @@ impl QuorumTransportBuilder {
     pub fn build(self) -> QuorumTransport {
         let quorum_weight = self.quorum.weight(&self.transports);
         QuorumTransport {
-            transports: self.transports,
+            transports: self.transports.into_boxed_slice().into(),
             quorum_weight,
         }
     }
