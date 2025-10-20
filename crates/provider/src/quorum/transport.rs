@@ -9,13 +9,11 @@ use alloy_json_rpc::{
 };
 use alloy_transport::{
     BoxTransport,
-    IntoBoxTransport,
     TransportError,
     TransportErrorKind,
 };
 use futures::FutureExt;
 use std::{
-    collections::HashMap,
     pin::Pin,
     task::Poll,
 };
@@ -25,7 +23,6 @@ use tower::Service;
 pub struct QuorumTransport {
     transports: Vec<WeightedTransport>,
     quorum_weight: u64,
-    quorum: Quorum,
 }
 
 impl QuorumTransport {
@@ -36,7 +33,7 @@ impl QuorumTransport {
 
     pub fn new(
         quorum: Quorum,
-        transports: impl IntoIterator<Item = WeightedTransport>,
+        transports: impl IntoIterator<Item=WeightedTransport>,
     ) -> Self {
         Self::builder()
             .add_transports(transports)
@@ -53,27 +50,6 @@ impl QuorumTransport {
     pub fn quorum_weight(&self) -> u64 {
         self.quorum_weight
     }
-
-    /// Add a provider to the set
-    pub fn add_transport(&mut self, provider: WeightedTransport) {
-        self.transports.push(provider);
-        self.quorum_weight = self.quorum.weight(&self.transports);
-    }
-
-    fn calculate_agreement_weight<'a, V: Eq + std::hash::Hash>(
-        &self,
-        results: &'a [Result<V, TransportError>],
-    ) -> HashMap<&'a V, u64> {
-        let mut agreement_map = HashMap::new();
-
-        for (i, result) in results.iter().enumerate() {
-            if let Ok(value) = result {
-                *agreement_map.entry(value).or_insert(0) += self.transports[i].weight;
-            }
-        }
-
-        agreement_map
-    }
 }
 
 impl Service<RequestPacket> for QuorumTransport {
@@ -81,9 +57,9 @@ impl Service<RequestPacket> for QuorumTransport {
     type Error = RpcError<TransportErrorKind>;
     type Future = Pin<
         Box<
-            dyn Future<Output = Result<ResponsePacket, RpcError<TransportErrorKind>>>
-                + Send
-                + 'static,
+            dyn Future<Output=Result<ResponsePacket, RpcError<TransportErrorKind>>>
+            + Send
+            + 'static,
         >,
     >;
 
@@ -98,7 +74,11 @@ impl Service<RequestPacket> for QuorumTransport {
         let requests = self
             .transports
             .iter()
-            .map(|transport| transport.inner.clone().call(req.clone()))
+            .enumerate()
+            .map(|(id, transport)| PendingRequest {
+                future: transport.inner.clone().call(req.clone()),
+                id,
+            })
             .collect::<Vec<_>>();
 
         let quorum_request = QuorumRequest::new(self.clone(), requests);
@@ -123,29 +103,16 @@ impl WeightedTransport {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct QuorumTransportBuilder {
     quorum: Quorum,
     transports: Vec<WeightedTransport>,
 }
 
-impl Default for QuorumTransportBuilder {
-    fn default() -> Self {
-        Self {
-            quorum: Default::default(),
-            transports: Vec::new(),
-        }
-    }
-}
-
 impl QuorumTransportBuilder {
-    pub fn add_transport(mut self, provider: WeightedTransport) -> Self {
-        self.transports.push(provider);
-        self
-    }
     pub fn add_transports(
         mut self,
-        providers: impl IntoIterator<Item = WeightedTransport>,
+        providers: impl IntoIterator<Item=WeightedTransport>,
     ) -> Self {
         for provider in providers {
             self.transports.push(provider);
@@ -163,7 +130,6 @@ impl QuorumTransportBuilder {
         let quorum_weight = self.quorum.weight(&self.transports);
         QuorumTransport {
             transports: self.transports,
-            quorum: self.quorum,
             quorum_weight,
         }
     }
@@ -179,13 +145,26 @@ pub struct QuorumRequest<'a> {
     requests: Vec<PendingRequest<'a>>,
 }
 
-type PendingRequest<'a> = Pin<
+type PendingRequestFuture<'a> = Pin<
     Box<
-        dyn Future<Output = Result<ResponsePacket, RpcError<TransportErrorKind>>>
-            + 'a
-            + Send,
+        dyn Future<Output=Result<ResponsePacket, RpcError<TransportErrorKind>>>
+        + 'a
+        + Send,
     >,
 >;
+
+struct PendingRequest<'a> {
+    future: PendingRequestFuture<'a>,
+    id: usize,
+}
+
+impl Future for PendingRequest<'_> {
+    type Output = Result<ResponsePacket, RpcError<TransportErrorKind>>;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        self.future.as_mut().poll(cx)
+    }
+}
+
 
 impl<'a> QuorumRequest<'a> {
     fn new(inner: QuorumTransport, requests: Vec<PendingRequest<'a>>) -> Self {
@@ -210,7 +189,7 @@ impl<'a> Future for QuorumRequest<'a> {
             let mut request = this.requests.swap_remove(n);
             match request.poll_unpin(cx) {
                 Poll::Ready(Ok(val)) => {
-                    let response_weight = this.inner.transports[0].weight;
+                    let response_weight = this.inner.transports[request.id].weight;
                     if let Some((_, weight)) = this
                         .responses
                         .iter_mut()
@@ -266,16 +245,39 @@ fn compare_response_packets(a: &ResponsePacket, b: &ResponsePacket) -> bool {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use alloy_json_rpc::Request;
     use alloy_provider::mock::Asserter;
     use alloy_transport::mock::MockTransport;
+    use alloy_transport::IntoBoxTransport;
 
-    #[test]
-    fn khar() {
-        assert_eq!(1, 1);
+    #[tokio::test]
+    async fn test_quorum_all_requires_all() {
+        let value = 100u64;
+
+        let transports = (0..3)
+            .map(|_| {
+                let asserter = Asserter::new();
+                asserter.push_success(&value);
+                let mock = MockTransport::new(asserter).into_box_transport();
+                WeightedTransport::new(mock)
+            })
+            .collect::<Vec<_>>();
+
+        let mut quorum = QuorumTransport::builder()
+            .add_transports(transports)
+            .quorum(Quorum::All)
+            .build();
+
+        let request: Request<()> =
+            Request::new("eth_getBlockNumber", alloy_json_rpc::Id::None, ());
+        let response = quorum
+            .call(RequestPacket::Single(request.try_into().unwrap()))
+            .await
+            .unwrap();
+
+        matches!(response, ResponsePacket::Single(_));
     }
 
     #[tokio::test]
