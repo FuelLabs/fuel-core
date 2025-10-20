@@ -4363,7 +4363,6 @@ dependencies = [
  "async-trait",
  "futures",
  "parking_lot",
- "serde_json",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",

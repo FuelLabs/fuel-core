@@ -217,30 +217,24 @@ impl<'a> Future for QuorumRequest<'a> {
     }
 }
 
-fn compare_responses(first: &Response, second: &Response) -> bool {
-    if (first.id != second.id) {
+fn compare_responses(a: &Response, b: &Response) -> bool {
+    if a.id != b.id {
         return false;
     }
-    match (&first.payload, &second.payload) {
-        (ResponsePayload::Success(first), ResponsePayload::Success(second)) => {
-            first.get() == second.get()
-        }
-        (ResponsePayload::Failure(first), ResponsePayload::Failure(second)) => {
-            first.code == second.code
-        }
+
+    match (&a.payload, &b.payload) {
+        (ResponsePayload::Success(a), ResponsePayload::Success(b)) => a.get() == b.get(),
+        (ResponsePayload::Failure(a), ResponsePayload::Failure(b)) => a.code == b.code,
         _ => false,
     }
 }
 
 fn compare_response_packets(a: &ResponsePacket, b: &ResponsePacket) -> bool {
     match (a, b) {
-        (ResponsePacket::Single(first), ResponsePacket::Single(second)) => {
-            compare_responses(first, second)
+        (ResponsePacket::Single(a), ResponsePacket::Single(b)) => compare_responses(a, b),
+        (ResponsePacket::Batch(a), ResponsePacket::Batch(b)) => {
+            a.iter().zip(b).all(|(x, y)| compare_responses(x, y))
         }
-        (ResponsePacket::Batch(first), ResponsePacket::Batch(second)) => first
-            .iter()
-            .zip(second)
-            .all(|(a, b)| compare_responses(a, b)),
         _ => false,
     }
 }
