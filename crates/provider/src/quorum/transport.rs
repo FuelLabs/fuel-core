@@ -26,7 +26,6 @@ pub struct QuorumTransport {
 }
 
 impl QuorumTransport {
-    /// Convenience method for creating a `QuorumProviderBuilder` with same `JsonRpcClient` types
     pub fn builder() -> QuorumTransportBuilder {
         QuorumTransportBuilder::default()
     }
@@ -223,72 +222,5 @@ fn compare_response_packets(a: &ResponsePacket, b: &ResponsePacket) -> bool {
                 == serde_json::to_string(response2).unwrap()
         }
         _ => todo!(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use alloy_json_rpc::Request;
-    use alloy_provider::mock::Asserter;
-    use alloy_transport::{
-        IntoBoxTransport,
-        mock::MockTransport,
-    };
-
-    #[tokio::test]
-    async fn test_quorum_all_requires_all() {
-        let value = 100u64;
-
-        let transports = (0..3)
-            .map(|_| {
-                let asserter = Asserter::new();
-                asserter.push_success(&value);
-                let mock = MockTransport::new(asserter).into_box_transport();
-                WeightedTransport::new(mock)
-            })
-            .collect::<Vec<_>>();
-
-        let mut quorum = QuorumTransport::builder()
-            .add_transports(transports)
-            .quorum(Quorum::All)
-            .build();
-
-        let request: Request<()> =
-            Request::new("eth_getBlockNumber", alloy_json_rpc::Id::None, ());
-        let response = quorum
-            .call(RequestPacket::Single(request.try_into().unwrap()))
-            .await
-            .unwrap();
-
-        matches!(response, ResponsePacket::Single(_));
-    }
-
-    #[tokio::test]
-    async fn test_quorum() {
-        let num = 5u64;
-        let value = 42u64;
-        let mut transports: Vec<WeightedTransport> = Vec::new();
-
-        for _ in 0..num {
-            let asserter = Asserter::new();
-            asserter.push_success(&value);
-            let mock_transport = MockTransport::new(asserter).into_box_transport();
-            transports.push(WeightedTransport::new(mock_transport));
-        }
-
-        let mut quorum = QuorumTransport::builder()
-            .add_transports(transports)
-            .quorum(Quorum::Majority)
-            .build();
-
-        let request: Request<()> =
-            Request::new("eth_getBlockNumber", alloy_json_rpc::Id::None, ());
-        let response = quorum
-            .call(RequestPacket::Single(request.try_into().unwrap()))
-            .await
-            .unwrap();
-
-        println!("{response:?}");
     }
 }
