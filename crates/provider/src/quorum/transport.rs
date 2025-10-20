@@ -151,9 +151,10 @@ impl Future for PendingRequest<'_> {
 
 impl<'a> QuorumRequest<'a> {
     fn new(inner: QuorumTransport, requests: Vec<PendingRequest<'a>>) -> Self {
+        let num_transports = inner.transports.len();
         Self {
-            responses: Vec::new(),
-            errors: Vec::with_capacity(inner.transports.len()),
+            responses: Vec::with_capacity(num_transports),
+            errors: Vec::with_capacity(num_transports),
             inner,
             requests,
         }

@@ -7,6 +7,7 @@ use alloy_provider::transport::TransportError;
 use std::num::{
     NonZeroU8,
     NonZeroU64,
+    NonZeroUsize,
 };
 use thiserror::Error;
 
@@ -25,7 +26,7 @@ pub enum Quorum {
     Percentage(NonZeroU8),
     /// The quorum is reached when the given number of provider agree
     /// The configured weight is ignored in this case.
-    ProviderCount(usize),
+    ProviderCount(NonZeroUsize),
     /// The quorum is reached once the accumulated weight of the matching return
     /// exceeds this weight.
     Weight(NonZeroU64),
@@ -47,7 +48,7 @@ impl Quorum {
                 // take the lowest `num` weights
                 let mut weights = providers.iter().map(|p| p.weight).collect::<Vec<_>>();
                 weights.sort_unstable();
-                weights.into_iter().take(num).sum()
+                weights.into_iter().take(num.get()).sum()
             }
             Quorum::Weight(w) => w.get(),
         }
