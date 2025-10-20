@@ -360,6 +360,15 @@ pub fn tx_from_proto_tx(_proto_tx: &ProtoTransaction) -> Result<FuelTransaction>
 
 fn input_from_proto_input(proto_input: &ProtoInput) -> Result<Input> {
     match &proto_input.variant {
+        //     pub enum Variant {
+        //         CoinSigned(super::CoinSignedInput),
+        //         CoinPredicate(super::CoinPredicateInput),
+        //         Contract(super::ContractInput),
+        //         MessageCoinSigned(super::MessageCoinSignedInput),
+        //         MessageCoinPredicate(super::MessageCoinPredicateInput),
+        //         MessageDataSigned(super::MessageDataSignedInput),
+        //         MessageDataPredicate(super::MessageDataPredicateInput),
+        //     }
         Some(crate::protobuf_types::input::Variant::CoinSigned(proto_coin_signed)) => {
             let proto_utxo_id = proto_coin_signed
                 .utxo_id
@@ -423,6 +432,17 @@ fn input_from_proto_input(proto_input: &ProtoInput) -> Result<Input> {
                 witness_index,
             );
             Ok(input)
+        }
+        Some(crate::protobuf_types::input::Variant::CoinPredicate(
+            proto_coin_predicate,
+        )) => Err(anyhow!(
+            "CoinPredicate input deserialization not implemented"
+        ))
+        .map_err(Error::Serialization),
+
+        Some(crate::protobuf_types::input::Variant::Message(proto_message)) => {
+            Err(anyhow!("Message input deserialization not implemented"))
+                .map_err(Error::Serialization)
         }
         _ => Err(anyhow!("Unsupported input variant")).map_err(Error::Serialization),
     }

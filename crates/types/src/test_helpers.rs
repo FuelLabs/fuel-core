@@ -119,6 +119,16 @@ prop_compose! {
     }
 }
 
+// prop_compose! {
+//     fn arb_create_tx()(
+//         contract_code in prop::collection::vec(any::<u8>(), 0..100),
+//     ) -> Create {
+//         let mut create = Create::default();
+//         *create.contract_code_mut() = contract_code.into();
+//         create
+//     }
+// }
+
 prop_compose! {
     fn arb_policies()(
         maturity in prop::option::of(0..100u32),
@@ -148,7 +158,7 @@ fn arb_inputs() -> impl Strategy<Value = Vec<Input>> {
     //     MessageDataSigned(MessageDataSigned),
     //     MessageDataPredicate(MessageDataPredicate),
     // }
-    let strategy = prop_oneof![arb_coin_signed(),];
+    let strategy = prop_oneof![arb_coin_signed(), arb_coin_predicate(),];
     prop::collection::vec(strategy, 0..10)
 }
 
@@ -186,6 +196,32 @@ prop_compose! {
             predicate_data: Default::default(),
         };
         Input::CoinSigned(inner)
+    }
+}
+
+prop_compose! {
+    fn arb_coin_predicate()(
+        utxo_id in arb_utxo_id(),
+        owner in arb_address(),
+        amount in 1..1_000_000u64,
+        asset_id in arb_asset_id(),
+        tx_pointer in arb_tx_pointer(),
+        predicate_gas_used in any::<u64>(),
+        predicate in prop::collection::vec(any::<u8>(), 0..100),
+        predicate_data in prop::collection::vec(any::<u8>(), 0..100),
+    ) -> Input {
+        let inner = crate::fuel_tx::input::coin::CoinPredicate {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            tx_pointer,
+            witness_index: Default::default(),
+            predicate_gas_used,
+            predicate: predicate.into(),
+            predicate_data: predicate_data.into(),
+        };
+        Input::CoinPredicate(inner)
     }
 }
 
