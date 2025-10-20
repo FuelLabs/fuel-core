@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 
 use crate::{
+    Config,
     ports::RelayerDb,
     service::NotInitializedTask,
-    Config,
 };
 use alloy_primitives::LogData;
 use fuel_core_provider::test_helpers::provider::MockProvider;
@@ -22,10 +22,13 @@ use crate::{
     },
     test_helpers::page_sizer::IdentityPageSizer,
 };
-use alloy_provider::transport::{TransportError, TransportErrorKind};
 use alloy_provider::{
-    mock::Asserter,
     ProviderBuilder,
+    mock::Asserter,
+    transport::{
+        TransportError,
+        TransportErrorKind,
+    },
 };
 use alloy_rpc_types_eth::Log;
 
@@ -58,10 +61,10 @@ async fn can_download_logs() {
         &provider,
         &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
-        .map_ok(|logs| logs.logs)
-        .try_concat()
-        .await
-        .unwrap();
+    .map_ok(|logs| logs.logs)
+    .try_concat()
+    .await
+    .unwrap();
 
     // Then
     assert_eq!(result, logs);
@@ -104,10 +107,10 @@ async fn quorum_agrees_on_logs() {
         &provider,
         &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
-        .map_ok(|logs| logs.logs)
-        .try_concat()
-        .await
-        .unwrap();
+    .map_ok(|logs| logs.logs)
+    .try_concat()
+    .await
+    .unwrap();
 
     // Then
     assert_eq!(result, logs);
@@ -158,15 +161,19 @@ async fn quorum__disagree_on_logs() {
         &provider,
         &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
-        .map_ok(|logs| logs.logs)
-        .try_concat()
-        .await;
+    .map_ok(|logs| logs.logs)
+    .try_concat()
+    .await;
     // Then
 
     match provider_error {
         Err(TransportError::Transport(TransportErrorKind::Custom(e))) => {
             println!("SAEED: {e}");
-            assert!(e.to_string().starts_with("eth provider failed to get logs: Custom(NoQuorumReached"));
+            assert!(
+                e.to_string().starts_with(
+                    "eth provider failed to get logs: Custom(NoQuorumReached"
+                )
+            );
         }
         _ => {
             panic!("Expected a JsonRpcClientError")

@@ -1,18 +1,23 @@
 use crate::{
+    Quorum,
     quorum::transport::{
         QuorumTransport,
         WeightedTransport,
     },
-    Quorum,
 };
 use alloy_provider::{
-    network::Ethereum,
     Provider,
     RootProvider,
+    network::Ethereum,
 };
 use alloy_rpc_client::RpcClient;
-use alloy_transport::mock::{Asserter, MockTransport};
-use alloy_transport::IntoBoxTransport;
+use alloy_transport::{
+    IntoBoxTransport,
+    mock::{
+        Asserter,
+        MockTransport,
+    },
+};
 use url::Url;
 
 pub struct QuorumProvider {
@@ -64,7 +69,9 @@ impl QuorumProviderBuilder {
     }
 
     pub fn add_mocked_transport(mut self, asserter: Asserter) -> Self {
-        self.transports.push(WeightedTransport::new(MockTransport::new(asserter).into_box_transport()));
+        self.transports.push(WeightedTransport::new(
+            MockTransport::new(asserter).into_box_transport(),
+        ));
         self
     }
 
@@ -93,19 +100,19 @@ impl Provider for QuorumProvider {
 #[cfg(test)]
 mod tests {
     use crate::{
-        quorum::transport::WeightedTransport,
         Quorum,
         QuorumProvider,
+        quorum::transport::WeightedTransport,
     };
     use alloy_json_rpc::ErrorPayload;
     use alloy_primitives::private::serde::Serialize;
     use alloy_provider::Provider;
     use alloy_transport::{
+        IntoBoxTransport,
         mock::{
             Asserter,
             MockTransport,
         },
-        IntoBoxTransport,
     };
 
     #[tokio::test]
