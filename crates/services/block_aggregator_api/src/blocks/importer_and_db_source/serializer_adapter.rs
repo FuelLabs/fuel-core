@@ -49,6 +49,7 @@ use fuel_core_types::{
         Address,
         Bytes32,
         Input,
+        MessageId,
         Transaction as FuelTransaction,
         UtxoId,
         field::{

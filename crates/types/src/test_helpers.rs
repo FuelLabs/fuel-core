@@ -109,7 +109,7 @@ prop_compose! {
         *script.script_gas_limit_mut() = script_gas_limit;
         *script.receipts_root_mut() = receipts_root.into();
         *script.script_mut() = script_bytes;
-        *script.script_data_mut() = script_data.into();
+        *script.script_data_mut() = script_data;
         *script.policies_mut() = policies;
         *script.inputs_mut() = inputs;
         // *script.outputs_mut() = outputs;
@@ -273,11 +273,12 @@ prop_compose! {
         prev_root in any::<[u8; 32]>(),
         time in any::<u64>(),
     ) -> crate::blockchain::header::ConsensusHeader<GeneratedConsensusFields> {
-        let mut consensus_header = crate::blockchain::header::ConsensusHeader::default();
-        consensus_header.height = BlockHeight::new(0);
-        consensus_header.prev_root = prev_root.into();
-        consensus_header.time = Tai64(time);
-        consensus_header
+        crate::blockchain::header::ConsensusHeader {
+            prev_root:  prev_root.into(),
+            height: BlockHeight::new(0),
+            time: Tai64(time),
+            generated: GeneratedConsensusFields::default(),
+        }
     }
 }
 
@@ -341,7 +342,7 @@ prop_compose! {
         //     pub message_outbox_root: Bytes32,
         //     pub event_inbox_root: Bytes32,
         // }
-        let count = fuel_block.transactions().len() as u16;
+        let count = fuel_block.transactions().len().try_into().expect("we shouldn't have more than u16::MAX transactions");
         let msg_root = msg_ids
             .iter()
             .fold(MerkleRootCalculator::new(), |mut tree, id| {
@@ -353,7 +354,7 @@ prop_compose! {
         let tx_root = generate_txns_root(fuel_block.transactions());
         let event_root = event_root.into();
         fuel_block.header_mut().set_transactions_count(count);
-        fuel_block.header_mut().set_message_receipt_count(msg_ids.len() as u32);
+        fuel_block.header_mut().set_message_receipt_count(msg_ids.len().try_into().expect("we shouldn't have more than u32::MAX messages"));
         fuel_block.header_mut().set_transaction_root(tx_root);
         fuel_block.header_mut().set_message_outbox_root(msg_root);
         fuel_block.header_mut().set_event_inbox_root(event_root);
