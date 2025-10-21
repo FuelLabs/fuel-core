@@ -138,9 +138,7 @@ where
         let mut reverse_changes = Changes::default();
 
         for (column, column_changes) in changes {
-            let results = self
-                .db
-                .multi_get(*column, column_changes.iter().map(|(k, _)| k))?;
+            let results = self.db.multi_get(*column, column_changes.keys())?;
 
             let entry = reverse_changes
                 .entry(*column)
@@ -542,7 +540,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         self.db
             .iter_store(Column::OriginalColumn(column), prefix, start, direction)
     }
@@ -553,7 +551,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+    ) -> BoxedIter<'_, fuel_core_storage::kv_store::KeyItem> {
         self.db
             .iter_store_keys(Column::OriginalColumn(column), prefix, start, direction)
     }
@@ -571,22 +569,20 @@ where
     ) -> StorageResult<()> {
         // When the history need to be process we need to have all the changes in one
         // transaction to be able to write their reverse changes.
-        if let Some(height) = height {
-            if self.state_rewind_policy != StateRewindPolicy::NoRewind {
-                let all_changes = match changes {
-                    StorageChanges::Changes(changes) => changes,
-                    StorageChanges::ChangesList(list) => {
-                        list.into_iter().flatten().collect()
-                    }
-                };
-                let mut storage_transaction = StorageTransaction::transaction(
-                    &self.db,
-                    ConflictPolicy::Overwrite,
-                    all_changes,
-                );
-                self.store_modifications_history(&mut storage_transaction, &height)?;
-                changes = StorageChanges::Changes(storage_transaction.into_changes());
-            }
+        if let Some(height) = height
+            && self.state_rewind_policy != StateRewindPolicy::NoRewind
+        {
+            let all_changes = match changes {
+                StorageChanges::Changes(changes) => changes,
+                StorageChanges::ChangesList(list) => list.into_iter().flatten().collect(),
+            };
+            let mut storage_transaction = StorageTransaction::transaction(
+                &self.db,
+                ConflictPolicy::Overwrite,
+                all_changes,
+            );
+            self.store_modifications_history(&mut storage_transaction, &height)?;
+            changes = StorageChanges::Changes(storage_transaction.into_changes());
         }
 
         self.db.commit_changes(&changes)?;

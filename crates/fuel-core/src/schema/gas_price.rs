@@ -52,10 +52,10 @@ impl LatestGasPriceQuery {
         let latest_block: Block<_> = query.latest_block()?;
         let block_height: u32 = (*latest_block.header().height()).into();
         let mut gas_price: U64 = 0.into();
-        if let Some(tx_id) = latest_block.transactions().last() {
-            if let Transaction::Mint(mint_tx) = query.transaction(tx_id)? {
-                gas_price = (*mint_tx.gas_price()).into();
-            }
+        if let Some(tx_id) = latest_block.transactions().last()
+            && let Transaction::Mint(mint_tx) = query.transaction(tx_id)?
+        {
+            gas_price = (*mint_tx.gas_price()).into();
         }
         Ok(LatestGasPrice {
             gas_price,

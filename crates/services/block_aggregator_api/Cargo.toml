@@ -1,5 +1,6 @@
 [package]
-name = "fuel-block-aggregator-api"
+name = "fuel-core-block-aggregator-api"
+description = "Block Aggregator API for Fuel Core"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -7,7 +8,6 @@ homepage = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
-description = "Block Aggregator API Service for Fuel Core"
 build = "build.rs"
 
 [features]
