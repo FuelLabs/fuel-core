@@ -10,7 +10,6 @@ use crate::{
         Exclude,
     },
 };
-use core::mem::swap;
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
     Error as StorageError,
@@ -247,7 +246,7 @@ pub async fn random_improve(
 
         // Fallback to largest_first if we can't fit more coins
         if collected_amount < target {
-            swap(&mut coins, &mut largest_first(query).await?);
+            coins = largest_first(query).await?;
         }
 
         coins_per_asset.push(coins);

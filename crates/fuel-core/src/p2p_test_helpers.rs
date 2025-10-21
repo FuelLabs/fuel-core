@@ -337,10 +337,13 @@ pub async fn make_nodes(
                 async move {
                     let config = config.clone();
                     let name = boot.as_ref().map_or(String::new(), |s| s.name.clone());
+                    let node_name = if name.is_empty() {
+                        format!("b:{i}")
+                    } else {
+                        name
+                    };
                     let mut node_config = make_config(
-                        (!name.is_empty())
-                            .then_some(name)
-                            .unwrap_or_else(|| format!("b:{i}")),
+                        node_name,
                         config.clone(),
                         CustomizeConfig::no_overrides(),
                     );
@@ -363,13 +366,12 @@ pub async fn make_nodes(
         let overrides = s
             .clone()
             .map_or(CustomizeConfig::no_overrides(), |s| s.0.config_overrides);
-        let mut node_config = make_config(
-            (!name.is_empty())
-                .then_some(name)
-                .unwrap_or_else(|| format!("p:{i}")),
-            config.clone(),
-            overrides,
-        );
+        let node_name = if name.is_empty() {
+            format!("p:{i}")
+        } else {
+            name
+        };
+        let mut node_config = make_config(node_name, config.clone(), overrides);
 
         let mut test_txs = Vec::with_capacity(0);
 
@@ -427,13 +429,12 @@ pub async fn make_nodes(
         let overrides = s
             .clone()
             .map_or(CustomizeConfig::no_overrides(), |s| s.config_overrides);
-        let mut node_config = make_config(
-            (!name.is_empty())
-                .then_some(name)
-                .unwrap_or_else(|| format!("v:{i}")),
-            config.clone(),
-            overrides,
-        );
+        let node_name = if name.is_empty() {
+            format!("v:{i}")
+        } else {
+            name
+        };
+        let mut node_config = make_config(node_name, config.clone(), overrides);
         node_config.block_production = Trigger::Never;
         node_config.consensus_signer = SignMode::Unavailable;
 

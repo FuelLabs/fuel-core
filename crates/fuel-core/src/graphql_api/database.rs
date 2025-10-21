@@ -323,7 +323,7 @@ impl StorageInspect<BlobData> for ReadView {
     fn get(
         &self,
         key: &<BlobData as Mappable>::Key,
-    ) -> StorageResult<Option<Cow<<BlobData as Mappable>::OwnedValue>>> {
+    ) -> StorageResult<Option<Cow<'_, <BlobData as Mappable>::OwnedValue>>> {
         StorageInspect::<BlobData>::get(self.on_chain.as_ref(), key)
     }
 

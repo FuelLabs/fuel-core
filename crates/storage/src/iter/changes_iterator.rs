@@ -1,6 +1,10 @@
 //! A type that allows to iterate over the `Changes`.
 
 use crate::{
+    Mappable,
+    Result as StorageResult,
+    blueprint::BlueprintCodec,
+    codec::Decode,
     iter::{
         BoxedIter,
         IntoBoxedIter,
@@ -9,11 +13,13 @@ use crate::{
     },
     kv_store::{
         KVItem,
+        KVWriteItem,
         KeyValueInspect,
         StorageColumn,
         Value,
         WriteOperation,
     },
+    structured_storage::TableWithBlueprint,
     transactional::StorageChanges,
 };
 
@@ -90,7 +96,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         match self.changes {
             StorageChanges::Changes(changes) => {
                 if let Some(tree) = changes.get(&column.id()) {
@@ -139,7 +145,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<crate::kv_store::KeyItem> {
+    ) -> BoxedIter<'_, crate::kv_store::KeyItem> {
         // We cannot define iter_store_keys appropriately for the `ChangesIterator`,
         // because we have to filter out the keys that were removed, which are
         // marked as `WriteOperation::Remove` in the value
@@ -181,5 +187,83 @@ where
                 iterators_list.into_iter().flatten().into_boxed()
             }
         }
+    }
+}
+
+impl<Column> ChangesIterator<'_, Column>
+where
+    Column: StorageColumn,
+{
+    /// Returns an iterator over the all Key-Value modifications for the column.
+    pub fn iter_store_writes(
+        &self,
+        column: Column,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> BoxedIter<'_, KVWriteItem> {
+        match self.changes {
+            StorageChanges::Changes(changes) => {
+                if let Some(tree) = changes.get(&column.id()) {
+                    crate::iter::iterator(tree, prefix, start, direction)
+                        .map(|(key, value)| (key.clone().into(), value.clone()))
+                        .map(Ok)
+                        .into_boxed()
+                } else {
+                    core::iter::empty().into_boxed()
+                }
+            }
+            StorageChanges::ChangesList(changes_list) => {
+                let column = column.id();
+
+                let mut iterators_list = Vec::with_capacity(changes_list.len());
+
+                for changes in changes_list.iter() {
+                    let iter = changes.get(&column).map(|tree| {
+                        crate::iter::iterator(tree, prefix, start, direction)
+                            .map(|(key, value)| (key.clone().into(), value.clone()))
+                            .map(Ok)
+                    });
+                    if let Some(iter) = iter {
+                        iterators_list.push(iter);
+                    }
+                }
+
+                iterators_list.into_iter().flatten().into_boxed()
+            }
+        }
+    }
+
+    /// Returns an iterator over the all modifications in the table.
+    #[allow(clippy::type_complexity)]
+    pub fn iter_all_writes<M>(
+        &self,
+        direction: Option<IterDirection>,
+    ) -> BoxedIter<'_, StorageResult<(M::OwnedKey, Option<M::OwnedValue>)>>
+    where
+        M: Mappable,
+        M: TableWithBlueprint<Column = Column>,
+        M::Blueprint: BlueprintCodec<M>,
+    {
+        self.iter_store_writes(M::column(), None, None, direction.unwrap_or_default())
+            .map(|val| {
+                val.and_then(|(key, value)| {
+                    let key = <M::Blueprint as BlueprintCodec<M>>::KeyCodec::decode(
+                        key.as_slice(),
+                    )
+                    .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?;
+                    let value = match value {
+                        WriteOperation::Insert(value) => Some(
+                            <M::Blueprint as BlueprintCodec<M>>::ValueCodec::decode(
+                                &value,
+                            )
+                            .map_err(|e| crate::Error::Codec(anyhow::anyhow!(e)))?,
+                        ),
+                        WriteOperation::Remove => None,
+                    };
+                    Ok((key, value))
+                })
+            })
+            .into_boxed()
     }
 }

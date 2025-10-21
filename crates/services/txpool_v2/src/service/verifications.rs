@@ -213,12 +213,12 @@ impl InputDependenciesVerifiedTx {
             debug_assert!(tx.checks().contains(Checks::all()));
         }
 
-        if let Transaction::Upgrade(upgrade) = tx.transaction() {
-            if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
-                wasm_checker
-                    .validate_uploaded_wasm(root)
-                    .map_err(Error::WasmValidity)?;
-            }
+        if let Transaction::Upgrade(upgrade) = tx.transaction()
+            && let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose()
+        {
+            wasm_checker
+                .validate_uploaded_wasm(root)
+                .map_err(Error::WasmValidity)?;
         }
 
         Ok(FullyVerifiedTx(tx))

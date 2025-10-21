@@ -2,6 +2,8 @@
 //! In the future, the `Column` enum should contain only the required tables for the execution.
 //! All other tables should live in the downstream creates in the place where they are really used.
 
+#![allow(deprecated)]
+
 use crate::kv_store::StorageColumn;
 
 use alloc::string::{
@@ -44,13 +46,17 @@ pub enum Column {
     FuelBlockMerkleData = 8,
     /// See [`FuelBlockMerkleMetadata`](crate::tables::merkle::FuelBlockMerkleMetadata)
     FuelBlockMerkleMetadata = 9,
-    /// See [`ContractsAssetsMerkleData`](crate::tables::merkle::ContractsAssetsMerkleData)
+    #[deprecated]
+    /// This column was used by SMT in the past, but is no longer in use.
     ContractsAssetsMerkleData = 10,
-    /// See [`ContractsAssetsMerkleMetadata`](crate::tables::merkle::ContractsAssetsMerkleMetadata)
+    #[deprecated]
+    /// This column was used by SMT in the past, but is no longer in use.
     ContractsAssetsMerkleMetadata = 11,
-    /// See [`ContractsStateMerkleData`](crate::tables::merkle::ContractsStateMerkleData)
+    #[deprecated]
+    /// This column was used by SMT in the past, but is no longer in use.
     ContractsStateMerkleData = 12,
-    /// See [`ContractsStateMerkleMetadata`](crate::tables::merkle::ContractsStateMerkleMetadata)
+    #[deprecated]
+    /// This column was used by SMT in the past, but is no longer in use.
     ContractsStateMerkleMetadata = 13,
     /// See [`Messages`](crate::tables::Messages)
     Messages = 14,

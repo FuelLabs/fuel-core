@@ -223,7 +223,7 @@ where
 
 pub trait ReadViewProvider {
     /// Returns the read view for the current operation.
-    fn read_view(&self) -> StorageResult<Cow<ReadView>>;
+    fn read_view(&self) -> StorageResult<Cow<'_, ReadView>>;
 }
 
 impl<'a> ReadViewProvider for Context<'a> {

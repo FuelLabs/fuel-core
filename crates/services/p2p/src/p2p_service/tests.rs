@@ -205,13 +205,12 @@ async fn reserved_nodes_reconnect_works() {
                     // if the `reserved_node` is not included,
                     // create and insert it, to be polled with rest of the nodes
                     if !all_nodes_ids
-                    .iter()
-                    .any(|local_peer_id| local_peer_id == &reserved_node_peer_id) {
-                        if let Some(node) = reserved_node {
-                            all_nodes_ids.push(node.local_peer_id);
-                            spawn(&stop_sender, node);
-                            reserved_node = None;
-                        }
+                        .iter()
+                        .any(|local_peer_id| local_peer_id == &reserved_node_peer_id)
+                        && let Some(node) = reserved_node.take()
+                    {
+                        all_nodes_ids.push(node.local_peer_id);
+                        spawn(&stop_sender, node);
                     }
                 }
                 if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
@@ -414,18 +413,18 @@ async fn sentry_nodes_working() {
     while instance.elapsed().as_secs() < 5 {
         tokio::select! {
             event_from_first_guarded = first_guarded_node.next_event() => {
-                if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded {
-                    if !first_sentry_set.contains(&peer_id) {
-                        panic!("The node should only connect to the specified reserved nodes!");
-                    }
+                if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded
+                    && !first_sentry_set.contains(&peer_id)
+                {
+                    panic!("The node should only connect to the specified reserved nodes!");
                 }
                 tracing::info!("Event from the first guarded node: {:?}", event_from_first_guarded);
             },
             event_from_second_guarded = second_guarded_node.next_event() => {
-                if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded {
-                    if !second_sentry_set.contains(&peer_id) {
-                        panic!("The node should only connect to the specified reserved nodes!");
-                    }
+                if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded
+                    && !second_sentry_set.contains(&peer_id)
+                {
+                    panic!("The node should only connect to the specified reserved nodes!");
                 }
                 tracing::info!("Event from the second guarded node: {:?}", event_from_second_guarded);
             },
@@ -570,15 +569,15 @@ async fn peer_info_updates_work() {
     loop {
         tokio::select! {
             node_a_event = node_a.next_event() => {
-                if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                    if let Some(PeerInfo {  heartbeat_data, client_version, .. }) = node_a.peer_manager.get_peer_info(&peer_id) {
-                        // Exits after it verifies that:
-                        // 1. Peer Addresses are known
-                        // 2. Client Version is known
-                        // 3. Node has responded with their latest BlockHeight
-                        if client_version.is_some() && heartbeat_data.block_height == Some(latest_block_height) {
-                            break;
-                        }
+                if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event
+                    && let Some(PeerInfo {  heartbeat_data, client_version, .. }) = node_a.peer_manager.get_peer_info(&peer_id)
+                {
+                    // Exits after it verifies that:
+                    // 1. Peer Addresses are known
+                    // 2. Client Version is known
+                    // 3. Node has responded with their latest BlockHeight
+                    if client_version.is_some() && heartbeat_data.block_height == Some(latest_block_height) {
+                        break;
                     }
                 }
 
@@ -1012,121 +1011,121 @@ async fn request_response_works_with(
                 break;
             }
             node_a_event = node_a.next_event() => {
-                if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                    if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
-                        // 0. verifies that we've got at least a single peer address to request message from
-                        if !request_sent {
-                            request_sent = true;
+                if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event
+                    && node_a.peer_manager.get_peer_info(&peer_id).is_some()
+                {
+                    // 0. verifies that we've got at least a single peer address to request message from
+                    if !request_sent {
+                        request_sent = true;
 
-                            match request_msg.clone() {
-                                RequestMessage::SealedHeaders(range) => {
-                                    let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                    assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
-                                    let tx_test_end = tx_test_end.clone();
+                        match request_msg.clone() {
+                            RequestMessage::SealedHeaders(range) => {
+                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
+                                let tx_test_end = tx_test_end.clone();
 
-                                    tokio::spawn(async move {
-                                        let response_message = rx_orchestrator.await;
+                                tokio::spawn(async move {
+                                    let response_message = rx_orchestrator.await;
 
-                                        let expected = arbitrary_headers_for_range(range.clone());
+                                    let expected = arbitrary_headers_for_range(range.clone());
 
-                                        if let Ok(response) = response_message {
-                                            match response {
-                                                Ok((_, Ok(Ok(sealed_headers)))) => {
-                                                    let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
-                                                    let _ = tx_test_end.send(check).await;
-                                                },
-                                                Ok((_, Ok(Err(e)))) => {
-                                                    tracing::error!("Node A did not return any headers: {:?}", e);
-                                                    let _ = tx_test_end.send(false).await;
-                                                },
-                                                Ok((_, Err(e))) => {
-                                                    tracing::error!("Error in P2P communication: {:?}", e);
-                                                    let _ = tx_test_end.send(false).await;
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Error in P2P before sending message: {:?}", e);
-                                                    let _ = tx_test_end.send(false).await;
-                                                },
+                                    if let Ok(response) = response_message {
+                                        match response {
+                                            Ok((_, Ok(Ok(sealed_headers)))) => {
+                                                let check = expected.iter().zip(sealed_headers.iter()).all(|(a, b)| eq_except_metadata(a, b));
+                                                let _ = tx_test_end.send(check).await;
+                                            },
+                                            Ok((_, Ok(Err(e)))) => {
+                                                tracing::error!("Node A did not return any headers: {:?}", e);
+                                                let _ = tx_test_end.send(false).await;
+                                            },
+                                            Ok((_, Err(e))) => {
+                                                tracing::error!("Error in P2P communication: {:?}", e);
+                                                let _ = tx_test_end.send(false).await;
+                                            },
+                                            Err(e) => {
+                                                tracing::error!("Error in P2P before sending message: {:?}", e);
+                                                let _ = tx_test_end.send(false).await;
+                                            },
+                                        }
+                                    } else {
+                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                        let _ = tx_test_end.send(false).await;
+                                    }
+                                });
+                            }
+                            RequestMessage::Transactions(_range) => {
+                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::Transactions(tx_orchestrator)).is_ok());
+                                let tx_test_end = tx_test_end.clone();
+
+                                tokio::spawn(async move {
+                                    let response_message = rx_orchestrator.await;
+
+                                    if let Ok(response) = response_message {
+                                        match response {
+                                            Ok((_, Ok(Ok(transactions)))) => {
+                                                let check = transactions.len() == 1 && transactions[0].0.len() == 5;
+                                                let _ = tx_test_end.send(check).await;
+                                            },
+                                            Ok((_, Ok(Err(e)))) => {
+                                                tracing::error!("Node A did not return any transactions: {:?}", e);
+                                                let _ = tx_test_end.send(false).await;
+                                            },
+                                            Ok((_, Err(e))) => {
+                                                tracing::error!("Error in P2P communication: {:?}", e);
+                                                let _ = tx_test_end.send(false).await;
+                                            },
+                                            Err(e) => {
+                                                tracing::error!("Error in P2P before sending message: {:?}", e);
+                                                let _ = tx_test_end.send(false).await;
+                                            },
+                                        }
+                                    } else {
+                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                        let _ = tx_test_end.send(false).await;
+                                    }
+                                });
+                            }
+                            RequestMessage::TxPoolAllTransactionsIds => {
+                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolAllTransactionsIds(tx_orchestrator)).is_ok());
+                                let tx_test_end = tx_test_end.clone();
+                                tokio::spawn(async move {
+                                    let response_message = rx_orchestrator.await;
+
+                                    if let Ok((_, Ok(Ok(transaction_ids)))) = response_message {
+                                        let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
+                                        let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
+                                        let _ = tx_test_end.send(check).await;
+                                    } else {
+                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                        let _ = tx_test_end.send(false).await;
+                                    }
+                                });
+                            }
+                            RequestMessage::TxPoolFullTransactions(tx_ids) => {
+                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolFullTransactions(tx_orchestrator)).is_ok());
+                                let tx_test_end = tx_test_end.clone();
+                                tokio::spawn(async move {
+                                    let response_message = rx_orchestrator.await;
+
+                                    if let Ok((_, Ok(Ok(transactions)))) = response_message {
+                                        let txs: Vec<Option<NetworkableTransactionPool>> = tx_ids.iter().enumerate().map(|(i, _)| {
+                                            if i == 0 {
+                                                None
+                                            } else {
+                                                Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
                                             }
-                                        } else {
-                                            tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                            let _ = tx_test_end.send(false).await;
-                                        }
-                                    });
-                                }
-                                RequestMessage::Transactions(_range) => {
-                                    let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                    assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::Transactions(tx_orchestrator)).is_ok());
-                                    let tx_test_end = tx_test_end.clone();
-
-                                    tokio::spawn(async move {
-                                        let response_message = rx_orchestrator.await;
-
-                                        if let Ok(response) = response_message {
-                                            match response {
-                                                Ok((_, Ok(Ok(transactions)))) => {
-                                                    let check = transactions.len() == 1 && transactions[0].0.len() == 5;
-                                                    let _ = tx_test_end.send(check).await;
-                                                },
-                                                Ok((_, Ok(Err(e)))) => {
-                                                    tracing::error!("Node A did not return any transactions: {:?}", e);
-                                                    let _ = tx_test_end.send(false).await;
-                                                },
-                                                Ok((_, Err(e))) => {
-                                                    tracing::error!("Error in P2P communication: {:?}", e);
-                                                    let _ = tx_test_end.send(false).await;
-                                                },
-                                                Err(e) => {
-                                                    tracing::error!("Error in P2P before sending message: {:?}", e);
-                                                    let _ = tx_test_end.send(false).await;
-                                                },
-                                            }
-                                        } else {
-                                            tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                            let _ = tx_test_end.send(false).await;
-                                        }
-                                    });
-                                }
-                                RequestMessage::TxPoolAllTransactionsIds => {
-                                    let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                    assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolAllTransactionsIds(tx_orchestrator)).is_ok());
-                                    let tx_test_end = tx_test_end.clone();
-                                    tokio::spawn(async move {
-                                        let response_message = rx_orchestrator.await;
-
-                                        if let Ok((_, Ok(Ok(transaction_ids)))) = response_message {
-                                            let tx_ids: Vec<TxId> = (0..5).map(|_| Transaction::default_test_tx().id(&ChainId::new(1))).collect();
-                                            let check = transaction_ids.len() == 5 && transaction_ids.iter().zip(tx_ids.iter()).all(|(a, b)| a == b);
-                                            let _ = tx_test_end.send(check).await;
-                                        } else {
-                                            tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                            let _ = tx_test_end.send(false).await;
-                                        }
-                                    });
-                                }
-                                RequestMessage::TxPoolFullTransactions(tx_ids) => {
-                                    let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                    assert!(node_a.send_request_msg(None, request_msg.clone(), ResponseSender::TxPoolFullTransactions(tx_orchestrator)).is_ok());
-                                    let tx_test_end = tx_test_end.clone();
-                                    tokio::spawn(async move {
-                                        let response_message = rx_orchestrator.await;
-
-                                        if let Ok((_, Ok(Ok(transactions)))) = response_message {
-                                            let txs: Vec<Option<NetworkableTransactionPool>> = tx_ids.iter().enumerate().map(|(i, _)| {
-                                                if i == 0 {
-                                                    None
-                                                } else {
-                                                    Some(NetworkableTransactionPool::Transaction(Transaction::default_test_tx()))
-                                                }
-                                            }).collect();
-                                            let check = transactions.len() == tx_ids.len() && transactions.iter().zip(txs.iter()).all(|(a, b)| a == b);
-                                            let _ = tx_test_end.send(check).await;
-                                        } else {
-                                            tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
-                                            let _ = tx_test_end.send(false).await;
-                                        }
-                                    });
-                                }
+                                        }).collect();
+                                        let check = transactions.len() == tx_ids.len() && transactions.iter().zip(txs.iter()).all(|(a, b)| a == b);
+                                        let _ = tx_test_end.send(check).await;
+                                    } else {
+                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                        let _ = tx_test_end.send(false).await;
+                                    }
+                                });
                             }
                         }
                     }
@@ -1227,44 +1226,44 @@ async fn invalid_response_type_is_detected() {
                 break;
             }
             node_a_event = node_a.next_event() => {
-                if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                    if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
-                        // 0. verifies that we've got at least a single peer address to request message from
-                        if !request_sent {
-                            request_sent = true;
+                if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event
+                    && node_a.peer_manager.get_peer_info(&peer_id).is_some()
+                {
+                    // 0. verifies that we've got at least a single peer address to request message from
+                    if !request_sent {
+                        request_sent = true;
 
-                            let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                            assert!(node_a.send_request_msg(None, RequestMessage::Transactions(0..2), ResponseSender::Transactions(tx_orchestrator)).is_ok());
-                            let tx_test_end = tx_test_end.clone();
+                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                        assert!(node_a.send_request_msg(None, RequestMessage::Transactions(0..2), ResponseSender::Transactions(tx_orchestrator)).is_ok());
+                        let tx_test_end = tx_test_end.clone();
 
-                            tokio::spawn(async move {
-                                let response_message = rx_orchestrator.await;
+                        tokio::spawn(async move {
+                            let response_message = rx_orchestrator.await;
 
-                                if let Ok(response) = response_message {
-                                    match response {
-                                        Ok((_, Ok(_))) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Request succeeded unexpectedly");
-                                        },
-                                        Ok((_, Err(ResponseError::TypeMismatch))) => {
-                                            // Got Invalid Response Type as expected, so end test
-                                            let _ = tx_test_end.send(true).await;
-                                        },
-                                        Ok((_, Err(err))) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Unexpected error in P2P communication: {:?}", err);
-                                        },
-                                        Err(e) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Error in P2P before sending message: {:?}", e);
-                                        },
-                                    }
-                                } else {
-                                    let _ = tx_test_end.send(false).await;
-                                    panic!("Orchestrator failed to receive a message: {:?}", response_message);
+                            if let Ok(response) = response_message {
+                                match response {
+                                    Ok((_, Ok(_))) => {
+                                        let _ = tx_test_end.send(false).await;
+                                        panic!("Request succeeded unexpectedly");
+                                    },
+                                    Ok((_, Err(ResponseError::TypeMismatch))) => {
+                                        // Got Invalid Response Type as expected, so end test
+                                        let _ = tx_test_end.send(true).await;
+                                    },
+                                    Ok((_, Err(err))) => {
+                                        let _ = tx_test_end.send(false).await;
+                                        panic!("Unexpected error in P2P communication: {:?}", err);
+                                    },
+                                    Err(e) => {
+                                        let _ = tx_test_end.send(false).await;
+                                        panic!("Error in P2P before sending message: {:?}", e);
+                                    },
                                 }
-                            });
-                        }
+                            } else {
+                                let _ = tx_test_end.send(false).await;
+                                panic!("Orchestrator failed to receive a message: {:?}", response_message);
+                            }
+                        });
                     }
                 }
 
@@ -1307,55 +1306,55 @@ async fn req_res_outbound_timeout_works() {
     loop {
         tokio::select! {
             node_a_event = node_a.next_event() => {
-                if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event {
-                    if node_a.peer_manager.get_peer_info(&peer_id).is_some() {
-                        // 0. verifies that we've got at least a single peer address to request message from
-                        if !request_sent {
-                            request_sent = true;
+                if let Some(FuelP2PEvent::PeerInfoUpdated { peer_id, block_height: _ }) = node_a_event
+                    && node_a.peer_manager.get_peer_info(&peer_id).is_some()
+                {
+                    // 0. verifies that we've got at least a single peer address to request message from
+                    if !request_sent {
+                        request_sent = true;
 
-                            // 1. Simulating Oneshot channel from the NetworkOrchestrator
-                            let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                        // 1. Simulating Oneshot channel from the NetworkOrchestrator
+                        let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
-                            // 2a. there should be ZERO pending outbound requests in the table
-                            assert_eq!(node_a.outbound_requests_table.len(), 0);
+                        // 2a. there should be ZERO pending outbound requests in the table
+                        assert_eq!(node_a.outbound_requests_table.len(), 0);
 
-                            // Request successfully sent
-                            let requested_block_height = RequestMessage::SealedHeaders(0..0);
-                            assert!(node_a.send_request_msg(None, requested_block_height, ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
+                        // Request successfully sent
+                        let requested_block_height = RequestMessage::SealedHeaders(0..0);
+                        assert!(node_a.send_request_msg(None, requested_block_height, ResponseSender::SealedHeaders(tx_orchestrator)).is_ok());
 
-                            // 2b. there should be ONE pending outbound requests in the table
-                            assert_eq!(node_a.outbound_requests_table.len(), 1);
+                        // 2b. there should be ONE pending outbound requests in the table
+                        assert_eq!(node_a.outbound_requests_table.len(), 1);
 
-                            let tx_test_end = tx_test_end.clone();
+                        let tx_test_end = tx_test_end.clone();
 
-                            tokio::spawn(async move {
-                                // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
-                                let response_message = rx_orchestrator.await;
-                                if let Ok(response) = response_message {
-                                    match response {
-                                        Ok((_, Ok(_))) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Request succeeded unexpectedly");
-                                        },
-                                        Ok((_, Err(ResponseError::P2P(_)))) => {
-                                            // Got Invalid Response Type as expected, so end test
-                                            let _ = tx_test_end.send(true).await;
-                                        },
-                                        Ok((_, Err(err))) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Unexpected error in P2P communication: {:?}", err);
-                                        },
-                                        Err(e) => {
-                                            let _ = tx_test_end.send(false).await;
-                                            panic!("Error in P2P before sending message: {:?}", e);
-                                        },
-                                    }
-                                } else {
-                                    let _ = tx_test_end.send(false).await;
-                                    panic!("Orchestrator failed to receive a message: {:?}", response_message);
+                        tokio::spawn(async move {
+                            // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
+                            let response_message = rx_orchestrator.await;
+                            if let Ok(response) = response_message {
+                                match response {
+                                    Ok((_, Ok(_))) => {
+                                        let _ = tx_test_end.send(false).await;
+                                        panic!("Request succeeded unexpectedly");
+                                    },
+                                    Ok((_, Err(ResponseError::P2P(_)))) => {
+                                        // Got Invalid Response Type as expected, so end test
+                                        let _ = tx_test_end.send(true).await;
+                                    },
+                                    Ok((_, Err(err))) => {
+                                        let _ = tx_test_end.send(false).await;
+                                        panic!("Unexpected error in P2P communication: {:?}", err);
+                                    },
+                                    Err(e) => {
+                                        let _ = tx_test_end.send(false).await;
+                                        panic!("Error in P2P before sending message: {:?}", e);
+                                    },
                                 }
-                            });
-                        }
+                            } else {
+                                let _ = tx_test_end.send(false).await;
+                                panic!("Orchestrator failed to receive a message: {:?}", response_message);
+                            }
+                        });
                     }
                 }
 

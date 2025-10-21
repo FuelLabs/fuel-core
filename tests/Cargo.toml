@@ -41,7 +41,6 @@ cynic = { workspace = true }
 ethers = "2"
 fuel-block-aggregator-api = { version = "0.46.0", path = "../crates/services/block_aggregator_api" }
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
-  "smt",
   "p2p",
   "relayer",
   "wasm-executor",

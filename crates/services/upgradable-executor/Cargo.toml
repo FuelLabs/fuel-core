@@ -14,11 +14,6 @@ build = "build.rs"
 [features]
 default = ["std"]
 std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
-smt = [
-    "fuel-core-storage/smt",
-    "fuel-core-executor/smt",
-    "fuel-core-wasm-executor?/smt",
-]
 wasm-executor = [
     "dep:anyhow",
     "dep:derive_more",

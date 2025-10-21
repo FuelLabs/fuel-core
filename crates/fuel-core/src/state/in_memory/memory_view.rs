@@ -86,7 +86,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         self.iter_all(column, prefix, start, direction).into_boxed()
     }
 
@@ -96,7 +96,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIter<'_, KeyItem> {
         self.iter_all_keys(column, prefix, start, direction)
             .into_boxed()
     }
