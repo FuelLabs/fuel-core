@@ -99,6 +99,12 @@ where
         }
         Ok(txs)
     }
+
+    // For now just have arbitrary 10 ms sleep to avoid busy looping.
+    // This could be more complicated with increasing backoff times, etc.
+    async fn go_to_sleep_before_continuing(&self) {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 impl<Serializer, DB, E> RunnableTask for SyncTask<Serializer, DB, Serializer::Block>
@@ -136,7 +142,7 @@ where
             self.next_height = BlockHeight::from((*next_height).saturating_add(1));
         } else {
             tracing::warn!("no block found at height {:?}, retrying", next_height);
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            self.go_to_sleep_before_continuing().await;
         }
         TaskNextAction::Continue
     }
