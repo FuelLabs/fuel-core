@@ -38,7 +38,6 @@ aws-sdk-kms = { version = "1.37.0", optional = true }
 clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
-fuel-core-block-aggregator-api = { workspace = true }
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
   "p2p",
   "relayer",
@@ -48,6 +47,7 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
 ] }
 fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
+fuel-core-block-aggregator-api = { workspace = true }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
 fuel-core-compression-service = { path = "../crates/services/compression", features = [
