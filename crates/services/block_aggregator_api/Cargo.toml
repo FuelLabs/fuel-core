@@ -41,9 +41,9 @@ tracing = { workspace = true }
 tonic-prost-build = { workspace = true }
 
 [dev-dependencies]
-proptest = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
+proptest = { workspace = true }
 tokio-stream = { workspace = true }
 tracing-subscriber = { workspace = true }
