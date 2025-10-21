@@ -1,28 +1,30 @@
+use self::schema::{
+    block::ProduceBlockArgs,
+    message::{
+        MessageProofArgs,
+        NonceArgs,
+    },
+};
 #[cfg(feature = "subscriptions")]
 use crate::client::types::StatusWithTransaction;
+use crate::provider::{Provider, ReqwestProvider};
 use crate::{
     client::{
         schema::{
-            Tai64Timestamp,
-            TransactionId,
             block::BlockByHeightArgs,
             coins::{
                 ExcludeInput,
                 SpendQueryElementInput,
             },
             contract::ContractBalanceQueryArgs,
-            gas_price::EstimateGasPrice,
             message::MessageStatusArgs,
             relayed_tx::RelayedTransactionStatusArgs,
-            tx::{
-                DryRunArg,
-                TxWithEstimatedPredicatesArg,
-            },
+            tx::TxWithEstimatedPredicatesArg,
+            Tai64Timestamp,
+            TransactionId,
         },
         types::{
-            RelayedTransactionStatus,
             asset::AssetDetail,
-            gas_price::LatestGasPrice,
             message::MessageStatus,
             primitives::{
                 Address,
@@ -31,20 +33,20 @@ use crate::{
                 ContractId,
                 UtxoId,
             },
-            upgrades::StateTransitionBytecode,
+            RelayedTransactionStatus,
         },
     },
     reqwest_ext::{
         FuelGraphQlResponse,
         FuelOperation,
-        ReqwestExt,
     },
 };
 use anyhow::Context;
+use async_trait::async_trait;
 #[cfg(feature = "subscriptions")]
 use base64::prelude::{
-    BASE64_STANDARD,
     Engine as _,
+    BASE64_STANDARD,
 };
 #[cfg(feature = "subscriptions")]
 use cynic::StreamingOperation;
@@ -66,21 +68,17 @@ use fuel_core_types::{
     fuel_tx::{
         BlobId,
         Bytes32,
-        ConsensusParameters,
         Receipt,
         Transaction,
         TxId,
     },
     fuel_types::{
         self,
+        canonical::Serialize,
         BlockHeight,
         Nonce,
-        canonical::Serialize,
     },
-    services::executor::{
-        StorageReadReplayEvent,
-        TransactionExecutionStatus,
-    },
+    services::executor::StorageReadReplayEvent,
 };
 #[cfg(feature = "subscriptions")]
 use futures::{
@@ -94,6 +92,29 @@ use pagination::{
     PaginationRequest,
 };
 use schema::{
+    assets::AssetInfoArg,
+    balance::BalanceArgs,
+    blob::BlobByIdArgs,
+    block::BlockByIdArgs,
+    coins::{
+        CoinByIdArgs,
+        CoinsConnectionArgs,
+    },
+    contract::{
+        ContractBalancesConnectionArgs,
+        ContractByIdArgs,
+    },
+    da_compressed::DaCompressedBlockByHeightArgs,
+    storage_read_replay::{
+        StorageReadReplay,
+        StorageReadReplayArgs,
+    },
+    tx::{
+        AssembleTxArg,
+        TransactionsByOwnerConnectionArgs,
+        TxArg,
+        TxIdArgs,
+    },
     Bytes,
     ContinueTx,
     ContinueTxArgs,
@@ -111,31 +132,8 @@ use schema::{
     StartTxArgs,
     U32,
     U64,
-    assets::AssetInfoArg,
-    balance::BalanceArgs,
-    blob::BlobByIdArgs,
-    block::BlockByIdArgs,
-    coins::{
-        CoinByIdArgs,
-        CoinsConnectionArgs,
-    },
-    contract::{
-        ContractBalancesConnectionArgs,
-        ContractByIdArgs,
-    },
-    da_compressed::DaCompressedBlockByHeightArgs,
-    gas_price::BlockHorizonArgs,
-    storage_read_replay::{
-        StorageReadReplay,
-        StorageReadReplayArgs,
-    },
-    tx::{
-        AssembleTxArg,
-        TransactionsByOwnerConnectionArgs,
-        TxArg,
-        TxIdArgs,
-    },
 };
+use serde::de::DeserializeOwned;
 #[cfg(feature = "subscriptions")]
 use std::future;
 use std::{
@@ -157,20 +155,12 @@ use std::{
 use tai64::Tai64;
 use tracing as _;
 use types::{
-    TransactionResponse,
-    TransactionStatus,
     assemble_tx::{
         AssembleTransactionResult,
         RequiredBalance,
     },
-};
-
-use self::schema::{
-    block::ProduceBlockArgs,
-    message::{
-        MessageProofArgs,
-        NonceArgs,
-    },
+    TransactionResponse,
+    TransactionStatus,
 };
 
 pub mod pagination;
@@ -246,7 +236,7 @@ impl Clone for ChainStateInfo {
 
 #[derive(Debug, Clone)]
 pub struct FuelClient {
-    client: reqwest::Client,
+    provider: ReqwestProvider,
     #[cfg(feature = "subscriptions")]
     cookie: std::sync::Arc<reqwest::cookie::Jar>,
     url: reqwest::Url,
@@ -271,12 +261,8 @@ impl FromStr for FuelClient {
         #[cfg(feature = "subscriptions")]
         {
             let cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
-            let client = reqwest::Client::builder()
-                .cookie_provider(cookie.clone())
-                .build()
-                .map_err(anyhow::Error::msg)?;
             Ok(Self {
-                client,
+                provider: ReqwestProvider::new(url.clone(), cookie.clone()).map_err(anyhow::Error::msg)?,
                 cookie,
                 url,
                 require_height: ConsistencyPolicy::Auto {
@@ -352,13 +338,6 @@ impl FuelClient {
         self
     }
 
-    pub fn required_block_height(&self) -> Option<BlockHeight> {
-        match &self.require_height {
-            ConsistencyPolicy::Auto { height } => height.lock().ok().and_then(|h| *h),
-            ConsistencyPolicy::Manual { height } => *height,
-        }
-    }
-
     fn update_chain_state_info<R, E>(&self, response: &FuelGraphQlResponse<R, E>) {
         if let Some(current_sft_version) = response
             .extensions
@@ -374,9 +353,9 @@ impl FuelClient {
             .as_ref()
             .and_then(|e| e.current_consensus_parameters_version)
             && let Ok(mut c) = self
-                .chain_state_info
-                .current_consensus_parameters_version
-                .lock()
+            .chain_state_info
+            .current_consensus_parameters_version
+            .lock()
         {
             *c = Some(current_consensus_parameters_version);
         }
@@ -388,9 +367,9 @@ impl FuelClient {
 
         if let Some(inner_required_height) = inner_required_height
             && let Some(current_fuel_block_height) = response
-                .extensions
-                .as_ref()
-                .and_then(|e| e.current_fuel_block_height)
+            .extensions
+            .as_ref()
+            .and_then(|e| e.current_fuel_block_height)
         {
             let mut lock = inner_required_height.lock().expect("Mutex poisoned");
 
@@ -400,59 +379,13 @@ impl FuelClient {
         }
     }
 
-    /// Send the GraphQL query to the client.
-    pub async fn query<ResponseData, Vars>(
-        &self,
-        q: Operation<ResponseData, Vars>,
-    ) -> io::Result<ResponseData>
-    where
-        Vars: serde::Serialize,
-        ResponseData: serde::de::DeserializeOwned + 'static,
-    {
-        let required_fuel_block_height = self.required_block_height();
-        let fuel_operation = FuelOperation::new(q, required_fuel_block_height);
-        let response = self
-            .client
-            .post(self.url.clone())
-            .run_fuel_graphql(fuel_operation)
-            .await
-            .map_err(io::Error::other)?;
-
-        self.decode_response(response)
-    }
-
-    fn decode_response<R, E>(&self, response: FuelGraphQlResponse<R, E>) -> io::Result<R>
-    where
-        R: serde::de::DeserializeOwned + 'static,
-    {
-        self.update_chain_state_info(&response);
-
-        if response
-            .extensions
-            .as_ref()
-            .and_then(|e| e.fuel_block_height_precondition_failed)
-            == Some(true)
-        {
-            return Err(io::Error::other("The required block height was not met"));
-        }
-
-        let response = response.response;
-
-        match (response.data, response.errors) {
-            (Some(d), _) => Ok(d),
-            (_, Some(e)) => Err(from_strings_errors_to_std_error(
-                e.into_iter().map(|e| e.message).collect(),
-            )),
-            _ => Err(io::Error::other("Invalid response")),
-        }
-    }
 
     #[tracing::instrument(skip_all)]
     #[cfg(feature = "subscriptions")]
     async fn subscribe<ResponseData, Vars>(
         &self,
         q: StreamingOperation<ResponseData, Vars>,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<ResponseData>> + '_>
+    ) -> io::Result<impl futures::Stream<Item=io::Result<ResponseData>> + '_>
     where
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static + Send,
@@ -532,12 +465,12 @@ impl FuelClient {
                                         match last.replace(data) {
                                             // Remove duplicates
                                             Some(l)
-                                                if l == *last.as_ref().expect(
-                                                    "Safe because of the replace above",
-                                                ) =>
-                                            {
-                                                None
-                                            }
+                                            if l == *last.as_ref().expect(
+                                                "Safe because of the replace above",
+                                            ) =>
+                                                {
+                                                    None
+                                                }
                                             _ => Some(Ok(Event::ResponseData(resp))),
                                         }
                                     }
@@ -608,173 +541,13 @@ impl FuelClient {
     }
 
     pub async fn health(&self) -> io::Result<bool> {
-        let query = schema::Health::build(());
-        self.query(query).await.map(|r| r.health)
+        self.provider.health().await
     }
 
     pub async fn node_info(&self) -> io::Result<types::NodeInfo> {
-        let query = schema::node_info::QueryNodeInfo::build(());
-        self.query(query).await.map(|r| r.node_info.into())
+        self.provider.node_info().await
     }
 
-    pub async fn latest_gas_price(&self) -> io::Result<LatestGasPrice> {
-        let query = schema::gas_price::QueryLatestGasPrice::build(());
-        self.query(query).await.map(|r| r.latest_gas_price.into())
-    }
-
-    pub async fn estimate_gas_price(
-        &self,
-        block_horizon: u32,
-    ) -> io::Result<EstimateGasPrice> {
-        let args = BlockHorizonArgs {
-            block_horizon: Some(block_horizon.into()),
-        };
-        let query = schema::gas_price::QueryEstimateGasPrice::build(args);
-        self.query(query).await.map(|r| r.estimate_gas_price)
-    }
-
-    #[cfg(feature = "std")]
-    pub async fn connected_peers_info(
-        &self,
-    ) -> io::Result<Vec<fuel_core_types::services::p2p::PeerInfo>> {
-        let query = schema::node_info::QueryPeersInfo::build(());
-        self.query(query)
-            .await
-            .map(|r| r.node_info.peers.into_iter().map(Into::into).collect())
-    }
-
-    pub async fn chain_info(&self) -> io::Result<types::ChainInfo> {
-        let query = schema::chain::ChainQuery::build(());
-        self.query(query).await.and_then(|r| {
-            let result = r.chain.try_into()?;
-            Ok(result)
-        })
-    }
-
-    pub async fn consensus_parameters(
-        &self,
-        version: i32,
-    ) -> io::Result<Option<ConsensusParameters>> {
-        let args = schema::upgrades::ConsensusParametersByVersionArgs { version };
-        let query = schema::upgrades::ConsensusParametersByVersionQuery::build(args);
-
-        let result = self
-            .query(query)
-            .await?
-            .consensus_parameters
-            .map(TryInto::try_into)
-            .transpose()?;
-
-        Ok(result)
-    }
-
-    pub async fn state_transition_byte_code_by_version(
-        &self,
-        version: i32,
-    ) -> io::Result<Option<StateTransitionBytecode>> {
-        let args = schema::upgrades::StateTransitionBytecodeByVersionArgs { version };
-        let query = schema::upgrades::StateTransitionBytecodeByVersionQuery::build(args);
-
-        let result = self
-            .query(query)
-            .await?
-            .state_transition_bytecode_by_version
-            .map(TryInto::try_into)
-            .transpose()?;
-
-        Ok(result)
-    }
-
-    pub async fn state_transition_byte_code_by_root(
-        &self,
-        root: Bytes32,
-    ) -> io::Result<Option<StateTransitionBytecode>> {
-        let args = schema::upgrades::StateTransitionBytecodeByRootArgs {
-            root: HexString(Bytes(root.to_vec())),
-        };
-        let query = schema::upgrades::StateTransitionBytecodeByRootQuery::build(args);
-
-        let result = self
-            .query(query)
-            .await?
-            .state_transition_bytecode_by_root
-            .map(TryInto::try_into)
-            .transpose()?;
-
-        Ok(result)
-    }
-
-    /// Default dry run, matching the exact configuration as the node
-    pub async fn dry_run(
-        &self,
-        txs: &[Transaction],
-    ) -> io::Result<Vec<TransactionExecutionStatus>> {
-        self.dry_run_opt(txs, None, None, None).await
-    }
-
-    /// Dry run with options to override the node behavior
-    pub async fn dry_run_opt(
-        &self,
-        txs: &[Transaction],
-        // Disable utxo input checks (exists, unspent, and valid signature)
-        utxo_validation: Option<bool>,
-        gas_price: Option<u64>,
-        at_height: Option<BlockHeight>,
-    ) -> io::Result<Vec<TransactionExecutionStatus>> {
-        let txs = txs
-            .iter()
-            .map(|tx| HexString(Bytes(tx.to_bytes())))
-            .collect::<Vec<HexString>>();
-        let query: Operation<schema::tx::DryRun, DryRunArg> =
-            schema::tx::DryRun::build(DryRunArg {
-                txs,
-                utxo_validation,
-                gas_price: gas_price.map(|gp| gp.into()),
-                block_height: at_height.map(|bh| bh.into()),
-            });
-        let tx_statuses = self.query(query).await.map(|r| r.dry_run)?;
-        tx_statuses
-            .into_iter()
-            .map(|tx_status| tx_status.try_into().map_err(Into::into))
-            .collect()
-    }
-
-    /// Like `dry_run_opt`, but also returns the storage reads
-    pub async fn dry_run_opt_record_storage_reads(
-        &self,
-        txs: &[Transaction],
-        // Disable utxo input checks (exists, unspent, and valid signature)
-        utxo_validation: Option<bool>,
-        gas_price: Option<u64>,
-        at_height: Option<BlockHeight>,
-    ) -> io::Result<(Vec<TransactionExecutionStatus>, Vec<StorageReadReplayEvent>)> {
-        let txs = txs
-            .iter()
-            .map(|tx| HexString(Bytes(tx.to_bytes())))
-            .collect::<Vec<HexString>>();
-        let query: Operation<schema::tx::DryRunRecordStorageReads, DryRunArg> =
-            schema::tx::DryRunRecordStorageReads::build(DryRunArg {
-                txs,
-                utxo_validation,
-                gas_price: gas_price.map(|gp| gp.into()),
-                block_height: at_height.map(|bh| bh.into()),
-            });
-        let result = self
-            .query(query)
-            .await
-            .map(|r| r.dry_run_record_storage_reads)?;
-        let tx_statuses = result
-            .tx_statuses
-            .into_iter()
-            .map(|tx_status| tx_status.try_into().map_err(Into::into))
-            .collect::<io::Result<Vec<_>>>()?;
-        let storage_reads = result
-            .storage_reads
-            .into_iter()
-            .map(Into::into)
-            .collect::<Vec<_>>();
-        Ok((tx_statuses, storage_reads))
-    }
 
     /// Get storage read replay for a block
     pub async fn storage_read_replay(
@@ -979,7 +752,7 @@ impl FuelClient {
     pub async fn submit_and_await_status(
         &self,
         tx: &Transaction,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
+    ) -> io::Result<impl Stream<Item=io::Result<TransactionStatus>> + '_> {
         self.submit_and_await_status_opt(tx, None, None).await
     }
 
@@ -990,7 +763,7 @@ impl FuelClient {
         tx: &Transaction,
         estimate_predicates: Option<bool>,
         include_preconfirmation: Option<bool>,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
+    ) -> io::Result<impl Stream<Item=io::Result<TransactionStatus>> + '_> {
         use cynic::SubscriptionBuilder;
         use schema::tx::SubmitAndAwaitStatusArg;
         let tx = tx.clone().to_bytes();
@@ -1017,7 +790,7 @@ impl FuelClient {
     pub async fn contract_storage_slots(
         &self,
         contract_id: &ContractId,
-    ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>> + '_> {
+    ) -> io::Result<impl Stream<Item=io::Result<(Bytes32, Vec<u8>)>> + '_> {
         use cynic::SubscriptionBuilder;
         use schema::storage::ContractStorageSlotsArgs;
         let s = schema::storage::ContractStorageSlots::build(ContractStorageSlotsArgs {
@@ -1039,7 +812,7 @@ impl FuelClient {
     pub async fn contract_storage_balances(
         &self,
         contract_id: &ContractId,
-    ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>> + '_>
+    ) -> io::Result<impl Stream<Item=io::Result<schema::contract::ContractBalance>> + '_>
     {
         use cynic::SubscriptionBuilder;
         use schema::{
@@ -1068,7 +841,7 @@ impl FuelClient {
         &self,
     ) -> io::Result<
         impl Stream<
-            Item = io::Result<fuel_core_types::services::block_importer::ImportResult>,
+            Item=io::Result<fuel_core_types::services::block_importer::ImportResult>,
         > + '_,
     > {
         use cynic::SubscriptionBuilder;
@@ -1093,7 +866,7 @@ impl FuelClient {
     #[cfg(feature = "subscriptions")]
     pub async fn preconfirmations_subscription(
         &self,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
+    ) -> io::Result<impl Stream<Item=io::Result<TransactionStatus>> + '_> {
         use cynic::SubscriptionBuilder;
         let s = schema::tx::PreconfirmationsSubscription::build(());
 
@@ -1296,7 +1069,7 @@ impl FuelClient {
     pub async fn subscribe_transaction_status(
         &self,
         id: &TxId,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>> + '_> {
+    ) -> io::Result<impl futures::Stream<Item=io::Result<TransactionStatus>> + '_> {
         self.subscribe_transaction_status_opt(id, None).await
     }
 
@@ -1306,7 +1079,7 @@ impl FuelClient {
         &self,
         id: &TxId,
         include_preconfirmation: Option<bool>,
-    ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
+    ) -> io::Result<impl Stream<Item=io::Result<TransactionStatus>> + '_> {
         use cynic::SubscriptionBuilder;
         use schema::tx::StatusChangeSubscriptionArgs;
         let tx_id: TransactionId = (*id).into();
@@ -1397,14 +1170,14 @@ impl FuelClient {
                         .map(TryInto::<Receipt>::try_into)
                         .collect::<Result<Vec<Receipt>, ConversionError>>(),
                 )
-                .transpose()?,
+                    .transpose()?,
                 schema::tx::TransactionStatus::FailureStatus(s) => Some(
                     s.receipts
                         .into_iter()
                         .map(TryInto::<Receipt>::try_into)
                         .collect::<Result<Vec<Receipt>, ConversionError>>(),
                 )
-                .transpose()?,
+                    .transpose()?,
                 _ => None,
             },
             _ => None,
@@ -1741,6 +1514,32 @@ impl FuelClient {
         });
         let asset_info = self.query(query).await?.asset_details.map(Into::into);
         Ok(asset_info)
+    }
+}
+
+#[async_trait]
+impl Provider for FuelClient {
+    async fn query<ResponseData, Vars>(&self, q: Operation<ResponseData, Vars>) -> io::Result<ResponseData>
+    where
+        Vars: serde::Serialize + Send + 'static,
+        ResponseData: DeserializeOwned + Send + 'static,
+    {
+        self.provider.query(q).await
+    }
+
+    fn required_block_height(&self) -> Option<BlockHeight> {
+        match &self.require_height {
+            ConsistencyPolicy::Auto { height } => height.lock().ok().and_then(|h| *h),
+            ConsistencyPolicy::Manual { height } => *height,
+        }
+    }
+
+    fn decode_response<R, E>(&self, response: FuelGraphQlResponse<R, E>) -> io::Result<R>
+    where
+        R: serde::de::DeserializeOwned + 'static,
+    {
+        self.update_chain_state_info(&response);
+        self.provider.decode_response(response)
     }
 }
 
