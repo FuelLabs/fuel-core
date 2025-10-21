@@ -97,7 +97,7 @@ fn arb_txs() -> impl Strategy<Value = Vec<Transaction>> {
 prop_compose! {
     fn arb_script_tx()(
         script_gas_limit in 1..10000u64,
-        recipts_root in any::<[u8; 32]>(),
+        receipts_root in any::<[u8; 32]>(),
         script_bytes in prop::collection::vec(any::<u8>(), 0..100),
         script_data in prop::collection::vec(any::<u8>(), 0..100),
         policies in arb_policies(),
@@ -107,7 +107,7 @@ prop_compose! {
     ) -> Transaction {
         let mut script = Script::default();
         *script.script_gas_limit_mut() = script_gas_limit;
-        *script.receipts_root_mut() = recipts_root.into();
+        *script.receipts_root_mut() = receipts_root.into();
         *script.script_mut() = script_bytes;
         *script.script_data_mut() = script_data.into();
         *script.policies_mut() = policies;
