@@ -5,15 +5,10 @@ use crate::{
     codec::{
         postcard::Postcard,
         primitive::Primitive,
-        raw::Raw,
     },
     column::Column,
     structured_storage::TableWithBlueprint,
     tables::merkle::{
-        ContractsAssetsMerkleData,
-        ContractsAssetsMerkleMetadata,
-        ContractsStateMerkleData,
-        ContractsStateMerkleMetadata,
         FuelBlockMerkleData,
         FuelBlockMerkleMetadata,
     },
@@ -46,7 +41,3 @@ type U64Codec = Primitive<8>;
 
 merkle_table!(FuelBlockMerkleData, U64Codec);
 merkle_table!(FuelBlockMerkleMetadata, Postcard);
-merkle_table!(ContractsAssetsMerkleData);
-merkle_table!(ContractsAssetsMerkleMetadata);
-merkle_table!(ContractsStateMerkleData);
-merkle_table!(ContractsStateMerkleMetadata);

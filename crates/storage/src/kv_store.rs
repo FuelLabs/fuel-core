@@ -19,6 +19,8 @@ pub type Value = alloc::sync::Arc<[u8]>;
 
 /// The pair of key and value from the storage.
 pub type KVItem = StorageResult<(Key, Value)>;
+/// The pair of key and optional value from the storage.
+pub type KVWriteItem = StorageResult<(Key, WriteOperation)>;
 /// The key from the storage.
 pub type KeyItem = StorageResult<Key>;
 
