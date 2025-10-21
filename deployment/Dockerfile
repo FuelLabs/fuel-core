@@ -1,6 +1,6 @@
 # Stage 1: Build
 FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
-FROM --platform=$BUILDPLATFORM rust:1.90.0 AS chef
+FROM --platform=$BUILDPLATFORM rust:1.90.0-bookworm AS chef
 
 ARG TARGETPLATFORM
 RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
@@ -65,7 +65,7 @@ RUN \
     && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d /root/fuel-core.d
 
 # Stage 2: Run
-FROM ubuntu:22.04 AS run
+FROM debian:bookworm-slim AS run
 
 ARG IP=0.0.0.0
 ARG PORT=4000
@@ -79,7 +79,7 @@ ENV DB_PATH="${DB_PATH}"
 WORKDIR /root/
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get install -y --no-install-recommends ca-certificates curl procps iputils-ping jq \
     # Clean up
     && apt-get autoremove -y \
     && apt-get clean -y \
