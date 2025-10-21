@@ -82,7 +82,7 @@ educe = { version = "0.6", default-features = false, features = [
 enum-iterator = "1.2"
 enum_dispatch = "0.3.13"
 # Workspace members
-fuel-block-aggregator-api = { version = "0.47.1", path = "crates/services/block_aggregator_api" }
+fuel-core-block-aggregator-api = { version = "0.47.1", path = "crates/services/block_aggregator_api" }
 fuel-core = { version = "0.47.1", path = "./crates/fuel-core", default-features = false }
 fuel-core-bin = { version = "0.47.1", path = "./bin/fuel-core" }
 fuel-core-chain-config = { version = "0.47.1", path = "./crates/chain-config", default-features = false }
