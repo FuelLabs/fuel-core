@@ -19,7 +19,7 @@ aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
 fault-proving = [
     "fuel-core/fault-proving",
     "fuel-core-types/fault-proving",
-    "fuel-block-aggregator-api/fault-proving",
+    "fuel-core-block-aggregator-api/fault-proving",
     "fuel-core-storage/fault-proving",
     "fuel-core-upgradable-executor/fault-proving",
     "fuel-core-poa/fault-proving",
