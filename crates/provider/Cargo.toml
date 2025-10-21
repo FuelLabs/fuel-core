@@ -13,7 +13,6 @@ description = "Fuel L1 Provider"
 
 [features]
 test-helpers = [
-    "parking_lot",
     "alloy-consensus",
     "alloy-rpc-client/reqwest",
     "alloy-primitives",
@@ -31,7 +30,7 @@ alloy-transport = { workspace = true }
 alloy-transport-http = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
-parking_lot = { workspace = true, optional = true }
+parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = "0.5.2"

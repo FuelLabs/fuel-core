@@ -192,7 +192,7 @@ mod tests {
             ),
             WeightedTransport::with_weight(
                 MockTransport::new(failing_asserter()).into_box_transport(),
-                2,
+                1,
             ),
         ];
 
