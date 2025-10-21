@@ -9,7 +9,7 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
     tx_receiver::PreconfirmationsReceiver,
 };
 #[cfg(feature = "rpc")]
-use fuel_block_aggregator_api::{
+use fuel_core_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
     db::storage_db::StorageDB,
 };
@@ -466,7 +466,7 @@ pub fn init_sub_services(
         let serializer = SerializerAdapter;
         let onchain_db = database.on_chain().clone();
         let importer = importer_adapter.events_shared_result();
-        fuel_block_aggregator_api::integration::new_service(
+        fuel_core_block_aggregator_api::integration::new_service(
             &block_aggregator_config,
             db_adapter,
             serializer,

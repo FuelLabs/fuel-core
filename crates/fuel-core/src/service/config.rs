@@ -82,7 +82,7 @@ pub struct Config {
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
     #[cfg(feature = "rpc")]
-    pub rpc_config: fuel_block_aggregator_api::integration::Config,
+    pub rpc_config: fuel_core_block_aggregator_api::integration::Config,
     pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -170,7 +170,7 @@ impl Config {
         const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
 
         #[cfg(feature = "rpc")]
-        let rpc_config = fuel_block_aggregator_api::integration::Config {
+        let rpc_config = fuel_core_block_aggregator_api::integration::Config {
             addr: free_local_addr(),
         };
 
