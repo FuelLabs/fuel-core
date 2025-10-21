@@ -1,6 +1,12 @@
 #![allow(non_snake_case)]
-
-use fuel_block_aggregator_api::protobuf_types::{
+use fuel_core::{
+    database::Database,
+    service::{
+        Config,
+        FuelService,
+    },
+};
+use fuel_core_block_aggregator_api::protobuf_types::{
     BlockHeightRequest as ProtoBlockHeightRequest,
     BlockRangeRequest as ProtoBlockRangeRequest,
     NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
@@ -8,13 +14,6 @@ use fuel_block_aggregator_api::protobuf_types::{
     block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
     block_response::Payload as ProtoPayload,
     header::VersionedHeader as ProtoVersionedHeader,
-};
-use fuel_core::{
-    database::Database,
-    service::{
-        Config,
-        FuelService,
-    },
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::fuel_tx::*;
@@ -65,6 +64,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
         panic!("expected literal block payload");
     };
     let ProtoVersionedBlock::V1(v1_block) = actual_block.versioned_block.unwrap();
+
     let actual_height = match v1_block.header.unwrap().versioned_header.unwrap() {
         ProtoVersionedHeader::V1(v1_header) => v1_header.height,
         ProtoVersionedHeader::V2(v2_header) => v2_header.height,
@@ -149,6 +149,7 @@ async fn new_block_subscription__can_get_expect_block() {
         ProtoVersionedHeader::V1(v1_header) => v1_header.height,
         ProtoVersionedHeader::V2(v2_header) => v2_header.height,
     };
+
     // then
     let expected_height = 1;
     assert_eq!(expected_height, actual_height);

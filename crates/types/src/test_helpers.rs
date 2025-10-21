@@ -359,7 +359,8 @@ prop_compose! {
         fuel_block.header_mut().set_event_inbox_root(event_root);
 
         // Consensus
-        let application_hash = fuel_block.header().application().hash();
+        // TODO: Include V2 Application with V2 Header
+        let application_hash = fuel_block.header().application_v1().unwrap().hash();
         consensus_header.generated.application_hash = application_hash;
         fuel_block.header_mut().set_consensus_header(consensus_header);
         (fuel_block, msg_ids, event_root)

@@ -80,11 +80,13 @@ impl BlockHeader {
     }
 
     /// Get the application portion of the header.
-    pub fn application(&self) -> &ApplicationHeader<GeneratedApplicationFieldsV1> {
+    pub fn application_v1(
+        &self,
+    ) -> Option<&ApplicationHeader<GeneratedApplicationFieldsV1>> {
         match self {
-            BlockHeader::V1(header) => header.application(),
+            BlockHeader::V1(header) => Some(header.application()),
             #[cfg(feature = "fault-proving")]
-            BlockHeader::V2(header) => header.application(),
+            BlockHeader::V2(_header) => None,
         }
     }
 
@@ -332,7 +334,7 @@ impl BlockHeader {
             }
             #[cfg(feature = "fault-proving")]
             BlockHeader::V2(header) => {
-                header.set_message_outbox_count(count);
+                header.set_message_receipt_count(count);
             }
         }
     }

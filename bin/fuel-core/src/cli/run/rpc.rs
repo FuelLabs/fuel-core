@@ -13,8 +13,8 @@ pub struct RpcArgs {
 }
 
 impl RpcArgs {
-    pub fn into_config(self) -> fuel_block_aggregator_api::integration::Config {
-        fuel_block_aggregator_api::integration::Config {
+    pub fn into_config(self) -> fuel_core_block_aggregator_api::integration::Config {
+        fuel_core_block_aggregator_api::integration::Config {
             addr: net::SocketAddr::new(self.rpc_ip, self.rpc_port),
         }
     }

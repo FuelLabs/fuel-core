@@ -35,7 +35,7 @@ std = [
     "ed25519-dalek/std",
 ]
 random = ["dep:rand", "fuel-vm-private/random"]
-test-helpers = ["random", "fuel-vm-private/test-helpers"]
+test-helpers = ["random", "fuel-vm-private/test-helpers", "dep:proptest"]
 aws-kms = ["dep:aws-sdk-kms"]
 fault-proving = []
 
@@ -53,7 +53,7 @@ fuel-vm-private = { workspace = true, default-features = false, features = [
 ] }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 parking_lot = { workspace = true }
-proptest = { workspace = true }
+proptest = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }

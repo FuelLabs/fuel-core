@@ -160,6 +160,16 @@ impl BlockHeaderV2 {
         self.recalculate_metadata();
     }
 
+    pub(crate) fn set_message_receipt_count(&mut self, count: u32) {
+        self.application_mut().generated.message_receipt_count = count;
+        self.recalculate_metadata();
+    }
+
+    pub(crate) fn set_event_inbox_root(&mut self, root: crate::fuel_tx::Bytes32) {
+        self.application_mut().generated.event_inbox_root = root;
+        self.recalculate_metadata();
+    }
+
     pub(crate) fn set_da_height(
         &mut self,
         da_height: crate::blockchain::primitives::DaBlockHeight,

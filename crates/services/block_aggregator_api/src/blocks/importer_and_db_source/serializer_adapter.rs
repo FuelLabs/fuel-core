@@ -49,16 +49,10 @@ use fuel_core_types::{
         Address,
         Bytes32,
         Input,
-        MessageId,
-        Receipt,
-        Script,
         Transaction as FuelTransaction,
         UtxoId,
         field::{
-            ChargeableBody,
             Inputs,
-            Maturity,
-            Owner,
             Policies as _,
             ReceiptsRoot as _,
             Script as _,
@@ -161,14 +155,14 @@ fn proto_v2_header_from_v2_header(
         state_transition_bytecode_version: application.state_transition_bytecode_version,
         transactions_count: u32::from(generated.transactions_count),
         message_receipt_count: generated.message_receipt_count,
-        transactions_root: bytes32_to_bytes(&generated.transactions_root),
-        message_outbox_root: bytes32_to_bytes(&generated.message_outbox_root),
-        event_inbox_root: bytes32_to_bytes(&generated.event_inbox_root),
-        tx_id_commitment: bytes32_to_bytes(&generated.tx_id_commitment),
-        prev_root: bytes32_to_bytes(&consensus.prev_root),
+        transactions_root: bytes32_to_vec(&generated.transactions_root),
+        message_outbox_root: bytes32_to_vec(&generated.message_outbox_root),
+        event_inbox_root: bytes32_to_vec(&generated.event_inbox_root),
+        tx_id_commitment: bytes32_to_vec(&generated.tx_id_commitment),
+        prev_root: bytes32_to_vec(&consensus.prev_root),
         height: u32::from(consensus.height),
         time: consensus.time.0,
-        application_hash: bytes32_to_bytes(&consensus.generated.application_hash),
+        application_hash: bytes32_to_vec(&consensus.generated.application_hash),
         block_id: Some(block_id.as_slice().to_vec()),
     }
 }
@@ -323,9 +317,9 @@ pub fn tx_from_proto_tx(_proto_tx: &ProtoTransaction) -> Result<FuelTransaction>
                 script_data,
                 policies,
                 inputs,
-                outputs,
-                witnesses,
-                metadata,
+                outputs: _,
+                witnesses: _,
+                metadata: _,
             } = _proto_script.clone();
             let fuel_policies = policies
                 .map(policies_from_proto_policies)
@@ -434,16 +428,16 @@ fn input_from_proto_input(proto_input: &ProtoInput) -> Result<Input> {
             Ok(input)
         }
         Some(crate::protobuf_types::input::Variant::CoinPredicate(
-            proto_coin_predicate,
+            _proto_coin_predicate,
         )) => Err(anyhow!(
             "CoinPredicate input deserialization not implemented"
         ))
         .map_err(Error::Serialization),
 
-        Some(crate::protobuf_types::input::Variant::Message(proto_message)) => {
-            Err(anyhow!("Message input deserialization not implemented"))
-                .map_err(Error::Serialization)
-        }
+        // Some(crate::protobuf_types::input::Variant::Message(proto_message)) => {
+        //     Err(anyhow!("Message input deserialization not implemented"))
+        //         .map_err(Error::Serialization)
+        // }
         _ => Err(anyhow!("Unsupported input variant")).map_err(Error::Serialization),
     }
 }
