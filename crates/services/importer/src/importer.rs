@@ -520,8 +520,6 @@ where
                 }
             }
         }
-        let a = 100;
-        let _ = a;
     }
 
     /// Prepares the block for committing. It includes the execution of the block,
