@@ -97,7 +97,7 @@ where
     fn get(
         &self,
         key: &M::Key,
-    ) -> StorageResult<Option<std::borrow::Cow<M::OwnedValue>>> {
+    ) -> StorageResult<Option<std::borrow::Cow<'_, M::OwnedValue>>> {
         MockStorageMethods::get::<M>(&self.storage, key)
     }
 

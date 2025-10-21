@@ -1,4 +1,8 @@
 use crate::{
+    contract_state_hash::{
+        compute_balances_hash,
+        compute_state_hash,
+    },
     ports::{
         MaybeCheckedTransaction,
         NewTxWaiterPort,
@@ -7,6 +11,10 @@ use crate::{
         TransactionsSource,
     },
     refs::ContractRef,
+    storage_access_recorder::{
+        ContractAccessesWithValues,
+        StorageAccessRecorder,
+    },
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -26,7 +34,6 @@ use fuel_core_storage::{
         ConflictPolicy,
         IntoTransaction,
         Modifiable,
-        ReadTransaction,
         StorageTransaction,
         WriteTransaction,
     },
@@ -157,13 +164,19 @@ use tracing::{
 };
 
 #[cfg(feature = "std")]
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    collections::BTreeMap,
+};
 
 #[cfg(not(feature = "alloc"))]
 use std::sync::Arc;
 
 #[cfg(not(feature = "std"))]
-use alloc::borrow::Cow;
+use alloc::{
+    borrow::Cow,
+    collections::BTreeMap,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::{
@@ -1422,8 +1435,7 @@ where
         } else {
             Self::check_mint_amount(&mint, execution_data.coinbase)?;
 
-            let input = mint.input_contract().clone();
-            let mut input = Input::Contract(input);
+            let mut input = Input::Contract(mint.input_contract().clone());
 
             if self.options.forbid_fake_coins {
                 self.verify_inputs_exist_and_values_match(
@@ -1432,8 +1444,6 @@ where
                     header.da_height,
                 )?;
             }
-
-            self.compute_inputs(core::slice::from_mut(&mut input), storage_tx)?;
 
             let (input, output) = self.execute_mint_with_vm(
                 header,
@@ -1603,8 +1613,10 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        let mut sub_block_db_commit = storage_tx
-            .write_transaction()
+        let storage_tx_record = StorageAccessRecorder::new(storage_tx);
+
+        let mut sub_block_db_commit = storage_tx_record
+            .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
         let mut vm_db = VmStorage::new(
@@ -1622,7 +1634,16 @@ where
         )
         .map_err(|e| format!("{e}"))
         .map_err(ExecutorError::CoinbaseCannotIncreaseBalance)?;
-        sub_block_db_commit.commit()?;
+
+        let (recorder, changes) = sub_block_db_commit.into_inner();
+        let (storage_tx, reads) = recorder.into_inner();
+        let (state_before, state_after) = reads
+            .finalize(&storage_tx, &changes)
+            .map_err(|err| ExecutorError::StorageError(err.to_string()))?;
+
+        self.compute_inputs(core::slice::from_mut(input), storage_tx, &state_before)?;
+
+        storage_tx.commit_changes(changes.clone())?;
 
         let block_height = *header.height();
         let output = *mint.output_contract();
@@ -1636,10 +1657,10 @@ where
             outputs.as_slice(),
         )?;
         self.compute_state_of_not_utxo_outputs(
-            outputs.as_mut_slice(),
-            core::slice::from_ref(input),
             *coinbase_id,
-            storage_tx,
+            core::slice::from_ref(input),
+            outputs.as_mut_slice(),
+            &state_after,
         )?;
         let Input::Contract(input) = core::mem::take(input) else {
             return Err(ExecutorError::Other(
@@ -1654,23 +1675,17 @@ where
         Ok((input, output))
     }
 
-    fn update_tx_outputs<Tx, T>(
+    fn update_tx_outputs<Tx>(
         &self,
-        storage_tx: &TxStorageTransaction<T>,
         tx_id: TxId,
         tx: &mut Tx,
+        record: &BTreeMap<ContractId, ContractAccessesWithValues>,
     ) -> ExecutorResult<()>
     where
         Tx: ExecutableTransaction,
-        T: KeyValueInspect<Column = Column>,
     {
         let mut outputs = core::mem::take(tx.outputs_mut());
-        self.compute_state_of_not_utxo_outputs(
-            &mut outputs,
-            tx.inputs(),
-            tx_id,
-            storage_tx,
-        )?;
+        self.compute_state_of_not_utxo_outputs(tx_id, tx.inputs(), &mut outputs, record)?;
         *tx.outputs_mut() = outputs;
         Ok(())
     }
@@ -1846,8 +1861,10 @@ where
     {
         let tx_id = checked_tx.id();
 
-        let mut sub_block_db_commit = storage_tx
-            .read_transaction()
+        let storage_tx_record = StorageAccessRecorder::new(&mut *storage_tx);
+
+        let mut sub_block_db_commit = storage_tx_record
+            .into_transaction()
             .with_policy(ConflictPolicy::Overwrite);
 
         let vm_db = VmStorage::new(
@@ -1964,17 +1981,24 @@ where
 
         Self::update_input_used_gas(predicate_gas_used, tx_id, &mut tx)?;
 
+        let (recorder, changes) = sub_block_db_commit.into_inner();
+        let (storage_tx_recovered, record) = recorder.into_inner();
+        let (state_before, mut state_after) =
+            record.finalize(&storage_tx_recovered, &changes)?;
+
         // We always need to update inputs with storage state before execution,
         // because VM zeroes malleable fields during the execution.
-        self.compute_inputs(tx.inputs_mut(), storage_tx)?;
+        self.compute_inputs(tx.inputs_mut(), storage_tx_recovered, &state_before)?;
 
         // only commit state changes if execution was a success
         if !reverted {
-            let changes = sub_block_db_commit.into_changes();
             storage_tx.commit_changes(changes)?;
+        } else {
+            state_after = Default::default();
         }
 
-        self.update_tx_outputs(storage_tx, tx_id, &mut tx)?;
+        self.update_tx_outputs(tx_id, &mut tx, &state_after)?;
+
         Ok((reverted, state, tx, receipts))
     }
 
@@ -2172,6 +2196,7 @@ where
         &self,
         inputs: &mut [Input],
         db: &TxStorageTransaction<T>,
+        record: &BTreeMap<ContractId, ContractAccessesWithValues>,
     ) -> ExecutorResult<()>
     where
         T: KeyValueInspect<Column = Column>,
@@ -2211,8 +2236,12 @@ where
                         contract.validated_utxo(self.options.forbid_fake_coins)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
-                    *balance_root = contract.balance_root()?;
-                    *state_root = contract.state_root()?;
+
+                    let empty = ContractAccessesWithValues::default();
+                    let for_contract = record.get(contract_id).unwrap_or(&empty);
+
+                    *balance_root = compute_balances_hash(&for_contract.assets);
+                    *state_root = compute_state_hash(&for_contract.slots);
                 }
                 _ => {}
             }
@@ -2225,16 +2254,13 @@ where
     /// Computes all zeroed or variable outputs.
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
-    fn compute_state_of_not_utxo_outputs<T>(
+    fn compute_state_of_not_utxo_outputs(
         &self,
-        outputs: &mut [Output],
-        inputs: &[Input],
         tx_id: TxId,
-        db: &TxStorageTransaction<T>,
-    ) -> ExecutorResult<()>
-    where
-        T: KeyValueInspect<Column = Column>,
-    {
+        inputs: &[Input],
+        outputs: &mut [Output],
+        record: &BTreeMap<ContractId, ContractAccessesWithValues>,
+    ) -> ExecutorResult<()> {
         for output in outputs {
             if let Output::Contract(contract_output) = output {
                 let contract_id =
@@ -2250,9 +2276,12 @@ where
                         })
                     };
 
-                let contract = ContractRef::new(db, *contract_id);
-                contract_output.balance_root = contract.balance_root()?;
-                contract_output.state_root = contract.state_root()?;
+                let empty = ContractAccessesWithValues::default();
+                let for_contract = record.get(contract_id).unwrap_or(&empty);
+
+                contract_output.balance_root =
+                    compute_balances_hash(&for_contract.assets);
+                contract_output.state_root = compute_state_hash(&for_contract.slots);
             }
         }
         Ok(())

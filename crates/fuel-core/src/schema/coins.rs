@@ -252,10 +252,9 @@ impl CoinQuery {
                 .owned_coins(&owner, (*start).map(Into::into), direction)
                 .filter_map(|result| {
                     if let (Ok(coin), Some(filter_asset_id)) = (&result, &filter.asset_id)
+                        && coin.asset_id != filter_asset_id.0
                     {
-                        if coin.asset_id != filter_asset_id.0 {
-                            return None;
-                        }
+                        return None;
                     }
 
                     Some(result)

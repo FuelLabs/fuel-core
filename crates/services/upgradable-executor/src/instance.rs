@@ -607,9 +607,7 @@ impl Instance<InputData> {
         let instance = self
             .linker
             .instantiate(&mut self.store, module)
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to instantiate the module: {}", e.to_string())
-            })?;
+            .map_err(|e| anyhow::anyhow!("Failed to instantiate the module: {}", e))?;
 
         let memory_export =
             instance
@@ -626,7 +624,7 @@ impl Instance<InputData> {
         let run = instance
             .get_typed_func::<u32, u64>(&mut self.store, "execute")
             .map_err(|e| {
-                anyhow::anyhow!("Failed to get the `execute` function: {}", e.to_string())
+                anyhow::anyhow!("Failed to get the `execute` function: {}", e)
             })?;
         let result = run.call(&mut self.store, self.stage.input_component_size)?;
 

@@ -119,7 +119,7 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<ContractBalance>> {
+    ) -> BoxedIter<'_, StorageResult<ContractBalance>> {
         self.filter_contract_balances(contract, start_asset, Some(direction))
             .map_ok(|entry| ContractBalance {
                 owner: *entry.key.contract_id(),
@@ -132,7 +132,7 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
     fn contract_storage_slots(
         &self,
         contract: ContractId,
-    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>> {
+    ) -> BoxedIter<'_, StorageResult<(Bytes32, Vec<u8>)>> {
         self.iter_all_by_prefix::<ContractsState, _>(Some(contract))
             .map(|res| res.map(|(key, value)| (*key.state_key(), value.0.into_inner())))
             .into_boxed()
@@ -141,7 +141,7 @@ impl DatabaseContracts for OnChainIterableKeyValueView {
     fn contract_storage_balances(
         &self,
         contract: ContractId,
-    ) -> BoxedIter<StorageResult<ContractBalance>> {
+    ) -> BoxedIter<'_, StorageResult<ContractBalance>> {
         self.iter_all_by_prefix::<ContractsAssets, _>(Some(contract))
             .map(|res| {
                 res.map(|(key, value)| ContractBalance {
@@ -175,7 +175,7 @@ impl OnChainDatabaseAt for OnChainKeyValueView {
         &self,
         contract_id: ContractId,
         storage_slots: Vec<Bytes32>,
-    ) -> BoxedIter<StorageResult<(Bytes32, Vec<u8>)>> {
+    ) -> BoxedIter<'_, StorageResult<(Bytes32, Vec<u8>)>> {
         storage_slots
             .into_iter()
             .map(move |key| {
@@ -195,7 +195,7 @@ impl OnChainDatabaseAt for OnChainKeyValueView {
         &self,
         contract_id: ContractId,
         assets: Vec<AssetId>,
-    ) -> BoxedIter<StorageResult<ContractBalance>> {
+    ) -> BoxedIter<'_, StorageResult<ContractBalance>> {
         assets
             .into_iter()
             .map(move |asset| {

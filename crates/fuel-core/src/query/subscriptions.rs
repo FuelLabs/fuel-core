@@ -53,10 +53,10 @@ where
         // Keep taking the stream until the oneshot channel is closed.
         .take_until(closed)
         .filter_map(move |status | {
-            if status.is_final() {
-                if let Some(close) = close.take() {
-                    let _ = close.send(());
-                }
+            if status.is_final()
+                && let Some(close) = close.take()
+            {
+                let _ = close.send(());
             }
 
             match status {

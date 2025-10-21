@@ -198,7 +198,7 @@ impl SanityBenchmarkRunnerBuilder {
 }
 
 impl SharedSanityBenchmarkRunnerBuilder {
-    fn build(&mut self) -> SanityBenchmarkRunner {
+    fn build(&mut self) -> SanityBenchmarkRunner<'_> {
         SanityBenchmarkRunner {
             service: &mut self.service,
             rt: &self.rt,
@@ -212,7 +212,7 @@ impl SharedSanityBenchmarkRunnerBuilder {
     pub fn build_with_new_contract(
         &mut self,
         contract_instructions: Vec<Instruction>,
-    ) -> SanityBenchmarkRunner {
+    ) -> SanityBenchmarkRunner<'_> {
         replace_contract_in_service(
             &mut self.service,
             &self.contract_id,
@@ -223,7 +223,7 @@ impl SharedSanityBenchmarkRunnerBuilder {
 }
 
 impl MultiContractBenchmarkRunnerBuilder {
-    pub fn build(&mut self) -> SanityBenchmarkRunner {
+    pub fn build(&mut self) -> SanityBenchmarkRunner<'_> {
         SanityBenchmarkRunner {
             service: &mut self.service,
             rt: &self.rt,
