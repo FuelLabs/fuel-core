@@ -124,7 +124,7 @@ impl ShutdownListener {
                         SignalVariant::SIGHUP,
                     ]
                     .into_iter()
-                    .map(|signal_variant| SignalKind::new(signal_variant))
+                    .map(SignalKind::new)
                     .collect();
 
                     let signals_with_variants: Vec<_> = signal_kinds
