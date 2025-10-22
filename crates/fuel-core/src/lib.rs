@@ -3,15 +3,6 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use std::{
-    future::Future,
-    pin::Pin,
-    task::{
-        Context,
-        Poll,
-    },
-};
-
 use futures::{
     StreamExt,
     stream::FuturesUnordered,
@@ -76,23 +67,44 @@ pub struct ShutdownListener {
     pub token: CancellationToken,
 }
 
-fn create_signal_futures(
-    signal_variants: Vec<tokio::signal::unix::SignalKind>,
-) -> tokio::io::Result<FuturesUnordered<Pin<Box<dyn Future<Output = Option<()>> + Send>>>>
-{
-    let mut signals = Vec::with_capacity(signal_variants.len());
-    for signal_kind in signal_variants {
-        signals.push(tokio::signal::unix::signal(signal_kind)?);
+pub struct SignalKind {
+    _inner: tokio::signal::unix::SignalKind,
+    variant: SignalVariant,
+}
+
+impl SignalKind {
+    pub fn new(variant: SignalVariant) -> Self {
+        let _inner = match variant {
+            SignalVariant::SIGTERM => tokio::signal::unix::SignalKind::terminate(),
+            SignalVariant::SIGINT => tokio::signal::unix::SignalKind::interrupt(),
+            SignalVariant::SIGSEGV => {
+                tokio::signal::unix::SignalKind::from_raw(libc::SIGSEGV)
+            }
+            SignalVariant::SIGKILL => {
+                tokio::signal::unix::SignalKind::from_raw(libc::SIGKILL)
+            }
+            SignalVariant::SIGABRT => {
+                tokio::signal::unix::SignalKind::from_raw(libc::SIGABRT)
+            }
+            SignalVariant::SIGHUP => tokio::signal::unix::SignalKind::hangup(),
+        };
+
+        Self { _inner, variant }
     }
 
-    let signal_futs = FuturesUnordered::new();
-
-    for mut signal in signals {
-        signal_futs.push(Box::pin(async move { signal.recv().await })
-            as Pin<Box<dyn Future<Output = Option<()>> + Send>>);
+    pub fn decompose(self) -> (tokio::signal::unix::SignalKind, SignalVariant) {
+        (self._inner, self.variant)
     }
+}
 
-    Ok(signal_futs)
+#[derive(Debug, Clone, Copy)]
+pub enum SignalVariant {
+    SIGTERM,
+    SIGINT,
+    SIGSEGV,
+    SIGKILL,
+    SIGABRT,
+    SIGHUP,
 }
 
 impl ShutdownListener {
@@ -103,17 +115,37 @@ impl ShutdownListener {
             tokio::spawn(async move {
                 #[cfg(unix)]
                 {
-                    let mut signal_futs = create_signal_futures(vec![
-                        tokio::signal::unix::SignalKind::terminate(),
-                        tokio::signal::unix::SignalKind::interrupt(),
-                        tokio::signal::unix::SignalKind::from_raw(libc::SIGSEGV),
-                        tokio::signal::unix::SignalKind::from_raw(libc::SIGKILL),
-                        tokio::signal::unix::SignalKind::from_raw(libc::SIGABRT),
-                        tokio::signal::unix::SignalKind::hangup(),
-                    ])?;
+                    let signal_kinds: Vec<_> = vec![
+                        SignalVariant::SIGTERM,
+                        SignalVariant::SIGINT,
+                        SignalVariant::SIGSEGV,
+                        SignalVariant::SIGKILL,
+                        SignalVariant::SIGABRT,
+                        SignalVariant::SIGHUP,
+                    ]
+                    .into_iter()
+                    .map(|signal_variant| SignalKind::new(signal_variant))
+                    .collect();
 
-                    signal_futs.next().await;
-                    tracing::error!("Received shutdown signal");
+                    let signals_with_variants: Vec<_> = signal_kinds
+                        .into_iter()
+                        .map(|signal_kind| {
+                            let (signal_kind, variant) = signal_kind.decompose();
+                            tokio::signal::unix::signal(signal_kind)
+                                .map(|signal| (signal, variant))
+                        })
+                        .collect::<Result<_, _>>()?;
+
+                    let mut signal_futs: FuturesUnordered<_> = signals_with_variants
+                        .into_iter()
+                        .map(|(mut signal, variant)| async move {
+                            signal.recv().await;
+                            variant
+                        })
+                        .collect();
+
+                    let variant = signal_futs.next().await;
+                    tracing::error!("Received shutdown signal: {variant:?}");
                 }
                 #[cfg(not(unix))]
                 {
