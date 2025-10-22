@@ -3,6 +3,19 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+use std::{
+    future::Future,
+    pin::Pin,
+    task::{
+        Context,
+        Poll,
+    },
+};
+
+use futures::{
+    StreamExt,
+    stream::FuturesUnordered,
+};
 #[cfg(test)]
 use tracing_subscriber as _;
 
@@ -63,50 +76,44 @@ pub struct ShutdownListener {
     pub token: CancellationToken,
 }
 
+fn create_signal_futures(
+    signal_variants: Vec<tokio::signal::unix::SignalKind>,
+) -> tokio::io::Result<FuturesUnordered<Pin<Box<dyn Future<Output = Option<()>> + Send>>>>
+{
+    let mut signals = Vec::with_capacity(signal_variants.len());
+    for signal_kind in signal_variants {
+        signals.push(tokio::signal::unix::signal(signal_kind)?);
+    }
+
+    let signal_futs = FuturesUnordered::new();
+
+    for mut signal in signals {
+        signal_futs.push(Box::pin(async move { signal.recv().await })
+            as Pin<Box<dyn Future<Output = Option<()>> + Send>>);
+    }
+
+    Ok(signal_futs)
+}
+
 impl ShutdownListener {
     pub fn spawn() -> Self {
         let token = CancellationToken::new();
         {
             let token = token.clone();
             tokio::spawn(async move {
-                let mut sigterm = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::terminate(),
-                )?;
-                let mut sigint = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::interrupt(),
-                )?;
-                let mut sigsegv = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::from_raw(libc::SIGSEGV),
-                )?;
-                let mut sigkill = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::from_raw(libc::SIGKILL),
-                )?;
-                let mut sigabrt = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::from_raw(libc::SIGABRT),
-                )?;
-                let mut sighup = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::hangup()
-                )?;
                 #[cfg(unix)]
-                tokio::select! {
-                    _ = sigterm.recv() => {
-                        tracing::error!("Received SIGTERM");
-                    }
-                    _ = sigint.recv() => {
-                        tracing::error!("Received SIGINT");
-                    }
-                    _ = sigsegv.recv() => {
-                        tracing::error!("Received SIGSEGV");
-                    }
-                    _ = sigkill.recv() => {
-                        tracing::error!("Received SIGKILL");
-                    }
-                    _ = sigabrt.recv() => {
-                        tracing::error!("Received SIGABRT");
-                    }
-                    _ = sighup.recv() => {
-                        tracing::error!("Received SIGHUP");
-                    }
+                {
+                    let mut signal_futs = create_signal_futures(vec![
+                        tokio::signal::unix::SignalKind::terminate(),
+                        tokio::signal::unix::SignalKind::interrupt(),
+                        tokio::signal::unix::SignalKind::from_raw(libc::SIGSEGV),
+                        tokio::signal::unix::SignalKind::from_raw(libc::SIGKILL),
+                        tokio::signal::unix::SignalKind::from_raw(libc::SIGABRT),
+                        tokio::signal::unix::SignalKind::hangup(),
+                    ])?;
+
+                    signal_futs.next().await;
+                    tracing::error!("Received shutdown signal");
                 }
                 #[cfg(not(unix))]
                 {
