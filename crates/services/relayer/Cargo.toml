@@ -11,45 +11,30 @@ rust-version = { workspace = true }
 description = "Fuel Relayer"
 
 [features]
-test-helpers = [
-    "bytes",
-    "parking_lot",
-    "serde",
-    "serde_json",
-    "thiserror",
-    "fuel-core-types/test-helpers",
-]
+test-helpers = ["fuel-core-provider/test-helpers", "fuel-core-types/test-helpers"]
 
 [dependencies]
+alloy-primitives = { workspace = true }
+alloy-provider = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
+alloy-sol-types = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bytes = { version = "1.1", optional = true }
 enum-iterator = { workspace = true }
-ethereum-types = "0.14.1"
-ethers-contract = { version = "2", default-features = false, features = [
-  "abigen",
-] }
-ethers-core = { version = "2", default-features = false }
-ethers-providers = { version = "2", default-features = false, features = [
-  "ws",
-  "rustls",
-] }
+fuel-core-provider = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 once_cell = { workspace = true }
-parking_lot = { workspace = true, optional = true }
-serde = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
-thiserror = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+fuel-core-provider = { path = "../../provider" }
 fuel-core-relayer = { path = "", features = ["test-helpers"] }
 fuel-core-services = { path = "../../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "../../storage", features = ["test-helpers"] }

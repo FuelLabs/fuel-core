@@ -1,32 +1,53 @@
 #![allow(non_snake_case)]
-use crate::test_helpers::{
-    middleware::MockMiddleware,
-    page_sizer::IdentityPageSizer,
-};
 
+use crate::{
+    Config,
+    ports::RelayerDb,
+    service::NotInitializedTask,
+};
+use alloy_primitives::LogData;
+use fuel_core_provider::test_helpers::provider::MockProvider;
+use fuel_core_services::RunnableService;
 use futures::TryStreamExt;
+use std::num::NonZeroU8;
 use test_case::test_case;
 
 use super::*;
 
 const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
 
+use crate::{
+    service::{
+        download_logs,
+        state,
+    },
+    test_helpers::page_sizer::IdentityPageSizer,
+};
+use alloy_provider::{
+    ProviderBuilder,
+    mock::Asserter,
+    transport::{
+        TransportError,
+        TransportErrorKind,
+    },
+};
+use alloy_rpc_types_eth::Log;
+
 #[tokio::test]
 async fn can_download_logs() {
-    let eth_node = MockMiddleware::default();
+    let asserter = Asserter::new();
     let logs = vec![
         Log {
-            address: Default::default(),
-            block_number: Some(3.into()),
+            block_number: Some(3),
             ..Default::default()
         },
         Log {
-            address: Default::default(),
-            block_number: Some(5.into()),
+            block_number: Some(5),
             ..Default::default()
         },
     ];
-    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    asserter.push_success(&logs);
+    let provider = ProviderBuilder::new().connect_mocked_client(asserter.clone());
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 5,
@@ -38,32 +59,32 @@ async fn can_download_logs() {
     let result = download_logs(
         &eth_state.needs_to_sync_eth().unwrap(),
         contracts,
-        &eth_node,
+        &provider,
         &mut IdentityPageSizer::new(DEFAULT_LOG_PAGE_SIZE),
     )
     .map_ok(|logs| logs.logs)
     .try_concat()
     .await
     .unwrap();
+
+    // Then
     assert_eq!(result, logs);
 }
 
 #[tokio::test]
 async fn quorum_agrees_on_logs() {
-    let eth_node = MockMiddleware::default();
+    let asserter = Asserter::new();
     let logs = vec![
         Log {
-            address: Default::default(),
-            block_number: Some(3.into()),
+            block_number: Some(3),
             ..Default::default()
         },
         Log {
-            address: Default::default(),
-            block_number: Some(5.into()),
+            block_number: Some(5),
             ..Default::default()
         },
     ];
-    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
+    asserter.push_success(&logs);
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 5,
@@ -72,13 +93,11 @@ async fn quorum_agrees_on_logs() {
     let eth_state = state::build_eth(&eth_state).await.unwrap();
 
     // Given
-    let provider = Provider::new(
-        QuorumProvider::builder()
-            .add_provider(WeightedProvider::new(eth_node.clone()))
-            .add_provider(WeightedProvider::new(eth_node))
-            .quorum(Quorum::Majority)
-            .build(),
-    );
+    let provider = QuorumProvider::builder()
+        .with_mocked_transport(asserter.clone())
+        .with_mocked_transport(asserter.clone())
+        .with_quorum(Quorum::Majority)
+        .build();
     let contracts = vec![Default::default()];
 
     // When
@@ -99,22 +118,22 @@ async fn quorum_agrees_on_logs() {
 
 #[tokio::test]
 async fn quorum__disagree_on_logs() {
-    let eth_node_two_logs = MockMiddleware::default();
-    let eth_node_one_log = MockMiddleware::default();
-    let logs = vec![
+    let logs: Vec<Log<LogData>> = vec![
         Log {
-            address: Default::default(),
-            block_number: Some(3.into()),
+            block_number: Some(3),
             ..Default::default()
         },
         Log {
-            address: Default::default(),
-            block_number: Some(5.into()),
+            block_number: Some(5),
             ..Default::default()
         },
     ];
-    eth_node_two_logs.update_data(|data| data.logs_batch = vec![logs.clone()]);
-    eth_node_one_log.update_data(|data| data.logs_batch = vec![vec![logs[0].clone()]]);
+
+    let asserter_with_two_logs = Asserter::new();
+    asserter_with_two_logs.push_success(&logs);
+
+    let asserter_with_one_log = Asserter::new();
+    asserter_with_one_log.push_success(&logs[0]);
 
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_finalized: 5,
@@ -123,18 +142,16 @@ async fn quorum__disagree_on_logs() {
     let eth_state = state::build_eth(&eth_state).await.unwrap();
 
     // Given
-    let provider = Provider::new(
-        QuorumProvider::builder()
-            // 3 different providers with 3 different logs
-            // 2 logs
-            .add_provider(WeightedProvider::new(eth_node_two_logs))
-            // 0 logs
-            .add_provider(WeightedProvider::new(MockMiddleware::default()))
-            // 1 log
-            .add_provider(WeightedProvider::new(eth_node_one_log))
-            .quorum(Quorum::Percentage(70))
-            .build(),
-    );
+    let provider = QuorumProvider::builder()
+        // 3 different providers with 3 different logs
+        // 2 logs
+        .with_mocked_transport(asserter_with_two_logs)
+        // 0 logs
+        .with_mocked_transport(Asserter::new())
+        // 1 log
+        .with_mocked_transport(asserter_with_one_log)
+        .with_quorum(Quorum::Percentage(NonZeroU8::new(70).unwrap()))
+        .build();
     let contracts = vec![Default::default()];
 
     // When
@@ -150,8 +167,12 @@ async fn quorum__disagree_on_logs() {
     // Then
 
     match provider_error {
-        Err(ProviderError::CustomError(e)) => {
-            assert!(e.contains("eth provider failed to get logs: NoQuorumReached"));
+        Err(TransportError::Transport(TransportErrorKind::Custom(e))) => {
+            assert!(
+                e.to_string().starts_with(
+                    "eth provider failed to get logs: Custom(NoQuorumReached"
+                )
+            );
         }
         _ => {
             panic!("Expected a JsonRpcClientError")
@@ -169,7 +190,7 @@ async fn deploy_height_does_not_override() {
         da_deploy_height: 20u64.into(),
         ..Default::default()
     };
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
     let _ = relayer.into_task(&Default::default(), ()).await;
 
@@ -178,10 +199,14 @@ async fn deploy_height_does_not_override() {
 
 const STARTING_HEIGHT: u64 = 2;
 
-#[test_case(6, 6, SyncState::Synced(6u64.into()); "if local is up to date with remote, then fully synced state")]
-#[test_case(6, 100, SyncState::Synced(100u64.into()); "if local is somehow ahead of remote, then fully synced state")]
-#[test_case(6, 5, SyncState::PartiallySynced(5u64.into()); "if local is behind remote, then partially synced state")]
-#[test_case(6, 0, SyncState::PartiallySynced(0u64.into()); "if local is set to starting height, then partially synced state")]
+#[test_case(6, 6, SyncState::Synced(6u64.into()); "if local is up to date with remote, then fully synced state"
+)]
+#[test_case(6, 100, SyncState::Synced(100u64.into()); "if local is somehow ahead of remote, then fully synced state"
+)]
+#[test_case(6, 5, SyncState::PartiallySynced(5u64.into()); "if local is behind remote, then partially synced state"
+)]
+#[test_case(6, 0, SyncState::PartiallySynced(0u64.into()); "if local is set to starting height, then partially synced state"
+)]
 #[tokio::test]
 async fn update_sync__changes_latest_eth_state(
     remote: u64,
@@ -194,7 +219,7 @@ async fn update_sync__changes_latest_eth_state(
         da_deploy_height: STARTING_HEIGHT.into(),
         ..Default::default()
     };
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let relayer = NotInitializedTask::new(eth_node, mock_db.clone(), config, false);
     let shared = relayer.shared_data();
     let task = relayer.into_task(&Default::default(), ()).await.unwrap();
@@ -214,16 +239,14 @@ async fn update_sync__changes_latest_eth_state(
 
 #[tokio::test]
 async fn relayer_grows_page_size_on_success() {
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let logs = vec![
         Log {
-            address: Default::default(),
-            block_number: Some(2.into()),
+            block_number: Some(2),
             ..Default::default()
         },
         Log {
-            address: Default::default(),
-            block_number: Some(3.into()),
+            block_number: Some(3),
             ..Default::default()
         },
     ];
@@ -263,10 +286,9 @@ async fn relayer_grows_page_size_on_success() {
 
 #[tokio::test]
 async fn relayer_respects_max_page_size_limit() {
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let logs = vec![Log {
-        address: Default::default(),
-        block_number: Some(2.into()),
+        block_number: Some(2),
         ..Default::default()
     }];
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
@@ -304,22 +326,19 @@ async fn relayer_respects_max_page_size_limit() {
 
 #[tokio::test]
 async fn relayer_handles_multiple_successful_rpc_calls_per_download() {
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let logs_page1 = vec![
         Log {
-            address: Default::default(),
-            block_number: Some(2.into()),
+            block_number: Some(2),
             ..Default::default()
         },
         Log {
-            address: Default::default(),
-            block_number: Some(3.into()),
+            block_number: Some(3),
             ..Default::default()
         },
     ];
     let logs_page2 = vec![Log {
-        address: Default::default(),
-        block_number: Some(4.into()),
+        block_number: Some(4),
         ..Default::default()
     }];
     eth_node.update_data(|data| data.logs_batch = vec![logs_page1, logs_page2]);
