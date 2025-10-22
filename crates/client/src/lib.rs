@@ -3,10 +3,9 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 pub mod client;
+mod provider;
 pub mod reqwest_ext;
 pub mod schema;
-mod http_client;
-mod provider;
 
 /// The GraphQL schema used by the library.
 pub const SCHEMA_SDL: &[u8] = include_bytes!("../assets/schema.sdl");
