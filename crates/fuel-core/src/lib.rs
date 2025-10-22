@@ -77,16 +77,11 @@ impl SignalKind {
         let _inner = match variant {
             SignalVariant::SIGTERM => tokio::signal::unix::SignalKind::terminate(),
             SignalVariant::SIGINT => tokio::signal::unix::SignalKind::interrupt(),
-            SignalVariant::SIGSEGV => {
-                tokio::signal::unix::SignalKind::from_raw(libc::SIGSEGV)
-            }
-            SignalVariant::SIGKILL => {
-                tokio::signal::unix::SignalKind::from_raw(libc::SIGKILL)
-            }
             SignalVariant::SIGABRT => {
                 tokio::signal::unix::SignalKind::from_raw(libc::SIGABRT)
             }
             SignalVariant::SIGHUP => tokio::signal::unix::SignalKind::hangup(),
+            SignalVariant::SIGQUIT => tokio::signal::unix::SignalKind::quit(),
         };
 
         Self { _inner, variant }
@@ -101,10 +96,9 @@ impl SignalKind {
 pub enum SignalVariant {
     SIGTERM,
     SIGINT,
-    SIGSEGV,
-    SIGKILL,
     SIGABRT,
     SIGHUP,
+    SIGQUIT,
 }
 
 impl ShutdownListener {
@@ -116,12 +110,11 @@ impl ShutdownListener {
                 #[cfg(unix)]
                 {
                     let signal_kinds: Vec<_> = vec![
-                        SignalVariant::SIGTERM,
                         SignalVariant::SIGINT,
-                        SignalVariant::SIGSEGV,
-                        SignalVariant::SIGKILL,
+                        SignalVariant::SIGTERM,
                         SignalVariant::SIGABRT,
                         SignalVariant::SIGHUP,
+                        SignalVariant::SIGQUIT,
                     ]
                     .into_iter()
                     .map(SignalKind::new)
@@ -129,12 +122,20 @@ impl ShutdownListener {
 
                     let signals_with_variants: Vec<_> = signal_kinds
                         .into_iter()
-                        .map(|signal_kind| {
+                        .filter_map(|signal_kind| {
                             let (signal_kind, variant) = signal_kind.decompose();
-                            tokio::signal::unix::signal(signal_kind)
-                                .map(|signal| (signal, variant))
+                            match tokio::signal::unix::signal(signal_kind) {
+                                Ok(signal) => {
+                                    tracing::info!("Registered signal handler for {variant:?}");
+                                    Some((signal, variant))
+                                }
+                                Err(e) => {
+                                    tracing::warn!("Failed to register signal handler for {variant:?}: {e}");
+                                    None
+                                }
+                            }
                         })
-                        .collect::<Result<_, _>>()?;
+                        .collect();
 
                     let mut signal_futs: FuturesUnordered<_> = signals_with_variants
                         .into_iter()
