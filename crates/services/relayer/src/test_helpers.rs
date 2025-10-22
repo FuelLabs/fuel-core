@@ -11,7 +11,6 @@ use fuel_core_types::entities::{
 };
 
 pub mod page_sizer;
-pub mod provider;
 
 pub trait LogTestHelper {
     fn to_msg(&self) -> Message;

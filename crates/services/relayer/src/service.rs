@@ -10,11 +10,7 @@ use crate::{
     ports::RelayerDb,
     service::state::EthLocal,
 };
-use alloy_provider::{
-    Provider,
-    RootProvider,
-    network::Ethereum,
-};
+use alloy_provider::Provider;
 use alloy_rpc_types_eth::{
     BlockId,
     BlockNumberOrTag,
@@ -24,6 +20,10 @@ use alloy_rpc_types_eth::{
 };
 use async_trait::async_trait;
 use core::time::Duration;
+use fuel_core_provider::{
+    Quorum,
+    QuorumProvider,
+};
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -37,7 +37,6 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use tokio::sync::watch;
-use url::Url;
 
 mod get_logs;
 mod run;
@@ -74,7 +73,7 @@ type Synced = watch::Receiver<SyncState>;
 type NotifySynced = watch::Sender<SyncState>;
 
 /// The alias of runnable relayer service.
-pub type Service<D> = CustomizableService<FuelEthProvider, D>;
+pub type Service<D> = CustomizableService<QuorumProvider, D>;
 type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
 /// The shared state of the relayer task.
@@ -82,24 +81,6 @@ type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 pub struct SharedState {
     /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
-}
-
-pub struct FuelEthProvider {
-    provider: RootProvider<Ethereum>,
-}
-
-impl FuelEthProvider {
-    fn new(url: Url) -> Self {
-        Self {
-            provider: RootProvider::<Ethereum>::new_http(url),
-        }
-    }
-}
-
-impl Provider for FuelEthProvider {
-    fn root(&self) -> &RootProvider<Ethereum> {
-        &self.provider
-    }
 }
 
 /// Not initialized version of the [`Task`].
@@ -478,23 +459,13 @@ pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
     D: RelayerDb + 'static,
 {
-    let url = config
-        .relayer
-        .as_ref()
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Tried to start Relayer without setting an eth_client in the config"
-            )
-        })?
-        .first()
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Tried to start Relayer without setting an eth_client in the config"
-            )
-        })?
-        .clone();
+    let urls = config.relayer.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Tried to start Relayer without setting an eth_client in the config"
+        )
+    })?;
 
-    let eth_node = FuelEthProvider::new(url);
+    let eth_node = QuorumProvider::new(Quorum::Majority, urls);
     let retry_on_error = true;
     Ok(new_service_internal(
         eth_node,

@@ -1,4 +1,5 @@
 use alloy_primitives::U256;
+use alloy_provider::Provider;
 use alloy_rpc_types_eth::SyncStatus;
 
 use super::*;

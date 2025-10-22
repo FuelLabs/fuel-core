@@ -44,12 +44,10 @@ use fuel_core_client::client::{
     },
 };
 use fuel_core_poa::service::Mode;
+use fuel_core_provider::test_helpers::provider::MockProvider;
 use fuel_core_relayer::{
     ports::Transactional,
-    test_helpers::{
-        LogTestHelper,
-        provider::MockProvider,
-    },
+    test_helpers::LogTestHelper,
 };
 use fuel_core_storage::{
     StorageAsMut,

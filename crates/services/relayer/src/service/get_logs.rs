@@ -1,8 +1,11 @@
 use super::*;
 use alloy_primitives::Address;
-use alloy_provider::transport::{
-    TransportError,
-    TransportErrorKind,
+use alloy_provider::{
+    Provider,
+    transport::{
+        TransportError,
+        TransportErrorKind,
+    },
 };
 use fuel_core_types::{
     entities::RelayedTransaction,

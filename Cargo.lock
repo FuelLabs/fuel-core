@@ -4349,18 +4349,39 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-core-relayer"
+name = "fuel-core-provider"
 version = "0.47.1"
 dependencies = [
  "alloy-consensus",
+ "alloy-json-rpc",
  "alloy-primitives",
  "alloy-provider",
  "alloy-rpc-client",
+ "alloy-rpc-types-eth",
+ "alloy-transport",
+ "alloy-transport-http",
+ "async-trait",
+ "fuel-core-provider",
+ "futures",
+ "parking_lot",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower 0.5.2",
+ "url",
+]
+
+[[package]]
+name = "fuel-core-relayer"
+version = "0.47.1"
+dependencies = [
+ "alloy-primitives",
+ "alloy-provider",
  "alloy-rpc-types-eth",
  "alloy-sol-types",
  "anyhow",
  "async-trait",
  "enum-iterator",
+ "fuel-core-provider",
  "fuel-core-relayer",
  "fuel-core-services",
  "fuel-core-storage",
@@ -4369,7 +4390,6 @@ dependencies = [
  "futures",
  "mockall",
  "once_cell",
- "parking_lot",
  "rand 0.8.5",
  "strum 0.25.0",
  "strum_macros 0.25.3",
@@ -4495,6 +4515,7 @@ dependencies = [
  "fuel-core-gas-price-service",
  "fuel-core-p2p",
  "fuel-core-poa",
+ "fuel-core-provider",
  "fuel-core-relayer",
  "fuel-core-storage",
  "fuel-core-trace",

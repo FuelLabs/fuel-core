@@ -11,29 +11,22 @@ rust-version = { workspace = true }
 description = "Fuel Relayer"
 
 [features]
-test-helpers = [
-    "parking_lot",
-    "fuel-core-types/test-helpers",
-    "alloy-consensus",
-    "alloy-rpc-client/reqwest",
-]
+test-helpers = ["fuel-core-provider/test-helpers", "fuel-core-types/test-helpers"]
 
 [dependencies]
-alloy-consensus = { workspace = true, optional = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true }
-alloy-rpc-client = { workspace = true, optional = true }
 alloy-rpc-types-eth = { workspace = true }
 alloy-sol-types = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 enum-iterator = { workspace = true }
+fuel-core-provider = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
 once_cell = { workspace = true }
-parking_lot = { workspace = true, optional = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
@@ -41,6 +34,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+fuel-core-provider = { path = "../../provider" }
 fuel-core-relayer = { path = "", features = ["test-helpers"] }
 fuel-core-services = { path = "../../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "../../storage", features = ["test-helpers"] }

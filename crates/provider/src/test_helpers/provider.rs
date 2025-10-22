@@ -177,9 +177,7 @@ impl Provider for MockProvider {
         unreachable!()
     }
 
-    fn get_block_number(
-        &self,
-    ) -> ProviderCall<alloy_rpc_client::NoParams, U64, BlockNumber> {
+    fn get_block_number(&self) -> ProviderCall<NoParams, U64, BlockNumber> {
         let this = self;
         this.before_event(TriggerType::GetBlockNumber);
         let r = self.update_data(|data| data.best_block.number());
@@ -315,7 +313,7 @@ impl Default for MockProvider {
     }
 }
 
-impl fmt::Debug for MockProvider {
+impl Debug for MockProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MockProvider")
             .field("data", &self.data)
