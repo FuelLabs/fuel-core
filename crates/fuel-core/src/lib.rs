@@ -72,17 +72,40 @@ impl ShutdownListener {
                 let mut sigterm = tokio::signal::unix::signal(
                     tokio::signal::unix::SignalKind::terminate(),
                 )?;
-
                 let mut sigint = tokio::signal::unix::signal(
                     tokio::signal::unix::SignalKind::interrupt(),
+                )?;
+                let mut sigsegv = tokio::signal::unix::signal(
+                    tokio::signal::unix::SignalKind::from_raw(libc::SIGSEGV),
+                )?;
+                let mut sigkill = tokio::signal::unix::signal(
+                    tokio::signal::unix::SignalKind::from_raw(libc::SIGKILL),
+                )?;
+                let mut sigabrt = tokio::signal::unix::signal(
+                    tokio::signal::unix::SignalKind::from_raw(libc::SIGABRT),
+                )?;
+                let mut sighup = tokio::signal::unix::signal(
+                    tokio::signal::unix::SignalKind::hangup()
                 )?;
                 #[cfg(unix)]
                 tokio::select! {
                     _ = sigterm.recv() => {
-                        tracing::info!("Received SIGTERM");
+                        tracing::error!("Received SIGTERM");
                     }
                     _ = sigint.recv() => {
-                        tracing::info!("Received SIGINT");
+                        tracing::error!("Received SIGINT");
+                    }
+                    _ = sigsegv.recv() => {
+                        tracing::error!("Received SIGSEGV");
+                    }
+                    _ = sigkill.recv() => {
+                        tracing::error!("Received SIGKILL");
+                    }
+                    _ = sigabrt.recv() => {
+                        tracing::error!("Received SIGABRT");
+                    }
+                    _ = sighup.recv() => {
+                        tracing::error!("Received SIGHUP");
                     }
                 }
                 #[cfg(not(unix))]

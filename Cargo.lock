@@ -3568,6 +3568,7 @@ dependencies = [
  "hyper 0.14.32",
  "indicatif",
  "itertools 0.12.1",
+ "libc",
  "mockall",
  "num_cpus",
  "parking_lot",
