@@ -14,6 +14,7 @@ members = [
     "crates/fuel-gas-price-algorithm",
     "crates/keygen",
     "crates/metrics",
+    "crates/provider",
     "crates/services",
     "crates/services/block_aggregator_api",
     "crates/services/compression",
@@ -58,10 +59,19 @@ version = "0.47.1"
 [workspace.dependencies]
 
 # Common dependencies
+alloy-consensus = { version = "1.0.37", default-features = false }
+alloy-json-rpc = { version = "1.0.37", default-features = false }
+alloy-primitives = { version = "1.4.0", default-features = false }
+alloy-provider = { version = "1.0.37", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
+alloy-rpc-client = { version = "1.0.37", default-features = false, features = ["reqwest"] }
+alloy-rpc-types-eth = "1.0.37"
+alloy-sol-types = "1.4.0"
+alloy-transport = { version = "1.0.37", default-features = false }
+alloy-transport-http = { version = "1.0.37", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
 anyhow = "1.0"
 async-graphql = { version = "=7.0.15", features = [
-  "graphiql",
-  "tracing",
+    "graphiql",
+    "tracing",
 ], default-features = false }
 async-graphql-value = { version = "=7.0.15" }
 async-trait = "0.1"
@@ -74,10 +84,10 @@ derive_more = { version = "0.99" }
 ed25519 = { version = "2.2.3", default-features = false }
 ed25519-dalek = { version = "2.1.1", default-features = false }
 educe = { version = "0.6", default-features = false, features = [
-  "Eq",
-  "PartialEq",
-  "Hash",
-  "Debug",
+    "Eq",
+    "PartialEq",
+    "Hash",
+    "Debug",
 ] }
 enum-iterator = "1.2"
 enum_dispatch = "0.3.13"
@@ -99,6 +109,7 @@ fuel-core-p2p = { version = "0.47.1", path = "./crates/services/p2p" }
 fuel-core-parallel-executor = { version = "0.47.1", path = "./crates/services/parallel-executor" }
 fuel-core-poa = { version = "0.47.1", path = "./crates/services/consensus_module/poa" }
 fuel-core-producer = { version = "0.47.1", path = "./crates/services/producer" }
+fuel-core-provider = { version = "0.47.1", path = "./crates/provider" }
 fuel-core-relayer = { version = "0.47.1", path = "./crates/services/relayer" }
 fuel-core-services = { version = "0.47.1", path = "./crates/services" }
 fuel-core-shared-sequencer = { version = "0.47.1", path = "crates/services/shared-sequencer" }
@@ -139,8 +150,8 @@ rand = "0.8"
 rayon = "1.10.0"
 # enable cookie store to support L7 sticky sessions
 reqwest = { version = "0.12.0", default-features = false, features = [
-  "rustls-tls",
-  "cookies",
+    "rustls-tls",
+    "cookies",
 ] }
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

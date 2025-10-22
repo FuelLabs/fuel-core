@@ -1,7 +1,14 @@
 use super::*;
+use alloy_primitives::Address;
+use alloy_provider::{
+    Provider,
+    transport::{
+        TransportError,
+        TransportErrorKind,
+    },
+};
 use fuel_core_types::{
     entities::RelayedTransaction,
-    fuel_types::Bytes20,
     services::relayer::Event,
 };
 use futures::TryStreamExt;
@@ -19,22 +26,19 @@ pub struct DownloadedLogs {
 /// Download the logs from the DA layer.
 pub(crate) fn download_logs<'a, P, S>(
     eth_sync_gap: &state::EthSyncGap,
-    contracts: Vec<Bytes20>,
+    contracts: Vec<Address>,
     eth_node: &'a P,
     page_sizer: &'a mut S,
-) -> impl futures::Stream<Item = Result<DownloadedLogs, ProviderError>> + 'a + use<'a, P, S>
+) -> impl futures::Stream<Item = Result<DownloadedLogs, TransportError>> + 'a + use<'a, P, S>
 where
-    P: Middleware<Error = ProviderError> + 'static,
+    P: Provider + 'static,
     S: PageSizer + 'static + Send,
 {
     // Create a stream of paginated logs.
     futures::stream::try_unfold(
         (eth_sync_gap.page(page_sizer.page_size()), page_sizer),
         move |(page, page_sizer)| {
-            let contracts = contracts
-                .iter()
-                .map(|c| ethereum_types::Address::from_slice(c.as_slice()))
-                .collect();
+            let contracts = contracts.clone();
             async move {
                 match page {
                     None => Ok(None),
@@ -44,7 +48,7 @@ where
                             .from_block(page.oldest())
                             .to_block(page.latest())
                             .address(ValueOrArray::Array(contracts))
-                            .topic0(ValueOrArray::Array(vec![
+                            .event_signature(ValueOrArray::Array(vec![
                                 *crate::config::ETH_LOG_MESSAGE,
                                 *crate::config::ETH_FORCED_TX,
                             ]));
@@ -63,7 +67,7 @@ where
                             .get_logs(&filter)
                             .await
                             .map_err(|err| {
-                                let ProviderError::JsonRpcClientError(err) = err else {
+                                let TransportError::Transport(err) = err else {
                                     // We optimistically reduce the page size for any rpc error,
                                     // to reduce the work to check if it is actually
                                     // because of "too many logs"
@@ -72,7 +76,7 @@ where
                                 };
 
                                 // Workaround because `QuorumError` obfuscates useful information
-                                ProviderError::CustomError(format!(
+                                TransportErrorKind::custom_str(&format!(
                                     "eth provider failed to get logs: {err:?}"
                                 ))
                             })
@@ -105,7 +109,7 @@ where
 pub(crate) async fn write_logs<D, S>(database: &mut D, logs: S) -> anyhow::Result<()>
 where
     D: RelayerDb,
-    S: futures::Stream<Item = Result<DownloadedLogs, ProviderError>>,
+    S: futures::Stream<Item = Result<DownloadedLogs, TransportError>>,
 {
     tokio::pin!(logs);
     while let Some(DownloadedLogs {
