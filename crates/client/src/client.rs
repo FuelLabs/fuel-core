@@ -48,7 +48,6 @@ use crate::{
     },
 };
 use anyhow::Context;
-#[cfg(feature = "subscriptions")]
 use cynic::{
     Id,
     MutationBuilder,
@@ -242,7 +241,7 @@ impl Clone for ChainStateInfo {
 
 #[derive(Debug, Clone)]
 pub struct FuelClient {
-    provider: FailoverTransport,
+    transport: FailoverTransport,
     require_height: ConsistencyPolicy,
     chain_state_info: ChainStateInfo,
 }
@@ -261,32 +260,13 @@ impl FromStr for FuelClient {
             .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
         url.set_path("/v1/graphql");
 
-        #[cfg(feature = "subscriptions")]
-        {
-            Ok(Self {
-                provider: FailoverTransport::new(
-                    vec![url],
-                    Arc::new(reqwest::cookie::Jar::default()),
-                )?,
-                require_height: ConsistencyPolicy::Auto {
-                    height: Arc::new(Mutex::new(None)),
-                },
-                chain_state_info: Default::default(),
-            })
-        }
-
-        #[cfg(not(feature = "subscriptions"))]
-        {
-            let client = reqwest::Client::new();
-            Ok(Self {
-                client,
-                url,
-                require_height: ConsistencyPolicy::Auto {
-                    height: Arc::new(Mutex::new(None)),
-                },
-                chain_state_info: Default::default(),
-            })
-        }
+        Ok(Self {
+            transport: FailoverTransport::new(vec![url])?,
+            require_height: ConsistencyPolicy::Auto {
+                height: Arc::new(Mutex::new(None)),
+            },
+            chain_state_info: Default::default(),
+        })
     }
 }
 
@@ -344,10 +324,7 @@ impl FuelClient {
 
     pub fn with_urls(urls: Vec<Url>) -> anyhow::Result<Self> {
         Ok(Self {
-            provider: FailoverTransport::new(
-                urls,
-                Arc::new(reqwest::cookie::Jar::default()),
-            )?,
+            transport: FailoverTransport::new(urls)?,
             require_height: ConsistencyPolicy::Auto {
                 height: Arc::new(Mutex::new(None)),
             },
@@ -438,7 +415,7 @@ impl FuelClient {
         ResponseData: serde::de::DeserializeOwned + 'static + QueryFragment + Send,
     {
         let required_fuel_block_height = self.required_block_height();
-        let response = self.provider.query(q, required_fuel_block_height).await?;
+        let response = self.transport.query(q, required_fuel_block_height).await?;
 
         self.update_chain_state_info(&response);
         decode_response(response)
@@ -775,7 +752,7 @@ impl FuelClient {
         };
 
         let mut stream = self
-            .provider
+            .transport
             .subscribe(variables, self.required_block_height())
             .await?
             .map(|r: io::Result<schema::tx::SubmitAndAwaitSubscription>| {
@@ -813,7 +790,7 @@ impl FuelClient {
         };
 
         let mut stream = self
-            .provider
+            .transport
             .subscribe(variables, self.required_block_height())
             .await?
             .map(
@@ -856,7 +833,7 @@ impl FuelClient {
         };
 
         let stream = self
-            .provider
+            .transport
             .subscribe(variables, self.required_block_height())
             .await?
             .map(
@@ -882,7 +859,7 @@ impl FuelClient {
         };
 
         let stream = self
-            .provider
+            .transport
             .subscribe(variables, self.required_block_height())
             .await?
             .map(
@@ -912,7 +889,7 @@ impl FuelClient {
         };
 
         let stream = self
-            .provider
+            .transport
             .subscribe(variables, self.required_block_height())
             .await?
             .map(
@@ -935,7 +912,7 @@ impl FuelClient {
         > + '_,
     > {
         let stream = self
-            .provider
+            .transport
             .subscribe((), self.required_block_height())
             .await?
             .map(|r: io::Result<schema::block::NewBlocksSubscription>| {
@@ -957,7 +934,7 @@ impl FuelClient {
         &self,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
         let stream = self
-            .provider
+            .transport
             .subscribe((), self.required_block_height())
             .await?
             .map(|r: io::Result<schema::tx::PreconfirmationsSubscription>| {
@@ -1180,7 +1157,7 @@ impl FuelClient {
 
         tracing::debug!("subscribing");
         let stream = self
-            .provider
+            .transport
             .subscribe::<StatusChangeSubscription, StatusChangeSubscriptionArgs>(
                 variables,
                 self.required_block_height(),

@@ -1,23 +1,28 @@
-use crate::{
-    client::decode_response,
-    reqwest_ext::{
-        FuelGraphQlResponse,
-        FuelOperation,
-        ReqwestExt,
-    },
+#[cfg(feature = "subscriptions")]
+use crate::client::decode_response;
+use crate::reqwest_ext::{
+    FuelGraphQlResponse,
+    FuelOperation,
+    ReqwestExt,
 };
 use async_trait::async_trait;
-use base64::Engine;
 #[cfg(feature = "subscriptions")]
-use base64::prelude::BASE64_STANDARD;
+use base64::prelude::{
+    BASE64_STANDARD,
+    Engine as _,
+};
 use cynic::{
     Operation,
     QueryFragment,
     QueryVariables,
+};
+#[cfg(feature = "subscriptions")]
+use cynic::{
     StreamingOperation,
     SubscriptionBuilder,
 };
 use fuel_core_types::fuel_types::BlockHeight;
+#[cfg(feature = "subscriptions")]
 use futures::{
     Stream,
     StreamExt,
@@ -30,6 +35,9 @@ use serde::{
 use std::{
     fmt::Debug,
     io,
+};
+#[cfg(feature = "subscriptions")]
+use std::{
     pin::Pin,
     sync::Arc,
 };
@@ -69,17 +77,28 @@ pub struct FailoverTransport {
 }
 
 impl FailoverTransport {
-    pub fn new(
-        urls: Vec<Url>,
-        cookie: Arc<reqwest::cookie::Jar>,
-    ) -> reqwest::Result<Self> {
-        Ok(Self {
-            client: reqwest::Client::builder()
+    pub fn new(urls: Vec<Url>) -> reqwest::Result<Self> {
+        #[cfg(feature = "subscriptions")]
+        {
+            let cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
+            let client = reqwest::Client::builder()
                 .cookie_provider(cookie.clone())
-                .build()?,
-            urls: urls.into(),
-            cookie,
-        })
+                .build()?;
+            Ok(Self {
+                urls: urls.into_boxed_slice(),
+                client,
+                cookie,
+            })
+        }
+
+        #[cfg(not(feature = "subscriptions"))]
+        {
+            let client = reqwest::Client::new();
+            Ok(Self {
+                client,
+                urls: urls.into_boxed_slice(),
+            })
+        }
     }
 
     async fn internal_query<ResponseData, Vars>(
