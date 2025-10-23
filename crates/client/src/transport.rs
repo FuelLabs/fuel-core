@@ -1,5 +1,5 @@
 use crate::{
-    client::from_strings_errors_to_std_error,
+    client::decode_response,
     reqwest_ext::{
         FuelGraphQlResponse,
         FuelOperation,
@@ -58,30 +58,6 @@ pub trait Transport: Debug + Send + Sync + 'static {
             + Send
             + 'static
             + SubscriptionBuilder<Variables>;
-
-    fn decode_response<R, E>(response: FuelGraphQlResponse<R, E>) -> io::Result<R>
-    where
-        R: serde::de::DeserializeOwned + 'static,
-    {
-        if response
-            .extensions
-            .as_ref()
-            .and_then(|e| e.fuel_block_height_precondition_failed)
-            == Some(true)
-        {
-            return Err(io::Error::other("The required block height was not met"));
-        }
-
-        let response = response.response;
-
-        match (response.data, response.errors) {
-            (Some(d), _) => Ok(d),
-            (_, Some(e)) => Err(from_strings_errors_to_std_error(
-                e.into_iter().map(|e| e.message).collect(),
-            )),
-            _ => Err(io::Error::other("Invalid response")),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -205,7 +181,7 @@ impl FailoverTransport {
                             &data,
                         ) {
                             Ok(resp) => {
-                                match Self::decode_response(resp) {
+                                match decode_response(resp) {
                                     Ok(resp) => {
                                         match last.replace(data) {
                                             // Remove duplicates
