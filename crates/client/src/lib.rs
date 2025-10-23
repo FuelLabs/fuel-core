@@ -3,7 +3,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 pub mod client;
-mod provider;
+mod transport;
 pub mod reqwest_ext;
 pub mod schema;
 

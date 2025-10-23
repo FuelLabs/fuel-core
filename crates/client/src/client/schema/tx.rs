@@ -475,7 +475,7 @@ pub struct TransactionsByOwnerQuery {
     pub transactions_by_owner: TransactionConnection,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct StatusChangeSubscriptionArgs {
     pub id: TransactionId,
     #[cynic(skip_serializing_if = "Option::is_none")]
@@ -507,7 +507,7 @@ pub struct TxWithEstimatedPredicatesArg {
     pub estimate_predicates: Option<bool>,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(cynic::QueryVariables, Clone)]
 pub struct SubmitAndAwaitStatusArg {
     pub tx: HexString,
     #[cynic(skip_serializing_if = "Option::is_none")]

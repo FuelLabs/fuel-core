@@ -20,7 +20,7 @@ pub struct ContractStorageSlots {
     pub contract_storage_slots: StorageSlot,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractStorageSlotsArgs {
     /// The ID of the contract.
     pub contract_id: ContractId,
@@ -68,7 +68,7 @@ pub struct ContractStorageBalances {
     pub contract_storage_balances: ContractBalance,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractStorageBalancesArgs {
     /// The ID of the contract.
     pub contract_id: ContractId,
