@@ -27,7 +27,6 @@ fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
 base64 = { version = "0.22.1", optional = true }
 cynic = { workspace = true }
 derive_more = { workspace = true }

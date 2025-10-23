@@ -4036,7 +4036,6 @@ name = "fuel-core-client"
 version = "0.47.1"
 dependencies = [
  "anyhow",
- "async-trait",
  "base64 0.22.1",
  "cynic",
  "derive_more 0.99.20",

@@ -42,10 +42,7 @@ use crate::{
         },
     },
     reqwest_ext::FuelGraphQlResponse,
-    transport::{
-        FailoverTransport,
-        Transport,
-    },
+    transport::FailoverTransport,
 };
 use anyhow::Context;
 use cynic::{

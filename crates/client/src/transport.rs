@@ -5,7 +5,6 @@ use crate::reqwest_ext::{
     FuelOperation,
     ReqwestExt,
 };
-use async_trait::async_trait;
 #[cfg(feature = "subscriptions")]
 use base64::prelude::{
     BASE64_STANDARD,
@@ -42,32 +41,6 @@ use std::{
     sync::Arc,
 };
 
-#[async_trait]
-pub trait Transport: Debug + Send + Sync + 'static {
-    async fn query<ResponseData, Vars>(
-        &self,
-        q: Operation<ResponseData, Vars>,
-        required_block_height: Option<BlockHeight>,
-    ) -> io::Result<FuelGraphQlResponse<ResponseData>>
-    where
-        Vars: serde::Serialize + QueryVariables + Clone + Send + 'static,
-        ResponseData: DeserializeOwned + QueryFragment + Send + 'static;
-
-    #[cfg(feature = "subscriptions")]
-    async fn subscribe<'a, ResponseData, Variables>(
-        &self,
-        variables: Variables,
-        required_block_height: Option<BlockHeight>,
-    ) -> io::Result<Pin<Box<dyn Stream<Item = io::Result<ResponseData>> + Send + 'a>>>
-    where
-        Variables: Serialize + QueryVariables + Send + Clone + 'static,
-        ResponseData: DeserializeOwned
-            + QueryFragment
-            + Send
-            + 'static
-            + SubscriptionBuilder<Variables>;
-}
-
 #[derive(Debug, Clone)]
 pub struct FailoverTransport {
     client: reqwest::Client,
@@ -99,6 +72,59 @@ impl FailoverTransport {
                 urls: urls.into_boxed_slice(),
             })
         }
+    }
+
+    pub async fn query<ResponseData, Vars>(
+        &self,
+        q: Operation<ResponseData, Vars>,
+        required_block_height: Option<BlockHeight>,
+    ) -> io::Result<FuelGraphQlResponse<ResponseData>>
+    where
+        Vars: Serialize + QueryVariables + Send + Clone + 'static,
+        ResponseData: DeserializeOwned + QueryFragment + Send + 'static,
+    {
+        let mut last_err = None;
+
+        for url in self.urls.iter() {
+            let query = clone_operation(&q);
+            match self
+                .internal_query(query, url.clone(), required_block_height)
+                .await
+            {
+                Ok(response_data) => return Ok(response_data),
+                Err(err) => last_err = Some(err),
+            }
+        }
+        Err(last_err.unwrap())
+    }
+
+    #[cfg(feature = "subscriptions")]
+    pub async fn subscribe<'a, ResponseData, Variables>(
+        &self,
+        variables: Variables,
+        required_block_height: Option<BlockHeight>,
+    ) -> io::Result<Pin<Box<dyn Stream<Item = io::Result<ResponseData>> + Send + 'a>>>
+    where
+        Variables: Serialize + QueryVariables + Send + Clone + 'static,
+        ResponseData: DeserializeOwned
+            + QueryFragment
+            + Send
+            + 'static
+            + SubscriptionBuilder<Variables>,
+    {
+        let mut last_err = None;
+
+        for url in self.urls.iter() {
+            let query = ResponseData::build(variables.clone());
+            match self
+                .internal_subscribe(query, url.clone(), required_block_height)
+                .await
+            {
+                Ok(response_data) => return Ok(response_data),
+                Err(err) => last_err = Some(err),
+            }
+        }
+        Err(last_err.unwrap())
     }
 
     async fn internal_query<ResponseData, Vars>(
@@ -260,62 +286,6 @@ impl FailoverTransport {
         };
 
         Ok(Box::pin(stream))
-    }
-}
-
-#[async_trait]
-impl Transport for FailoverTransport {
-    async fn query<ResponseData, Vars>(
-        &self,
-        q: Operation<ResponseData, Vars>,
-        required_block_height: Option<BlockHeight>,
-    ) -> io::Result<FuelGraphQlResponse<ResponseData>>
-    where
-        Vars: Serialize + QueryVariables + Send + Clone + 'static,
-        ResponseData: DeserializeOwned + QueryFragment + Send + 'static,
-    {
-        let mut last_err = None;
-
-        for url in self.urls.iter() {
-            let query = clone_operation(&q);
-            match self
-                .internal_query(query, url.clone(), required_block_height)
-                .await
-            {
-                Ok(response_data) => return Ok(response_data),
-                Err(err) => last_err = Some(err),
-            }
-        }
-        Err(last_err.unwrap())
-    }
-
-    #[cfg(feature = "subscriptions")]
-    async fn subscribe<'a, ResponseData, Variables>(
-        &self,
-        variables: Variables,
-        required_block_height: Option<BlockHeight>,
-    ) -> io::Result<Pin<Box<dyn Stream<Item = io::Result<ResponseData>> + Send + 'a>>>
-    where
-        Variables: Serialize + QueryVariables + Send + Clone + 'static,
-        ResponseData: DeserializeOwned
-            + QueryFragment
-            + Send
-            + 'static
-            + SubscriptionBuilder<Variables>,
-    {
-        let mut last_err = None;
-
-        for url in self.urls.iter() {
-            let query = ResponseData::build(variables.clone());
-            match self
-                .internal_subscribe(query, url.clone(), required_block_height)
-                .await
-            {
-                Ok(response_data) => return Ok(response_data),
-                Err(err) => last_err = Some(err),
-            }
-        }
-        Err(last_err.unwrap())
     }
 }
 
