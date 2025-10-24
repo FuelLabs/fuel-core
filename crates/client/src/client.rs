@@ -295,30 +295,6 @@ pub fn from_strings_errors_to_std_error(errors: Vec<String>) -> io::Error {
     io::Error::other(e)
 }
 
-pub fn decode_response<R, E>(response: FuelGraphQlResponse<R, E>) -> io::Result<R>
-where
-    R: serde::de::DeserializeOwned + 'static,
-{
-    if response
-        .extensions
-        .as_ref()
-        .and_then(|e| e.fuel_block_height_precondition_failed)
-        == Some(true)
-    {
-        return Err(io::Error::other("The required block height was not met"));
-    }
-
-    let response = response.response;
-
-    match (response.data, response.errors) {
-        (Some(d), _) => Ok(d),
-        (_, Some(e)) => Err(from_strings_errors_to_std_error(
-            e.into_iter().map(|e| e.message).collect(),
-        )),
-        _ => Err(io::Error::other("Invalid response")),
-    }
-}
-
 impl FuelClient {
     pub fn new(url: impl AsRef<str>) -> anyhow::Result<Self> {
         Self::from_str(url.as_ref())
@@ -357,6 +333,33 @@ impl FuelClient {
     ) -> &mut Self {
         self.require_height = ConsistencyPolicy::Manual { height };
         self
+    }
+
+    pub fn decode_response<R, E>(
+        &self,
+        response: FuelGraphQlResponse<R, E>,
+    ) -> io::Result<R>
+    where
+        R: serde::de::DeserializeOwned + 'static,
+    {
+        if response
+            .extensions
+            .as_ref()
+            .and_then(|e| e.fuel_block_height_precondition_failed)
+            == Some(true)
+        {
+            return Err(io::Error::other("The required block height was not met"));
+        }
+
+        let response = response.response;
+
+        match (response.data, response.errors) {
+            (Some(d), _) => Ok(d),
+            (_, Some(e)) => Err(from_strings_errors_to_std_error(
+                e.into_iter().map(|e| e.message).collect(),
+            )),
+            _ => Err(io::Error::other("Invalid response")),
+        }
     }
 
     pub fn required_block_height(&self) -> Option<BlockHeight> {
@@ -420,7 +423,7 @@ impl FuelClient {
         let response = self.transport.query(q, required_fuel_block_height).await?;
 
         self.update_chain_state_info(&response);
-        decode_response(response)
+        self.decode_response(response)
     }
 
     #[tracing::instrument(skip_all)]
@@ -448,7 +451,7 @@ impl FuelClient {
                 match result {
                     Ok(resp) => {
                         client.update_chain_state_info(&resp);
-                        Some(decode_response(resp))
+                        Some(client.decode_response(resp))
                     }
                     Err(e) => Some(Err(e)), // pass through untouched
                 }
