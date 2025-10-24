@@ -34,7 +34,7 @@ impl From<fuel_core_types::services::executor::StorageReadReplayEvent>
     }
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct StorageReadReplayArgs {
     pub height: U32,
 }

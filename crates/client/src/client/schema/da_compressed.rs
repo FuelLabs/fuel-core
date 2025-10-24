@@ -5,7 +5,7 @@ use crate::client::schema::{
 
 use super::HexString;
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct DaCompressedBlockByHeightArgs {
     pub height: U32,
 }
