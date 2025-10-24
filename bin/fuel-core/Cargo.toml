@@ -64,8 +64,10 @@ hex = { workspace = true }
 humantime = "2.1"
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
+rayon = "1.11.0"
 rlimit = "0.10.2"
 serde_json = { workspace = true }
+tar = "0.4.44"
 tempfile = { version = "3.23.0", default-features = false }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
@@ -76,8 +78,6 @@ tracing-subscriber = { workspace = true, features = [
     "json",
 ] }
 url = { workspace = true, optional = true }
-rayon = "1.11.0"
-tar = "0.4.44"
 
 [dev-dependencies]
 fuel-core = { workspace = true, features = ["test-helpers"] }
