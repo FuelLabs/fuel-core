@@ -5,8 +5,8 @@ use crate::reqwest_ext::{
 };
 #[cfg(feature = "subscriptions")]
 use base64::prelude::{
-    Engine as _,
     BASE64_STANDARD,
+    Engine as _,
 };
 use cynic::{
     Operation,
@@ -23,8 +23,8 @@ use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
 use reqwest::Url;
 use serde::{
-    de::DeserializeOwned,
     Serialize,
+    de::DeserializeOwned,
 };
 #[cfg(feature = "subscriptions")]
 use std::sync::Arc;
@@ -98,15 +98,15 @@ impl FailoverTransport {
         variables: Variables,
         required_block_height: Option<BlockHeight>,
     ) -> io::Result<
-        impl futures::Stream<Item=io::Result<FuelGraphQlResponse<ResponseData>>> + '_,
+        impl futures::Stream<Item = io::Result<FuelGraphQlResponse<ResponseData>>> + '_,
     >
     where
         Variables: Serialize + QueryVariables + Send + Clone + 'static,
         ResponseData: DeserializeOwned
-        + QueryFragment
-        + Send
-        + 'static
-        + SubscriptionBuilder<Variables>,
+            + QueryFragment
+            + Send
+            + 'static
+            + SubscriptionBuilder<Variables>,
     {
         let mut last_err = None;
 
@@ -149,7 +149,7 @@ impl FailoverTransport {
         url: Url,
         required_block_height: Option<BlockHeight>,
     ) -> io::Result<
-        impl futures::Stream<Item=io::Result<FuelGraphQlResponse<ResponseData>>> + '_,
+        impl futures::Stream<Item = io::Result<FuelGraphQlResponse<ResponseData>>> + '_,
     >
     where
         Vars: serde::Serialize,
@@ -227,12 +227,12 @@ impl FailoverTransport {
                                 match last.replace(data) {
                                     // Remove duplicates
                                     Some(l)
-                                    if l == *last.as_ref().expect(
-                                        "Safe because of the replace above",
-                                    ) =>
-                                        {
-                                            None
-                                        }
+                                        if l == *last.as_ref().expect(
+                                            "Safe because of the replace above",
+                                        ) =>
+                                    {
+                                        None
+                                    }
                                     _ => Some(Ok(Event::ResponseData(resp))),
                                 }
                             }
