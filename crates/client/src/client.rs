@@ -45,6 +45,8 @@ use crate::{
     transport::FailoverTransport,
 };
 use anyhow::Context;
+#[cfg(feature = "subscriptions")]
+use cynic::SubscriptionBuilder;
 use cynic::{
     Id,
     MutationBuilder,
@@ -164,6 +166,9 @@ use types::{
         RequiredBalance,
     },
 };
+
+#[cfg(feature = "subscriptions")]
+use std::pin::Pin;
 
 pub mod pagination;
 pub mod schema;
@@ -409,13 +414,46 @@ impl FuelClient {
     ) -> io::Result<ResponseData>
     where
         Vars: serde::Serialize + Clone + QueryVariables + Send + 'static,
-        ResponseData: serde::de::DeserializeOwned + 'static + QueryFragment + Send,
+        ResponseData: serde::de::DeserializeOwned + QueryFragment + Send + 'static,
     {
         let required_fuel_block_height = self.required_block_height();
         let response = self.transport.query(q, required_fuel_block_height).await?;
 
         self.update_chain_state_info(&response);
         decode_response(response)
+    }
+
+    #[tracing::instrument(skip_all)]
+    #[cfg(feature = "subscriptions")]
+    async fn subscribe<ResponseData, Variables>(
+        &self,
+        variables: Variables,
+    ) -> io::Result<Pin<Box<impl futures::Stream<Item = io::Result<ResponseData>> + '_>>>
+    where
+        Variables: serde::Serialize + QueryVariables + Send + Clone + 'static,
+        ResponseData: serde::de::DeserializeOwned
+            + QueryFragment
+            + SubscriptionBuilder<Variables>
+            + 'static
+            + Send,
+    {
+        let stream = self
+            .transport
+            .subscribe(variables, self.required_block_height())
+            .await?;
+
+        let client = self; // capture immutably
+        Ok(Box::pin(stream.filter_map(move |result| {
+            async move {
+                match result {
+                    Ok(resp) => {
+                        client.update_chain_state_info(&resp);
+                        Some(decode_response(resp))
+                    }
+                    Err(e) => Some(Err(e)), // pass through untouched
+                }
+            }
+        })))
     }
 
     pub fn latest_stf_version(&self) -> Option<StateTransitionBytecodeVersion> {
@@ -748,19 +786,18 @@ impl FuelClient {
             estimate_predicates,
         };
 
-        let mut stream = self
-            .transport
-            .subscribe(variables, self.required_block_height())
-            .await?
-            .map(|r: io::Result<schema::tx::SubmitAndAwaitSubscription>| {
+        let mut stream = self.subscribe(variables).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitSubscription>| {
                 let status: TransactionStatus = r?.submit_and_await.try_into()?;
                 Result::<_, io::Error>::Ok(status)
-            });
+            },
+        );
 
         let status = stream.next().await.ok_or_else(|| {
             io::Error::other("Failed to get status from the submission")
         })??;
 
+        println!("{status:?}");
         Ok(status)
     }
 
@@ -786,16 +823,12 @@ impl FuelClient {
             estimate_predicates,
         };
 
-        let mut stream = self
-            .transport
-            .subscribe(variables, self.required_block_height())
-            .await?
-            .map(
-                |r: io::Result<schema::tx::SubmitAndAwaitSubscriptionWithTransaction>| {
-                    let status: StatusWithTransaction = r?.submit_and_await.try_into()?;
-                    Result::<_, io::Error>::Ok(status)
-                },
-            );
+        let mut stream = self.subscribe(variables).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitSubscriptionWithTransaction>| {
+                let status: StatusWithTransaction = r?.submit_and_await.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
 
         let status = stream.next().await.ok_or_else(|| {
             io::Error::other("Failed to get status from the submission")
@@ -829,17 +862,12 @@ impl FuelClient {
             include_preconfirmation,
         };
 
-        let stream = self
-            .transport
-            .subscribe(variables, self.required_block_height())
-            .await?
-            .map(
-                |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
-                    let status: TransactionStatus =
-                        r?.submit_and_await_status.try_into()?;
-                    Result::<_, io::Error>::Ok(status)
-                },
-            );
+        let stream = self.subscribe(variables).await?.map(
+            |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
+                let status: TransactionStatus = r?.submit_and_await_status.try_into()?;
+                Result::<_, io::Error>::Ok(status)
+            },
+        );
 
         Ok(stream)
     }
@@ -855,17 +883,12 @@ impl FuelClient {
             contract_id: (*contract_id).into(),
         };
 
-        let stream = self
-            .transport
-            .subscribe(variables, self.required_block_height())
-            .await?
-            .map(
-                |result: io::Result<schema::storage::ContractStorageSlots>| {
-                    let result: (Bytes32, Vec<u8>) =
-                        result?.contract_storage_slots.into();
-                    Result::<_, io::Error>::Ok(result)
-                },
-            );
+        let stream = self.subscribe(variables).await?.map(
+            |result: io::Result<schema::storage::ContractStorageSlots>| {
+                let result: (Bytes32, Vec<u8>) = result?.contract_storage_slots.into();
+                Result::<_, io::Error>::Ok(result)
+            },
+        );
 
         Ok(stream)
     }
@@ -885,16 +908,12 @@ impl FuelClient {
             contract_id: (*contract_id).into(),
         };
 
-        let stream = self
-            .transport
-            .subscribe(variables, self.required_block_height())
-            .await?
-            .map(
-                |result: io::Result<schema::storage::ContractStorageBalances>| {
-                    let result: ContractBalance = result?.contract_storage_balances;
-                    Result::<_, io::Error>::Ok(result)
-                },
-            );
+        let stream = self.subscribe(variables).await?.map(
+            |result: io::Result<schema::storage::ContractStorageBalances>| {
+                let result: ContractBalance = result?.contract_storage_balances;
+                Result::<_, io::Error>::Ok(result)
+            },
+        );
 
         Ok(stream)
     }
@@ -908,11 +927,8 @@ impl FuelClient {
             Item = io::Result<fuel_core_types::services::block_importer::ImportResult>,
         > + '_,
     > {
-        let stream = self
-            .transport
-            .subscribe((), self.required_block_height())
-            .await?
-            .map(|r: io::Result<schema::block::NewBlocksSubscription>| {
+        let stream = self.subscribe(()).await?.map(
+            |r: io::Result<schema::block::NewBlocksSubscription>| {
                 let result: fuel_core_types::services::block_importer::ImportResult =
                     postcard::from_bytes(r?.new_blocks.0.0.as_slice()).map_err(|e| {
                         io::Error::other(format!(
@@ -920,7 +936,8 @@ impl FuelClient {
                         ))
                     })?;
                 Result::<_, io::Error>::Ok(result)
-            });
+            },
+        );
 
         Ok(stream)
     }
@@ -930,14 +947,12 @@ impl FuelClient {
     pub async fn preconfirmations_subscription(
         &self,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
-        let stream = self
-            .transport
-            .subscribe((), self.required_block_height())
-            .await?
-            .map(|r: io::Result<schema::tx::PreconfirmationsSubscription>| {
+        let stream = self.subscribe(()).await?.map(
+            |r: io::Result<schema::tx::PreconfirmationsSubscription>| {
                 let status: TransactionStatus = r?.preconfirmations.try_into()?;
                 Result::<_, io::Error>::Ok(status)
-            });
+            },
+        );
 
         Ok(stream)
     }
@@ -1154,10 +1169,8 @@ impl FuelClient {
 
         tracing::debug!("subscribing");
         let stream = self
-            .transport
             .subscribe::<StatusChangeSubscription, StatusChangeSubscriptionArgs>(
                 variables,
-                self.required_block_height(),
             )
             .await?
             .map(|tx| {

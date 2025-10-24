@@ -1,5 +1,3 @@
-#[cfg(feature = "subscriptions")]
-use crate::client::decode_response;
 use crate::reqwest_ext::{
     FuelGraphQlResponse,
     FuelOperation,
@@ -7,8 +5,8 @@ use crate::reqwest_ext::{
 };
 #[cfg(feature = "subscriptions")]
 use base64::prelude::{
-    BASE64_STANDARD,
     Engine as _,
+    BASE64_STANDARD,
 };
 use cynic::{
     Operation,
@@ -22,23 +20,17 @@ use cynic::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 #[cfg(feature = "subscriptions")]
-use futures::{
-    Stream,
-    StreamExt,
-};
+use futures::StreamExt;
 use reqwest::Url;
 use serde::{
-    Serialize,
     de::DeserializeOwned,
+    Serialize,
 };
+#[cfg(feature = "subscriptions")]
+use std::sync::Arc;
 use std::{
     fmt::Debug,
     io,
-};
-#[cfg(feature = "subscriptions")]
-use std::{
-    pin::Pin,
-    sync::Arc,
 };
 
 #[derive(Debug, Clone)]
@@ -80,7 +72,7 @@ impl FailoverTransport {
         required_block_height: Option<BlockHeight>,
     ) -> io::Result<FuelGraphQlResponse<ResponseData>>
     where
-        Vars: Serialize + QueryVariables + Send + Clone + 'static,
+        Vars: Serialize + QueryVariables + Clone + Send + 'static,
         ResponseData: DeserializeOwned + QueryFragment + Send + 'static,
     {
         let mut last_err = None;
@@ -91,7 +83,9 @@ impl FailoverTransport {
                 .internal_query(query, url.clone(), required_block_height)
                 .await
             {
-                Ok(response_data) => return Ok(response_data),
+                Ok(response_data) => {
+                    return Ok(response_data);
+                }
                 Err(err) => last_err = Some(err),
             }
         }
@@ -99,18 +93,20 @@ impl FailoverTransport {
     }
 
     #[cfg(feature = "subscriptions")]
-    pub async fn subscribe<'a, ResponseData, Variables>(
+    pub async fn subscribe<ResponseData, Variables>(
         &self,
         variables: Variables,
         required_block_height: Option<BlockHeight>,
-    ) -> io::Result<Pin<Box<dyn Stream<Item = io::Result<ResponseData>> + Send + 'a>>>
+    ) -> io::Result<
+        impl futures::Stream<Item=io::Result<FuelGraphQlResponse<ResponseData>>> + '_,
+    >
     where
         Variables: Serialize + QueryVariables + Send + Clone + 'static,
         ResponseData: DeserializeOwned
-            + QueryFragment
-            + Send
-            + 'static
-            + SubscriptionBuilder<Variables>,
+        + QueryFragment
+        + Send
+        + 'static
+        + SubscriptionBuilder<Variables>,
     {
         let mut last_err = None;
 
@@ -147,12 +143,14 @@ impl FailoverTransport {
 
     #[tracing::instrument(skip_all)]
     #[cfg(feature = "subscriptions")]
-    async fn internal_subscribe<'a, ResponseData, Vars>(
+    async fn internal_subscribe<ResponseData, Vars>(
         &self,
         q: StreamingOperation<ResponseData, Vars>,
         url: Url,
         required_block_height: Option<BlockHeight>,
-    ) -> io::Result<Pin<Box<dyn Stream<Item = io::Result<ResponseData>> + Send + 'a>>>
+    ) -> io::Result<
+        impl futures::Stream<Item=io::Result<FuelGraphQlResponse<ResponseData>>> + '_,
+    >
     where
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static + Send,
@@ -207,12 +205,12 @@ impl FailoverTransport {
                 .build(),
         );
 
-        let mut last = None;
-
         enum Event<ResponseData> {
             Connected,
             ResponseData(ResponseData),
         }
+
+        let mut last = None;
 
         let mut init_stream = es::Client::stream(&client)
             .take_while(|result| {
@@ -226,23 +224,16 @@ impl FailoverTransport {
                             &data,
                         ) {
                             Ok(resp) => {
-                                match decode_response(resp) {
-                                    Ok(resp) => {
-                                        match last.replace(data) {
-                                            // Remove duplicates
-                                            Some(l)
-                                                if l == *last.as_ref().expect(
-                                                    "Safe because of the replace above",
-                                                ) =>
-                                            {
-                                                None
-                                            }
-                                            _ => Some(Ok(Event::ResponseData(resp))),
+                                match last.replace(data) {
+                                    // Remove duplicates
+                                    Some(l)
+                                    if l == *last.as_ref().expect(
+                                        "Safe because of the replace above",
+                                    ) =>
+                                        {
+                                            None
                                         }
-                                    }
-                                    Err(e) => Some(Err(io::Error::other(format!(
-                                        "Decode error: {e:?}"
-                                    )))),
+                                    _ => Some(Ok(Event::ResponseData(resp))),
                                 }
                             }
                             Err(e) => {
@@ -285,7 +276,7 @@ impl FailoverTransport {
             }
         };
 
-        Ok(Box::pin(stream))
+        Ok(stream)
     }
 }
 
