@@ -1,4 +1,7 @@
-use clap::Parser;
+use clap::{
+    Parser,
+    Subcommand,
+};
 use fuel_core::{
     ShutdownListener,
     upgradable_executor,
@@ -29,6 +32,7 @@ pub fn default_db_path() -> PathBuf {
     dirs::home_dir().unwrap().join(".fuel").join("db")
 }
 
+pub mod archive;
 pub mod fee_contract;
 #[cfg(feature = "rocksdb")]
 pub mod rollback;
@@ -52,7 +56,7 @@ pub struct Opt {
 }
 
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Parser)]
+#[derive(Debug, Subcommand)]
 pub enum Fuel {
     Run(run::Command),
     #[cfg(feature = "rocksdb")]
@@ -60,6 +64,8 @@ pub enum Fuel {
     #[cfg(feature = "rocksdb")]
     Rollback(rollback::Command),
     GenerateFeeContract(fee_contract::Command),
+    #[clap(subcommand)]
+    Archive(archive::Command),
 }
 
 pub const LOG_FILTER: &str = "RUST_LOG";
@@ -143,6 +149,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
             Fuel::Snapshot(command) => snapshot::exec(command).await,
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
             Fuel::Rollback(command) => rollback::exec(command).await,
+            Fuel::Archive(command) => archive::exec(command).await,
         },
         Err(e) => {
             // Prints the error and exits.
