@@ -141,10 +141,10 @@ impl<ResponseData, Errors> CynicReqwestBuilder<ResponseData, Errors> {
     }
 }
 
-impl<
+impl<ResponseData, Errors> IntoFuture for CynicReqwestBuilder<ResponseData, Errors>
+where
     ResponseData: serde::de::DeserializeOwned + Send + 'static,
     Errors: serde::de::DeserializeOwned + Send + 'static,
-> std::future::IntoFuture for CynicReqwestBuilder<ResponseData, Errors>
 {
     type Output = Result<FuelGraphQlResponse<ResponseData, Errors>, CynicReqwestError>;
 
