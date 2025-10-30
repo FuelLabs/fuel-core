@@ -21,6 +21,7 @@ use cynic::{
 use fuel_core_types::fuel_types::BlockHeight;
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
+use futures::future::select_ok;
 use reqwest::Url;
 use serde::{
     Serialize,
@@ -75,21 +76,19 @@ impl FailoverTransport {
         Vars: Serialize + QueryVariables + Clone + Send + 'static,
         ResponseData: DeserializeOwned + QueryFragment + Send + 'static,
     {
-        let mut last_err = None;
+        let futures: Vec<_> = self
+            .urls
+            .iter()
+            .map(|url| {
+                let query = clone_operation(&q);
+                Box::pin(self.internal_query(query, url.clone(), required_block_height))
+            })
+            .collect();
 
-        for url in self.urls.iter() {
-            let query = clone_operation(&q);
-            match self
-                .internal_query(query, url.clone(), required_block_height)
-                .await
-            {
-                Ok(response_data) => {
-                    return Ok(response_data);
-                }
-                Err(err) => last_err = Some(err),
-            }
+        match select_ok(futures).await {
+            Ok((response, _)) => Ok(response),
+            Err(err) => Err(err),
         }
-        Err(last_err.unwrap())
     }
 
     #[cfg(feature = "subscriptions")]
