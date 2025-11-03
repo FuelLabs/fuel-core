@@ -28,7 +28,7 @@ jobs:
       benchmark_results: ${{ steps.benchmarks.outputs.benchmark_results }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@master
@@ -69,7 +69,7 @@ jobs:
     if: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Parse benchmark results and create PR
         run: |

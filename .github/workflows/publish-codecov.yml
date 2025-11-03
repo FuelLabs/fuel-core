@@ -21,11 +21,11 @@ env:
 jobs:
   publish-codecov:
     name: Publish code coverage report on GitHub pages branch
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-latest-x64-4x
     permissions: # Write access to push changes to pages
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install latest Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -39,7 +39,7 @@ jobs:
         run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
 
       - name: Checkout the repo again for pushing pages revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: 'codecov-pages'
           path: 'pages-branch'
