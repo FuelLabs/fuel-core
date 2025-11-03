@@ -1385,7 +1385,7 @@ fn policies_from_proto_policies(proto_policies: ProtoPolicies) -> FuelPolicies {
     let bits =
         PoliciesBits::from_bits(bits).expect("Should be able to create from `u32`");
     if bits.contains(PoliciesBits::Tip)
-        && let Some(tip) = values.get(0)
+        && let Some(tip) = values.first()
     {
         policies.set(PolicyType::Tip, Some(*tip));
     }
