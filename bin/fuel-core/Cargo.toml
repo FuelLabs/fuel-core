@@ -18,7 +18,7 @@ path = "src/main.rs"
 
 [features]
 default = ["env", "relayer", "rocksdb", "archive"]
-archive = ["dep:tar", "dep:tempfile", "dep:rayon", "rocksdb"]
+archive = ["dep:tar", "dep:tempfile", "dep:rayon"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format", "dep:fuel-core-poa"]
