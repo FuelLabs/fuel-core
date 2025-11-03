@@ -17,7 +17,8 @@ name = "fuel-core"
 path = "src/main.rs"
 
 [features]
-default = ["env", "relayer", "rocksdb"]
+default = ["env", "relayer", "rocksdb", "archive"]
+archive = ["dep:tar", "dep:tempfile", "dep:rayon"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format", "dep:fuel-core-poa"]
@@ -64,11 +65,11 @@ hex = { workspace = true }
 humantime = "2.1"
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
-rayon = "1.11.0"
+rayon = { workspace = true, optional = true }
 rlimit = "0.10.2"
 serde_json = { workspace = true }
-tar = "0.4.44"
-tempfile = { version = "3.23.0", default-features = false }
+tar = { version = "0.4.44", optional = true }
+tempfile = { workspace = true, optional = true }
 tikv-jemallocator = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
