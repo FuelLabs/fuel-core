@@ -824,7 +824,6 @@ fn bytes32_to_vec(bytes: &fuel_core_types::fuel_types::Bytes32) -> Vec<u8> {
     bytes.as_ref().to_vec()
 }
 
-#[cfg(test)]
 pub fn fuel_block_from_protobuf(
     proto_block: ProtoBlock,
     msg_ids: &[fuel_core_types::fuel_tx::MessageId],
@@ -1379,95 +1378,40 @@ fn input_from_proto_input(proto_input: &ProtoInput) -> Result<Input> {
     }
 }
 
-//     /// Sets the `gas_price` policy.
-//     pub fn with_tip(mut self, tip: Word) -> Self {
-//         self.set(PolicyType::Tip, Some(tip));
-//         self
-//     }
-//
-//     /// Sets the `witness_limit` policy.
-//     pub fn with_witness_limit(mut self, witness_limit: Word) -> Self {
-//         self.set(PolicyType::WitnessLimit, Some(witness_limit));
-//         self
-//     }
-//
-//     /// Sets the `maturity` policy.
-//     pub fn with_maturity(mut self, maturity: BlockHeight) -> Self {
-//         self.set(PolicyType::Maturity, Some(*maturity.deref() as u64));
-//         self
-//     }
-//
-//     /// Sets the `expiration` policy.
-//     pub fn with_expiration(mut self, expiration: BlockHeight) -> Self {
-//         self.set(PolicyType::Expiration, Some(*expiration.deref() as u64));
-//         self
-//     }
-//
-//     /// Sets the `max_fee` policy.
-//     pub fn with_max_fee(mut self, max_fee: Word) -> Self {
-//         self.set(PolicyType::MaxFee, Some(max_fee));
-//         self
-//     }
-//
-//     /// Sets the `owner` policy.
-//     pub fn with_owner(mut self, owner: Word) -> Self {
-//         self.set(PolicyType::Owner, Some(owner));
-//         self
-//     }
-//
-// bitflags::bitflags! {
-//     /// See https://github.com/FuelLabs/fuel-specs/blob/master/src/tx-format/policy.md#policy
-//     #[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
-//     #[derive(serde::Serialize, serde::Deserialize)]
-//     pub struct PoliciesBits: u32 {
-//         /// If set, the gas price is present in the policies.
-//         const Tip = 1 << 0;
-//         /// If set, the witness limit is present in the policies.
-//         const WitnessLimit = 1 << 1;
-//         /// If set, the maturity is present in the policies.
-//         const Maturity = 1 << 2;
-//         /// If set, the max fee is present in the policies.
-//         const MaxFee = 1 << 3;
-//         /// If set, the expiration is present in the policies.
-//         const Expiration = 1 << 4;
-//         /// If set, the owner is present in the policies.
-//         const Owner = 1 << 5;
-//     }
-// }
 fn policies_from_proto_policies(proto_policies: ProtoPolicies) -> FuelPolicies {
     let ProtoPolicies { bits, values } = proto_policies;
     let mut policies = FuelPolicies::default();
     let bits =
         PoliciesBits::from_bits(bits).expect("Should be able to create from `u32`");
-    if bits.contains(PoliciesBits::Tip) {
-        if let Some(tip) = values.get(0) {
-            policies.set(PolicyType::Tip, Some(*tip));
-        }
+    if bits.contains(PoliciesBits::Tip)
+        && let Some(tip) = values.get(0)
+    {
+        policies.set(PolicyType::Tip, Some(*tip));
     }
-    if bits.contains(PoliciesBits::WitnessLimit) {
-        if let Some(witness_limit) = values.get(1) {
-            policies.set(PolicyType::WitnessLimit, Some(*witness_limit));
-        }
+    if bits.contains(PoliciesBits::WitnessLimit)
+        && let Some(witness_limit) = values.get(1)
+    {
+        policies.set(PolicyType::WitnessLimit, Some(*witness_limit));
     }
-    if bits.contains(PoliciesBits::Maturity) {
-        if let Some(maturity) = values.get(2) {
-            policies.set(PolicyType::Maturity, Some(*maturity));
-        }
+    if bits.contains(PoliciesBits::Maturity)
+        && let Some(maturity) = values.get(2)
+    {
+        policies.set(PolicyType::Maturity, Some(*maturity));
     }
-    if bits.contains(PoliciesBits::MaxFee) {
-        if let Some(max_fee) = values.get(3) {
-            policies.set(PolicyType::MaxFee, Some(*max_fee));
-        }
+    if bits.contains(PoliciesBits::MaxFee)
+        && let Some(max_fee) = values.get(3)
+    {
+        policies.set(PolicyType::MaxFee, Some(*max_fee));
     }
-    if bits.contains(PoliciesBits::Expiration) {
-        if let Some(expiration) = values.get(4) {
-            policies.set(PolicyType::Expiration, Some(*expiration));
-        }
+    if bits.contains(PoliciesBits::Expiration)
+        && let Some(expiration) = values.get(4)
+    {
+        policies.set(PolicyType::Expiration, Some(*expiration));
     }
-    if bits.contains(PoliciesBits::Owner) {
-        if let Some(owner) = values.get(5) {
-            policies.set(PolicyType::Owner, Some(*owner));
-        }
+    if bits.contains(PoliciesBits::Owner)
+        && let Some(owner) = values.get(5)
+    {
+        policies.set(PolicyType::Owner, Some(*owner));
     }
     policies
 }
