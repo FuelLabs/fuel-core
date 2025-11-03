@@ -1489,6 +1489,7 @@ pub fn proto_header_to_empty_consensus_header(
     }
 }
 
+#[cfg(not(feature = "fault-proving"))]
 #[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
@@ -1496,7 +1497,6 @@ mod tests {
     use fuel_core_types::test_helpers::arb_block;
     use proptest::prelude::*;
 
-    #[cfg(not(feature = "fault-proving"))]
     proptest! {
             #![proptest_config(ProptestConfig {
       cases: 100, .. ProptestConfig::default()
