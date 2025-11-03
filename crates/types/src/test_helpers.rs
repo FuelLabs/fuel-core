@@ -613,11 +613,10 @@ fn arb_upload_transaction() -> impl Strategy<Value = Transaction> {
                     .map(Bytes32::from)
                     .collect::<Vec<_>>();
                 let subsections_number = subsections_number.max(1);
-                let subsection_index = subsection_index_candidate % subsections_number;
                 let body = UploadBody {
                     root: root_bytes.into(),
                     witness_index: 0,
-                    subsection_index,
+                    subsection_index: subsection_index_candidate,
                     subsections_number,
                     proof_set,
                 };
@@ -637,22 +636,17 @@ fn arb_blob_transaction() -> impl Strategy<Value = Transaction> {
         prop::collection::vec(arb_witness(), 0..3),
         prop::collection::vec(any::<u8>(), 0..256),
     )
-        .prop_map(
-            |(policies, inputs, outputs, mut extra_witnesses, payload)| {
-                let mut witnesses = Vec::with_capacity(extra_witnesses.len() + 1);
-                witnesses.push(Witness::from(payload.clone()));
-                witnesses.append(&mut extra_witnesses);
-                let blob_id = BlobId::compute(&payload);
-                let body = BlobBody {
-                    id: blob_id,
-                    witness_index: 0,
-                };
-                let blob = crate::fuel_tx::Transaction::blob(
-                    body, policies, inputs, outputs, witnesses,
-                );
-                Transaction::Blob(blob)
-            },
-        )
+        .prop_map(|(policies, inputs, outputs, witnesses, payload)| {
+            let blob_id = BlobId::compute(&payload);
+            let body = BlobBody {
+                id: blob_id,
+                witness_index: 0,
+            };
+            let blob = crate::fuel_tx::Transaction::blob(
+                body, policies, inputs, outputs, witnesses,
+            );
+            Transaction::Blob(blob)
+        })
 }
 
 /// Deterministic `Input::coin_signed` sample used for round-trip testing.
