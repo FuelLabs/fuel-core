@@ -50,7 +50,6 @@ use crate::{
 use anyhow::anyhow;
 #[cfg(feature = "fault-proving")]
 use fuel_core_types::blockchain::header::BlockHeaderV2;
-#[cfg(all(test, feature = "fault-proving"))]
 use fuel_core_types::fuel_types::ChainId;
 
 use fuel_core_types::{
