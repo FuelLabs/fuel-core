@@ -249,16 +249,16 @@ impl TxStatusManager for PreconfirmationSender {
     fn status_update(&self, tx_id: TxId, tx_status: TransactionStatus) {
         let permit = self.sender_signature_service.try_reserve();
 
-        if let Ok(permit) = permit {
-            if let TransactionStatus::SqueezedOut(status) = &tx_status {
-                let preconfirmation = Preconfirmation {
-                    tx_id,
-                    status: PreconfirmationStatus::SqueezedOut {
-                        reason: status.reason.clone(),
-                    },
-                };
-                permit.send(vec![preconfirmation]);
-            }
+        if let Ok(permit) = permit
+            && let TransactionStatus::SqueezedOut(status) = &tx_status
+        {
+            let preconfirmation = Preconfirmation {
+                tx_id,
+                status: PreconfirmationStatus::SqueezedOut {
+                    reason: status.reason.clone(),
+                },
+            };
+            permit.send(vec![preconfirmation]);
         }
 
         self.tx_status_manager_adapter

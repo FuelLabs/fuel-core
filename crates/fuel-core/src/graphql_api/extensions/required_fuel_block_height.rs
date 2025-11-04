@@ -114,14 +114,13 @@ fn get_required_height(request: &Request) -> Option<BlockHeight> {
 
     if let Some(ConstValue::Number(required_fuel_block_height)) =
         required_fuel_block_height
+        && let Some(required_fuel_block_height) = required_fuel_block_height.as_u64()
     {
-        if let Some(required_fuel_block_height) = required_fuel_block_height.as_u64() {
-            let required_fuel_block_height: u32 =
-                required_fuel_block_height.try_into().unwrap_or(u32::MAX);
-            let required_block_height: BlockHeight = required_fuel_block_height.into();
+        let required_fuel_block_height: u32 =
+            required_fuel_block_height.try_into().unwrap_or(u32::MAX);
+        let required_block_height: BlockHeight = required_fuel_block_height.into();
 
-            return Some(required_block_height)
-        }
+        return Some(required_block_height)
     }
     None
 }

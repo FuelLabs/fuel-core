@@ -198,7 +198,7 @@ impl Importer {
         self.broadcast.subscribe()
     }
 
-    pub(crate) fn lock(&self) -> Result<tokio::sync::SemaphorePermit, Error> {
+    pub(crate) fn lock(&self) -> Result<tokio::sync::SemaphorePermit<'_>, Error> {
         let guard = self.guard.try_acquire();
         match guard {
             Ok(permit) => Ok(permit),
@@ -520,8 +520,6 @@ where
                 }
             }
         }
-        let a = 100;
-        let _ = a;
     }
 
     /// Prepares the block for committing. It includes the execution of the block,

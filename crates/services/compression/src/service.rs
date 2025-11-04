@@ -403,15 +403,15 @@ where
 
     async fn shutdown(mut self) -> anyhow::Result<()> {
         // gracefully handle all the remaining blocks in the stream and then stop
-        if let Some(Some(block_with_metadata)) = self.block_stream.next().now_or_never() {
-            if let Err(e) = self.handle_new_block(block_with_metadata.block()) {
-                return Err(anyhow::anyhow!(e).context(format!(
-                    "Couldn't compress block: {}. Shutting down. \
-                            Node will be in indeterminate state upon restart. \
-                            Suggested to delete compression database.",
-                    block_with_metadata.height()
-                )));
-            }
+        if let Some(Some(block_with_metadata)) = self.block_stream.next().now_or_never()
+            && let Err(e) = self.handle_new_block(block_with_metadata.block())
+        {
+            return Err(anyhow::anyhow!(e).context(format!(
+                "Couldn't compress block: {}. Shutting down. \
+                        Node will be in indeterminate state upon restart. \
+                        Suggested to delete compression database.",
+                block_with_metadata.height()
+            )));
         }
         Ok(())
     }

@@ -15,7 +15,6 @@ use std::{
         self,
         Debug,
     },
-    io::ErrorKind,
     num::TryFromIntError,
 };
 use thiserror::Error;
@@ -319,7 +318,7 @@ impl From<FromHexError> for ConversionError {
 
 impl From<ConversionError> for std::io::Error {
     fn from(e: ConversionError) -> Self {
-        std::io::Error::new(ErrorKind::Other, e)
+        std::io::Error::other(e)
     }
 }
 

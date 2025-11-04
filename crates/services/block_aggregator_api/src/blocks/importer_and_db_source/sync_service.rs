@@ -99,6 +99,12 @@ where
         }
         Ok(txs)
     }
+
+    // For now just have arbitrary 10 ms sleep to avoid busy looping.
+    // This could be more complicated with increasing backoff times, etc.
+    async fn go_to_sleep_before_continuing(&self) {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 impl<Serializer, DB, E> RunnableTask for SyncTask<Serializer, DB>
@@ -111,14 +117,14 @@ where
 {
     async fn run(&mut self, _watcher: &mut StateWatcher) -> TaskNextAction {
         self.maybe_update_stop_height().await;
-        if let Some(last_height) = self.maybe_stop_height {
-            if self.next_height >= last_height {
-                tracing::info!(
-                    "reached end height {}, putting task into hibernation",
-                    last_height
-                );
-                futures::future::pending().await
-            }
+        if let Some(last_height) = self.maybe_stop_height
+            && self.next_height >= last_height
+        {
+            tracing::info!(
+                "reached end height {}, putting task into hibernation",
+                last_height
+            );
+            futures::future::pending().await
         }
         let next_height = self.next_height;
         let res = self.get_block(&next_height);
@@ -135,7 +141,7 @@ where
             self.next_height = BlockHeight::from((*next_height).saturating_add(1));
         } else {
             tracing::warn!("no block found at height {:?}, retrying", next_height);
-            tokio::time::sleep(Duration::from_millis(10)).await;
+            self.go_to_sleep_before_continuing().await;
         }
         TaskNextAction::Continue
     }

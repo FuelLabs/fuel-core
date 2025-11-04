@@ -1,15 +1,15 @@
 #![allow(non_snake_case)]
 
-use fuel_block_aggregator_api::api::protobuf_adapter::{
-    block_aggregator_client::BlockAggregatorClient,
-    block_response::Payload,
-};
 use fuel_core::{
     database::Database,
     service::{
         Config,
         FuelService,
     },
+};
+use fuel_core_block_aggregator_api::api::protobuf_adapter::{
+    block_aggregator_client::BlockAggregatorClient,
+    block_response::Payload,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
@@ -47,10 +47,11 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
     let header = expected_block.header;
 
     // when
-    let request = fuel_block_aggregator_api::api::protobuf_adapter::BlockRangeRequest {
-        start: 1,
-        end: 1,
-    };
+    let request =
+        fuel_core_block_aggregator_api::api::protobuf_adapter::BlockRangeRequest {
+            start: 1,
+            end: 1,
+        };
     let actual_bytes = if let Some(Payload::Literal(block)) = rpc_client
         .get_block_range(request)
         .await
@@ -102,7 +103,8 @@ async fn get_block_height__can_get_value_from_rpc() {
         .expect("could not connect to server");
 
     // when
-    let request = fuel_block_aggregator_api::api::protobuf_adapter::BlockHeightRequest {};
+    let request =
+        fuel_core_block_aggregator_api::api::protobuf_adapter::BlockHeightRequest {};
     let expected_height = 1;
     let actual_height = rpc_client
         .get_block_height(request)
@@ -134,7 +136,7 @@ async fn new_block_subscription__can_get_expect_block() {
         .expect("could not connect to server");
 
     let request =
-        fuel_block_aggregator_api::api::protobuf_adapter::NewBlockSubscriptionRequest {};
+        fuel_core_block_aggregator_api::api::protobuf_adapter::NewBlockSubscriptionRequest {};
     let mut stream = rpc_client
         .new_block_subscription(request)
         .await

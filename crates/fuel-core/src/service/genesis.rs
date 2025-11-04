@@ -332,6 +332,7 @@ mod tests {
     };
     use fuel_core_producer::ports::BlockProducerDatabase;
     use fuel_core_storage::{
+        ContractsStateData,
         StorageAsRef,
         tables::{
             Coins,
@@ -554,7 +555,8 @@ mod tests {
                 .unwrap()
                 .expect("Expect a state entry to exist")
                 .into_owned();
-            assert_eq!(state.value, ret.0)
+            let value: ContractsStateData = state.value.into();
+            assert_eq!(value, ret)
         }
     }
 

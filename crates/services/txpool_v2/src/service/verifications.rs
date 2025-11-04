@@ -10,7 +10,6 @@ use crate::{
         TxPoolPersistentStorage,
         WasmChecker,
     },
-    service::memory::MemoryPool,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
@@ -41,9 +40,12 @@ use fuel_core_types::{
             Memory,
         },
     },
-    services::txpool::{
-        Metadata,
-        PoolTransaction,
+    services::{
+        executor::memory::MemoryPool,
+        txpool::{
+            Metadata,
+            PoolTransaction,
+        },
     },
 };
 use std::sync::Arc;
@@ -211,12 +213,12 @@ impl InputDependenciesVerifiedTx {
             debug_assert!(tx.checks().contains(Checks::all()));
         }
 
-        if let Transaction::Upgrade(upgrade) = tx.transaction() {
-            if let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose() {
-                wasm_checker
-                    .validate_uploaded_wasm(root)
-                    .map_err(Error::WasmValidity)?;
-            }
+        if let Transaction::Upgrade(upgrade) = tx.transaction()
+            && let UpgradePurpose::StateTransition { root } = upgrade.upgrade_purpose()
+        {
+            wasm_checker
+                .validate_uploaded_wasm(root)
+                .map_err(Error::WasmValidity)?;
         }
 
         Ok(FullyVerifiedTx(tx))

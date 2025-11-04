@@ -46,7 +46,6 @@ use fuel_core_txpool::{
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
-        memory::MemoryPool,
         pruner::TransactionPruner,
         subscriptions::Subscriptions,
         verifications::Verification,
@@ -71,6 +70,7 @@ use fuel_core_types::{
     },
     services::{
         block_importer::SharedImportResult,
+        executor::memory::MemoryPool,
         p2p::{
             GossipData,
             GossipsubMessageAcceptance,
@@ -106,7 +106,6 @@ use tokio::{
     time::MissedTickBehavior,
 };
 
-pub(crate) mod memory;
 mod pruner;
 mod subscriptions;
 pub(crate) mod verifications;
@@ -378,10 +377,10 @@ where
                         response_channel,
                         tx,
                     } => {
-                        if let Some(channel) = response_channel {
-                            if channel.send(Ok(())).is_err() {
-                                tracing::error!("Failed to send the response to the RPC");
-                            }
+                        if let Some(channel) = response_channel
+                            && channel.send(Ok(())).is_err()
+                        {
+                            tracing::error!("Failed to send the response to the RPC");
                         }
                         if let Err(e) = self.p2p.broadcast_transaction(tx) {
                             tracing::error!("Failed to broadcast transaction: {}", e);

@@ -14,11 +14,6 @@ version = { workspace = true }
 [features]
 default = ["rocksdb", "serde"]
 serde = ["dep:serde_with"]
-smt = [
-    "fuel-core-storage/smt",
-    "fuel-core-executor/smt",
-    "fuel-core-upgradable-executor/smt",
-]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rpc = ["fuel-core/rpc"]
@@ -65,7 +60,7 @@ clap = { workspace = true, features = ["derive"] }
 cosmrs = { version = "0.21", optional = true }
 derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
-fuel-block-aggregator-api = { workspace = true }
+fuel-core-block-aggregator-api = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-compression-service = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
@@ -121,7 +116,7 @@ uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-core = { path = ".", features = ["smt", "test-helpers"] }
+fuel-core = { path = ".", features = ["test-helpers"] }
 fuel-core-executor = { workspace = true, features = [
   "std",
   "test-helpers",
@@ -135,6 +130,7 @@ fuel-core-upgradable-executor = { workspace = true, features = [
   "test-helpers",
 ] }
 proptest = { workspace = true }
+sha2 = { workspace = true, features = ["default"] }
 test-case = { workspace = true }
 test-strategy = { workspace = true }
 tokio-test = "0.4.4"

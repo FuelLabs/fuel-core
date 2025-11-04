@@ -36,7 +36,7 @@ impl MockWriter {
     }
 
     /// Give access to the internal buffer (behind a `MutexGuard`).
-    fn buf(&self) -> io::Result<MutexGuard<Vec<u8>>> {
+    fn buf(&self) -> io::Result<MutexGuard<'_, Vec<u8>>> {
         // Note: The `lock` will block. This would be a problem in production code,
         // but is fine in tests.
         self.buf
