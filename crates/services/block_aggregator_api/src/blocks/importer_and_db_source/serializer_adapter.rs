@@ -1489,6 +1489,8 @@ pub fn proto_header_to_empty_consensus_header(
     }
 }
 
+// TODO: Add coverage for V2 Block stuff
+//   https://github.com/FuelLabs/fuel-core/issues/3139
 #[cfg(not(feature = "fault-proving"))]
 #[allow(non_snake_case)]
 #[cfg(test)]
