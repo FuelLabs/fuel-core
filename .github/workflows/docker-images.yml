@@ -169,8 +169,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: |
-            type=image,name=${{ env.REGISTRY_URL }},push-by-digest=true,name-canonical=true,push=true
           profile-name: 'fuel-core-builder'
           platforms: linux/amd64,linux/arm64
           build-args: "DEBUG_SYMBOLS=true"
