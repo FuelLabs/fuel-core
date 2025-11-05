@@ -1,7 +1,7 @@
 use crate::{
     block_range_response::BlockRangeResponse,
     db::{
-        BlockStorage,
+        BlockAggregatorDB,
         storage_db::table::Column,
     },
     protobuf_types::Block as ProtoBlock,
@@ -96,7 +96,7 @@ impl<S> StorageDB<S> {
     }
 }
 
-impl<S, T> BlockStorage for StorageDB<S>
+impl<S, T> BlockAggregatorDB for StorageDB<S>
 where
     S: Modifiable + std::fmt::Debug,
     S: KeyValueInspect<Column = Column>,

@@ -1,35 +1,33 @@
 use crate::{
     block_range_response::BlockRangeResponse,
     blocks::Block,
-    db::BlockStorage,
+    db::BlockAggregatorDB,
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub struct RemoteCache;
 
-impl BlockStorage for RemoteCache {
+impl BlockAggregatorDB for RemoteCache {
+    type Block = Block;
     type BlockRangeResponse = BlockRangeResponse;
 
-    fn store_block(
+    async fn store_block(
         &mut self,
         height: BlockHeight,
         block: Block,
-    ) -> impl Future<Output = crate::result::Result<()>> + Send {
+    ) -> crate::result::Result<()> {
         todo!()
     }
 
-    fn get_block_range(
+    async fn get_block_range(
         &self,
         first: BlockHeight,
         last: BlockHeight,
-    ) -> impl Future<Output = crate::result::Result<Self::BlockRangeResponse>> + Send
-    {
+    ) -> crate::result::Result<Self::BlockRangeResponse> {
         todo!()
     }
 
-    fn get_current_height(
-        &self,
-    ) -> impl Future<Output = crate::result::Result<BlockHeight>> + Send {
+    async fn get_current_height(&self) -> crate::result::Result<BlockHeight> {
         todo!()
     }
 }

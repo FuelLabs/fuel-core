@@ -74,7 +74,7 @@ pub mod integration {
         >,
     >
     where
-        DB: BlockStorage<
+        DB: BlockAggregatorDB<
             BlockRangeResponse = <ProtobufAPI as BlockAggregatorApi>::BlockRangeResponse,
             Block = ProtoBlock,
         >,

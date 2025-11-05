@@ -8,7 +8,7 @@ use crate::{
         BlockSource,
         BlockSourceEvent,
     },
-    db::BlockStorage,
+    db::BlockAggregatorDB,
 };
 use fuel_core_services::{
     TaskNextAction,
@@ -20,7 +20,6 @@ impl<Api, DB, Blocks, BlockRangeResponse> BlockAggregator<Api, DB, Blocks, Block
 where
     Api: BlockAggregatorApi<BlockRangeResponse = BlockRangeResponse>,
     DB: BlockAggregatorDB<Block = Blocks::Block, BlockRangeResponse = BlockRangeResponse>,
-
     Blocks: BlockSource,
     <Blocks as BlockSource>::Block: Clone + std::fmt::Debug,
     BlockRangeResponse: Send,
