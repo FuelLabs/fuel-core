@@ -72,16 +72,14 @@ use fuel_core_types::services::executor::UncommittedResult;
 
 #[cfg(feature = "wasm-executor")]
 use fuel_core_executor::executor::convert_tx_execution_result_to_preconfirmation;
-use fuel_core_types::services::{
-    executor::memory::MemoryPool,
-    preconfirmation::SqueezedOut,
-};
+use fuel_core_types::services::executor::memory::MemoryPool;
 #[cfg(feature = "wasm-executor")]
 use fuel_core_types::{
     fuel_types::Bytes32,
     services::preconfirmation::{
         Preconfirmation,
         PreconfirmationStatus,
+        SqueezedOut,
     },
 };
 #[cfg(feature = "wasm-executor")]
