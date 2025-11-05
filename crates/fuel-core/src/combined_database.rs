@@ -3,6 +3,8 @@ use crate::state::{
     historical_rocksdb::StateRewindPolicy,
     rocks_db::DatabaseConfig,
 };
+#[cfg(feature = "rocksdb")]
+use rayon::prelude::*;
 
 use crate::{
     database::{
@@ -62,6 +64,25 @@ pub struct CombinedDatabase {
     compression: Database<CompressionDatabase>,
 }
 
+#[derive(Clone, Copy)]
+enum DatabaseName {
+    OnChain,
+    OffChain,
+    Relayer,
+    GasPrice,
+    Compression,
+}
+
+impl DatabaseName {
+    pub const ALL: [Self; 5] = [
+        Self::OnChain,
+        Self::OffChain,
+        Self::Relayer,
+        Self::GasPrice,
+        Self::Compression,
+    ];
+}
+
 impl CombinedDatabase {
     pub fn new(
         on_chain: Database<OnChain>,
@@ -90,7 +111,7 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "backup")]
-    pub fn backup(
+    pub fn create_full_backup(
         db_dir: &std::path::Path,
         backup_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
@@ -110,24 +131,53 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "backup")]
+    fn backup_single_database(
+        database_name: DatabaseName,
+        db_dir: &std::path::Path,
+        backup_dir: &std::path::Path,
+    ) -> crate::database::Result<()> {
+        match database_name {
+            DatabaseName::OnChain => {
+                crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, backup_dir)
+                    .trace_err("Failed to backup on-chain database")?;
+            }
+            DatabaseName::OffChain => {
+                crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, backup_dir)
+                    .trace_err("Failed to backup off-chain database")?;
+            }
+            DatabaseName::Relayer => {
+                crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, backup_dir)
+                    .trace_err("Failed to backup relayer database")?;
+            }
+            DatabaseName::GasPrice => {
+                crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(
+                    db_dir, backup_dir,
+                )
+                .trace_err("Failed to backup gas-price database")?;
+            }
+            DatabaseName::Compression => {
+                crate::state::rocks_db::RocksDb::<CompressionDatabase>::backup(
+                    db_dir, backup_dir,
+                )
+                .trace_err("Failed to backup compression database")?;
+            }
+        }
+
+        Ok(())
+    }
+
+    #[cfg(feature = "backup")]
     fn backup_databases(
         db_dir: &std::path::Path,
         temp_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
-        crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup on-chain database")?;
-
-        crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup off-chain database")?;
-
-        crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup relayer database")?;
-
-        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup gas-price database")?;
-
-        crate::state::rocks_db::RocksDb::<CompressionDatabase>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup compression database")?;
+        DatabaseName::ALL.par_iter().copied().try_for_each(|name| {
+            CombinedDatabase::backup_single_database(
+                name,
+                db_dir.as_ref(),
+                temp_dir.as_ref(),
+            )
+        })?;
 
         Ok(())
     }
@@ -663,7 +713,7 @@ mod tests {
 
         // when
         let backup_dir = TempDir::new().unwrap();
-        CombinedDatabase::backup(db_dir.path(), backup_dir.path()).unwrap();
+        CombinedDatabase::create_full_backup(db_dir.path(), backup_dir.path()).unwrap();
 
         // then
         let restore_dir = TempDir::new().unwrap();
@@ -719,7 +769,7 @@ mod tests {
         let backup_dir = TempDir::new().unwrap();
 
         // then
-        CombinedDatabase::backup(db_dir.path(), backup_dir.path())
+        CombinedDatabase::create_full_backup(db_dir.path(), backup_dir.path())
             .expect_err("Backup should fail");
         let backup_dir_contents = std::fs::read_dir(backup_dir.path()).unwrap();
         assert_eq!(backup_dir_contents.count(), 0);
@@ -754,7 +804,7 @@ mod tests {
         drop(combined_db);
 
         let backup_dir = TempDir::new().unwrap();
-        CombinedDatabase::backup(db_dir.path(), backup_dir.path()).unwrap();
+        CombinedDatabase::create_full_backup(db_dir.path(), backup_dir.path()).unwrap();
 
         // when
         // we set the permissions of backup_dir to not allow reading
@@ -806,7 +856,7 @@ mod tests {
         // no drop for combined_db
 
         // then
-        let res = CombinedDatabase::backup(db_dir.path(), backup_dir.path());
+        let res = CombinedDatabase::create_full_backup(db_dir.path(), backup_dir.path());
         assert!(res.is_ok());
 
         // cleanup
