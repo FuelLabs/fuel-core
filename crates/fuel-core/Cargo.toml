@@ -92,7 +92,7 @@ num_cpus = { version = "1.16.0", optional = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true }
 rand = { workspace = true }
-rayon = {workspace = true, optional = true}
+rayon = { workspace = true, optional = true }
 rocksdb = { version = "0.21", default-features = false, features = [
   "lz4",
   "multi-threaded-cf",
