@@ -48,17 +48,12 @@ pub struct FailoverTransport {
 
 impl Clone for FailoverTransport {
     fn clone(&self) -> Self {
-        let len = self.urls.len();
-        let index = if len == 0 {
-            0
-        } else {
-            self.default_url_index.load(Ordering::Relaxed) % len
-        };
-
         Self {
             client: self.client.clone(),
             urls: self.urls.clone(),
-            default_url_index: AtomicUsize::new(index),
+            default_url_index: AtomicUsize::new(
+                self.default_url_index.load(Ordering::Relaxed),
+            ),
             #[cfg(feature = "subscriptions")]
             cookie: self.cookie.clone(),
         }
@@ -109,9 +104,12 @@ impl FailoverTransport {
             ));
         }
 
-        let default_index = self.default_url_index.load(Ordering::Relaxed) % urls_count;
+        let default_index = self.default_url_index.load(Ordering::Relaxed);
         for url_offset in 0..urls_count {
-            let url_index = (default_index + url_offset) % urls_count;
+            let url_index = default_index
+                .saturating_add(url_offset)
+                .checked_rem(urls_count)
+                .ok_or_else(|| io::Error::other("Invalid URL count"))?;
             let url = self.urls[url_index].clone();
             let query = clone_operation(&q);
             match self.internal_query(query, url, required_block_height).await {
@@ -152,10 +150,13 @@ impl FailoverTransport {
             ));
         }
 
-        let default_index = self.default_url_index.load(Ordering::Relaxed) % urls_count;
+        let default_index = self.default_url_index.load(Ordering::Relaxed);
 
         for url_offset in 0..urls_count {
-            let url_index = (default_index + url_offset) % urls_count;
+            let url_index = default_index
+                .saturating_add(url_offset)
+                .checked_rem(urls_count)
+                .ok_or_else(|| io::Error::other("Invalid URL count"))?;
             let url = self.urls[url_index].clone();
             let query = ResponseData::build(variables.clone());
             match self
