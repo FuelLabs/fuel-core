@@ -3,7 +3,7 @@ use crate::state::{
     historical_rocksdb::StateRewindPolicy,
     rocks_db::DatabaseConfig,
 };
-#[cfg(feature = "rocksdb")]
+#[cfg(feature = "backup")]
 use rayon::prelude::*;
 
 use crate::{
@@ -64,27 +64,6 @@ pub struct CombinedDatabase {
     compression: Database<CompressionDatabase>,
 }
 
-#[cfg(feature = "rocksdb")]
-#[derive(Clone, Copy)]
-enum DatabaseName {
-    OnChain,
-    OffChain,
-    Relayer,
-    GasPrice,
-    Compression,
-}
-
-#[cfg(feature = "rocksdb")]
-impl DatabaseName {
-    pub const ALL: [Self; 5] = [
-        Self::OnChain,
-        Self::OffChain,
-        Self::Relayer,
-        Self::GasPrice,
-        Self::Compression,
-    ];
-}
-
 impl CombinedDatabase {
     pub fn new(
         on_chain: Database<OnChain>,
@@ -133,49 +112,40 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "backup")]
-    fn backup_single_database(
-        database_name: DatabaseName,
-        db_dir: &std::path::Path,
-        backup_dir: &std::path::Path,
-    ) -> crate::database::Result<()> {
-        match database_name {
-            DatabaseName::OnChain => {
-                crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, backup_dir)
-                    .trace_err("Failed to backup on-chain database")?;
-            }
-            DatabaseName::OffChain => {
-                crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, backup_dir)
-                    .trace_err("Failed to backup off-chain database")?;
-            }
-            DatabaseName::Relayer => {
-                crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, backup_dir)
-                    .trace_err("Failed to backup relayer database")?;
-            }
-            DatabaseName::GasPrice => {
-                crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(
-                    db_dir, backup_dir,
-                )
-                .trace_err("Failed to backup gas-price database")?;
-            }
-            DatabaseName::Compression => {
-                crate::state::rocks_db::RocksDb::<CompressionDatabase>::backup(
-                    db_dir, backup_dir,
-                )
-                .trace_err("Failed to backup compression database")?;
-            }
-        }
-
-        Ok(())
-    }
-
-    #[cfg(feature = "backup")]
     fn backup_databases(
         db_dir: &std::path::Path,
         temp_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
-        DatabaseName::ALL.par_iter().copied().try_for_each(|name| {
-            CombinedDatabase::backup_single_database(name, db_dir, temp_dir)
-        })?;
+        use crate::state::rocks_db::RocksDb;
+
+        let backups: Vec<
+            fn(&std::path::Path, &std::path::Path) -> crate::database::Result<()>,
+        > = vec![
+            |db, out| {
+                RocksDb::<OnChain>::backup(db, out)
+                    .trace_err("Failed to backup on-chain database")
+            },
+            |db, out| {
+                RocksDb::<OffChain>::backup(db, out)
+                    .trace_err("Failed to backup off-chain database")
+            },
+            |db, out| {
+                RocksDb::<Relayer>::backup(db, out)
+                    .trace_err("Failed to backup relayer database")
+            },
+            |db, out| {
+                RocksDb::<GasPriceDatabase>::backup(db, out)
+                    .trace_err("Failed to backup gas-price database")
+            },
+            |db, out| {
+                RocksDb::<CompressionDatabase>::backup(db, out)
+                    .trace_err("Failed to backup compression database")
+            },
+        ];
+
+        backups
+            .into_par_iter()
+            .try_for_each(|backup_fn| backup_fn(db_dir, temp_dir))?;
 
         Ok(())
     }

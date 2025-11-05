@@ -17,8 +17,8 @@ serde = ["dep:serde_with"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer", "dep:cosmrs"]
-rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus", "dep:rayon"]
-backup = ["rocksdb", "fuel-core-database/backup"]
+rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
+backup = ["rocksdb", "fuel-core-database/backup", "dep:rayon"]
 test-helpers = [
     "fuel-core-database/test-helpers",
     "fuel-core-p2p?/test-helpers",
