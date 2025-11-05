@@ -29,6 +29,7 @@ use std::{
     time::SystemTime,
 };
 
+use crate::services::preconfirmation::SqueezedOut;
 pub use tai64::Tai64;
 
 /// Contains types and logic for Peer Reputation
@@ -139,9 +140,10 @@ impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
                 expiration: Tai64::UNIX_EPOCH,
                 preconfirmations: vec![Preconfirmation {
                     tx_id: TxId::default(),
-                    status: PreconfirmationStatus::SqueezedOut {
-                        reason: "Dummy reason".to_string(),
-                    },
+                    status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                        "Dummy reason".to_string(),
+                        TxId::default(),
+                    )),
                 }],
             },
             signature: crate::fuel_tx::Bytes64::default(),

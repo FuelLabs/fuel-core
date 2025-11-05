@@ -162,7 +162,7 @@ where
         {
             return Err(InsertionErrorType::Error(Error::InputValidation(
                 InputValidationError::DuplicateTxId(tx_id),
-            )))
+            )));
         }
 
         let insertion_result = self.insert_inner(tx, persistent_storage);
@@ -241,9 +241,10 @@ where
             self.new_executable_txs_notifier.send_replace(());
         }
 
-        let status = statuses::SqueezedOut {
-            reason: Error::Removed(RemovedReason::LessWorth(tx_id)).to_string(),
-        };
+        let status = statuses::SqueezedOut::new(
+            Error::Removed(RemovedReason::LessWorth(tx_id)).to_string(),
+            tx_id,
+        );
 
         let removed_transactions = removed_transactions
             .into_iter()
@@ -279,14 +280,14 @@ where
         if tx.max_gas() == 0 {
             return Err(InsertionErrorType::Error(Error::InputValidation(
                 InputValidationError::MaxGasZero,
-            )))
+            )));
         }
 
         let tx_id = tx.id();
         if self.tx_id_to_storage_id.contains_key(&tx_id) {
             return Err(InsertionErrorType::Error(Error::InputValidation(
                 InputValidationError::DuplicateTxId(tx_id),
-            )))
+            )));
         }
 
         self.config
@@ -442,7 +443,7 @@ where
                     tracing::warn!(
                         "Storage data not found for the transaction during `remove_transaction`."
                     );
-                    continue
+                    continue;
                 };
                 self.extracted_outputs
                     .new_extracted_transaction(&transaction.transaction);
@@ -469,7 +470,7 @@ where
                     "Dependent storage data not found for \
                             the transaction during `remove_transaction`."
                 );
-                continue
+                continue;
             };
 
             self.selection_algorithm
@@ -562,7 +563,7 @@ where
             let storage_id = sorted_txs.next().ok_or(Error::NotInsertedLimitHit)?;
 
             if checked_transaction.all_dependencies().contains(storage_id) {
-                continue
+                continue;
             }
 
             debug_assert!(!self.storage.has_dependencies(storage_id));
@@ -576,7 +577,7 @@ where
                     "Storage data not found for one of the less \
                     worth transactions during `find_free_space`."
                 );
-                continue
+                continue;
             };
             let ratio = Ratio::new(
                 storage_data.dependents_cumulative_tip,
@@ -618,11 +619,8 @@ where
     }
 
     /// Remove transaction and its dependents.
-    pub fn remove_transactions_and_dependents<I>(
-        &mut self,
-        tx_ids: I,
-        tx_status: statuses::SqueezedOut,
-    ) where
+    pub fn remove_transactions_and_dependents<I>(&mut self, tx_ids: I, error: Error)
+    where
         I: IntoIterator<Item = TxId>,
     {
         let mut removed_transactions = vec![];
@@ -635,7 +633,7 @@ where
                 removed_transactions.extend(removed.into_iter().map(|data| {
                     let tx_id = data.transaction.id();
 
-                    (tx_id, tx_status.clone())
+                    (tx_id, statuses::SqueezedOut::new(error.to_string(), tx_id))
                 }));
             }
         }
@@ -648,16 +646,13 @@ where
 
     pub fn remove_skipped_transaction(&mut self, tx_id: TxId, reason: String) {
         // If pre confirmation comes from the block producer node via p2p,
-        // transaction still may be inside of the TxPool.
+        // transaction still may be inside the TxPool.
         // In that case first remove it and all its dependants.
         if self.tx_id_to_storage_id.contains_key(&tx_id) {
-            let tx_status = statuses::SqueezedOut {
-                reason: Error::SkippedTransaction(format!(
-                    "Transaction with id: {tx_id}, was removed because of: {reason}"
-                ))
-                .to_string(),
-            };
-            self.remove_transactions_and_dependents(iter::once(tx_id), tx_status);
+            let error = Error::SkippedTransaction(format!(
+                "Transaction with id: {tx_id}, was removed because of: {reason}"
+            ));
+            self.remove_transactions_and_dependents(iter::once(tx_id), error);
         }
 
         self.extracted_outputs.new_skipped_transaction(&tx_id);
@@ -665,12 +660,11 @@ where
 
         let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
         if !coin_dependents.is_empty() {
-            let tx_status = statuses::SqueezedOut {
-                reason: Error::SkippedTransaction(format!(
+            let tx_status = statuses::SqueezedOut::new(
+                Error::SkippedTransaction(format!(
                     "Parent transaction with id: {tx_id}, was removed because of: {reason}"
                 ))
-                .to_string(),
-            };
+                    .to_string(), tx_id);
 
             for dependent in coin_dependents {
                 let removed = self

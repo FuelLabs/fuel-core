@@ -72,7 +72,10 @@ use fuel_core_types::services::executor::UncommittedResult;
 
 #[cfg(feature = "wasm-executor")]
 use fuel_core_executor::executor::convert_tx_execution_result_to_preconfirmation;
-use fuel_core_types::services::executor::memory::MemoryPool;
+use fuel_core_types::services::{
+    executor::memory::MemoryPool,
+    preconfirmation::SqueezedOut,
+};
 #[cfg(feature = "wasm-executor")]
 use fuel_core_types::{
     fuel_types::Bytes32,
@@ -957,9 +960,10 @@ where
                 .iter()
                 .map(|(tx_id, error)| Preconfirmation {
                     tx_id: *tx_id,
-                    status: PreconfirmationStatus::SqueezedOut {
-                        reason: error.to_string(),
-                    },
+                    status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                        error.to_string(),
+                        *tx_id,
+                    )),
                 });
 
         preconfirmations.extend(squeezed_out);
