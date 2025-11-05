@@ -64,6 +64,7 @@ pub struct CombinedDatabase {
     compression: Database<CompressionDatabase>,
 }
 
+#[cfg(feature = "rocksdb")]
 #[derive(Clone, Copy)]
 enum DatabaseName {
     OnChain,
@@ -73,6 +74,7 @@ enum DatabaseName {
     Compression,
 }
 
+#[cfg(feature = "rocksdb")]
 impl DatabaseName {
     pub const ALL: [Self; 5] = [
         Self::OnChain,
@@ -172,11 +174,7 @@ impl CombinedDatabase {
         temp_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
         DatabaseName::ALL.par_iter().copied().try_for_each(|name| {
-            CombinedDatabase::backup_single_database(
-                name,
-                db_dir.as_ref(),
-                temp_dir.as_ref(),
-            )
+            CombinedDatabase::backup_single_database(name, db_dir, temp_dir)
         })?;
 
         Ok(())

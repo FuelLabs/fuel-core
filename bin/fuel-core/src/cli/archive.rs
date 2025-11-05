@@ -154,7 +154,7 @@ mod archiver {
         let nested_tars = std::fs::read_dir(dest_dir)?
             .filter_map(|entry| {
                 let path = entry.ok()?.path();
-                if path.is_file() && path.extension().map_or(false, |ext| ext == "tar") {
+                if path.is_file() && path.extension().is_some_and(|ext| ext == "tar") {
                     Some(path)
                 } else {
                     None
