@@ -21,7 +21,6 @@ use cynic::{
 use fuel_core_types::fuel_types::BlockHeight;
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
-use futures::future::select_ok;
 use reqwest::Url;
 use serde::{
     Serialize,
@@ -32,14 +31,38 @@ use std::sync::Arc;
 use std::{
     fmt::Debug,
     io,
+    sync::atomic::{
+        AtomicUsize,
+        Ordering,
+    },
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FailoverTransport {
     client: reqwest::Client,
     urls: Box<[Url]>,
+    default_url_index: AtomicUsize,
     #[cfg(feature = "subscriptions")]
     cookie: Arc<reqwest::cookie::Jar>,
+}
+
+impl Clone for FailoverTransport {
+    fn clone(&self) -> Self {
+        let len = self.urls.len();
+        let index = if len == 0 {
+            0
+        } else {
+            self.default_url_index.load(Ordering::Relaxed) % len
+        };
+
+        Self {
+            client: self.client.clone(),
+            urls: self.urls.clone(),
+            default_url_index: AtomicUsize::new(index),
+            #[cfg(feature = "subscriptions")]
+            cookie: self.cookie.clone(),
+        }
+    }
 }
 
 impl FailoverTransport {
@@ -53,6 +76,7 @@ impl FailoverTransport {
             Ok(Self {
                 urls: urls.into_boxed_slice(),
                 client,
+                default_url_index: AtomicUsize::new(0),
                 cookie,
             })
         }
@@ -63,6 +87,7 @@ impl FailoverTransport {
             Ok(Self {
                 client,
                 urls: urls.into_boxed_slice(),
+                default_url_index: AtomicUsize::new(0),
             })
         }
     }
@@ -76,19 +101,30 @@ impl FailoverTransport {
         Vars: Serialize + QueryVariables + Clone + Send + 'static,
         ResponseData: DeserializeOwned + QueryFragment + Send + 'static,
     {
-        let futures: Vec<_> = self
-            .urls
-            .iter()
-            .map(|url| {
-                let query = clone_operation(&q);
-                Box::pin(self.internal_query(query, url.clone(), required_block_height))
-            })
-            .collect();
-
-        match select_ok(futures).await {
-            Ok((response, _)) => Ok(response),
-            Err(err) => Err(err),
+        let mut last_err = None;
+        let urls_count = self.urls.len();
+        if urls_count == 0 {
+            return Err(io::Error::other(
+                "Failover transport has no URLs configured",
+            ));
         }
+
+        let default_index = self.default_url_index.load(Ordering::Relaxed) % urls_count;
+        for url_offset in 0..urls_count {
+            let url_index = (default_index + url_offset) % urls_count;
+            let url = self.urls[url_index].clone();
+            let query = clone_operation(&q);
+            match self.internal_query(query, url, required_block_height).await {
+                Ok(response_data) => {
+                    if url_offset != 0 {
+                        self.default_url_index.store(url_index, Ordering::Relaxed);
+                    }
+                    return Ok(response_data);
+                }
+                Err(err) => last_err = Some(err),
+            }
+        }
+        Err(last_err.unwrap())
     }
 
     #[cfg(feature = "subscriptions")]
@@ -109,13 +145,29 @@ impl FailoverTransport {
     {
         let mut last_err = None;
 
-        for url in self.urls.iter() {
+        let urls_count = self.urls.len();
+        if urls_count == 0 {
+            return Err(io::Error::other(
+                "Failover transport has no URLs configured",
+            ));
+        }
+
+        let default_index = self.default_url_index.load(Ordering::Relaxed) % urls_count;
+
+        for url_offset in 0..urls_count {
+            let url_index = (default_index + url_offset) % urls_count;
+            let url = self.urls[url_index].clone();
             let query = ResponseData::build(variables.clone());
             match self
-                .internal_subscribe(query, url.clone(), required_block_height)
+                .internal_subscribe(query, url, required_block_height)
                 .await
             {
-                Ok(response_data) => return Ok(response_data),
+                Ok(response_data) => {
+                    if url_offset != 0 {
+                        self.default_url_index.store(url_index, Ordering::Relaxed);
+                    }
+                    return Ok(response_data);
+                }
                 Err(err) => last_err = Some(err),
             }
         }
@@ -134,7 +186,7 @@ impl FailoverTransport {
     {
         let fuel_operation = FuelOperation::new(q, required_block_height);
         self.client
-            .post(url.clone())
+            .post(url)
             .run_fuel_graphql(fuel_operation)
             .await
             .map_err(io::Error::other)
