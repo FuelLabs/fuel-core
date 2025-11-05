@@ -1,14 +1,12 @@
-use crate::{
-    blocks::Block,
-    result::Result,
-};
+use crate::result::Result;
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub mod remote_cache;
 pub mod storage_db;
 
 /// The definition of the block aggregator database.
-pub trait BlockStorage: Send + Sync {
+pub trait BlockAggregatorDB: Send + Sync {
+    type Block;
     /// The type used to report a range of blocks
     type BlockRangeResponse;
 
@@ -16,7 +14,7 @@ pub trait BlockStorage: Send + Sync {
     fn store_block(
         &mut self,
         height: BlockHeight,
-        block: Block,
+        block: Self::Block,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Retrieves a range of blocks from the database

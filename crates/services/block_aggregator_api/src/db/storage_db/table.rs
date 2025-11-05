@@ -1,4 +1,4 @@
-use crate::blocks::Block;
+use crate::protobuf_types::Block as ProtoBlock;
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
@@ -51,7 +51,7 @@ impl Mappable for Blocks {
     type Key = Self::OwnedKey;
     type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
-    type OwnedValue = Block;
+    type OwnedValue = ProtoBlock;
 }
 
 impl TableWithBlueprint for Blocks {
