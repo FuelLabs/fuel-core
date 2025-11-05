@@ -836,13 +836,15 @@ where
                         let tx = block.transactions.last().expect(
                             "Shouldn't happens as we just added a transaction; qed",
                         );
+                        // The transaction has been included in the block; subtracting one gives its zero-based index.
+                        let tx_index = data.tx_count.saturating_sub(1);
                         let preconfirmation_status =
                             convert_tx_execution_result_to_preconfirmation(
                                 tx,
                                 tx_id,
                                 &latest_executed_tx.result,
                                 *block.header.height(),
-                                data.tx_count,
+                                tx_index,
                             );
                         statuses.push(preconfirmation_status);
                     }
