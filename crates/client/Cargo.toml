@@ -31,7 +31,6 @@ cynic = { workspace = true }
 derive_more = { workspace = true }
 eventsource-client = { version = "0.13.0", optional = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
-futures = { workspace = true }
 hex = { workspace = true }
 # Included to enable webpki in the eventsource client
 hyper-rustls = { version = "0.24", features = [
