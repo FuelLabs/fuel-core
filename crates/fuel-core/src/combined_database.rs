@@ -111,7 +111,7 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "backup")]
-    pub fn create_full_backup(
+    pub fn backup(
         db_dir: &std::path::Path,
         backup_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
@@ -713,7 +713,7 @@ mod tests {
 
         // when
         let backup_dir = TempDir::new().unwrap();
-        CombinedDatabase::create_full_backup(db_dir.path(), backup_dir.path()).unwrap();
+        CombinedDatabase::backup(db_dir.path(), backup_dir.path()).unwrap();
 
         // then
         let restore_dir = TempDir::new().unwrap();
@@ -769,7 +769,7 @@ mod tests {
         let backup_dir = TempDir::new().unwrap();
 
         // then
-        CombinedDatabase::create_full_backup(db_dir.path(), backup_dir.path())
+        CombinedDatabase::backup(db_dir.path(), backup_dir.path())
             .expect_err("Backup should fail");
         let backup_dir_contents = std::fs::read_dir(backup_dir.path()).unwrap();
         assert_eq!(backup_dir_contents.count(), 0);
@@ -804,7 +804,7 @@ mod tests {
         drop(combined_db);
 
         let backup_dir = TempDir::new().unwrap();
-        CombinedDatabase::create_full_backup(db_dir.path(), backup_dir.path()).unwrap();
+        CombinedDatabase::backup(db_dir.path(), backup_dir.path()).unwrap();
 
         // when
         // we set the permissions of backup_dir to not allow reading
@@ -856,7 +856,7 @@ mod tests {
         // no drop for combined_db
 
         // then
-        let res = CombinedDatabase::create_full_backup(db_dir.path(), backup_dir.path());
+        let res = CombinedDatabase::backup(db_dir.path(), backup_dir.path());
         assert!(res.is_ok());
 
         // cleanup

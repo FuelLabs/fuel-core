@@ -37,14 +37,14 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
 
 #[cfg(not(feature = "archive"))]
 pub fn backup(db_dir: &str, backup_path: &str) -> anyhow::Result<()> {
-    CombinedDatabase::backup(db_dir.as_ref(), backup_path.as_ref())?;
+    CombinedDatabase::create_full_backup(db_dir.as_ref(), backup_path.as_ref())?;
     Ok(())
 }
 
 #[cfg(feature = "archive")]
 pub fn backup(db_dir: &str, backup_path: &str) -> anyhow::Result<()> {
     let tmp_dir = tempfile::TempDir::new()?;
-    CombinedDatabase::create_full_backup(db_dir.as_ref(), tmp_dir.path())?;
+    CombinedDatabase::backup(db_dir.as_ref(), tmp_dir.path())?;
     archiver::add_to_archive(tmp_dir.path(), backup_path.as_ref())?;
     Ok(())
 }
