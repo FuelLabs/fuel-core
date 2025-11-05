@@ -37,7 +37,7 @@ pub fn exec(command: Command) -> anyhow::Result<()> {
 
 #[cfg(not(feature = "archive"))]
 pub fn backup(db_dir: &str, backup_path: &str) -> anyhow::Result<()> {
-    CombinedDatabase::create_full_backup(db_dir.as_ref(), backup_path.as_ref())?;
+    CombinedDatabase::backup(db_dir.as_ref(), backup_path.as_ref())?;
     Ok(())
 }
 
