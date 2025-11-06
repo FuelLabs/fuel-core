@@ -819,6 +819,7 @@ where
                     ));
                     continue;
                 }
+                let tx_index = data.tx_count;
                 match self.execute_transaction_and_commit(
                     block,
                     storage_tx,
@@ -837,7 +838,6 @@ where
                             "Shouldn't happens as we just added a transaction; qed",
                         );
                         // The transaction has been included in the block; subtracting one gives its zero-based index.
-                        let tx_index = data.tx_count.saturating_sub(1);
                         let preconfirmation_status =
                             convert_tx_execution_result_to_preconfirmation(
                                 tx,
