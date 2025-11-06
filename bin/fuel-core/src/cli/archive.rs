@@ -31,7 +31,7 @@ pub struct RestoreArgs {
 pub fn exec(command: Command) -> anyhow::Result<()> {
     match command {
         Command::Backup(args) => backup(&args.from, &args.to),
-        Command::Restore(args) => restore(&args.from, &args.to),
+        Command::Restore(args) => restore(&args.to, &args.from),
     }
 }
 
@@ -76,16 +76,11 @@ mod archiver {
             BufReader,
             BufWriter,
         },
-        os::unix::fs::PermissionsExt,
-        path::{
-            Path,
-            PathBuf,
-        },
+        path::Path,
     };
     use tar::{
         Archive,
         Builder,
-        Header,
     };
 
     pub fn add_to_archive(src_dir: &Path, dest_path: &Path) -> anyhow::Result<()> {
@@ -100,34 +95,14 @@ mod archiver {
         let tar_paths = top_level_dirs
             .par_iter()
             .map(|dir| {
-                let tar_path = dest_path.join(format!(
-                    "{}.tar",
-                    dir.file_name()
-                        .ok_or(anyhow!("Failed to get the directory name."))?
-                        .to_string_lossy()
-                ));
+                let dir_name = dir
+                    .file_name()
+                    .ok_or(anyhow!("Failed to get the directory name."))?
+                    .to_string_lossy();
+                let tar_path = dest_path.join(format!("{}.tar", dir_name));
                 let writer = BufWriter::new(File::create(&tar_path)?);
                 let mut tar = Builder::new(writer);
-
-                let files = collect_files(dir)?
-                    .into_par_iter()
-                    .filter_map(|(rel, abs)| {
-                        let metadata = abs.metadata().ok()?;
-                        let mut header = Header::new_gnu();
-                        header.set_path(rel).ok()?;
-                        header.set_size(metadata.len());
-                        header.set_mode(metadata.permissions().mode());
-                        header.set_mtime(
-                            metadata.modified().ok()?.elapsed().ok()?.as_secs(),
-                        );
-                        header.set_cksum();
-                        Some((header, abs))
-                    })
-                    .collect::<Vec<_>>();
-
-                for (header, path) in files {
-                    tar.append(&header, File::open(path)?)?;
-                }
+                tar.append_dir_all(dir_name.as_ref(), dir)?;
 
                 tar.finish()?;
                 Ok::<_, anyhow::Error>(tar_path)
@@ -148,7 +123,9 @@ mod archiver {
 
         // Step 1: Extract the main archive
         let reader = BufReader::new(File::open(src_file)?);
-        Archive::new(reader).unpack(dest_dir)?;
+        let mut archive = Archive::new(reader);
+        archive.set_ignore_zeros(true); // Because we've concatenated all the individual tars to db.tar
+        archive.unpack(dest_dir)?;
 
         // Step 2: Find nested .tar files in dest_dir
         let nested_tars = std::fs::read_dir(dest_dir)?
@@ -176,21 +153,5 @@ mod archiver {
         })?;
 
         Ok(())
-    }
-
-    fn collect_files(base: &Path) -> anyhow::Result<Vec<(PathBuf, PathBuf)>> {
-        let mut files = Vec::new();
-        for entry in fs::read_dir(base)? {
-            let entry = entry?;
-            let path = entry.path();
-            let rel = path.strip_prefix(base)?.to_path_buf();
-
-            if path.is_file() {
-                files.push((rel, path));
-            } else if path.is_dir() {
-                files.extend(collect_files(&path)?);
-            }
-        }
-        Ok(files)
     }
 }
