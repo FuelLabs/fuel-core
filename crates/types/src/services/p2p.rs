@@ -13,7 +13,10 @@ use super::{
     txpool::ArcPoolTx,
 };
 #[cfg(feature = "test-helpers")]
-use crate::services::preconfirmation::PreconfirmationStatus;
+use crate::services::preconfirmation::{
+    PreconfirmationStatus,
+    SqueezedOut,
+};
 use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -29,7 +32,6 @@ use std::{
     time::SystemTime,
 };
 
-use crate::services::preconfirmation::SqueezedOut;
 pub use tai64::Tai64;
 
 /// Contains types and logic for Peer Reputation
