@@ -837,7 +837,6 @@ where
                         let tx = block.transactions.last().expect(
                             "Shouldn't happens as we just added a transaction; qed",
                         );
-                        // The transaction has been included in the block; subtracting one gives its zero-based index.
                         let preconfirmation_status =
                             convert_tx_execution_result_to_preconfirmation(
                                 tx,
