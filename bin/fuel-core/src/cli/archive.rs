@@ -76,11 +76,16 @@ mod archiver {
             BufReader,
             BufWriter,
         },
-        path::Path,
+        os::unix::fs::PermissionsExt,
+        path::{
+            Path,
+            PathBuf,
+        },
     };
     use tar::{
         Archive,
         Builder,
+        Header,
     };
 
     pub fn add_to_archive(src_dir: &Path, dest_path: &Path) -> anyhow::Result<()> {
@@ -98,11 +103,32 @@ mod archiver {
                 let dir_name = dir
                     .file_name()
                     .ok_or(anyhow!("Failed to get the directory name."))?
-                    .to_string_lossy();
+                    .to_str()
+                    .ok_or(anyhow!("Failed to get the directory name."))?;
                 let tar_path = dest_path.join(format!("{}.tar", dir_name));
                 let writer = BufWriter::new(File::create(&tar_path)?);
                 let mut tar = Builder::new(writer);
-                tar.append_dir_all(dir_name.as_ref(), dir)?;
+
+                let files = collect_files(dir, dir)?
+                    .into_par_iter()
+                    .filter_map(|(rel, abs)| {
+                        let metadata = abs.metadata().ok()?;
+                        let mut header = Header::new_gnu();
+                        let path = Path::new(&dir_name).join(rel);
+                        header.set_path(path).ok()?;
+                        header.set_size(metadata.len());
+                        header.set_mode(metadata.permissions().mode());
+                        header.set_mtime(
+                            metadata.modified().ok()?.elapsed().ok()?.as_secs(),
+                        );
+                        header.set_cksum();
+                        Some((header, abs))
+                    })
+                    .collect::<Vec<_>>();
+
+                for (header, path) in files {
+                    tar.append(&header, File::open(path)?)?;
+                }
 
                 tar.finish()?;
                 Ok::<_, anyhow::Error>(tar_path)
@@ -119,39 +145,30 @@ mod archiver {
     }
 
     pub fn extract_from_archive(src_file: &Path, dest_dir: &Path) -> anyhow::Result<()> {
-        use rayon::prelude::*;
-
-        // Step 1: Extract the main archive
         let reader = BufReader::new(File::open(src_file)?);
         let mut archive = Archive::new(reader);
         archive.set_ignore_zeros(true); // Because we've concatenated all the individual tars to db.tar
         archive.unpack(dest_dir)?;
 
-        // Step 2: Find nested .tar files in dest_dir
-        let nested_tars = std::fs::read_dir(dest_dir)?
-            .filter_map(|entry| {
-                let path = entry.ok()?.path();
-                if path.is_file() && path.extension().is_some_and(|ext| ext == "tar") {
-                    Some(path)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        // Step 3: Extract each nested tar in parallel
-        nested_tars.par_iter().try_for_each(|tar_path| {
-            let subdir_name = tar_path
-                .file_stem()
-                .ok_or_else(|| anyhow::anyhow!("Invalid tar filename"))?;
-            let subdir_path = dest_dir.join(subdir_name);
-
-            std::fs::create_dir_all(&subdir_path)?;
-            let reader = BufReader::new(File::open(tar_path)?);
-            Archive::new(reader).unpack(&subdir_path)?;
-            Ok::<(), anyhow::Error>(())
-        })?;
-
         Ok(())
+    }
+
+    fn collect_files(
+        path: &Path,
+        base_path: &Path,
+    ) -> anyhow::Result<Vec<(PathBuf, PathBuf)>> {
+        let mut files = Vec::new();
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let path = entry.path();
+            let relative_path = path.strip_prefix(base_path)?.to_path_buf();
+
+            if path.is_file() {
+                files.push((relative_path, path));
+            } else if path.is_dir() {
+                files.extend(collect_files(&path, base_path)?);
+            }
+        }
+        Ok(files)
     }
 }
