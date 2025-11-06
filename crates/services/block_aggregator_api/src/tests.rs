@@ -4,7 +4,7 @@ use super::*;
 use crate::{
     api::BlockAggregatorQuery,
     blocks::{
-        Block,
+        BlockBytes,
         BlockSourceEvent,
     },
     result::{
@@ -34,7 +34,7 @@ use tokio::{
     time::error::Elapsed,
 };
 
-type BlockRangeResponse = BoxStream<Block>;
+type BlockRangeResponse = BoxStream<BlockBytes>;
 
 struct FakeApi<T, B> {
     receiver: Receiver<BlockAggregatorQuery<T, B>>,
@@ -57,7 +57,7 @@ impl<T: Send, B: Send> BlockAggregatorApi for FakeApi<T, B> {
 }
 
 struct FakeDB {
-    map: Arc<Mutex<HashMap<BlockHeight, Block>>>,
+    map: Arc<Mutex<HashMap<BlockHeight, BlockBytes>>>,
 }
 
 impl FakeDB {
@@ -66,20 +66,20 @@ impl FakeDB {
         Self { map }
     }
 
-    fn add_block(&mut self, height: BlockHeight, block: Block) {
+    fn add_block(&mut self, height: BlockHeight, block: BlockBytes) {
         self.map.lock().unwrap().insert(height, block);
     }
 
-    fn clone_inner(&self) -> Arc<Mutex<HashMap<BlockHeight, Block>>> {
+    fn clone_inner(&self) -> Arc<Mutex<HashMap<BlockHeight, BlockBytes>>> {
         self.map.clone()
     }
 }
 
 impl BlockAggregatorDB for FakeDB {
-    type Block = Block;
+    type Block = BlockBytes;
     type BlockRangeResponse = BlockRangeResponse;
 
-    async fn store_block(&mut self, id: BlockHeight, block: Block) -> Result<()> {
+    async fn store_block(&mut self, id: BlockHeight, block: BlockBytes) -> Result<()> {
         self.map.lock().unwrap().insert(id, block);
         Ok(())
     }
@@ -88,7 +88,7 @@ impl BlockAggregatorDB for FakeDB {
         &self,
         first: BlockHeight,
         last: BlockHeight,
-    ) -> Result<BoxStream<Block>> {
+    ) -> Result<BoxStream<BlockBytes>> {
         let mut blocks = vec![];
         let first: u32 = first.into();
         let last: u32 = last.into();
@@ -113,11 +113,11 @@ impl BlockAggregatorDB for FakeDB {
 }
 
 struct FakeBlockSource {
-    blocks: Receiver<BlockSourceEvent<Block>>,
+    blocks: Receiver<BlockSourceEvent<BlockBytes>>,
 }
 
 impl FakeBlockSource {
-    fn new() -> (Self, Sender<BlockSourceEvent<Block>>) {
+    fn new() -> (Self, Sender<BlockSourceEvent<BlockBytes>>) {
         let (_sender, receiver) = tokio::sync::mpsc::channel(1);
         let _self = Self { blocks: receiver };
         (_self, _sender)
@@ -125,9 +125,9 @@ impl FakeBlockSource {
 }
 
 impl BlockSource for FakeBlockSource {
-    type Block = Block;
+    type Block = BlockBytes;
 
-    async fn next_block(&mut self) -> Result<BlockSourceEvent<Block>> {
+    async fn next_block(&mut self) -> Result<BlockSourceEvent<BlockBytes>> {
         self.blocks
             .recv()
             .await
@@ -145,9 +145,9 @@ async fn run__get_block_range__returns_expected_blocks() {
     // given
     let (api, sender) = FakeApi::new();
     let mut db = FakeDB::new();
-    db.add_block(1.into(), Block::random(&mut rng));
-    db.add_block(2.into(), Block::random(&mut rng));
-    db.add_block(3.into(), Block::random(&mut rng));
+    db.add_block(1.into(), BlockBytes::random(&mut rng));
+    db.add_block(2.into(), BlockBytes::random(&mut rng));
+    db.add_block(3.into(), BlockBytes::random(&mut rng));
 
     let (source, _block_sender) = FakeBlockSource::new();
 
@@ -161,7 +161,7 @@ async fn run__get_block_range__returns_expected_blocks() {
 
     // then
     let stream = response.await.unwrap();
-    let blocks = stream.collect::<Vec<Block>>().await;
+    let blocks = stream.collect::<Vec<BlockBytes>>().await;
 
     // TODO: Check values
     assert_eq!(blocks.len(), 2);
@@ -180,7 +180,7 @@ async fn run__new_block_gets_added_to_db() {
     let (source, source_sender) = FakeBlockSource::new();
     let mut srv = BlockAggregator::new(api, db, source);
 
-    let block = Block::random(&mut rng);
+    let block = BlockBytes::random(&mut rng);
     let id = BlockHeight::from(123u32);
     let mut watcher = StateWatcher::started();
 
@@ -202,9 +202,9 @@ async fn run__get_current_height__returns_expected_height() {
     let (api, sender) = FakeApi::new();
     let mut db = FakeDB::new();
     let expected_height = BlockHeight::from(3u32);
-    db.add_block(1.into(), Block::random(&mut rng));
-    db.add_block(2.into(), Block::random(&mut rng));
-    db.add_block(expected_height, Block::random(&mut rng));
+    db.add_block(1.into(), BlockBytes::random(&mut rng));
+    db.add_block(2.into(), BlockBytes::random(&mut rng));
+    db.add_block(expected_height, BlockBytes::random(&mut rng));
 
     let (source, _block_sender) = FakeBlockSource::new();
     let mut srv = BlockAggregator::new(api, db, source);
@@ -234,7 +234,7 @@ async fn run__new_block_subscription__sends_new_block() {
     let (source, source_sender) = FakeBlockSource::new();
     let mut srv = BlockAggregator::new(api, db, source);
 
-    let expected_block = Block::random(&mut rng);
+    let expected_block = BlockBytes::random(&mut rng);
     let expected_height = BlockHeight::from(123u32);
     let mut watcher = StateWatcher::started();
     let (query, response) = BlockAggregatorQuery::new_block_subscription();
@@ -263,7 +263,7 @@ async fn run__new_block_subscription__does_not_send_syncing_blocks() {
     let (source, source_sender) = FakeBlockSource::new();
     let mut srv = BlockAggregator::new(api, db, source);
 
-    let block = Block::random(&mut rng);
+    let block = BlockBytes::random(&mut rng);
     let height = BlockHeight::from(123u32);
     let mut watcher = StateWatcher::started();
     let (query, response) = BlockAggregatorQuery::new_block_subscription();

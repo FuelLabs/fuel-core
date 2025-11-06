@@ -24,11 +24,11 @@ pub enum BlockSourceEvent<B> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct Block {
+pub struct BlockBytes {
     bytes: Bytes,
 }
 
-impl Block {
+impl BlockBytes {
     pub fn new(bytes: Bytes) -> Self {
         Self { bytes }
     }
@@ -50,7 +50,7 @@ impl Block {
     }
 }
 
-impl From<Vec<u8>> for Block {
+impl From<Vec<u8>> for BlockBytes {
     fn from(value: Vec<u8>) -> Self {
         let bytes = Bytes::from(value);
         Self::new(bytes)
