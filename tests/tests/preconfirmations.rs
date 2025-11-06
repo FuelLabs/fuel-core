@@ -74,7 +74,7 @@ async fn preconfirmation__received_after_successful_execution() {
             resolved_outputs,
         } => {
             // Then
-            assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
+            assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 0));
             assert_eq!(transaction_id, tx_id);
             let receipts = receipts.unwrap();
             assert_eq!(receipts.len(), 3);
