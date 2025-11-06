@@ -58,7 +58,7 @@ pub trait RunnableService: Send {
     const NAME: &'static str;
 
     /// Service specific shared data. This is used when you have data that needs to be shared by
-    /// one or more tasks. It is the implementors responsibility to ensure cloning this
+    /// one or more tasks. It is the implementers responsibility to ensure cloning this
     /// type is shallow and doesn't provide a full duplication of data that is meant
     /// to be shared between asynchronous processes.
     type SharedData: Clone + Send + Sync;
