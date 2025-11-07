@@ -9,6 +9,7 @@ use crate::{
 };
 use aws_sdk_s3::operation::put_object::PutObjectOutput;
 use aws_smithy_mocks::{
+    Rule,
     mock,
     mock_client,
 };
@@ -20,6 +21,7 @@ use fuel_core_storage::{
     },
 };
 use futures::StreamExt;
+use std::iter;
 
 fn database() -> StorageTransaction<InMemoryStorage<Column>> {
     InMemoryStorage::default().into_transaction()
@@ -31,16 +33,18 @@ fn arb_proto_block() -> ProtoBlock {
     let proto_block = serializer.serialize_block(&block).unwrap();
     proto_block
 }
-
-#[tokio::test]
-async fn store_block__happy_path() {
-    let put_happy_rule = mock!(Client::put_object)
+fn put_happy_rule() -> Rule {
+    mock!(Client::put_object)
         .match_requests(|req| req.bucket() == Some("test-bucket"))
         .sequence()
         .output(|| PutObjectOutput::builder().build())
-        .build();
+        .build()
+}
+
+#[tokio::test]
+async fn store_block__happy_path() {
     // given
-    let client = mock_client!(aws_sdk_s3, [&put_happy_rule]);
+    let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_id = "test-id".to_string();
     let aws_secret = "test-secret".to_string();
     let aws_region = "test-region".to_string();
@@ -102,13 +106,8 @@ async fn get_block_range__happy_path() {
 
 #[tokio::test]
 async fn get_current_height__returns_highest_continuos_block() {
-    let put_happy_rule = mock!(Client::put_object)
-        .match_requests(|req| req.bucket() == Some("test-bucket"))
-        .sequence()
-        .output(|| PutObjectOutput::builder().build())
-        .build();
     // given
-    let client = mock_client!(aws_sdk_s3, [&put_happy_rule]);
+    let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_id = "test-id".to_string();
     let aws_secret = "test-secret".to_string();
     let aws_region = "test-region".to_string();
@@ -125,5 +124,65 @@ async fn get_current_height__returns_highest_continuos_block() {
     let actual = adapter.get_current_height().await.unwrap().unwrap();
 
     // then
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn store_block__does_not_update_the_highest_continuous_block_if_not_contiguous() {
+    // given
+    let mut storage = database();
+    let mut tx = storage.write_transaction();
+    let starting_height = BlockHeight::from(1u32);
+    tx.storage_as_mut::<LatestBlock>()
+        .insert(&(), &starting_height)
+        .unwrap();
+    tx.commit().unwrap();
+    let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
+    let aws_id = "test-id".to_string();
+    let aws_secret = "test-secret".to_string();
+    let aws_region = "test-region".to_string();
+    let aws_bucket = "test-bucket".to_string();
+    let mut adapter =
+        RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, client, storage);
+    let expected = BlockHeight::new(3);
+    let block = arb_proto_block();
+    let block = BlockSourceEvent::NewBlock(expected, block);
+    adapter.store_block(block).await.unwrap();
+
+    // when
+    let expected = starting_height;
+    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    assert_eq!(expected, actual);
+}
+
+#[tokio::test]
+async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
+    let rules: Vec<_> = iter::repeat_with(put_happy_rule).take(10).collect();
+    let client = mock_client!(aws_sdk_s3, rules.iter());
+    let aws_id = "test-id".to_string();
+    let aws_secret = "test-secret".to_string();
+    let aws_region = "test-region".to_string();
+    let aws_bucket = "test-bucket".to_string();
+
+    // given
+    let db = database();
+    let mut adapter =
+        RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, client, db);
+
+    for height in 2..=10u32 {
+        let height = BlockHeight::from(height);
+        let block = arb_proto_block();
+        let block = BlockSourceEvent::NewBlock(height, block.clone());
+        adapter.store_block(block).await.unwrap();
+    }
+    // when
+    let height = BlockHeight::from(1u32);
+    let some_block = arb_proto_block();
+    let block = BlockSourceEvent::OldBlock(height, some_block.clone());
+    adapter.store_block(block).await.unwrap();
+
+    // then
+    let expected = BlockHeight::from(10u32);
+    let actual = adapter.get_current_height().await.unwrap().unwrap();
     assert_eq!(expected, actual);
 }

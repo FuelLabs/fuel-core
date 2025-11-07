@@ -26,10 +26,7 @@ use fuel_core_storage::{
         WriteTransaction,
     },
 };
-use fuel_core_types::{
-    blockchain::block::Block as FuelBlock,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::fuel_types::BlockHeight;
 use prost::Message;
 
 #[allow(non_snake_case)]
