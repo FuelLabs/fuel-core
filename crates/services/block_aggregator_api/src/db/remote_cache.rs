@@ -40,6 +40,7 @@ pub struct RemoteCache<S> {
     aws_secret: String,
     aws_region: String,
     aws_bucket: String,
+    url_base: String,
     client: Client,
 
     // track consistency between runs
@@ -54,6 +55,7 @@ impl<S> RemoteCache<S> {
         aws_secret: String,
         aws_region: String,
         aws_bucket: String,
+        url_base: String,
         client: Client,
         local_persisted: S,
     ) -> RemoteCache<S> {
@@ -62,11 +64,16 @@ impl<S> RemoteCache<S> {
             aws_secret,
             aws_region,
             aws_bucket,
+            url_base,
             client,
             local_persisted,
             highest_new_height: None,
             orphaned_new_height: None,
         }
+    }
+
+    fn url_for_block(base: &str, key: &str) -> String {
+        format!("{}/blocks/{}", base, key,)
     }
 }
 
@@ -132,10 +139,11 @@ where
         // TODO: Check if it exists
         let region = self.aws_region.clone();
         let bucket = self.aws_bucket.clone();
+        let base = self.url_base.clone();
 
         let stream = futures::stream::iter((*first..=*last).map(move |height| {
             let key = block_height_to_key(&BlockHeight::new(height));
-            let url = "todo".to_string();
+            let url = Self::url_for_block(&base, &key);
             crate::block_range_response::RemoteBlockRangeResponse {
                 region: region.clone(),
                 bucket: bucket.clone(),

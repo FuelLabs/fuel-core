@@ -20,6 +20,7 @@ use fuel_core_storage::{
         StorageTransaction,
     },
 };
+use fuel_core_types::blockchain::block::Block as FuelBlock;
 use futures::StreamExt;
 use std::iter;
 
@@ -49,9 +50,11 @@ async fn store_block__happy_path() {
     let aws_secret = "test-secret".to_string();
     let aws_region = "test-region".to_string();
     let aws_bucket = "test-bucket".to_string();
+    let base = "http://good.com".to_string();
     let storage = database();
-    let mut adapter =
-        RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, client, storage);
+    let mut adapter = RemoteCache::new(
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage,
+    );
     let block_height = BlockHeight::new(123);
     let block = arb_proto_block();
     let block = BlockSourceEvent::OldBlock(block_height, block);
@@ -71,12 +74,14 @@ async fn get_block_range__happy_path() {
     let aws_secret = "test-secret".to_string();
     let aws_region = "test-region".to_string();
     let aws_bucket = "test-bucket".to_string();
+    let base = "http://good.com".to_string();
     let storage = database();
     let adapter = RemoteCache::new(
         aws_id.clone(),
         aws_secret.clone(),
         aws_region.clone(),
         aws_bucket.clone(),
+        base.clone(),
         client,
         storage,
     );
@@ -94,27 +99,33 @@ async fn get_block_range__happy_path() {
         BlockRangeResponse::Remote(stream) => stream.collect::<Vec<_>>().await,
     };
     let expected = (999..=1003)
-        .map(|height| RemoteBlockRangeResponse {
-            region: aws_region.clone(),
-            bucket: aws_bucket.clone(),
-            key: block_height_to_key(&BlockHeight::new(height)),
-            url: "todo".to_string(),
+        .map(|height| {
+            let key = block_height_to_key(&BlockHeight::new(height));
+            let url = RemoteCache::<()>::url_for_block(&base, &key);
+            RemoteBlockRangeResponse {
+                region: aws_region.clone(),
+                bucket: aws_bucket.clone(),
+                key,
+                url,
+            }
         })
         .collect::<Vec<_>>();
     assert_eq!(actual, expected);
 }
 
 #[tokio::test]
-async fn get_current_height__returns_highest_continuos_block() {
+async fn get_current_height__returns_highest_continuous_block() {
     // given
     let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_id = "test-id".to_string();
     let aws_secret = "test-secret".to_string();
     let aws_region = "test-region".to_string();
     let aws_bucket = "test-bucket".to_string();
+    let base = "http://good.com".to_string();
     let storage = database();
-    let mut adapter =
-        RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, client, storage);
+    let mut adapter = RemoteCache::new(
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage,
+    );
     let expected = BlockHeight::new(123);
     let block = arb_proto_block();
     let block = BlockSourceEvent::OldBlock(expected, block);
@@ -142,8 +153,10 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
     let aws_secret = "test-secret".to_string();
     let aws_region = "test-region".to_string();
     let aws_bucket = "test-bucket".to_string();
-    let mut adapter =
-        RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, client, storage);
+    let base = "http://good.com".to_string();
+    let mut adapter = RemoteCache::new(
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage,
+    );
     let expected = BlockHeight::new(3);
     let block = arb_proto_block();
     let block = BlockSourceEvent::NewBlock(expected, block);
@@ -163,11 +176,12 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
     let aws_secret = "test-secret".to_string();
     let aws_region = "test-region".to_string();
     let aws_bucket = "test-bucket".to_string();
+    let base = "http://good.com".to_string();
 
     // given
     let db = database();
     let mut adapter =
-        RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, client, db);
+        RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, base, client, db);
 
     for height in 2..=10u32 {
         let height = BlockHeight::from(height);
