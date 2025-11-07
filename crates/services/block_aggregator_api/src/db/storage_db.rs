@@ -9,10 +9,7 @@ use crate::{
             LatestBlock,
         },
     },
-    protobuf_types::{
-        Block as ProtoBlock,
-        Block,
-    },
+    protobuf_types::Block as ProtoBlock,
     result::{
         Error,
         Result,
@@ -37,9 +34,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
-    borrow::Cow,
-    cmp::Ordering,
-    collections::BTreeSet,
     pin::Pin,
     task::{
         Context,
@@ -66,31 +60,6 @@ impl<S> StorageDB<S> {
     }
 }
 
-impl<S, T> StorageDB<S>
-where
-    S: Modifiable + std::fmt::Debug,
-    S: KeyValueInspect<Column = Column>,
-    for<'b> StorageTransaction<&'b mut S>:
-        StorageMutate<LatestBlock, Error = StorageError>,
-    S: AtomicView<LatestView = T>,
-    T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
-{
-    fn next_height(&self) -> Result<Option<BlockHeight>> {
-        let storage = self
-            .storage
-            .latest_view()
-            .map_err(|e| Error::DB(anyhow!(e)))
-            .unwrap();
-        let binding = storage.read_transaction();
-        let latest_height = binding
-            .storage_as_ref::<LatestBlock>()
-            .get(&())
-            .map_err(|e| Error::DB(anyhow!(e)))?;
-        let next_height = latest_height.and_then(|h| h.succ());
-        Ok(next_height)
-    }
-}
-
 impl<S, T> BlockAggregatorDB for StorageDB<S>
 where
     S: Modifiable + std::fmt::Debug,
@@ -111,7 +80,6 @@ where
         block_event: BlockSourceEvent<Self::Block>,
     ) -> Result<()> {
         let (height, block) = block_event.clone().into_inner();
-        let next_height = self.next_height()?;
         let mut tx = self.storage.write_transaction();
         tx.storage_as_mut::<Blocks>()
             .insert(&height, &block)

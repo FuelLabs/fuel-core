@@ -7,15 +7,8 @@ use crate::{
     },
     db::table::Column,
 };
-use aws_sdk_s3::{
-    operation::{
-        get_object::GetObjectOutput,
-        put_object::PutObjectOutput,
-    },
-    primitives::ByteStream,
-};
+use aws_sdk_s3::operation::put_object::PutObjectOutput;
 use aws_smithy_mocks::{
-    RuleMode,
     mock,
     mock_client,
 };
@@ -34,7 +27,7 @@ fn database() -> StorageTransaction<InMemoryStorage<Column>> {
 
 fn arb_proto_block() -> ProtoBlock {
     let block = FuelBlock::default();
-    let mut serializer = SerializerAdapter;
+    let serializer = SerializerAdapter;
     let proto_block = serializer.serialize_block(&block).unwrap();
     proto_block
 }
@@ -75,7 +68,7 @@ async fn get_block_range__happy_path() {
     let aws_region = "test-region".to_string();
     let aws_bucket = "test-bucket".to_string();
     let storage = database();
-    let mut adapter = RemoteCache::new(
+    let adapter = RemoteCache::new(
         aws_id.clone(),
         aws_secret.clone(),
         aws_region.clone(),
@@ -85,7 +78,6 @@ async fn get_block_range__happy_path() {
     );
     let start = BlockHeight::new(999);
     let end = BlockHeight::new(1003);
-    let block = arb_proto_block();
 
     // when
     let addresses = adapter.get_block_range(start, end).await.unwrap();

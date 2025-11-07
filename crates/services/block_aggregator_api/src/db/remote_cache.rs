@@ -1,20 +1,30 @@
 use crate::{
     block_range_response::BlockRangeResponse,
-    blocks::{
-        BlockBytes,
-        BlockSourceEvent,
+    blocks::BlockSourceEvent,
+    db::{
+        BlockAggregatorDB,
+        table::LatestBlock,
     },
-    db::BlockAggregatorDB,
-    protobuf_types::{
-        Block as ProtoBlock,
-        Block,
-    },
+    protobuf_types::Block as ProtoBlock,
     result::Error,
 };
+use anyhow::anyhow;
 use aws_sdk_s3::{
     self,
     Client,
     primitives::ByteStream,
+};
+use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+        WriteTransaction,
+    },
 };
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
@@ -28,12 +38,17 @@ mod tests;
 
 #[allow(unused)]
 pub struct RemoteCache<S> {
+    // aws configuration
     aws_id: String,
     aws_secret: String,
     aws_region: String,
     aws_bucket: String,
     client: Client,
+
+    // track consistency between runs
     local_persisted: S,
+    highest_new_height: Option<BlockHeight>,
+    orphaned_new_height: Option<BlockHeight>,
 }
 
 impl<S> RemoteCache<S> {
@@ -52,28 +67,28 @@ impl<S> RemoteCache<S> {
             aws_bucket,
             client,
             local_persisted,
+            highest_new_height: None,
+            orphaned_new_height: None,
         }
     }
 }
 
-impl<S: Send + Sync> BlockAggregatorDB for RemoteCache<S> {
+impl<S> BlockAggregatorDB for RemoteCache<S>
+where
+    S: Send + Sync,
+    S: Modifiable,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
+{
     type Block = ProtoBlock;
     type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(
         &mut self,
-        block: BlockSourceEvent<Self::Block>,
+        block_event: BlockSourceEvent<Self::Block>,
     ) -> crate::result::Result<()> {
-        let (height, block) = match block {
-            BlockSourceEvent::NewBlock(height, block) => {
-                // Do nothing extra
-                (height, block)
-            }
-            BlockSourceEvent::OldBlock(height, block) => {
-                // TODO: record latest block
-                (height, block)
-            }
-        };
+        let (height, block) = block_event.clone().into_inner();
         let key = block_height_to_key(&height);
         let mut buf = Vec::new();
         block.encode(&mut buf).map_err(Error::db_error)?;
@@ -86,6 +101,29 @@ impl<S: Send + Sync> BlockAggregatorDB for RemoteCache<S> {
             .body(body)
             .content_type("application/octet-stream");
         let _ = req.send().await.map_err(Error::db_error)?;
+        match block_event {
+            BlockSourceEvent::NewBlock(new_height, _) => {
+                tracing::debug!("New block: {:?}", new_height);
+                self.highest_new_height = Some(new_height);
+                if self.orphaned_new_height.is_none() {
+                    self.orphaned_new_height = Some(new_height);
+                }
+            }
+            BlockSourceEvent::OldBlock(height, _) => {
+                tracing::debug!("Old block: {:?}", height);
+                let mut tx = self.local_persisted.write_transaction();
+                let latest_height = if height.succ() == self.orphaned_new_height {
+                    self.orphaned_new_height = None;
+                    self.highest_new_height.clone().unwrap_or(height)
+                } else {
+                    height
+                };
+                tx.storage_as_mut::<LatestBlock>()
+                    .insert(&(), &latest_height)
+                    .map_err(|e| Error::DB(anyhow!(e)))?;
+                tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+            }
+        }
         Ok(())
     }
 
@@ -112,7 +150,13 @@ impl<S: Send + Sync> BlockAggregatorDB for RemoteCache<S> {
     }
 
     async fn get_current_height(&self) -> crate::result::Result<Option<BlockHeight>> {
-        todo!()
+        let height = self
+            .local_persisted
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+
+        Ok(height.map(|b| b.into_owned()))
     }
 }
 

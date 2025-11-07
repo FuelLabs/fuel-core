@@ -88,7 +88,6 @@ impl TableWithBlueprint for LatestBlock {
 use fuel_core_storage::codec::{
     postcard::Postcard,
     primitive::Primitive,
-    raw::Raw,
 };
 use prost::Message;
 
