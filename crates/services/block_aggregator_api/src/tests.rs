@@ -79,7 +79,8 @@ impl BlockAggregatorDB for FakeDB {
     type Block = BlockBytes;
     type BlockRangeResponse = BlockRangeResponse;
 
-    async fn store_block(&mut self, id: BlockHeight, block: BlockBytes) -> Result<()> {
+    async fn store_block(&mut self, block: BlockSourceEvent<BlockBytes>) -> Result<()> {
+        let (id, block) = block.into_inner();
         self.map.lock().unwrap().insert(id, block);
         Ok(())
     }
@@ -105,9 +106,9 @@ impl BlockAggregatorDB for FakeDB {
         Ok(Box::pin(futures::stream::iter(blocks)))
     }
 
-    async fn get_current_height(&self) -> Result<BlockHeight> {
+    async fn get_current_height(&self) -> Result<Option<BlockHeight>> {
         let map = self.map.lock().unwrap();
-        let max_height = map.keys().max().cloned().unwrap_or(BlockHeight::from(0u32));
+        let max_height = map.keys().max().cloned();
         Ok(max_height)
     }
 }
@@ -218,7 +219,7 @@ async fn run__get_current_height__returns_expected_height() {
 
     // then
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    let height = response.await.unwrap();
+    let height = response.await.unwrap().unwrap();
     assert_eq!(expected_height, height);
 
     // cleanup

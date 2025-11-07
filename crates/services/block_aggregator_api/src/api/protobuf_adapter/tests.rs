@@ -66,7 +66,7 @@ async fn await_query__get_current_height__client_receives_expected_value() {
     // then
     // return response through query's channel
     if let BlockAggregatorQuery::GetCurrentHeight { response } = query {
-        response.send(BlockHeight::new(42)).unwrap();
+        response.send(Some(BlockHeight::new(42))).unwrap();
     } else {
         panic!("expected GetCurrentHeight query");
     }

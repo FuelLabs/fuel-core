@@ -1,10 +1,17 @@
 use crate::{
     block_range_response::BlockRangeResponse,
+    blocks::BlockSourceEvent,
     db::{
         BlockAggregatorDB,
-        storage_db::table::Column,
+        storage_db::table::{
+            Column,
+            LatestBlock,
+        },
     },
-    protobuf_types::Block as ProtoBlock,
+    protobuf_types::{
+        Block as ProtoBlock,
+        Block,
+    },
     result::{
         Error,
         Result,
@@ -29,6 +36,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
+    borrow::Cow,
     cmp::Ordering,
     collections::BTreeSet,
     pin::Pin,
@@ -44,55 +52,89 @@ pub mod table;
 mod tests;
 
 pub struct StorageDB<S> {
-    highest_contiguous_block: BlockHeight,
-    orphaned_heights: BTreeSet<BlockHeight>,
+    highest_new_height: Option<BlockHeight>,
+    orphaned_new_height: Option<BlockHeight>,
     storage: S,
 }
 
 impl<S> StorageDB<S> {
     pub fn new(storage: S) -> Self {
-        let height = BlockHeight::new(0);
-        Self::new_with_height(storage, height)
-    }
-
-    pub fn new_with_height(storage: S, highest_contiguous_block: BlockHeight) -> Self {
-        let orphaned_heights = BTreeSet::new();
         Self {
-            highest_contiguous_block,
-            orphaned_heights,
+            highest_new_height: None,
+            orphaned_new_height: None,
             storage,
         }
     }
 
-    fn update_highest_contiguous_block(&mut self, height: BlockHeight) {
-        let next_height = self.next_height();
-        match height.cmp(&next_height) {
-            Ordering::Equal => {
-                self.highest_contiguous_block = height;
-                while let Some(next_height) = self.orphaned_heights.first() {
-                    if next_height == &self.next_height() {
-                        self.highest_contiguous_block = *next_height;
-                        let _ = self.orphaned_heights.pop_first();
-                    } else {
-                        break;
-                    }
-                }
-            }
-            Ordering::Greater => {
-                self.orphaned_heights.insert(height);
-            }
-            Ordering::Less => {
-                tracing::warn!(
-                    "Received block at height {:?}, but the syncing is already at height {:?}. Ignoring block.",
-                    height,
-                    self.highest_contiguous_block
-                );
-            }
-        }
-    }
-    fn next_height(&self) -> BlockHeight {
-        let last_height = *self.highest_contiguous_block;
-        BlockHeight::new(last_height.saturating_add(1))
+    // fn update_highest_contiguous_block(&mut self, height: BlockHeight) {
+    //     let next_height = self.next_height();
+    //     match height.cmp(&next_height) {
+    //         Ordering::Equal => {
+    //             self.highest_contiguous_block = height;
+    //             while let Some(next_height) = self.orphaned_heights.first() {
+    //                 if next_height == &self.next_height() {
+    //                     self.highest_contiguous_block = *next_height;
+    //                     let _ = self.orphaned_heights.pop_first();
+    //                 } else {
+    //                     break;
+    //                 }
+    //             }
+    //         }
+    //         Ordering::Greater => {
+    //             self.orphaned_heights.insert(height);
+    //         }
+    //         Ordering::Less => {
+    //             tracing::warn!(
+    //                 "Received block at height {:?}, but the syncing is already at height {:?}. Ignoring block.",
+    //                 height,
+    //                 self.highest_contiguous_block
+    //             );
+    //         }
+    //     }
+    // }
+    // fn next_height(&self) -> BlockHeight {
+    //     let last_height = *self.get_current_height();
+    //     BlockHeight::new(last_height.saturating_add(1))
+    // }
+
+    // fn update_latest_block(&mut self, block_event: &BlockSourceEvent<ProtoBlock>) {
+    //     match block_event {
+    //         BlockSourceEvent::NewBlock(height, _) => {
+    //             self.highest_height = Some(*height);
+    //             if height == self.next_height() {
+    //                 self.orphaned_height = None;
+    //                 // TODO
+    //             } else if self.orphaned_height.is_none() {
+    //                 self.orphaned_height = Some(*height);
+    //             }
+    //         }
+    //         BlockSourceEvent::OldBlock(height, _) => {}
+    //     }
+    // }
+}
+
+impl<S, T> StorageDB<S>
+where
+    S: Modifiable + std::fmt::Debug,
+    S: KeyValueInspect<Column = Column>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
+    S: AtomicView<LatestView = T>,
+    T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
+{
+    fn next_height(&self) -> Result<Option<BlockHeight>> {
+        let storage = self
+            .storage
+            .latest_view()
+            .map_err(|e| Error::DB(anyhow!(e)))
+            .unwrap();
+        let binding = storage.read_transaction();
+        let latest_height = binding
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+        let next_height = latest_height.and_then(|h| h.succ());
+        Ok(next_height)
     }
 }
 
@@ -100,7 +142,10 @@ impl<S, T> BlockAggregatorDB for StorageDB<S>
 where
     S: Modifiable + std::fmt::Debug,
     S: KeyValueInspect<Column = Column>,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
     for<'b> StorageTransaction<&'b mut S>: StorageMutate<Blocks, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
     S: AtomicView<LatestView = T>,
     T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
     StorageTransaction<T>: StorageInspect<Blocks, Error = StorageError>,
@@ -110,14 +155,36 @@ where
 
     async fn store_block(
         &mut self,
-        height: BlockHeight,
-        block: ProtoBlock,
+        block_event: BlockSourceEvent<Self::Block>,
     ) -> Result<()> {
-        self.update_highest_contiguous_block(height);
+        let (height, block) = block_event.clone().into_inner();
+        let next_height = self.next_height()?;
         let mut tx = self.storage.write_transaction();
         tx.storage_as_mut::<Blocks>()
             .insert(&height, &block)
             .map_err(|e| Error::DB(anyhow!(e)))?;
+
+        match block_event {
+            BlockSourceEvent::NewBlock(new_height, _) => {
+                tracing::debug!("New block: {:?}", new_height);
+                self.highest_new_height = Some(new_height);
+                if self.orphaned_new_height.is_none() {
+                    self.orphaned_new_height = Some(new_height);
+                }
+            }
+            BlockSourceEvent::OldBlock(height, _) => {
+                tracing::debug!("Old block: {:?}", height);
+                let latest_height = if height.succ() == self.orphaned_new_height {
+                    self.orphaned_new_height = None;
+                    self.highest_new_height.clone().unwrap_or(height)
+                } else {
+                    height
+                };
+                tx.storage_as_mut::<LatestBlock>()
+                    .insert(&(), &latest_height)
+                    .map_err(|e| Error::DB(anyhow!(e)))?;
+            }
+        }
         tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
         Ok(())
     }
@@ -135,8 +202,14 @@ where
         Ok(BlockRangeResponse::Literal(Box::pin(stream)))
     }
 
-    async fn get_current_height(&self) -> Result<BlockHeight> {
-        Ok(self.highest_contiguous_block)
+    async fn get_current_height(&self) -> Result<Option<BlockHeight>> {
+        let height = self
+            .storage
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+
+        Ok(height.map(|b| b.into_owned()))
     }
 }
 

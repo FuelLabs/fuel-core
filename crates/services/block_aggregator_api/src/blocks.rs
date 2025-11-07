@@ -17,10 +17,20 @@ pub trait BlockSource: Send + Sync {
     fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
 }
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum BlockSourceEvent<B> {
     NewBlock(BlockHeight, B),
     OldBlock(BlockHeight, B),
+}
+
+impl<B> BlockSourceEvent<B> {
+    pub fn into_inner(self) -> (BlockHeight, B) {
+        match self {
+            Self::NewBlock(height, block) | Self::OldBlock(height, block) => {
+                (height, block)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

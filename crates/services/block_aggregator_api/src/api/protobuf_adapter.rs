@@ -60,7 +60,7 @@ impl BlockAggregator for Server {
         let res = receiver.await;
         match res {
             Ok(height) => Ok(tonic::Response::new(ProtoBlockHeightResponse {
-                height: *height,
+                height: *height.unwrap(),
             })),
             Err(e) => Err(tonic::Status::internal(format!(
                 "Failed to receive height: {}",

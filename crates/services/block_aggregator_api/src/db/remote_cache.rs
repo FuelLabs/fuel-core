@@ -1,8 +1,14 @@
 use crate::{
     block_range_response::BlockRangeResponse,
-    blocks::BlockBytes,
+    blocks::{
+        BlockBytes,
+        BlockSourceEvent,
+    },
     db::BlockAggregatorDB,
-    protobuf_types::Block as ProtoBlock,
+    protobuf_types::{
+        Block as ProtoBlock,
+        Block,
+    },
     result::Error,
 };
 use aws_sdk_s3::{
@@ -51,9 +57,18 @@ impl BlockAggregatorDB for RemoteCache {
 
     async fn store_block(
         &mut self,
-        height: BlockHeight,
-        block: ProtoBlock,
+        block: BlockSourceEvent<Self::Block>,
     ) -> crate::result::Result<()> {
+        let (height, block) = match block {
+            BlockSourceEvent::NewBlock(height, block) => {
+                // Do nothing extra
+                (height, block)
+            }
+            BlockSourceEvent::OldBlock(height, block) => {
+                // TODO: record latest block
+                (height, block)
+            }
+        };
         let key = block_height_to_key(&height);
         let mut buf = Vec::new();
         block.encode(&mut buf).map_err(Error::db_error)?;
@@ -91,7 +106,7 @@ impl BlockAggregatorDB for RemoteCache {
         Ok(BlockRangeResponse::Remote(Box::pin(stream)))
     }
 
-    async fn get_current_height(&self) -> crate::result::Result<BlockHeight> {
+    async fn get_current_height(&self) -> crate::result::Result<Option<BlockHeight>> {
         todo!()
     }
 }
@@ -149,9 +164,10 @@ mod tests {
             RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, client);
         let block_height = BlockHeight::new(123);
         let block = arb_proto_block();
+        let block = BlockSourceEvent::OldBlock(block_height, block);
 
         // when
-        let res = adapter.store_block(block_height, block).await;
+        let res = adapter.store_block(block).await;
 
         // then
         assert!(res.is_ok());

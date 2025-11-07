@@ -28,6 +28,7 @@ use std::borrow::Cow;
 pub enum Column {
     Metadata = 0,
     Blocks = 1,
+    LatestBlock = 2,
 }
 
 impl Column {
@@ -67,7 +68,25 @@ impl TableWithBlueprint for Blocks {
     }
 }
 
+pub struct LatestBlock;
+
+impl Mappable for LatestBlock {
+    type Key = Self::OwnedKey;
+    type OwnedKey = ();
+    type Value = Self::OwnedValue;
+    type OwnedValue = BlockHeight;
+}
+
+impl TableWithBlueprint for LatestBlock {
+    type Blueprint = Plain<Postcard, Primitive<4>>;
+    type Column = Column;
+    fn column() -> Self::Column {
+        Column::LatestBlock
+    }
+}
+
 use fuel_core_storage::codec::{
+    postcard::Postcard,
     primitive::Primitive,
     raw::Raw,
 };
