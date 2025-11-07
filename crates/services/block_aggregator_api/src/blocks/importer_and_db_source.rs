@@ -40,6 +40,9 @@ pub trait BlockSerializer {
     fn serialize_block(&self, block: &FuelBlock) -> Result<Self::Block>;
 }
 
+/// A block source that combines an importer and a database sync task.
+/// Old blocks will be synced from a target database and new blocks will be received from
+/// the importer
 pub struct ImporterAndDbSource<Serializer, DB, E>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,

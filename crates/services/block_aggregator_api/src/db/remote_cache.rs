@@ -40,6 +40,7 @@ impl RemoteCache {
             aws_region,
             aws_bucket,
             client,
+            head: None,
         }
     }
 }
@@ -73,7 +74,21 @@ impl BlockAggregatorDB for RemoteCache {
         first: BlockHeight,
         last: BlockHeight,
     ) -> crate::result::Result<Self::BlockRangeResponse> {
-        todo!()
+        // TODO: Check if it exists
+        let region = self.aws_region.clone();
+        let bucket = self.aws_bucket.clone();
+
+        let stream = futures::stream::iter((*first..=*last).map(move |height| {
+            let key = block_height_to_key(&BlockHeight::new(height));
+            let url = "todo".to_string();
+            crate::block_range_response::RemoteBlockRangeResponse {
+                region: region.clone(),
+                bucket: bucket.clone(),
+                key: key.clone(),
+                url,
+            }
+        }));
+        Ok(BlockRangeResponse::Remote(Box::pin(stream)))
     }
 
     async fn get_current_height(&self) -> crate::result::Result<BlockHeight> {
@@ -89,9 +104,12 @@ pub fn block_height_to_key(height: &BlockHeight) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocks::importer_and_db_source::{
-        BlockSerializer,
-        serializer_adapter::SerializerAdapter,
+    use crate::{
+        block_range_response::RemoteBlockRangeResponse,
+        blocks::importer_and_db_source::{
+            BlockSerializer,
+            serializer_adapter::SerializerAdapter,
+        },
     };
     use aws_sdk_s3::{
         operation::{
@@ -105,6 +123,7 @@ mod tests {
         mock,
         mock_client,
     };
+    use futures::StreamExt;
 
     fn arb_proto_block() -> ProtoBlock {
         let block = FuelBlock::default();
@@ -140,6 +159,41 @@ mod tests {
 
     #[tokio::test]
     async fn get_block_range__happy_path() {
-        todo!()
+        // given
+        let client = mock_client!(aws_sdk_s3, []);
+        let aws_id = "test-id".to_string();
+        let aws_secret = "test-secret".to_string();
+        let aws_region = "test-region".to_string();
+        let aws_bucket = "test-bucket".to_string();
+        let mut adapter = RemoteCache::new(
+            aws_id.clone(),
+            aws_secret.clone(),
+            aws_region.clone(),
+            aws_bucket.clone(),
+            client,
+        );
+        let start = BlockHeight::new(999);
+        let end = BlockHeight::new(1003);
+        let block = arb_proto_block();
+
+        // when
+        let addresses = adapter.get_block_range(start, end).await.unwrap();
+
+        // then
+        let actual = match addresses {
+            BlockRangeResponse::Literal(_) => {
+                panic!("Expected remote response, got literal");
+            }
+            BlockRangeResponse::Remote(stream) => stream.collect::<Vec<_>>().await,
+        };
+        let expected = (999..=1003)
+            .map(|height| RemoteBlockRangeResponse {
+                region: aws_region.clone(),
+                bucket: aws_bucket.clone(),
+                key: block_height_to_key(&BlockHeight::new(height)),
+                url: "todo".to_string(),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
     }
 }
