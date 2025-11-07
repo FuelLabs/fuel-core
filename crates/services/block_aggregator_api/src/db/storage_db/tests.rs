@@ -6,7 +6,7 @@ use crate::{
         BlockSerializer,
         serializer_adapter::SerializerAdapter,
     },
-    db::storage_db::table::Column,
+    db::table::Column,
 };
 use fuel_core_storage::{
     StorageAsRef,
@@ -139,7 +139,6 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
 async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
     // given
     let db = database();
-    let starting_height = BlockHeight::from(0u32);
     let mut adapter = StorageDB::new(db);
 
     for height in 2..=10u32 {

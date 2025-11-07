@@ -1,5 +1,5 @@
 use crate::database::database_description::DatabaseDescription;
-use fuel_core_block_aggregator_api::db::storage_db::table::Column;
+use fuel_core_block_aggregator_api::db::table::Column;
 use fuel_core_types::fuel_types::BlockHeight;
 
 #[derive(Clone, Copy, Debug)]

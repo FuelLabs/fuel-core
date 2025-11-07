@@ -3,7 +3,8 @@ use crate::{
     blocks::BlockSourceEvent,
     db::{
         BlockAggregatorDB,
-        storage_db::table::{
+        table::{
+            Blocks,
             Column,
             LatestBlock,
         },
@@ -45,9 +46,7 @@ use std::{
         Poll,
     },
 };
-use table::Blocks;
 
-pub mod table;
 #[cfg(test)]
 mod tests;
 
@@ -65,52 +64,6 @@ impl<S> StorageDB<S> {
             storage,
         }
     }
-
-    // fn update_highest_contiguous_block(&mut self, height: BlockHeight) {
-    //     let next_height = self.next_height();
-    //     match height.cmp(&next_height) {
-    //         Ordering::Equal => {
-    //             self.highest_contiguous_block = height;
-    //             while let Some(next_height) = self.orphaned_heights.first() {
-    //                 if next_height == &self.next_height() {
-    //                     self.highest_contiguous_block = *next_height;
-    //                     let _ = self.orphaned_heights.pop_first();
-    //                 } else {
-    //                     break;
-    //                 }
-    //             }
-    //         }
-    //         Ordering::Greater => {
-    //             self.orphaned_heights.insert(height);
-    //         }
-    //         Ordering::Less => {
-    //             tracing::warn!(
-    //                 "Received block at height {:?}, but the syncing is already at height {:?}. Ignoring block.",
-    //                 height,
-    //                 self.highest_contiguous_block
-    //             );
-    //         }
-    //     }
-    // }
-    // fn next_height(&self) -> BlockHeight {
-    //     let last_height = *self.get_current_height();
-    //     BlockHeight::new(last_height.saturating_add(1))
-    // }
-
-    // fn update_latest_block(&mut self, block_event: &BlockSourceEvent<ProtoBlock>) {
-    //     match block_event {
-    //         BlockSourceEvent::NewBlock(height, _) => {
-    //             self.highest_height = Some(*height);
-    //             if height == self.next_height() {
-    //                 self.orphaned_height = None;
-    //                 // TODO
-    //             } else if self.orphaned_height.is_none() {
-    //                 self.orphaned_height = Some(*height);
-    //             }
-    //         }
-    //         BlockSourceEvent::OldBlock(height, _) => {}
-    //     }
-    // }
 }
 
 impl<S, T> StorageDB<S>

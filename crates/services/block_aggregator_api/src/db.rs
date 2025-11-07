@@ -6,6 +6,7 @@ use fuel_core_types::fuel_types::BlockHeight;
 
 pub mod remote_cache;
 pub mod storage_db;
+pub mod table;
 
 /// The definition of the block aggregator database.
 pub trait BlockAggregatorDB: Send + Sync {
