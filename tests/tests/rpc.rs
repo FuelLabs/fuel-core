@@ -154,3 +154,26 @@ async fn new_block_subscription__can_get_expect_block() {
     let expected_height = 1;
     assert_eq!(expected_height, actual_height);
 }
+
+macro_rules! require_env_var_or_skip {
+    ($($var:literal),+) => {
+        $(if std::env::var($var).is_err() {
+            eprintln!("Skipping test: missing {}", $var);
+            return;
+        })+
+    };
+}
+
+#[tokio::test]
+async fn get_block_range__can_get_from_remote_s3_bucket() {
+    require_env_var_or_skip!(
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_REGION",
+        "AWS_BUCKET"
+    );
+    let config = Config::local_node();
+    let _srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+}

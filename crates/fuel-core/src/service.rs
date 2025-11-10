@@ -194,6 +194,7 @@ impl FuelService {
             Default::default(),
             Default::default(),
             Default::default(),
+            Default::default(),
         );
         Self::from_combined_database(combined_database, config).await
     }

@@ -200,3 +200,8 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
     let actual = adapter.get_current_height().await.unwrap().unwrap();
     assert_eq!(expected, actual);
 }
+
+#[test]
+fn store_block__real_test_for_science() {
+    todo!()
+}

@@ -104,6 +104,7 @@ pub mod integration {
         ServiceRunner::new(block_aggregator)
     }
 }
+
 #[cfg(test)]
 mod tests;
 
