@@ -466,6 +466,7 @@ pub fn init_sub_services(
             aws_secrete_access_key,
             aws_region,
             aws_bucket,
+            aws_endpoint_url,
         )) = get_env_vars()
         {
             let url_base = "good.com";
@@ -476,6 +477,7 @@ pub fn init_sub_services(
                 &aws_region,
                 &aws_bucket,
                 url_base,
+                aws_endpoint_url,
             )
         } else {
             tracing::info!(
