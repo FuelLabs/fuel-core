@@ -119,7 +119,7 @@ where
                 let mut tx = self.local_persisted.write_transaction();
                 let latest_height = if height.succ() == self.orphaned_new_height {
                     self.orphaned_new_height = None;
-                    self.highest_new_height.clone().unwrap_or(height)
+                    self.highest_new_height.unwrap_or(height)
                 } else {
                     height
                 };

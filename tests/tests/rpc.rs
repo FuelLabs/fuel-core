@@ -218,6 +218,13 @@ async fn get_block_height_from_remote_s3_bucket() -> Bytes {
     obj.body.collect().await.unwrap().into_bytes()
 }
 
+async fn ensure_bucket_exists() {
+    let client = aws_client();
+    let bucket = std::env::var("AWS_BUCKET").unwrap();
+    let req = client.create_bucket().bucket(&bucket);
+    let _ = req.send().await.unwrap();
+}
+
 async fn clean_s3_bucket() {
     let client = aws_client();
     let bucket = std::env::var("AWS_BUCKET").unwrap();
@@ -240,6 +247,7 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
     // let _ = tracing_subscriber::fmt()
     //     .with_max_level(tracing::Level::INFO)
     //     .try_init();
+    ensure_bucket_exists().await;
     clean_s3_bucket().await;
 
     // given
