@@ -52,7 +52,7 @@ impl Message {
         (*self.0.nonce()).into()
     }
 
-    async fn data(&self) -> HexString {
+    async fn data(&self) -> HexString<'_> {
         self.0.data().clone().into()
     }
 
@@ -90,7 +90,7 @@ impl MessageQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<HexString, Message, EmptyFields, EmptyFields>>
+    ) -> async_graphql::Result<Connection<HexString<'_>, Message, EmptyFields, EmptyFields>>
     {
         let query = ctx.read_view()?;
         let owner = owner.map(|owner| owner.0);
@@ -221,7 +221,7 @@ impl MessageProof {
         self.0.amount.into()
     }
 
-    async fn data(&self) -> HexString {
+    async fn data(&self) -> HexString<'_> {
         self.0.data.clone().into()
     }
 }
