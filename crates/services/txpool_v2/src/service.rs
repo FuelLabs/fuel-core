@@ -405,7 +405,7 @@ where
                 source,
             } => {
                 let is_duplicate = error.is_duplicate_tx();
-                let tx_status = TransactionStatus::squeezed_out(error.to_string());
+                let tx_status = TransactionStatus::squeezed_out(error.to_string(), tx_id);
                 match source {
                     InsertionSource::P2P { from_peer_info } => {
                         let _ = self.p2p.notify_gossip_transaction_validity(
@@ -514,7 +514,7 @@ where
 
                     tx_status_manager.status_update(
                         tx_id,
-                        TransactionStatus::squeezed_out(err.to_string()),
+                        TransactionStatus::squeezed_out(err.to_string(), tx_id),
                     );
                     return
                 }

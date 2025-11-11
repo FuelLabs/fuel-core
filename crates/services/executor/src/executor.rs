@@ -186,7 +186,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use fuel_core_types::fuel_vm::interpreter::Memory;
+use fuel_core_types::{
+    fuel_vm::interpreter::Memory,
+    services::preconfirmation::SqueezedOut,
+};
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
@@ -849,9 +852,10 @@ where
                     Err(err) => {
                         statuses.push(Preconfirmation {
                             tx_id,
-                            status: PreconfirmationStatus::SqueezedOut {
-                                reason: err.to_string(),
-                            },
+                            status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                                err.to_string(),
+                                tx_id,
+                            )),
                         });
                         data.skipped_transactions.push((tx_id, err));
                     }

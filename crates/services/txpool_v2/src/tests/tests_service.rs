@@ -307,7 +307,7 @@ async fn prune_expired_transactions() {
         .unwrap();
 
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |_, status| {
             matches!(status, TransactionStatus::SqueezedOut { .. })
         })
         .await
@@ -410,7 +410,7 @@ async fn prune_expired_does_not_trigger_twice() {
 
     // Then
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |_, status| {
             matches!(status, TransactionStatus::SqueezedOut { .. })
         })
         .await
@@ -419,7 +419,7 @@ async fn prune_expired_does_not_trigger_twice() {
     // Verify that their no new notifications about tx3
     let ids = vec![tx3.id(&Default::default())];
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |_, status| {
             matches!(status, TransactionStatus::SqueezedOut { .. })
         })
         .await
@@ -459,10 +459,10 @@ async fn simple_insert_removal() {
     tokio::time::sleep(Duration::from_secs(TIMEOUT)).await;
 
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |tx_id, status| {
             matches!(status, TransactionStatus::SqueezedOut(s)
-                    if s.reason == "Transaction is removed: Transaction expired \
-                    because it exceeded the configured time to live `tx-pool-ttl`.")
+                    if s.reason() == format!("Transaction is removed: Transaction expired \
+                    because it exceeded the configured time to live `tx-pool-ttl`. TxId: {tx_id}"))
         })
         .await
         .unwrap();
@@ -610,7 +610,7 @@ async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_u
     assert_eq!(txs_first_extract[0].id(), tx1.id(&Default::default()));
     let ids = vec![tx2.id(&Default::default())];
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |_, status| {
             matches!(status, TransactionStatus::SqueezedOut(_))
         })
         .await

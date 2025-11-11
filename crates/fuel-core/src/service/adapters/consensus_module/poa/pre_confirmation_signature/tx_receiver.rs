@@ -54,7 +54,10 @@ mod tests {
     use super::*;
     use fuel_core_types::{
         fuel_tx::TxId,
-        services::preconfirmation::PreconfirmationStatus,
+        services::preconfirmation::{
+            PreconfirmationStatus,
+            SqueezedOut,
+        },
     };
 
     #[tokio::test]
@@ -63,9 +66,10 @@ mod tests {
         let txs = vec![
             Preconfirmation {
                 tx_id: TxId::default(),
-                status: PreconfirmationStatus::SqueezedOut {
-                    reason: "Dummy reason".to_string(),
-                },
+                status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                    "Dummy reason".to_string(),
+                    TxId::default(),
+                )),
             },
             Preconfirmation {
                 tx_id: TxId::default(),

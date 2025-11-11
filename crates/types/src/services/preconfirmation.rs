@@ -11,6 +11,7 @@ use tai64::Tai64;
 
 #[cfg(not(feature = "std"))]
 use alloc::{
+    format,
     string::String,
     sync::Arc,
     vec::Vec,
@@ -39,15 +40,34 @@ pub struct Preconfirmation {
     pub status: PreconfirmationStatus,
 }
 
+/// Transaction was squeezed out by the tx pool
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SqueezedOut {
+    /// Reason the transaction was squeezed out
+    reason: String,
+}
+
+impl SqueezedOut {
+    /// Creates a new SqueezedOut
+    pub fn new(reason: String, tx_id: TxId) -> Self {
+        Self {
+            reason: format!("{reason} TxId: {tx_id}"),
+        }
+    }
+
+    /// Returns why the transaction was squeezed out.
+    pub fn reason(&self) -> &str {
+        &self.reason
+    }
+}
+
 /// Status of a transaction that has been pre-confirmed by block producer
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PreconfirmationStatus {
     /// Transaction was squeezed out by the tx pool
-    SqueezedOut {
-        /// Reason the transaction was squeezed out
-        reason: String,
-    },
+    SqueezedOut(SqueezedOut),
     /// Transaction has been confirmed and will be included in block_height
     Success {
         /// Transaction pointer within the block.

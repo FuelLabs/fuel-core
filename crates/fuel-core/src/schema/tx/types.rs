@@ -399,7 +399,7 @@ impl SqueezedOutStatus {
     }
 
     async fn reason(&self) -> String {
-        self.status.reason.clone()
+        self.status.reason().to_string()
     }
 }
 
