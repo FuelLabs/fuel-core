@@ -13,13 +13,9 @@ use crate::{
     },
     result::Result,
 };
-use aws_sdk_s3::{
-    Config,
-    config::{
-        BehaviorVersion,
-        Credentials,
-        Region,
-    },
+use aws_sdk_s3::config::{
+    Credentials,
+    Region,
 };
 use fuel_core_storage::{
     Error as StorageError,
