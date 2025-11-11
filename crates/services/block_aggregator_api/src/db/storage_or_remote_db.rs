@@ -56,7 +56,6 @@ impl<R, S> StorageOrRemoteDB<R, S> {
         url_base: &str,
         aws_endpoint_url: Option<String>,
     ) -> Self {
-        let region_str = aws_region.to_string();
         let client = {
             let mut builder = aws_sdk_s3::config::Builder::new();
             if let Some(aws_endpoint_url) = aws_endpoint_url {
@@ -64,7 +63,7 @@ impl<R, S> StorageOrRemoteDB<R, S> {
             }
 
             let config = builder
-                .region(Region::new(Cow::Owned(region_str.clone())))
+                .region(Region::new(Cow::Owned(aws_region.to_string())))
                 .credentials_provider(Credentials::new(
                     aws_id,
                     aws_secret,

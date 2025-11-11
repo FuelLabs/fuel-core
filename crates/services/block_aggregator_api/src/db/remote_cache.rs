@@ -97,6 +97,7 @@ where
         let mut buf = Vec::new();
         block.encode(&mut buf).map_err(Error::db_error)?;
         let body = ByteStream::from(buf);
+        tracing::info!("Storing block in bucket: {:?}", &self.aws_bucket);
         let req = self
             .client
             .put_object()

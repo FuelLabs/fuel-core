@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+
 use fuel_core::{
     database::Database,
     service::{
@@ -19,6 +20,7 @@ use fuel_core_client::client::FuelClient;
 use fuel_core_types::fuel_tx::*;
 use futures::StreamExt;
 use test_helpers::client_ext::ClientExt;
+use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn get_block_range__can_get_serialized_block_from_rpc() {
@@ -164,8 +166,39 @@ macro_rules! require_env_var_or_skip {
     };
 }
 
+// fn aws_client() -> Client {
+//     let (
+//         aws_access_key_id,
+//         aws_secret_access_key,
+//         aws_region,
+//         _,
+//         aws_endpoint_url,
+//     ) = get_env_vars().unwrap();
+//
+//     let mut builder = aws_sdk_s3::config::Builder::new();
+//     if let Some(aws_endpoint_url) = aws_endpoint_url {
+//         builder.set_endpoint_url(Some(aws_endpoint_url.clone()));
+//     }
+//
+//     let config = builder
+//         .region(Region::new(Cow::Owned(aws_region.clone())))
+//         .credentials_provider(Credentials::new(
+//             aws_access_key_id,
+//             aws_secret_access_key,
+//             None,
+//             None,
+//             "block-aggregator",
+//         ))
+//         .behavior_version_latest()
+//         .build();
+//     aws_sdk_s3::Client::from_conf(config)
+// }
+
 #[tokio::test]
 async fn get_block_range__can_get_from_remote_s3_bucket() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
     require_env_var_or_skip!(
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
@@ -173,7 +206,16 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
         "AWS_BUCKET"
     );
     let config = Config::local_node();
-    let _srv = FuelService::from_database(Database::default(), config.clone())
+    let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
+
+    let graphql_client = FuelClient::from(srv.bound_address);
+
+    let tx = Transaction::default_test_tx();
+    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
+
+    sleep(std::time::Duration::from_secs(1)).await;
+
+    drop(srv)
 }

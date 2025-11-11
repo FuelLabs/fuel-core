@@ -60,11 +60,11 @@ use crate::{
         },
     },
 };
-use fuel_core_block_aggregator_api::db::storage_or_remote_db::get_env_vars;
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
     db::storage_or_remote_db::StorageOrRemoteDB,
+    db::storage_or_remote_db::get_env_vars,
 };
 use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
