@@ -3,6 +3,8 @@ use crate::state::{
     historical_rocksdb::StateRewindPolicy,
     rocks_db::DatabaseConfig,
 };
+#[cfg(feature = "backup")]
+use rayon::prelude::*;
 
 use crate::{
     database::{
@@ -114,20 +116,36 @@ impl CombinedDatabase {
         db_dir: &std::path::Path,
         temp_dir: &std::path::Path,
     ) -> crate::database::Result<()> {
-        crate::state::rocks_db::RocksDb::<OnChain>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup on-chain database")?;
+        use crate::state::rocks_db::RocksDb;
 
-        crate::state::rocks_db::RocksDb::<OffChain>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup off-chain database")?;
+        let backups: Vec<
+            fn(&std::path::Path, &std::path::Path) -> crate::database::Result<()>,
+        > = vec![
+            |db, out| {
+                RocksDb::<OnChain>::backup(db, out)
+                    .trace_err("Failed to backup on-chain database")
+            },
+            |db, out| {
+                RocksDb::<OffChain>::backup(db, out)
+                    .trace_err("Failed to backup off-chain database")
+            },
+            |db, out| {
+                RocksDb::<Relayer>::backup(db, out)
+                    .trace_err("Failed to backup relayer database")
+            },
+            |db, out| {
+                RocksDb::<GasPriceDatabase>::backup(db, out)
+                    .trace_err("Failed to backup gas-price database")
+            },
+            |db, out| {
+                RocksDb::<CompressionDatabase>::backup(db, out)
+                    .trace_err("Failed to backup compression database")
+            },
+        ];
 
-        crate::state::rocks_db::RocksDb::<Relayer>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup relayer database")?;
-
-        crate::state::rocks_db::RocksDb::<GasPriceDatabase>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup gas-price database")?;
-
-        crate::state::rocks_db::RocksDb::<CompressionDatabase>::backup(db_dir, temp_dir)
-            .trace_err("Failed to backup compression database")?;
+        backups
+            .into_par_iter()
+            .try_for_each(|backup_fn| backup_fn(db_dir, temp_dir))?;
 
         Ok(())
     }
