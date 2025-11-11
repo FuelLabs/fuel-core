@@ -224,10 +224,7 @@ async fn clean_s3_bucket() {
     let req = client.list_objects().bucket(&bucket);
     let objs = req.send().await.unwrap();
     for obj in objs.contents.unwrap_or_default() {
-        let req = client
-            .delete_object()
-            .bucket(&bucket)
-            .key(&obj.key.unwrap());
+        let req = client.delete_object().bucket(&bucket).key(obj.key.unwrap());
         let _ = req.send().await.unwrap();
     }
 }

@@ -402,6 +402,7 @@ fn service_with_many_contracts(
                 Default::default(),
                 Default::default(),
                 Default::default(),
+                Default::default(),
             ),
             config.clone(),
         )
