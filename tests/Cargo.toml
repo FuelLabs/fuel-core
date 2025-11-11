@@ -36,6 +36,7 @@ aws-config = { version = "1.1.7", features = [
   "behavior-version-latest",
 ], optional = true }
 aws-sdk-kms = { version = "1.37.0", optional = true }
+aws-sdk-s3 = "1.111.0"
 clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"
@@ -79,6 +80,7 @@ itertools = { workspace = true }
 k256 = { version = "0.13.3", features = ["ecdsa-core"] }
 postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
+prost = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rstest = "0.15"
@@ -94,8 +96,6 @@ tokio = { workspace = true, features = [
 ] }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
-aws-sdk-s3 = "1.111.0"
-prost = { workspace = true }
 
 [dev-dependencies]
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
