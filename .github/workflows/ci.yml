@@ -317,7 +317,7 @@ jobs:
       - cargo-verifications
       - publish-crates-check
       - cargo-test-kms
-      - rpc-integration-tests
+      - rpc-s3-integration-tests
     runs-on: ubuntu-latest
     steps:
       - run: echo "pass"
