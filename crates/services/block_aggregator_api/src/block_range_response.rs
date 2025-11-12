@@ -1,4 +1,4 @@
-use crate::blocks::Block;
+use crate::protobuf_types::Block as ProtoBlock;
 use fuel_core_services::stream::Stream;
 
 pub type BoxStream<T> = core::pin::Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
@@ -6,7 +6,7 @@ pub type BoxStream<T> = core::pin::Pin<Box<dyn Stream<Item = T> + Send + 'static
 /// The response to a block range query, either as a literal stream of blocks or as a remote URL
 pub enum BlockRangeResponse {
     /// A literal stream of blocks
-    Literal(BoxStream<Block>),
+    Literal(BoxStream<ProtoBlock>),
     /// A remote URL where the blocks can be fetched
     Remote(String),
 }

@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use super::*;
+use crate::blocks::Block;
 use ::postcard::to_allocvec;
 use fuel_core_services::stream::{
     IntoBoxStream,
@@ -34,6 +35,8 @@ use std::sync::Arc;
 pub struct MockSerializer;
 
 impl BlockSerializer for MockSerializer {
+    type Block = Block;
+
     fn serialize_block(&self, block: &FuelBlock) -> Result<Block> {
         let bytes_vec = to_allocvec(block).map_err(|e| {
             Error::BlockSource(anyhow!("failed to serialize block: {}", e))
@@ -46,7 +49,6 @@ fn database() -> StorageTransaction<InMemoryStorage<OnChainColumn>> {
     InMemoryStorage::default().into_transaction()
 }
 
-// let block_stream = tokio_stream::iter(blocks).chain(pending()).into_boxed();
 fn stream_with_pending<T: Send + Sync + 'static>(items: Vec<T>) -> BoxStream<T> {
     tokio_stream::iter(items).chain(pending()).into_boxed()
 }

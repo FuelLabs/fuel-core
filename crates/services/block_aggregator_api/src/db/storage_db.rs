@@ -1,10 +1,10 @@
 use crate::{
     block_range_response::BlockRangeResponse,
-    blocks::Block,
     db::{
         BlockAggregatorDB,
         storage_db::table::Column,
     },
+    protobuf_types::Block as ProtoBlock,
     result::{
         Error,
         Result,
@@ -105,9 +105,14 @@ where
     T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
     StorageTransaction<T>: StorageInspect<Blocks, Error = StorageError>,
 {
+    type Block = ProtoBlock;
     type BlockRangeResponse = BlockRangeResponse;
 
-    async fn store_block(&mut self, height: BlockHeight, block: Block) -> Result<()> {
+    async fn store_block(
+        &mut self,
+        height: BlockHeight,
+        block: ProtoBlock,
+    ) -> Result<()> {
         self.update_highest_contiguous_block(height);
         let mut tx = self.storage.write_transaction();
         tx.storage_as_mut::<Blocks>()
@@ -156,7 +161,7 @@ where
     S: Unpin + ReadTransaction + std::fmt::Debug,
     for<'a> StorageTransaction<&'a S>: StorageInspect<Blocks, Error = StorageError>,
 {
-    type Item = Block;
+    type Item = ProtoBlock;
 
     fn poll_next(
         self: Pin<&mut Self>,

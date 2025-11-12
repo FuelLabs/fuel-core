@@ -1,9 +1,6 @@
 use crate::{
     api::BlockAggregatorApi,
-    blocks::{
-        Block,
-        BlockSource,
-    },
+    blocks::BlockSource,
     db::BlockAggregatorDB,
 };
 use fuel_core_services::{
@@ -13,6 +10,8 @@ use fuel_core_services::{
     TaskNextAction,
 };
 use fuel_core_types::fuel_types::BlockHeight;
+use protobuf_types::Block as ProtoBlock;
+use std::fmt::Debug;
 
 pub mod api;
 pub mod blocks;
@@ -20,6 +19,8 @@ pub mod db;
 pub mod result;
 
 pub mod block_range_response;
+
+pub mod protobuf_types;
 
 pub mod integration {
     use crate::{
@@ -33,6 +34,7 @@ pub mod integration {
             ImporterAndDbSource,
         },
         db::BlockAggregatorDB,
+        protobuf_types::Block as ProtoBlock,
     };
     use fuel_core_services::{
         ServiceRunner,
@@ -56,6 +58,7 @@ pub mod integration {
         pub addr: SocketAddr,
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn new_service<DB, S, OnchainDB, E>(
         config: &Config,
         db: DB,
@@ -63,13 +66,19 @@ pub mod integration {
         onchain_db: OnchainDB,
         importer: BoxStream<SharedImportResult>,
     ) -> ServiceRunner<
-        BlockAggregator<ProtobufAPI, DB, ImporterAndDbSource<S, OnchainDB, E>>,
+        BlockAggregator<
+            ProtobufAPI,
+            DB,
+            ImporterAndDbSource<S, OnchainDB, E>,
+            ProtoBlock,
+        >,
     >
     where
         DB: BlockAggregatorDB<
             BlockRangeResponse = <ProtobufAPI as BlockAggregatorApi>::BlockRangeResponse,
+            Block = ProtoBlock,
         >,
-        S: BlockSerializer + Clone + Send + Sync + 'static,
+        S: BlockSerializer<Block=ProtoBlock> + Clone + Send + Sync + 'static,
         OnchainDB: Send + Sync,
         OnchainDB: StorageInspect<FuelBlocks, Error = E>,
         OnchainDB: StorageInspect<Transactions, Error = E>,
@@ -104,33 +113,35 @@ pub mod block_aggregator;
 //   but we can change the name later
 /// The Block Aggregator service, which aggregates blocks from a source and stores them in a database
 /// Queries can be made to the service to retrieve data from the `DB`
-pub struct BlockAggregator<Api, DB, Blocks> {
+pub struct BlockAggregator<Api, DB, Blocks, Block> {
     query: Api,
     database: DB,
     block_source: Blocks,
-    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<NewBlock>>,
+    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<Block>>,
 }
 
 pub struct NewBlock {
     height: BlockHeight,
-    block: Block,
+    block: ProtoBlock,
 }
 
 impl NewBlock {
-    pub fn new(height: BlockHeight, block: Block) -> Self {
+    pub fn new(height: BlockHeight, block: ProtoBlock) -> Self {
         Self { height, block }
     }
 
-    pub fn into_inner(self) -> (BlockHeight, Block) {
+    pub fn into_inner(self) -> (BlockHeight, ProtoBlock) {
         (self.height, self.block)
     }
 }
 
-impl<Api, DB, Blocks, BlockRange> RunnableTask for BlockAggregator<Api, DB, Blocks>
+impl<Api, DB, Blocks, BlockRange> RunnableTask
+    for BlockAggregator<Api, DB, Blocks, Blocks::Block>
 where
-    Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
-    DB: BlockAggregatorDB<BlockRangeResponse = BlockRange>,
+    Api: BlockAggregatorApi<Block = Blocks::Block, BlockRangeResponse = BlockRange>,
+    DB: BlockAggregatorDB<Block = Blocks::Block, BlockRangeResponse = BlockRange>,
     Blocks: BlockSource,
+    <Blocks as BlockSource>::Block: Clone + std::fmt::Debug + Send,
     BlockRange: Send,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
@@ -151,12 +162,15 @@ where
 }
 
 #[async_trait::async_trait]
-impl<Api, DB, Blocks, BlockRange> RunnableService for BlockAggregator<Api, DB, Blocks>
+impl<Api, DB, Blocks, BlockRange> RunnableService
+    for BlockAggregator<Api, DB, Blocks, Blocks::Block>
 where
-    Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
-    DB: BlockAggregatorDB<BlockRangeResponse = BlockRange>,
+    Api:
+        BlockAggregatorApi<Block = Blocks::Block, BlockRangeResponse = BlockRange> + Send,
+    DB: BlockAggregatorDB<Block = Blocks::Block, BlockRangeResponse = BlockRange> + Send,
     Blocks: BlockSource,
     BlockRange: Send,
+    <Blocks as BlockSource>::Block: Clone + Debug + Send,
 {
     const NAME: &'static str = "BlockAggregatorService";
     type SharedData = ();

@@ -7,17 +7,20 @@ pub mod importer_and_db_source;
 
 /// Source from which blocks can be gathered for aggregation
 pub trait BlockSource: Send + Sync {
+    type Block;
     /// Asynchronously fetch the next block and its height
-    fn next_block(&mut self) -> impl Future<Output = Result<BlockSourceEvent>> + Send;
+    fn next_block(
+        &mut self,
+    ) -> impl Future<Output = Result<BlockSourceEvent<Self::Block>>> + Send;
 
     /// Drain any remaining blocks from the source
     fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[derive(Debug, Eq, PartialEq, Hash)]
-pub enum BlockSourceEvent {
-    NewBlock(BlockHeight, Block),
-    OldBlock(BlockHeight, Block),
+pub enum BlockSourceEvent<B> {
+    NewBlock(BlockHeight, B),
+    OldBlock(BlockHeight, B),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
