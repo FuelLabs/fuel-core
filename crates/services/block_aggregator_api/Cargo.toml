@@ -8,6 +8,10 @@ homepage = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
+build = "build.rs"
+
+[features]
+fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -18,8 +22,10 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
+log = "0.4.27"
 num_enum = { workspace = true }
-prost = { workspace = true }
+postcard = { workspace = true }
+prost = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true }
@@ -38,6 +44,6 @@ tonic-prost-build = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
-postcard = { workspace = true }
+proptest = { workspace = true }
 tokio-stream = { workspace = true }
 tracing-subscriber = { workspace = true }

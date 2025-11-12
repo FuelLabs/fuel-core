@@ -1,17 +1,17 @@
 use crate::{
     api::BlockAggregatorApi,
-    blocks::{
-        Block,
-        BlockSource,
-    },
+    blocks::BlockSource,
     db::BlockAggregatorDB,
 };
 use fuel_core_services::{
+    RunnableService,
     RunnableTask,
     StateWatcher,
     TaskNextAction,
 };
 use fuel_core_types::fuel_types::BlockHeight;
+use protobuf_types::Block as ProtoBlock;
+use std::fmt::Debug;
 
 pub mod api;
 pub mod blocks;
@@ -20,6 +20,90 @@ pub mod result;
 
 pub mod block_range_response;
 
+pub mod protobuf_types;
+
+pub mod integration {
+    use crate::{
+        BlockAggregator,
+        api::{
+            BlockAggregatorApi,
+            protobuf_adapter::ProtobufAPI,
+        },
+        blocks::importer_and_db_source::{
+            BlockSerializer,
+            ImporterAndDbSource,
+        },
+        db::BlockAggregatorDB,
+        protobuf_types::Block as ProtoBlock,
+    };
+    use fuel_core_services::{
+        ServiceRunner,
+        stream::BoxStream,
+    };
+    use fuel_core_storage::{
+        StorageInspect,
+        tables::{
+            FuelBlocks,
+            Transactions,
+        },
+    };
+    use fuel_core_types::{
+        fuel_types::BlockHeight,
+        services::block_importer::SharedImportResult,
+    };
+    use std::net::SocketAddr;
+
+    #[derive(Clone, Debug)]
+    pub struct Config {
+        pub addr: SocketAddr,
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn new_service<DB, S, OnchainDB, E>(
+        config: &Config,
+        db: DB,
+        serializer: S,
+        onchain_db: OnchainDB,
+        importer: BoxStream<SharedImportResult>,
+    ) -> ServiceRunner<
+        BlockAggregator<
+            ProtobufAPI,
+            DB,
+            ImporterAndDbSource<S, OnchainDB, E>,
+            ProtoBlock,
+        >,
+    >
+    where
+        DB: BlockAggregatorDB<
+            BlockRangeResponse = <ProtobufAPI as BlockAggregatorApi>::BlockRangeResponse,
+            Block = ProtoBlock,
+        >,
+        S: BlockSerializer<Block=ProtoBlock> + Clone + Send + Sync + 'static,
+        OnchainDB: Send + Sync,
+        OnchainDB: StorageInspect<FuelBlocks, Error = E>,
+        OnchainDB: StorageInspect<Transactions, Error = E>,
+        E: std::fmt::Debug + Send + Sync,
+    {
+        let addr = config.addr.to_string();
+        let api = ProtobufAPI::new(addr);
+        let db_starting_height = BlockHeight::from(0);
+        let db_ending_height = None;
+        let block_source = ImporterAndDbSource::new(
+            importer,
+            serializer,
+            onchain_db,
+            db_starting_height,
+            db_ending_height,
+        );
+        let block_aggregator = BlockAggregator {
+            query: api,
+            database: db,
+            block_source,
+            new_block_subscriptions: Vec::new(),
+        };
+        ServiceRunner::new(block_aggregator)
+    }
+}
 #[cfg(test)]
 mod tests;
 
@@ -29,33 +113,35 @@ pub mod block_aggregator;
 //   but we can change the name later
 /// The Block Aggregator service, which aggregates blocks from a source and stores them in a database
 /// Queries can be made to the service to retrieve data from the `DB`
-pub struct BlockAggregator<Api, DB, Blocks> {
+pub struct BlockAggregator<Api, DB, Blocks, Block> {
     query: Api,
     database: DB,
     block_source: Blocks,
-    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<NewBlock>>,
+    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<Block>>,
 }
 
 pub struct NewBlock {
     height: BlockHeight,
-    block: Block,
+    block: ProtoBlock,
 }
 
 impl NewBlock {
-    pub fn new(height: BlockHeight, block: Block) -> Self {
+    pub fn new(height: BlockHeight, block: ProtoBlock) -> Self {
         Self { height, block }
     }
 
-    pub fn into_inner(self) -> (BlockHeight, Block) {
+    pub fn into_inner(self) -> (BlockHeight, ProtoBlock) {
         (self.height, self.block)
     }
 }
 
-impl<Api, DB, Blocks, BlockRange> RunnableTask for BlockAggregator<Api, DB, Blocks>
+impl<Api, DB, Blocks, BlockRange> RunnableTask
+    for BlockAggregator<Api, DB, Blocks, Blocks::Block>
 where
-    Api: BlockAggregatorApi<BlockRangeResponse = BlockRange>,
-    DB: BlockAggregatorDB<BlockRangeResponse = BlockRange>,
+    Api: BlockAggregatorApi<Block = Blocks::Block, BlockRangeResponse = BlockRange>,
+    DB: BlockAggregatorDB<Block = Blocks::Block, BlockRangeResponse = BlockRange>,
     Blocks: BlockSource,
+    <Blocks as BlockSource>::Block: Clone + std::fmt::Debug + Send,
     BlockRange: Send,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
@@ -72,5 +158,32 @@ where
             anyhow::anyhow!("Error draining block source during shutdown: {e:?}")
         })?;
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl<Api, DB, Blocks, BlockRange> RunnableService
+    for BlockAggregator<Api, DB, Blocks, Blocks::Block>
+where
+    Api:
+        BlockAggregatorApi<Block = Blocks::Block, BlockRangeResponse = BlockRange> + Send,
+    DB: BlockAggregatorDB<Block = Blocks::Block, BlockRangeResponse = BlockRange> + Send,
+    Blocks: BlockSource,
+    BlockRange: Send,
+    <Blocks as BlockSource>::Block: Clone + Debug + Send,
+{
+    const NAME: &'static str = "BlockAggregatorService";
+    type SharedData = ();
+    type Task = Self;
+    type TaskParams = ();
+
+    fn shared_data(&self) -> Self::SharedData {}
+
+    async fn into_task(
+        self,
+        _state_watcher: &StateWatcher,
+        _params: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        Ok(self)
     }
 }

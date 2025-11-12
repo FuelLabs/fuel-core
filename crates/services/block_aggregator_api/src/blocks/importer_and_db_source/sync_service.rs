@@ -25,18 +25,19 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
+use std::time::Duration;
 use tokio::sync::mpsc::Sender;
 
-pub struct SyncTask<Serializer, DB> {
+pub struct SyncTask<Serializer, DB, B> {
     serializer: Serializer,
-    block_return_sender: Sender<BlockSourceEvent>,
+    block_return_sender: Sender<BlockSourceEvent<B>>,
     db: DB,
     next_height: BlockHeight,
     maybe_stop_height: Option<BlockHeight>,
     new_ending_height: tokio::sync::oneshot::Receiver<BlockHeight>,
 }
 
-impl<Serializer, DB, E> SyncTask<Serializer, DB>
+impl<Serializer, DB, E> SyncTask<Serializer, DB, Serializer::Block>
 where
     Serializer: BlockSerializer + Send,
     DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
@@ -45,7 +46,7 @@ where
 {
     pub fn new(
         serializer: Serializer,
-        block_return: Sender<BlockSourceEvent>,
+        block_return: Sender<BlockSourceEvent<Serializer::Block>>,
         db: DB,
         db_starting_height: BlockHeight,
         db_ending_height: Option<BlockHeight>,
@@ -98,11 +99,18 @@ where
         }
         Ok(txs)
     }
+
+    // For now just have arbitrary 10 ms sleep to avoid busy looping.
+    // This could be more complicated with increasing backoff times, etc.
+    async fn go_to_sleep_before_continuing(&self) {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
-impl<Serializer, DB, E> RunnableTask for SyncTask<Serializer, DB>
+impl<Serializer, DB, E> RunnableTask for SyncTask<Serializer, DB, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync,
+    Serializer::Block: Send + Sync + 'static,
     DB: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
     DB: StorageInspect<Transactions, Error = E> + Send + 'static,
@@ -134,6 +142,7 @@ where
             self.next_height = BlockHeight::from((*next_height).saturating_add(1));
         } else {
             tracing::warn!("no block found at height {:?}, retrying", next_height);
+            self.go_to_sleep_before_continuing().await;
         }
         TaskNextAction::Continue
     }
@@ -144,9 +153,10 @@ where
 }
 
 #[async_trait::async_trait]
-impl<Serializer, DB, E> RunnableService for SyncTask<Serializer, DB>
+impl<Serializer, DB, E> RunnableService for SyncTask<Serializer, DB, Serializer::Block>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
+    <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
     DB: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = E> + Send + 'static,
     DB: StorageInspect<Transactions, Error = E> + Send + 'static,
