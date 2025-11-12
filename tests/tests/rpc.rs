@@ -294,6 +294,7 @@ fn aws_client() -> Client {
     }
 
     let config = builder
+        .force_path_style(true)
         .region(Region::new(Cow::Owned(aws_region.clone())))
         .credentials_provider(Credentials::new(
             aws_access_key_id,

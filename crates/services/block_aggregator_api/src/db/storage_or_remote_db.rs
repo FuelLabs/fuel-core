@@ -61,6 +61,7 @@ impl<R, S> StorageOrRemoteDB<R, S> {
             }
 
             let config = builder
+                .force_path_style(true)
                 .region(Region::new(Cow::Owned(aws_region.to_string())))
                 .credentials_provider(Credentials::new(
                     aws_id,
