@@ -5,12 +5,19 @@ package blockaggregator;
 message BlockHeightRequest {}
 
 message BlockHeightResponse {
-  uint32 height = 1;
+  optional uint32 height = 1;
 }
 
 message BlockRangeRequest {
   uint32 start = 1;
   uint32 end = 2;
+}
+
+message RemoteBlockRangeResponse {
+  string region = 1;
+  string bucket = 2;
+  string key = 3;
+  string url = 4;
 }
 
 message Block {
@@ -31,62 +38,6 @@ message Header {
   }
 }
 
-// pub struct BlockHeaderV1 {
-//    /// The application header.
-//    pub(crate) application: ApplicationHeader<GeneratedApplicationFieldsV1>,
-//    /// The consensus header.
-//    pub(crate) consensus: ConsensusHeader<GeneratedConsensusFields>,
-//    /// The header metadata calculated during creation.
-//    /// The field is pub(crate) to enforce the use of the [`PartialBlockHeader::generate`] method.
-//    #[cfg_attr(feature = "serde", serde(skip))]
-//    #[educe(PartialEq(ignore))]
-//    pub(crate) metadata: Option<BlockHeaderMetadata>,
-//}
-// pub struct ApplicationHeader<Generated> {
-//    /// The layer 1 height of messages and events to include since the last layer 1 block number.
-//    /// This is not meant to represent the layer 1 block this was committed to. Validators will need
-//    /// to have some rules in place to ensure the block number was chosen in a reasonable way. For
-//    /// example, they should verify that the block number satisfies the finality requirements of the
-//    /// layer 1 chain. They should also verify that the block number isn't too stale and is increasing.
-//    /// Some similar concerns are noted in this issue: <https://github.com/FuelLabs/fuel-specs/issues/220>
-//    pub da_height: DaBlockHeight,
-//    /// The version of the consensus parameters used to execute this block.
-//    pub consensus_parameters_version: ConsensusParametersVersion,
-//    /// The version of the state transition bytecode used to execute this block.
-//    pub state_transition_bytecode_version: StateTransitionBytecodeVersion,
-//    /// Generated application fields.
-//    pub generated: Generated,
-//}
-// pub struct GeneratedApplicationFieldsV1 {
-//    /// Number of transactions in this block.
-//    pub transactions_count: u16,
-//    /// Number of message receipts in this block.
-//    pub message_receipt_count: u32,
-//    /// Merkle root of transactions.
-//    pub transactions_root: Bytes32,
-//    /// Merkle root of message receipts in this block.
-//    pub message_outbox_root: Bytes32,
-//    /// Root hash of all imported events from L1
-//    pub event_inbox_root: Bytes32,
-//}
-// pub struct ConsensusHeader<Generated> {
-//    /// Merkle root of all previous block header hashes.
-//    pub prev_root: Bytes32,
-//    /// Fuel block height.
-//    pub height: BlockHeight,
-//    /// The block producer time.
-//    pub time: Tai64,
-//    /// generated consensus fields.
-//    pub generated: Generated,
-//}
-// pub struct GeneratedConsensusFields {
-//    /// Hash of the application header.
-//    pub application_hash: Bytes32,
-//}
-// pub struct BlockHeaderMetadata {
-//    /// Hash of the header.
-//    id: BlockId,
-//}
 message V1Header {
   uint64 da_height = 1;
   uint32 consensus_parameters_version = 2;
@@ -664,7 +615,7 @@ message InnerPredicateOffset {
 message BlockResponse {
   oneof payload {
     Block literal = 1;
-    string remote = 2;
+    RemoteBlockRangeResponse remote = 2;
   }
 }
 

@@ -84,13 +84,22 @@ impl<R, S> StorageOrRemoteDB<R, S> {
     }
 }
 
-pub fn get_env_vars() -> Option<(String, String, String, String, Option<String>)> {
+pub fn get_env_vars() -> Option<(String, String, String, String, String, Option<String>)>
+{
     let aws_id = std::env::var("AWS_ACCESS_KEY_ID").ok()?;
     let aws_secret = std::env::var("AWS_SECRET_ACCESS_KEY").ok()?;
     let aws_region = std::env::var("AWS_REGION").ok()?;
     let aws_bucket = std::env::var("AWS_BUCKET").ok()?;
+    let bucket_url_base = std::env::var("BUCKET_URL_BASE").ok()?;
     let aws_endpoint_url = std::env::var("AWS_ENDPOINT_URL").ok();
-    Some((aws_id, aws_secret, aws_region, aws_bucket, aws_endpoint_url))
+    Some((
+        aws_id,
+        aws_secret,
+        aws_region,
+        aws_bucket,
+        bucket_url_base,
+        aws_endpoint_url,
+    ))
 }
 
 impl<R, S, T> BlockAggregatorDB for StorageOrRemoteDB<R, S>

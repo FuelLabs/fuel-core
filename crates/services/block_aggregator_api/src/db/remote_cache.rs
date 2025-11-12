@@ -156,6 +156,7 @@ where
     }
 
     async fn get_current_height(&self) -> crate::result::Result<Option<BlockHeight>> {
+        tracing::debug!("Getting current height from local cache");
         let height = self
             .local_persisted
             .storage_as_ref::<LatestBlock>()

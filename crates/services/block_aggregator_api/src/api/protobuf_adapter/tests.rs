@@ -6,7 +6,10 @@ use crate::{
         BlockAggregatorQuery,
         protobuf_adapter::ProtobufAPI,
     },
-    block_range_response::BlockRangeResponse,
+    block_range_response::{
+        BlockRangeResponse,
+        RemoteBlockRangeResponse,
+    },
     blocks::importer_and_db_source::{
         BlockSerializer,
         serializer_adapter::SerializerAdapter,
@@ -73,11 +76,11 @@ async fn await_query__get_current_height__client_receives_expected_value() {
     let res = handle.await.unwrap();
 
     // assert client received expected value
-    assert_eq!(res.into_inner().height, 42);
+    assert_eq!(res.into_inner().height, Some(42));
 }
 
 #[tokio::test]
-async fn await_query__get_block_range__client_receives_expected_value() {
+async fn await_query__get_block_range__client_receives_expected_value__literal() {
     // given
     let path = free_local_addr();
     let mut api = ProtobufAPI::new(path.to_string());
@@ -142,6 +145,88 @@ async fn await_query__get_block_range__client_receives_expected_value() {
         .map(|b| {
             if let Some(Payload::Literal(inner)) = b.payload {
                 inner
+            } else {
+                panic!("unexpected response type")
+            }
+        })
+        .collect();
+
+    assert_eq!(expected, actual);
+}
+#[tokio::test]
+async fn await_query__get_block_range__client_receives_expected_value__remote() {
+    // given
+    let path = free_local_addr();
+    let mut api = ProtobufAPI::new(path.to_string());
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    // call get current height endpoint with client
+    let url = format!("http://{}", path);
+    let mut client = ProtoBlockAggregatorClient::connect(url.to_string())
+        .await
+        .expect("could not connect to server");
+    let request = BlockRangeRequest { start: 0, end: 1 };
+    let handle = tokio::spawn(async move {
+        tracing::info!("querying with client");
+        client
+            .get_block_range(request)
+            .await
+            .expect("could not get height")
+    });
+
+    // when
+    tracing::info!("awaiting query");
+    let query = api.await_query().await.unwrap();
+
+    // then
+    let list: Vec<_> = vec!["1", "2"]
+        .iter()
+        .map(|height| {
+            let region = "test-region".to_string();
+            let bucket = "test-bucket".to_string();
+            let key = height.to_string();
+            let url = "good.url".to_string();
+            RemoteBlockRangeResponse {
+                region,
+                bucket,
+                key,
+                url,
+            }
+        })
+        .collect();
+    // return response through query's channel
+    if let BlockAggregatorQuery::GetBlockRange {
+        first,
+        last,
+        response,
+    } = query
+    {
+        assert_eq!(first, BlockHeight::new(0));
+        assert_eq!(last, BlockHeight::new(1));
+        tracing::info!("correct query received, sending response");
+        let stream = tokio_stream::iter(list.clone()).boxed();
+        let range = BlockRangeResponse::Remote(stream);
+        response.send(range).unwrap();
+    } else {
+        panic!("expected GetBlockRange query");
+    }
+    tracing::info!("awaiting query");
+    let response = handle.await.unwrap();
+    let expected = list;
+    let actual: Vec<RemoteBlockRangeResponse> = response
+        .into_inner()
+        .try_collect::<Vec<_>>()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|b| {
+            if let Some(Payload::Remote(inner)) = b.payload {
+                RemoteBlockRangeResponse {
+                    region: inner.region,
+                    bucket: inner.bucket,
+                    key: inner.key,
+                    url: inner.url,
+                }
             } else {
                 panic!("unexpected response type")
             }

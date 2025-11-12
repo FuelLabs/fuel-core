@@ -11,6 +11,7 @@ use crate::{
         BlockRangeRequest as ProtoBlockRangeRequest,
         BlockResponse as ProtoBlockResponse,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+        RemoteBlockRangeResponse as ProtoRemoteBlockRangeResponse,
         block_aggregator_server::{
             BlockAggregator,
             BlockAggregatorServer as ProtoBlockAggregatorServer,
@@ -60,7 +61,7 @@ impl BlockAggregator for Server {
         let res = receiver.await;
         match res {
             Ok(height) => Ok(tonic::Response::new(ProtoBlockHeightResponse {
-                height: *height.unwrap(),
+                height: height.map(|inner| *inner),
             })),
             Err(e) => Err(tonic::Status::internal(format!(
                 "Failed to receive height: {}",
@@ -108,9 +109,32 @@ impl BlockAggregator for Server {
 
                     Ok(tonic::Response::new(ReceiverStream::new(rx)))
                 }
-                BlockRangeResponse::Remote(_) => {
-                    tracing::error!("Remote block range not implemented");
-                    todo!()
+                BlockRangeResponse::Remote(inner) => {
+                    let (tx, rx) = tokio::sync::mpsc::channel::<
+                        Result<ProtoBlockResponse, Status>,
+                    >(ARB_LITERAL_BLOCK_BUFFER_SIZE);
+
+                    tokio::spawn(async move {
+                        let mut s = inner;
+                        while let Some(pb) = s.next().await {
+                            let proto_response = ProtoRemoteBlockRangeResponse {
+                                region: pb.region.clone(),
+                                bucket: pb.bucket.clone(),
+                                key: pb.key.clone(),
+                                url: pb.url.clone(),
+                            };
+                            let response = ProtoBlockResponse {
+                                payload: Some(proto_block_response::Payload::Remote(
+                                    proto_response,
+                                )),
+                            };
+                            if tx.send(Ok(response)).await.is_err() {
+                                break;
+                            }
+                        }
+                    });
+
+                    Ok(tonic::Response::new(ReceiverStream::new(rx)))
                 }
             },
             Err(e) => Err(tonic::Status::internal(format!(
