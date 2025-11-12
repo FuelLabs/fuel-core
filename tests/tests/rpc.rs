@@ -158,7 +158,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc__remote() {
         region: aws_region.clone(),
         bucket: aws_bucket.clone(),
         key: key.clone(),
-        url: format!("{}/blocks/{}", url_base, key),
+        url: format!("{}/{}", url_base, key),
     };
     assert_eq!(expected, remote_info);
     clean_s3_bucket().await;

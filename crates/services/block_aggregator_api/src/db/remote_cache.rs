@@ -79,7 +79,7 @@ impl<S> RemoteCache<S> {
     }
 
     fn url_for_block(base: &str, key: &str) -> String {
-        format!("{}/blocks/{}", base, key,)
+        format!("{}/{}", base, key,)
     }
 }
 
