@@ -48,15 +48,17 @@ pub struct StorageDB<S> {
     highest_new_height: Option<BlockHeight>,
     orphaned_new_height: Option<BlockHeight>,
     synced: bool,
+    sync_from: BlockHeight,
     storage: S,
 }
 
 impl<S> StorageDB<S> {
-    pub fn new(storage: S) -> Self {
+    pub fn new(storage: S, sync_from: BlockHeight) -> Self {
         Self {
             highest_new_height: None,
             orphaned_new_height: None,
             synced: false,
+            sync_from,
             storage,
         }
     }
@@ -94,6 +96,14 @@ where
                 self.highest_new_height = Some(new_height);
                 if self.synced {
                     let mut tx = self.storage.write_transaction();
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if new_height == self.sync_from {
+                    let mut tx = self.storage.write_transaction();
+                    self.synced = true;
+                    self.highest_new_height = Some(new_height);
                     tx.storage_as_mut::<LatestBlock>()
                         .insert(&(), &new_height)
                         .map_err(|e| Error::DB(anyhow!(e)))?;

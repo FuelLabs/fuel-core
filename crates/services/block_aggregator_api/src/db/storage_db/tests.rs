@@ -35,7 +35,7 @@ fn proto_block_with_height(height: BlockHeight) -> ProtoBlock {
 async fn store_block__adds_to_storage() {
     // given
     let db = database();
-    let mut adapter = StorageDB::new(db);
+    let mut adapter = StorageDB::new(db, BlockHeight::from(0u32));
     let height = BlockHeight::from(1u32);
     let expected = proto_block_with_height(height);
     let block = BlockSourceEvent::OldBlock(height, expected.clone());
@@ -79,7 +79,7 @@ async fn get_block__can_get_expected_range() {
     tx.commit().unwrap();
     let db = db.commit().unwrap();
     let tx = db.into_transaction();
-    let adapter = StorageDB::new(tx);
+    let adapter = StorageDB::new(tx, BlockHeight::from(0u32));
 
     // when
     let BlockRangeResponse::Literal(stream) =
@@ -97,7 +97,7 @@ async fn get_block__can_get_expected_range() {
 async fn store_block__updates_the_highest_continuous_block_if_contiguous() {
     // given
     let db = database();
-    let mut adapter = StorageDB::new(db);
+    let mut adapter = StorageDB::new(db, BlockHeight::from(0u32));
     let height = BlockHeight::from(1u32);
     let expected = proto_block_with_height(height);
     let block = BlockSourceEvent::OldBlock(height, expected.clone());
@@ -121,7 +121,7 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
         .insert(&(), &starting_height)
         .unwrap();
     tx.commit().unwrap();
-    let mut adapter = StorageDB::new(db);
+    let mut adapter = StorageDB::new(db, BlockHeight::from(0u32));
     let height = BlockHeight::from(3u32);
     let proto = proto_block_with_height(height);
     let block = BlockSourceEvent::NewBlock(height, proto.clone());
@@ -139,7 +139,7 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
 async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
     // given
     let db = database();
-    let mut adapter = StorageDB::new(db);
+    let mut adapter = StorageDB::new(db, BlockHeight::from(0u32));
 
     for height in 2..=10u32 {
         let height = BlockHeight::from(height);
@@ -162,7 +162,7 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
 async fn store_block__new_block_updates_the_highest_continuous_block_if_synced() {
     // given
     let db = database();
-    let mut adapter = StorageDB::new(db);
+    let mut adapter = StorageDB::new(db, BlockHeight::from(0u32));
 
     let height = BlockHeight::from(0u32);
     let some_block = proto_block_with_height(height);
@@ -187,24 +187,16 @@ async fn store_block__new_block_updates_the_highest_continuous_block_if_synced()
 async fn store_block__new_block_comes_first() {
     // given
     let db = database();
-    let mut adapter = StorageDB::new(db);
+    let mut adapter = StorageDB::new(db, BlockHeight::from(0u32));
 
     // when
-    let height = BlockHeight::from(1u32);
+    let height = BlockHeight::from(0u32);
     let some_block = proto_block_with_height(height);
     let block = BlockSourceEvent::NewBlock(height, some_block.clone());
     adapter.store_block(block).await.unwrap();
-    assert!(!adapter.synced);
-    // (with old block after)
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    let height = BlockHeight::from(0u32);
-    let some_block = proto_block_with_height(height);
-    let block = BlockSourceEvent::OldBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
 
     // then
-
-    let expected = BlockHeight::from(1u32);
+    let expected = BlockHeight::from(0u32);
     let actual = adapter.get_current_height().await.unwrap().unwrap();
     assert_eq!(expected, actual);
 

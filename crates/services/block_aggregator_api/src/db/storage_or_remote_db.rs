@@ -39,10 +39,11 @@ pub enum StorageOrRemoteDB<R, S> {
 }
 
 impl<R, S> StorageOrRemoteDB<R, S> {
-    pub fn new_storage(storage: S) -> Self {
-        StorageOrRemoteDB::Storage(StorageDB::new(storage))
+    pub fn new_storage(storage: S, sync_from: BlockHeight) -> Self {
+        StorageOrRemoteDB::Storage(StorageDB::new(storage, sync_from))
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_s3(
         storage: R,
         aws_id: &str,
