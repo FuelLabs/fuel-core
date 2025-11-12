@@ -25,6 +25,7 @@ use fuel_core_block_aggregator_api::{
         BlockHeightRequest as ProtoBlockHeightRequest,
         BlockRangeRequest as ProtoBlockRangeRequest,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+        RemoteBlockRangeResponse as ProtoRemoteBlockRangeResponse,
         block::VersionedBlock as ProtoVersionedBlock,
         block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
         block_response::Payload as ProtoPayload,
@@ -43,7 +44,11 @@ use test_helpers::client_ext::ClientExt;
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn get_block_range__can_get_serialized_block_from_rpc() {
+async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
+    if env_vars_are_set() {
+        tracing::info!("Skipping test: AWS credentials are set");
+        return;
+    }
     let config = Config::local_node();
     let rpc_url = config.rpc_config.addr;
 
@@ -91,12 +96,81 @@ async fn get_block_range__can_get_serialized_block_from_rpc() {
         ProtoVersionedHeader::V1(v1_header) => v1_header.height,
         ProtoVersionedHeader::V2(v2_header) => v2_header.height,
     };
+
     // then
     assert_eq!(expected_header.height.0, actual_height);
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn get_block_range__can_get_serialized_block_from_rpc__remote() {
+    let Some((_, _, aws_region, aws_bucket, url_base, _)) = get_env_vars() else {
+        tracing::info!("Skipping test: AWS credentials are not set");
+        return;
+    };
+    let config = Config::local_node();
+    let rpc_url = config.rpc_config.addr;
+
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+
+    let graphql_client = FuelClient::from(srv.bound_address);
+
+    let tx = Transaction::default_test_tx();
+    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
+
+    let rpc_url = format!("http://{}", rpc_url);
+    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
+        .await
+        .expect("could not connect to server");
+
+    let expected_block = graphql_client
+        .full_block_by_height(1)
+        .await
+        .unwrap()
+        .unwrap();
+    let expected_header = expected_block.header;
+    let expected_height = BlockHeight::new(expected_header.height.0);
+
+    // when
+    let request = ProtoBlockRangeRequest { start: 1, end: 1 };
+    let remote_info = if let Some(ProtoPayload::Remote(remote_info)) = rpc_client
+        .get_block_range(request)
+        .await
+        .unwrap()
+        .into_inner()
+        .next()
+        .await
+        .unwrap()
+        .unwrap()
+        .payload
+    {
+        remote_info
+    } else {
+        panic!("expected literal block payload");
+    };
+
+    // then
+    let key = block_height_to_key(&expected_height);
+    let expected = ProtoRemoteBlockRangeResponse {
+        region: aws_region.clone(),
+        bucket: aws_bucket.clone(),
+        key: key.clone(),
+        url: format!("{}/blocks/{}", url_base, key),
+    };
+    assert_eq!(expected, remote_info);
+    clean_s3_bucket().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn get_block_height__can_get_value_from_rpc() {
+    if get_env_vars().is_some() {
+        ensure_bucket_exists().await;
+        clean_s3_bucket().await;
+    }
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
     let config = Config::local_node();
     let rpc_url = config.rpc_config.addr;
 
@@ -116,14 +190,20 @@ async fn get_block_height__can_get_value_from_rpc() {
         .expect("could not connect to server");
 
     // when
+    sleep(std::time::Duration::from_secs(1)).await;
     let request = ProtoBlockHeightRequest {};
-    let expected_height = 1;
+    let expected_height = Some(1);
     let actual_height = rpc_client
         .get_block_height(request)
         .await
         .unwrap()
         .into_inner()
         .height;
+
+    // cleanup
+    if get_env_vars().is_some() {
+        clean_s3_bucket().await;
+    }
 
     // then
     assert_eq!(expected_height, actual_height);
@@ -186,8 +266,15 @@ macro_rules! require_env_var_or_skip {
     };
 }
 
+fn env_vars_are_set() -> bool {
+    std::env::var("AWS_ACCESS_KEY_ID").is_ok()
+        && std::env::var("AWS_SECRET_ACCESS_KEY").is_ok()
+        && std::env::var("AWS_REGION").is_ok()
+        && std::env::var("AWS_BUCKET").is_ok()
+}
+
 fn aws_client() -> Client {
-    let (aws_access_key_id, aws_secret_access_key, aws_region, _, aws_endpoint_url) =
+    let (aws_access_key_id, aws_secret_access_key, aws_region, _, _, aws_endpoint_url) =
         get_env_vars().unwrap();
 
     let mut builder = aws_sdk_s3::config::Builder::new();

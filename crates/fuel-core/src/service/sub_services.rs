@@ -466,17 +466,17 @@ pub fn init_sub_services(
             aws_secrete_access_key,
             aws_region,
             aws_bucket,
+            url_base,
             aws_endpoint_url,
         )) = get_env_vars()
         {
-            let url_base = "good.com";
             StorageOrRemoteDB::new_s3(
                 database.block_aggregation_s3().clone(),
                 &aws_access_key_id,
                 &aws_secrete_access_key,
                 &aws_region,
                 &aws_bucket,
-                url_base,
+                &url_base,
                 aws_endpoint_url,
             )
         } else {
