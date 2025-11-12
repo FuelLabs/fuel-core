@@ -170,9 +170,6 @@ async fn get_block_height__can_get_value_from_rpc() {
         ensure_bucket_exists().await;
         clean_s3_bucket().await;
     }
-    let _ = tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .try_init();
     let config = Config::local_node();
     let rpc_url = config.rpc_config.addr;
 
@@ -342,6 +339,9 @@ async fn clean_s3_bucket() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn get_block_range__can_get_from_remote_s3_bucket() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .try_init();
     require_env_var_or_skip!(
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
@@ -375,4 +375,7 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
     // cleanup
     clean_s3_bucket().await;
     drop(srv);
+    tracing::info!(
+        "Successfully ran test: get_block_range__can_get_from_remote_s3_bucket"
+    );
 }
