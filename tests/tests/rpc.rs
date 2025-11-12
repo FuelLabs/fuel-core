@@ -323,7 +323,7 @@ async fn clean_s3_bucket() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn get_block_range__can_get_from_remote_s3_bucket() {
     require_env_var_or_skip!(
         "AWS_ACCESS_KEY_ID",
@@ -331,9 +331,6 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
         "AWS_REGION",
         "AWS_BUCKET"
     );
-    // let _ = tracing_subscriber::fmt()
-    //     .with_max_level(tracing::Level::INFO)
-    //     .try_init();
     ensure_bucket_exists().await;
     clean_s3_bucket().await;
 

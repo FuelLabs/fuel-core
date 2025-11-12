@@ -461,6 +461,7 @@ pub fn init_sub_services(
     #[cfg(feature = "rpc")]
     let block_aggregator_rpc = {
         let block_aggregator_config = config.rpc_config.clone();
+        let sync_from = block_aggregator_config.sync_from.unwrap_or_default();
         let db_adapter = if let Some((
             aws_access_key_id,
             aws_secrete_access_key,
@@ -478,6 +479,7 @@ pub fn init_sub_services(
                 &aws_bucket,
                 &url_base,
                 aws_endpoint_url,
+                sync_from,
             )
         } else {
             tracing::info!(

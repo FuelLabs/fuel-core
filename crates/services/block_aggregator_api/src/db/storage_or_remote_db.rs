@@ -51,6 +51,7 @@ impl<R, S> StorageOrRemoteDB<R, S> {
         aws_bucket: &str,
         url_base: &str,
         aws_endpoint_url: Option<String>,
+        sync_from: BlockHeight,
     ) -> Self {
         let client = {
             let mut builder = aws_sdk_s3::config::Builder::new();
@@ -79,6 +80,7 @@ impl<R, S> StorageOrRemoteDB<R, S> {
             url_base.to_string(),
             client,
             storage,
+            sync_from,
         );
         StorageOrRemoteDB::Remote(remote_cache)
     }

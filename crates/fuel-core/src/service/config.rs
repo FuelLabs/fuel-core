@@ -48,6 +48,7 @@ use crate::{
 
 use fuel_core_types::fuel_types::{
     AssetId,
+    BlockHeight,
     ChainId,
 };
 #[cfg(feature = "parallel-executor")]
@@ -172,6 +173,7 @@ impl Config {
         #[cfg(feature = "rpc")]
         let rpc_config = fuel_core_block_aggregator_api::integration::Config {
             addr: free_local_addr(),
+            sync_from: Some(BlockHeight::from(0)),
         };
 
         Self {

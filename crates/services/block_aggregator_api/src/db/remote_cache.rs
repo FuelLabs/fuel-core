@@ -45,8 +45,10 @@ pub struct RemoteCache<S> {
 
     // track consistency between runs
     local_persisted: S,
+    sync_from: BlockHeight,
     highest_new_height: Option<BlockHeight>,
     orphaned_new_height: Option<BlockHeight>,
+    synced: bool,
 }
 
 impl<S> RemoteCache<S> {
@@ -58,6 +60,7 @@ impl<S> RemoteCache<S> {
         url_base: String,
         client: Client,
         local_persisted: S,
+        sync_from: BlockHeight,
     ) -> RemoteCache<S> {
         RemoteCache {
             aws_id,
@@ -67,8 +70,10 @@ impl<S> RemoteCache<S> {
             url_base,
             client,
             local_persisted,
+            sync_from,
             highest_new_height: None,
             orphaned_new_height: None,
+            synced: false,
         }
     }
 
@@ -97,7 +102,6 @@ where
         let mut buf = Vec::new();
         block.encode(&mut buf).map_err(Error::db_error)?;
         let body = ByteStream::from(buf);
-        tracing::info!("Storing block in bucket: {:?}", &self.aws_bucket);
         let req = self
             .client
             .put_object()
@@ -109,18 +113,51 @@ where
         match block_event {
             BlockSourceEvent::NewBlock(new_height, _) => {
                 tracing::debug!("New block: {:?}", new_height);
+                tracing::info!("New block: {:?}", new_height);
                 self.highest_new_height = Some(new_height);
-                if self.orphaned_new_height.is_none() {
+                if self.synced {
+                    tracing::info!("Updating latest block to {:?}", new_height);
+                    let mut tx = self.local_persisted.write_transaction();
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if new_height == self.sync_from {
+                    tracing::info!("Updating latest block to {:?}", new_height);
+                    self.synced = true;
+                    self.highest_new_height = Some(new_height);
+                    self.orphaned_new_height = None;
+                    let mut tx = self.local_persisted.write_transaction();
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if self.height_is_next_height(new_height)? {
+                    tracing::info!("Updating latest block to {:?}", new_height);
+                    self.synced = true;
+                    self.highest_new_height = Some(new_height);
+                    self.orphaned_new_height = None;
+                    let mut tx = self.local_persisted.write_transaction();
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if self.orphaned_new_height.is_none() {
+                    tracing::info!("Marking block as orphaned: {:?}", new_height);
                     self.orphaned_new_height = Some(new_height);
                 }
             }
             BlockSourceEvent::OldBlock(height, _) => {
                 tracing::debug!("Old block: {:?}", height);
+                tracing::info!("Old block: {:?}", height);
                 let mut tx = self.local_persisted.write_transaction();
                 let latest_height = if height.succ() == self.orphaned_new_height {
+                    tracing::info!("Marking block as synced: {:?}", height);
                     self.orphaned_new_height = None;
+                    self.synced = true;
                     self.highest_new_height.unwrap_or(height)
                 } else {
+                    tracing::info!("Updating latest block to {:?}", height);
                     height
                 };
                 tx.storage_as_mut::<LatestBlock>()
@@ -164,6 +201,27 @@ where
             .map_err(|e| Error::DB(anyhow!(e)))?;
 
         Ok(height.map(|b| b.into_owned()))
+    }
+}
+
+impl<S> RemoteCache<S>
+where
+    S: Send + Sync,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
+{
+    fn height_is_next_height(&self, height: BlockHeight) -> crate::result::Result<bool> {
+        let maybe_latest_height = self
+            .local_persisted
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+        if let Some(latest_height) = maybe_latest_height {
+            Ok(latest_height.succ() == Some(height))
+        } else {
+            Ok(false)
+        }
     }
 }
 

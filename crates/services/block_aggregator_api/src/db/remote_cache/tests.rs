@@ -51,8 +51,9 @@ async fn store_block__happy_path() {
     let aws_bucket = "test-bucket".to_string();
     let base = "http://good.com".to_string();
     let storage = database();
+    let sync_from = BlockHeight::new(0);
     let mut adapter = RemoteCache::new(
-        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage,
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage, sync_from,
     );
     let block_height = BlockHeight::new(123);
     let block = arb_proto_block();
@@ -75,14 +76,16 @@ async fn get_block_range__happy_path() {
     let aws_bucket = "test-bucket".to_string();
     let base = "http://good.com".to_string();
     let storage = database();
+    let sync_from = BlockHeight::new(0);
     let adapter = RemoteCache::new(
-        aws_id.clone(),
-        aws_secret.clone(),
+        aws_id,
+        aws_secret,
         aws_region.clone(),
         aws_bucket.clone(),
         base.clone(),
         client,
         storage,
+        sync_from,
     );
     let start = BlockHeight::new(999);
     let end = BlockHeight::new(1003);
@@ -122,9 +125,11 @@ async fn get_current_height__returns_highest_continuous_block() {
     let aws_bucket = "test-bucket".to_string();
     let base = "http://good.com".to_string();
     let storage = database();
+    let sync_from = BlockHeight::new(0);
     let mut adapter = RemoteCache::new(
-        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage,
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage, sync_from,
     );
+
     let expected = BlockHeight::new(123);
     let block = arb_proto_block();
     let block = BlockSourceEvent::OldBlock(expected, block);
@@ -153,9 +158,11 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
     let aws_region = "test-region".to_string();
     let aws_bucket = "test-bucket".to_string();
     let base = "http://good.com".to_string();
+    let sync_from = BlockHeight::new(0);
     let mut adapter = RemoteCache::new(
-        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage,
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, storage, sync_from,
     );
+
     let expected = BlockHeight::new(3);
     let block = arb_proto_block();
     let block = BlockSourceEvent::NewBlock(expected, block);
@@ -179,8 +186,10 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
 
     // given
     let db = database();
-    let mut adapter =
-        RemoteCache::new(aws_id, aws_secret, aws_region, aws_bucket, base, client, db);
+    let sync_from = BlockHeight::new(0);
+    let mut adapter = RemoteCache::new(
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, db, sync_from,
+    );
 
     for height in 2..=10u32 {
         let height = BlockHeight::from(height);
@@ -198,4 +207,73 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
     let expected = BlockHeight::from(10u32);
     let actual = adapter.get_current_height().await.unwrap().unwrap();
     assert_eq!(expected, actual);
+
+    assert!(adapter.synced)
+}
+
+#[tokio::test]
+async fn store_block__new_block_updates_the_highest_continuous_block_if_synced() {
+    let rules: Vec<_> = iter::repeat_with(put_happy_rule).take(10).collect();
+    let client = mock_client!(aws_sdk_s3, rules.iter());
+    let aws_id = "test-id".to_string();
+    let aws_secret = "test-secret".to_string();
+    let aws_region = "test-region".to_string();
+    let aws_bucket = "test-bucket".to_string();
+    let base = "http://good.com".to_string();
+
+    // given
+    let db = database();
+    let sync_from = BlockHeight::new(0);
+    let mut adapter = RemoteCache::new(
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, db, sync_from,
+    );
+
+    let height = BlockHeight::from(0u32);
+    let some_block = arb_proto_block();
+    let block = BlockSourceEvent::OldBlock(height, some_block.clone());
+    adapter.store_block(block).await.unwrap();
+
+    // when
+    let height = BlockHeight::from(1u32);
+    let some_block = arb_proto_block();
+    let block = BlockSourceEvent::NewBlock(height, some_block.clone());
+    adapter.store_block(block).await.unwrap();
+
+    // then
+    let expected = BlockHeight::from(1u32);
+    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    assert_eq!(expected, actual);
+
+    assert!(adapter.synced)
+}
+
+#[tokio::test]
+async fn store_block__new_block_comes_first() {
+    let rules: Vec<_> = iter::repeat_with(put_happy_rule).take(10).collect();
+    let client = mock_client!(aws_sdk_s3, rules.iter());
+    let aws_id = "test-id".to_string();
+    let aws_secret = "test-secret".to_string();
+    let aws_region = "test-region".to_string();
+    let aws_bucket = "test-bucket".to_string();
+    let base = "http://good.com".to_string();
+
+    // given
+    let db = database();
+    let sync_from = BlockHeight::new(0);
+    let mut adapter = RemoteCache::new(
+        aws_id, aws_secret, aws_region, aws_bucket, base, client, db, sync_from,
+    );
+
+    // when
+    let height = BlockHeight::from(0u32);
+    let some_block = arb_proto_block();
+    let block = BlockSourceEvent::NewBlock(height, some_block.clone());
+    adapter.store_block(block).await.unwrap();
+
+    // then
+    let expected = BlockHeight::from(0u32);
+    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    assert_eq!(expected, actual);
+
+    assert!(adapter.synced);
 }

@@ -158,3 +158,55 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
     let actual = adapter.get_current_height().await.unwrap().unwrap();
     assert_eq!(expected, actual);
 }
+#[tokio::test]
+async fn store_block__new_block_updates_the_highest_continuous_block_if_synced() {
+    // given
+    let db = database();
+    let mut adapter = StorageDB::new(db);
+
+    let height = BlockHeight::from(0u32);
+    let some_block = proto_block_with_height(height);
+    let block = BlockSourceEvent::OldBlock(height, some_block.clone());
+    adapter.store_block(block).await.unwrap();
+
+    // when
+    let height = BlockHeight::from(1u32);
+    let some_block = proto_block_with_height(height);
+    let block = BlockSourceEvent::NewBlock(height, some_block.clone());
+    adapter.store_block(block).await.unwrap();
+
+    // then
+    let expected = BlockHeight::from(1u32);
+    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    assert_eq!(expected, actual);
+
+    assert!(adapter.synced)
+}
+
+#[tokio::test]
+async fn store_block__new_block_comes_first() {
+    // given
+    let db = database();
+    let mut adapter = StorageDB::new(db);
+
+    // when
+    let height = BlockHeight::from(1u32);
+    let some_block = proto_block_with_height(height);
+    let block = BlockSourceEvent::NewBlock(height, some_block.clone());
+    adapter.store_block(block).await.unwrap();
+    assert!(!adapter.synced);
+    // (with old block after)
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let height = BlockHeight::from(0u32);
+    let some_block = proto_block_with_height(height);
+    let block = BlockSourceEvent::OldBlock(height, some_block.clone());
+    adapter.store_block(block).await.unwrap();
+
+    // then
+
+    let expected = BlockHeight::from(1u32);
+    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    assert_eq!(expected, actual);
+
+    assert!(adapter.synced);
+}

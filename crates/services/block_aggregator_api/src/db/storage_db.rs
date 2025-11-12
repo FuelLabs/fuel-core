@@ -47,6 +47,7 @@ mod tests;
 pub struct StorageDB<S> {
     highest_new_height: Option<BlockHeight>,
     orphaned_new_height: Option<BlockHeight>,
+    synced: bool,
     storage: S,
 }
 
@@ -55,6 +56,7 @@ impl<S> StorageDB<S> {
         Self {
             highest_new_height: None,
             orphaned_new_height: None,
+            synced: false,
             storage,
         }
     }
@@ -84,12 +86,27 @@ where
         tx.storage_as_mut::<Blocks>()
             .insert(&height, &block)
             .map_err(|e| Error::DB(anyhow!(e)))?;
+        tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
 
         match block_event {
             BlockSourceEvent::NewBlock(new_height, _) => {
                 tracing::debug!("New block: {:?}", new_height);
                 self.highest_new_height = Some(new_height);
-                if self.orphaned_new_height.is_none() {
+                if self.synced {
+                    let mut tx = self.storage.write_transaction();
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if self.height_is_next_height(new_height)? {
+                    let mut tx = self.storage.write_transaction();
+                    self.synced = true;
+                    self.highest_new_height = Some(new_height);
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if self.orphaned_new_height.is_none() {
                     self.orphaned_new_height = Some(new_height);
                 }
             }
@@ -97,16 +114,18 @@ where
                 tracing::debug!("Old block: {:?}", height);
                 let latest_height = if height.succ() == self.orphaned_new_height {
                     self.orphaned_new_height = None;
+                    self.synced = true;
                     self.highest_new_height.unwrap_or(height)
                 } else {
                     height
                 };
+                let mut tx = self.storage.write_transaction();
                 tx.storage_as_mut::<LatestBlock>()
                     .insert(&(), &latest_height)
                     .map_err(|e| Error::DB(anyhow!(e)))?;
+                tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
             }
         }
-        tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
         Ok(())
     }
 
@@ -134,6 +153,29 @@ where
     }
 }
 
+impl<S, T> StorageDB<S>
+where
+    S: Modifiable + std::fmt::Debug,
+    S: KeyValueInspect<Column = Column>,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
+    S: AtomicView<LatestView = T>,
+    T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
+{
+    fn height_is_next_height(&self, height: BlockHeight) -> Result<bool> {
+        let maybe_latest_height = self
+            .storage
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+        if let Some(latest_height) = maybe_latest_height {
+            Ok(latest_height.succ() == Some(height))
+        } else {
+            Ok(false)
+        }
+    }
+}
 pub struct StorageStream<S> {
     inner: S,
     next: Option<BlockHeight>,

@@ -53,12 +53,14 @@ impl BlockAggregator for Server {
         request: tonic::Request<ProtoBlockHeightRequest>,
     ) -> Result<tonic::Response<ProtoBlockHeightResponse>, tonic::Status> {
         tracing::debug!("get_block_height: {:?}", request);
+        tracing::info!("get_block_height: {:?}", request);
         let (response, receiver) = tokio::sync::oneshot::channel();
         let query = BlockAggregatorQuery::GetCurrentHeight { response };
         self.query_sender.send(query).await.map_err(|e| {
             tonic::Status::internal(format!("Failed to send query: {}", e))
         })?;
         let res = receiver.await;
+        tracing::info!("query result: {:?}", &res);
         match res {
             Ok(height) => Ok(tonic::Response::new(ProtoBlockHeightResponse {
                 height: height.map(|inner| *inner),
