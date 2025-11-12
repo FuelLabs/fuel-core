@@ -206,6 +206,59 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+  rpc-s3-integration-tests:
+    name: RPC S3 Integration Tests (w/LocalStack)
+    needs:
+      - lint-toml-files
+      - prevent-openssl
+      - rustfmt
+      - check-changelog
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    timeout-minutes: 45
+    services:
+      localstack:
+        image: localstack/localstack:3.6
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3
+          DEBUG: 1
+        options: >-
+          --health-cmd="curl -f http://localhost:4566/health || exit 1"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      AWS_BUCKET: test-bucket
+      AWS_ENDPOINT: http://localhost:4566
+      BUCKET_URL_BASE: test-url.com
+      RUSTFLAGS: -D warnings
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Wait for LocalStack
+        run: |
+          for i in {1..20}; do
+            if curl -s http://localhost:4566/health | grep "\"s3\": \"running\"" > /dev/null; then
+              echo "LocalStack ready!"
+              break
+            fi
+            echo "Waiting for LocalStack..."
+            sleep 3
+          done
+      - name: Create S3 bucket
+        run: aws --endpoint-url=http://localhost:4566 s3 mb s3://test-bucket
+      - name: Run RPC Integration Tests
+        run: cargo test --package fuel-core-tests --test integration_tests rpc --features rpc -- --test-threads=1
+
   publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
@@ -264,6 +317,7 @@ jobs:
       - cargo-verifications
       - publish-crates-check
       - cargo-test-kms
+      - rpc-integration-tests
     runs-on: ubuntu-latest
     steps:
       - run: echo "pass"
