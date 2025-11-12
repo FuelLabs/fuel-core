@@ -107,6 +107,8 @@ async fn get_block_range__can_get_serialized_block_from_rpc__remote() {
         tracing::info!("Skipping test: AWS credentials are not set");
         return;
     };
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
     let config = Config::local_node();
     let rpc_url = config.rpc_config.addr;
 
@@ -211,6 +213,10 @@ async fn get_block_height__can_get_value_from_rpc() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn new_block_subscription__can_get_expect_block() {
+    if get_env_vars().is_some() {
+        ensure_bucket_exists().await;
+        clean_s3_bucket().await;
+    }
     let config = Config::local_node();
     let rpc_url = config.rpc_config.addr;
 
@@ -255,6 +261,9 @@ async fn new_block_subscription__can_get_expect_block() {
     // then
     let expected_height = 1;
     assert_eq!(expected_height, actual_height);
+    if get_env_vars().is_some() {
+        clean_s3_bucket().await;
+    }
 }
 
 macro_rules! require_env_var_or_skip {
@@ -298,20 +307,25 @@ fn aws_client() -> Client {
     aws_sdk_s3::Client::from_conf(config)
 }
 
-async fn get_block_height_from_remote_s3_bucket() -> Bytes {
+async fn get_block_from_s3_bucket() -> Bytes {
     let client = aws_client();
     let bucket = std::env::var("AWS_BUCKET").unwrap();
     let key = block_height_to_key(&BlockHeight::new(1));
     let req = client.get_object().bucket(&bucket).key(&key);
     let obj = req.send().await.unwrap();
-    obj.body.collect().await.unwrap().into_bytes()
+    let message = format!(
+        "should be able to get block from bucket: {} with key {}",
+        bucket, key
+    );
+    obj.body.collect().await.expect(&message).into_bytes()
 }
 
 async fn ensure_bucket_exists() {
     let client = aws_client();
     let bucket = std::env::var("AWS_BUCKET").unwrap();
     let req = client.create_bucket().bucket(&bucket);
-    let _ = req.send().await.unwrap();
+    let expect_message = format!("should be able to create bucket: {}", bucket);
+    let _ = req.send().await.expect(&expect_message);
 }
 
 async fn clean_s3_bucket() {
@@ -352,7 +366,7 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
     sleep(std::time::Duration::from_secs(1)).await;
 
     // then
-    let data = get_block_height_from_remote_s3_bucket().await;
+    let data = get_block_from_s3_bucket().await;
     // can deserialize
     let actual_proto: ProtoBlock = prost::Message::decode(data.as_ref()).unwrap();
     let _ = fuel_block_from_protobuf(actual_proto, &[], Bytes32::default()).unwrap();
