@@ -36,6 +36,7 @@ aws-config = { version = "1.1.7", features = [
     "behavior-version-latest",
 ], optional = true }
 aws-sdk-kms = { version = "1.37.0", optional = true }
+aws-sdk-s3 = "1.111.0"
 clap = { workspace = true }
 cynic = { workspace = true }
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
@@ -79,6 +80,7 @@ itertools = { workspace = true }
 k256 = { version = "0.13.3", features = ["ecdsa-core"] }
 postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
+prost = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rstest = "0.15"

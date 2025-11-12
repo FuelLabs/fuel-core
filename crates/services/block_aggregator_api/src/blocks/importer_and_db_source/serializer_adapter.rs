@@ -125,7 +125,6 @@ impl BlockSerializer for SerializerAdapter {
     type Block = ProtoBlock;
 
     fn serialize_block(&self, block: &FuelBlock) -> crate::result::Result<Self::Block> {
-        // TODO: Should this be owned to begin with?
         let (header, txs) = block.clone().into_inner();
         let proto_header = proto_header_from_header(header);
         match &block {

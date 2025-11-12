@@ -11,6 +11,7 @@ use crate::{
         BlockRangeRequest as ProtoBlockRangeRequest,
         BlockResponse as ProtoBlockResponse,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+        RemoteBlockRangeResponse as ProtoRemoteBlockRangeResponse,
         block_aggregator_server::{
             BlockAggregator,
             BlockAggregatorServer as ProtoBlockAggregatorServer,
@@ -52,15 +53,17 @@ impl BlockAggregator for Server {
         request: tonic::Request<ProtoBlockHeightRequest>,
     ) -> Result<tonic::Response<ProtoBlockHeightResponse>, tonic::Status> {
         tracing::debug!("get_block_height: {:?}", request);
+        tracing::info!("get_block_height: {:?}", request);
         let (response, receiver) = tokio::sync::oneshot::channel();
         let query = BlockAggregatorQuery::GetCurrentHeight { response };
         self.query_sender.send(query).await.map_err(|e| {
             tonic::Status::internal(format!("Failed to send query: {}", e))
         })?;
         let res = receiver.await;
+        tracing::info!("query result: {:?}", &res);
         match res {
             Ok(height) => Ok(tonic::Response::new(ProtoBlockHeightResponse {
-                height: *height,
+                height: height.map(|inner| *inner),
             })),
             Err(e) => Err(tonic::Status::internal(format!(
                 "Failed to receive height: {}",
@@ -108,9 +111,32 @@ impl BlockAggregator for Server {
 
                     Ok(tonic::Response::new(ReceiverStream::new(rx)))
                 }
-                BlockRangeResponse::Remote(_) => {
-                    tracing::error!("Remote block range not implemented");
-                    todo!()
+                BlockRangeResponse::Remote(inner) => {
+                    let (tx, rx) = tokio::sync::mpsc::channel::<
+                        Result<ProtoBlockResponse, Status>,
+                    >(ARB_LITERAL_BLOCK_BUFFER_SIZE);
+
+                    tokio::spawn(async move {
+                        let mut s = inner;
+                        while let Some(pb) = s.next().await {
+                            let proto_response = ProtoRemoteBlockRangeResponse {
+                                region: pb.region.clone(),
+                                bucket: pb.bucket.clone(),
+                                key: pb.key.clone(),
+                                url: pb.url.clone(),
+                            };
+                            let response = ProtoBlockResponse {
+                                payload: Some(proto_block_response::Payload::Remote(
+                                    proto_response,
+                                )),
+                            };
+                            if tx.send(Ok(response)).await.is_err() {
+                                break;
+                            }
+                        }
+                    });
+
+                    Ok(tonic::Response::new(ReceiverStream::new(rx)))
                 }
             },
             Err(e) => Err(tonic::Status::internal(format!(

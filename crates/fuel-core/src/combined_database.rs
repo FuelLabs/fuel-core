@@ -10,7 +10,10 @@ use crate::{
         GenesisDatabase,
         Result as DatabaseResult,
         database_description::{
-            block_aggregator::BlockAggregatorDatabase,
+            block_aggregator::{
+                BlockAggregatorDatabaseS3,
+                BlockAggregatorDatabaseStorage,
+            },
             compression::CompressionDatabase,
             gas_price::GasPriceDatabase,
             off_chain::OffChain,
@@ -61,7 +64,8 @@ pub struct CombinedDatabase {
     relayer: Database<Relayer>,
     gas_price: Database<GasPriceDatabase>,
     compression: Database<CompressionDatabase>,
-    block_aggregation: Database<BlockAggregatorDatabase>,
+    block_aggregation_storage: Database<BlockAggregatorDatabaseStorage>,
+    block_aggregation_s3: Database<BlockAggregatorDatabaseS3>,
 }
 
 impl CombinedDatabase {
@@ -71,7 +75,8 @@ impl CombinedDatabase {
         relayer: Database<Relayer>,
         gas_price: Database<GasPriceDatabase>,
         compression: Database<CompressionDatabase>,
-        block_aggregation: Database<BlockAggregatorDatabase>,
+        block_aggregation_storage: Database<BlockAggregatorDatabaseStorage>,
+        block_aggregation_s3: Database<BlockAggregatorDatabaseS3>,
     ) -> Self {
         Self {
             on_chain,
@@ -79,7 +84,8 @@ impl CombinedDatabase {
             relayer,
             gas_price,
             compression,
-            block_aggregation,
+            block_aggregation_storage,
+            block_aggregation_s3,
         }
     }
 
@@ -244,7 +250,15 @@ impl CombinedDatabase {
                 ..database_config
             },
         )?;
-        let block_aggregation = Database::open_rocksdb(
+        let block_aggregation_storage = Database::open_rocksdb(
+            path,
+            state_rewind_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
+        let block_aggregation_s3 = Database::open_rocksdb(
             path,
             state_rewind_policy,
             DatabaseConfig {
@@ -259,7 +273,8 @@ impl CombinedDatabase {
             relayer,
             gas_price,
             compression,
-            block_aggregation,
+            block_aggregation_storage,
+            block_aggregation_s3,
         })
     }
 
@@ -275,7 +290,8 @@ impl CombinedDatabase {
             relayer: Default::default(),
             gas_price: Default::default(),
             compression: Default::default(),
-            block_aggregation: Default::default(),
+            block_aggregation_storage: Default::default(),
+            block_aggregation_s3: Default::default(),
         })
     }
 
@@ -322,6 +338,7 @@ impl CombinedDatabase {
             Database::in_memory(),
             Database::in_memory(),
             Database::in_memory(),
+            Database::in_memory(),
         )
     }
 
@@ -342,8 +359,12 @@ impl CombinedDatabase {
         &self.compression
     }
 
-    pub fn block_aggregation(&self) -> &Database<BlockAggregatorDatabase> {
-        &self.block_aggregation
+    pub fn block_aggregation_storage(&self) -> &Database<BlockAggregatorDatabaseStorage> {
+        &self.block_aggregation_storage
+    }
+
+    pub fn block_aggregation_s3(&self) -> &Database<BlockAggregatorDatabaseS3> {
+        &self.block_aggregation_s3
     }
 
     #[cfg(any(feature = "test-helpers", test))]
@@ -615,6 +636,8 @@ impl CombinedDatabase {
         self.relayer.shutdown();
         self.gas_price.shutdown();
         self.compression.shutdown();
+        self.block_aggregation_storage.shutdown();
+        self.block_aggregation_s3.shutdown();
     }
 }
 

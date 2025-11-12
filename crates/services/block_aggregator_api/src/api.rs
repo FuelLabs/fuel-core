@@ -25,7 +25,7 @@ pub enum BlockAggregatorQuery<BlockRangeResponse, Block> {
         response: tokio::sync::oneshot::Sender<BlockRangeResponse>,
     },
     GetCurrentHeight {
-        response: tokio::sync::oneshot::Sender<BlockHeight>,
+        response: tokio::sync::oneshot::Sender<Option<BlockHeight>>,
     },
     // TODO: Do we need a way to unsubscribe or can we just see that the receiver is dropped?
     NewBlockSubscription {
@@ -68,7 +68,8 @@ impl<T, B> BlockAggregatorQuery<T, B> {
         (query, receiver)
     }
 
-    pub fn get_current_height() -> (Self, tokio::sync::oneshot::Receiver<BlockHeight>) {
+    pub fn get_current_height()
+    -> (Self, tokio::sync::oneshot::Receiver<Option<BlockHeight>>) {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let query = Self::GetCurrentHeight { response: sender };
         (query, receiver)

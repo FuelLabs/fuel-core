@@ -20,7 +20,11 @@ pub mod result;
 
 pub mod block_range_response;
 
+pub mod block_aggregator;
 pub mod protobuf_types;
+
+#[cfg(test)]
+mod tests;
 
 pub mod integration {
     use crate::{
@@ -56,6 +60,7 @@ pub mod integration {
     #[derive(Clone, Debug)]
     pub struct Config {
         pub addr: SocketAddr,
+        pub sync_from: Option<BlockHeight>,
     }
 
     #[allow(clippy::type_complexity)]
@@ -65,6 +70,7 @@ pub mod integration {
         serializer: S,
         onchain_db: OnchainDB,
         importer: BoxStream<SharedImportResult>,
+        sync_from_height: BlockHeight,
     ) -> ServiceRunner<
         BlockAggregator<
             ProtobufAPI,
@@ -86,13 +92,12 @@ pub mod integration {
     {
         let addr = config.addr.to_string();
         let api = ProtobufAPI::new(addr);
-        let db_starting_height = BlockHeight::from(0);
         let db_ending_height = None;
         let block_source = ImporterAndDbSource::new(
             importer,
             serializer,
             onchain_db,
-            db_starting_height,
+            sync_from_height,
             db_ending_height,
         );
         let block_aggregator = BlockAggregator {
@@ -104,10 +109,6 @@ pub mod integration {
         ServiceRunner::new(block_aggregator)
     }
 }
-#[cfg(test)]
-mod tests;
-
-pub mod block_aggregator;
 
 // TODO: this doesn't need to limited to the blocks,
 //   but we can change the name later

@@ -11,4 +11,10 @@ pub enum Error {
     Serialization(anyhow::Error),
 }
 
+impl Error {
+    pub fn db_error<T: Into<anyhow::Error>>(err: T) -> Self {
+        Error::DB(err.into())
+    }
+}
+
 pub type Result<T, E = Error> = core::result::Result<T, E>;

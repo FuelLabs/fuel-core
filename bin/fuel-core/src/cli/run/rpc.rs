@@ -1,4 +1,5 @@
 use clap::Args;
+use fuel_core_types::fuel_types::BlockHeight;
 use std::net;
 
 #[derive(Debug, Clone, Args)]
@@ -16,6 +17,7 @@ impl RpcArgs {
     pub fn into_config(self) -> fuel_core_block_aggregator_api::integration::Config {
         fuel_core_block_aggregator_api::integration::Config {
             addr: net::SocketAddr::new(self.rpc_ip, self.rpc_port),
+            sync_from: Some(BlockHeight::from(0)),
         }
     }
 }

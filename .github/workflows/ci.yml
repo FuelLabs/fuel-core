@@ -200,6 +200,44 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+  rpc-s3-integration-tests:
+    name: RPC S3 Integration Tests (w/LocalStack)
+    needs:
+      - lint-toml-files
+      - prevent-openssl
+      - rustfmt
+      - check-changelog
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    timeout-minutes: 45
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: s3
+          DEBUG: 1
+
+    env:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_REGION: us-east-1
+      AWS_BUCKET: test-bucket
+      AWS_ENDPOINT_URL: http://localhost:4566
+      BUCKET_URL_BASE: test-url.com
+      RUSTFLAGS: -D warnings
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+      - name: Run RPC Integration Tests
+        run: cargo test --package fuel-core-tests --test integration_tests rpc --features rpc -- --test-threads=1
+
   publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204
     steps:
@@ -258,6 +296,7 @@ jobs:
       - cargo-verifications
       - publish-crates-check
       - cargo-test-kms
+      - rpc-s3-integration-tests
     runs-on: ubuntu-latest
     steps:
       - run: echo "pass"

@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use crate::blocks::Block;
+use crate::blocks::BlockBytes;
 use ::postcard::to_allocvec;
 use fuel_core_services::stream::{
     IntoBoxStream,
@@ -35,13 +35,13 @@ use std::sync::Arc;
 pub struct MockSerializer;
 
 impl BlockSerializer for MockSerializer {
-    type Block = Block;
+    type Block = BlockBytes;
 
-    fn serialize_block(&self, block: &FuelBlock) -> Result<Block> {
+    fn serialize_block(&self, block: &FuelBlock) -> Result<BlockBytes> {
         let bytes_vec = to_allocvec(block).map_err(|e| {
             Error::BlockSource(anyhow!("failed to serialize block: {}", e))
         })?;
-        Ok(Block::from(bytes_vec))
+        Ok(BlockBytes::from(bytes_vec))
     }
 }
 
