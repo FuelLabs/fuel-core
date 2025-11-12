@@ -111,6 +111,7 @@ jobs:
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       AWS_REGION: us-east-1
+      AWS_BUCKET: test-bucket
       AWS_ENDPOINT: http://127.0.0.1:4566
     strategy:
       matrix:

@@ -271,6 +271,8 @@ fn env_vars_are_set() -> bool {
         && std::env::var("AWS_SECRET_ACCESS_KEY").is_ok()
         && std::env::var("AWS_REGION").is_ok()
         && std::env::var("AWS_BUCKET").is_ok()
+        && std::env::var("AWS_ENDPOINT_URL").is_ok()
+        && std::env::var("BUCKET_URL_BASE").is_ok()
 }
 
 fn aws_client() -> Client {
@@ -329,7 +331,9 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY",
         "AWS_REGION",
-        "AWS_BUCKET"
+        "AWS_BUCKET",
+        "AWS_ENDPOINT_URL",
+        "BUCKET_URL_BASE"
     );
     ensure_bucket_exists().await;
     clean_s3_bucket().await;
