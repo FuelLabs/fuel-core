@@ -217,17 +217,12 @@ jobs:
     timeout-minutes: 45
     services:
       localstack:
-        image: localstack/localstack:3.6
+        image: localstack/localstack:latest
         ports:
           - 4566:4566
         env:
           SERVICES: s3
           DEBUG: 1
-        options: >-
-          --health-cmd="curl -f http://localhost:4566/health || exit 1"
-          --health-interval=5s
-          --health-timeout=5s
-          --health-retries=20
 
     env:
       AWS_ACCESS_KEY_ID: test
