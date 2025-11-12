@@ -1,24 +1,22 @@
 #![cfg(feature = "test-helpers")]
 #![allow(non_snake_case)]
 
-use ethers_core::types::{
-    Log,
+use alloy_primitives::{
+    IntoLogData,
     U256,
 };
+use alloy_rpc_types_eth::Log;
+use fuel_core_provider::test_helpers::provider::MockProvider;
 use fuel_core_relayer::{
     Config,
     bridge::{
-        MessageSentFilter,
-        TransactionFilter,
+        MessageSent,
+        Transaction,
     },
     mock_db::MockDb,
     new_service_test,
     ports::RelayerDb,
-    test_helpers::{
-        EvtToLog,
-        LogTestHelper,
-        middleware::MockMiddleware,
-    },
+    test_helpers::LogTestHelper,
 };
 use fuel_core_services::Service;
 
@@ -27,11 +25,10 @@ fuel_core_trace::enable_tracing!();
 #[tokio::test(start_paused = true)]
 async fn can_set_da_height() {
     let mock_db = MockDb::default();
-    let eth_node = MockMiddleware::default();
-    // Setup the eth node with a block high enough that there
-    // will be some finalized blocks.
     let da_block_height = 100u64;
-    eth_node.update_data(|data| data.best_block.number = Some(da_block_height.into()));
+    let eth_node = MockProvider::default();
+    eth_node.update_data(|data| data.best_block.header.number = da_block_height);
+
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
     relayer.start_and_await().await.unwrap();
 
@@ -53,10 +50,10 @@ async fn stop_service_at_the_begin() {
     mock_db
         .set_finalized_da_height_to_at_least(&0u64.into())
         .unwrap();
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
+    eth_node.update_data(|data| data.best_block.header.number = 100);
     let relayer = new_service_test(eth_node, mock_db.clone(), Default::default());
     relayer.start_and_await().await.unwrap();
     relayer.stop();
@@ -75,8 +72,8 @@ async fn stop_service_at_the_middle() {
     mock_db
         .set_finalized_da_height_to_at_least(&0u64.into())
         .unwrap();
-    let eth_node = MockMiddleware::default();
-    eth_node.update_data(|data| data.best_block.number = Some(100.into()));
+    let eth_node = MockProvider::default();
+    eth_node.update_data(|data| data.best_block.header.number = 100);
     let config = Config {
         log_page_size: 5,
         ..Default::default()
@@ -91,7 +88,7 @@ async fn stop_service_at_the_middle() {
     // Allow several sync iterations.
     const NUMBER_OF_SYNC_ITERATIONS: u64 = 7;
     for _ in 0..NUMBER_OF_SYNC_ITERATIONS {
-        // Each iterations syncs 5 blocks.
+        // Each iteration syncs 5 blocks.
         tokio::task::yield_now().await;
     }
     relayer.stop();
@@ -251,31 +248,54 @@ async fn relayer__if_a_log_does_not_include_index_then_event_not_included_and_er
 }
 
 fn message(nonce: u64, block_number: u64, block_index: u64) -> Log {
-    let message = MessageSentFilter {
-        nonce: U256::from_dec_str(nonce.to_string().as_str())
-            .expect("Should convert to U256"),
-        ..Default::default()
+    let message = MessageSent {
+        sender: Default::default(),
+        recipient: Default::default(),
+        nonce: U256::from(nonce),
+        amount: 0,
+        data: Default::default(),
     };
-    let mut log = message.into_log();
-    log.block_number = Some(block_number.into());
-    log.log_index = Some(block_index.into());
-    log
+    let log_data = message.to_log_data();
+    Log {
+        inner: alloy_primitives::Log {
+            address: Default::default(),
+            data: log_data.clone(),
+        },
+        block_hash: None,
+        block_number: Some(block_number),
+        block_timestamp: None,
+        transaction_hash: None,
+        transaction_index: None,
+        log_index: Some(block_index),
+        removed: false,
+    }
 }
 
 fn transaction(max_gas: u64, block_number: u64, block_index: u64) -> Log {
-    let transaction = TransactionFilter {
+    let transaction = Transaction {
+        nonce: Default::default(),
         max_gas,
-        ..Default::default()
+        canonically_serialized_tx: Default::default(),
     };
-    let mut log = transaction.into_log();
-    log.block_number = Some(block_number.into());
-    log.log_index = Some(block_index.into());
-    log
+    let log_data = transaction.to_log_data();
+    Log {
+        inner: alloy_primitives::Log {
+            address: Default::default(),
+            data: log_data.clone(),
+        },
+        block_hash: None,
+        block_number: Some(block_number),
+        block_timestamp: None,
+        transaction_hash: None,
+        transaction_index: None,
+        log_index: Some(block_index),
+        removed: false,
+    }
 }
 
 struct TestContext {
     mock_db: MockDb,
-    eth_node: MockMiddleware,
+    eth_node: MockProvider,
     config: Config,
 }
 
@@ -283,7 +303,7 @@ impl TestContext {
     fn new() -> Self {
         Self {
             mock_db: MockDb::default(),
-            eth_node: MockMiddleware::default(),
+            eth_node: MockProvider::default(),
             config: Config::default(),
         }
     }
@@ -293,7 +313,7 @@ impl TestContext {
             self.config.eth_v2_listening_contracts[0].as_slice(),
         );
         for log in &mut logs {
-            log.address = contract_address;
+            log.inner.address = contract_address;
         }
 
         self.eth_node
@@ -301,7 +321,7 @@ impl TestContext {
         // Setup the eth node with a block high enough that there
         // will be some finalized blocks.
         self.eth_node
-            .update_data(|data| data.best_block.number = Some(100.into()));
+            .update_data(|data| data.best_block.header.number = 100);
     }
 
     async fn when_relayer_syncs(self) -> MockDb {
