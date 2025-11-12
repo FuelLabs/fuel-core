@@ -16,6 +16,7 @@ default = ["rocksdb", "serde"]
 serde = ["dep:serde_with"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
+rpc = ["fuel-core/rpc"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer", "dep:cosmrs"]
 rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
 backup = ["rocksdb", "fuel-core-database/backup"]
@@ -59,6 +60,7 @@ clap = { workspace = true, features = ["derive"] }
 cosmrs = { version = "0.21", optional = true }
 derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
+fuel-core-block-aggregator-api = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-compression-service = { workspace = true }
 fuel-core-consensus-module = { workspace = true }

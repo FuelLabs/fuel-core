@@ -1,4 +1,9 @@
 use clap::ValueEnum;
+#[cfg(feature = "test-helpers")]
+use std::net::{
+    SocketAddr,
+    TcpListener,
+};
 use std::{
     num::{
         NonZeroU32,
@@ -76,6 +81,8 @@ pub struct Config {
     pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
+    #[cfg(feature = "rpc")]
+    pub rpc_config: fuel_core_block_aggregator_api::integration::Config,
     pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -100,6 +107,12 @@ pub struct Config {
     pub production_timeout: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
     pub memory_pool_size: usize,
+}
+
+#[cfg(feature = "test-helpers")]
+pub fn free_local_addr() -> SocketAddr {
+    let listener = TcpListener::bind("[::1]:0").unwrap();
+    listener.local_addr().unwrap() // OS picks a free port
 }
 
 impl Config {
@@ -155,6 +168,11 @@ impl Config {
         let gas_price_config = GasPriceConfig::local_node();
 
         const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
+
+        #[cfg(feature = "rpc")]
+        let rpc_config = fuel_core_block_aggregator_api::integration::Config {
+            addr: free_local_addr(),
+        };
 
         Self {
             graphql_config: GraphQLConfig {
@@ -229,6 +247,8 @@ impl Config {
             time_until_synced: Duration::ZERO,
             production_timeout: Duration::from_secs(20),
             memory_pool_size: 4,
+            #[cfg(feature = "rpc")]
+            rpc_config,
         }
     }
 

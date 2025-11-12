@@ -1,9 +1,19 @@
 #![allow(clippy::let_unit_value)]
 
-use std::sync::Arc;
-
-use tokio::sync::Mutex;
-
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
+#[cfg(feature = "p2p")]
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
+    key_generator::Ed25519KeyGenerator,
+    trigger::TimeBasedTrigger,
+    tx_receiver::PreconfirmationsReceiver,
+};
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::{
+    blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
+    db::storage_db::StorageDB,
+};
+use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
     algorithm::AlgorithmV1,
     da_source_service::block_committer_costs::{
@@ -14,7 +24,6 @@ use fuel_core_gas_price_service::v1::{
     service::SharedData,
     uninitialized_task::new_gas_price_service_v1,
 };
-
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     self,
@@ -23,18 +32,8 @@ use fuel_core_storage::{
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
-
-use fuel_core_compression_service::service::new_service as new_compression_service;
-
-#[cfg(feature = "relayer")]
-use crate::relayer::Config as RelayerConfig;
-
-#[cfg(feature = "p2p")]
-use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
-    key_generator::Ed25519KeyGenerator,
-    trigger::TimeBasedTrigger,
-    tx_receiver::PreconfirmationsReceiver,
-};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use super::{
     DbType,
@@ -459,6 +458,23 @@ pub fn init_sub_services(
         chain_name,
     };
 
+    #[cfg(feature = "rpc")]
+    let block_aggregator_rpc = {
+        let block_aggregator_config = config.rpc_config.clone();
+        let db = database.block_aggregation().clone();
+        let db_adapter = StorageDB::new(db);
+        let serializer = SerializerAdapter;
+        let onchain_db = database.on_chain().clone();
+        let importer = importer_adapter.events_shared_result();
+        fuel_core_block_aggregator_api::integration::new_service(
+            &block_aggregator_config,
+            db_adapter,
+            serializer,
+            onchain_db,
+            importer,
+        )
+    };
+
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
         *genesis_block.header().height(),
         graphql_config,
@@ -523,6 +539,8 @@ pub fn init_sub_services(
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
     services.push(Box::new(tx_status_manager));
+    #[cfg(feature = "rpc")]
+    services.push(Box::new(block_aggregator_rpc));
 
     if let Some(compression_service) = compression_service {
         services.push(Box::new(compression_service));
