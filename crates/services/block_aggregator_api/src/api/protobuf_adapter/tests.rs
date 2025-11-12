@@ -179,7 +179,7 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
     let query = api.await_query().await.unwrap();
 
     // then
-    let list: Vec<_> = vec!["1", "2"]
+    let list: Vec<_> = ["1", "2"]
         .iter()
         .map(|height| {
             let region = "test-region".to_string();

@@ -60,14 +60,13 @@ use crate::{
         },
     },
 };
+#[cfg(feature = "rpc")]
 use anyhow::anyhow;
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
     db::storage_or_remote_db::StorageOrRemoteDB,
     db::storage_or_remote_db::get_env_vars,
-};
-use fuel_core_block_aggregator_api::{
     db::table::LatestBlock,
     result::Error,
 };
@@ -83,11 +82,13 @@ use fuel_core_gas_price_service::v1::{
     uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::Trigger;
+#[cfg(feature = "rpc")]
+use fuel_core_storage::StorageAsRef;
 use fuel_core_storage::{
     self,
-    StorageAsRef,
     transactional::AtomicView,
 };
+
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
@@ -485,7 +486,7 @@ pub fn init_sub_services(
                 .map_err(|e| Error::DB(anyhow!(e)))?
                 .map(|c| *c)
                 .and_then(|h| h.succ());
-            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from.clone());
+            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
 
             StorageOrRemoteDB::new_s3(
                 db,
@@ -513,7 +514,7 @@ pub fn init_sub_services(
                 .map_err(|e| Error::DB(anyhow!(e)))?
                 .map(|c| *c)
                 .and_then(|h| h.succ());
-            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from.clone());
+            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
             StorageOrRemoteDB::new_storage(db, sync_from)
         };
         let serializer = SerializerAdapter;

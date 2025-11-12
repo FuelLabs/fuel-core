@@ -46,11 +46,13 @@ use crate::{
     graphql_api::ServiceConfig as GraphQLConfig,
 };
 
+#[cfg(feature = "rpc")]
+use fuel_core_types::fuel_types::BlockHeight;
 use fuel_core_types::fuel_types::{
     AssetId,
-    BlockHeight,
     ChainId,
 };
+
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
 

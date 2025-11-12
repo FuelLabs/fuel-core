@@ -52,6 +52,7 @@ pub struct RemoteCache<S> {
 }
 
 impl<S> RemoteCache<S> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         aws_id: String,
         aws_secret: String,
