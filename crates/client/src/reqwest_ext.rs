@@ -141,8 +141,10 @@ impl<ResponseData, Errors> CynicReqwestBuilder<ResponseData, Errors> {
     }
 }
 
-impl<ResponseData: serde::de::DeserializeOwned, Errors: serde::de::DeserializeOwned>
-    std::future::IntoFuture for CynicReqwestBuilder<ResponseData, Errors>
+impl<ResponseData, Errors> IntoFuture for CynicReqwestBuilder<ResponseData, Errors>
+where
+    ResponseData: serde::de::DeserializeOwned + Send + 'static,
+    Errors: serde::de::DeserializeOwned + Send + 'static,
 {
     type Output = Result<FuelGraphQlResponse<ResponseData, Errors>, CynicReqwestError>;
 
@@ -180,8 +182,8 @@ async fn deser_gql<ResponseData, ErrorExtensions>(
     response: Result<reqwest::Response, reqwest::Error>,
 ) -> Result<FuelGraphQlResponse<ResponseData, ErrorExtensions>, CynicReqwestError>
 where
-    ResponseData: serde::de::DeserializeOwned,
-    ErrorExtensions: serde::de::DeserializeOwned,
+    ResponseData: serde::de::DeserializeOwned + Send + 'static,
+    ErrorExtensions: serde::de::DeserializeOwned + Send + 'static,
 {
     let response = match response {
         Ok(response) => response,

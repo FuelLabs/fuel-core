@@ -19,7 +19,7 @@ use fuel_core_types::{
     fuel_types,
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct CoinByIdArgs {
     pub utxo_id: UtxoId,
 }
@@ -44,7 +44,7 @@ pub struct CoinFilterInput {
     pub asset_id: Option<AssetId>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct CoinsConnectionArgs {
     /// Filter coins based on a filter
     filter: CoinFilterInput,
@@ -195,7 +195,7 @@ impl CoinType {
     }
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct CoinsToSpendArgs {
     /// The `Address` of the assets' coins owner.
     owner: Address,
