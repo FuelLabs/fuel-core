@@ -44,7 +44,7 @@ futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-wasmtime = { version = "34.0.2", default-features = false, features = [
+wasmtime = { version = "36.0.3", default-features = false, features = [
   "cache",
   "cranelift",
   "parallel-compilation",
