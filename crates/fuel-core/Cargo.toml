@@ -88,6 +88,7 @@ hex = { workspace = true }
 hyper = { workspace = true }
 indicatif = { workspace = true, default-features = true }
 itertools = { workspace = true }
+libc = { version = "0.2.177" }
 mockall = { workspace = true, optional = true }
 num_cpus = { version = "1.16.0", optional = true }
 parking_lot = { workspace = true }
