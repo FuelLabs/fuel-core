@@ -505,6 +505,8 @@ pub fn init_sub_services(
                      AWS_SECRET_ACCESS_KEY \n\
                      AWS_REGION \n\
                      AWS_BUCKET \n\
+                     AWS_ENDPOINT_URL \n\
+                     AWS_S3_URL_BASE (Optional)\n\
                  Using local storage"
             );
             let db = database.block_aggregation_storage().clone();

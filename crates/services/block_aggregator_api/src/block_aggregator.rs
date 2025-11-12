@@ -136,6 +136,7 @@ where
             }
             BlockSourceEvent::OldBlock(_id, _block) => {
                 // Do nothing
+                // Only stream new blocks
             }
         };
         let res = self.database.store_block(event).await;
