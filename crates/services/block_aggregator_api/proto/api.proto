@@ -88,7 +88,7 @@ message Header {
 //    id: BlockId,
 //}
 message V1Header {
-  uint32 da_height = 1;
+  uint64 da_height = 1;
   uint32 consensus_parameters_version = 2;
   uint32 state_transition_bytecode_version = 3;
   uint32 transactions_count = 4;
@@ -98,7 +98,7 @@ message V1Header {
   bytes event_inbox_root = 8;
   bytes prev_root = 9;
   uint32 height = 10;
-  bytes time = 11;
+  uint64 time = 11;
   bytes application_hash = 12;
   optional bytes block_id = 13;
 }
@@ -118,7 +118,7 @@ message V1Header {
 //    pub tx_id_commitment: Bytes32,
 //}
 message V2Header {
-  uint32 da_height = 1;
+  uint64 da_height = 1;
   uint32 consensus_parameters_version = 2;
   uint32 state_transition_bytecode_version = 3;
   uint32 transactions_count = 4;
@@ -129,29 +129,19 @@ message V2Header {
   bytes tx_id_commitment = 9;
   bytes prev_root = 10;
   uint32 height = 11;
-  bytes time = 12;
+  uint64 time = 12;
   bytes application_hash = 13;
   optional bytes block_id = 14;
 }
 
-// pub enum Transaction {
-//    Script(Script),
-//    Create(Create),
-//    Mint(Mint),
-//    Upgrade(Upgrade),
-//    Upload(Upload),
-//    Blob(Blob),
-//}
-// TODO: implement other transaction types
-// https://github.com/FuelLabs/fuel-core/issues/3122
 message Transaction {
   oneof variant {
     ScriptTransaction script = 1;
-//    CreateTx create = 2;
-//    MintTx mint = 3;
-//    UpgradeTx upgrade = 4;
-//    UploadTx upload = 5;
-//    BlobTx blob = 6;
+    CreateTransaction create = 2;
+    MintTransaction mint = 3;
+    UpgradeTransaction upgrade = 4;
+    UploadTransaction upload = 5;
+    BlobTransaction blob = 6;
   }
 }
 
@@ -193,6 +183,59 @@ message ScriptTransaction {
   repeated Output outputs = 7;
   repeated bytes witnesses = 8;
   ScriptMetadata metadata = 9;
+}
+
+message CreateTransaction {
+  uint32 bytecode_witness_index = 1;
+  bytes salt = 2;
+  repeated StorageSlot storage_slots = 3;
+  Policies policies = 4;
+  repeated Input inputs = 5;
+  repeated Output outputs = 6;
+  repeated bytes witnesses = 7;
+  CreateMetadata metadata = 8;
+}
+
+message MintTransaction {
+  TxPointer tx_pointer = 1;
+  ContractInput input_contract = 2;
+  ContractOutput output_contract = 3;
+  uint64 mint_amount = 4;
+  bytes mint_asset_id = 5;
+  uint64 gas_price = 6;
+  MintMetadata metadata = 7;
+}
+
+message UpgradeTransaction {
+  UpgradePurpose purpose = 1;
+  Policies policies = 2;
+  repeated Input inputs = 3;
+  repeated Output outputs = 4;
+  repeated bytes witnesses = 5;
+  UpgradeMetadata metadata = 6;
+}
+
+message UploadTransaction {
+  bytes root = 1;
+  uint32 witness_index = 2;
+  uint32 subsection_index = 3;
+  uint32 subsections_number = 4;
+  repeated bytes proof_set = 5;
+  Policies policies = 6;
+  repeated Input inputs = 7;
+  repeated Output outputs = 8;
+  repeated bytes witnesses = 9;
+  UploadMetadata metadata = 10;
+}
+
+message BlobTransaction {
+  bytes blob_id = 1;
+  uint32 witness_index = 2;
+  Policies policies = 3;
+  repeated Input inputs = 4;
+  repeated Output outputs = 5;
+  repeated bytes witnesses = 6;
+  BlobMetadata metadata = 7;
 }
 
 // pub struct Policies {
@@ -263,7 +306,7 @@ message CoinSignedInput {
   bytes owner = 2;
   uint64 amount = 3;
   bytes asset_id = 4;
-  bytes tx_pointer = 5;
+  TxPointer tx_pointer = 5;
   uint32 witness_index = 6;
   uint64 predicate_gas_used = 7;
   bytes predicate = 8;
@@ -281,7 +324,7 @@ message CoinPredicateInput {
   bytes owner = 2;
   uint64 amount = 3;
   bytes asset_id = 4;
-  bytes tx_pointer = 5;
+  TxPointer tx_pointer = 5;
   uint32 witness_index = 6;
   uint64 predicate_gas_used = 7;
   bytes predicate = 8;
@@ -304,7 +347,7 @@ message ContractInput {
   UtxoId utxo_id = 1;
   bytes balance_root = 2;
   bytes state_root = 3;
-  bytes tx_pointer = 4;
+  TxPointer tx_pointer = 4;
   bytes contract_id = 5;
 }
 
@@ -350,7 +393,7 @@ message MessageCoinSignedInput {
   bytes sender = 1;
   bytes recipient = 2;
   uint64 amount = 3;
-  uint32 nonce = 4;
+  bytes nonce = 4;
   uint32 witness_index = 5;
   uint64 predicate_gas_used = 6;
   bytes data = 7;
@@ -369,7 +412,7 @@ message MessageCoinPredicateInput {
   bytes sender = 1;
   bytes recipient = 2;
   uint64 amount = 3;
-  uint32 nonce = 4;
+  bytes nonce = 4;
   uint32 witness_index = 5;
   uint64 predicate_gas_used = 6;
   bytes data = 7;
@@ -382,7 +425,7 @@ message MessageDataSignedInput {
   bytes sender = 1;
   bytes recipient = 2;
   uint64 amount = 3;
-  uint32 nonce = 4;
+  bytes nonce = 4;
   uint32 witness_index = 5;
   uint64 predicate_gas_used = 6;
   bytes data = 7;
@@ -396,7 +439,7 @@ message MessageDataPredicateInput {
   bytes sender = 1;
   bytes recipient = 2;
   uint64 amount = 3;
-  uint32 nonce = 4;
+  bytes nonce = 4;
   uint32 witness_index = 5;
   uint64 predicate_gas_used = 6;
   bytes data = 7;
@@ -449,8 +492,9 @@ message CoinOutput {
   bytes asset_id = 3;
 }
 message ContractOutput {
-  bytes contract_id = 1;
-  bytes state_root = 2;
+  uint32 input_index = 1;
+  bytes balance_root = 2;
+  bytes state_root = 3;
 }
 message ChangeOutput {
   bytes to = 1;
@@ -476,6 +520,16 @@ message ContractCreatedOutput {
 message UtxoId {
   bytes tx_id = 1;
   uint32 output_index = 2;
+}
+
+message TxPointer {
+  uint32 block_height = 1;
+  uint32 tx_index = 2;
+}
+
+message StorageSlot {
+  bytes key = 1;
+  bytes value = 2;
 }
 
 
@@ -517,6 +571,84 @@ message ScriptMetadata {
   bytes receipts_root = 10;
   bytes script = 11;
   bytes script_data = 12;
+}
+
+message CreateMetadata {
+  bytes id = 1;
+  uint32 inputs_offset = 2;
+  repeated uint32 inputs_offset_at = 3;
+  repeated PredicateOffset inputs_predicate_offset_at = 4;
+  uint32 outputs_offset = 5;
+  repeated uint32 outputs_offset_at = 6;
+  uint32 witnesses_offset = 7;
+  repeated uint32 witnesses_offset_at = 8;
+  bytes contract_id = 9;
+  bytes contract_root = 10;
+  bytes state_root = 11;
+}
+
+message MintMetadata {
+  bytes id = 1;
+}
+
+message UpgradePurpose {
+  oneof variant {
+    UpgradeConsensusParameters consensus_parameters = 1;
+    UpgradeStateTransition state_transition = 2;
+  }
+}
+
+message UpgradeConsensusParameters {
+  uint32 witness_index = 1;
+  bytes checksum = 2;
+}
+
+message UpgradeStateTransition {
+  bytes root = 1;
+}
+
+message UpgradeMetadata {
+  bytes id = 1;
+  uint32 inputs_offset = 2;
+  repeated uint32 inputs_offset_at = 3;
+  repeated PredicateOffset inputs_predicate_offset_at = 4;
+  uint32 outputs_offset = 5;
+  repeated uint32 outputs_offset_at = 6;
+  uint32 witnesses_offset = 7;
+  repeated uint32 witnesses_offset_at = 8;
+  oneof variant {
+    UpgradeConsensusParametersMetadata consensus_parameters = 9;
+    UpgradeStateTransitionMetadata state_transition = 10;
+  }
+}
+
+message UpgradeConsensusParametersMetadata {
+  bytes consensus_parameters = 1;
+  bytes calculated_checksum = 2;
+}
+
+message UpgradeStateTransitionMetadata {}
+
+message UploadMetadata {
+  bytes id = 1;
+  uint32 inputs_offset = 2;
+  repeated uint32 inputs_offset_at = 3;
+  repeated PredicateOffset inputs_predicate_offset_at = 4;
+  uint32 outputs_offset = 5;
+  repeated uint32 outputs_offset_at = 6;
+  uint32 witnesses_offset = 7;
+  repeated uint32 witnesses_offset_at = 8;
+}
+
+message BlobMetadata {
+  bytes id = 1;
+  uint32 inputs_offset = 2;
+  repeated uint32 inputs_offset_at = 3;
+  repeated PredicateOffset inputs_predicate_offset_at = 4;
+  uint32 outputs_offset = 5;
+  repeated uint32 outputs_offset_at = 6;
+  uint32 witnesses_offset = 7;
+  repeated uint32 witnesses_offset_at = 8;
 }
 
 message PredicateOffset {

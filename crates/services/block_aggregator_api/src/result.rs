@@ -7,6 +7,8 @@ pub enum Error {
     BlockSource(anyhow::Error),
     #[error("Database error: {0}")]
     DB(anyhow::Error),
+    #[error("Serialization error: {0}")]
+    Serialization(anyhow::Error),
 }
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;
