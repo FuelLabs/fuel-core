@@ -609,25 +609,23 @@ fn proto_policies_from_policies(
     policies: &fuel_core_types::fuel_tx::policies::Policies,
 ) -> ProtoPolicies {
     let mut values = [0u64; 6];
-    if policies.is_set(PolicyType::Tip) {
-        values[0] = policies.get(PolicyType::Tip).unwrap_or_default();
+    if let Some(value) = policies.get(PolicyType::Tip) {
+        values[0] = value;
     }
-    if policies.is_set(PolicyType::WitnessLimit) {
-        let value = policies.get(PolicyType::WitnessLimit).unwrap_or_default();
+    if let Some(value) = policies.get(PolicyType::WitnessLimit) {
         values[1] = value;
     }
-    if policies.is_set(PolicyType::Maturity) {
-        let value = policies.get(PolicyType::Maturity).unwrap_or_default();
+    if let Some(value) = policies.get(PolicyType::Maturity) {
         values[2] = value;
     }
-    if policies.is_set(PolicyType::MaxFee) {
-        values[3] = policies.get(PolicyType::MaxFee).unwrap_or_default();
+    if let Some(value) = policies.get(PolicyType::MaxFee) {
+        values[3] = value;
     }
-    if policies.is_set(PolicyType::Expiration) {
-        values[4] = policies.get(PolicyType::Expiration).unwrap_or_default();
+    if let Some(value) = policies.get(PolicyType::Expiration) {
+        values[4] = value;
     }
-    if policies.is_set(PolicyType::Owner) {
-        values[5] = policies.get(PolicyType::Owner).unwrap_or_default();
+    if let Some(value) = policies.get(PolicyType::Owner) {
+        values[5] = value;
     }
     let bits = policies.bits();
     ProtoPolicies {
