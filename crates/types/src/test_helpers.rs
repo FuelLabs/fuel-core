@@ -72,7 +72,6 @@ pub fn create_contract<R: Rng>(
     (tx, contract_id)
 }
 
-#[allow(unused)]
 fn arb_txs() -> impl Strategy<Value = Vec<Transaction>> {
     prop::collection::vec(arb_transaction(), 0..10)
 }
