@@ -609,25 +609,33 @@ fn proto_policies_from_policies(
     policies: &fuel_core_types::fuel_tx::policies::Policies,
 ) -> ProtoPolicies {
     let mut values = [0u64; 6];
+    let mut truncated_len = 0;
     if let Some(value) = policies.get(PolicyType::Tip) {
         values[0] = value;
+        truncated_len = 1;
     }
     if let Some(value) = policies.get(PolicyType::WitnessLimit) {
         values[1] = value;
+        truncated_len = 2;
     }
     if let Some(value) = policies.get(PolicyType::Maturity) {
         values[2] = value;
+        truncated_len = 3;
     }
     if let Some(value) = policies.get(PolicyType::MaxFee) {
         values[3] = value;
+        truncated_len = 4;
     }
     if let Some(value) = policies.get(PolicyType::Expiration) {
         values[4] = value;
+        truncated_len = 5;
     }
     if let Some(value) = policies.get(PolicyType::Owner) {
         values[5] = value;
+        truncated_len = 6;
     }
     let bits = policies.bits();
+    values[..truncated_len].to_vec();
     ProtoPolicies {
         bits,
         values: values.to_vec(),
