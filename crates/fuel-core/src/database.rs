@@ -93,6 +93,9 @@ use crate::{
     },
     state::HeightType,
 };
+use anyhow::anyhow;
+use fuel_core_block_aggregator_api::db::table::LatestBlock;
+use fuel_core_storage::transactional::WriteTransaction;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 
@@ -447,13 +450,39 @@ impl Modifiable for Database<GasPriceDatabase> {
 
 impl Modifiable for Database<BlockAggregatorDatabaseStorage> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        // Does not need to be monotonically increasing because
+        // storage values are modified in parallel from different heights
         commit_changes_with_height_update(self, changes, |_iter| Ok(Vec::new()))
+    }
+}
+
+impl Database<BlockAggregatorDatabaseStorage> {
+    pub fn rollback_to(&mut self, block_height: BlockHeight) -> StorageResult<()> {
+        let mut tx = self.write_transaction();
+        tx.storage_as_mut::<LatestBlock>()
+            .insert(&(), &block_height)
+            .map_err(|e: StorageError| anyhow!(e))?;
+        tx.commit().map_err(|e: StorageError| anyhow!(e))?;
+        Ok(())
     }
 }
 
 impl Modifiable for Database<BlockAggregatorDatabaseS3> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        // Does not need to be monotonically increasing because
+        // storage values are modified in parallel from different heights
         commit_changes_with_height_update(self, changes, |_iter| Ok(Vec::new()))
+    }
+}
+
+impl Database<BlockAggregatorDatabaseS3> {
+    pub fn rollback_to(&mut self, block_height: BlockHeight) -> StorageResult<()> {
+        let mut tx = self.write_transaction();
+        tx.storage_as_mut::<LatestBlock>()
+            .insert(&(), &block_height)
+            .map_err(|e: StorageError| anyhow!(e))?;
+        tx.commit().map_err(|e: StorageError| anyhow!(e))?;
+        Ok(())
     }
 }
 
