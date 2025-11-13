@@ -34,12 +34,11 @@ use futures::{
     StreamExt,
     TryStreamExt,
 };
-use std::net::TcpListener;
 
 fn free_local_addr() -> String {
-    let listener = TcpListener::bind("[::1]:0").unwrap();
-    let addr = listener.local_addr().unwrap(); // OS picks a free port
-    format!("[::1]:{}", addr.port())
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    format!("127.0.0.1:{}", addr.port())
 }
 
 #[tokio::test]
