@@ -125,13 +125,16 @@ impl BlockSerializer for SerializerAdapter {
     type Block = ProtoBlock;
 
     fn serialize_block(&self, block: &FuelBlock) -> crate::result::Result<Self::Block> {
-        let (header, txs) = block.clone().into_inner();
-        let proto_header = proto_header_from_header(header);
+        let proto_header = proto_header_from_header(block.header());
         match &block {
             FuelBlock::V1(_) => {
                 let proto_v1_block = ProtoV1Block {
                     header: Some(proto_header),
-                    transactions: txs.into_iter().map(proto_tx_from_tx).collect(),
+                    transactions: block
+                        .transactions()
+                        .into_iter()
+                        .map(proto_tx_from_tx)
+                        .collect(),
                 };
                 Ok(ProtoBlock {
                     versioned_block: Some(ProtoVersionedBlock::V1(proto_v1_block)),
@@ -141,19 +144,19 @@ impl BlockSerializer for SerializerAdapter {
     }
 }
 
-fn proto_header_from_header(header: BlockHeader) -> ProtoHeader {
+fn proto_header_from_header(header: &BlockHeader) -> ProtoHeader {
     let block_id = header.id();
-    let consensus = *header.consensus();
+    let consensus = header.consensus();
     let versioned_header = match header {
         BlockHeader::V1(header) => {
             let proto_v1_header =
-                proto_v1_header_from_v1_header(consensus, block_id, header);
+                proto_v1_header_from_v1_header(&consensus, &block_id, header);
             ProtoVersionedHeader::V1(proto_v1_header)
         }
         #[cfg(feature = "fault-proving")]
         BlockHeader::V2(header) => {
             let proto_v2_header =
-                proto_v2_header_from_v2_header(consensus, block_id, header);
+                proto_v2_header_from_v2_header(consensus, &block_id, header);
             ProtoVersionedHeader::V2(proto_v2_header)
         }
     };
@@ -164,9 +167,9 @@ fn proto_header_from_header(header: BlockHeader) -> ProtoHeader {
 }
 
 fn proto_v1_header_from_v1_header(
-    consensus: ConsensusHeader<GeneratedConsensusFields>,
-    block_id: BlockId,
-    header: BlockHeaderV1,
+    consensus: &ConsensusHeader<GeneratedConsensusFields>,
+    block_id: &BlockId,
+    header: &BlockHeaderV1,
 ) -> ProtoV1Header {
     let application = header.application();
     let generated = application.generated;
@@ -190,9 +193,9 @@ fn proto_v1_header_from_v1_header(
 
 #[cfg(feature = "fault-proving")]
 fn proto_v2_header_from_v2_header(
-    consensus: ConsensusHeader<GeneratedConsensusFields>,
-    block_id: BlockId,
-    header: BlockHeaderV2,
+    consensus: &ConsensusHeader<GeneratedConsensusFields>,
+    block_id: &BlockId,
+    header: &BlockHeaderV2,
 ) -> ProtoV2Header {
     let application = *header.application();
     let generated = application.generated;
@@ -215,7 +218,7 @@ fn proto_v2_header_from_v2_header(
     }
 }
 
-fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
+fn proto_tx_from_tx(tx: &FuelTransaction) -> ProtoTransaction {
     match tx {
         FuelTransaction::Script(script) => {
             let proto_script = ProtoScriptTx {
@@ -224,16 +227,10 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
                 script: script.script().clone(),
                 script_data: script.script_data().clone(),
                 policies: Some(proto_policies_from_policies(script.policies())),
-                inputs: script
-                    .inputs()
-                    .iter()
-                    .cloned()
-                    .map(proto_input_from_input)
-                    .collect(),
+                inputs: script.inputs().iter().map(proto_input_from_input).collect(),
                 outputs: script
                     .outputs()
                     .iter()
-                    .cloned()
                     .map(proto_output_from_output)
                     .collect(),
                 witnesses: script
@@ -258,16 +255,10 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
                     .map(proto_storage_slot_from_storage_slot)
                     .collect(),
                 policies: Some(proto_policies_from_policies(create.policies())),
-                inputs: create
-                    .inputs()
-                    .iter()
-                    .cloned()
-                    .map(proto_input_from_input)
-                    .collect(),
+                inputs: create.inputs().iter().map(proto_input_from_input).collect(),
                 outputs: create
                     .outputs()
                     .iter()
-                    .cloned()
                     .map(proto_output_from_output)
                     .collect(),
                 witnesses: create
@@ -308,13 +299,11 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
                 inputs: upgrade
                     .inputs()
                     .iter()
-                    .cloned()
                     .map(proto_input_from_input)
                     .collect(),
                 outputs: upgrade
                     .outputs()
                     .iter()
-                    .cloned()
                     .map(proto_output_from_output)
                     .collect(),
                 witnesses: upgrade
@@ -337,16 +326,10 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
                 subsections_number: u32::from(*upload.subsections_number()),
                 proof_set: upload.proof_set().iter().map(bytes32_to_vec).collect(),
                 policies: Some(proto_policies_from_policies(upload.policies())),
-                inputs: upload
-                    .inputs()
-                    .iter()
-                    .cloned()
-                    .map(proto_input_from_input)
-                    .collect(),
+                inputs: upload.inputs().iter().map(proto_input_from_input).collect(),
                 outputs: upload
                     .outputs()
                     .iter()
-                    .cloned()
                     .map(proto_output_from_output)
                     .collect(),
                 witnesses: upload
@@ -366,16 +349,10 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
                 blob_id: blob.blob_id().as_ref().to_vec(),
                 witness_index: u32::from(*blob.bytecode_witness_index()),
                 policies: Some(proto_policies_from_policies(blob.policies())),
-                inputs: blob
-                    .inputs()
-                    .iter()
-                    .cloned()
-                    .map(proto_input_from_input)
-                    .collect(),
+                inputs: blob.inputs().iter().map(proto_input_from_input).collect(),
                 outputs: blob
                     .outputs()
                     .iter()
-                    .cloned()
                     .map(proto_output_from_output)
                     .collect(),
                 witnesses: blob
@@ -393,7 +370,7 @@ fn proto_tx_from_tx(tx: FuelTransaction) -> ProtoTransaction {
     }
 }
 
-fn proto_input_from_input(input: Input) -> ProtoInput {
+fn proto_input_from_input(input: &Input) -> ProtoInput {
     match input {
         Input::CoinSigned(coin_signed) => ProtoInput {
             variant: Some(ProtoInputVariant::CoinSigned(ProtoCoinSignedInput {
@@ -536,7 +513,7 @@ fn proto_contract_output_from_contract(
     }
 }
 
-fn proto_output_from_output(output: Output) -> ProtoOutput {
+fn proto_output_from_output(output: &Output) -> ProtoOutput {
     let variant = match output {
         Output::Coin {
             to,
@@ -544,7 +521,7 @@ fn proto_output_from_output(output: Output) -> ProtoOutput {
             asset_id,
         } => ProtoOutputVariant::Coin(ProtoCoinOutput {
             to: to.as_ref().to_vec(),
-            amount,
+            amount: *amount,
             asset_id: asset_id.as_ref().to_vec(),
         }),
         Output::Contract(contract) => {
@@ -556,7 +533,7 @@ fn proto_output_from_output(output: Output) -> ProtoOutput {
             asset_id,
         } => ProtoOutputVariant::Change(ProtoChangeOutput {
             to: to.as_ref().to_vec(),
-            amount,
+            amount: *amount,
             asset_id: asset_id.as_ref().to_vec(),
         }),
         Output::Variable {
@@ -565,7 +542,7 @@ fn proto_output_from_output(output: Output) -> ProtoOutput {
             asset_id,
         } => ProtoOutputVariant::Variable(ProtoVariableOutput {
             to: to.as_ref().to_vec(),
-            amount,
+            amount: *amount,
             asset_id: asset_id.as_ref().to_vec(),
         }),
         Output::ContractCreated {
@@ -846,7 +823,7 @@ pub fn fuel_block_from_protobuf(
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("Missing protobuf header"))
                 .map_err(Error::Serialization)?;
-            partial_header_from_proto_header(proto_header)?
+            partial_header_from_proto_header(&proto_header)?
         }
     };
     let txs = match versioned_block {
@@ -869,7 +846,7 @@ pub fn fuel_block_from_protobuf(
 }
 
 pub fn partial_header_from_proto_header(
-    proto_header: ProtoHeader,
+    proto_header: &ProtoHeader,
 ) -> Result<PartialBlockHeader> {
     let partial_header = PartialBlockHeader {
         consensus: proto_header_to_empty_consensus_header(&proto_header)?,
@@ -889,7 +866,7 @@ pub fn tx_from_proto_tx(proto_tx: &ProtoTransaction) -> Result<FuelTransaction> 
             let policies = proto_script
                 .policies
                 .clone()
-                .map(policies_from_proto_policies)
+                .map(|p| policies_from_proto_policies(&p))
                 .unwrap_or_default();
             let inputs = proto_script
                 .inputs
@@ -931,7 +908,7 @@ pub fn tx_from_proto_tx(proto_tx: &ProtoTransaction) -> Result<FuelTransaction> 
             let policies = proto_create
                 .policies
                 .clone()
-                .map(policies_from_proto_policies)
+                .map(|p| policies_from_proto_policies(&p))
                 .unwrap_or_default();
             let inputs = proto_create
                 .inputs
@@ -1019,7 +996,7 @@ pub fn tx_from_proto_tx(proto_tx: &ProtoTransaction) -> Result<FuelTransaction> 
             let policies = proto_upgrade
                 .policies
                 .clone()
-                .map(policies_from_proto_policies)
+                .map(|p| policies_from_proto_policies(&p))
                 .unwrap_or_default();
             let inputs = proto_upgrade
                 .inputs
@@ -1051,7 +1028,7 @@ pub fn tx_from_proto_tx(proto_tx: &ProtoTransaction) -> Result<FuelTransaction> 
             let policies = proto_upload
                 .policies
                 .clone()
-                .map(policies_from_proto_policies)
+                .map(|p| policies_from_proto_policies(&p))
                 .unwrap_or_default();
             let inputs = proto_upload
                 .inputs
@@ -1125,7 +1102,7 @@ pub fn tx_from_proto_tx(proto_tx: &ProtoTransaction) -> Result<FuelTransaction> 
             let policies = proto_blob
                 .policies
                 .clone()
-                .map(policies_from_proto_policies)
+                .map(|p| policies_from_proto_policies(&p))
                 .unwrap_or_default();
             let inputs = proto_blob
                 .inputs
@@ -1384,11 +1361,11 @@ fn input_from_proto_input(proto_input: &ProtoInput) -> Result<Input> {
     }
 }
 
-fn policies_from_proto_policies(proto_policies: ProtoPolicies) -> FuelPolicies {
+fn policies_from_proto_policies(proto_policies: &ProtoPolicies) -> FuelPolicies {
     let ProtoPolicies { bits, values } = proto_policies;
     let mut policies = FuelPolicies::default();
     let bits =
-        PoliciesBits::from_bits(bits).expect("Should be able to create from `u32`");
+        PoliciesBits::from_bits(*bits).expect("Should be able to create from `u32`");
     if bits.contains(PoliciesBits::Tip)
         && let Some(tip) = values.first()
     {
