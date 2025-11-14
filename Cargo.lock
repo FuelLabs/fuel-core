@@ -4249,6 +4249,7 @@ dependencies = [
  "aws-smithy-mocks",
  "bytes",
  "enum-iterator",
+ "fuel-core-protobuf",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-types 0.47.1",
@@ -4614,6 +4615,18 @@ dependencies = [
  "tokio",
  "tokio-rayon",
  "tracing",
+]
+
+[[package]]
+name = "fuel-core-protobuf"
+version = "0.1.0"
+source = "git+https://github.com/FuelLabs/fuel-core-protobuf.git?branch=add-defs#5b6e4d6c6db0ac654f152423cb0a6292fac9c7dc"
+dependencies = [
+ "prost 0.14.1",
+ "serde",
+ "tonic 0.14.2",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]

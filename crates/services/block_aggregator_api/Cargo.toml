@@ -20,6 +20,7 @@ aws-sdk-s3 = "1.111.0"
 aws-smithy-mocks = "0.2.0"
 bytes = { workspace = true, features = ["serde"] }
 enum-iterator = { workspace = true }
+fuel-core-protobuf = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
