@@ -26,7 +26,16 @@ use crate::{
         Result,
     },
 };
+use anyhow::anyhow;
 use async_trait::async_trait;
+use fuel_core_services::{
+    RunnableService,
+    RunnableTask,
+    Service,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
+};
 use futures::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
@@ -167,41 +176,73 @@ impl BlockAggregator for Server {
 }
 
 pub struct ProtobufAPI {
-    _server_task_handle: tokio::task::JoinHandle<()>,
-    shutdown_sender: Option<tokio::sync::oneshot::Sender<()>>,
+    _server_service: ServiceRunner<ServerTask>,
     query_receiver:
         tokio::sync::mpsc::Receiver<BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>>,
 }
 
+pub struct ServerTask {
+    addr: std::net::SocketAddr,
+    query_sender:
+        tokio::sync::mpsc::Sender<BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>>,
+}
+#[async_trait::async_trait]
+impl RunnableService for ServerTask {
+    const NAME: &'static str = "ProtobufServerTask";
+    type SharedData = ();
+    type Task = Self;
+    type TaskParams = ();
+
+    fn shared_data(&self) -> Self::SharedData {}
+
+    async fn into_task(
+        self,
+        _state_watcher: &StateWatcher,
+        _params: Self::TaskParams,
+    ) -> anyhow::Result<Self::Task> {
+        Ok(self)
+    }
+}
+
+impl RunnableTask for ServerTask {
+    async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
+        let server = Server::new(self.query_sender.clone());
+        let router = tonic::transport::Server::builder()
+            .add_service(ProtoBlockAggregatorServer::new(server));
+        tokio::select! {
+                res = router.serve(self.addr) => {
+                    if let Err(e) = res {
+                        tracing::error!("BlockAggregator tonic server error: {}", e);
+                        TaskNextAction::ErrorContinue(anyhow!(e))
+                    } else {
+                        tracing::info!("BlockAggregator tonic server stopped");
+                        TaskNextAction::Stop
+                    }
+                },
+            _ = watcher.while_started() => {
+                TaskNextAction::Stop
+            }
+        }
+    }
+
+    async fn shutdown(self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 impl ProtobufAPI {
-    pub fn new(url: String) -> Self {
+    pub fn new(url: String) -> Result<Self> {
         let (query_sender, query_receiver) = tokio::sync::mpsc::channel::<
             BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>,
         >(100);
-        let server = Server::new(query_sender);
         let addr = url.parse().unwrap();
-        let (shutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
-        let _server_task_handle = tokio::spawn(async move {
-            let service = tonic::transport::Server::builder()
-                .add_service(ProtoBlockAggregatorServer::new(server));
-            tokio::select! {
-                res = service.serve(addr) => {
-                    if let Err(e) = res {
-                        tracing::error!("BlockAggregator tonic server error: {}", e);
-                    } else {
-                        tracing::info!("BlockAggregator tonic server stopped");
-                    }
-                },
-                _ = shutdown_receiver => {
-                    tracing::info!("Shutting down BlockAggregator tonic server");
-                },
-            }
-        });
-        Self {
-            _server_task_handle,
-            shutdown_sender: Some(shutdown_sender),
+        let _server_service = ServiceRunner::new(ServerTask { addr, query_sender });
+        _server_service.start().map_err(|e| Error::Api(e))?;
+        let api = Self {
+            _server_service,
             query_receiver,
-        }
+        };
+        Ok(api)
     }
 }
 
@@ -218,13 +259,5 @@ impl BlockAggregatorApi for ProtobufAPI {
             .await
             .ok_or_else(|| Error::Api(anyhow::anyhow!("Channel closed")))?;
         Ok(query)
-    }
-}
-
-impl Drop for ProtobufAPI {
-    fn drop(&mut self) {
-        if let Some(shutdown_sender) = self.shutdown_sender.take() {
-            let _ = shutdown_sender.send(());
-        }
     }
 }
