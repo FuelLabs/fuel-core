@@ -3,7 +3,10 @@ use crate::{
         BlockAggregatorApi,
         BlockAggregatorQuery,
     },
-    block_range_response::BlockRangeResponse,
+    block_range_response::{
+        BlockRangeResponse,
+        BoxStream,
+    },
     protobuf_types::{
         Block as ProtoBlock,
         BlockHeightRequest as ProtoBlockHeightRequest,
@@ -71,13 +74,13 @@ impl BlockAggregator for Server {
             ))),
         }
     }
-    type GetBlockRangeStream = ReceiverStream<Result<ProtoBlockResponse, Status>>;
+    // type GetBlockRangeStream = ReceiverStream<Result<ProtoBlockResponse, Status>>;
+    type GetBlockRangeStream = BoxStream<Result<ProtoBlockResponse, Status>>;
 
     async fn get_block_range(
         &self,
         request: tonic::Request<ProtoBlockRangeRequest>,
     ) -> Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status> {
-        const ARB_LITERAL_BLOCK_BUFFER_SIZE: usize = 100;
         let req = request.into_inner();
         let (response, receiver) = tokio::sync::oneshot::channel();
         let query = BlockAggregatorQuery::GetBlockRange {
@@ -93,50 +96,36 @@ impl BlockAggregator for Server {
         match res {
             Ok(block_range_response) => match block_range_response {
                 BlockRangeResponse::Literal(inner) => {
-                    let (tx, rx) = tokio::sync::mpsc::channel::<
-                        Result<ProtoBlockResponse, Status>,
-                    >(ARB_LITERAL_BLOCK_BUFFER_SIZE);
-
-                    tokio::spawn(async move {
-                        let mut s = inner;
-                        while let Some(pb) = s.next().await {
+                    let stream = inner
+                        .map(|res| {
                             let response = ProtoBlockResponse {
-                                payload: Some(proto_block_response::Payload::Literal(pb)),
+                                payload: Some(proto_block_response::Payload::Literal(
+                                    res,
+                                )),
                             };
-                            if tx.send(Ok(response)).await.is_err() {
-                                break;
-                            }
-                        }
-                    });
-
-                    Ok(tonic::Response::new(ReceiverStream::new(rx)))
+                            Ok(response)
+                        })
+                        .boxed();
+                    Ok(tonic::Response::new(stream))
                 }
                 BlockRangeResponse::Remote(inner) => {
-                    let (tx, rx) = tokio::sync::mpsc::channel::<
-                        Result<ProtoBlockResponse, Status>,
-                    >(ARB_LITERAL_BLOCK_BUFFER_SIZE);
-
-                    tokio::spawn(async move {
-                        let mut s = inner;
-                        while let Some(pb) = s.next().await {
+                    let stream = inner
+                        .map(|res| {
                             let proto_response = ProtoRemoteBlockRangeResponse {
-                                region: pb.region.clone(),
-                                bucket: pb.bucket.clone(),
-                                key: pb.key.clone(),
-                                url: pb.url.clone(),
+                                region: res.region.clone(),
+                                bucket: res.bucket.clone(),
+                                key: res.key.clone(),
+                                url: res.url.clone(),
                             };
                             let response = ProtoBlockResponse {
                                 payload: Some(proto_block_response::Payload::Remote(
                                     proto_response,
                                 )),
                             };
-                            if tx.send(Ok(response)).await.is_err() {
-                                break;
-                            }
-                        }
-                    });
-
-                    Ok(tonic::Response::new(ReceiverStream::new(rx)))
+                            Ok(response)
+                        })
+                        .boxed();
+                    Ok(tonic::Response::new(stream))
                 }
             },
             Err(e) => Err(tonic::Status::internal(format!(

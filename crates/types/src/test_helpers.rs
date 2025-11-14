@@ -488,7 +488,7 @@ fn arb_create_transaction() -> impl Strategy<Value = Transaction> {
     )
         .prop_map(
             |(policies, salt_bytes, storage_slots, inputs, outputs, witnesses)| {
-                let create = crate::fuel_tx::Transaction::create(
+                let create = Transaction::create(
                     0,
                     policies,
                     Salt::from(salt_bytes),
@@ -520,7 +520,7 @@ fn arb_mint_transaction() -> impl Strategy<Value = Transaction> {
                 mint_asset_id,
                 gas_price,
             )| {
-                let mint = crate::fuel_tx::Transaction::mint(
+                let mint = Transaction::mint(
                     tx_pointer,
                     input_contract,
                     output_contract,
