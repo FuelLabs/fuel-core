@@ -38,7 +38,6 @@ tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
 
-
 [dev-dependencies]
 aws-sdk-s3 = { version = "1.111.0", features = ["test-util"] }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
