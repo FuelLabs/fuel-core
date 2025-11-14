@@ -71,14 +71,14 @@ pub mod integration {
         onchain_db: OnchainDB,
         importer: BoxStream<SharedImportResult>,
         sync_from_height: BlockHeight,
-    ) -> ServiceRunner<
+    ) -> anyhow::Result<ServiceRunner<
         BlockAggregator<
             ProtobufAPI,
             DB,
             ImporterAndDbSource<S, OnchainDB, E>,
             ProtoBlock,
         >,
-    >
+    >>
     where
         DB: BlockAggregatorDB<
             BlockRangeResponse = <ProtobufAPI as BlockAggregatorApi>::BlockRangeResponse,
@@ -91,7 +91,8 @@ pub mod integration {
         E: std::fmt::Debug + Send + Sync,
     {
         let addr = config.addr.to_string();
-        let api = ProtobufAPI::new(addr);
+        let api = ProtobufAPI::new(addr)
+            .map_err(|e| anyhow::anyhow!("Error creating API: {e}"))?;
         let db_ending_height = None;
         let block_source = ImporterAndDbSource::new(
             importer,
@@ -106,7 +107,8 @@ pub mod integration {
             block_source,
             new_block_subscriptions: Vec::new(),
         };
-        ServiceRunner::new(block_aggregator)
+        let runner = ServiceRunner::new(block_aggregator);
+        Ok(runner)
     }
 }
 
