@@ -57,10 +57,20 @@ pub mod integration {
     };
     use std::net::SocketAddr;
 
+    //        "AWS_ACCESS_KEY_ID",
+    //         "AWS_SECRET_ACCESS_KEY",
     #[derive(Clone, Debug)]
     pub struct Config {
         pub addr: SocketAddr,
         pub sync_from: Option<BlockHeight>,
+    }
+    pub enum StorageMethod {
+        Local,
+        S3 {
+            bucket: String,
+            endpoint_url: Option<String>,
+            requester_pays: bool,
+        },
     }
 
     #[allow(clippy::type_complexity)]
