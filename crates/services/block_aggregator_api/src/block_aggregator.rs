@@ -1,6 +1,5 @@
 use crate::{
     BlockAggregator,
-    NewBlock,
     api::{
         BlockAggregatorApi,
         BlockAggregatorQuery,
@@ -17,11 +16,12 @@ use fuel_core_services::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
-impl<Api, DB, Blocks, BlockRangeResponse> BlockAggregator<Api, DB, Blocks>
+impl<Api, DB, Blocks, BlockRangeResponse> BlockAggregator<Api, DB, Blocks, Blocks::Block>
 where
     Api: BlockAggregatorApi<BlockRangeResponse = BlockRangeResponse>,
-    DB: BlockAggregatorDB<BlockRangeResponse = BlockRangeResponse>,
+    DB: BlockAggregatorDB<Block = Blocks::Block, BlockRangeResponse = BlockRangeResponse>,
     Blocks: BlockSource,
+    <Blocks as BlockSource>::Block: Clone + std::fmt::Debug,
     BlockRangeResponse: Send,
 {
     pub fn new(query: Api, database: DB, block_source: Blocks) -> Self {
@@ -40,7 +40,9 @@ where
 
     pub async fn handle_query(
         &mut self,
-        res: crate::result::Result<BlockAggregatorQuery<BlockRangeResponse>>,
+        res: crate::result::Result<
+            BlockAggregatorQuery<BlockRangeResponse, Blocks::Block>,
+        >,
     ) -> TaskNextAction {
         tracing::debug!("Handling query: {res:?}");
         let query = try_or_stop!(res, |e| {
@@ -83,7 +85,7 @@ where
 
     async fn handle_get_current_height_query(
         &mut self,
-        response: tokio::sync::oneshot::Sender<BlockHeight>,
+        response: tokio::sync::oneshot::Sender<Option<BlockHeight>>,
     ) -> TaskNextAction {
         let res = self.database.get_current_height().await;
         let height = try_or_stop!(res, |e| {
@@ -98,7 +100,7 @@ where
 
     async fn handle_new_block_subscription(
         &mut self,
-        response: tokio::sync::mpsc::Sender<NewBlock>,
+        response: tokio::sync::mpsc::Sender<Blocks::Block>,
     ) -> TaskNextAction {
         self.new_block_subscriptions.push(response);
         TaskNextAction::Continue
@@ -106,20 +108,23 @@ where
 
     pub async fn handle_block(
         &mut self,
-        res: crate::result::Result<BlockSourceEvent>,
-    ) -> TaskNextAction {
+        res: crate::result::Result<BlockSourceEvent<<Blocks as BlockSource>::Block>>,
+    ) -> TaskNextAction
+    where
+        <Blocks as BlockSource>::Block: std::fmt::Debug,
+    {
         tracing::debug!("Handling block: {res:?}");
         let event = try_or_stop!(res, |e| {
             tracing::error!("Error receiving block from source: {e:?}");
         });
-        let (id, block) = match event {
-            BlockSourceEvent::NewBlock(id, block) => {
+        match &event {
+            BlockSourceEvent::NewBlock(height, block) => {
                 self.new_block_subscriptions.retain_mut(|sub| {
-                    let send_res = sub.try_send(NewBlock::new(id, block.clone()));
+                    let send_res = sub.try_send(block.clone());
                     match send_res {
                         Ok(_) => true,
                         Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                            tracing::error!("Error sending new block to subscriber due to full channel: {id:?}");
+                            tracing::error!("Error sending new block to subscriber due to full channel: {height:?}");
                             true
                         },
                         Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -128,11 +133,13 @@ where
                         },
                     }
                 });
-                (id, block)
             }
-            BlockSourceEvent::OldBlock(id, block) => (id, block),
+            BlockSourceEvent::OldBlock(_id, _block) => {
+                // Do nothing
+                // Only stream new blocks
+            }
         };
-        let res = self.database.store_block(id, block).await;
+        let res = self.database.store_block(event).await;
         try_or_stop!(res, |e| {
             tracing::error!("Error storing block in database: {e:?}");
         });

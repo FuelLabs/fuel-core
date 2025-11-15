@@ -3,6 +3,7 @@ use crate::state::{
     historical_rocksdb::StateRewindPolicy,
     rocks_db::DatabaseConfig,
 };
+use anyhow::anyhow;
 
 use crate::{
     database::{
@@ -10,6 +11,10 @@ use crate::{
         GenesisDatabase,
         Result as DatabaseResult,
         database_description::{
+            block_aggregator::{
+                BlockAggregatorDatabaseS3,
+                BlockAggregatorDatabaseStorage,
+            },
             compression::CompressionDatabase,
             gas_price::GasPriceDatabase,
             off_chain::OffChain,
@@ -19,6 +24,7 @@ use crate::{
     },
     service::DbType,
 };
+use fuel_core_block_aggregator_api::db::table::LatestBlock;
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
     StateConfig,
@@ -26,7 +32,6 @@ use fuel_core_chain_config::{
 };
 #[cfg(feature = "backup")]
 use fuel_core_services::TraceErr;
-use fuel_core_storage::Result as StorageResult;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
     Coins,
@@ -35,6 +40,11 @@ use fuel_core_storage::tables::{
     ContractsRawCode,
     ContractsState,
     Messages,
+};
+use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -60,6 +70,8 @@ pub struct CombinedDatabase {
     relayer: Database<Relayer>,
     gas_price: Database<GasPriceDatabase>,
     compression: Database<CompressionDatabase>,
+    block_aggregation_storage: Database<BlockAggregatorDatabaseStorage>,
+    block_aggregation_s3: Database<BlockAggregatorDatabaseS3>,
 }
 
 impl CombinedDatabase {
@@ -69,6 +81,8 @@ impl CombinedDatabase {
         relayer: Database<Relayer>,
         gas_price: Database<GasPriceDatabase>,
         compression: Database<CompressionDatabase>,
+        block_aggregation_storage: Database<BlockAggregatorDatabaseStorage>,
+        block_aggregation_s3: Database<BlockAggregatorDatabaseS3>,
     ) -> Self {
         Self {
             on_chain,
@@ -76,6 +90,8 @@ impl CombinedDatabase {
             relayer,
             gas_price,
             compression,
+            block_aggregation_storage,
+            block_aggregation_s3,
         }
     }
 
@@ -86,6 +102,8 @@ impl CombinedDatabase {
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
         crate::state::rocks_db::RocksDb::<GasPriceDatabase>::prune(path)?;
         crate::state::rocks_db::RocksDb::<CompressionDatabase>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseStorage>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseS3>::prune(path)?;
         Ok(())
     }
 
@@ -128,6 +146,16 @@ impl CombinedDatabase {
 
         crate::state::rocks_db::RocksDb::<CompressionDatabase>::backup(db_dir, temp_dir)
             .trace_err("Failed to backup compression database")?;
+
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseStorage>::backup(
+            db_dir, temp_dir,
+        )
+        .trace_err("Failed to backup block aggregation storage database")?;
+
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseS3>::backup(
+            db_dir, temp_dir,
+        )
+        .trace_err("Failed to backup block aggregation s3 database")?;
 
         Ok(())
     }
@@ -182,6 +210,18 @@ impl CombinedDatabase {
             backup_dir,
         )
         .trace_err("Failed to restore compression database")?;
+
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseStorage>::restore(
+            temp_restore_dir,
+            backup_dir,
+        )
+        .trace_err("Failed to restore block aggregation storage database")?;
+
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseS3>::restore(
+            temp_restore_dir,
+            backup_dir,
+        )
+        .trace_err("Failed to restore block aggregation s3 database")?;
 
         Ok(())
     }
@@ -240,12 +280,31 @@ impl CombinedDatabase {
                 ..database_config
             },
         )?;
+        let block_aggregation_storage = Database::open_rocksdb(
+            path,
+            state_rewind_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
+        let block_aggregation_s3 = Database::open_rocksdb(
+            path,
+            state_rewind_policy,
+            DatabaseConfig {
+                max_fds,
+                ..database_config
+            },
+        )?;
+
         Ok(Self {
             on_chain,
             off_chain,
             relayer,
             gas_price,
             compression,
+            block_aggregation_storage,
+            block_aggregation_s3,
         })
     }
 
@@ -261,6 +320,8 @@ impl CombinedDatabase {
             relayer: Default::default(),
             gas_price: Default::default(),
             compression: Default::default(),
+            block_aggregation_storage: Default::default(),
+            block_aggregation_s3: Default::default(),
         })
     }
 
@@ -306,6 +367,8 @@ impl CombinedDatabase {
             Database::in_memory(),
             Database::in_memory(),
             Database::in_memory(),
+            Database::in_memory(),
+            Database::in_memory(),
         )
     }
 
@@ -315,6 +378,8 @@ impl CombinedDatabase {
         self.relayer.check_version()?;
         self.gas_price.check_version()?;
         self.compression.check_version()?;
+        self.block_aggregation_storage.check_version()?;
+        self.block_aggregation_s3.check_version()?;
         Ok(())
     }
 
@@ -324,6 +389,25 @@ impl CombinedDatabase {
 
     pub fn compression(&self) -> &Database<CompressionDatabase> {
         &self.compression
+    }
+
+    pub fn block_aggregation_storage(&self) -> &Database<BlockAggregatorDatabaseStorage> {
+        &self.block_aggregation_storage
+    }
+
+    pub fn block_aggregation_storage_mut(
+        &mut self,
+    ) -> &mut Database<BlockAggregatorDatabaseStorage> {
+        &mut self.block_aggregation_storage
+    }
+
+    pub fn block_aggregation_s3(&self) -> &Database<BlockAggregatorDatabaseS3> {
+        &self.block_aggregation_s3
+    }
+    pub fn block_aggregation_s3_mut(
+        &mut self,
+    ) -> &mut Database<BlockAggregatorDatabaseS3> {
+        &mut self.block_aggregation_s3
     }
 
     #[cfg(any(feature = "test-helpers", test))]
@@ -404,7 +488,7 @@ impl CombinedDatabase {
 
     /// Rollbacks the state of the blockchain to a specific block height.
     pub fn rollback_to<S>(
-        &self,
+        &mut self,
         target_block_height: BlockHeight,
         shutdown_listener: &mut S,
     ) -> anyhow::Result<()>
@@ -431,6 +515,28 @@ impl CombinedDatabase {
                 self.compression().latest_height_from_metadata()?;
             let compression_db_rolled_back =
                 is_equal_or_none(compression_db_height, target_block_height);
+
+            let block_aggregation_storage_height = self
+                .block_aggregation_storage()
+                .storage_as_ref::<LatestBlock>()
+                .get(&())
+                .map_err(|e: StorageError| anyhow!(e))?
+                .map(|b| b.into_owned());
+            let block_aggregation_storage_rolled_back = is_equal_or_less_than_or_none(
+                block_aggregation_storage_height,
+                target_block_height,
+            );
+
+            let block_aggregation_s3_height = self
+                .block_aggregation_s3()
+                .storage_as_ref::<LatestBlock>()
+                .get(&())
+                .map_err(|e: StorageError| anyhow!(e))?
+                .map(|b| b.into_owned());
+            let block_aggregation_s3_rolled_back = is_equal_or_less_than_or_none(
+                block_aggregation_s3_height,
+                target_block_height,
+            );
 
             if on_chain_height == target_block_height
                 && off_chain_height == target_block_height
@@ -490,6 +596,16 @@ impl CombinedDatabase {
                 && compression_db_height > target_block_height
             {
                 self.compression().rollback_last_block()?;
+            }
+
+            if !block_aggregation_storage_rolled_back {
+                self.block_aggregation_storage_mut()
+                    .rollback_to(target_block_height)?;
+            }
+
+            if !block_aggregation_s3_rolled_back {
+                self.block_aggregation_s3_mut()
+                    .rollback_to(target_block_height)?;
             }
         }
 
@@ -595,6 +711,8 @@ impl CombinedDatabase {
         self.relayer.shutdown();
         self.gas_price.shutdown();
         self.compression.shutdown();
+        self.block_aggregation_storage.shutdown();
+        self.block_aggregation_s3.shutdown();
     }
 }
 
@@ -624,6 +742,10 @@ impl CombinedGenesisDatabase {
 
 fn is_equal_or_none<T: PartialEq>(maybe_left: Option<T>, right: T) -> bool {
     maybe_left.map(|left| left == right).unwrap_or(true)
+}
+
+fn is_equal_or_less_than_or_none<T: PartialOrd>(maybe_left: Option<T>, right: T) -> bool {
+    maybe_left.map(|left| left <= right).unwrap_or(true)
 }
 
 #[allow(non_snake_case)]

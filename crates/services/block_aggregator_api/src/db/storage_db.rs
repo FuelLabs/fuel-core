@@ -1,10 +1,15 @@
 use crate::{
     block_range_response::BlockRangeResponse,
-    blocks::Block,
+    blocks::BlockSourceEvent,
     db::{
         BlockAggregatorDB,
-        storage_db::table::Column,
+        table::{
+            Blocks,
+            Column,
+            LatestBlock,
+        },
     },
+    protobuf_types::Block as ProtoBlock,
     result::{
         Error,
         Result,
@@ -29,70 +34,33 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
-    cmp::Ordering,
-    collections::BTreeSet,
     pin::Pin,
     task::{
         Context,
         Poll,
     },
 };
-use table::Blocks;
 
-pub mod table;
 #[cfg(test)]
 mod tests;
 
 pub struct StorageDB<S> {
-    highest_contiguous_block: BlockHeight,
-    orphaned_heights: BTreeSet<BlockHeight>,
+    highest_new_height: Option<BlockHeight>,
+    orphaned_new_height: Option<BlockHeight>,
+    synced: bool,
+    sync_from: BlockHeight,
     storage: S,
 }
 
 impl<S> StorageDB<S> {
-    pub fn new(storage: S) -> Self {
-        let height = BlockHeight::new(0);
-        Self::new_with_height(storage, height)
-    }
-
-    pub fn new_with_height(storage: S, highest_contiguous_block: BlockHeight) -> Self {
-        let orphaned_heights = BTreeSet::new();
+    pub fn new(storage: S, sync_from: BlockHeight) -> Self {
         Self {
-            highest_contiguous_block,
-            orphaned_heights,
+            highest_new_height: None,
+            orphaned_new_height: None,
+            synced: false,
+            sync_from,
             storage,
         }
-    }
-
-    fn update_highest_contiguous_block(&mut self, height: BlockHeight) {
-        let next_height = self.next_height();
-        match height.cmp(&next_height) {
-            Ordering::Equal => {
-                self.highest_contiguous_block = height;
-                while let Some(next_height) = self.orphaned_heights.first() {
-                    if next_height == &self.next_height() {
-                        self.highest_contiguous_block = *next_height;
-                        let _ = self.orphaned_heights.pop_first();
-                    } else {
-                        break;
-                    }
-                }
-            }
-            Ordering::Greater => {
-                self.orphaned_heights.insert(height);
-            }
-            Ordering::Less => {
-                tracing::warn!(
-                    "Received block at height {:?}, but the syncing is already at height {:?}. Ignoring block.",
-                    height,
-                    self.highest_contiguous_block
-                );
-            }
-        }
-    }
-    fn next_height(&self) -> BlockHeight {
-        let last_height = *self.highest_contiguous_block;
-        BlockHeight::new(last_height.saturating_add(1))
     }
 }
 
@@ -100,20 +68,74 @@ impl<S, T> BlockAggregatorDB for StorageDB<S>
 where
     S: Modifiable + std::fmt::Debug,
     S: KeyValueInspect<Column = Column>,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
     for<'b> StorageTransaction<&'b mut S>: StorageMutate<Blocks, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
     S: AtomicView<LatestView = T>,
     T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
-    StorageTransaction<T>: AtomicView + StorageInspect<Blocks, Error = StorageError>,
+    StorageTransaction<T>: StorageInspect<Blocks, Error = StorageError>,
 {
+    type Block = ProtoBlock;
     type BlockRangeResponse = BlockRangeResponse;
 
-    async fn store_block(&mut self, height: BlockHeight, block: Block) -> Result<()> {
-        self.update_highest_contiguous_block(height);
+    async fn store_block(
+        &mut self,
+        block_event: BlockSourceEvent<Self::Block>,
+    ) -> Result<()> {
+        let (height, block) = block_event.clone().into_inner();
         let mut tx = self.storage.write_transaction();
         tx.storage_as_mut::<Blocks>()
             .insert(&height, &block)
             .map_err(|e| Error::DB(anyhow!(e)))?;
         tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+
+        match block_event {
+            BlockSourceEvent::NewBlock(new_height, _) => {
+                tracing::debug!("New block: {:?}", new_height);
+                self.highest_new_height = Some(new_height);
+                if self.synced {
+                    let mut tx = self.storage.write_transaction();
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if new_height == self.sync_from {
+                    let mut tx = self.storage.write_transaction();
+                    self.synced = true;
+                    self.highest_new_height = Some(new_height);
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if self.height_is_next_height(new_height)? {
+                    let mut tx = self.storage.write_transaction();
+                    self.synced = true;
+                    self.highest_new_height = Some(new_height);
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &new_height)
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if self.orphaned_new_height.is_none() {
+                    self.orphaned_new_height = Some(new_height);
+                }
+            }
+            BlockSourceEvent::OldBlock(height, _) => {
+                tracing::debug!("Old block: {:?}", height);
+                let latest_height = if height.succ() == self.orphaned_new_height {
+                    self.orphaned_new_height = None;
+                    self.synced = true;
+                    self.highest_new_height.unwrap_or(height)
+                } else {
+                    height
+                };
+                let mut tx = self.storage.write_transaction();
+                tx.storage_as_mut::<LatestBlock>()
+                    .insert(&(), &latest_height)
+                    .map_err(|e| Error::DB(anyhow!(e)))?;
+                tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+            }
+        }
         Ok(())
     }
 
@@ -130,11 +152,40 @@ where
         Ok(BlockRangeResponse::Literal(Box::pin(stream)))
     }
 
-    async fn get_current_height(&self) -> Result<BlockHeight> {
-        Ok(self.highest_contiguous_block)
+    async fn get_current_height(&self) -> Result<Option<BlockHeight>> {
+        let height = self
+            .storage
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+
+        Ok(height.map(|b| b.into_owned()))
     }
 }
 
+impl<S, T> StorageDB<S>
+where
+    S: Modifiable + std::fmt::Debug,
+    S: KeyValueInspect<Column = Column>,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
+    S: AtomicView<LatestView = T>,
+    T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
+{
+    fn height_is_next_height(&self, height: BlockHeight) -> Result<bool> {
+        let maybe_latest_height = self
+            .storage
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+        if let Some(latest_height) = maybe_latest_height {
+            Ok(latest_height.succ() == Some(height))
+        } else {
+            Ok(false)
+        }
+    }
+}
 pub struct StorageStream<S> {
     inner: S,
     next: Option<BlockHeight>,
@@ -156,7 +207,7 @@ where
     S: Unpin + ReadTransaction + std::fmt::Debug,
     for<'a> StorageTransaction<&'a S>: StorageInspect<Blocks, Error = StorageError>,
 {
-    type Item = Block;
+    type Item = ProtoBlock;
 
     fn poll_next(
         self: Pin<&mut Self>,

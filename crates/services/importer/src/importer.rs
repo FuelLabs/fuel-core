@@ -260,6 +260,7 @@ impl Importer {
         result: CommitInput,
     ) -> Result<(), Error> {
         let (sender, receiver) = oneshot::channel();
+
         let command = Commands::CommitResult {
             result,
             permit,

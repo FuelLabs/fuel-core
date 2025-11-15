@@ -1,41 +1,5 @@
 #![allow(clippy::let_unit_value)]
 
-use std::sync::Arc;
-
-use tokio::sync::Mutex;
-
-use fuel_core_gas_price_service::v1::{
-    algorithm::AlgorithmV1,
-    da_source_service::block_committer_costs::{
-        BlockCommitterDaBlockCosts,
-        BlockCommitterHttpApi,
-    },
-    metadata::V1AlgorithmConfig,
-    service::SharedData,
-    uninitialized_task::new_gas_price_service_v1,
-};
-
-use fuel_core_poa::Trigger;
-use fuel_core_storage::{
-    self,
-    transactional::AtomicView,
-};
-#[cfg(feature = "relayer")]
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::signer::SignMode;
-
-use fuel_core_compression_service::service::new_service as new_compression_service;
-
-#[cfg(feature = "relayer")]
-use crate::relayer::Config as RelayerConfig;
-
-#[cfg(feature = "p2p")]
-use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
-    key_generator::Ed25519KeyGenerator,
-    trigger::TimeBasedTrigger,
-    tx_receiver::PreconfirmationsReceiver,
-};
-
 use super::{
     DbType,
     adapters::{
@@ -49,6 +13,14 @@ use super::{
     },
     config::DaCompressionMode,
     genesis::create_genesis_block,
+};
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
+#[cfg(feature = "p2p")]
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
+    key_generator::Ed25519KeyGenerator,
+    trigger::TimeBasedTrigger,
+    tx_receiver::PreconfirmationsReceiver,
 };
 use crate::{
     combined_database::CombinedDatabase,
@@ -88,6 +60,40 @@ use crate::{
         },
     },
 };
+#[cfg(feature = "rpc")]
+use anyhow::anyhow;
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::{
+    blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
+    db::storage_or_remote_db::StorageOrRemoteDB,
+    db::storage_or_remote_db::get_env_vars,
+    db::table::LatestBlock,
+    result::Error,
+};
+use fuel_core_compression_service::service::new_service as new_compression_service;
+use fuel_core_gas_price_service::v1::{
+    algorithm::AlgorithmV1,
+    da_source_service::block_committer_costs::{
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
+    },
+    metadata::V1AlgorithmConfig,
+    service::SharedData,
+    uninitialized_task::new_gas_price_service_v1,
+};
+use fuel_core_poa::Trigger;
+#[cfg(feature = "rpc")]
+use fuel_core_storage::StorageAsRef;
+use fuel_core_storage::{
+    self,
+    transactional::AtomicView,
+};
+
+#[cfg(feature = "relayer")]
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::signer::SignMode;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub type PoAService = fuel_core_poa::Service<
     BlockProducerAdapter,
@@ -459,6 +465,73 @@ pub fn init_sub_services(
         chain_name,
     };
 
+    #[cfg(feature = "rpc")]
+    let block_aggregator_rpc = {
+        let block_aggregator_config = config.rpc_config.clone();
+        let sync_from = block_aggregator_config.sync_from.unwrap_or_default();
+        let sync_from_height;
+        let db_adapter = if let Some((
+            aws_access_key_id,
+            aws_secrete_access_key,
+            aws_region,
+            aws_bucket,
+            url_base,
+            aws_endpoint_url,
+        )) = get_env_vars()
+        {
+            let db = database.block_aggregation_s3().clone();
+            let maybe_sync_from_height = db
+                .storage_as_ref::<LatestBlock>()
+                .get(&())
+                .map_err(|e| Error::DB(anyhow!(e)))?
+                .map(|c| *c)
+                .and_then(|h| h.succ());
+            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
+
+            StorageOrRemoteDB::new_s3(
+                db,
+                &aws_access_key_id,
+                &aws_secrete_access_key,
+                &aws_region,
+                &aws_bucket,
+                &url_base,
+                aws_endpoint_url,
+                sync_from,
+            )
+        } else {
+            tracing::info!(
+                "Required environment variables for S3 bucket not set. Requires: \n\
+                     AWS_ACCESS_KEY_ID \n\
+                     AWS_SECRET_ACCESS_KEY \n\
+                     AWS_REGION \n\
+                     AWS_BUCKET \n\
+                     AWS_ENDPOINT_URL \n\
+                     AWS_S3_URL_BASE (Optional)\n\
+                 Using local storage"
+            );
+            let db = database.block_aggregation_storage().clone();
+            let maybe_sync_from_height = db
+                .storage_as_ref::<LatestBlock>()
+                .get(&())
+                .map_err(|e| Error::DB(anyhow!(e)))?
+                .map(|c| *c)
+                .and_then(|h| h.succ());
+            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
+            StorageOrRemoteDB::new_storage(db, sync_from)
+        };
+        let serializer = SerializerAdapter;
+        let onchain_db = database.on_chain().clone();
+        let importer = importer_adapter.events_shared_result();
+        fuel_core_block_aggregator_api::integration::new_service(
+            &block_aggregator_config,
+            db_adapter,
+            serializer,
+            onchain_db,
+            importer,
+            sync_from_height,
+        )
+    };
+
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
         *genesis_block.header().height(),
         graphql_config,
@@ -523,6 +596,8 @@ pub fn init_sub_services(
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
     services.push(Box::new(tx_status_manager));
+    #[cfg(feature = "rpc")]
+    services.push(Box::new(block_aggregator_rpc));
 
     if let Some(compression_service) = compression_service {
         services.push(Box::new(compression_service));
