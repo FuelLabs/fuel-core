@@ -4618,7 +4618,7 @@ dependencies = [
 [[package]]
 name = "fuel-core-protobuf"
 version = "0.1.0"
-source = "git+https://github.com/FuelLabs/fuel-core-protobuf.git?branch=add-defs#44c929564fcc92d0c3aaaab8099b2cb6283ecb72"
+source = "git+https://github.com/FuelLabs/fuel-core-protobuf.git?branch=update-remote-store-types#5c3cfdbc7c17d4512f87ffb47234f794a41ea400"
 dependencies = [
  "prost 0.14.1",
  "serde",
