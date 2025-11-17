@@ -110,7 +110,7 @@ mod archiver {
                 let mut tar = Builder::new(writer);
 
                 let files = collect_files(dir, dir)?
-                    .into_par_iter()
+                    .into_iter()
                     .filter_map(|(rel, abs)| {
                         let metadata = abs.metadata().ok()?;
                         let mut header = Header::new_gnu();
