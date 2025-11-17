@@ -4,4 +4,7 @@ extend-ignore-identifiers-re = [
     "tro",
     "Tro",
     "typ",
+    "aloc",
+    "ALOC",
+    "Aloc",
 ]
