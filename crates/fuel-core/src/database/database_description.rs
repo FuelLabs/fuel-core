@@ -13,6 +13,7 @@ pub mod off_chain;
 pub mod on_chain;
 pub mod relayer;
 
+#[cfg(feature = "rpc")]
 pub mod block_aggregator;
 
 pub trait DatabaseHeight: PartialEq + Default + Debug + Copy + Send + Sync {

@@ -15,7 +15,7 @@ use fuel_core::{
     },
 };
 use fuel_core_block_aggregator_api::{
-    blocks::importer_and_db_source::serializer_adapter::fuel_block_from_protobuf,
+    blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
     db::{
         remote_cache::block_height_to_key,
         storage_or_remote_db::get_env_vars,

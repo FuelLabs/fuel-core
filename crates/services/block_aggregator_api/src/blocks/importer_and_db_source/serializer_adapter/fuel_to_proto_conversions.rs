@@ -41,6 +41,8 @@ use crate::{
     },
 };
 
+#[cfg(feature = "fault-proving")]
+use fuel_core_types::blockchain::header::BlockHeaderV2;
 use fuel_core_types::{
     blockchain::{
         header::{

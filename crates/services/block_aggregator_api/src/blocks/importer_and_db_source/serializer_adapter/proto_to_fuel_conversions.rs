@@ -1,4 +1,6 @@
 #[cfg(feature = "fault-proving")]
+use crate::blocks::importer_and_db_source::serializer_adapter::ChainId;
+#[cfg(feature = "fault-proving")]
 use crate::protobuf_types::V2Header as ProtoV2Header;
 use crate::{
     protobuf_types::{
