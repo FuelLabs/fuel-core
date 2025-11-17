@@ -63,7 +63,10 @@ pub mod integration {
     pub struct Config {
         pub addr: SocketAddr,
         pub sync_from: Option<BlockHeight>,
+        pub storage_method: StorageMethod,
     }
+
+    #[derive(Clone, Debug)]
     pub enum StorageMethod {
         Local,
         S3 {
