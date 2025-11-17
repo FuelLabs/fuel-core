@@ -6,4 +6,5 @@ extend-ignore-identifiers-re = [
     "typ",
     "aloc",
     "ALOC",
+    "Aloc",
 ]
