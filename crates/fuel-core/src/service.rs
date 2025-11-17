@@ -193,7 +193,9 @@ impl FuelService {
             Default::default(),
             Default::default(),
             Default::default(),
+            #[cfg(feature = "rpc")]
             Default::default(),
+            #[cfg(feature = "rpc")]
             Default::default(),
         );
         Self::from_combined_database(combined_database, config).await

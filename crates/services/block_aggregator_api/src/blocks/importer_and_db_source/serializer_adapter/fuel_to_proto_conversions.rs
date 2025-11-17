@@ -41,6 +41,8 @@ use crate::{
     },
 };
 
+#[cfg(feature = "fault-proving")]
+use fuel_core_types::blockchain::header::BlockHeaderV2;
 use fuel_core_types::{
     blockchain::{
         header::{
@@ -94,7 +96,7 @@ pub fn proto_header_from_header(header: &BlockHeader) -> ProtoHeader {
     let versioned_header = match header {
         BlockHeader::V1(header) => {
             let proto_v1_header =
-                proto_v1_header_from_v1_header(&consensus, &block_id, header);
+                proto_v1_header_from_v1_header(consensus, &block_id, header);
             ProtoVersionedHeader::V1(proto_v1_header)
         }
         #[cfg(feature = "fault-proving")]
@@ -469,7 +471,7 @@ fn proto_output_from_output(output: &Output) -> ProtoOutput {
             asset_id: asset_id.as_ref().to_vec(),
         }),
         Output::Contract(contract) => {
-            ProtoOutputVariant::Contract(proto_contract_output_from_contract(&contract))
+            ProtoOutputVariant::Contract(proto_contract_output_from_contract(contract))
         }
         Output::Change {
             to,
@@ -494,7 +496,7 @@ fn proto_output_from_output(output: &Output) -> ProtoOutput {
             state_root,
         } => ProtoOutputVariant::ContractCreated(ProtoContractCreatedOutput {
             contract_id: contract_id.as_ref().to_vec(),
-            state_root: bytes32_to_vec(&state_root),
+            state_root: bytes32_to_vec(state_root),
         }),
     };
 

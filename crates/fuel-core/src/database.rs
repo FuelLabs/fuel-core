@@ -69,6 +69,11 @@ use std::{
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
+#[cfg(feature = "rpc")]
+use crate::database::database_description::block_aggregator::{
+    BlockAggregatorDatabaseS3,
+    BlockAggregatorDatabaseStorage,
+};
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -84,17 +89,17 @@ use crate::state::{
 };
 use crate::{
     database::database_description::{
-        block_aggregator::{
-            BlockAggregatorDatabaseS3,
-            BlockAggregatorDatabaseStorage,
-        },
         gas_price::GasPriceDatabase,
         indexation_availability,
     },
     state::HeightType,
 };
+
+#[cfg(feature = "rpc")]
 use anyhow::anyhow;
+#[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::db::table::LatestBlock;
+#[cfg(feature = "rpc")]
 use fuel_core_storage::transactional::WriteTransaction;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -448,6 +453,7 @@ impl Modifiable for Database<GasPriceDatabase> {
     }
 }
 
+#[cfg(feature = "rpc")]
 impl Modifiable for Database<BlockAggregatorDatabaseStorage> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         // Does not need to be monotonically increasing because
@@ -456,6 +462,7 @@ impl Modifiable for Database<BlockAggregatorDatabaseStorage> {
     }
 }
 
+#[cfg(feature = "rpc")]
 impl Database<BlockAggregatorDatabaseStorage> {
     pub fn rollback_to(&mut self, block_height: BlockHeight) -> StorageResult<()> {
         let mut tx = self.write_transaction();
@@ -467,6 +474,7 @@ impl Database<BlockAggregatorDatabaseStorage> {
     }
 }
 
+#[cfg(feature = "rpc")]
 impl Modifiable for Database<BlockAggregatorDatabaseS3> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         // Does not need to be monotonically increasing because
@@ -475,6 +483,7 @@ impl Modifiable for Database<BlockAggregatorDatabaseS3> {
     }
 }
 
+#[cfg(feature = "rpc")]
 impl Database<BlockAggregatorDatabaseS3> {
     pub fn rollback_to(&mut self, block_height: BlockHeight) -> StorageResult<()> {
         let mut tx = self.write_transaction();

@@ -529,7 +529,7 @@ pub fn init_sub_services(
             onchain_db,
             importer,
             sync_from_height,
-        )
+        )?
     };
 
     let graph_ql = fuel_core_graphql_api::api_service::new_service(

@@ -1,5 +1,5 @@
 #[cfg(feature = "fault-proving")]
-use crate::protobuf_types::V2Header as ProtoV2Header;
+use crate::blocks::importer_and_db_source::serializer_adapter::ChainId;
 use crate::{
     protobuf_types::{
         Block as ProtoBlock,
@@ -294,8 +294,8 @@ pub fn partial_header_from_proto_header(
     proto_header: &ProtoHeader,
 ) -> crate::result::Result<PartialBlockHeader> {
     let partial_header = PartialBlockHeader {
-        consensus: proto_header_to_empty_consensus_header(&proto_header)?,
-        application: proto_header_to_empty_application_header(&proto_header)?,
+        consensus: proto_header_to_empty_consensus_header(proto_header)?,
+        application: proto_header_to_empty_application_header(proto_header)?,
     };
     Ok(partial_header)
 }

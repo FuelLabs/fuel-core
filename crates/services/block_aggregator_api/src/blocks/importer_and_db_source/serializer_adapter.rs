@@ -1,5 +1,3 @@
-#[cfg(feature = "fault-proving")]
-use crate::protobuf_types::V2Header as ProtoV2Header;
 use crate::{
     blocks::importer_and_db_source::BlockSerializer,
     protobuf_types::{
@@ -9,10 +7,7 @@ use crate::{
     },
 };
 #[cfg(feature = "fault-proving")]
-use fuel_core_types::{
-    blockchain::header::BlockHeaderV2,
-    fuel_types::ChainId,
-};
+use fuel_core_types::fuel_types::ChainId;
 
 use fuel_core_types::{
     blockchain::{
@@ -35,7 +30,7 @@ impl BlockSerializer for SerializerAdapter {
                     header: Some(proto_header),
                     transactions: block
                         .transactions()
-                        .into_iter()
+                        .iter()
                         .map(proto_tx_from_tx)
                         .collect(),
                 };

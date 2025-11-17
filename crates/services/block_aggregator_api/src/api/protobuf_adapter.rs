@@ -237,7 +237,7 @@ impl ProtobufAPI {
         >(100);
         let addr = url.parse().unwrap();
         let _server_service = ServiceRunner::new(ServerTask { addr, query_sender });
-        _server_service.start().map_err(|e| Error::Api(e))?;
+        _server_service.start().map_err(Error::Api)?;
         let api = Self {
             _server_service,
             query_receiver,
