@@ -673,7 +673,7 @@ where
                             Error::SkippedTransaction(format!(
                                 "Parent transaction with id: {tx_id}, was removed because of: {reason}"
                             )).to_string(), dependent_tx_id);
-                        (tx_id, tx_status)
+                        (dependent_tx_id, tx_status)
                     })
                     .collect();
                 if !removed_txs.is_empty() {
