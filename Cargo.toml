@@ -94,6 +94,7 @@ educe = { version = "0.6", default-features = false, features = [
 ] }
 enum-iterator = "1.2"
 enum_dispatch = "0.3.13"
+flate2 = "1.1.5"
 fuel-core = { version = "0.47.1", path = "./crates/fuel-core", default-features = false }
 fuel-core-bin = { version = "0.47.1", path = "./bin/fuel-core" }
 # Workspace members

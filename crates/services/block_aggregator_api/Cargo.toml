@@ -19,6 +19,7 @@ aws-config = { workspace = true }
 aws-sdk-s3 = "1.111.0"
 aws-smithy-mocks = "0.2.0"
 bytes = { workspace = true, features = ["serde"] }
+flate2 = { workspace = true }
 enum-iterator = { workspace = true }
 fuel-core-protobuf = { workspace = true }
 fuel-core-services = { workspace = true }

@@ -5,6 +5,7 @@ use aws_config::{
     default_provider::credentials::DefaultCredentialsChain,
 };
 use aws_sdk_s3::Client;
+use flate2::read::GzDecoder;
 use fuel_core::{
     database::Database,
     service::{
@@ -37,6 +38,7 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use prost::bytes::Bytes;
+use std::io::Read;
 use test_helpers::client_ext::ClientExt;
 use tokio::time::sleep;
 
@@ -376,7 +378,8 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
     sleep(std::time::Duration::from_secs(1)).await;
 
     // then
-    let data = get_block_from_s3_bucket().await;
+    let zipped_data = get_block_from_s3_bucket().await;
+    let data = unzip_bytes(&zipped_data);
     // can deserialize
     let actual_proto: ProtoBlock = prost::Message::decode(data.as_ref()).unwrap();
     let _ = fuel_block_from_protobuf(actual_proto, &[], Bytes32::default()).unwrap();
@@ -387,4 +390,11 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
     tracing::info!(
         "Successfully ran test: get_block_range__can_get_from_remote_s3_bucket"
     );
+}
+
+fn unzip_bytes(bytes: &[u8]) -> Vec<u8> {
+    let mut decoder = GzDecoder::new(bytes);
+    let mut output = Vec::new();
+    decoder.read_to_end(&mut output).unwrap();
+    output
 }

@@ -14,6 +14,10 @@ use aws_sdk_s3::{
     Client,
     primitives::ByteStream,
 };
+use flate2::{
+    Compression,
+    write::GzEncoder,
+};
 use fuel_core_storage::{
     Error as StorageError,
     StorageAsMut,
@@ -28,6 +32,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use prost::Message;
+use std::io::Write;
 
 #[allow(non_snake_case)]
 #[cfg(test)]
@@ -92,13 +97,15 @@ where
         let key = block_height_to_key(&height);
         let mut buf = Vec::new();
         block.encode(&mut buf).map_err(Error::db_error)?;
-        let body = ByteStream::from(buf);
+        let zipped = gzip_bytes(&buf)?;
+        let body = ByteStream::from(zipped);
         let req = self
             .client
             .put_object()
             .bucket(&self.aws_bucket)
             .key(&key)
             .body(body)
+            .content_encoding("gzip")
             .content_type("application/octet-stream");
         let _ = req.send().await.map_err(Error::db_error)?;
         match block_event {
@@ -218,5 +225,15 @@ where
 }
 
 pub fn block_height_to_key(height: &BlockHeight) -> String {
-    format!("{:08x}", height)
+    let raw: [u8; 4] = height.to_bytes();
+    format!(
+        "{:02}/{:02}/{:02}/{:02}",
+        &raw[0], &raw[1], &raw[2], &raw[3]
+    )
+}
+
+pub fn gzip_bytes(data: &[u8]) -> crate::result::Result<Vec<u8>> {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(data).map_err(|e| Error::db_error(e))?;
+    encoder.finish().map_err(|e| Error::db_error(e))
 }
