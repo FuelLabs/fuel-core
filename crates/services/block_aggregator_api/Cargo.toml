@@ -15,6 +15,7 @@ fault-proving = ["fuel-core-types/fault-proving"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+aws-config = { workspace = true }
 aws-sdk-s3 = "1.111.0"
 aws-smithy-mocks = "0.2.0"
 bytes = { workspace = true, features = ["serde"] }
@@ -37,7 +38,6 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }
-aws-config = { workspace = true }
 
 [dev-dependencies]
 aws-sdk-s3 = { version = "1.111.0", features = ["test-util"] }

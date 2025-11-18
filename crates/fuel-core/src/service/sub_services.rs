@@ -473,19 +473,6 @@ pub fn init_sub_services(
         let block_aggregator_config = config.rpc_config.clone();
         let sync_from = block_aggregator_config.sync_from.unwrap_or_default();
         let sync_from_height;
-        // let db_adapter = if let Some((
-        //     aws_access_key_id,
-        //     aws_secrete_access_key,
-        //     aws_region,
-        //     aws_bucket,
-        //     url_base,
-        //     aws_endpoint_url,
-        // )) = get_env_vars()
-        // {
-
-        //     )
-        // } else {
-        // };
         let db_adapter = match &block_aggregator_config.storage_method {
             StorageMethod::Local => {
                 let db = database.block_aggregation_storage().clone();
