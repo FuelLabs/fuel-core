@@ -6,7 +6,7 @@ use fuel_core::combined_database::CombinedDatabase;
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Back up the database into a tar archive
+    /// Backup the database into multiple tar files for each database, then concatenate into a final tar
     Backup(BackupArgs),
     /// Restore the database from a tar archive
     Restore(RestoreArgs),
@@ -19,7 +19,10 @@ pub struct BackupArgs {
     #[arg(long, help = "The source directory of the database to backup")]
     pub from: String,
 
-    /// Destination directory where the tar files will be created.
+    /// Destination directory where intermediate tar files will be created.
+    ///
+    /// Note: Backup produces multiple tar chunks here, for each database,
+    /// then concatenates them into the final tar file (see --file-name).
     #[arg(long, help = "The destination directory for the backup tar files")]
     pub to: String,
 
