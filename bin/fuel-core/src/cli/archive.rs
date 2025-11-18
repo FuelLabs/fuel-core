@@ -138,25 +138,23 @@ mod archiver {
 
                 let files = collect_files(dir, dir)?
                     .into_iter()
-                    .filter_map(|(rel, abs)| {
-                        let metadata = abs.metadata().ok()?;
+                    .map(|(rel, abs)| {
+                        let metadata = abs.metadata()?;
                         let mut header = Header::new_gnu();
                         let path = Path::new(&dir_name).join(rel);
-                        header.set_path(path).ok()?;
+                        header.set_path(path)?;
                         header.set_size(metadata.len());
                         header.set_mode(metadata.permissions().mode());
                         header.set_mtime(
                             metadata
-                                .modified()
-                                .ok()?
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .ok()?
+                                .modified()?
+                                .duration_since(std::time::UNIX_EPOCH)?
                                 .as_secs(),
                         );
                         header.set_cksum();
-                        Some((header, abs))
+                        Ok((header, abs))
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
                 for (header, path) in files {
                     tar.append(&header, File::open(path)?)?;
