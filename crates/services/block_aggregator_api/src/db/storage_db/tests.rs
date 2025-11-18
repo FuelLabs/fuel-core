@@ -90,7 +90,7 @@ async fn get_block__can_get_expected_range() {
     let actual = stream.collect::<Vec<_>>().await;
 
     // then
-    assert_eq!(actual, vec![expected_2, expected_3]);
+    assert_eq!(actual, vec![(height_2, expected_2), (height_3, expected_3)]);
 }
 
 #[tokio::test]

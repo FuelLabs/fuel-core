@@ -14,12 +14,14 @@ use crate::{
         BlockRangeRequest as ProtoBlockRangeRequest,
         BlockResponse as ProtoBlockResponse,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
-        RemoteBlockRangeResponse as ProtoRemoteBlockRangeResponse,
+        RemoteBlockResponse as ProtoRemoteBlockResponse,
+        RemoteS3Bucket as ProtoRemoteS3Bucket,
         block_aggregator_server::{
             BlockAggregator,
             BlockAggregatorServer as ProtoBlockAggregatorServer,
         },
         block_response as proto_block_response,
+        remote_block_response::Location as ProtoRemoteLocation,
     },
     result::{
         Error,
@@ -60,7 +62,7 @@ impl Server {
 
 #[async_trait]
 impl BlockAggregator for Server {
-    async fn get_block_height(
+    async fn get_synced_block_height(
         &self,
         request: tonic::Request<ProtoBlockHeightRequest>,
     ) -> Result<tonic::Response<ProtoBlockHeightResponse>, tonic::Status> {
@@ -106,8 +108,9 @@ impl BlockAggregator for Server {
             Ok(block_range_response) => match block_range_response {
                 BlockRangeResponse::Literal(inner) => {
                     let stream = inner
-                        .map(|res| {
+                        .map(|(height, res)| {
                             let response = ProtoBlockResponse {
+                                height: *height,
                                 payload: Some(proto_block_response::Payload::Literal(
                                     res,
                                 )),
@@ -117,16 +120,21 @@ impl BlockAggregator for Server {
                         .boxed();
                     Ok(tonic::Response::new(stream))
                 }
-                BlockRangeResponse::Remote(inner) => {
+                BlockRangeResponse::S3(inner) => {
                     let stream = inner
-                        .map(|res| {
-                            let proto_response = ProtoRemoteBlockRangeResponse {
-                                region: res.region.clone(),
-                                bucket: res.bucket.clone(),
-                                key: res.key.clone(),
-                                url: res.url.clone(),
+                        .map(|(height, res)| {
+                            let s3 = ProtoRemoteS3Bucket {
+                                bucket: res.bucket,
+                                key: res.key,
+                                requester_pays: res.requester_pays,
+                                endpoint: res.aws_endpoint,
+                            };
+                            let location = ProtoRemoteLocation::S3(s3);
+                            let proto_response = ProtoRemoteBlockResponse {
+                                location: Some(location),
                             };
                             let response = ProtoBlockResponse {
+                                height: *height,
                                 payload: Some(proto_block_response::Payload::Remote(
                                     proto_response,
                                 )),
@@ -161,8 +169,9 @@ impl BlockAggregator for Server {
 
         let (task_sender, task_receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
         tokio::spawn(async move {
-            while let Some(nb) = receiver.recv().await {
+            while let Some((height, nb)) = receiver.recv().await {
                 let response = ProtoBlockResponse {
+                    height: *height,
                     payload: Some(proto_block_response::Payload::Literal(nb)),
                 };
                 if task_sender.send(Ok(response)).await.is_err() {

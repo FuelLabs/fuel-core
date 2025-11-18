@@ -36,11 +36,9 @@ mod tests;
 #[allow(unused)]
 pub struct RemoteCache<S> {
     // aws configuration
-    aws_id: String,
-    aws_secret: String,
-    aws_region: String,
     aws_bucket: String,
-    url_base: String,
+    requester_pays: bool,
+    aws_endpoint: Option<String>,
     client: Client,
 
     // track consistency between runs
@@ -54,21 +52,17 @@ pub struct RemoteCache<S> {
 impl<S> RemoteCache<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        aws_id: String,
-        aws_secret: String,
-        aws_region: String,
         aws_bucket: String,
-        url_base: String,
+        requester_pays: bool,
+        aws_endpoint: Option<String>,
         client: Client,
         local_persisted: S,
         sync_from: BlockHeight,
     ) -> RemoteCache<S> {
         RemoteCache {
-            aws_id,
-            aws_secret,
-            aws_region,
             aws_bucket,
-            url_base,
+            requester_pays,
+            aws_endpoint,
             client,
             local_persisted,
             sync_from,
@@ -76,10 +70,6 @@ impl<S> RemoteCache<S> {
             orphaned_new_height: None,
             synced: false,
         }
-    }
-
-    fn url_for_block(base: &str, key: &str) -> String {
-        format!("{}/{}", base, key,)
     }
 }
 
@@ -176,21 +166,22 @@ where
         last: BlockHeight,
     ) -> crate::result::Result<Self::BlockRangeResponse> {
         // TODO: Check if it exists
-        let region = self.aws_region.clone();
         let bucket = self.aws_bucket.clone();
-        let base = self.url_base.clone();
+        let requester_pays = self.requester_pays;
+        let aws_endpoint = self.aws_endpoint.clone();
 
         let stream = futures::stream::iter((*first..=*last).map(move |height| {
-            let key = block_height_to_key(&BlockHeight::new(height));
-            let url = Self::url_for_block(&base, &key);
-            crate::block_range_response::RemoteBlockRangeResponse {
-                region: region.clone(),
+            let block_height = BlockHeight::new(height);
+            let key = block_height_to_key(&block_height);
+            let res = crate::block_range_response::RemoteS3Response {
                 bucket: bucket.clone(),
                 key: key.clone(),
-                url,
-            }
+                requester_pays,
+                aws_endpoint: aws_endpoint.clone(),
+            };
+            (block_height, res)
         }));
-        Ok(BlockRangeResponse::Remote(Box::pin(stream)))
+        Ok(BlockRangeResponse::S3(Box::pin(stream)))
     }
 
     async fn get_current_height(&self) -> crate::result::Result<Option<BlockHeight>> {

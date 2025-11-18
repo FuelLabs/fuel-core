@@ -249,7 +249,7 @@ async fn run__new_block_subscription__sends_new_block() {
 
     // then
     let actual_block = await_response_with_timeout(response).await.unwrap();
-    assert_eq!(expected_block, actual_block);
+    assert_eq!((expected_height, expected_block), actual_block);
 
     // cleanup
     drop(source_sender);

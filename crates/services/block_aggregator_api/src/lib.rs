@@ -56,9 +56,6 @@ pub mod integration {
         services::block_importer::SharedImportResult,
     };
     use std::net::SocketAddr;
-
-    //        "AWS_ACCESS_KEY_ID",
-    //         "AWS_SECRET_ACCESS_KEY",
     #[derive(Clone, Debug)]
     pub struct Config {
         pub addr: SocketAddr,
@@ -133,7 +130,7 @@ pub struct BlockAggregator<Api, DB, Blocks, Block> {
     query: Api,
     database: DB,
     block_source: Blocks,
-    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<Block>>,
+    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<(BlockHeight, Block)>>,
 }
 
 pub struct NewBlock {

@@ -53,6 +53,7 @@ use fuel_core_types::fuel_types::{
     ChainId,
 };
 
+use fuel_core_block_aggregator_api::integration::StorageMethod;
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
 
@@ -176,6 +177,11 @@ impl Config {
         let rpc_config = fuel_core_block_aggregator_api::integration::Config {
             addr: free_local_addr(),
             sync_from: Some(BlockHeight::from(0)),
+            storage_method: StorageMethod::S3 {
+                bucket: "test-bucket".to_string(),
+                endpoint_url: None,
+                requester_pays: false,
+            },
         };
 
         Self {

@@ -66,7 +66,6 @@ use anyhow::anyhow;
 use fuel_core_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
     db::storage_or_remote_db::StorageOrRemoteDB,
-    db::storage_or_remote_db::get_env_vars,
     db::table::LatestBlock,
     result::Error,
 };
@@ -92,6 +91,7 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 
+use fuel_core_block_aggregator_api::integration::StorageMethod;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
@@ -473,54 +473,53 @@ pub fn init_sub_services(
         let block_aggregator_config = config.rpc_config.clone();
         let sync_from = block_aggregator_config.sync_from.unwrap_or_default();
         let sync_from_height;
-        let db_adapter = if let Some((
-            aws_access_key_id,
-            aws_secrete_access_key,
-            aws_region,
-            aws_bucket,
-            url_base,
-            aws_endpoint_url,
-        )) = get_env_vars()
-        {
-            let db = database.block_aggregation_s3().clone();
-            let maybe_sync_from_height = db
-                .storage_as_ref::<LatestBlock>()
-                .get(&())
-                .map_err(|e: StorageError| Error::DB(anyhow!(e)))?
-                .map(|c| *c)
-                .and_then(|h| h.succ());
-            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
+        // let db_adapter = if let Some((
+        //     aws_access_key_id,
+        //     aws_secrete_access_key,
+        //     aws_region,
+        //     aws_bucket,
+        //     url_base,
+        //     aws_endpoint_url,
+        // )) = get_env_vars()
+        // {
 
-            StorageOrRemoteDB::new_s3(
-                db,
-                &aws_access_key_id,
-                &aws_secrete_access_key,
-                &aws_region,
-                &aws_bucket,
-                &url_base,
-                aws_endpoint_url,
-                sync_from,
-            )
-        } else {
-            tracing::info!(
-                "Required environment variables for S3 bucket not set. Requires: \n\
-                     AWS_ACCESS_KEY_ID \n\
-                     AWS_SECRET_ACCESS_KEY \n\
-                     AWS_REGION \n\
-                     AWS_BUCKET \n\
-                     AWS_ENDPOINT_URL \n\
-                     AWS_S3_URL_BASE (Optional)\n\
-                 Using local storage"
-            );
-            let db = database.block_aggregation_storage().clone();
-            let maybe_sync_from_height = db
-                .storage_as_ref::<LatestBlock>()
-                .get(&())
-                .map_err(|e: StorageError| Error::DB(anyhow!(e)))?
-                .map(|c| *c)
-                .and_then(|h| h.succ());
-            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
-            StorageOrRemoteDB::new_storage(db, sync_from)
+        //     )
+        // } else {
+        // };
+        let db_adapter = match &block_aggregator_config.storage_method {
+            StorageMethod::Local => {
+                let db = database.block_aggregation_storage().clone();
+                let maybe_sync_from_height = db
+                    .storage_as_ref::<LatestBlock>()
+                    .get(&())
+                    .map_err(|e: StorageError| Error::DB(anyhow!(e)))?
+                    .map(|c| *c)
+                    .and_then(|h| h.succ());
+                sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
+                StorageOrRemoteDB::new_storage(db, sync_from)
+            }
+            StorageMethod::S3 {
+                bucket,
+                endpoint_url,
+                requester_pays,
+            } => {
+                let db = database.block_aggregation_s3().clone();
+                let maybe_sync_from_height = db
+                    .storage_as_ref::<LatestBlock>()
+                    .get(&())
+                    .map_err(|e: StorageError| Error::DB(anyhow!(e)))?
+                    .map(|c| *c)
+                    .and_then(|h| h.succ());
+                sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
+
+                StorageOrRemoteDB::new_s3(
+                    db,
+                    bucket,
+                    *requester_pays,
+                    endpoint_url.clone(),
+                    sync_from,
+                )
+            }
         };
         let serializer = SerializerAdapter;
         let onchain_db = database.on_chain().clone();
