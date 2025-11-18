@@ -94,6 +94,7 @@ mod archiver {
         io::{
             BufReader,
             BufWriter,
+            Write,
         },
         os::unix::fs::PermissionsExt,
         path::{
@@ -163,6 +164,7 @@ mod archiver {
         for tar_path in tar_paths {
             let mut reader = BufReader::new(File::open(tar_path)?);
             std::io::copy(&mut reader, &mut final_writer)?;
+            final_writer.flush()?;
         }
 
         Ok(())
