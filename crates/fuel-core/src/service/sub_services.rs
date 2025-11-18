@@ -68,6 +68,7 @@ use fuel_core_block_aggregator_api::{
     db::storage_or_remote_db::StorageOrRemoteDB,
     db::table::LatestBlock,
     result::Error,
+    integration::StorageMethod
 };
 use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
@@ -91,7 +92,6 @@ use fuel_core_storage::{
     StorageAsRef,
 };
 
-use fuel_core_block_aggregator_api::integration::StorageMethod;
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
