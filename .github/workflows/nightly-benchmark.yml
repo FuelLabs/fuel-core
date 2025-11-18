@@ -4,11 +4,6 @@ on:
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
-    inputs:
-      create_pr:
-        description: "Create a pull request with the benchmark results"
-        required: true
-        default: "false"
 
 env:
   GIT_REPO: ${{ github.repository }}
@@ -66,35 +61,73 @@ jobs:
       contents: write
       pull-requests: write
 
-    if: ${{ github.event.inputs.create_pr == 'true' || github.event_name == 'pull_request' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Parse benchmark results and create PR
+      - name: Parse benchmark results and create/update PR
         run: |
+          # Update benchmark results in chain config
           jq --argjson benchmark_results "$benchmark_results" \
             '.consensus_parameters.${{ env.CONSENSUS_PARAMETERS_VERSION }}.gas_costs = $benchmark_results' \
             bin/fuel-core/chainspec/local-testnet/chain_config.json > \
             bin/fuel-core/chainspec/local-testnet/chain_config.json.tmp && \
             mv bin/fuel-core/chainspec/local-testnet/chain_config.json.tmp bin/fuel-core/chainspec/local-testnet/chain_config.json
-          # create a new branch
-          branch_name="chore/benchmark-update-$(date +%s)"
-          git checkout -b "$branch_name"
-          git add bin/fuel-core/chainspec/local-testnet/chain_config.json
+
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git commit -m "Update benchmark results"
 
-          git push origin "$branch_name"
+          branch_name="chore/nightly-benchmark-updates"
 
-          # create a new PR
-          gh pr create \
-            --title "chore(gas_costs): update local chain config with nightly benchmark results" \
-            --body "Updated benchmark results" \
-            --base master \
-            --head "$branch_name"
-            --label "no changelog"
+          # Check if PR already exists
+          pr_number=$(gh pr list --head "$branch_name" --base master --json number --jq '.[0].number')
+
+          git add bin/fuel-core/chainspec/local-testnet/chain_config.json
+          git commit -m "chore: update nightly benchmark results - $(date -u +%Y-%m-%d)"
+
+          if [ -n "$pr_number" ]; then
+            echo "PR #$pr_number already exists. Updating..."
+
+            git fetch origin "$branch_name"
+            git checkout -B "$branch_name"
+            git push origin "$branch_name" --force
+
+            # Update PR body with latest timestamp
+            gh pr edit "$pr_number" \
+              --body "## Nightly Benchmark Results
+
+          This PR is automatically updated every night with the latest benchmark results.
+
+          **Last Updated:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          ### Changes
+          - Updated gas costs in \`bin/fuel-core/chainspec/local-testnet/chain_config.json\`
+          - Consensus Parameters Version: \`${{ env.CONSENSUS_PARAMETERS_VERSION }}\`
+
+          **Note:** This PR is for tracking performance changes and should not be merged."
+          else
+            echo "No existing PR found. Creating new PR..."
+            git checkout -b "$branch_name"
+            git push origin "$branch_name"
+
+            # Create new PR
+            gh pr create \
+              --title "chore(gas_costs): nightly benchmark results tracking" \
+              --body "## Nightly Benchmark Results
+
+          This PR is automatically updated every night with the latest benchmark results.
+
+          **Last Updated:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          ### Changes
+          - Updated gas costs in \`bin/fuel-core/chainspec/local-testnet/chain_config.json\`
+          - Consensus Parameters Version: \`${{ env.CONSENSUS_PARAMETERS_VERSION }}\`
+
+          **Note:** This PR is for tracking performance changes and should not be merged." \
+              --base master \
+              --head "$branch_name" \
+              --label "no changelog"
+          fi
         env:
           benchmark_results: ${{ needs.benchmark.outputs.benchmark_results }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
