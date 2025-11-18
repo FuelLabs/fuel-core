@@ -53,6 +53,7 @@ use fuel_core_types::fuel_types::{
     ChainId,
 };
 
+#[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::integration::StorageMethod;
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;

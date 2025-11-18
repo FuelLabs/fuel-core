@@ -189,8 +189,9 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
                 bucket,
                 key,
                 requester_pays: false,
+                aws_endpoint: None,
             };
-            (height.clone(), res)
+            (*height, res)
         })
         .collect();
     // return response through query's channel
@@ -229,6 +230,7 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
                     bucket: s3.bucket,
                     key: s3.key,
                     requester_pays: false,
+                    aws_endpoint: None,
                 };
                 (height, res)
             } else {
