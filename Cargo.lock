@@ -3886,7 +3886,6 @@ dependencies = [
  "postcard",
  "proptest",
  "rand 0.8.5",
- "rayon",
  "rocksdb",
  "serde",
  "serde_json",
