@@ -16,6 +16,7 @@ use crate::{
 use std::borrow::Cow;
 
 use aws_config::{
+    BehaviorVersion,
     Region,
     default_provider::credentials::DefaultCredentialsChain,
 };
@@ -60,16 +61,18 @@ impl<R, S> StorageOrRemoteDB<R, S> {
             // TODO: This is a little gross spinning up the runtime just to get credentials.
             //   If this takes a long time maybe we should move this to the service or something.
             let rt_handle = tokio::runtime::Handle::current();
-            let credentials = tokio::task::block_in_place(|| {
-                rt_handle.block_on(DefaultCredentialsChain::builder().build())
+            let sdk_config = tokio::task::block_in_place(|| {
+                rt_handle.block_on(async {
+                    let credentials = DefaultCredentialsChain::builder().build().await;
+                    aws_config::defaults(BehaviorVersion::latest())
+                        .credentials_provider(credentials)
+                        .endpoint_url("http://127.0.0.1:4566")
+                        .load()
+                        .await
+                })
             });
-            let config = builder
-                .force_path_style(true)
-                .credentials_provider(credentials)
-                .behavior_version_latest()
-                // TODO: Move to config
-                .region(Region::new(Cow::Owned("us-east-1".to_string())))
-                .build();
+            let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
+            let config = builder.force_path_style(true).build();
             aws_sdk_s3::Client::from_conf(config)
         };
         let remote_cache = RemoteCache::new(

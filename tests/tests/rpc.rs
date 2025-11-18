@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use aws_config::{
-    Region,
+    BehaviorVersion,
     default_provider::credentials::DefaultCredentialsChain,
 };
 use aws_sdk_s3::Client;
@@ -37,7 +37,6 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use prost::bytes::Bytes;
-use std::borrow::Cow;
 use test_helpers::client_ext::ClientExt;
 use tokio::time::sleep;
 
@@ -50,10 +49,11 @@ macro_rules! require_env_var_or_skip {
     };
 }
 
-pub fn get_env_vars() -> Option<(String, String)> {
+pub fn get_env_vars() -> Option<(String, String, String)> {
     let aws_id = std::env::var("AWS_ACCESS_KEY_ID").ok()?;
     let aws_secret = std::env::var("AWS_SECRET_ACCESS_KEY").ok()?;
-    Some((aws_id, aws_secret))
+    let aws_region = std::env::var("AWS_REGION").ok()?;
+    Some((aws_id, aws_secret, aws_region))
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -299,23 +299,22 @@ fn env_vars_are_set() -> bool {
         && std::env::var("AWS_SECRET_ACCESS_KEY").is_ok()
 }
 
-async fn aws_client(region: String) -> Client {
-    let builder = aws_sdk_s3::config::Builder::new();
-
+async fn aws_client() -> Client {
     let credentials = DefaultCredentialsChain::builder().build().await;
-    let config = builder
-        .force_path_style(true)
-        .endpoint_url("http://127.0.0.1:4566")
-        .region(Region::new(Cow::Owned(region.clone())))
+    let _aws_region =
+        std::env::var("AWS_REGION").expect("AWS_REGION env var must be set");
+    let sdk_config = aws_config::defaults(BehaviorVersion::latest())
         .credentials_provider(credentials)
-        .behavior_version_latest()
-        .build();
+        .endpoint_url("http://127.0.0.1:4566")
+        .load()
+        .await;
+    let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
+    let config = builder.force_path_style(true).build();
     Client::from_conf(config)
 }
 
 async fn get_block_from_s3_bucket() -> Bytes {
-    let region = "us-east-1".to_string();
-    let client = aws_client(region).await;
+    let client = aws_client().await;
     let bucket = "test-bucket".to_string();
     let key = block_height_to_key(&BlockHeight::new(1));
     tracing::info!("getting block from bucket: {} with key {}", bucket, key);
@@ -329,8 +328,7 @@ async fn get_block_from_s3_bucket() -> Bytes {
 }
 
 async fn ensure_bucket_exists() {
-    let region = "us-east-1".to_string();
-    let client = aws_client(region).await;
+    let client = aws_client().await;
     let bucket = "test-bucket";
     let req = client.create_bucket().bucket(bucket);
     let expect_message = format!("should be able to create bucket: {}", bucket);
@@ -338,8 +336,7 @@ async fn ensure_bucket_exists() {
 }
 
 async fn clean_s3_bucket() {
-    let region = "us-east-1".to_string();
-    let client = aws_client(region).await;
+    let client = aws_client().await;
     let bucket = "test-bucket";
     let req = client.list_objects().bucket(bucket);
     let objs = req.send().await.unwrap();
@@ -355,7 +352,7 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
         .with_max_level(tracing::Level::INFO)
         .try_init();
 
-    require_env_var_or_skip!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY");
+    require_env_var_or_skip!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
     ensure_bucket_exists().await;
     clean_s3_bucket().await;
 
