@@ -13,11 +13,9 @@ use crate::{
     },
     result::Result,
 };
-use std::borrow::Cow;
 
 use aws_config::{
     BehaviorVersion,
-    Region,
     default_provider::credentials::DefaultCredentialsChain,
 };
 use fuel_core_storage::{
