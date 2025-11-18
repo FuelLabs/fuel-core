@@ -82,11 +82,14 @@ use fuel_core_gas_price_service::v1::{
     uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::Trigger;
-#[cfg(feature = "rpc")]
-use fuel_core_storage::StorageAsRef;
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
+};
+#[cfg(feature = "rpc")]
+use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsRef,
 };
 
 #[cfg(feature = "relayer")]
@@ -483,7 +486,7 @@ pub fn init_sub_services(
             let maybe_sync_from_height = db
                 .storage_as_ref::<LatestBlock>()
                 .get(&())
-                .map_err(|e| Error::DB(anyhow!(e)))?
+                .map_err(|e: StorageError| Error::DB(anyhow!(e)))?
                 .map(|c| *c)
                 .and_then(|h| h.succ());
             sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
@@ -513,7 +516,7 @@ pub fn init_sub_services(
             let maybe_sync_from_height = db
                 .storage_as_ref::<LatestBlock>()
                 .get(&())
-                .map_err(|e| Error::DB(anyhow!(e)))?
+                .map_err(|e: StorageError| Error::DB(anyhow!(e)))?
                 .map(|c| *c)
                 .and_then(|h| h.succ());
             sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);

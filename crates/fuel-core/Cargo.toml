@@ -60,7 +60,7 @@ clap = { workspace = true, features = ["derive"] }
 cosmrs = { version = "0.21", optional = true }
 derive_more = { version = "0.99" }
 enum-iterator = { workspace = true }
-fuel-core-block-aggregator-api = { workspace = true, optional = true }
+fuel-core-block-aggregator-api = { workspace = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-compression-service = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
