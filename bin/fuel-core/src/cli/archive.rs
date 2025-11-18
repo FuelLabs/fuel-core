@@ -146,7 +146,12 @@ mod archiver {
                         header.set_size(metadata.len());
                         header.set_mode(metadata.permissions().mode());
                         header.set_mtime(
-                            metadata.modified().ok()?.elapsed().ok()?.as_secs(),
+                            metadata
+                                .modified()
+                                .ok()?
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .ok()?
+                                .as_secs(),
                         );
                         header.set_cksum();
                         Some((header, abs))
