@@ -822,6 +822,7 @@ where
                     ));
                     continue;
                 }
+                let tx_index = data.tx_count;
                 match self.execute_transaction_and_commit(
                     block,
                     storage_tx,
@@ -845,7 +846,7 @@ where
                                 tx_id,
                                 &latest_executed_tx.result,
                                 *block.header.height(),
-                                data.tx_count,
+                                tx_index,
                             );
                         statuses.push(preconfirmation_status);
                     }
