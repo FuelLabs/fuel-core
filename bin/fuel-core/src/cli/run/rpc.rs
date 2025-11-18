@@ -19,15 +19,6 @@ pub struct RpcArgs {
     pub storage_method: StorageMethod,
 }
 
-//     #[derive(Clone, Debug)]
-//     pub enum StorageMethod {
-//         Local,
-//         S3 {
-//             bucket: String,
-//             endpoint_url: Option<String>,
-//             requester_pays: bool,
-//         },
-//     }
 #[derive(Debug, Clone, Subcommand)]
 pub enum StorageMethod {
     Local,
