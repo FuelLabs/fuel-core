@@ -36,7 +36,7 @@ futures = { workspace = true, optional = true }
 hex = { workspace = true }
 # Included to enable webpki in the eventsource client
 hyper-rustls = { version = "0.24", features = [
-  "webpki-tokio",
+    "webpki-tokio",
 ], optional = true }
 itertools = { workspace = true }
 postcard = { workspace = true, optional = true }
@@ -54,8 +54,8 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 
 [dev-dependencies]
 fuel-core-types = { workspace = true, features = [
-  "serde",
-  "std",
-  "test-helpers",
+    "serde",
+    "std",
+    "test-helpers",
 ] }
 insta = { workspace = true }
