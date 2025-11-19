@@ -50,6 +50,7 @@ pub mod integration {
             FuelBlocks,
             Transactions,
         },
+        transactional::HistoricalView,
     };
     use fuel_core_types::{
         fuel_types::BlockHeight,
@@ -88,12 +89,16 @@ pub mod integration {
         OnchainDB: Send + Sync,
         OnchainDB: StorageInspect<FuelBlocks, Error = E>,
         OnchainDB: StorageInspect<Transactions, Error = E>,
+        OnchainDB: HistoricalView<Height = BlockHeight>,
         E: std::fmt::Debug + Send + Sync,
     {
         let addr = config.addr.to_string();
         let api = ProtobufAPI::new(addr)
             .map_err(|e| anyhow::anyhow!("Error creating API: {e}"))?;
-        let db_ending_height = None;
+        let db_ending_height = onchain_db
+            .latest_height()
+            .and_then(BlockHeight::succ)
+            .unwrap_or(BlockHeight::from(0));
         let block_source = ImporterAndDbSource::new(
             importer,
             serializer,
