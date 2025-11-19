@@ -73,7 +73,7 @@ where
         serializer: Serializer,
         database: DB,
         db_starting_height: BlockHeight,
-        db_ending_height: Option<BlockHeight>,
+        db_ending_height: BlockHeight,
     ) -> Self {
         const ARB_CHANNEL_SIZE: usize = 100;
         let (block_return, receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
@@ -92,7 +92,6 @@ where
             database,
             db_starting_height,
             db_ending_height,
-            new_end_receiver,
         );
         let sync_runner = ServiceRunner::new(sync_task);
         sync_runner.start().unwrap();
