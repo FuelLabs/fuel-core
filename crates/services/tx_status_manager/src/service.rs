@@ -672,7 +672,10 @@ mod tests {
             }
 
             pub fn squeezed_out() -> TransactionStatus {
-                TransactionStatus::squeezed_out("fishy tx".to_string())
+                TransactionStatus::squeezed_out(
+                    "fishy tx".to_string(),
+                    Default::default(),
+                )
             }
 
             pub fn preconfirmation_squeezed_out() -> TransactionStatus {
