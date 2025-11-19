@@ -237,17 +237,21 @@ async fn get_block_height__can_get_value_from_rpc() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn new_block_subscription__can_get_expect_block() {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+    let mut config = Config::local_node();
     if get_env_vars().is_some() {
         ensure_bucket_exists().await;
         clean_s3_bucket().await;
+        let endpoint_url = "http://127.0.0.1:4566".to_string();
+        config.rpc_config.storage_method = StorageMethod::S3 {
+            bucket: "test-bucket".to_string(),
+            endpoint_url: Some(endpoint_url),
+            requester_pays: false,
+        };
     }
-    let mut config = Config::local_node();
-    let endpoint_url = "http://127.0.0.1:4566".to_string();
-    config.rpc_config.storage_method = StorageMethod::S3 {
-        bucket: "test-bucket".to_string(),
-        endpoint_url: Some(endpoint_url),
-        requester_pays: false,
-    };
+
     let rpc_url = config.rpc_config.addr;
 
     let srv = FuelService::from_database(Database::default(), config.clone())
