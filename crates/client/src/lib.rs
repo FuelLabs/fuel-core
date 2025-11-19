@@ -5,7 +5,7 @@
 pub mod client;
 pub mod reqwest_ext;
 pub mod schema;
-mod transport;
+pub mod transport;
 
 /// The GraphQL schema used by the library.
 pub const SCHEMA_SDL: &[u8] = include_bytes!("../assets/schema.sdl");
