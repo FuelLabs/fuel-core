@@ -525,7 +525,7 @@ impl TestPoolUniverse {
         &mut self,
         tx_ids: Vec<TxId>,
     ) {
-        self.await_expected_tx_statuses(tx_ids, |status| {
+        self.await_expected_tx_statuses(tx_ids, |_, status| {
             matches!(status, TransactionStatus::Submitted { .. })
         })
         .await
@@ -536,7 +536,7 @@ impl TestPoolUniverse {
         &mut self,
         tx_ids: Vec<TxId>,
     ) {
-        self.await_expected_tx_statuses(tx_ids, |status| {
+        self.await_expected_tx_statuses(tx_ids, |_, status| {
             matches!(status, TransactionStatus::SqueezedOut { .. })
         })
         .await
@@ -546,7 +546,7 @@ impl TestPoolUniverse {
     pub(crate) async fn await_expected_tx_statuses(
         &mut self,
         tx_ids: Vec<TxId>,
-        predicate: impl Fn(&TransactionStatus) -> bool,
+        predicate: impl Fn(TxId, &TransactionStatus) -> bool,
     ) -> Result<(), TxStatusWaitError> {
         const TIMEOUT: Duration = Duration::from_secs(3);
         const POLL_TIMEOUT: Duration = Duration::from_millis(5);
@@ -565,7 +565,7 @@ impl TestPoolUniverse {
             )
             .await
             {
-                Ok(Some((tx_id, tx_status))) if predicate(&tx_status) => {
+                Ok(Some((tx_id, tx_status))) if predicate(tx_id, &tx_status) => {
                     values.push(tx_id);
                 }
                 Ok(Some(_)) => {
