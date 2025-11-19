@@ -543,9 +543,6 @@ mod tests {
 
     #[tokio::test]
     async fn stop_sub_service_shutdown_all_services() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::DEBUG)
-            .init();
         // The test verify that if we stop any of sub-services
         let mut i = 0;
         loop {
