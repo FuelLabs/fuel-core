@@ -96,7 +96,10 @@ impl<S> RemoteCache<S> {
                 .credentials_provider(credentials)
                 .load()
                 .await;
-            let config_builder = aws_sdk_s3::config::Builder::from(&sdk_config);
+            let mut config_builder = aws_sdk_s3::config::Builder::from(&sdk_config);
+            if let Some(endpoint) = &self.aws_endpoint {
+                config_builder.set_endpoint_url(Some(endpoint.to_string()));
+            }
             let config = config_builder.force_path_style(true).build();
             let client = aws_sdk_s3::Client::from_conf(config);
             self.client = Some(client);

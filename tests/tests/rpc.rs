@@ -237,9 +237,6 @@ async fn get_block_height__can_get_value_from_rpc() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn new_block_subscription__can_get_expect_block() {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .init();
     let mut config = Config::local_node();
     if get_env_vars().is_some() {
         ensure_bucket_exists().await;
