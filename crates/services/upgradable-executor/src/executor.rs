@@ -79,6 +79,7 @@ use fuel_core_types::{
     services::preconfirmation::{
         Preconfirmation,
         PreconfirmationStatus,
+        SqueezedOut,
     },
 };
 #[cfg(feature = "wasm-executor")]
@@ -957,9 +958,10 @@ where
                 .iter()
                 .map(|(tx_id, error)| Preconfirmation {
                     tx_id: *tx_id,
-                    status: PreconfirmationStatus::SqueezedOut {
-                        reason: error.to_string(),
-                    },
+                    status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                        error.to_string(),
+                        *tx_id,
+                    )),
                 });
 
         preconfirmations.extend(squeezed_out);
