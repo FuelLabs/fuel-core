@@ -178,11 +178,7 @@ impl Config {
         let rpc_config = fuel_core_block_aggregator_api::integration::Config {
             addr: free_local_addr(),
             sync_from: Some(BlockHeight::from(0)),
-            storage_method: StorageMethod::S3 {
-                bucket: "test-bucket".to_string(),
-                endpoint_url: None,
-                requester_pays: false,
-            },
+            storage_method: StorageMethod::Local,
         };
 
         Self {

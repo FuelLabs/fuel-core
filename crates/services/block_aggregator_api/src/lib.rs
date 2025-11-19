@@ -63,8 +63,9 @@ pub mod integration {
         pub storage_method: StorageMethod,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Default)]
     pub enum StorageMethod {
+        #[default]
         Local,
         S3 {
             bucket: String,

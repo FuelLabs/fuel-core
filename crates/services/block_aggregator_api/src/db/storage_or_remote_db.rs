@@ -14,10 +14,6 @@ use crate::{
     result::Result,
 };
 
-use aws_config::{
-    BehaviorVersion,
-    default_provider::credentials::DefaultCredentialsChain,
-};
 use fuel_core_storage::{
     Error as StorageError,
     StorageInspect,
@@ -51,33 +47,11 @@ impl<R, S> StorageOrRemoteDB<R, S> {
         aws_endpoint_url: Option<String>,
         sync_from: BlockHeight,
     ) -> Self {
-        let client = {
-            let mut builder = aws_sdk_s3::config::Builder::new();
-            if let Some(aws_endpoint_url) = &aws_endpoint_url {
-                builder.set_endpoint_url(Some(aws_endpoint_url.clone()));
-            }
-            // TODO: This is a little gross spinning up the runtime just to get credentials.
-            //   If this takes a long time maybe we should move this to the service or something.
-            let rt_handle = tokio::runtime::Handle::current();
-            let sdk_config = tokio::task::block_in_place(|| {
-                rt_handle.block_on(async {
-                    let credentials = DefaultCredentialsChain::builder().build().await;
-                    aws_config::defaults(BehaviorVersion::latest())
-                        .credentials_provider(credentials)
-                        .endpoint_url("http://127.0.0.1:4566")
-                        .load()
-                        .await
-                })
-            });
-            let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
-            let config = builder.force_path_style(true).build();
-            aws_sdk_s3::Client::from_conf(config)
-        };
         let remote_cache = RemoteCache::new(
             aws_bucket.to_string(),
             requester_pays,
             aws_endpoint_url,
-            client,
+            None,
             storage,
             sync_from,
         );

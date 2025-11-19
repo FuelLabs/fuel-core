@@ -16,7 +16,7 @@ pub struct RpcArgs {
     pub rpc_port: u16,
 
     #[command(subcommand)]
-    pub storage_method: StorageMethod,
+    pub storage_method: Option<StorageMethod>,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -37,7 +37,7 @@ impl RpcArgs {
         fuel_core_block_aggregator_api::integration::Config {
             addr: net::SocketAddr::new(self.rpc_ip, self.rpc_port),
             sync_from: Some(BlockHeight::from(0)),
-            storage_method: self.storage_method.into(),
+            storage_method: self.storage_method.map(Into::into).unwrap_or_default(),
         }
     }
 }
