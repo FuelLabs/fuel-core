@@ -18,7 +18,6 @@ use fuel_core_storage::{
     },
 };
 use futures::StreamExt;
-use std::collections::HashSet;
 
 use fuel_core_types::{
     blockchain::SealedBlock,
@@ -47,10 +46,6 @@ impl BlockSerializer for MockSerializer {
 
 fn database() -> StorageTransaction<InMemoryStorage<OnChainColumn>> {
     InMemoryStorage::default().into_transaction()
-}
-
-fn stream_with_pending<T: Send + Sync + 'static>(items: Vec<T>) -> BoxStream<T> {
-    tokio_stream::iter(items).chain(pending()).into_boxed()
 }
 
 #[tokio::test]

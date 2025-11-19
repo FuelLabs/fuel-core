@@ -77,13 +77,8 @@ where
     ) -> Self {
         const ARB_CHANNEL_SIZE: usize = 100;
         let (block_return, receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let (new_end_sender, new_end_receiver) = tokio::sync::oneshot::channel();
-        let importer_task = ImporterTask::new(
-            importer,
-            serializer.clone(),
-            block_return.clone(),
-            Some(new_end_sender),
-        );
+        let importer_task =
+            ImporterTask::new(importer, serializer.clone(), block_return.clone());
         let importer_runner = ServiceRunner::new(importer_task);
         importer_runner.start().unwrap();
         let sync_task = SyncTask::new(
