@@ -800,7 +800,6 @@ impl FuelClient {
             io::Error::other("Failed to get status from the submission")
         })??;
 
-        println!("{status:?}");
         Ok(status)
     }
 
