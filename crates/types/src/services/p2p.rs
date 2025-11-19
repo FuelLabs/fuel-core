@@ -13,7 +13,10 @@ use super::{
     txpool::ArcPoolTx,
 };
 #[cfg(feature = "test-helpers")]
-use crate::services::preconfirmation::PreconfirmationStatus;
+use crate::services::preconfirmation::{
+    PreconfirmationStatus,
+    SqueezedOut,
+};
 use crate::{
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -139,9 +142,10 @@ impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
                 expiration: Tai64::UNIX_EPOCH,
                 preconfirmations: vec![Preconfirmation {
                     tx_id: TxId::default(),
-                    status: PreconfirmationStatus::SqueezedOut {
-                        reason: "Dummy reason".to_string(),
-                    },
+                    status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                        "Dummy reason".to_string(),
+                        TxId::default(),
+                    )),
                 }],
             },
             signature: crate::fuel_tx::Bytes64::default(),
