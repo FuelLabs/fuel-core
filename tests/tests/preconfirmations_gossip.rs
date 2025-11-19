@@ -187,7 +187,7 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
     } = status.clone()
     {
         // Then
-        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
+        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 0));
         assert_eq!(total_fee, 0);
         assert_eq!(transaction_id, tx_id);
         let receipts = receipts.unwrap();
@@ -334,7 +334,7 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
     } = status
     {
         // Then
-        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 1));
+        assert_eq!(tx_pointer, TxPointer::new(BlockHeight::new(1), 0));
         assert_eq!(total_fee, 0);
         assert_eq!(transaction_id, tx_id);
         let receipts = receipts.unwrap();
