@@ -45,7 +45,7 @@ async fn insert_transaction__failed_tx_verification_triggers_squeezed_out() {
 
     // Then
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |_, status| {
             matches!(status, TransactionStatus::SqueezedOut(_))
         })
         .await
@@ -77,7 +77,7 @@ async fn insert_transaction__pool_notification_removed_triggers_squeezed_out() {
     // Since the pool capacity is 1, the transaction with small tip should be squeezed out
     // and replaced with a more lucrative transaction.
     universe
-        .await_expected_tx_statuses(vec![tx1_id], |status| {
+        .await_expected_tx_statuses(vec![tx1_id], |_, status| {
             matches!(status, TransactionStatus::SqueezedOut(_))
         })
         .await
@@ -109,7 +109,7 @@ async fn insert_transaction__pool_notification_error_insertion_triggers_squeezed
 
     // Then
     universe
-        .await_expected_tx_statuses(vec![tx2_id], |status| {
+        .await_expected_tx_statuses(vec![tx2_id], |_, status| {
             matches!(status, TransactionStatus::SqueezedOut(_))
         })
         .await
