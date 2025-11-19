@@ -31,7 +31,7 @@ async fn test_tx__keep_missing_input_and_resolved_when_input_submitted() {
     service.shared.try_insert(vec![tx2.clone()]).unwrap();
 
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |_, status| {
             matches!(status, TransactionStatus::Submitted { .. })
         })
         .await
@@ -80,9 +80,9 @@ async fn test_tx__return_error_expired() {
         does not exist"
     );
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |tx_id, status| {
             matches!(status, TransactionStatus::SqueezedOut(s)
-                if s.reason == squeezed_out_reason)
+                if s.reason() == format!("{squeezed_out_reason} TxId: {tx_id}"))
         })
         .await
         .unwrap();
@@ -122,9 +122,9 @@ async fn test_tx__directly_removed_not_enough_space() {
         does not exist"
     );
     universe
-        .await_expected_tx_statuses(ids, |status| {
+        .await_expected_tx_statuses(ids, |tx_id, status| {
             matches!(status, TransactionStatus::SqueezedOut(s)
-                if s.reason == squeezed_out_reason)
+                if s.reason() == format!("{} TxId: {}", squeezed_out_reason, tx_id))
         })
         .await
         .unwrap();

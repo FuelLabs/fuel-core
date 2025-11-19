@@ -1,3 +1,10 @@
+use self::schema::{
+    block::ProduceBlockArgs,
+    message::{
+        MessageProofArgs,
+        NonceArgs,
+    },
+};
 #[cfg(feature = "subscriptions")]
 use crate::client::types::StatusWithTransaction;
 use crate::{
@@ -34,25 +41,19 @@ use crate::{
             upgrades::StateTransitionBytecode,
         },
     },
-    reqwest_ext::{
-        FuelGraphQlResponse,
-        FuelOperation,
-        ReqwestExt,
-    },
+    reqwest_ext::FuelGraphQlResponse,
+    transport::FailoverTransport,
 };
 use anyhow::Context;
 #[cfg(feature = "subscriptions")]
-use base64::prelude::{
-    BASE64_STANDARD,
-    Engine as _,
-};
-#[cfg(feature = "subscriptions")]
-use cynic::StreamingOperation;
+use cynic::SubscriptionBuilder;
 use cynic::{
     Id,
     MutationBuilder,
     Operation,
     QueryBuilder,
+    QueryFragment,
+    QueryVariables,
 };
 use fuel_core_types::{
     blockchain::header::{
@@ -93,6 +94,7 @@ use pagination::{
     PaginatedResult,
     PaginationRequest,
 };
+use reqwest::Url;
 use schema::{
     Bytes,
     ContinueTx,
@@ -165,13 +167,8 @@ use types::{
     },
 };
 
-use self::schema::{
-    block::ProduceBlockArgs,
-    message::{
-        MessageProofArgs,
-        NonceArgs,
-    },
-};
+#[cfg(feature = "subscriptions")]
+use std::pin::Pin;
 
 pub mod pagination;
 pub mod schema;
@@ -246,10 +243,7 @@ impl Clone for ChainStateInfo {
 
 #[derive(Debug, Clone)]
 pub struct FuelClient {
-    client: reqwest::Client,
-    #[cfg(feature = "subscriptions")]
-    cookie: std::sync::Arc<reqwest::cookie::Jar>,
-    url: reqwest::Url,
+    transport: FailoverTransport,
     require_height: ConsistencyPolicy,
     chain_state_info: ChainStateInfo,
 }
@@ -268,36 +262,13 @@ impl FromStr for FuelClient {
             .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
         url.set_path("/v1/graphql");
 
-        #[cfg(feature = "subscriptions")]
-        {
-            let cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
-            let client = reqwest::Client::builder()
-                .cookie_provider(cookie.clone())
-                .build()
-                .map_err(anyhow::Error::msg)?;
-            Ok(Self {
-                client,
-                cookie,
-                url,
-                require_height: ConsistencyPolicy::Auto {
-                    height: Arc::new(Mutex::new(None)),
-                },
-                chain_state_info: Default::default(),
-            })
-        }
-
-        #[cfg(not(feature = "subscriptions"))]
-        {
-            let client = reqwest::Client::new();
-            Ok(Self {
-                client,
-                url,
-                require_height: ConsistencyPolicy::Auto {
-                    height: Arc::new(Mutex::new(None)),
-                },
-                chain_state_info: Default::default(),
-            })
-        }
+        Ok(Self {
+            transport: FailoverTransport::new(vec![url])?,
+            require_height: ConsistencyPolicy::Auto {
+                height: Arc::new(Mutex::new(None)),
+            },
+            chain_state_info: Default::default(),
+        })
     }
 }
 
@@ -329,6 +300,18 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
+    pub fn with_urls(urls: Vec<Url>) -> anyhow::Result<Self> {
+        Ok(Self {
+            transport: FailoverTransport::new(urls)?,
+            require_height: ConsistencyPolicy::Auto {
+                height: Arc::new(Mutex::new(None)),
+            },
+            chain_state_info: Default::default(),
+        })
+    }
+}
+
+impl FuelClient {
     pub fn with_required_fuel_block_height(
         &mut self,
         new_height: Option<BlockHeight>,
@@ -350,6 +333,33 @@ impl FuelClient {
     ) -> &mut Self {
         self.require_height = ConsistencyPolicy::Manual { height };
         self
+    }
+
+    pub fn decode_response<R, E>(
+        &self,
+        response: FuelGraphQlResponse<R, E>,
+    ) -> io::Result<R>
+    where
+        R: serde::de::DeserializeOwned + 'static,
+    {
+        if response
+            .extensions
+            .as_ref()
+            .and_then(|e| e.fuel_block_height_precondition_failed)
+            == Some(true)
+        {
+            return Err(io::Error::other("The required block height was not met"));
+        }
+
+        let response = response.response;
+
+        match (response.data, response.errors) {
+            (Some(d), _) => Ok(d),
+            (_, Some(e)) => Err(from_strings_errors_to_std_error(
+                e.into_iter().map(|e| e.message).collect(),
+            )),
+            _ => Err(io::Error::other("Invalid response")),
+        }
     }
 
     pub fn required_block_height(&self) -> Option<BlockHeight> {
@@ -406,187 +416,47 @@ impl FuelClient {
         q: Operation<ResponseData, Vars>,
     ) -> io::Result<ResponseData>
     where
-        Vars: serde::Serialize,
-        ResponseData: serde::de::DeserializeOwned + 'static,
+        Vars: serde::Serialize + Clone + QueryVariables + Send + 'static,
+        ResponseData: serde::de::DeserializeOwned + QueryFragment + Send + 'static,
     {
         let required_fuel_block_height = self.required_block_height();
-        let fuel_operation = FuelOperation::new(q, required_fuel_block_height);
-        let response = self
-            .client
-            .post(self.url.clone())
-            .run_fuel_graphql(fuel_operation)
-            .await
-            .map_err(io::Error::other)?;
+        let response = self.transport.query(q, required_fuel_block_height).await?;
 
-        self.decode_response(response)
-    }
-
-    fn decode_response<R, E>(&self, response: FuelGraphQlResponse<R, E>) -> io::Result<R>
-    where
-        R: serde::de::DeserializeOwned + 'static,
-    {
         self.update_chain_state_info(&response);
-
-        if response
-            .extensions
-            .as_ref()
-            .and_then(|e| e.fuel_block_height_precondition_failed)
-            == Some(true)
-        {
-            return Err(io::Error::other("The required block height was not met"));
-        }
-
-        let response = response.response;
-
-        match (response.data, response.errors) {
-            (Some(d), _) => Ok(d),
-            (_, Some(e)) => Err(from_strings_errors_to_std_error(
-                e.into_iter().map(|e| e.message).collect(),
-            )),
-            _ => Err(io::Error::other("Invalid response")),
-        }
+        self.decode_response(response)
     }
 
     #[tracing::instrument(skip_all)]
     #[cfg(feature = "subscriptions")]
-    async fn subscribe<ResponseData, Vars>(
+    async fn subscribe<ResponseData, Variables>(
         &self,
-        q: StreamingOperation<ResponseData, Vars>,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<ResponseData>> + '_>
+        variables: Variables,
+    ) -> io::Result<Pin<Box<impl futures::Stream<Item = io::Result<ResponseData>> + '_>>>
     where
-        Vars: serde::Serialize,
-        ResponseData: serde::de::DeserializeOwned + 'static + Send,
+        Variables: serde::Serialize + QueryVariables + Send + Clone + 'static,
+        ResponseData: serde::de::DeserializeOwned
+            + QueryFragment
+            + SubscriptionBuilder<Variables>
+            + 'static
+            + Send,
     {
-        use core::ops::Deref;
-        use eventsource_client as es;
-        use hyper_rustls as _;
-        use reqwest::cookie::CookieStore;
-        let mut url = self.url.clone();
-        url.set_path("/v1/graphql-sub");
+        let stream = self
+            .transport
+            .subscribe(variables, self.required_block_height())
+            .await?;
 
-        let required_fuel_block_height = self.required_block_height();
-        let fuel_operation = FuelOperation::new(q, required_fuel_block_height);
-
-        let json_query = serde_json::to_string(&fuel_operation)?;
-        let mut client_builder = es::ClientBuilder::for_url(url.as_str())
-            .map_err(|e| io::Error::other(format!("Failed to start client {e:?}")))?
-            .body(json_query)
-            .method("POST".to_string())
-            .header("content-type", "application/json")
-            .map_err(|e| {
-                io::Error::other(format!("Failed to add header to client {e:?}"))
-            })?;
-        if let Some(password) = url.password() {
-            let username = url.username();
-            let credentials = format!("{}:{}", username, password);
-            let authorization = format!("Basic {}", BASE64_STANDARD.encode(credentials));
-            client_builder = client_builder
-                .header("Authorization", &authorization)
-                .map_err(|e| {
-                    io::Error::other(format!("Failed to add header to client {e:?}"))
-                })?;
-        }
-
-        if let Some(value) = self.cookie.deref().cookies(&self.url) {
-            let value = value.to_str().map_err(|e| {
-                io::Error::other(format!("Unable convert header value to string {e:?}"))
-            })?;
-            client_builder = client_builder
-                .header(reqwest::header::COOKIE.as_str(), value)
-                .map_err(|e| {
-                    io::Error::other(format!(
-                        "Failed to add header from `reqwest` to client {e:?}"
-                    ))
-                })?;
-        }
-
-        let client = client_builder.build_with_conn(
-            hyper_rustls::HttpsConnectorBuilder::new()
-                .with_webpki_roots()
-                .https_or_http()
-                .enable_http1()
-                .build(),
-        );
-
-        let mut last = None;
-
-        enum Event<ResponseData> {
-            Connected,
-            ResponseData(ResponseData),
-        }
-
-        let mut init_stream = es::Client::stream(&client)
-            .take_while(|result| {
-                futures::future::ready(!matches!(result, Err(es::Error::Eof)))
-            })
-            .filter_map(move |result| {
-                tracing::debug!("Got result: {result:?}");
-                let r = match result {
-                    Ok(es::SSE::Event(es::Event { data, .. })) => {
-                        match serde_json::from_str::<FuelGraphQlResponse<ResponseData>>(
-                            &data,
-                        ) {
-                            Ok(resp) => {
-                                match self.decode_response(resp) {
-                                    Ok(resp) => {
-                                        match last.replace(data) {
-                                            // Remove duplicates
-                                            Some(l)
-                                                if l == *last.as_ref().expect(
-                                                    "Safe because of the replace above",
-                                                ) =>
-                                            {
-                                                None
-                                            }
-                                            _ => Some(Ok(Event::ResponseData(resp))),
-                                        }
-                                    }
-                                    Err(e) => Some(Err(io::Error::other(format!(
-                                        "Decode error: {e:?}"
-                                    )))),
-                                }
-                            }
-                            Err(e) => {
-                                Some(Err(io::Error::other(format!("Json error: {e:?}"))))
-                            }
-                        }
+        let client = self; // capture immutably
+        Ok(Box::pin(stream.filter_map(move |result| {
+            async move {
+                match result {
+                    Ok(resp) => {
+                        client.update_chain_state_info(&resp);
+                        Some(client.decode_response(resp))
                     }
-                    Ok(es::SSE::Connected(_)) => Some(Ok(Event::Connected)),
-                    Ok(_) => None,
-                    Err(e) => {
-                        Some(Err(io::Error::other(format!("Graphql error: {e:?}"))))
-                    }
-                };
-                futures::future::ready(r)
-            });
-
-        let event = init_stream.next().await;
-        let stream_with_resp = init_stream.filter_map(|result| async move {
-            match result {
-                Ok(Event::Connected) => None,
-                Ok(Event::ResponseData(resp)) => Some(Ok(resp)),
-                Err(error) => Some(Err(error)),
+                    Err(e) => Some(Err(e)), // pass through untouched
+                }
             }
-        });
-
-        let stream = match event {
-            Some(Ok(Event::Connected)) => {
-                tracing::debug!("Subscription connected");
-                stream_with_resp.boxed()
-            }
-            Some(Ok(Event::ResponseData(resp))) => {
-                tracing::debug!("Subscription returned response");
-                let joined_stream = futures::stream::once(async move { Ok(resp) })
-                    .chain(stream_with_resp);
-                joined_stream.boxed()
-            }
-            Some(Err(e)) => return Err(e),
-            None => {
-                return Err(io::Error::other("Subscription stream ended unexpectedly"));
-            }
-        };
-
-        Ok(stream)
+        })))
     }
 
     pub fn latest_stf_version(&self) -> Option<StateTransitionBytecodeVersion> {
@@ -913,15 +783,13 @@ impl FuelClient {
         tx: &Transaction,
         estimate_predicates: Option<bool>,
     ) -> io::Result<TransactionStatus> {
-        use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
-        let s =
-            schema::tx::SubmitAndAwaitSubscription::build(TxWithEstimatedPredicatesArg {
-                tx: HexString(Bytes(tx)),
-                estimate_predicates,
-            });
+        let variables = TxWithEstimatedPredicatesArg {
+            tx: HexString(Bytes(tx)),
+            estimate_predicates,
+        };
 
-        let mut stream = self.subscribe(s).await?.map(
+        let mut stream = self.subscribe(variables).await?.map(
             |r: io::Result<schema::tx::SubmitAndAwaitSubscription>| {
                 let status: TransactionStatus = r?.submit_and_await.try_into()?;
                 Result::<_, io::Error>::Ok(status)
@@ -951,16 +819,13 @@ impl FuelClient {
         tx: &Transaction,
         estimate_predicates: Option<bool>,
     ) -> io::Result<StatusWithTransaction> {
-        use cynic::SubscriptionBuilder;
         let tx = tx.clone().to_bytes();
-        let s = schema::tx::SubmitAndAwaitSubscriptionWithTransaction::build(
-            TxWithEstimatedPredicatesArg {
-                tx: HexString(Bytes(tx)),
-                estimate_predicates,
-            },
-        );
+        let variables = TxWithEstimatedPredicatesArg {
+            tx: HexString(Bytes(tx)),
+            estimate_predicates,
+        };
 
-        let mut stream = self.subscribe(s).await?.map(
+        let mut stream = self.subscribe(variables).await?.map(
             |r: io::Result<schema::tx::SubmitAndAwaitSubscriptionWithTransaction>| {
                 let status: StatusWithTransaction = r?.submit_and_await.try_into()?;
                 Result::<_, io::Error>::Ok(status)
@@ -991,18 +856,15 @@ impl FuelClient {
         estimate_predicates: Option<bool>,
         include_preconfirmation: Option<bool>,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
-        use cynic::SubscriptionBuilder;
         use schema::tx::SubmitAndAwaitStatusArg;
         let tx = tx.clone().to_bytes();
-        let s = schema::tx::SubmitAndAwaitStatusSubscription::build(
-            SubmitAndAwaitStatusArg {
-                tx: HexString(Bytes(tx)),
-                estimate_predicates,
-                include_preconfirmation,
-            },
-        );
+        let variables = SubmitAndAwaitStatusArg {
+            tx: HexString(Bytes(tx)),
+            estimate_predicates,
+            include_preconfirmation,
+        };
 
-        let stream = self.subscribe(s).await?.map(
+        let stream = self.subscribe(variables).await?.map(
             |r: io::Result<schema::tx::SubmitAndAwaitStatusSubscription>| {
                 let status: TransactionStatus = r?.submit_and_await_status.try_into()?;
                 Result::<_, io::Error>::Ok(status)
@@ -1018,13 +880,12 @@ impl FuelClient {
         &self,
         contract_id: &ContractId,
     ) -> io::Result<impl Stream<Item = io::Result<(Bytes32, Vec<u8>)>> + '_> {
-        use cynic::SubscriptionBuilder;
         use schema::storage::ContractStorageSlotsArgs;
-        let s = schema::storage::ContractStorageSlots::build(ContractStorageSlotsArgs {
+        let variables = ContractStorageSlotsArgs {
             contract_id: (*contract_id).into(),
-        });
+        };
 
-        let stream = self.subscribe(s).await?.map(
+        let stream = self.subscribe(variables).await?.map(
             |result: io::Result<schema::storage::ContractStorageSlots>| {
                 let result: (Bytes32, Vec<u8>) = result?.contract_storage_slots.into();
                 Result::<_, io::Error>::Ok(result)
@@ -1041,18 +902,15 @@ impl FuelClient {
         contract_id: &ContractId,
     ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>> + '_>
     {
-        use cynic::SubscriptionBuilder;
         use schema::{
             contract::ContractBalance,
             storage::ContractStorageBalancesArgs,
         };
-        let s = schema::storage::ContractStorageBalances::build(
-            ContractStorageBalancesArgs {
-                contract_id: (*contract_id).into(),
-            },
-        );
+        let variables = ContractStorageBalancesArgs {
+            contract_id: (*contract_id).into(),
+        };
 
-        let stream = self.subscribe(s).await?.map(
+        let stream = self.subscribe(variables).await?.map(
             |result: io::Result<schema::storage::ContractStorageBalances>| {
                 let result: ContractBalance = result?.contract_storage_balances;
                 Result::<_, io::Error>::Ok(result)
@@ -1071,10 +929,7 @@ impl FuelClient {
             Item = io::Result<fuel_core_types::services::block_importer::ImportResult>,
         > + '_,
     > {
-        use cynic::SubscriptionBuilder;
-        let s = schema::block::NewBlocksSubscription::build(());
-
-        let stream = self.subscribe(s).await?.map(
+        let stream = self.subscribe(()).await?.map(
             |r: io::Result<schema::block::NewBlocksSubscription>| {
                 let result: fuel_core_types::services::block_importer::ImportResult =
                     postcard::from_bytes(r?.new_blocks.0.0.as_slice()).map_err(|e| {
@@ -1094,10 +949,7 @@ impl FuelClient {
     pub async fn preconfirmations_subscription(
         &self,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
-        use cynic::SubscriptionBuilder;
-        let s = schema::tx::PreconfirmationsSubscription::build(());
-
-        let stream = self.subscribe(s).await?.map(
+        let stream = self.subscribe(()).await?.map(
             |r: io::Result<schema::tx::PreconfirmationsSubscription>| {
                 let status: TransactionStatus = r?.preconfirmations.try_into()?;
                 Result::<_, io::Error>::Ok(status)
@@ -1307,22 +1159,28 @@ impl FuelClient {
         id: &TxId,
         include_preconfirmation: Option<bool>,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
-        use cynic::SubscriptionBuilder;
-        use schema::tx::StatusChangeSubscriptionArgs;
+        use schema::tx::{
+            StatusChangeSubscription,
+            StatusChangeSubscriptionArgs,
+        };
         let tx_id: TransactionId = (*id).into();
-        let s =
-            schema::tx::StatusChangeSubscription::build(StatusChangeSubscriptionArgs {
-                id: tx_id,
-                include_preconfirmation,
-            });
+        let variables = StatusChangeSubscriptionArgs {
+            id: tx_id,
+            include_preconfirmation,
+        };
 
         tracing::debug!("subscribing");
-        let stream = self.subscribe(s).await?.map(|tx| {
-            tracing::debug!("received {tx:?}");
-            let tx = tx?;
-            let status = tx.status_change.try_into()?;
-            Ok(status)
-        });
+        let stream = self
+            .subscribe::<StatusChangeSubscription, StatusChangeSubscriptionArgs>(
+                variables,
+            )
+            .await?
+            .map(|tx| {
+                tracing::debug!("received {tx:?}");
+                let tx = tx?;
+                let status = tx.status_change.try_into()?;
+                Ok(status)
+            });
 
         Ok(stream)
     }
