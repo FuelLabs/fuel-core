@@ -234,6 +234,6 @@ pub fn block_height_to_key(height: &BlockHeight) -> String {
 
 pub fn gzip_bytes(data: &[u8]) -> crate::result::Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(data).map_err(|e| Error::db_error(e))?;
-    encoder.finish().map_err(|e| Error::db_error(e))
+    encoder.write_all(data).map_err(Error::db_error)?;
+    encoder.finish().map_err(Error::db_error)
 }
