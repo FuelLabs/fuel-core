@@ -206,7 +206,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         }
     };
     let Some(data) = data else {
-        return Err(anyhow::anyhow!("Output message doesn't contain any `data`").into());
+        return Err(anyhow::anyhow!("Output message doesn't contain any `data`").into())
     };
 
     // Get the message fuel block header.
@@ -217,7 +217,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
                 return Err(anyhow::anyhow!(
                     "Unable to get the message block from the database: {err}"
                 )
-                .into());
+                .into())
             }
         };
 
@@ -232,7 +232,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
             return Err(anyhow::anyhow!(
                 "Unable to get commit block header from database: {err}"
             )
-            .into());
+            .into())
         }
     };
 
@@ -240,7 +240,7 @@ pub fn message_proof<T: MessageProofData + ?Sized>(
         return Err(anyhow::anyhow!(
             "Impossible to generate proof beyond the genesis block"
         )
-        .into());
+        .into())
     };
     let block_proof = database.block_history_proof(
         message_block_header.height(),
@@ -305,7 +305,7 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
         return Err(anyhow::anyhow!(
             "Unable to find the message receipt in the transaction to generate the proof"
         )
-        .into());
+        .into())
     };
 
     // Get the proof set.
@@ -313,7 +313,7 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
         return Err(anyhow::anyhow!(
             "Unable to generate the Merkle proof for the message from its receipts"
         )
-        .into());
+        .into())
     };
 
     // Return the proof.

@@ -27,7 +27,7 @@ impl TryFrom<Message> for MessageCoin {
         if message.is_retryable_message() {
             return Err(anyhow::anyhow!(
                 "The data is not empty, impossible to convert into the `MessageCoin`"
-            ));
+            ))
         }
 
         let coin = MessageCoin {

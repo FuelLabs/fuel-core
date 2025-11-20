@@ -233,7 +233,7 @@ impl NetworkBehaviour for Behaviour {
             .remove(&connection_id);
 
         if connections.reserved_peers.contains(&peer) {
-            return Ok(dummy::ConnectionHandler);
+            return Ok(dummy::ConnectionHandler)
         }
 
         check_limit(
@@ -299,7 +299,7 @@ impl NetworkBehaviour for Behaviour {
             .remove(&connection_id);
 
         if connections.reserved_peers.contains(&peer) {
-            return Ok(dummy::ConnectionHandler);
+            return Ok(dummy::ConnectionHandler)
         }
 
         check_limit(

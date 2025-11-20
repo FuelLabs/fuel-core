@@ -466,7 +466,7 @@ where
         }
 
         let TransactionExecutionResult::Success { receipts, .. } = result else {
-            continue;
+            continue
         };
 
         update_receipt_based_indexation(receipts, db, asset_metadata_indexation_enabled)?;

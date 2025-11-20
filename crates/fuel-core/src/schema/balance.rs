@@ -120,7 +120,7 @@ impl BalanceQuery {
             return Err(anyhow!(
                 "Can not use pagination when balances indexation is not available"
             )
-            .into());
+            .into())
         }
         let base_asset_id = *ctx
             .data_unchecked::<ChainInfoProvider>()

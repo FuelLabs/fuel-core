@@ -178,7 +178,7 @@ pub async fn recover_missing_tables_from_genesis_state_config(
     //  It is safe to initialize some missing data, for now, but it can change in the future.
     //  We plan to remove this code later, see: https://github.com/FuelLabs/fuel-core/issues/2326
     let Err(off_chain) = db.off_chain().clone().into_genesis() else {
-        return Ok(());
+        return Ok(())
     };
 
     let genesis_db = CombinedGenesisDatabase {

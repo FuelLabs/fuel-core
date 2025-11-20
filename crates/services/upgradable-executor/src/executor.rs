@@ -530,7 +530,7 @@ where
 
         // If any of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
-            return Err(err);
+            return Err(err)
         }
 
         let (_, txs) = block.into_inner();
@@ -1159,7 +1159,7 @@ where
         let fuel_core_types::fuel_vm::UploadedBytecode::Completed(bytecode) =
             uploaded_bytecode.as_ref()
         else {
-            return Err(UpgradableError::IncompleteUploadedBytecode(bytecode_root));
+            return Err(UpgradableError::IncompleteUploadedBytecode(bytecode_root))
         };
 
         // If the bytecode is the same as the native executor, we don't need to compile it.

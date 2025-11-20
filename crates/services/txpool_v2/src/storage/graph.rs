@@ -221,38 +221,38 @@ impl GraphStorage {
                     if to != i_owner {
                         return Err(Error::InputValidation(
                             InputValidationError::NotInsertedIoWrongOwner,
-                        ));
+                        ))
                     }
                     if amount != i_amount {
                         return Err(Error::InputValidation(
                             InputValidationError::NotInsertedIoWrongAmount,
-                        ));
+                        ))
                     }
                     if asset_id != i_asset_id {
                         return Err(Error::InputValidation(
                             InputValidationError::NotInsertedIoWrongAssetId,
-                        ));
+                        ))
                     }
                 }
                 Output::Contract(_) => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedIoContractOutput,
-                    ));
+                    ))
                 }
                 Output::Change { .. } => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
-                    ));
+                    ))
                 }
                 Output::Variable { .. } => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
-                    ));
+                    ))
                 }
                 Output::ContractCreated { .. } => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedIoContractOutput,
-                    ));
+                    ))
                 }
             };
         }
@@ -488,7 +488,7 @@ impl Storage for GraphStorage {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
-                continue;
+                continue
             };
 
             node.number_dependents_in_chain =
@@ -580,7 +580,7 @@ impl Storage for GraphStorage {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
-                continue;
+                continue
             };
 
             if dependency_node.number_dependents_in_chain
@@ -687,10 +687,10 @@ impl Storage for GraphStorage {
                                 if extracted_outputs
                                     .coin_exists(utxo_id, owner, amount, asset_id)
                                 {
-                                    continue;
+                                    continue
                                 }
                                 missing_inputs.push(MissingInput::Utxo(*utxo_id));
-                                continue;
+                                continue
                             }
                             Err(e) => {
                                 return Err(InputValidationErrorType::Inconsistency(
@@ -746,10 +746,10 @@ impl Storage for GraphStorage {
                             Ok(true) => {}
                             Ok(false) => {
                                 if extracted_outputs.contract_exists(contract_id) {
-                                    continue;
+                                    continue
                                 }
                                 missing_inputs.push(MissingInput::Contract(*contract_id));
-                                continue;
+                                continue
                             }
                             Err(e) => {
                                 return Err(InputValidationErrorType::Inconsistency(
@@ -868,7 +868,7 @@ mod tests {
             visited: &mut HashMap<NodeIndex, HashSet<NodeIndex>>,
         ) -> HashSet<NodeIndex> {
             if let Some(sub_set) = visited.get(&root) {
-                return sub_set.clone();
+                return sub_set.clone()
             }
 
             let root_data = self.graph.node_weight(root).unwrap();

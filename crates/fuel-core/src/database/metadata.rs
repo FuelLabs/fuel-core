@@ -63,7 +63,7 @@ where
                 found: metadata.version(),
                 expected: Description::version(),
             }
-            .into());
+            .into())
         }
 
         Ok(())

@@ -624,7 +624,7 @@ where
         range.end
     );
     let Some(sourced_headers) = get_sealed_block_headers(range.clone(), p2p).await else {
-        return Batch::new(None, range, vec![]);
+        return Batch::new(None, range, vec![])
     };
     let SourcePeer {
         peer_id,
@@ -681,7 +681,7 @@ where
         data: transactions,
     }) = get_transactions(range.clone(), peer.clone(), p2p).await
     else {
-        return Batch::new(peer, range, vec![]);
+        return Batch::new(peer, range, vec![])
     };
 
     let iter = headers.into_iter().zip(transactions.into_iter());
@@ -704,7 +704,7 @@ where
                 Some(peer_id.clone()),
                 PeerReportReason::InvalidTransactions,
             );
-            break;
+            break
         }
     }
     Batch::new(Some(peer_id), range, blocks)

@@ -99,7 +99,7 @@ impl Extension for ValidationInner {
                 .lock()
                 .expect("Only one instance owns `ValidationInner`; qed");
             if !errors.is_empty() {
-                return Err(errors.drain(..).map(Into::into).collect());
+                return Err(errors.drain(..).map(Into::into).collect())
             }
         }
 

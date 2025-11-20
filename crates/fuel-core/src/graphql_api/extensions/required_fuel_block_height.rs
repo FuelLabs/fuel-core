@@ -120,7 +120,7 @@ fn get_required_height(request: &Request) -> Option<BlockHeight> {
             required_fuel_block_height.try_into().unwrap_or(u32::MAX);
         let required_block_height: BlockHeight = required_fuel_block_height.into();
 
-        return Some(required_block_height);
+        return Some(required_block_height)
     }
     None
 }

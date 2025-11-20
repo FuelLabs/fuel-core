@@ -145,7 +145,7 @@ impl NetworkBehaviour for Behaviour {
         _: &mut std::task::Context<'_>,
     ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(action) = self.pending_events.pop_front() {
-            return Poll::Ready(action.build());
+            return Poll::Ready(action.build())
         }
 
         Poll::Pending

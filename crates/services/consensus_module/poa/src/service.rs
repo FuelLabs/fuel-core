@@ -321,7 +321,7 @@ where
         if matches!(self.trigger, Trigger::Open { .. }) {
             return Err(anyhow!(
                 "Manual block production is not allowed with trigger `Open`"
-            ));
+            ))
         }
 
         let mut block_time = if let Some(time) = block_production.start_time {
@@ -365,11 +365,11 @@ where
         let last_block_created = Instant::now();
         // verify signing key is set
         if !self.signer.is_available() {
-            return Err(anyhow!("unable to produce blocks without a consensus key"));
+            return Err(anyhow!("unable to produce blocks without a consensus key"))
         }
 
         if self.last_timestamp > block_time {
-            return Err(anyhow!("The block timestamp should monotonically increase"));
+            return Err(anyhow!("The block timestamp should monotonically increase"))
         }
         // Ask the block producer to create the block
         let (
@@ -428,7 +428,7 @@ where
         tracing::info!("Producing predefined block");
         let last_block_created = Instant::now();
         if !self.signer.is_available() {
-            return Err(anyhow!("unable to produce blocks without a signer"));
+            return Err(anyhow!("unable to produce blocks without a signer"))
         }
 
         // Ask the block producer to create the block

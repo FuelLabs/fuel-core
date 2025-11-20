@@ -246,7 +246,7 @@ impl Importer {
                 "The previous block processing \
                     was not finished for {TIMEOUT} seconds."
             );
-            return Err(Error::PreviousBlockProcessingNotFinished);
+            return Err(Error::PreviousBlockProcessingNotFinished)
         };
         let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
@@ -374,7 +374,7 @@ where
             return Err(Error::InvalidDatabaseStateAfterExecution(
                 expected_block_root,
                 actual_block_root,
-            ));
+            ))
         }
 
         let changes = db_after_execution.into_changes();
@@ -613,14 +613,14 @@ where
 
         let result_of_verification = verifier.verify_block_fields(consensus, block);
         if let Err(err) = result_of_verification {
-            return Err(Error::FailedVerification(err));
+            return Err(Error::FailedVerification(err))
         }
 
         // The current code has a separate function X to process `StateConfig`.
         // It is not possible to execute it via `Executor`.
         // Maybe we need consider to move the function X here, if that possible.
         if let Consensus::Genesis(_) = consensus {
-            return Err(Error::ExecuteGenesis);
+            return Err(Error::ExecuteGenesis)
         }
 
         let (ValidationResult { tx_status, events }, changes) = executor
@@ -632,7 +632,7 @@ where
         if actual_block_id != sealed_block_id {
             // It should not be possible because, during validation, we don't touch the block.
             // But while we pass it by value, let's check it.
-            return Err(Error::BlockIdMismatch(sealed_block_id, actual_block_id));
+            return Err(Error::BlockIdMismatch(sealed_block_id, actual_block_id))
         }
 
         let result = VerifyAndExecutionResult {
@@ -670,7 +670,7 @@ impl Importer {
                 "The previous block processing \
                      was not finished for {TIMEOUT} seconds."
             );
-            return Err(Error::PreviousBlockProcessingNotFinished);
+            return Err(Error::PreviousBlockProcessingNotFinished)
         };
         let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
@@ -730,13 +730,13 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
             // Because the genesis block is not committed, it should return `None`.
             // If we find the latest height, something is wrong with the state of the database.
             if found {
-                return Err(Error::InvalidUnderlyingDatabaseGenesisState);
+                return Err(Error::InvalidUnderlyingDatabaseGenesisState)
             }
             actual_next_height
         }
         Consensus::PoA(_) => {
             if actual_next_height == BlockHeight::from(0u32) {
-                return Err(Error::ZeroNonGenericHeight);
+                return Err(Error::ZeroNonGenericHeight)
             }
 
             let last_db_height = database
@@ -751,7 +751,7 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
             return Err(Error::UnsupportedConsensusVariant(format!(
                 "{:?}",
                 consensus
-            )));
+            )))
         }
     };
 
@@ -759,13 +759,13 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
         return Err(Error::IncorrectBlockHeight(
             expected_next_height,
             actual_next_height,
-        ));
+        ))
     }
 
     let mut transaction = database.storage_transaction(Changes::new());
 
     if !transaction.store_new_block(chain_id, sealed_block)? {
-        return Err(Error::NotUnique(actual_next_height));
+        return Err(Error::NotUnique(actual_next_height))
     }
 
     Ok(transaction.into_changes())

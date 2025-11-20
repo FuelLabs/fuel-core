@@ -190,7 +190,7 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
         });
 
         if result.is_empty() {
-            break;
+            break
         }
 
         txpool.read().storage.check_integrity();

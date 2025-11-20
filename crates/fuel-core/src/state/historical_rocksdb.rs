@@ -288,7 +288,7 @@ where
 
     fn remove_v1_entries(&self) -> StorageResult<()> {
         if !self.has_v1_history() {
-            return Ok(());
+            return Ok(())
         }
 
         self.db

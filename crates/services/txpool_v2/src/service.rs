@@ -299,7 +299,7 @@ where
 
         if let Err(err) = self.pool_worker.process_block(Arc::clone(&result)) {
             tracing::error!("{err}");
-            return TaskNextAction::Stop;
+            return TaskNextAction::Stop
         }
         // We don't want block importer wait for us to process the result.
         drop(result);
@@ -324,7 +324,7 @@ where
 
                 if let Err(err) = result {
                     tracing::error!("{err}");
-                    return TaskNextAction::Stop;
+                    return TaskNextAction::Stop
                 }
             }
         }
@@ -436,7 +436,7 @@ where
         for transaction in transactions {
             let Ok(reservation) = self.transaction_verifier_process.reserve() else {
                 tracing::error!("Failed to insert transactions: Out of capacity");
-                continue;
+                continue
             };
             let op = self.insert_transaction(transaction, None, None);
 
@@ -516,7 +516,7 @@ where
                         tx_id,
                         TransactionStatus::squeezed_out(err.to_string(), tx_id),
                     );
-                    return;
+                    return
                 }
             };
 

@@ -147,7 +147,7 @@ where
                     return Err(DatabaseError::ConflictingChanges {
                         column,
                         key: key.clone(),
-                    });
+                    })
                 }
 
                 match operation {

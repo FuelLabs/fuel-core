@@ -584,7 +584,7 @@ where
         if let Some(script) = self.tx.as_script()
             && !script.script().is_empty()
         {
-            return true;
+            return true
         }
         false
     }
@@ -593,7 +593,7 @@ where
     //  `Variable` outputs.
     fn fill_with_variable_outputs(&mut self) -> anyhow::Result<()> {
         if !self.is_runnable_script() {
-            return Ok(());
+            return Ok(())
         }
 
         let max_outputs = self
@@ -616,11 +616,11 @@ where
 
     fn remove_unused_variable_outputs(&mut self) {
         if !self.is_runnable_script() {
-            return;
+            return
         }
 
         if self.index_of_first_fake_variable_output.is_none() {
-            return;
+            return
         }
 
         let index_of_first_fake_variable_output = self
@@ -630,17 +630,17 @@ where
 
         while let Some(output) = self.tx.outputs().last() {
             if self.tx.outputs().len() <= index_of_first_fake_variable_output as usize {
-                break;
+                break
             }
 
             if let Output::Variable { amount, .. } = output {
                 if *amount == 0 {
                     self.tx.outputs_mut().pop();
                 } else {
-                    break;
+                    break
                 }
             } else {
-                break;
+                break
             }
         }
     }
@@ -655,11 +655,11 @@ where
 
     async fn estimate_predicates(mut self) -> anyhow::Result<Self> {
         if !self.arguments.estimate_predicates {
-            return Ok(self);
+            return Ok(self)
         }
 
         if !self.has_predicates {
-            return Ok(self);
+            return Ok(self)
         }
 
         if self.estimated_predicates_count >= self.arguments.estimate_predicates_limit {
@@ -704,7 +704,7 @@ where
 
     async fn estimate_script_if_possible(&mut self) -> anyhow::Result<()> {
         if !self.is_runnable_script() {
-            return Ok(());
+            return Ok(())
         }
 
         let Some(script_ref) = self.tx.as_script_mut() else {
@@ -852,12 +852,12 @@ where
             }
 
             if contracts_not_in_inputs.is_empty() {
-                break;
+                break
             }
 
             for contract_id in contracts_not_in_inputs {
                 if !self.set_contracts.insert(contract_id) {
-                    continue;
+                    continue
                 }
 
                 let inptus = script.inputs_mut();
@@ -913,13 +913,13 @@ where
         for input in self.tx.inputs() {
             if input_is_spendable_as_fee(input) {
                 let Some(amount) = input.amount() else {
-                    continue;
+                    continue
                 };
                 let Some(asset_id) = input.asset_id(&base_asset_id) else {
-                    continue;
+                    continue
                 };
                 let Some(owner) = input.input_owner() else {
-                    continue;
+                    continue
                 };
 
                 if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
@@ -949,7 +949,7 @@ where
             let need_to_cover = final_fee.saturating_add(self.base_asset_reserved);
 
             if need_to_cover <= total_base_asset {
-                break;
+                break
             }
 
             let remaining_input_slots = self.remaining_input_slots()?;

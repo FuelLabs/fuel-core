@@ -338,7 +338,7 @@ fn used_gas(receipts: Vec<Receipt>) -> u64 {
     for r in receipts {
         if let Receipt::ScriptResult { gas_used, .. } = r {
             used_gas = gas_used;
-            break;
+            break
         }
     }
     used_gas

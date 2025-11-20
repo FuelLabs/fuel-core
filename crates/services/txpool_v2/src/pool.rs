@@ -162,7 +162,7 @@ where
         {
             return Err(InsertionErrorType::Error(Error::InputValidation(
                 InputValidationError::DuplicateTxId(tx_id),
-            )));
+            )))
         }
 
         let insertion_result = self.insert_inner(tx, persistent_storage);

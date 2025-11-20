@@ -207,7 +207,7 @@ impl NetworkBehaviour for Behaviour {
         cx: &mut Context<'_>,
     ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(event) = self.pending_events.pop_front() {
-            return Poll::Ready(event);
+            return Poll::Ready(event)
         }
 
         if let Some((instant, peer_id)) = self.reserved_nodes_to_connect.front()
@@ -229,11 +229,11 @@ impl NetworkBehaviour for Behaviour {
                 .build();
             self.pending_connections.insert(opts.connection_id());
 
-            return Poll::Ready(ToSwarm::Dial { opts });
+            return Poll::Ready(ToSwarm::Dial { opts })
         }
 
         if self.decay_interval.poll_tick(cx).is_ready() {
-            return Poll::Ready(ToSwarm::GenerateEvent(PeerReportEvent::PerformDecay));
+            return Poll::Ready(ToSwarm::GenerateEvent(PeerReportEvent::PerformDecay))
         }
 
         Poll::Pending

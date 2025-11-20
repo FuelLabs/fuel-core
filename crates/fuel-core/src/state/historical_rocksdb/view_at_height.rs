@@ -76,7 +76,7 @@ where
                 return match value {
                     WriteOperation::Insert(value) => Ok(Some(value)),
                     WriteOperation::Remove => Ok(None),
-                };
+                }
             }
         }
 

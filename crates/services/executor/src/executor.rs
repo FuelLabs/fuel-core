@@ -1134,7 +1134,7 @@ where
             .ok_or(ExecutorError::PreviousBlockIsNotFound)?;
         let previous_da_height = prev_block_header.header().da_height();
         let Some(next_unprocessed_da_height) = previous_da_height.0.checked_add(1) else {
-            return Err(ExecutorError::DaHeightExceededItsLimit);
+            return Err(ExecutorError::DaHeightExceededItsLimit)
         };
 
         let mut root_calculator = MerkleRootCalculator::new();
@@ -1152,7 +1152,7 @@ where
                 match event {
                     Event::Message(message) => {
                         if message.da_height() != da_height {
-                            return Err(ExecutorError::RelayerGivesIncorrectMessages);
+                            return Err(ExecutorError::RelayerGivesIncorrectMessages)
                         }
                         block_storage_tx
                             .storage_as_mut::<Messages>()
@@ -1359,7 +1359,7 @@ where
 
     fn check_mint_is_not_found(execution_data: &ExecutionData) -> ExecutorResult<()> {
         if execution_data.found_mint {
-            return Err(ExecutorError::MintIsNotLastTransaction);
+            return Err(ExecutorError::MintIsNotLastTransaction)
         }
         Ok(())
     }
@@ -1375,7 +1375,7 @@ where
             .storage::<ProcessedTransactions>()
             .contains_key(tx_id)?
         {
-            return Err(ExecutorError::TransactionIdCollision(*tx_id));
+            return Err(ExecutorError::TransactionIdCollision(*tx_id))
         }
         Ok(())
     }
@@ -1528,14 +1528,14 @@ where
 
     fn check_mint_amount(mint: &Mint, expected_amount: u64) -> ExecutorResult<()> {
         if *mint.mint_amount() != expected_amount {
-            return Err(ExecutorError::CoinbaseAmountMismatch);
+            return Err(ExecutorError::CoinbaseAmountMismatch)
         }
         Ok(())
     }
 
     fn check_gas_price(mint: &Mint, expected_gas_price: Word) -> ExecutorResult<()> {
         if *mint.gas_price() != expected_gas_price {
-            return Err(ExecutorError::CoinbaseGasPriceMismatch);
+            return Err(ExecutorError::CoinbaseGasPriceMismatch)
         }
         Ok(())
     }
@@ -1545,14 +1545,14 @@ where
         execution_data: &ExecutionData,
     ) -> ExecutorResult<()> {
         if checked_mint.transaction().tx_pointer().tx_index() != execution_data.tx_count {
-            return Err(ExecutorError::MintHasUnexpectedIndex);
+            return Err(ExecutorError::MintHasUnexpectedIndex)
         }
         Ok(())
     }
 
     fn verify_mint_for_empty_contract(mint: &Mint) -> ExecutorResult<()> {
         if *mint.mint_amount() != 0 {
-            return Err(ExecutorError::CoinbaseAmountMismatch);
+            return Err(ExecutorError::CoinbaseAmountMismatch)
         }
 
         let input = input::contract::Contract {
@@ -1568,7 +1568,7 @@ where
             state_root: Bytes32::zeroed(),
         };
         if mint.input_contract() != &input || mint.output_contract() != &output {
-            return Err(ExecutorError::MintMismatch);
+            return Err(ExecutorError::MintMismatch)
         }
         Ok(())
     }
@@ -1599,7 +1599,7 @@ where
             .replace(&coinbase_id, &())?
             .is_some()
         {
-            return Err(ExecutorError::TransactionIdCollision(coinbase_id));
+            return Err(ExecutorError::TransactionIdCollision(coinbase_id))
         }
         Ok(tx)
     }
@@ -2435,7 +2435,7 @@ where
             .into();
 
             if db.storage::<Coins>().replace(&utxo_id, &coin)?.is_some() {
-                return Err(ExecutorError::OutputAlreadyExists);
+                return Err(ExecutorError::OutputAlreadyExists)
             }
             execution_data
                 .events

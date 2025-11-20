@@ -276,7 +276,7 @@ where
         let timestamp = match height {
             // panic if $rB is greater than the current block height.
             height if height > self.current_block_height => {
-                return Err(anyhow!("block height too high for timestamp").into());
+                return Err(anyhow!("block height too high for timestamp").into())
             }
             height if height == self.current_block_height => self.current_timestamp,
             height => self.database.block_time(&height)?,

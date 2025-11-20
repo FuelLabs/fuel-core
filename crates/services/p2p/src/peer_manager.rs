@@ -184,7 +184,7 @@ impl PeerManager {
 
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
         if self.reserved_peers.contains(peer_id) {
-            return self.reserved_connected_peers.get(peer_id);
+            return self.reserved_connected_peers.get(peer_id)
         }
         self.non_reserved_connected_peers.get(peer_id)
     }

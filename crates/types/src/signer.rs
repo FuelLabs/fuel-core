@@ -55,9 +55,7 @@ impl SignMode {
     /// Sign a prehashed message
     pub async fn sign_message(&self, message: Message) -> anyhow::Result<Signature> {
         let signature = match self {
-            SignMode::Unavailable => {
-                return Err(anyhow!("no PoA signing key configured"));
-            }
+            SignMode::Unavailable => return Err(anyhow!("no PoA signing key configured")),
             SignMode::Key(key) => {
                 let signing_key = key.expose_secret().deref();
                 Signature::sign(signing_key, &message)

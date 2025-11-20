@@ -282,7 +282,7 @@ impl BlockQuery {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
                     "Can't provide both an id and a height",
-                ));
+                ))
             }
             (Some(id), None) => query.block_height(&id.0.into()),
             (None, Some(height)) => {
@@ -290,7 +290,7 @@ impl BlockQuery {
                 Ok(height.into())
             }
             (None, None) => {
-                return Err(async_graphql::Error::new("Missing either id or height"));
+                return Err(async_graphql::Error::new("Missing either id or height"))
             }
         };
 
@@ -397,7 +397,7 @@ impl BlockMutation {
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
         if !config.debug {
-            return Err(anyhow!("`debug` must be enabled to use this endpoint").into());
+            return Err(anyhow!("`debug` must be enabled to use this endpoint").into())
         }
 
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();

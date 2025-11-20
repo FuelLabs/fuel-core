@@ -94,7 +94,7 @@ impl Extension for MetricsExtInner {
 
         // If it is not a query, skip time metering.
         if field_name.is_none() {
-            return next.run(ctx, info).await;
+            return next.run(ctx, info).await
         }
 
         let start_time = Instant::now();

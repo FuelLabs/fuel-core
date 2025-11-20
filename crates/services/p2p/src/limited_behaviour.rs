@@ -263,7 +263,7 @@ where
                     }
                     _ => {
                         tracing::warn!("Unhandled ToSwarm event in limited behaviour");
-                        return Poll::Pending;
+                        return Poll::Pending
                     }
                 };
 

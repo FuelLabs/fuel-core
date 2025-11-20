@@ -119,22 +119,22 @@ where
             return Err(anyhow!(
                 "Either first `{first}` or latest `{last}` elements, not both"
             )
-            .into());
+            .into())
         }
         (Some(after), _, _, Some(last)) => {
             return Err(anyhow!(
                 "After `{after:?}` with last `{last}` elements is not supported"
             )
-            .into());
+            .into())
         }
         (_, Some(before), Some(first), _) => {
             return Err(anyhow!(
                 "Before `{before:?}` with first `{first}` elements is not supported"
             )
-            .into());
+            .into())
         }
         (_, _, None, None) => {
-            return Err(anyhow!("The queries for the whole range is not supported").into());
+            return Err(anyhow!("The queries for the whole range is not supported").into())
         }
         (_, _, _, _) => { /* Other combinations are allowed */ }
     };
@@ -150,7 +150,7 @@ where
             } else if let Some(last) = last {
                 (last, IterDirection::Reverse)
             } else {
-                return Err(anyhow!("Either `first` or `last` should be provided"));
+                return Err(anyhow!("Either `first` or `last` should be provided"))
             };
 
             let start;
@@ -178,7 +178,7 @@ where
                         // Skip until start + 1
                         if key == start {
                             has_previous_page = true;
-                            return true;
+                            return true
                         }
                     }
                 }
@@ -192,7 +192,7 @@ where
                         // take until we've reached the end
                         if key == end {
                             has_next_page = true;
-                            return false;
+                            return false
                         }
                     }
                     count = count.saturating_sub(1);

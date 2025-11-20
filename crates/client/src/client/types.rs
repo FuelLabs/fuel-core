@@ -260,7 +260,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 TransactionStatus::SqueezedOut { reason: s.reason }
             }
             SchemaTxStatus::Unknown => {
-                return Err(Self::Error::UnknownVariant("SchemaTxStatus"));
+                return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
             }
         })
     }
@@ -408,7 +408,7 @@ impl TryFrom<SchemaStatusWithTx> for StatusWithTransaction {
                 StatusWithTransaction::SqueezedOut { reason: s.reason }
             }
             SchemaStatusWithTx::Unknown => {
-                return Err(Self::Error::UnknownVariant("SchemaTxStatus"));
+                return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
             }
         })
     }

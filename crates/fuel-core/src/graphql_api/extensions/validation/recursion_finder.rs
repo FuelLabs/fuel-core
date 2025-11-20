@@ -38,7 +38,7 @@ impl<'a> Visitor<'a> for RecursionFinder<'a> {
             let name = ty.name();
 
             if name == "__Type" {
-                return;
+                return
             }
 
             let old = self.visited.entry(name).or_default();
@@ -60,7 +60,7 @@ impl<'a> Visitor<'a> for RecursionFinder<'a> {
             let name = ty.name();
 
             if name == "__Type" {
-                return;
+                return
             }
 
             let old = self.visited.entry(name);

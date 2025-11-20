@@ -411,12 +411,12 @@ where
             None => {
                 return self
                     .latest_view_with_height(None)
-                    .map(|view| view.into_key_value_view());
+                    .map(|view| view.into_key_value_view())
             }
             Some(current_height) if &current_height == height => {
                 return self
                     .latest_view_with_height(Some(current_height))
-                    .map(|view| view.into_key_value_view());
+                    .map(|view| view.into_key_value_view())
             }
             _ => {}
         };

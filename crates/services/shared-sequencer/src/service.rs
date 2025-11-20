@@ -178,17 +178,17 @@ where
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         if !self.config.enabled {
             let _ = watcher.while_started().await;
-            return TaskNextAction::Stop;
+            return TaskNextAction::Stop
         }
 
         if let Err(err) = self.ensure_account_metadata().await {
             // We don't want to spam the RPC endpoint with a lot of queries,
             // so wait for one second before sending the next one.
             tokio::time::sleep(Duration::from_secs(1)).await;
-            return TaskNextAction::ErrorContinue(err);
+            return TaskNextAction::ErrorContinue(err)
         }
         if let Err(err) = self.ensure_prev_order().await {
-            return TaskNextAction::ErrorContinue(err);
+            return TaskNextAction::ErrorContinue(err)
         };
 
         tokio::select! {

@@ -170,7 +170,7 @@ impl GasPriceVerifiedTx {
     ) -> Result<InputDependenciesVerifiedTx, Error> {
         let pool_tx = checked_tx_into_pool(self.0, metadata)?;
         if pool_tx.max_gas() == 0 {
-            return Err(Error::InputValidation(InputValidationError::MaxGasZero));
+            return Err(Error::InputValidation(InputValidationError::MaxGasZero))
         }
         blacklist
             .check_blacklisting(&pool_tx)

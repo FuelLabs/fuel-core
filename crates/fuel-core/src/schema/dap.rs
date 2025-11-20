@@ -546,11 +546,11 @@ impl DapMutation {
                     state: gql_types::RunState::Completed,
                     breakpoint: None,
                     json_receipts: Vec::new(),
-                });
+                })
             }
             // The transaction was already completed earlier, so it cannot be resumed
             Err(err) => {
-                return Err(async_graphql::Error::new(format!("VM error: {err:?}")));
+                return Err(async_graphql::Error::new(format!("VM error: {err:?}")))
             }
         };
 

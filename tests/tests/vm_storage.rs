@@ -308,7 +308,7 @@ mod tests {
                     U256::from_big_endian(&start_key).overflowing_add(i.into());
 
                 if overflow {
-                    return None;
+                    return None
                 }
 
                 let current_key = u256_to_bytes32(current_key);
