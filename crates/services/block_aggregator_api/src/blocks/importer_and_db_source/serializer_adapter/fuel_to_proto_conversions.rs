@@ -21,6 +21,7 @@ use crate::{
         MintTransaction as ProtoMintTx,
         Output as ProtoOutput,
         Policies as ProtoPolicies,
+        Receipt as ProtoReceipt,
         ScriptTransaction as ProtoScriptTx,
         StorageSlot as ProtoStorageSlot,
         Transaction as ProtoTransaction,
@@ -56,6 +57,7 @@ use fuel_core_types::{
     fuel_tx::{
         Input,
         Output,
+        Receipt as FuelReceipt,
         StorageSlot,
         Transaction as FuelTransaction,
         TxPointer,
@@ -563,4 +565,8 @@ fn proto_policies_from_policies(
         bits,
         values: values.to_vec(),
     }
+}
+
+pub fn proto_receipt_from_receipt(_receipt: &FuelReceipt) -> ProtoReceipt {
+    todo!()
 }

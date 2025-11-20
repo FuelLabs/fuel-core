@@ -112,10 +112,10 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
     let block_height_2 = block_height_1.succ().unwrap();
     fuel_block_2.header_mut().set_block_height(block_height_2);
     let block1 = serializer_adapter
-        .serialize_block(&fuel_block_1)
+        .serialize_block(&fuel_block_1, &[])
         .expect("could not serialize block");
     let block2 = serializer_adapter
-        .serialize_block(&fuel_block_2)
+        .serialize_block(&fuel_block_2, &[])
         .expect("could not serialize block");
     let list = vec![(*block_height_1, block1), (block_height_2, block2)];
     // return response through query's channel
@@ -276,10 +276,10 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     let mut fuel_block_2 = FuelBlock::default();
     fuel_block_2.header_mut().set_block_height(height2);
     let block1 = serializer_adapter
-        .serialize_block(&fuel_block_1)
+        .serialize_block(&fuel_block_1, &[])
         .expect("could not serialize block");
     let block2 = serializer_adapter
-        .serialize_block(&fuel_block_2)
+        .serialize_block(&fuel_block_2, &[])
         .expect("could not serialize block");
     let list = vec![(height1, block1), (height2, block2)];
     if let BlockAggregatorQuery::NewBlockSubscription { response } = query {

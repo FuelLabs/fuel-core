@@ -69,9 +69,16 @@ where
         match maybe_import_result {
             Some(import_result) => {
                 let height = import_result.sealed_block.entity.header().height();
+                let receipts = import_result
+                    .tx_status
+                    .iter()
+                    .map(|status| status.result.receipts())
+                    .flatten()
+                    .map(Clone::clone)
+                    .collect::<Vec<_>>();
                 let res = self
                     .serializer
-                    .serialize_block(&import_result.sealed_block.entity);
+                    .serialize_block(&import_result.sealed_block.entity, &receipts);
                 let block = try_or_continue!(res);
                 let event = BlockSourceEvent::NewBlock(*height, block);
                 let res = self.block_return_sender.send(event).await;

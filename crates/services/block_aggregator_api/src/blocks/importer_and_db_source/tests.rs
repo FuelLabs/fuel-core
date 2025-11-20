@@ -36,7 +36,11 @@ pub struct MockSerializer;
 impl BlockSerializer for MockSerializer {
     type Block = BlockBytes;
 
-    fn serialize_block(&self, block: &FuelBlock) -> Result<BlockBytes> {
+    fn serialize_block(
+        &self,
+        block: &FuelBlock,
+        _receipts: &[FuelReceipt],
+    ) -> Result<BlockBytes> {
         let bytes_vec = to_allocvec(block).map_err(|e| {
             Error::BlockSource(anyhow!("failed to serialize block: {}", e))
         })?;
@@ -81,7 +85,7 @@ async fn next_block__gets_new_block_from_importer() {
     let actual = adapter.next_block().await.unwrap();
 
     // then
-    let serialized = serializer.serialize_block(&block.entity).unwrap();
+    let serialized = serializer.serialize_block(&block.entity, &[]).unwrap();
     let expected = BlockSourceEvent::NewBlock(*height, serialized);
     assert_eq!(expected, actual);
 }
@@ -131,7 +135,7 @@ async fn next_block__can_get_block_from_db() {
     let actual = adapter.next_block().await.unwrap();
 
     // then
-    let serialized = serializer.serialize_block(&block).unwrap();
+    let serialized = serializer.serialize_block(&block, &[]).unwrap();
     let expected = BlockSourceEvent::OldBlock(*height, serialized);
     assert_eq!(expected, actual);
 }

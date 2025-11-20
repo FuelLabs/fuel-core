@@ -90,6 +90,15 @@ where
         }
         Ok(txs)
     }
+
+    fn get_receipts(
+        &self,
+        _height: &BlockHeight,
+    ) -> Result<Vec<fuel_core_types::fuel_tx::Receipt>, E> {
+        // In this simplified example, we are not fetching receipts from the DB.
+        // Implement this method based on your storage schema if needed.
+        Ok(vec![])
+    }
 }
 
 impl<Serializer, DB, E> RunnableTask for SyncTask<Serializer, DB, Serializer::Block>
@@ -114,12 +123,16 @@ where
         let maybe_block = try_or_stop!(res, |e| {
             tracing::error!("error fetching block at height {}: {:?}", next_height, e);
         });
+        let res = self.get_receipts(&next_height);
+        let receipts = try_or_stop!(res, |e| {
+            tracing::error!("error fetching receipts at height {}: {:?}", next_height, e);
+        });
         if let Some(block) = maybe_block {
             tracing::debug!(
                 "found block at height {:?}, sending to return channel",
                 next_height
             );
-            let res = self.serializer.serialize_block(&block);
+            let res = self.serializer.serialize_block(&block, &receipts);
             let block = try_or_continue!(res);
             let event =
                 BlockSourceEvent::OldBlock(BlockHeight::from(*next_height), block);

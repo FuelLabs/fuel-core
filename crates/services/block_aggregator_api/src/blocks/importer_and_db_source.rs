@@ -27,6 +27,7 @@ use fuel_core_types::{
 
 use crate::blocks::importer_and_db_source::sync_service::SyncTask;
 use fuel_core_storage::tables::Transactions;
+use fuel_core_types::fuel_tx::Receipt as FuelReceipt;
 
 pub mod importer_service;
 pub mod sync_service;
@@ -37,7 +38,11 @@ pub mod serializer_adapter;
 
 pub trait BlockSerializer {
     type Block;
-    fn serialize_block(&self, block: &FuelBlock) -> Result<Self::Block>;
+    fn serialize_block(
+        &self,
+        block: &FuelBlock,
+        receipts: &[FuelReceipt],
+    ) -> Result<Self::Block>;
 }
 
 /// A block source that combines an importer and a database sync task.
