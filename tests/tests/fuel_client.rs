@@ -2,11 +2,17 @@
 
 use fuel_core::{
     database::Database,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::FuelClient;
 use reqwest::Url;
-use std::{net::SocketAddr, time::Duration};
+use std::{
+    net::SocketAddr,
+    time::Duration,
+};
 use tokio::time::timeout;
 
 fn graphql_url(addr: SocketAddr) -> Url {
