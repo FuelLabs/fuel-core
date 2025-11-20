@@ -5,15 +5,25 @@ use crate::{
         BlockAggregatorDB,
         remote_cache::RemoteCache,
         storage_db::StorageDB,
-        table::{Blocks, Column, LatestBlock},
+        table::{
+            Blocks,
+            Column,
+            LatestBlock,
+        },
     },
     result::Result,
 };
 
 use fuel_core_storage::{
-    Error as StorageError, StorageInspect, StorageMutate,
+    Error as StorageError,
+    StorageInspect,
+    StorageMutate,
     kv_store::KeyValueInspect,
-    transactional::{AtomicView, Modifiable, StorageTransaction},
+    transactional::{
+        AtomicView,
+        Modifiable,
+        StorageTransaction,
+    },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 

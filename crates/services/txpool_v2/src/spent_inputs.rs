@@ -1,9 +1,16 @@
 use fuel_core_types::{
-    fuel_tx::{Input, TxId, UtxoId},
+    fuel_tx::{
+        Input,
+        TxId,
+        UtxoId,
+    },
     fuel_types::Nonce,
 };
 use lru::LruCache;
-use std::{collections::HashMap, num::NonZeroUsize};
+use std::{
+    collections::HashMap,
+    num::NonZeroUsize,
+};
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
 enum InputKey {

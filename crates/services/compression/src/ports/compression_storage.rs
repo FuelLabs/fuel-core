@@ -1,13 +1,21 @@
 use crate::{
     errors::CompressionError,
-    storage::{self, CompressedBlocks},
+    storage::{
+        self,
+        CompressedBlocks,
+    },
 };
 use fuel_core_storage::{
-    self, StorageAsMut, StorageSize,
+    self,
+    StorageAsMut,
+    StorageSize,
     kv_store::KeyValueInspect,
     merkle::column::MerkleizedColumn,
     not_found,
-    transactional::{Modifiable, StorageTransaction},
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+    },
 };
 
 /// Compressed block type alias

@@ -2,11 +2,20 @@
 
 use crate::v1::da_source_service::{
     DaBlockCosts,
-    service::{DaBlockCostsSource, Result as DaBlockCostsResult},
+    service::{
+        DaBlockCostsSource,
+        Result as DaBlockCostsResult,
+    },
 };
 use anyhow::anyhow;
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
-use serde::{Deserialize, Serialize};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use std::ops::Deref;
 
 #[async_trait::async_trait]
@@ -258,7 +267,10 @@ pub mod fake_server {
     use mockito::Matcher::Any;
     use std::{
         collections::HashMap,
-        sync::{Arc, Mutex},
+        sync::{
+            Arc,
+            Mutex,
+        },
     };
 
     pub struct FakeServer {

@@ -1,17 +1,34 @@
 use anyhow::anyhow;
-use clap::{Args, builder::ArgPredicate::IsPresent};
+use clap::{
+    Args,
+    builder::ArgPredicate::IsPresent,
+};
 use fuel_core::{
     p2p::{
         Multiaddr,
-        config::{Config, MAX_RESPONSE_SIZE, NotInitialized, convert_to_libp2p_keypair},
+        config::{
+            Config,
+            MAX_RESPONSE_SIZE,
+            NotInitialized,
+            convert_to_libp2p_keypair,
+        },
         gossipsub_config::default_gossipsub_builder,
         heartbeat,
     },
-    types::{fuel_crypto, fuel_crypto::SecretKey},
+    types::{
+        fuel_crypto,
+        fuel_crypto::SecretKey,
+    },
 };
 use std::{
-    net::{IpAddr, Ipv4Addr},
-    num::{NonZeroU32, NonZeroUsize},
+    net::{
+        IpAddr,
+        Ipv4Addr,
+    },
+    num::{
+        NonZeroU32,
+        NonZeroUsize,
+    },
     path::PathBuf,
     str::FromStr,
 };

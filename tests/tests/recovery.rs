@@ -4,8 +4,12 @@ use clap::Parser;
 use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
 use proptest::{
-    prelude::{Just, ProptestConfig},
-    prop_compose, proptest,
+    prelude::{
+        Just,
+        ProptestConfig,
+    },
+    prop_compose,
+    proptest,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
 

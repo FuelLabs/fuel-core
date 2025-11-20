@@ -1,21 +1,42 @@
 use self::mdns_wrapper::MdnsWrapper;
 use futures::FutureExt;
 use libp2p::{
-    Multiaddr, PeerId,
-    core::{Endpoint, transport::PortUse},
-    kad::{self, store::MemoryStore},
+    Multiaddr,
+    PeerId,
+    core::{
+        Endpoint,
+        transport::PortUse,
+    },
+    kad::{
+        self,
+        store::MemoryStore,
+    },
     mdns,
     swarm::{
-        ConnectionDenied, ConnectionId, NetworkBehaviour, THandler,
-        derive_prelude::{ConnectionClosed, ConnectionEstablished, FromSwarm},
+        ConnectionDenied,
+        ConnectionId,
+        NetworkBehaviour,
+        THandler,
+        derive_prelude::{
+            ConnectionClosed,
+            ConnectionEstablished,
+            FromSwarm,
+        },
     },
 };
 
-use libp2p::swarm::{THandlerInEvent, THandlerOutEvent, ToSwarm};
+use libp2p::swarm::{
+    THandlerInEvent,
+    THandlerOutEvent,
+    ToSwarm,
+};
 use std::{
     collections::HashSet,
     pin::Pin,
-    task::{Context, Poll},
+    task::{
+        Context,
+        Poll,
+    },
     time::Duration,
 };
 use tracing::trace;
@@ -212,13 +233,28 @@ impl NetworkBehaviour for Behaviour {
 
 #[cfg(test)]
 mod tests {
-    use super::{Behaviour, Config, Event};
-    use futures::{StreamExt, future::poll_fn};
+    use super::{
+        Behaviour,
+        Config,
+        Event,
+    };
+    use futures::{
+        StreamExt,
+        future::poll_fn,
+    };
     use libp2p::{
-        Multiaddr, PeerId, Swarm, identity::Keypair, multiaddr::Protocol,
+        Multiaddr,
+        PeerId,
+        Swarm,
+        identity::Keypair,
+        multiaddr::Protocol,
         swarm::SwarmEvent,
     };
-    use std::{collections::HashSet, task::Poll, time::Duration};
+    use std::{
+        collections::HashSet,
+        task::Poll,
+        time::Duration,
+    };
 
     use libp2p_swarm_test::SwarmExt;
 

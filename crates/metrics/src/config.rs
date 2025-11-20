@@ -1,6 +1,10 @@
 use once_cell::sync::Lazy;
 use strum::IntoEnumIterator;
-use strum_macros::{Display, EnumIter, EnumString};
+use strum_macros::{
+    Display,
+    EnumIter,
+    EnumString,
+};
 
 #[derive(Debug, Display, Clone, Copy, PartialEq, EnumString, EnumIter)]
 #[strum(serialize_all = "lowercase")]

@@ -1,6 +1,12 @@
-use core::{fmt, mem};
+use core::{
+    fmt,
+    mem,
+};
 use fuel_core_types::fuel_vm::interpreter::MemoryInstance;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 use tokio::sync::OwnedSemaphorePermit;
 
 /// Memory instance originating from a pool.

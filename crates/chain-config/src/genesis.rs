@@ -1,5 +1,8 @@
 use fuel_core_storage::MerkleRoot;
-use fuel_core_types::{blockchain::consensus::Genesis, fuel_crypto::Hasher};
+use fuel_core_types::{
+    blockchain::consensus::Genesis,
+    fuel_crypto::Hasher,
+};
 
 // TODO: Replace `anyhow` with own `Error` related to genesis.
 

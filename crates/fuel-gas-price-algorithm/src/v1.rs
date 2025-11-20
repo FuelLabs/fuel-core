@@ -1,9 +1,15 @@
 use crate::utils::cumulative_percentage_change;
 use std::{
-    cmp::{max, min},
+    cmp::{
+        max,
+        min,
+    },
     collections::BTreeMap,
     num::NonZeroU64,
-    ops::{Div, RangeInclusive},
+    ops::{
+        Div,
+        RangeInclusive,
+    },
 };
 
 #[cfg(test)]

@@ -1,53 +1,113 @@
 use self::indexation::error::IndexationError;
 
 use super::{
-    block_height_subscription, indexation,
-    storage::old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
+    block_height_subscription,
+    indexation,
+    storage::old::{
+        OldFuelBlockConsensus,
+        OldFuelBlocks,
+        OldTransactions,
+    },
 };
 use crate::{
     fuel_core_graphql_api::{
         ports::{
             self,
-            worker::{BlockAt, OffChainDatabaseTransaction},
+            worker::{
+                BlockAt,
+                OffChainDatabaseTransaction,
+            },
         },
         storage::{
             blocks::FuelBlockIdsToHeights,
-            coins::{OwnedCoins, owner_coin_id_key},
+            coins::{
+                OwnedCoins,
+                owner_coin_id_key,
+            },
             contracts::ContractsInfo,
-            messages::{OwnedMessageIds, OwnedMessageKey, SpentMessages},
+            messages::{
+                OwnedMessageIds,
+                OwnedMessageKey,
+                SpentMessages,
+            },
         },
     },
     graphql_api::{
-        query_costs, storage::relayed_transactions::RelayedTransactionStatuses,
+        query_costs,
+        storage::relayed_transactions::RelayedTransactionStatuses,
     },
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use fuel_core_services::{
-    RunnableService, RunnableTask, ServiceRunner, StateWatcher, TaskNextAction,
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
     stream::BoxStream,
 };
-use fuel_core_storage::{Error as StorageError, Result as StorageResult, StorageAsMut};
+use fuel_core_storage::{
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsMut,
+};
 use fuel_core_tx_status_manager::from_executor_to_status;
 use fuel_core_types::{
     blockchain::{
-        block::{Block, CompressedBlock},
+        block::{
+            Block,
+            CompressedBlock,
+        },
         consensus::Consensus,
     },
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
-        AssetId, ConsensusParameters, Contract, Input, Output, Receipt, Transaction,
-        TxId, UniqueIdentifier,
-        field::{Inputs, Outputs, Salt, StorageSlots},
-        input::coin::{CoinPredicate, CoinSigned},
+        AssetId,
+        ConsensusParameters,
+        Contract,
+        Input,
+        Output,
+        Receipt,
+        Transaction,
+        TxId,
+        UniqueIdentifier,
+        field::{
+            Inputs,
+            Outputs,
+            Salt,
+            StorageSlots,
+        },
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
     },
-    fuel_types::{BlockHeight, Bytes32, ChainId},
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        ChainId,
+    },
     services::{
-        block_importer::{ImportResult, SharedImportResult},
-        executor::{Event, TransactionExecutionResult, TransactionExecutionStatus},
+        block_importer::{
+            ImportResult,
+            SharedImportResult,
+        },
+        executor::{
+            Event,
+            TransactionExecutionResult,
+            TransactionExecutionStatus,
+        },
     },
 };
-use futures::{FutureExt, StreamExt};
-use std::{borrow::Cow, ops::Deref, sync::Arc};
+use futures::{
+    FutureExt,
+    StreamExt,
+};
+use std::{
+    borrow::Cow,
+    ops::Deref,
+    sync::Arc,
+};
 
 #[cfg(test)]
 mod tests;

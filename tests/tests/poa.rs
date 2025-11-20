@@ -2,17 +2,33 @@
 
 use fuel_core::{
     combined_database::CombinedDatabase,
-    service::{Config, FuelService, adapters::consensus_module::poa::block_path},
+    service::{
+        Config,
+        FuelService,
+        adapters::consensus_module::poa::block_path,
+    },
 };
-use fuel_core_client::client::{FuelClient, types::TransactionStatus};
+use fuel_core_client::client::{
+    FuelClient,
+    types::TransactionStatus,
+};
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
-    blockchain::consensus::Consensus, fuel_crypto::SecretKey, fuel_tx::Transaction,
-    secrecy::Secret, signer::SignMode,
+    blockchain::consensus::Consensus,
+    fuel_crypto::SecretKey,
+    fuel_tx::Transaction,
+    secrecy::Secret,
+    signer::SignMode,
 };
-use rand::{SeedableRng, rngs::StdRng};
+use rand::{
+    SeedableRng,
+    rngs::StdRng,
+};
 use tempfile::tempdir;
-use test_helpers::{fuel_core_driver::FuelCoreDriver, produce_block_with_tx};
+use test_helpers::{
+    fuel_core_driver::FuelCoreDriver,
+    produce_block_with_tx,
+};
 
 #[tokio::test]
 async fn can_get_sealed_block_from_poa_produced_block() {
@@ -153,10 +169,21 @@ mod p2p {
     use super::*;
     use fuel_core::{
         chain_config::ConsensusConfig,
-        p2p_test_helpers::{Bootstrap, CustomizeConfig, make_config, make_node},
+        p2p_test_helpers::{
+            Bootstrap,
+            CustomizeConfig,
+            make_config,
+            make_node,
+        },
     };
-    use fuel_core_poa::{Trigger, service::Mode};
-    use fuel_core_types::{fuel_tx::Input, fuel_types::Address};
+    use fuel_core_poa::{
+        Trigger,
+        service::Mode,
+    };
+    use fuel_core_types::{
+        fuel_tx::Input,
+        fuel_types::Address,
+    };
     use std::time::Duration;
 
     // Starts first_producer which creates some blocks

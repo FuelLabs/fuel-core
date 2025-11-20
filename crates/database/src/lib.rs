@@ -11,7 +11,10 @@
 #![deny(warnings)]
 #![deny(unused_variables)]
 
-use fuel_core_storage::{Error as StorageError, transactional::ReferenceBytesKey};
+use fuel_core_storage::{
+    Error as StorageError,
+    transactional::ReferenceBytesKey,
+};
 use fuel_core_types::services::executor::Error as ExecutorError;
 
 /// The error occurred during work with any of databases.

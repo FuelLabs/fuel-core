@@ -3,22 +3,44 @@ use crate::{
     errors::CompressionError,
     metrics::CompressionMetricsManager,
     ports::{
-        block_source::{BlockAt, BlockSource, BlockWithMetadataExt},
+        block_source::{
+            BlockAt,
+            BlockSource,
+            BlockWithMetadataExt,
+        },
         canonical_height::CanonicalHeight,
-        compression_storage::{CompressionStorage, LatestHeight, WriteCompressedBlock},
+        compression_storage::{
+            CompressionStorage,
+            LatestHeight,
+            WriteCompressedBlock,
+        },
         configuration::CompressionConfigProvider,
     },
-    sync_state::{SyncStateNotifier, SyncStateObserver, new_sync_state_channel},
+    sync_state::{
+        SyncStateNotifier,
+        SyncStateObserver,
+        new_sync_state_channel,
+    },
     temporal_registry::CompressionContext,
 };
 use fuel_core_compression::compress::compress;
 use fuel_core_services::{
-    RunnableService, RunnableTask, ServiceRunner, StateWatcher, TaskNextAction,
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
     try_or_continue,
 };
 use fuel_core_storage::transactional::WriteTransaction;
-use fuel_core_types::{blockchain::block::Block, fuel_types::ChainId};
-use futures::{FutureExt, StreamExt};
+use fuel_core_types::{
+    blockchain::block::Block,
+    fuel_types::ChainId,
+};
+use futures::{
+    FutureExt,
+    StreamExt,
+};
 use std::time::Instant;
 
 /// Uninitialized compression service.
@@ -425,20 +447,34 @@ mod tests {
 
     use super::*;
     use crate::{
-        ports::block_source::{BlockWithMetadata, BlockWithMetadataExt},
+        ports::block_source::{
+            BlockWithMetadata,
+            BlockWithMetadataExt,
+        },
         storage,
         storage::CompressedBlocks,
     };
     use fuel_core_services::{
         Service,
-        stream::{BoxStream, IntoBoxStream},
+        stream::{
+            BoxStream,
+            IntoBoxStream,
+        },
     };
     use fuel_core_storage::{
         StorageAsRef,
-        iter::{IterDirection, IteratorOverTable, changes_iterator::ChangesIterator},
+        iter::{
+            IterDirection,
+            IteratorOverTable,
+            changes_iterator::ChangesIterator,
+        },
         merkle::column::MerkleizedColumn,
         structured_storage::test::InMemoryStorage,
-        transactional::{IntoTransaction, StorageChanges, StorageTransaction},
+        transactional::{
+            IntoTransaction,
+            StorageChanges,
+            StorageTransaction,
+        },
     };
 
     struct EmptyBlockSource;

@@ -1,25 +1,50 @@
 use clap::Parser;
 use fuel_core::chain_config::{
-    ChainConfig, ConsensusConfig, PoAV2, SnapshotWriter, StateConfig,
+    ChainConfig,
+    ConsensusConfig,
+    PoAV2,
+    SnapshotWriter,
+    StateConfig,
 };
 use fuel_core_bin::cli::snapshot;
 use fuel_core_client::client::{
-    pagination::{PageDirection, PaginationRequest},
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::message::MessageStatus,
 };
 use fuel_core_types::{
     blockchain::header::LATEST_STATE_TRANSITION_VERSION,
-    fuel_asm::{GTFArgs, RegId, op},
+    fuel_asm::{
+        GTFArgs,
+        RegId,
+        op,
+    },
     fuel_crypto::PublicKey,
     fuel_merkle::binary,
     fuel_tx::*,
     fuel_vm::*,
 };
 use itertools::Itertools;
-use rand::{Rng, SeedableRng, rngs::StdRng};
-use std::{collections::BTreeMap, ops::Deref, path::PathBuf};
-use tempfile::{TempDir, tempdir};
-use test_helpers::{fuel_core_driver::FuelCoreDriver, produce_block_with_tx};
+use rand::{
+    Rng,
+    SeedableRng,
+    rngs::StdRng,
+};
+use std::{
+    collections::BTreeMap,
+    ops::Deref,
+    path::PathBuf,
+};
+use tempfile::{
+    TempDir,
+    tempdir,
+};
+use test_helpers::{
+    fuel_core_driver::FuelCoreDriver,
+    produce_block_with_tx,
+};
 
 async fn take_snapshot(db_dir: &TempDir, snapshot_dir: &TempDir) -> anyhow::Result<()> {
     snapshot::exec(snapshot::Command::parse_from([

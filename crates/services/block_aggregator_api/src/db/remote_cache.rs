@@ -1,19 +1,38 @@
 use crate::{
     block_range_response::BlockRangeResponse,
     blocks::BlockSourceEvent,
-    db::{BlockAggregatorDB, table::LatestBlock},
+    db::{
+        BlockAggregatorDB,
+        table::LatestBlock,
+    },
     protobuf_types::Block as ProtoBlock,
     result::Error,
 };
 use anyhow::anyhow;
 use aws_config::{
-    BehaviorVersion, default_provider::credentials::DefaultCredentialsChain,
+    BehaviorVersion,
+    default_provider::credentials::DefaultCredentialsChain,
 };
-use aws_sdk_s3::{self, Client, primitives::ByteStream};
-use flate2::{Compression, write::GzEncoder};
+use aws_sdk_s3::{
+    self,
+    Client,
+    primitives::ByteStream,
+};
+use flate2::{
+    Compression,
+    write::GzEncoder,
+};
 use fuel_core_storage::{
-    Error as StorageError, StorageAsMut, StorageAsRef, StorageInspect, StorageMutate,
-    transactional::{Modifiable, StorageTransaction, WriteTransaction},
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+        WriteTransaction,
+    },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use prost::Message;

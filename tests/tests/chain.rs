@@ -1,17 +1,35 @@
 use fuel_core::{
-    chain_config::{ChainConfig, CoinConfig, StateConfig},
-    service::{Config, FuelService, config::GasPriceConfig},
+    chain_config::{
+        ChainConfig,
+        CoinConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+        config::GasPriceConfig,
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
     types::{
         TransactionStatus,
-        primitives::{AssetId, UtxoId},
+        primitives::{
+            AssetId,
+            UtxoId,
+        },
     },
 };
-use fuel_core_types::{fuel_crypto::SecretKey, fuel_tx::Input, fuel_types::ChainId};
+use fuel_core_types::{
+    fuel_crypto::SecretKey,
+    fuel_tx::Input,
+    fuel_types::ChainId,
+};
 use rand::SeedableRng;
-use test_helpers::assemble_tx::{AssembleAndRunTx, SigningAccount};
+use test_helpers::assemble_tx::{
+    AssembleAndRunTx,
+    SigningAccount,
+};
 
 #[tokio::test]
 async fn chain_info() {

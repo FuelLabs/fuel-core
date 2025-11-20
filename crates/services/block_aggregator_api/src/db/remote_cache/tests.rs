@@ -2,15 +2,23 @@ use super::*;
 use crate::{
     block_range_response::RemoteS3Response,
     blocks::importer_and_db_source::{
-        BlockSerializer, serializer_adapter::SerializerAdapter,
+        BlockSerializer,
+        serializer_adapter::SerializerAdapter,
     },
     db::table::Column,
 };
 use aws_sdk_s3::operation::put_object::PutObjectOutput;
-use aws_smithy_mocks::{Rule, mock, mock_client};
+use aws_smithy_mocks::{
+    Rule,
+    mock,
+    mock_client,
+};
 use fuel_core_storage::{
     structured_storage::test::InMemoryStorage,
-    transactional::{IntoTransaction, StorageTransaction},
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
 };
 use fuel_core_types::blockchain::block::Block as FuelBlock;
 use futures::StreamExt;

@@ -1,15 +1,33 @@
 //! A simple contract that holds a counter in the storage slot zero.
 //! Every time the contract is called, it increments the counter by one and returns the new value.
 
-use fuel_core_client::client::{FuelClient, types::TransactionStatus};
+use fuel_core_client::client::{
+    FuelClient,
+    types::TransactionStatus,
+};
 use fuel_core_types::{
-    fuel_asm::{GTFArgs, RegId, op},
+    fuel_asm::{
+        GTFArgs,
+        RegId,
+        op,
+    },
     fuel_tx::{
-        Bytes32, ContractId, CreateMetadata, Finalizable, Input, Output, Receipt,
-        StorageSlot, Transaction, TransactionBuilder,
+        Bytes32,
+        ContractId,
+        CreateMetadata,
+        Finalizable,
+        Input,
+        Output,
+        Receipt,
+        StorageSlot,
+        Transaction,
+        TransactionBuilder,
     },
     fuel_types::BlockHeight,
-    fuel_vm::{Salt, SecretKey},
+    fuel_vm::{
+        Salt,
+        SecretKey,
+    },
 };
 use futures::StreamExt;
 use rand::Rng;

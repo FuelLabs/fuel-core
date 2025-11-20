@@ -1,19 +1,37 @@
 use super::{
-    BlockImporterAdapter, BlockProducerAdapter, ChainStateInfoProvider, SharedMemoryPool,
-    StaticGasPrice, TxStatusManagerAdapter,
-    compression_adapters::CompressionServiceAdapter, import_result_provider,
+    BlockImporterAdapter,
+    BlockProducerAdapter,
+    ChainStateInfoProvider,
+    SharedMemoryPool,
+    StaticGasPrice,
+    TxStatusManagerAdapter,
+    compression_adapters::CompressionServiceAdapter,
+    import_result_provider,
 };
 use crate::{
     database::OnChainIterableKeyValueView,
     fuel_core_graphql_api::ports::{
-        BlockProducerPort, ChainStateProvider, DatabaseMessageProof, GasPriceEstimate,
-        P2pPort, TxPoolPort,
-        worker::{self, BlockAt},
+        BlockProducerPort,
+        ChainStateProvider,
+        DatabaseMessageProof,
+        GasPriceEstimate,
+        P2pPort,
+        TxPoolPort,
+        worker::{
+            self,
+            BlockAt,
+        },
     },
-    graphql_api::ports::{DatabaseDaCompressedBlocks, MemoryPool, TxStatusManager},
+    graphql_api::ports::{
+        DatabaseDaCompressedBlocks,
+        MemoryPool,
+        TxStatusManager,
+    },
     service::{
         adapters::{
-            P2PAdapter, TxPoolAdapter, import_result_provider::ImportResultProvider,
+            P2PAdapter,
+            TxPoolAdapter,
+            import_result_provider::ImportResultProvider,
         },
         vm_pool::MemoryFromPool,
     },
@@ -22,25 +40,42 @@ use async_trait::async_trait;
 use fuel_core_compression_service::storage::CompressedBlocks;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    Result as StorageResult, blueprint::BlueprintCodec, kv_store::KeyValueInspect,
-    not_found, structured_storage::TableWithBlueprint,
+    Result as StorageResult,
+    blueprint::BlueprintCodec,
+    kv_store::KeyValueInspect,
+    not_found,
+    structured_storage::TableWithBlueprint,
 };
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_txpool::TxPoolStats;
 use fuel_core_types::{
-    blockchain::header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
+    blockchain::header::{
+        ConsensusParametersVersion,
+        StateTransitionBytecodeVersion,
+    },
     entities::relayer::message::MerkleProof,
-    fuel_tx::{Bytes32, ConsensusParameters, Transaction, TxId},
+    fuel_tx::{
+        Bytes32,
+        ConsensusParameters,
+        Transaction,
+        TxId,
+    },
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
-        executor::{DryRunResult, StorageReadReplayEvent},
+        executor::{
+            DryRunResult,
+            StorageReadReplayEvent,
+        },
         p2p::PeerInfo,
         transaction_status::TransactionStatus,
     },
     tai64::Tai64,
 };
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 
 mod off_chain;
 mod on_chain;

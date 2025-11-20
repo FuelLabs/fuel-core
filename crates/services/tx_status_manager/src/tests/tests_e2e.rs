@@ -5,18 +5,34 @@
 //! actions such as send, receive, subscribe and drop.
 
 use fuel_core_types::{
-    fuel_tx::Bytes32, services::transaction_status::TransactionStatus,
+    fuel_tx::Bytes32,
+    services::transaction_status::TransactionStatus,
 };
 use proptest::prelude::*;
-use test_strategy::{Arbitrary, proptest};
+use test_strategy::{
+    Arbitrary,
+    proptest,
+};
 use tokio_stream::StreamExt;
 
 use super::*;
 use crate::{
-    tx_status_stream::{State, TxStatusMessage, TxStatusStream, TxUpdate},
-    update_sender::{MpscChannel, SendError, UpdateSender},
+    tx_status_stream::{
+        State,
+        TxStatusMessage,
+        TxStatusStream,
+        TxUpdate,
+    },
+    update_sender::{
+        MpscChannel,
+        SendError,
+        UpdateSender,
+    },
 };
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::HashMap,
+    time::Duration,
+};
 
 const MAX_CHANNELS: usize = 2;
 const MAX_IDS: u8 = 2;

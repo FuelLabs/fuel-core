@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::OnceLock};
+use std::{
+    collections::HashMap,
+    sync::OnceLock,
+};
 #[cfg(test)]
 use strum_macros::EnumIter;
 

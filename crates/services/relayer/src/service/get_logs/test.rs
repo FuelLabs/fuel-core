@@ -1,16 +1,28 @@
 #![allow(clippy::arithmetic_side_effects)]
 use super::*;
 use crate::{
-    abi::bridge::{MessageSent, Transaction},
+    abi::bridge::{
+        MessageSent,
+        Transaction,
+    },
     service::state::EthSyncGap,
     test_helpers::page_sizer::IdentityPageSizer,
 };
-use alloy_primitives::{IntoLogData, U256};
+use alloy_primitives::{
+    IntoLogData,
+    U256,
+};
 use alloy_provider::transport::TransportError;
-use fuel_core_provider::test_helpers::provider::{MockProvider, TriggerType};
+use fuel_core_provider::test_helpers::provider::{
+    MockProvider,
+    TriggerType,
+};
 use std::{
     ops::RangeInclusive,
-    sync::atomic::{self, AtomicUsize},
+    sync::atomic::{
+        self,
+        AtomicUsize,
+    },
 };
 use test_case::test_case;
 

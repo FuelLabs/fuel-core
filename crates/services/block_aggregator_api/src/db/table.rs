@@ -2,7 +2,10 @@ use crate::protobuf_types::Block as ProtoBlock;
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{Decode, Encode},
+    codec::{
+        Decode,
+        Encode,
+    },
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
 };
@@ -82,7 +85,10 @@ impl TableWithBlueprint for LatestBlock {
     }
 }
 
-use fuel_core_storage::codec::{postcard::Postcard, primitive::Primitive};
+use fuel_core_storage::codec::{
+    postcard::Postcard,
+    primitive::Primitive,
+};
 use prost::Message;
 
 pub struct ProtoBufCodec;

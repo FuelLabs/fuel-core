@@ -2,11 +2,17 @@
 //! Maps from block height -> registrations made for compressing that block
 
 use fuel_core_storage::{
-    Mappable, blueprint::plain::Plain, codec::postcard::Postcard,
-    merkle::sparse::MerkleizedTableColumn, structured_storage::TableWithBlueprint,
+    Mappable,
+    blueprint::plain::Plain,
+    codec::postcard::Postcard,
+    merkle::sparse::MerkleizedTableColumn,
+    structured_storage::TableWithBlueprint,
 };
 
-use super::column::{CompressionColumn, MerkleizedColumnOf};
+use super::column::{
+    CompressionColumn,
+    MerkleizedColumnOf,
+};
 
 /// Table that indexes the registrations.
 pub struct Registrations;

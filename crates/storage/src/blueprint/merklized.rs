@@ -3,17 +3,37 @@
 //! for all entries.
 
 use crate::{
-    Error as StorageError, Mappable, MerkleRoot, Result as StorageResult, StorageAsMut,
-    StorageInspect, StorageMutate,
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageInspect,
+    StorageMutate,
     blueprint::{
-        BlueprintCodec, BlueprintInspect, BlueprintMutate, SupportsBatching,
+        BlueprintCodec,
+        BlueprintInspect,
+        BlueprintMutate,
+        SupportsBatching,
         SupportsMerkle,
     },
-    codec::{Decode, Encode, Encoder},
-    kv_store::{BatchOperations, KeyValueInspect, KeyValueMutate},
+    codec::{
+        Decode,
+        Encode,
+        Encoder,
+    },
+    kv_store::{
+        BatchOperations,
+        KeyValueInspect,
+        KeyValueMutate,
+    },
     not_found,
     structured_storage::StructuredStorage,
-    tables::merkle::{DenseMerkleMetadata, DenseMerkleMetadataV1, DenseMetadataKey},
+    tables::merkle::{
+        DenseMerkleMetadata,
+        DenseMerkleMetadataV1,
+        DenseMetadataKey,
+    },
 };
 use fuel_core_types::fuel_merkle::binary::Primitive;
 
@@ -301,14 +321,33 @@ pub mod basic_tests_bmt {
     use super::*;
     use crate::{
         blueprint::merklized::Merklized,
-        codec::{Decode, Encode},
-        structured_storage::{TableWithBlueprint, test::InMemoryStorage},
-        tables::merkle::{DenseMerkleMetadata, DenseMetadataKey},
-        transactional::{StorageTransaction, WriteTransaction},
+        codec::{
+            Decode,
+            Encode,
+        },
+        structured_storage::{
+            TableWithBlueprint,
+            test::InMemoryStorage,
+        },
+        tables::merkle::{
+            DenseMerkleMetadata,
+            DenseMetadataKey,
+        },
+        transactional::{
+            StorageTransaction,
+            WriteTransaction,
+        },
     };
     use core::fmt;
-    use fuel_core_types::fuel_merkle::binary::{self, MerkleTree, Primitive};
-    use rand::{SeedableRng, rngs::StdRng};
+    use fuel_core_types::fuel_merkle::binary::{
+        self,
+        MerkleTree,
+        Primitive,
+    };
+    use rand::{
+        SeedableRng,
+        rngs::StdRng,
+    };
 
     /// A wrapper type to allow for `AsRef` implementation.
     pub struct Wrapper<T>(pub T);

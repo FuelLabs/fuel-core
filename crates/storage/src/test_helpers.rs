@@ -1,9 +1,17 @@
 //! The module to help with tests.
 
 use crate::{
-    Error as StorageError, Mappable, MerkleRoot, MerkleRootStorage,
-    Result as StorageResult, StorageInspect, StorageMutate,
-    transactional::{Changes, Modifiable},
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    Result as StorageResult,
+    StorageInspect,
+    StorageMutate,
+    transactional::{
+        Changes,
+        Modifiable,
+    },
 };
 
 /// The trait is used to provide a generic mocked implementation for all possible `StorageInspect`,

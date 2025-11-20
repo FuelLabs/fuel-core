@@ -3,18 +3,28 @@
 use super::*;
 use crate::blocks::BlockBytes;
 use ::postcard::to_allocvec;
-use fuel_core_services::stream::{IntoBoxStream, pending};
+use fuel_core_services::stream::{
+    IntoBoxStream,
+    pending,
+};
 use fuel_core_storage::{
     StorageAsMut,
     column::Column as OnChainColumn,
     structured_storage::test::InMemoryStorage,
-    transactional::{IntoTransaction, StorageTransaction, WriteTransaction},
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+        WriteTransaction,
+    },
 };
 use futures::StreamExt;
 
 use fuel_core_types::{
     blockchain::SealedBlock,
-    fuel_tx::{Transaction, UniqueIdentifier},
+    fuel_tx::{
+        Transaction,
+        UniqueIdentifier,
+    },
     fuel_types::ChainId,
     services::block_importer::ImportResult,
 };

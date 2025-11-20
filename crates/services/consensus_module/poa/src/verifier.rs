@@ -2,7 +2,11 @@ use crate::ports::Database;
 use anyhow::ensure;
 use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_types::{
-    blockchain::{block::Block, consensus::poa::PoAConsensus, header::BlockHeader},
+    blockchain::{
+        block::Block,
+        consensus::poa::PoAConsensus,
+        header::BlockHeader,
+    },
     fuel_tx::Input,
 };
 

@@ -1,7 +1,10 @@
 //! The config of the block verifier.
 
 use fuel_core_chain_config::ConsensusConfig;
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 
 /// The config of the block verifier.
 pub struct Config {

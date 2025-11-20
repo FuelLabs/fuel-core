@@ -4,17 +4,27 @@ use crate::helpers::TestSetupBuilder;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
-        field::{Inputs, Outputs},
+        field::{
+            Inputs,
+            Outputs,
+        },
         *,
     },
     fuel_types::ChainId,
     fuel_vm::{
-        checked_transaction::{CheckPredicateParams, EstimatePredicates},
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
         interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
 };
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{
+    Rng,
+    SeedableRng,
+    rngs::StdRng,
+};
 
 #[tokio::test]
 async fn transaction_with_valid_predicate_is_executed() {

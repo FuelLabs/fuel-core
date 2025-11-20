@@ -1,29 +1,64 @@
-use std::{borrow::Cow, collections::HashSet};
+use std::{
+    borrow::Cow,
+    collections::HashSet,
+};
 
 use crate::{
-    coins_query::{CoinsQueryError, SpendQuery, random_improve, select_coins_to_spend},
+    coins_query::{
+        CoinsQueryError,
+        SpendQuery,
+        random_improve,
+        select_coins_to_spend,
+    },
     database::database_description::IndexationKind,
     fuel_core_graphql_api::{
-        IntoApiResult, query_costs, storage::coins::CoinsToSpendIndexKey,
+        IntoApiResult,
+        query_costs,
+        storage::coins::CoinsToSpendIndexKey,
     },
-    graphql_api::{api_service::ChainInfoProvider, database::ReadView},
-    query::asset_query::{AssetSpendTarget, Exclude},
+    graphql_api::{
+        api_service::ChainInfoProvider,
+        database::ReadView,
+    },
+    query::asset_query::{
+        AssetSpendTarget,
+        Exclude,
+    },
     schema::{
         ReadViewProvider,
-        scalars::{Address, AssetId, Nonce, U16, U32, U64, U128, UtxoId},
+        scalars::{
+            Address,
+            AssetId,
+            Nonce,
+            U16,
+            U32,
+            U64,
+            U128,
+            UtxoId,
+        },
     },
 };
 use async_graphql::{
     Context,
-    connection::{Connection, EmptyFields},
+    connection::{
+        Connection,
+        EmptyFields,
+    },
 };
 use fuel_core_types::{
     entities::coins::{
-        self, CoinId,
+        self,
+        CoinId,
         coin::Coin as CoinModel,
-        message_coin::{self, MessageCoin as MessageCoinModel},
+        message_coin::{
+            self,
+            MessageCoin as MessageCoinModel,
+        },
     },
-    fuel_tx::{self, ConsensusParameters},
+    fuel_tx::{
+        self,
+        ConsensusParameters,
+    },
 };
 use itertools::Itertools;
 use tokio_stream::StreamExt;

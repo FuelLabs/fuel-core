@@ -1,14 +1,26 @@
 use crate::graphql_api::database::ReadView;
 use fuel_core_services::stream::IntoBoxStream;
 use fuel_core_storage::{
-    Error as StorageError, Result as StorageResult, iter::IterDirection,
+    Error as StorageError,
+    Result as StorageResult,
+    iter::IterDirection,
 };
 use fuel_core_types::{
-    entities::coins::{CoinId, CoinType},
+    entities::coins::{
+        CoinId,
+        CoinType,
+    },
     fuel_tx::UtxoId,
-    fuel_types::{Address, AssetId, Nonce},
+    fuel_types::{
+        Address,
+        AssetId,
+        Nonce,
+    },
 };
-use futures::{Stream, TryStreamExt};
+use futures::{
+    Stream,
+    TryStreamExt,
+};
 use std::collections::HashSet;
 use tokio_stream::StreamExt;
 

@@ -1,33 +1,63 @@
 use anyhow::anyhow;
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 use tokio::{
-    sync::{mpsc, oneshot},
+    sync::{
+        mpsc,
+        oneshot,
+    },
     time::Instant,
 };
 
 use crate::{
-    Config, Trigger,
+    Config,
+    Trigger,
     ports::{
-        BlockImporter, BlockProducer, BlockProductionReadySignal, BlockSigner, GetTime,
-        P2pPort, PredefinedBlocks, TransactionPool, TransactionsSource,
+        BlockImporter,
+        BlockProducer,
+        BlockProductionReadySignal,
+        BlockSigner,
+        GetTime,
+        P2pPort,
+        PredefinedBlocks,
+        TransactionPool,
+        TransactionsSource,
         WaitForReadySignal,
     },
-    sync::{SyncState, SyncTask},
+    sync::{
+        SyncState,
+        SyncTask,
+    },
 };
 use fuel_core_services::{
-    RunnableService, RunnableTask, Service as OtherService, ServiceRunner, StateWatcher,
-    TaskNextAction, stream::BoxFuture,
+    RunnableService,
+    RunnableTask,
+    Service as OtherService,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
+    stream::BoxFuture,
 };
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
-    blockchain::{SealedBlock, block::Block, header::BlockHeader},
-    fuel_tx::{Transaction, TxId},
+    blockchain::{
+        SealedBlock,
+        block::Block,
+        header::BlockHeader,
+    },
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
     fuel_types::BlockHeight,
     services::{
         Uncommitted,
         block_importer::ImportResult,
         executor::{
-            Error as ExecutorError, ExecutionResult,
+            Error as ExecutorError,
+            ExecutionResult,
             UncommittedResult as UncommittedExecutionResult,
         },
     },

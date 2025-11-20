@@ -2,16 +2,28 @@
 
 use crate::{
     blockchain::primitives::SecretKeyWrapper,
-    fuel_crypto::{Message, PublicKey},
-    fuel_tx::{Address, Input},
+    fuel_crypto::{
+        Message,
+        PublicKey,
+    },
+    fuel_tx::{
+        Address,
+        Input,
+    },
     fuel_vm::Signature,
-    secrecy::{ExposeSecret, Secret},
+    secrecy::{
+        ExposeSecret,
+        Secret,
+    },
 };
 use anyhow::anyhow;
 #[cfg(feature = "aws-kms")]
 use aws_sdk_kms::{
     primitives::Blob,
-    types::{MessageType, SigningAlgorithmSpec},
+    types::{
+        MessageType,
+        SigningAlgorithmSpec,
+    },
 };
 use core::ops::Deref;
 
@@ -127,7 +139,10 @@ async fn sign_with_kms(
     message: Message,
 ) -> anyhow::Result<Signature> {
     use k256::{
-        ecdsa::{RecoveryId, VerifyingKey},
+        ecdsa::{
+            RecoveryId,
+            VerifyingKey,
+        },
         pkcs8::DecodePublicKey,
     };
 
@@ -191,7 +206,10 @@ mod tests {
     use super::*;
     use crate as fuel_core_types;
     use fuel_core_types::fuel_crypto::SecretKey;
-    use rand::{SeedableRng, rngs::StdRng};
+    use rand::{
+        SeedableRng,
+        rngs::StdRng,
+    };
 
     #[cfg(not(feature = "aws-kms"))]
     use aws_config as _;

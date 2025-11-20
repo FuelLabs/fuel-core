@@ -1,6 +1,10 @@
 //! Blockchain related types
 
-use crate::blockchain::{block::Block, consensus::Sealed, header::BlockHeader};
+use crate::blockchain::{
+    block::Block,
+    consensus::Sealed,
+    header::BlockHeader,
+};
 
 pub mod block;
 pub mod consensus;

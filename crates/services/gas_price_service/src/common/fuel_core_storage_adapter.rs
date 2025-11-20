@@ -1,30 +1,55 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::storage::{
-            GasPriceColumn, GasPriceMetadata, RecordedHeights,
+            GasPriceColumn,
+            GasPriceMetadata,
+            RecordedHeights,
         },
         updater_metadata::UpdaterMetadata,
-        utils::{BlockInfo, Error as GasPriceError, Result as GasPriceResult},
+        utils::{
+            BlockInfo,
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
     ports::{
-        GasPriceServiceAtomicStorage, GetLatestRecordedHeight, GetMetadataStorage,
-        SetLatestRecordedHeight, SetMetadataStorage,
+        GasPriceServiceAtomicStorage,
+        GetLatestRecordedHeight,
+        GetMetadataStorage,
+        SetLatestRecordedHeight,
+        SetMetadataStorage,
     },
 };
 use anyhow::anyhow;
 use core::cmp::min;
 use fuel_core_storage::{
-    Error as StorageError, StorageAsMut, StorageAsRef, StorageInspect,
-    codec::{Encode, postcard::Postcard},
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
+    codec::{
+        Encode,
+        postcard::Postcard,
+    },
     kv_store::KeyValueInspect,
-    transactional::{Modifiable, StorageTransaction, WriteTransaction},
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+        WriteTransaction,
+    },
 };
 use fuel_core_types::{
-    blockchain::{block::Block, header::ConsensusParametersVersion},
+    blockchain::{
+        block::Block,
+        header::ConsensusParametersVersion,
+    },
     fuel_merkle::storage::StorageMutate,
     fuel_tx::{
         Transaction,
-        field::{MintAmount, MintGasPrice},
+        field::{
+            MintAmount,
+            MintGasPrice,
+        },
     },
     fuel_types::BlockHeight,
 };

@@ -1,7 +1,10 @@
 //! Ports used by the relayer to access the outside world
 
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, services::relayer::Event};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    services::relayer::Event,
+};
 
 #[cfg(test)]
 mod tests;

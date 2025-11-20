@@ -1,10 +1,15 @@
 use std::env;
 
 use fuel_core::chain_config::{
-    ChainConfig, SnapshotMetadata, SnapshotWriter, StateConfig, TableEncoding,
+    ChainConfig,
+    SnapshotMetadata,
+    SnapshotWriter,
+    StateConfig,
+    TableEncoding,
 };
 use fuel_core_types::{
-    blockchain::header::LATEST_STATE_TRANSITION_VERSION, fuel_tx::GasCosts,
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
+    fuel_tx::GasCosts,
 };
 use test_helpers::fuel_core_driver::FuelCoreDriver;
 

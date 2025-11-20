@@ -1,6 +1,9 @@
 use crate::client::{
     schema,
-    types::primitives::{BlobId, Bytes},
+    types::primitives::{
+        BlobId,
+        Bytes,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq)]

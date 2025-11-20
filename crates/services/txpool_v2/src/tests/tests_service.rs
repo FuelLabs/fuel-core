@@ -1,18 +1,33 @@
 use fuel_core_services::Service as ServiceTrait;
 use fuel_core_types::{
-    blockchain::{block::Block, consensus::Sealed},
-    fuel_tx::{UniqueIdentifier, UtxoId},
+    blockchain::{
+        block::Block,
+        consensus::Sealed,
+    },
+    fuel_tx::{
+        UniqueIdentifier,
+        UtxoId,
+    },
     fuel_types::ChainId,
-    services::{block_importer::ImportResult, transaction_status::TransactionStatus},
+    services::{
+        block_importer::ImportResult,
+        transaction_status::TransactionStatus,
+    },
 };
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 
 use crate::{
     Constraints,
     config::Config,
     tests::{
         mocks::MockImporter,
-        universe::{DEFAULT_EXPIRATION_HEIGHT, TestPoolUniverse},
+        universe::{
+            DEFAULT_EXPIRATION_HEIGHT,
+            TestPoolUniverse,
+        },
     },
 };
 

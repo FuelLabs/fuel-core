@@ -1,28 +1,64 @@
-use super::scalars::{Bytes32, HexString, Tai64Timestamp, TransactionId};
+use super::scalars::{
+    Bytes32,
+    HexString,
+    Tai64Timestamp,
+    TransactionId,
+};
 use crate::{
     fuel_core_graphql_api::{
-        Config as GraphQLConfig, IntoApiResult, api_service::ConsensusModule,
-        database::ReadView, query_costs, require_expensive_subscriptions,
+        Config as GraphQLConfig,
+        IntoApiResult,
+        api_service::ConsensusModule,
+        database::ReadView,
+        query_costs,
+        require_expensive_subscriptions,
     },
     graphql_api,
     schema::{
         ReadViewProvider,
-        scalars::{BlockId, Signature, U16, U32, U64},
+        scalars::{
+            BlockId,
+            Signature,
+            U16,
+            U32,
+            U64,
+        },
         tx::types::Transaction,
     },
 };
 use anyhow::anyhow;
 use async_graphql::{
-    Context, Enum, Object, SimpleObject, Subscription, Union,
-    connection::{Connection, EmptyFields},
+    Context,
+    Enum,
+    Object,
+    SimpleObject,
+    Subscription,
+    Union,
+    connection::{
+        Connection,
+        EmptyFields,
+    },
 };
-use fuel_core_storage::{Result as StorageResult, iter::IterDirection};
+use fuel_core_storage::{
+    Result as StorageResult,
+    iter::IterDirection,
+};
 use fuel_core_types::{
-    blockchain::{block::CompressedBlock, header::BlockHeader},
+    blockchain::{
+        block::CompressedBlock,
+        header::BlockHeader,
+    },
     fuel_tx::TxId,
-    fuel_types::{self, BlockHeight},
+    fuel_types::{
+        self,
+        BlockHeight,
+    },
 };
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{
+    Stream,
+    StreamExt,
+    TryStreamExt,
+};
 use tokio_stream::wrappers::BroadcastStream;
 
 pub struct Block(pub(crate) CompressedBlock);

@@ -3,14 +3,21 @@ mod tests;
 
 use crate::common::{
     fuel_core_storage_adapter::{
-        GasPriceSettings, GasPriceSettingsProvider, get_block_info,
+        GasPriceSettings,
+        GasPriceSettingsProvider,
+        get_block_info,
     },
-    utils::{BlockInfo, Error as GasPriceError, Result as GasPriceResult},
+    utils::{
+        BlockInfo,
+        Error as GasPriceError,
+        Result as GasPriceResult,
+    },
 };
 use anyhow::anyhow;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
-    fuel_types::BlockHeight, services::block_importer::SharedImportResult,
+    fuel_types::BlockHeight,
+    services::block_importer::SharedImportResult,
 };
 use std::future::Future;
 use tokio_stream::StreamExt;

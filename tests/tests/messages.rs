@@ -1,29 +1,53 @@
 use fuel_core::{
-    chain_config::{MessageConfig, StateConfig},
-    service::{Config, FuelService},
+    chain_config::{
+        MessageConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{PageDirection, PaginationRequest},
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::{
         TransactionStatus,
-        assemble_tx::{ChangePolicy, RequiredBalance},
+        assemble_tx::{
+            ChangePolicy,
+            RequiredBalance,
+        },
         message::MessageStatus,
     },
 };
 use fuel_core_types::{
-    fuel_asm::{GTFArgs, RegId, op},
+    fuel_asm::{
+        GTFArgs,
+        RegId,
+        op,
+    },
     fuel_crypto::*,
     fuel_merkle,
-    fuel_tx::{Word, input::message::compute_message_id, *},
+    fuel_tx::{
+        Word,
+        input::message::compute_message_id,
+        *,
+    },
     fuel_types::ChainId,
 };
 use itertools::Itertools;
 use rstest::rstest;
 use std::ops::Deref;
 use test_helpers::{
-    assemble_tx::{AssembleAndRunTx, SigningAccount},
-    config_with_fee, default_signing_wallet,
+    assemble_tx::{
+        AssembleAndRunTx,
+        SigningAccount,
+    },
+    config_with_fee,
+    default_signing_wallet,
 };
 
 mod relayer;

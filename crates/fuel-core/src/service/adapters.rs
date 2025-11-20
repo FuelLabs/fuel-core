@@ -1,28 +1,50 @@
-use std::{ops::Deref, sync::Arc};
-use tokio::sync::{mpsc, watch};
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
+use tokio::sync::{
+    mpsc,
+    watch,
+};
 
-use fuel_core_consensus_module::{RelayerConsensusConfig, block_verifier::Verifier};
+use fuel_core_consensus_module::{
+    RelayerConsensusConfig,
+    block_verifier::Verifier,
+};
 use fuel_core_executor::executor::OnceTransactionsSource;
 use fuel_core_gas_price_service::{
-    common::cumulative_percentage_change, v1::service::LatestGasPrice,
+    common::cumulative_percentage_change,
+    v1::service::LatestGasPrice,
 };
 use fuel_core_importer::ImporterResult;
 use fuel_core_poa::ports::BlockSigner;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
-use fuel_core_tx_status_manager::{SharedData, TxStatusStream};
+use fuel_core_tx_status_manager::{
+    SharedData,
+    TxStatusStream,
+};
 use fuel_core_txpool::ports::GasPriceProvider as TxPoolGasPriceProvider;
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        consensus::{Consensus, poa::PoAConsensus},
+        consensus::{
+            Consensus,
+            poa::PoAConsensus,
+        },
     },
-    fuel_tx::{Bytes32, Transaction},
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+    },
     fuel_types::BlockHeight,
     services::{
         block_importer::SharedImportResult,
         block_producer::Components,
-        executor::{Result as ExecutorResult, UncommittedResult},
+        executor::{
+            Result as ExecutorResult,
+            UncommittedResult,
+        },
         preconfirmation::Preconfirmation,
     },
     signer::SignMode,
@@ -35,10 +57,16 @@ use tokio::time::Instant;
 use fuel_core_types::services::p2p::peer_reputation::AppScore;
 
 use crate::{
-    database::{Database, database_description::relayer::Relayer},
+    database::{
+        Database,
+        database_description::relayer::Relayer,
+    },
     fuel_core_graphql_api::ports::GasPriceEstimate,
     service::{
-        sub_services::{BlockProducerService, TxPoolSharedState},
+        sub_services::{
+            BlockProducerService,
+            TxPoolSharedState,
+        },
         vm_pool::MemoryPool,
     },
 };

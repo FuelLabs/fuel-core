@@ -3,31 +3,66 @@ pub trait Randomize {
 }
 
 use fuel_core_storage::{
-    ContractsAssetKey, ContractsStateData, ContractsStateKey,
+    ContractsAssetKey,
+    ContractsStateData,
+    ContractsStateKey,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
         Messages,
     },
 };
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        consensus::{Consensus, poa::PoAConsensus},
+        consensus::{
+            Consensus,
+            poa::PoAConsensus,
+        },
         header::PartialBlockHeader,
         primitives::DaBlockHeight,
     },
     entities::{
         Message,
-        coins::coin::{CompressedCoin, CompressedCoinV1},
-        contract::{ContractUtxoInfo, ContractsInfoType},
+        coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
+        contract::{
+            ContractUtxoInfo,
+            ContractsInfoType,
+        },
         relayer::message::MessageV1,
     },
-    fuel_asm::{RegId, op},
-    fuel_tx::{
-        BlobId, ContractId, Transaction, TransactionBuilder, UniqueIdentifier, UtxoId,
+    fuel_asm::{
+        RegId,
+        op,
     },
-    fuel_types::{Address, AssetId, BlockHeight, Bytes32, ChainId, Nonce},
-    fuel_vm::{BlobBytes, BlobData, Salt, Signature},
+    fuel_tx::{
+        BlobId,
+        ContractId,
+        Transaction,
+        TransactionBuilder,
+        UniqueIdentifier,
+        UtxoId,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        BlockHeight,
+        Bytes32,
+        ChainId,
+        Nonce,
+    },
+    fuel_vm::{
+        BlobBytes,
+        BlobData,
+        Salt,
+        Signature,
+    },
 };
 
 use crate::TableEntry;

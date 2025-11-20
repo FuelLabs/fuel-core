@@ -1,8 +1,14 @@
-use crate::futures::{FuturesMetrics, future_tracker::FutureTracker};
+use crate::futures::{
+    FuturesMetrics,
+    future_tracker::FutureTracker,
+};
 use std::{
     future::Future,
     pin::Pin,
-    task::{Context, Poll},
+    task::{
+        Context,
+        Poll,
+    },
 };
 
 pin_project_lite::pin_project! {

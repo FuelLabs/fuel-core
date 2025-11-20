@@ -2,7 +2,10 @@ use super::dump::dump_schema;
 use clap::Parser;
 use std::{
     env,
-    path::{Path, PathBuf},
+    path::{
+        Path,
+        PathBuf,
+    },
     process::Command,
 };
 

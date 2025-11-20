@@ -1,22 +1,47 @@
 use crate::client::{
-    PageDirection, PaginatedResult, PaginationRequest,
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
     schema::{
-        Address, AssetId, ConnectionArgsFields, ConversionError, HexString, PageInfo,
-        Tai64Timestamp, TransactionId, TxPointer, U16, U32, U64, UtxoId,
+        Address,
+        AssetId,
+        ConnectionArgsFields,
+        ConversionError,
+        HexString,
+        PageInfo,
+        Tai64Timestamp,
+        TransactionId,
+        TxPointer,
+        U16,
+        U32,
+        U64,
+        UtxoId,
         coins::ExcludeInput,
         schema,
-        tx::{transparent_receipt::Receipt, transparent_tx::Output},
+        tx::{
+            transparent_receipt::Receipt,
+            transparent_tx::Output,
+        },
     },
     types::TransactionResponse,
 };
 use fuel_core_types::{
     fuel_tx,
-    fuel_types::{Bytes32, canonical::Deserialize},
+    fuel_types::{
+        Bytes32,
+        canonical::Deserialize,
+    },
     fuel_vm,
-    services::executor::{TransactionExecutionResult, TransactionExecutionStatus},
+    services::executor::{
+        TransactionExecutionResult,
+        TransactionExecutionStatus,
+    },
 };
 use std::{
-    convert::{TryFrom, TryInto},
+    convert::{
+        TryFrom,
+        TryInto,
+    },
     sync::Arc,
 };
 

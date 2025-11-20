@@ -1,48 +1,100 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
-            GasPriceSettings, GasPriceSettingsProvider, block_bytes, get_block_info,
-            mint_values, storage::GasPriceColumn,
+            GasPriceSettings,
+            GasPriceSettingsProvider,
+            block_bytes,
+            get_block_info,
+            mint_values,
+            storage::GasPriceColumn,
         },
-        gas_price_algorithm::{GasPriceAlgorithm, SharedGasPriceAlgo},
+        gas_price_algorithm::{
+            GasPriceAlgorithm,
+            SharedGasPriceAlgo,
+        },
         l2_block_source::FuelL2BlockSource,
         updater_metadata::UpdaterMetadata,
-        utils::{BlockInfo, Error as GasPriceError, Result as GasPriceResult},
+        utils::{
+            BlockInfo,
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
     ports::{
-        GasPriceData, GasPriceServiceAtomicStorage, GetLatestRecordedHeight,
-        GetMetadataStorage, L2Data, SetLatestRecordedHeight, SetMetadataStorage,
+        GasPriceData,
+        GasPriceServiceAtomicStorage,
+        GetLatestRecordedHeight,
+        GetMetadataStorage,
+        L2Data,
+        SetLatestRecordedHeight,
+        SetMetadataStorage,
     },
-    sync_state::{SyncStateNotifier, SyncStateObserver, new_sync_state_channel},
+    sync_state::{
+        SyncStateNotifier,
+        SyncStateObserver,
+        new_sync_state_channel,
+    },
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
             block_committer_costs::BlockCommitterDaBlockCosts,
-            service::{DaBlockCostsSource, DaSourceService},
+            service::{
+                DaBlockCostsSource,
+                DaSourceService,
+            },
         },
-        metadata::{V1AlgorithmConfig, V1Metadata, v1_algorithm_from_metadata},
-        service::{GasPriceServiceV1, LatestGasPrice, SharedData, initialize_algorithm},
+        metadata::{
+            V1AlgorithmConfig,
+            V1Metadata,
+            v1_algorithm_from_metadata,
+        },
+        service::{
+            GasPriceServiceV1,
+            LatestGasPrice,
+            SharedData,
+            initialize_algorithm,
+        },
         uninitialized_task::fuel_storage_unrecorded_blocks::{
-            AsUnrecordedBlocks, FuelStorageUnrecordedBlocks,
+            AsUnrecordedBlocks,
+            FuelStorageUnrecordedBlocks,
         },
     },
 };
 use anyhow::Error;
 use fuel_core_services::{
-    RunnableService, Service, ServiceRunner, State, StateWatcher, stream::BoxStream,
+    RunnableService,
+    Service,
+    ServiceRunner,
+    State,
+    StateWatcher,
+    stream::BoxStream,
 };
 use fuel_core_storage::{
-    kv_store::{KeyValueInspect, KeyValueMutate},
+    kv_store::{
+        KeyValueInspect,
+        KeyValueMutate,
+    },
     not_found,
-    transactional::{AtomicView, Modifiable, StorageTransaction},
+    transactional::{
+        AtomicView,
+        Modifiable,
+        StorageTransaction,
+    },
 };
 use fuel_core_types::{
-    fuel_tx::field::MintAmount, fuel_types::BlockHeight,
+    fuel_tx::field::MintAmount,
+    fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
-use fuel_gas_price_algorithm::v1::{AlgorithmUpdaterV1, UnrecordedBlocks};
+use fuel_gas_price_algorithm::v1::{
+    AlgorithmUpdaterV1,
+    UnrecordedBlocks,
+};
 use std::{
-    sync::{Arc, atomic::AtomicU32},
+    sync::{
+        Arc,
+        atomic::AtomicU32,
+    },
     time::Duration,
 };
 

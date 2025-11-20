@@ -2,10 +2,16 @@
 
 use crate::{
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, raw::Raw},
+    codec::{
+        postcard::Postcard,
+        raw::Raw,
+    },
     column::Column,
     structured_storage::TableWithBlueprint,
-    tables::{ContractsLatestUtxo, ContractsRawCode},
+    tables::{
+        ContractsLatestUtxo,
+        ContractsRawCode,
+    },
 };
 
 // # Dev-note: The value of the `ContractsRawCode` has a unique implementation of serialization

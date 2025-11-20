@@ -2,14 +2,31 @@
 use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
     p2p_test_helpers::{
-        BootstrapSetup, CustomizeConfig, Nodes, ProducerSetup, ValidatorSetup, make_nodes,
+        BootstrapSetup,
+        CustomizeConfig,
+        Nodes,
+        ProducerSetup,
+        ValidatorSetup,
+        make_nodes,
     },
 };
-use fuel_core_client::client::{FuelClient, types::TransactionStatus};
-use fuel_core_types::{fuel_tx::*, fuel_vm::*};
-use rand::{SeedableRng, rngs::StdRng};
+use fuel_core_client::client::{
+    FuelClient,
+    types::TransactionStatus,
+};
+use fuel_core_types::{
+    fuel_tx::*,
+    fuel_vm::*,
+};
+use rand::{
+    SeedableRng,
+    rngs::StdRng,
+};
 use std::str::FromStr;
-use test_helpers::assemble_tx::{AssembleAndRunTx, SigningAccount};
+use test_helpers::assemble_tx::{
+    AssembleAndRunTx,
+    SigningAccount,
+};
 
 #[rstest::rstest]
 #[tokio::test(flavor = "multi_thread")]

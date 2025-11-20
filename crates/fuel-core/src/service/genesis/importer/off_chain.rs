@@ -1,5 +1,8 @@
 use crate::{
-    database::{GenesisDatabase, database_description::off_chain::OffChain},
+    database::{
+        GenesisDatabase,
+        database_description::off_chain::OffChain,
+    },
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::{
         storage::{
@@ -7,8 +10,15 @@ use crate::{
             coins::OwnedCoins,
             contracts::ContractsInfo,
             messages::OwnedMessageIds,
-            old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
-            transactions::{OwnedTransactions, TransactionStatuses},
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
+            transactions::{
+                OwnedTransactions,
+                TransactionStatuses,
+            },
         },
         worker_service,
     },
@@ -16,13 +26,22 @@ use crate::{
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     StorageAsMut,
-    tables::{Coins, FuelBlocks, Messages, SealedBlockConsensus, Transactions},
+    tables::{
+        Coins,
+        FuelBlocks,
+        Messages,
+        SealedBlockConsensus,
+        Transactions,
+    },
     transactional::StorageTransaction,
 };
 use fuel_core_types::services::executor::Event;
 use std::borrow::Cow;
 
-use super::{Handler, import_task::ImportTable};
+use super::{
+    Handler,
+    import_task::ImportTable,
+};
 
 fn balances_indexation_enabled() -> bool {
     use std::sync::OnceLock;

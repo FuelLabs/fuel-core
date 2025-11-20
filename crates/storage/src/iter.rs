@@ -1,16 +1,31 @@
 //! The module defines primitives that allow iterating of the storage.
 
 use crate::{
-    blueprint::{BlueprintCodec, BlueprintInspect},
-    codec::{Decode, Encode, Encoder},
-    kv_store::{KVItem, KeyItem, KeyValueInspect},
+    blueprint::{
+        BlueprintCodec,
+        BlueprintInspect,
+    },
+    codec::{
+        Decode,
+        Encode,
+        Encoder,
+    },
+    kv_store::{
+        KVItem,
+        KeyItem,
+        KeyValueInspect,
+    },
     structured_storage::TableWithBlueprint,
     transactional::ReferenceBytesKey,
 };
 use fuel_vm_private::fuel_storage::Mappable;
 
 #[cfg(feature = "alloc")]
-use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
+use alloc::{
+    boxed::Box,
+    collections::BTreeMap,
+    vec::Vec,
+};
 
 pub mod changes_iterator;
 

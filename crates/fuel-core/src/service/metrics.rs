@@ -1,7 +1,10 @@
 use axum::{
     body::Body,
     http::Request,
-    response::{IntoResponse, Response},
+    response::{
+        IntoResponse,
+        Response,
+    },
 };
 use fuel_core_metrics::encode_metrics;
 

@@ -3,24 +3,37 @@ use std::time::Duration;
 use fuel_core::{
     self,
     schema::tx::types::TransactionStatus,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::{
-        field::{Inputs, Outputs},
+        field::{
+            Inputs,
+            Outputs,
+        },
         *,
     },
     fuel_types::ChainId,
     fuel_vm::{
-        checked_transaction::{CheckPredicateParams, EstimatePredicates},
+        checked_transaction::{
+            CheckPredicateParams,
+            EstimatePredicates,
+        },
         interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
 };
 use futures::StreamExt;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{
+    Rng,
+    SeedableRng,
+    rngs::StdRng,
+};
 
 fn create_transaction<R: Rng>(rng: &mut R, script: Vec<Instruction>) -> Transaction {
     let predicate = op::ret(RegId::ONE).to_bytes().to_vec();

@@ -3,9 +3,12 @@
 use crate::{
     FuelService,
     cli::{
-        ShutdownListener, default_db_path,
+        ShutdownListener,
+        default_db_path,
         run::{
-            consensus::PoATriggerArgs, graphql::GraphQLArgs, tx_pool::TxPoolArgs,
+            consensus::PoATriggerArgs,
+            graphql::GraphQLArgs,
+            tx_pool::TxPoolArgs,
             tx_status_manager::TxStatusManagerArgs,
         },
     },
@@ -14,39 +17,84 @@ use anyhow::Context;
 use clap::Parser;
 use fuel_core::{
     chain_config::default_consensus_dev_key,
-    combined_database::{CombinedDatabase, CombinedDatabaseConfig},
-    fuel_core_graphql_api::{Costs, ServiceConfig as GraphQLConfig},
+    combined_database::{
+        CombinedDatabase,
+        CombinedDatabaseConfig,
+    },
+    fuel_core_graphql_api::{
+        Costs,
+        ServiceConfig as GraphQLConfig,
+    },
     producer::Config as ProducerConfig,
     service::{
-        Config, DbType, RelayerConsensusConfig,
-        config::{DaCompressionMode, Trigger},
+        Config,
+        DbType,
+        RelayerConsensusConfig,
+        config::{
+            DaCompressionMode,
+            Trigger,
+        },
         genesis::NotifyCancel,
     },
-    state::rocks_db::{ColumnsPolicy, DatabaseConfig},
+    state::rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+    },
     tx_status_manager::config::Config as TxStatusManagerConfig,
     txpool::config::{
-        BlackList, Config as TxPoolConfig, HeavyWorkConfig, PoolLimits,
+        BlackList,
+        Config as TxPoolConfig,
+        HeavyWorkConfig,
+        PoolLimits,
         ServiceChannelLimits,
     },
-    types::{fuel_tx::ContractId, fuel_vm::SecretKey, secrecy::Secret},
+    types::{
+        fuel_tx::ContractId,
+        fuel_vm::SecretKey,
+        secrecy::Secret,
+    },
 };
 
-use fuel_core_chain_config::{SnapshotMetadata, SnapshotReader};
-use fuel_core_metrics::config::{DisableConfig, Module};
-use fuel_core_types::{
-    blockchain::header::StateTransitionBytecodeVersion, signer::SignMode,
+use fuel_core_chain_config::{
+    SnapshotMetadata,
+    SnapshotReader,
 };
-use pyroscope::{PyroscopeAgent, pyroscope::PyroscopeAgentRunning};
-use pyroscope_pprofrs::{PprofConfig, pprof_backend};
-use rlimit::{Resource, getrlimit};
+use fuel_core_metrics::config::{
+    DisableConfig,
+    Module,
+};
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
+};
+use pyroscope::{
+    PyroscopeAgent,
+    pyroscope::PyroscopeAgentRunning,
+};
+use pyroscope_pprofrs::{
+    PprofConfig,
+    pprof_backend,
+};
+use rlimit::{
+    Resource,
+    getrlimit,
+};
 use std::{
-    env, net,
-    num::{NonZeroU32, NonZeroU64},
+    env,
+    net,
+    num::{
+        NonZeroU32,
+        NonZeroU64,
+    },
     path::PathBuf,
     str::FromStr,
     time::Duration,
 };
-use tracing::{info, trace, warn};
+use tracing::{
+    info,
+    trace,
+    warn,
+};
 
 #[cfg(feature = "rocksdb")]
 use fuel_core::state::historical_rocksdb::StateRewindPolicy;

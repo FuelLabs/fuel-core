@@ -2,15 +2,29 @@
 
 use crate::{
     fuel_tx::{
-        Chargeable, ConsensusParameters, Input, Output, Transaction,
-        field::{Inputs, Outputs},
+        Chargeable,
+        ConsensusParameters,
+        Input,
+        Output,
+        Transaction,
+        field::{
+            Inputs,
+            Outputs,
+        },
     },
     fuel_vm::checked_transaction::CheckedTransaction,
-    services::executor::{Error as ExecutorError, Result as ExecutorResult},
+    services::executor::{
+        Error as ExecutorError,
+        Result as ExecutorResult,
+    },
 };
 
 #[cfg(feature = "alloc")]
-use alloc::{borrow::Cow, string::ToString, vec::Vec};
+use alloc::{
+    borrow::Cow,
+    string::ToString,
+    vec::Vec,
+};
 
 /// Extension trait for transactions.
 pub trait TransactionExt {

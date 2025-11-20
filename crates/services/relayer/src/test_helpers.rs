@@ -5,7 +5,10 @@ use alloy_rpc_types_eth::Log;
 use std::convert::TryFrom;
 
 use crate::log::EthEventLog;
-use fuel_core_types::entities::{Message, RelayedTransaction};
+use fuel_core_types::entities::{
+    Message,
+    RelayedTransaction,
+};
 
 pub mod page_sizer;
 

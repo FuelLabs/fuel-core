@@ -9,20 +9,42 @@
 use std::sync::Arc;
 
 use crate::{
-    config::{Config, PoolLimits},
+    config::{
+        Config,
+        PoolLimits,
+    },
     selection_algorithms::Constraints,
     tests::universe::TestPoolUniverse,
 };
 use fuel_core_types::{
     fuel_tx::{
-        ConsensusParameters, Finalizable, GasCosts, Input, Output, Script,
-        TransactionBuilder, TxId, UtxoId, field::Tip,
+        ConsensusParameters,
+        Finalizable,
+        GasCosts,
+        Input,
+        Output,
+        Script,
+        TransactionBuilder,
+        TxId,
+        UtxoId,
+        field::Tip,
     },
     fuel_types::AssetId,
-    fuel_vm::checked_transaction::{Checked, IntoChecked},
-    services::txpool::{Metadata, PoolTransaction},
+    fuel_vm::checked_transaction::{
+        Checked,
+        IntoChecked,
+    },
+    services::txpool::{
+        Metadata,
+        PoolTransaction,
+    },
 };
-use rand::{Rng, SeedableRng, prelude::SliceRandom, rngs::StdRng};
+use rand::{
+    Rng,
+    SeedableRng,
+    prelude::SliceRandom,
+    rngs::StdRng,
+};
 
 #[derive(Debug, Clone, Copy)]
 struct Limits {

@@ -2,11 +2,17 @@ use std::time::Duration;
 
 use fuel_core::{
     chain_config::StateConfig,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
-    types::primitives::{Address, AssetId},
+    types::primitives::{
+        Address,
+        AssetId,
+    },
 };
 use fuel_core_types::fuel_tx;
 

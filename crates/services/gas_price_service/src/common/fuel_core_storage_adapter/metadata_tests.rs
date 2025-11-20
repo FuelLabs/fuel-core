@@ -3,7 +3,10 @@
 use super::*;
 use fuel_core_storage::{
     structured_storage::test::InMemoryStorage,
-    transactional::{IntoTransaction, StorageTransaction},
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
 };
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 

@@ -1,8 +1,17 @@
-use fuel_core_storage::{Error as StorageError, MerkleRoot};
-use fuel_core_types::{
-    blockchain::primitives::BlockId, fuel_types::BlockHeight, services::executor,
+use fuel_core_storage::{
+    Error as StorageError,
+    MerkleRoot,
 };
-use tokio::sync::{TryAcquireError, mpsc, oneshot};
+use fuel_core_types::{
+    blockchain::primitives::BlockId,
+    fuel_types::BlockHeight,
+    services::executor,
+};
+use tokio::sync::{
+    TryAcquireError,
+    mpsc,
+    oneshot,
+};
 
 #[derive(Debug, derive_more::Display, derive_more::From)]
 pub enum Error {

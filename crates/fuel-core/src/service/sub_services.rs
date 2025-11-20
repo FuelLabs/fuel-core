@@ -3,8 +3,13 @@
 use super::{
     DbType,
     adapters::{
-        FuelBlockSigner, P2PAdapter, TxStatusManagerAdapter,
-        compression_adapters::{CompressionBlockDBAdapter, CompressionServiceAdapter},
+        FuelBlockSigner,
+        P2PAdapter,
+        TxStatusManagerAdapter,
+        compression_adapters::{
+            CompressionBlockDBAdapter,
+            CompressionServiceAdapter,
+        },
     },
     config::DaCompressionMode,
     genesis::create_genesis_block,
@@ -13,26 +18,44 @@ use super::{
 use crate::relayer::Config as RelayerConfig;
 #[cfg(feature = "p2p")]
 use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
-    key_generator::Ed25519KeyGenerator, trigger::TimeBasedTrigger,
+    key_generator::Ed25519KeyGenerator,
+    trigger::TimeBasedTrigger,
     tx_receiver::PreconfirmationsReceiver,
 };
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
-    fuel_core_graphql_api::{self, Config as GraphQLConfig},
-    graphql_api::worker_service::{self},
+    fuel_core_graphql_api::{
+        self,
+        Config as GraphQLConfig,
+    },
+    graphql_api::worker_service::{
+        self,
+    },
     schema::build_schema,
     service::{
-        Config, SharedState, SubServices,
+        Config,
+        SharedState,
+        SubServices,
         adapters::{
-            BlockImporterAdapter, BlockProducerAdapter, ChainStateInfoProvider,
-            ExecutorAdapter, MaybeRelayerAdapter, PoAAdapter, PreconfirmationSender,
-            SharedMemoryPool, SystemTime, TxPoolAdapter, UniversalGasPriceProvider,
-            VerifierAdapter, chain_state_info_provider,
+            BlockImporterAdapter,
+            BlockProducerAdapter,
+            ChainStateInfoProvider,
+            ExecutorAdapter,
+            MaybeRelayerAdapter,
+            PoAAdapter,
+            PreconfirmationSender,
+            SharedMemoryPool,
+            SystemTime,
+            TxPoolAdapter,
+            UniversalGasPriceProvider,
+            VerifierAdapter,
+            chain_state_info_provider,
             consensus_module::poa::InDirectoryPredefinedBlocks,
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
-            import_result_provider::ImportResultProvider, ready_signal::ReadySignal,
+            import_result_provider::ImportResultProvider,
+            ready_signal::ReadySignal,
             tx_status_manager::ConsensusConfigProtocolPublicKey,
         },
     },
@@ -42,23 +65,32 @@ use anyhow::anyhow;
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
-    db::storage_or_remote_db::StorageOrRemoteDB, db::table::LatestBlock,
-    integration::StorageMethod, result::Error,
+    db::storage_or_remote_db::StorageOrRemoteDB,
+    db::table::LatestBlock,
+    integration::StorageMethod,
+    result::Error,
 };
 use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
     algorithm::AlgorithmV1,
     da_source_service::block_committer_costs::{
-        BlockCommitterDaBlockCosts, BlockCommitterHttpApi,
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
     },
     metadata::V1AlgorithmConfig,
     service::SharedData,
     uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::Trigger;
-use fuel_core_storage::{self, transactional::AtomicView};
+use fuel_core_storage::{
+    self,
+    transactional::AtomicView,
+};
 #[cfg(feature = "rpc")]
-use fuel_core_storage::{Error as StorageError, StorageAsRef};
+use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsRef,
+};
 
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;

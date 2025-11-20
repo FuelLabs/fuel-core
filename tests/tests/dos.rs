@@ -1,8 +1,14 @@
 #![allow(non_snake_case)]
 
-use std::time::{Duration, Instant};
+use std::time::{
+    Duration,
+    Instant,
+};
 
-use fuel_core::service::{Config, FuelService};
+use fuel_core::service::{
+    Config,
+    FuelService,
+};
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::blockchain::header::LATEST_STATE_TRANSITION_VERSION;
 use test_case::test_case;

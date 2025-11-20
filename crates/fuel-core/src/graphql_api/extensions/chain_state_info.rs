@@ -1,14 +1,28 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+};
 
 use async_graphql::{
-    ErrorExtensionValues, Request, Response, ServerResult, Value,
+    ErrorExtensionValues,
+    Request,
+    Response,
+    ServerResult,
+    Value,
     extensions::{
-        Extension, ExtensionContext, ExtensionFactory, NextExecute, NextPrepareRequest,
+        Extension,
+        ExtensionContext,
+        ExtensionFactory,
+        NextExecute,
+        NextPrepareRequest,
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 
-use crate::graphql_api::{api_service::ChainInfoProvider, block_height_subscription};
+use crate::graphql_api::{
+    api_service::ChainInfoProvider,
+    block_height_subscription,
+};
 
 pub(crate) const CURRENT_STF_VERSION: &str = "current_stf_version";
 pub(crate) const CURRENT_CONSENSUS_PARAMETERS_VERSION: &str =
@@ -131,9 +145,13 @@ impl SetExtensionsResponse for BTreeMap<String, Value> {
 mod tests {
     use super::*;
     use crate::graphql_api::extensions::unify_response;
-    use async_graphql::{Response, ServerError};
+    use async_graphql::{
+        Response,
+        ServerError,
+    };
     use fuel_core_types::blockchain::header::{
-        ConsensusParametersVersion, StateTransitionBytecodeVersion,
+        ConsensusParametersVersion,
+        StateTransitionBytecodeVersion,
     };
 
     #[test]

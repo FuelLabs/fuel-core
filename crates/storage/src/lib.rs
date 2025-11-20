@@ -19,12 +19,16 @@ use core::array::TryFromSliceError;
 use fuel_core_types::services::executor::Error as ExecutorError;
 
 #[cfg(feature = "alloc")]
-use alloc::{boxed::Box, string::ToString};
+use alloc::{
+    boxed::Box,
+    string::ToString,
+};
 
 pub use fuel_vm_private::{
     fuel_storage::*,
     storage::{
-        ContractsAssetsStorage, InterpreterStorage,
+        ContractsAssetsStorage,
+        InterpreterStorage,
         predicate::PredicateStorageRequirements,
     },
 };
@@ -44,7 +48,9 @@ pub mod vm_storage;
 
 use fuel_core_types::fuel_merkle::binary::MerkleTreeError;
 pub use fuel_vm_private::storage::{
-    ContractsAssetKey, ContractsStateData, ContractsStateKey,
+    ContractsAssetKey,
+    ContractsStateData,
+    ContractsStateKey,
 };
 #[doc(hidden)]
 pub use paste;

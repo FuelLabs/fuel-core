@@ -1,5 +1,8 @@
 use crate::v1::da_source_service::service::DaBlockCostsSource;
-use std::{ops::RangeInclusive, time::Duration};
+use std::{
+    ops::RangeInclusive,
+    time::Duration,
+};
 
 pub mod block_committer_costs;
 #[cfg(test)]
@@ -20,12 +23,24 @@ mod tests {
     use super::*;
     use crate::v1::da_source_service::{
         dummy_costs::DummyDaBlockCosts,
-        service::{DA_BLOCK_COSTS_CHANNEL_SIZE, DaSourceService, new_da_service},
+        service::{
+            DA_BLOCK_COSTS_CHANNEL_SIZE,
+            DaSourceService,
+            new_da_service,
+        },
     };
-    use fuel_core_services::{RunnableTask, Service, StateWatcher};
+    use fuel_core_services::{
+        RunnableTask,
+        Service,
+        StateWatcher,
+    };
     use fuel_core_types::fuel_types::BlockHeight;
     use std::{
-        sync::{Arc, Mutex, atomic::AtomicU32},
+        sync::{
+            Arc,
+            Mutex,
+            atomic::AtomicU32,
+        },
         time::Duration,
     };
 

@@ -1,20 +1,40 @@
-use crate::reqwest_ext::{FuelGraphQlResponse, FuelOperation, ReqwestExt};
+use crate::reqwest_ext::{
+    FuelGraphQlResponse,
+    FuelOperation,
+    ReqwestExt,
+};
 #[cfg(feature = "subscriptions")]
-use base64::prelude::{BASE64_STANDARD, Engine as _};
-use cynic::{Operation, QueryFragment, QueryVariables};
+use base64::prelude::{
+    BASE64_STANDARD,
+    Engine as _,
+};
+use cynic::{
+    Operation,
+    QueryFragment,
+    QueryVariables,
+};
 #[cfg(feature = "subscriptions")]
-use cynic::{StreamingOperation, SubscriptionBuilder};
+use cynic::{
+    StreamingOperation,
+    SubscriptionBuilder,
+};
 use fuel_core_types::fuel_types::BlockHeight;
 #[cfg(feature = "subscriptions")]
 use futures::StreamExt;
 use reqwest::Url;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{
+    Serialize,
+    de::DeserializeOwned,
+};
 #[cfg(feature = "subscriptions")]
 use std::sync::Arc;
 use std::{
     fmt::Debug,
     io,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{
+        AtomicUsize,
+        Ordering,
+    },
 };
 
 #[derive(Debug)]

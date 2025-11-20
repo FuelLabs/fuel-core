@@ -2,7 +2,11 @@
 
 use crate::{
     blockchain::primitives::DaBlockHeight,
-    fuel_types::{Address, Nonce, Word},
+    fuel_types::{
+        Address,
+        Nonce,
+        Word,
+    },
 };
 
 /// Message send from Da layer to fuel by bridge

@@ -1,6 +1,9 @@
 use fuel_core_services::Service;
 use fuel_core_types::{
-    fuel_tx::{UniqueIdentifier, UtxoId},
+    fuel_tx::{
+        UniqueIdentifier,
+        UtxoId,
+    },
     services::transaction_status::TransactionStatus,
 };
 

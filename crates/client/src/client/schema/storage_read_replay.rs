@@ -1,5 +1,8 @@
 use super::HexString;
-use crate::client::schema::{U32, schema};
+use crate::client::schema::{
+    U32,
+    schema,
+};
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]

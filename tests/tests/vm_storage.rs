@@ -3,11 +3,16 @@ mod tests {
     use fuel_core::database::Database;
 
     use fuel_core_storage::{
-        InterpreterStorage, StorageAsMut, StorageMutate, tables::ContractsState,
+        InterpreterStorage,
+        StorageAsMut,
+        StorageMutate,
+        tables::ContractsState,
         vm_storage::VmStorage,
     };
     use fuel_core_types::{
-        fuel_tx::ContractId, fuel_types::Bytes32, fuel_vm::ContractsStateKey,
+        fuel_tx::ContractId,
+        fuel_types::Bytes32,
+        fuel_vm::ContractsStateKey,
     };
     use primitive_types::U256;
     use std::borrow::Cow;

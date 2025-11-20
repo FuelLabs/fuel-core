@@ -1,14 +1,31 @@
 use core::fmt;
 use fuel_core_storage::{
-    Error as StorageError, Mappable, MerkleRoot, StorageAsRef, StorageInspect,
-    iter::{IterableStore, IteratorOverTable},
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    StorageAsRef,
+    StorageInspect,
+    iter::{
+        IterableStore,
+        IteratorOverTable,
+    },
     not_found,
-    tables::{ContractsAssets, ContractsLatestUtxo, ContractsState},
+    tables::{
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsState,
+    },
 };
 use fuel_core_types::{
     fuel_crypto::Hasher,
-    fuel_types::{Bytes32, ContractId},
-    services::executor::{Error as ExecutorError, Result as ExecutorResult},
+    fuel_types::{
+        Bytes32,
+        ContractId,
+    },
+    services::executor::{
+        Error as ExecutorError,
+        Result as ExecutorResult,
+    },
 };
 #[cfg(feature = "std")]
 use std::borrow::Cow;
@@ -16,7 +33,10 @@ use std::borrow::Cow;
 #[cfg(not(feature = "std"))]
 use alloc::borrow::Cow;
 
-use crate::contract_state_hash::{compute_balances_hash, compute_state_hash};
+use crate::contract_state_hash::{
+    compute_balances_hash,
+    compute_state_hash,
+};
 
 /// The wrapper around `contract_id` to simplify work with `Contract` in the database.
 pub struct ContractRef<Database> {

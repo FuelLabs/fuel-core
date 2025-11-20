@@ -1,9 +1,19 @@
 use crate::fuel_core_graphql_api::{
-    api_service::ReadDatabase, block_height_subscription,
+    api_service::ReadDatabase,
+    block_height_subscription,
 };
 use async_graphql::{
-    Pos, Request, ServerError, ServerResult, Value,
-    extensions::{Extension, ExtensionContext, ExtensionFactory, NextPrepareRequest},
+    Pos,
+    Request,
+    ServerError,
+    ServerResult,
+    Value,
+    extensions::{
+        Extension,
+        ExtensionContext,
+        ExtensionFactory,
+        NextPrepareRequest,
+    },
 };
 use async_graphql_value::ConstValue;
 use fuel_core_types::fuel_types::BlockHeight;

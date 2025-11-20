@@ -2,42 +2,82 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    Config, Service, Trigger, new_service,
+    Config,
+    Service,
+    Trigger,
+    new_service,
     ports::{
-        BlockProducer, BlockSigner, GetTime, InMemoryPredefinedBlocks, MockBlockImporter,
-        MockBlockProducer, MockP2pPort, MockTransactionPool, TransactionsSource,
+        BlockProducer,
+        BlockSigner,
+        GetTime,
+        InMemoryPredefinedBlocks,
+        MockBlockImporter,
+        MockBlockProducer,
+        MockP2pPort,
+        MockTransactionPool,
+        TransactionsSource,
         WaitForReadySignal,
     },
     service::MainTask,
 };
 use fuel_core_chain_config::default_consensus_dev_key;
-use fuel_core_services::{Service as StorageTrait, ServiceRunner, State};
+use fuel_core_services::{
+    Service as StorageTrait,
+    ServiceRunner,
+    State,
+};
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
         block::Block,
-        consensus::{Consensus, poa::PoAConsensus},
-        header::{BlockHeader, PartialBlockHeader},
+        consensus::{
+            Consensus,
+            poa::PoAConsensus,
+        },
+        header::{
+            BlockHeader,
+            PartialBlockHeader,
+        },
         primitives::SecretKeyWrapper,
     },
     fuel_crypto::SecretKey,
     fuel_tx::*,
     fuel_types::BlockHeight,
     secrecy::Secret,
-    services::executor::{ExecutionResult, UncommittedResult},
+    services::executor::{
+        ExecutionResult,
+        UncommittedResult,
+    },
     signer::SignMode,
-    tai64::{Tai64, Tai64N},
+    tai64::{
+        Tai64,
+        Tai64N,
+    },
 };
-use rand::{Rng, SeedableRng, prelude::StdRng};
+use rand::{
+    Rng,
+    SeedableRng,
+    prelude::StdRng,
+};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex as StdMutex, Mutex},
+    sync::{
+        Arc,
+        Mutex as StdMutex,
+        Mutex,
+    },
     time::Duration,
 };
 use tokio::{
-    sync::{broadcast, watch},
-    time::{self, Instant},
+    sync::{
+        broadcast,
+        watch,
+    },
+    time::{
+        self,
+        Instant,
+    },
 };
 
 mod manually_produce_tests;

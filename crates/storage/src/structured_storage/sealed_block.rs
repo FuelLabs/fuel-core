@@ -2,7 +2,10 @@
 
 use crate::{
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, primitive::Primitive},
+    codec::{
+        postcard::Postcard,
+        primitive::Primitive,
+    },
     column::Column,
     structured_storage::TableWithBlueprint,
     tables::SealedBlockConsensus,

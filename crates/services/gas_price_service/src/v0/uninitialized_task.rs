@@ -1,26 +1,46 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
-            GasPriceSettings, GasPriceSettingsProvider, get_block_info,
+            GasPriceSettings,
+            GasPriceSettingsProvider,
+            get_block_info,
         },
         gas_price_algorithm::SharedGasPriceAlgo,
         l2_block_source::FuelL2BlockSource,
         updater_metadata::UpdaterMetadata,
-        utils::{BlockInfo, Error as GasPriceError, Result as GasPriceResult},
+        utils::{
+            BlockInfo,
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
-    ports::{GasPriceData, L2Data, SetMetadataStorage},
+    ports::{
+        GasPriceData,
+        L2Data,
+        SetMetadataStorage,
+    },
     v0::{
         algorithm::SharedV0Algorithm,
-        metadata::{V0AlgorithmConfig, V0Metadata},
+        metadata::{
+            V0AlgorithmConfig,
+            V0Metadata,
+        },
         service::GasPriceServiceV0,
     },
 };
 use fuel_core_services::{
-    RunnableService, ServiceRunner, StateWatcher, stream::BoxStream,
+    RunnableService,
+    ServiceRunner,
+    StateWatcher,
+    stream::BoxStream,
 };
-use fuel_core_storage::{not_found, transactional::AtomicView};
+use fuel_core_storage::{
+    not_found,
+    transactional::AtomicView,
+};
 use fuel_core_types::{
-    fuel_types::BlockHeight, services::block_importer::SharedImportResult,
+    fuel_types::BlockHeight,
+    services::block_importer::SharedImportResult,
 };
 use fuel_gas_price_algorithm::v0::AlgorithmUpdaterV0;
 

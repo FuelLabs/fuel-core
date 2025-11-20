@@ -6,67 +6,138 @@ mod tests {
     #[cfg(not(feature = "wasm-executor"))]
     use fuel_core_executor::{
         executor::{
-            TimeoutOnlyTxWaiter, TransparentPreconfirmationSender,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
             WaitNewTransactionsResult,
         },
-        ports::{NewTxWaiterPort, PreconfirmationSenderPort},
+        ports::{
+            NewTxWaiterPort,
+            PreconfirmationSenderPort,
+        },
     };
 
     #[cfg(not(feature = "wasm-executor"))]
     use fuel_core_types::services::preconfirmation::{
-        Preconfirmation, PreconfirmationStatus,
+        Preconfirmation,
+        PreconfirmationStatus,
     };
 
     use crate as fuel_core;
     use fuel_core::database::Database;
     use fuel_core_executor::{
         executor::OnceTransactionsSource,
-        ports::{MaybeCheckedTransaction, RelayerPort},
+        ports::{
+            MaybeCheckedTransaction,
+            RelayerPort,
+        },
         refs::ContractRef,
     };
     use fuel_core_storage::{
-        Result as StorageResult, StorageAsMut, StorageAsRef,
-        tables::{Coins, ConsensusParametersVersions, ContractsRawCode, Messages},
-        transactional::{AtomicView, WriteTransaction},
+        Result as StorageResult,
+        StorageAsMut,
+        StorageAsRef,
+        tables::{
+            Coins,
+            ConsensusParametersVersions,
+            ContractsRawCode,
+            Messages,
+        },
+        transactional::{
+            AtomicView,
+            WriteTransaction,
+        },
     };
     use fuel_core_types::{
         blockchain::{
-            block::{Block, PartialFuelBlock},
-            header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
+            block::{
+                Block,
+                PartialFuelBlock,
+            },
+            header::{
+                ApplicationHeader,
+                ConsensusHeader,
+                PartialBlockHeader,
+            },
             primitives::DaBlockHeight,
         },
         entities::{
             coins::coin::CompressedCoin,
-            relayer::message::{Message, MessageV1},
+            relayer::message::{
+                Message,
+                MessageV1,
+            },
         },
-        fuel_asm::{GTFArgs, RegId, op},
+        fuel_asm::{
+            GTFArgs,
+            RegId,
+            op,
+        },
         fuel_crypto::SecretKey,
         fuel_merkle::common::empty_sum_sha256,
         fuel_tx::{
-            Bytes32, ConsensusParameters, Create, DependentCost, FeeParameters,
-            Finalizable, GasCostsValues, Output, Receipt, Script, Transaction,
-            TransactionBuilder, TransactionFee, TxParameters, TxPointer,
-            UniqueIdentifier, UtxoId, ValidityError,
+            Bytes32,
+            ConsensusParameters,
+            Create,
+            DependentCost,
+            FeeParameters,
+            Finalizable,
+            GasCostsValues,
+            Output,
+            Receipt,
+            Script,
+            Transaction,
+            TransactionBuilder,
+            TransactionFee,
+            TxParameters,
+            TxPointer,
+            UniqueIdentifier,
+            UtxoId,
+            ValidityError,
             consensus_parameters::gas::GasCostsValuesV1,
             field::{
-                Expiration, InputContract, Inputs, MintAmount, MintAssetId, MintGasPrice,
-                OutputContract, Outputs, Policies, TxPointer as TxPointerTraitTrait,
+                Expiration,
+                InputContract,
+                Inputs,
+                MintAmount,
+                MintAssetId,
+                MintGasPrice,
+                OutputContract,
+                Outputs,
+                Policies,
+                TxPointer as TxPointerTraitTrait,
             },
             input::{
                 Input,
-                coin::{CoinPredicate, CoinSigned},
+                coin::{
+                    CoinPredicate,
+                    CoinSigned,
+                },
                 contract,
             },
             policies::PolicyType,
         },
         fuel_types::{
-            Address, AssetId, BlockHeight, ChainId, ContractId, Word,
+            Address,
+            AssetId,
+            BlockHeight,
+            ChainId,
+            ContractId,
+            Word,
             canonical::Serialize,
         },
         fuel_vm::{
-            Call, CallFrame, Contract,
-            checked_transaction::{CheckError, EstimatePredicates, IntoChecked},
-            interpreter::{ExecutableTransaction, MemoryInstance},
+            Call,
+            CallFrame,
+            Contract,
+            checked_transaction::{
+                CheckError,
+                EstimatePredicates,
+                IntoChecked,
+            },
+            interpreter::{
+                ExecutableTransaction,
+                MemoryInstance,
+            },
             predicate::EmptyStorage,
             script_with_data_offset,
             util::test_helpers::TestBuilder as TxBuilder,
@@ -74,8 +145,11 @@ mod tests {
         services::{
             block_producer::Components,
             executor::{
-                Error as ExecutorError, Event as ExecutorEvent, ExecutionResult,
-                TransactionExecutionResult, TransactionValidityError,
+                Error as ExecutorError,
+                Event as ExecutorEvent,
+                ExecutionResult,
+                TransactionExecutionResult,
+                TransactionValidityError,
             },
             relayer::Event,
         },
@@ -84,8 +158,15 @@ mod tests {
     };
     use fuel_core_upgradable_executor::executor::Executor;
     use itertools::Itertools;
-    use rand::{Rng, SeedableRng, prelude::StdRng};
-    use sha2::{Digest, Sha256};
+    use rand::{
+        Rng,
+        SeedableRng,
+        prelude::StdRng,
+    };
+    use sha2::{
+        Digest,
+        Sha256,
+    };
 
     #[derive(Clone, Debug, Default)]
     struct Config {
@@ -314,7 +395,10 @@ mod tests {
         use super::*;
         use fuel_core_storage::{
             iter::IterDirection,
-            transactional::{AtomicView, Modifiable},
+            transactional::{
+                AtomicView,
+                Modifiable,
+            },
         };
         use fuel_core_types::services::graphql_api::ContractBalance;
 
@@ -3740,7 +3824,8 @@ mod tests {
     async fn produce_without_commit_with_source__includes_a_mint_with_whatever_gas_price_provided()
      {
         use fuel_core_executor::executor::{
-            TimeoutOnlyTxWaiter, TransparentPreconfirmationSender,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
         };
 
         // Given
@@ -3794,7 +3879,8 @@ mod tests {
     #[tokio::test]
     async fn validate__will_fail_if_gas_price_does_not_match_expected_value() {
         use fuel_core_executor::executor::{
-            TimeoutOnlyTxWaiter, TransparentPreconfirmationSender,
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
         };
 
         // Given
@@ -3965,20 +4051,27 @@ mod tests {
     mod relayer {
         use super::*;
         use crate::database::database_description::{
-            on_chain::OnChain, relayer::Relayer,
+            on_chain::OnChain,
+            relayer::Relayer,
         };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::{
             StorageAsMut,
             column::Column,
-            iter::{IteratorOverTable, changes_iterator::ChangesIterator},
+            iter::{
+                IteratorOverTable,
+                changes_iterator::ChangesIterator,
+            },
             tables::FuelBlocks,
             transactional::StorageChanges,
         };
         use fuel_core_types::{
             entities::RelayedTransaction,
             fuel_merkle::binary::root_calculator::MerkleRootCalculator,
-            fuel_tx::{Chargeable, output},
+            fuel_tx::{
+                Chargeable,
+                output,
+            },
             services::executor::ForcedTransactionFailure,
         };
 

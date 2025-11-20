@@ -2,7 +2,10 @@ use crate::service::WritePoolRequest;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::services::{
     block_importer::SharedImportResult,
-    p2p::{PeerId, TransactionGossipData},
+    p2p::{
+        PeerId,
+        TransactionGossipData,
+    },
 };
 use tokio::sync::mpsc;
 

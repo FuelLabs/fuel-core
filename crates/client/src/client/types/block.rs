@@ -1,10 +1,21 @@
 use crate::client::{
-    PaginatedResult, schema,
+    PaginatedResult,
+    schema,
     schema::ConversionError,
-    types::primitives::{BlockId, Hash, MerkleRoot, PublicKey, Signature, TransactionId},
+    types::primitives::{
+        BlockId,
+        Hash,
+        MerkleRoot,
+        PublicKey,
+        Signature,
+        TransactionId,
+    },
 };
 
-use crate::client::schema::block::{BlockVersion, HeaderVersion};
+use crate::client::schema::block::{
+    BlockVersion,
+    HeaderVersion,
+};
 use tai64::Tai64;
 
 #[derive(Clone, Debug, PartialEq, Eq)]

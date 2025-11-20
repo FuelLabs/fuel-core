@@ -1,26 +1,50 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{
+        HashMap,
+        HashSet,
+        VecDeque,
+    },
     time::SystemTime,
 };
 
 use fuel_core_types::{
     fuel_tx::{
-        ContractId, Input, Output, TxId, UtxoId,
+        ContractId,
+        Input,
+        Output,
+        TxId,
+        UtxoId,
         input::{
-            coin::{CoinPredicate, CoinSigned},
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
             contract::Contract,
             message::{
-                MessageCoinPredicate, MessageCoinSigned, MessageDataPredicate,
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
                 MessageDataSigned,
             },
         },
     },
-    services::txpool::{ArcPoolTx, PoolTransaction},
+    services::txpool::{
+        ArcPoolTx,
+        PoolTransaction,
+    },
 };
-use petgraph::{graph::NodeIndex, prelude::StableDiGraph};
+use petgraph::{
+    graph::NodeIndex,
+    prelude::StableDiGraph,
+};
 
 use crate::{
-    error::{DependencyError, Error, InputValidationError, InputValidationErrorType},
+    error::{
+        DependencyError,
+        Error,
+        InputValidationError,
+        InputValidationErrorType,
+    },
     extracted_outputs::ExtractedOutputs,
     pending_pool::MissingInput,
     ports::TxPoolPersistentStorage,
@@ -29,7 +53,11 @@ use crate::{
     storage::checked_collision::CheckedTransaction,
 };
 
-use super::{RemovedTransactions, Storage, StorageData};
+use super::{
+    RemovedTransactions,
+    Storage,
+    StorageData,
+};
 
 pub struct GraphStorage {
     /// The configuration of the graph
@@ -783,7 +811,10 @@ impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{StorageData, graph::GraphStorage};
+    use crate::storage::{
+        StorageData,
+        graph::GraphStorage,
+    };
     use std::ops::Add;
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]

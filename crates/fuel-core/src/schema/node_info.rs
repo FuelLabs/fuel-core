@@ -1,13 +1,25 @@
-use super::scalars::{U32, U64};
+use super::scalars::{
+    U32,
+    U64,
+};
 use crate::{
     database::database_description::IndexationKind,
-    fuel_core_graphql_api::{Config as GraphQLConfig, query_costs},
+    fuel_core_graphql_api::{
+        Config as GraphQLConfig,
+        query_costs,
+    },
     graphql_api::{
         api_service::TxPool,
-        database::{IndexationFlags, ReadDatabase},
+        database::{
+            IndexationFlags,
+            ReadDatabase,
+        },
     },
 };
-use async_graphql::{Context, Object};
+use async_graphql::{
+    Context,
+    Object,
+};
 use std::time::UNIX_EPOCH;
 
 pub struct NodeInfo {

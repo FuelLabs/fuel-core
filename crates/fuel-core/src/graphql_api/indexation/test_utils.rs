@@ -1,6 +1,13 @@
 use fuel_core_types::{
-    entities::{Message, coins::coin::Coin, relayer::message::MessageV1},
-    fuel_tx::{Address, AssetId},
+    entities::{
+        Message,
+        coins::coin::Coin,
+        relayer::message::MessageV1,
+    },
+    fuel_tx::{
+        Address,
+        AssetId,
+    },
 };
 
 pub(crate) fn make_coin(owner: &Address, asset_id: &AssetId, amount: u64) -> Coin {

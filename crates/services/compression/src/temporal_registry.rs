@@ -5,23 +5,48 @@ use crate::{
     storage,
     storage::{
         evictor_cache::MetadataKey,
-        timestamps::{TimestampKey, TimestampKeyspace},
+        timestamps::{
+            TimestampKey,
+            TimestampKeyspace,
+        },
     },
 };
 use fuel_core_compression::ports::{
-    EvictorDb, HistoryLookup, TemporalRegistry, UtxoIdToPointer,
+    EvictorDb,
+    HistoryLookup,
+    TemporalRegistry,
+    UtxoIdToPointer,
 };
 use fuel_core_storage::{
-    Error as StorageError, StorageAsMut, StorageAsRef, StorageInspect, StorageMutate,
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
     not_found,
-    tables::{Coins, FuelBlocks, Messages},
+    tables::{
+        Coins,
+        FuelBlocks,
+        Messages,
+    },
     transactional::StorageTransaction,
 };
 use fuel_core_types::{
-    blockchain::{block::Block, transaction::TransactionExt},
+    blockchain::{
+        block::Block,
+        transaction::TransactionExt,
+    },
     fuel_tx::{
-        Address, AssetId, ContractId, Input, Output, ScriptCode, TxPointer,
-        UniqueIdentifier, UtxoId, input::PredicateCode,
+        Address,
+        AssetId,
+        ContractId,
+        Input,
+        Output,
+        ScriptCode,
+        TxPointer,
+        UniqueIdentifier,
+        UtxoId,
+        input::PredicateCode,
     },
     fuel_types::ChainId,
     tai64::Tai64,
@@ -393,15 +418,26 @@ mod fault_proving {
     use super::*;
     use crate::storage::{
         column::CompressionColumn,
-        {self},
+        {
+            self,
+        },
     };
     use fuel_core_storage::{
-        Mappable, MerkleRoot, MerkleRootStorage,
+        Mappable,
+        MerkleRoot,
+        MerkleRootStorage,
         blueprint::BlueprintInspect,
-        kv_store::{KeyValueInspect, StorageColumn},
+        kv_store::{
+            KeyValueInspect,
+            StorageColumn,
+        },
         merkle::{
             column::MerkleizedColumn,
-            sparse::{DummyStorage, Merkleized, MerkleizedTableColumn},
+            sparse::{
+                DummyStorage,
+                Merkleized,
+                MerkleizedTableColumn,
+            },
         },
         structured_storage::TableWithBlueprint,
         transactional::StorageTransaction,

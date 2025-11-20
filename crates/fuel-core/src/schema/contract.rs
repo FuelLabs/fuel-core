@@ -1,16 +1,36 @@
 use crate::{
-    fuel_core_graphql_api::{IntoApiResult, query_costs},
+    fuel_core_graphql_api::{
+        IntoApiResult,
+        query_costs,
+    },
     schema::{
         ReadViewProvider,
-        scalars::{AssetId, ContractId, HexString, Salt, U64},
+        scalars::{
+            AssetId,
+            ContractId,
+            HexString,
+            Salt,
+            U64,
+        },
     },
 };
 use async_graphql::{
-    Context, InputObject, Object,
-    connection::{Connection, EmptyFields},
+    Context,
+    InputObject,
+    Object,
+    connection::{
+        Connection,
+        EmptyFields,
+    },
 };
-use fuel_core_storage::{not_found, tables::ContractsRawCode};
-use fuel_core_types::{fuel_types, services::graphql_api};
+use fuel_core_storage::{
+    not_found,
+    tables::ContractsRawCode,
+};
+use fuel_core_types::{
+    fuel_types,
+    services::graphql_api,
+};
 use futures::StreamExt;
 
 pub struct Contract(pub(crate) fuel_types::ContractId);

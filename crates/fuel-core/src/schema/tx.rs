@@ -1,48 +1,111 @@
-use super::scalars::{AssetId, U16, U32, U64};
+use super::scalars::{
+    AssetId,
+    U16,
+    U32,
+    U64,
+};
 use crate::{
     coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
-        Config as GraphQLConfig, IntoApiResult,
-        api_service::{BlockProducer, ChainInfoProvider, DynTxStatusManager, TxPool},
+        Config as GraphQLConfig,
+        IntoApiResult,
+        api_service::{
+            BlockProducer,
+            ChainInfoProvider,
+            DynTxStatusManager,
+            TxPool,
+        },
         query_costs,
     },
     graphql_api::{
-        database::ReadView, ports::MemoryPool, require_expensive_subscriptions,
+        database::ReadView,
+        ports::MemoryPool,
+        require_expensive_subscriptions,
     },
-    query::{TxnStatusChangeState, asset_query::Exclude, transaction_status_change},
+    query::{
+        TxnStatusChangeState,
+        asset_query::Exclude,
+        transaction_status_change,
+    },
     schema::{
         ReadViewProvider,
         coins::ExcludeInput,
         gas_price::EstimateGasPriceExt,
-        scalars::{Address, HexString, SortedTxCursor, TransactionId, TxPointer},
+        scalars::{
+            Address,
+            HexString,
+            SortedTxCursor,
+            TransactionId,
+            TxPointer,
+        },
         tx::{
-            assemble_tx::{AssembleArguments, AssembleTx},
-            types::{AssembleTransactionResult, TransactionStatus, get_tx_status},
+            assemble_tx::{
+                AssembleArguments,
+                AssembleTx,
+            },
+            types::{
+                AssembleTransactionResult,
+                TransactionStatus,
+                get_tx_status,
+            },
         },
     },
     service::adapters::SharedMemoryPool,
 };
 use async_graphql::{
-    Context, Object, Subscription,
-    connection::{Connection, EmptyFields},
+    Context,
+    Object,
+    Subscription,
+    connection::{
+        Connection,
+        EmptyFields,
+    },
 };
 use fuel_core_storage::{
-    Error as StorageError, IsNotFound, PredicateStorageRequirements,
-    Result as StorageResult, iter::IterDirection,
+    Error as StorageError,
+    IsNotFound,
+    PredicateStorageRequirements,
+    Result as StorageResult,
+    iter::IterDirection,
 };
 use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
-    fuel_tx::{self, Bytes32, Cacheable, Transaction as FuelTx, UniqueIdentifier},
-    fuel_types::{self, canonical::Deserialize},
-    fuel_vm::checked_transaction::{CheckPredicateParams, EstimatePredicates},
-    services::{executor::DryRunResult, transaction_status},
+    fuel_tx::{
+        self,
+        Bytes32,
+        Cacheable,
+        Transaction as FuelTx,
+        UniqueIdentifier,
+    },
+    fuel_types::{
+        self,
+        canonical::Deserialize,
+    },
+    fuel_vm::checked_transaction::{
+        CheckPredicateParams,
+        EstimatePredicates,
+    },
+    services::{
+        executor::DryRunResult,
+        transaction_status,
+    },
 };
-use futures::{Stream, TryStreamExt};
-use std::{borrow::Cow, future::Future, iter, sync::Arc};
+use futures::{
+    Stream,
+    TryStreamExt,
+};
+use std::{
+    borrow::Cow,
+    future::Future,
+    iter,
+    sync::Arc,
+};
 use types::{
-    DryRunStorageReads, DryRunTransactionExecutionStatus, StorageReadReplayEvent,
+    DryRunStorageReads,
+    DryRunTransactionExecutionStatus,
+    StorageReadReplayEvent,
     Transaction,
 };
 

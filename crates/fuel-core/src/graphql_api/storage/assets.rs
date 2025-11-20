@@ -1,11 +1,17 @@
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, raw::Raw},
+    codec::{
+        postcard::Postcard,
+        raw::Raw,
+    },
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::{
-    fuel_tx::{AssetId, ContractId},
+    fuel_tx::{
+        AssetId,
+        ContractId,
+    },
     fuel_types::SubAssetId,
 };
 

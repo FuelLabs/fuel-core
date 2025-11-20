@@ -1,11 +1,26 @@
-use crate::quorum::{Quorum, QuorumError};
-use alloy_json_rpc::{
-    RequestPacket, Response, ResponsePacket, ResponsePayload, RpcError,
+use crate::quorum::{
+    Quorum,
+    QuorumError,
 };
-use alloy_transport::{BoxTransport, TransportError, TransportErrorKind};
+use alloy_json_rpc::{
+    RequestPacket,
+    Response,
+    ResponsePacket,
+    ResponsePayload,
+    RpcError,
+};
+use alloy_transport::{
+    BoxTransport,
+    TransportError,
+    TransportErrorKind,
+};
 use futures::FutureExt;
 use parking_lot::Mutex;
-use std::{pin::Pin, sync::Arc, task::Poll};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::Poll,
+};
 use tower::Service;
 
 #[derive(Clone)]

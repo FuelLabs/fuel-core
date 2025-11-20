@@ -1,16 +1,27 @@
 //! Message
 
 use crate::{
-    blockchain::{header::BlockHeader, primitives::DaBlockHeight},
+    blockchain::{
+        header::BlockHeader,
+        primitives::DaBlockHeight,
+    },
     fuel_merkle::common::ProofSet,
     fuel_tx::{
         Input,
         input::message::{
-            MessageCoinPredicate, MessageCoinSigned, MessageDataPredicate,
-            MessageDataSigned, compute_message_id,
+            MessageCoinPredicate,
+            MessageCoinSigned,
+            MessageDataPredicate,
+            MessageDataSigned,
+            compute_message_id,
         },
     },
-    fuel_types::{Address, MessageId, Nonce, Word},
+    fuel_types::{
+        Address,
+        MessageId,
+        Nonce,
+        Word,
+    },
 };
 
 #[cfg(feature = "alloc")]

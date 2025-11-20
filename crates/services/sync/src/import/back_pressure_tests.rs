@@ -3,7 +3,11 @@ use std::time::Duration;
 
 use super::*;
 use crate::import::test_helpers::{
-    Count, PressureBlockImporter, PressureConsensus, PressurePeerToPeer, SharedCounts,
+    Count,
+    PressureBlockImporter,
+    PressureConsensus,
+    PressurePeerToPeer,
+    SharedCounts,
 };
 use test_case::test_case;
 

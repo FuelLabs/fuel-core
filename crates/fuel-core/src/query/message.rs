@@ -1,19 +1,43 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    Error as StorageError, Result as StorageResult, StorageAsRef,
-    iter::{BoxedIter, IterDirection},
+    Error as StorageError,
+    Result as StorageResult,
+    StorageAsRef,
+    iter::{
+        BoxedIter,
+        IterDirection,
+    },
     not_found,
     tables::Messages,
 };
 use fuel_core_types::{
     blockchain::block::CompressedBlock,
-    entities::relayer::message::{MerkleProof, Message, MessageProof, MessageStatus},
+    entities::relayer::message::{
+        MerkleProof,
+        Message,
+        MessageProof,
+        MessageStatus,
+    },
     fuel_merkle::binary::in_memory::MerkleTree,
-    fuel_tx::{Receipt, TxId, input::message::compute_message_id},
-    fuel_types::{Address, BlockHeight, Bytes32, MessageId, Nonce},
+    fuel_tx::{
+        Receipt,
+        TxId,
+        input::message::compute_message_id,
+    },
+    fuel_types::{
+        Address,
+        BlockHeight,
+        Bytes32,
+        MessageId,
+        Nonce,
+    },
     services::transaction_status::TransactionExecutionStatus,
 };
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{
+    Stream,
+    StreamExt,
+    TryStreamExt,
+};
 use itertools::Itertools;
 use std::borrow::Cow;
 
@@ -318,14 +342,25 @@ mod tests {
     use fuel_core_types::{
         blockchain::block::CompressedBlock,
         entities::relayer::message::MerkleProof,
-        fuel_tx::{Address, Bytes32, Receipt, TxId},
-        fuel_types::{BlockHeight, Nonce},
+        fuel_tx::{
+            Address,
+            Bytes32,
+            Receipt,
+            TxId,
+        },
+        fuel_types::{
+            BlockHeight,
+            Nonce,
+        },
         services::transaction_status::TransactionExecutionStatus,
         tai64::Tai64,
     };
     use std::collections::HashMap;
 
-    use super::{MessageProofData, message_proof};
+    use super::{
+        MessageProofData,
+        message_proof,
+    };
 
     pub struct FakeDB {
         pub blocks: HashMap<BlockHeight, CompressedBlock>,

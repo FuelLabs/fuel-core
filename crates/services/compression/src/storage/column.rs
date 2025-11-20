@@ -1,7 +1,10 @@
 //! Column enum for the database.
 
 use fuel_core_storage::merkle::{
-    column::{AsU32, MerkleizedColumn},
+    column::{
+        AsU32,
+        MerkleizedColumn,
+    },
     sparse::MerkleizedTableColumn,
 };
 

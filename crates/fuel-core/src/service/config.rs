@@ -1,27 +1,44 @@
 use clap::ValueEnum;
 #[cfg(feature = "test-helpers")]
-use std::net::{SocketAddr, TcpListener};
+use std::net::{
+    SocketAddr,
+    TcpListener,
+};
 use std::{
-    num::{NonZeroU32, NonZeroU64},
+    num::{
+        NonZeroU32,
+        NonZeroU64,
+    },
     path::PathBuf,
     time::Duration,
 };
-use strum_macros::{Display, EnumString, EnumVariantNames};
+use strum_macros::{
+    Display,
+    EnumString,
+    EnumVariantNames,
+};
 
 use fuel_core_chain_config::SnapshotReader;
 #[cfg(feature = "test-helpers")]
-use fuel_core_chain_config::{ChainConfig, StateConfig};
+use fuel_core_chain_config::{
+    ChainConfig,
+    StateConfig,
+};
 pub use fuel_core_consensus_module::RelayerConsensusConfig;
 pub use fuel_core_importer;
 #[cfg(feature = "p2p")]
-use fuel_core_p2p::config::{Config as P2PConfig, NotInitialized};
+use fuel_core_p2p::config::{
+    Config as P2PConfig,
+    NotInitialized,
+};
 pub use fuel_core_poa::Trigger;
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 use fuel_core_tx_status_manager::config::Config as TxStatusManagerConfig;
 use fuel_core_txpool::config::Config as TxPoolConfig;
 use fuel_core_types::{
-    blockchain::header::StateTransitionBytecodeVersion, signer::SignMode,
+    blockchain::header::StateTransitionBytecodeVersion,
+    signer::SignMode,
 };
 
 use crate::{
@@ -31,7 +48,10 @@ use crate::{
 
 #[cfg(feature = "rpc")]
 use fuel_core_types::fuel_types::BlockHeight;
-use fuel_core_types::fuel_types::{AssetId, ChainId};
+use fuel_core_types::fuel_types::{
+    AssetId,
+    ChainId,
+};
 
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::integration::StorageMethod;

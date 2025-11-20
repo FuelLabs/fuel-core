@@ -1,13 +1,22 @@
 //! The table that indexes the timestamps of the keys in the registry.
 
-use fuel_core_types::{fuel_compression::RegistryKey, tai64::Tai64};
-
-use fuel_core_storage::{
-    Mappable, blueprint::plain::Plain, codec::postcard::Postcard,
-    merkle::sparse::MerkleizedTableColumn, structured_storage::TableWithBlueprint,
+use fuel_core_types::{
+    fuel_compression::RegistryKey,
+    tai64::Tai64,
 };
 
-use super::column::{CompressionColumn, MerkleizedColumnOf};
+use fuel_core_storage::{
+    Mappable,
+    blueprint::plain::Plain,
+    codec::postcard::Postcard,
+    merkle::sparse::MerkleizedTableColumn,
+    structured_storage::TableWithBlueprint,
+};
+
+use super::column::{
+    CompressionColumn,
+    MerkleizedColumnOf,
+};
 
 /// The metadata key used by `DaCompressionTemporalRegistryTimsetamps` table to
 /// keep track of when each key was last updated.

@@ -1,8 +1,14 @@
 use crate::{
     import::test_helpers::counts::SharedCounts,
-    ports::{ConsensusPort, MockConsensusPort},
+    ports::{
+        ConsensusPort,
+        MockConsensusPort,
+    },
 };
-use fuel_core_types::blockchain::{SealedBlockHeader, primitives::DaBlockHeight};
+use fuel_core_types::blockchain::{
+    SealedBlockHeader,
+    primitives::DaBlockHeight,
+};
 use std::time::Duration;
 
 pub struct PressureConsensus(MockConsensusPort, Duration, SharedCounts);

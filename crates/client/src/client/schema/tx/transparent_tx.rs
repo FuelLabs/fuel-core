@@ -1,13 +1,40 @@
 use crate::client::schema::{
-    Address, AssetId, BlobId, Bytes32, ConnectionArgsFields, ContractId, ConversionError,
-    HexString, Nonce, PageInfo, Salt, TransactionId, TxPointer, U16, U32, U64, UtxoId,
+    Address,
+    AssetId,
+    BlobId,
+    Bytes32,
+    ConnectionArgsFields,
+    ContractId,
+    ConversionError,
+    HexString,
+    Nonce,
+    PageInfo,
+    Salt,
+    TransactionId,
+    TxPointer,
+    U16,
+    U32,
+    U64,
+    UtxoId,
     schema,
-    tx::{TransactionStatus, TxIdArgsFields},
+    tx::{
+        TransactionStatus,
+        TxIdArgsFields,
+    },
 };
-use core::convert::{TryFrom, TryInto};
+use core::convert::{
+    TryFrom,
+    TryInto,
+};
 use fuel_core_types::{
     fuel_tx::{
-        self, BlobBody, StorageSlot, UploadBody, field::ReceiptsRoot, input, output,
+        self,
+        BlobBody,
+        StorageSlot,
+        UploadBody,
+        field::ReceiptsRoot,
+        input,
+        output,
         policies::PolicyType,
     },
     fuel_types,

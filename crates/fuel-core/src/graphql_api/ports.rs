@@ -1,13 +1,27 @@
-use super::storage::{assets::AssetDetails, balances::TotalBalanceAmount};
+use super::storage::{
+    assets::AssetDetails,
+    balances::TotalBalanceAmount,
+};
 use crate::fuel_core_graphql_api::storage::coins::CoinsToSpendIndexKey;
 use async_trait::async_trait;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    Error as StorageError, Result as StorageResult, StorageInspect, StorageRead,
-    iter::{BoxedIter, IterDirection},
+    Error as StorageError,
+    Result as StorageResult,
+    StorageInspect,
+    StorageRead,
+    iter::{
+        BoxedIter,
+        IterDirection,
+    },
     tables::{
-        BlobData, Coins, ContractsAssets, ContractsRawCode, Messages,
-        StateTransitionBytecodeVersions, UploadedBytecodes,
+        BlobData,
+        Coins,
+        ContractsAssets,
+        ContractsRawCode,
+        Messages,
+        StateTransitionBytecodeVersions,
+        UploadedBytecodes,
     },
 };
 use fuel_core_tx_status_manager::TxStatusMessage;
@@ -16,21 +30,50 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
-        primitives::{BlockId, DaBlockHeight},
+        header::{
+            ConsensusParametersVersion,
+            StateTransitionBytecodeVersion,
+        },
+        primitives::{
+            BlockId,
+            DaBlockHeight,
+        },
     },
     entities::relayer::{
-        message::{MerkleProof, Message},
+        message::{
+            MerkleProof,
+            Message,
+        },
         transaction::RelayedTransactionStatus,
     },
-    fuel_tx::{Bytes32, ConsensusParameters, Salt, Transaction, TxId, TxPointer, UtxoId},
-    fuel_types::{Address, AssetId, BlockHeight, ContractId, Nonce},
+    fuel_tx::{
+        Bytes32,
+        ConsensusParameters,
+        Salt,
+        Transaction,
+        TxId,
+        TxPointer,
+        UtxoId,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        BlockHeight,
+        ContractId,
+        Nonce,
+    },
     fuel_vm::interpreter::Memory,
     services::{
-        executor::{DryRunResult, StorageReadReplayEvent},
+        executor::{
+            DryRunResult,
+            StorageReadReplayEvent,
+        },
         graphql_api::ContractBalance,
         p2p::PeerInfo,
-        transaction_status::{self, TransactionStatus},
+        transaction_status::{
+            self,
+            TransactionStatus,
+        },
     },
     tai64::Tai64,
 };
@@ -290,27 +333,45 @@ pub mod worker {
         fuel_core_graphql_api::storage::{
             coins::OwnedCoins,
             contracts::ContractsInfo,
-            messages::{OwnedMessageIds, SpentMessages},
+            messages::{
+                OwnedMessageIds,
+                SpentMessages,
+            },
         },
         graphql_api::storage::{
             assets::AssetsInfo,
-            balances::{CoinBalances, MessageBalances},
+            balances::{
+                CoinBalances,
+                MessageBalances,
+            },
             coins::CoinsToSpendIndex,
-            old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
+            old::{
+                OldFuelBlockConsensus,
+                OldFuelBlocks,
+                OldTransactions,
+            },
             relayed_transactions::RelayedTransactionStatuses,
         },
     };
     use derive_more::Display;
     use fuel_core_services::stream::BoxStream;
     use fuel_core_storage::{
-        Error as StorageError, Result as StorageResult, StorageMutate,
+        Error as StorageError,
+        Result as StorageResult,
+        StorageMutate,
     };
     use fuel_core_types::{
-        fuel_tx::{Address, Bytes32},
+        fuel_tx::{
+            Address,
+            Bytes32,
+        },
         fuel_types::BlockHeight,
         services::{
             block_importer::SharedImportResult,
-            transaction_status::{self, TransactionStatus},
+            transaction_status::{
+                self,
+                TransactionStatus,
+            },
         },
     };
 

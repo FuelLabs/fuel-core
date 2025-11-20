@@ -1,10 +1,20 @@
 use fuel_core_types::{
-    fuel_tx::{Address, BlobId, ContractId, TxId, UtxoId, Word},
+    fuel_tx::{
+        Address,
+        BlobId,
+        ContractId,
+        TxId,
+        UtxoId,
+        Word,
+    },
     fuel_types::Nonce,
     fuel_vm::checked_transaction::CheckError,
 };
 
-use crate::{pending_pool::MissingInput, ports::WasmValidityError};
+use crate::{
+    pending_pool::MissingInput,
+    ports::WasmValidityError,
+};
 
 #[derive(Clone, Debug, derive_more::Display)]
 pub enum Error {

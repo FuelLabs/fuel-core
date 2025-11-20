@@ -2,7 +2,10 @@
 
 use crate::{
     blueprint::plain::Plain,
-    codec::{primitive::Primitive, raw::Raw},
+    codec::{
+        primitive::Primitive,
+        raw::Raw,
+    },
     column::Column,
     structured_storage::TableWithBlueprint,
     tables::ContractsAssets,

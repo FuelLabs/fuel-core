@@ -2,18 +2,46 @@
 
 use fuel_core::{
     chain_config::StateConfig,
-    database::{Database, database_description::on_chain::OnChain},
-    service::{Config, FuelService},
+    database::{
+        Database,
+        database_description::on_chain::OnChain,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
-use fuel_core_client::client::{FuelClient, types::TransactionStatus};
+use fuel_core_client::client::{
+    FuelClient,
+    types::TransactionStatus,
+};
 use fuel_core_types::{
-    fuel_asm::{GTFArgs, Instruction, RegId, op},
-    fuel_tx::{BlobBody, BlobId, BlobIdExt, Finalizable, Input, TransactionBuilder},
+    fuel_asm::{
+        GTFArgs,
+        Instruction,
+        RegId,
+        op,
+    },
+    fuel_tx::{
+        BlobBody,
+        BlobId,
+        BlobIdExt,
+        Finalizable,
+        Input,
+        TransactionBuilder,
+    },
     fuel_types::canonical::Serialize,
-    fuel_vm::constraints::reg_key::{IS, SSP, ZERO},
+    fuel_vm::constraints::reg_key::{
+        IS,
+        SSP,
+        ZERO,
+    },
 };
 use test_helpers::{
-    assemble_tx::{AssembleAndRunTx, SigningAccount},
+    assemble_tx::{
+        AssembleAndRunTx,
+        SigningAccount,
+    },
     config_with_fee,
 };
 use tokio::io;

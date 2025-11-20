@@ -1,25 +1,42 @@
 use crate::{
-    api::{BlockAggregatorApi, BlockAggregatorQuery},
-    block_range_response::{BlockRangeResponse, BoxStream},
+    api::{
+        BlockAggregatorApi,
+        BlockAggregatorQuery,
+    },
+    block_range_response::{
+        BlockRangeResponse,
+        BoxStream,
+    },
     protobuf_types::{
-        Block as ProtoBlock, BlockHeightRequest as ProtoBlockHeightRequest,
+        Block as ProtoBlock,
+        BlockHeightRequest as ProtoBlockHeightRequest,
         BlockHeightResponse as ProtoBlockHeightResponse,
-        BlockRangeRequest as ProtoBlockRangeRequest, BlockResponse as ProtoBlockResponse,
+        BlockRangeRequest as ProtoBlockRangeRequest,
+        BlockResponse as ProtoBlockResponse,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
         RemoteBlockResponse as ProtoRemoteBlockResponse,
         RemoteS3Bucket as ProtoRemoteS3Bucket,
         block_aggregator_server::{
-            BlockAggregator, BlockAggregatorServer as ProtoBlockAggregatorServer,
+            BlockAggregator,
+            BlockAggregatorServer as ProtoBlockAggregatorServer,
         },
         block_response as proto_block_response,
         remote_block_response::Location as ProtoRemoteLocation,
     },
-    result::{Error, Result},
+    result::{
+        Error,
+        Result,
+    },
 };
 use anyhow::anyhow;
 use async_trait::async_trait;
 use fuel_core_services::{
-    RunnableService, RunnableTask, Service, ServiceRunner, StateWatcher, TaskNextAction,
+    RunnableService,
+    RunnableTask,
+    Service,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
 };
 use futures::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;

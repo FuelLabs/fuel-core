@@ -1,17 +1,30 @@
 use fuel_core::{
     database::Database,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{PageDirection, PaginationRequest},
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
-    fuel_asm::*, fuel_crypto::SecretKey, fuel_tx::TransactionBuilder, secrecy::Secret,
+    fuel_asm::*,
+    fuel_crypto::SecretKey,
+    fuel_tx::TransactionBuilder,
+    secrecy::Secret,
     signer::SignMode,
 };
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{
+    Rng,
+    SeedableRng,
+    rngs::StdRng,
+};
 use std::time::Duration;
 
 #[tokio::test(start_paused = true)]

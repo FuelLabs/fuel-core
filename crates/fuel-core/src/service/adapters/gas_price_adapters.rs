@@ -1,24 +1,46 @@
 use crate::{
-    database::OnChainIterableKeyValueView, service::adapters::ChainStateInfoProvider,
+    database::OnChainIterableKeyValueView,
+    service::adapters::ChainStateInfoProvider,
 };
 use fuel_core_gas_price_service::{
     common::{
-        fuel_core_storage_adapter::{GasPriceSettings, GasPriceSettingsProvider},
-        utils::{Error as GasPriceError, Result as GasPriceResult},
+        fuel_core_storage_adapter::{
+            GasPriceSettings,
+            GasPriceSettingsProvider,
+        },
+        utils::{
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
-    ports::{GasPriceData, L2Data},
+    ports::{
+        GasPriceData,
+        L2Data,
+    },
     v1::metadata::V1AlgorithmConfig,
 };
-use fuel_core_storage::{Result as StorageResult, transactional::HistoricalView};
+use fuel_core_storage::{
+    Result as StorageResult,
+    transactional::HistoricalView,
+};
 use fuel_core_types::{
-    blockchain::{block::Block, header::ConsensusParametersVersion},
+    blockchain::{
+        block::Block,
+        header::ConsensusParametersVersion,
+    },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
 
 use crate::{
-    database::{Database, database_description::gas_price::GasPriceDatabase},
-    service::{Config, config::GasPriceConfig},
+    database::{
+        Database,
+        database_description::gas_price::GasPriceDatabase,
+    },
+    service::{
+        Config,
+        config::GasPriceConfig,
+    },
 };
 
 #[cfg(test)]

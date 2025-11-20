@@ -1,6 +1,9 @@
 use core::fmt::Debug;
 use fuel_core_storage::kv_store::StorageColumn;
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use std::collections::HashSet;
 use strum::IntoEnumIterator;
 

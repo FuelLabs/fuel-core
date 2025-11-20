@@ -1,36 +1,71 @@
-use super::{progress::MultipleProgressReporter, task_manager::TaskManager};
+use super::{
+    progress::MultipleProgressReporter,
+    task_manager::TaskManager,
+};
 use crate::{
     combined_database::CombinedGenesisDatabase,
-    database::database_description::{off_chain::OffChain, on_chain::OnChain},
+    database::database_description::{
+        off_chain::OffChain,
+        on_chain::OnChain,
+    },
     fuel_core_graphql_api::storage::messages::SpentMessages,
     graphql_api::storage::{
         blocks::FuelBlockIdsToHeights,
         coins::OwnedCoins,
         contracts::ContractsInfo,
         messages::OwnedMessageIds,
-        old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
-        transactions::{OwnedTransactions, TransactionStatuses},
+        old::{
+            OldFuelBlockConsensus,
+            OldFuelBlocks,
+            OldTransactions,
+        },
+        transactions::{
+            OwnedTransactions,
+            TransactionStatuses,
+        },
     },
 };
 use core::marker::PhantomData;
-use fuel_core_chain_config::{AsTable, SnapshotReader, StateConfig, TableEntry};
+use fuel_core_chain_config::{
+    AsTable,
+    SnapshotReader,
+    StateConfig,
+    TableEntry,
+};
 use fuel_core_services::StateWatcher;
 use fuel_core_storage::{
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
-        FuelBlocks, Messages, ProcessedTransactions, SealedBlockConsensus, Transactions,
-        merkle::{FuelBlockMerkleData, FuelBlockMerkleMetadata},
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        FuelBlocks,
+        Messages,
+        ProcessedTransactions,
+        SealedBlockConsensus,
+        Transactions,
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
     },
 };
 use fuel_core_types::{
-    blockchain::{block::Block, primitives::DaBlockHeight},
+    blockchain::{
+        block::Block,
+        primitives::DaBlockHeight,
+    },
     fuel_tx::AssetId,
     fuel_types::BlockHeight,
     fuel_vm::BlobData,
 };
-use import_task::{ImportTable, ImportTask};
+use import_task::{
+    ImportTable,
+    ImportTask,
+};
 
 mod import_task;
 mod off_chain;

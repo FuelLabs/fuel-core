@@ -1,8 +1,11 @@
 //! The module contains implementations and tests for the `ContractsState` table.
 
 use crate::{
-    blueprint::plain::Plain, codec::raw::Raw, column::Column,
-    structured_storage::TableWithBlueprint, tables::ContractsState,
+    blueprint::plain::Plain,
+    codec::raw::Raw,
+    column::Column,
+    structured_storage::TableWithBlueprint,
+    tables::ContractsState,
 };
 
 impl TableWithBlueprint for ContractsState {

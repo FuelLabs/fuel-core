@@ -1,6 +1,10 @@
 //! Types related to GraphQL API service.
 
-use crate::fuel_types::{Address, AssetId, ContractId};
+use crate::fuel_types::{
+    Address,
+    AssetId,
+    ContractId,
+};
 
 /// The cumulative balance(`amount`) of the `Owner` of `asset_id`.
 pub struct Balance<Owner, Amount> {

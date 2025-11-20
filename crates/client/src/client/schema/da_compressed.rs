@@ -1,4 +1,7 @@
-use crate::client::schema::{U32, schema};
+use crate::client::schema::{
+    U32,
+    schema,
+};
 
 use super::HexString;
 

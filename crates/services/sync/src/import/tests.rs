@@ -2,14 +2,23 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    import::test_helpers::{empty_header, random_peer},
+    import::test_helpers::{
+        empty_header,
+        random_peer,
+    },
     ports::{
-        MockBlockImporterPort, MockConsensusPort, MockPeerToPeerPort, PeerReportReason,
+        MockBlockImporterPort,
+        MockConsensusPort,
+        MockPeerToPeerPort,
+        PeerReportReason,
     },
 };
 use fuel_core_types::services::p2p::Transactions;
 use mockall::Sequence;
-use std::{ops::Deref, time::Duration};
+use std::{
+    ops::Deref,
+    time::Duration,
+};
 
 use super::*;
 

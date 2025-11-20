@@ -1,5 +1,6 @@
 use fuel_core_types::{
-    fuel_tx::Bytes32, services::transaction_status::TransactionStatus,
+    fuel_tx::Bytes32,
+    services::transaction_status::TransactionStatus,
 };
 use std::pin::Pin;
 use tokio_stream::Stream;

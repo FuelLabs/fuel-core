@@ -1,29 +1,58 @@
 use crate::{
     database::{
-        Database, OnChainIterableKeyValueView, OnChainKeyValueView,
+        Database,
+        OnChainIterableKeyValueView,
+        OnChainKeyValueView,
         database_description::on_chain::OnChain,
     },
     fuel_core_graphql_api::ports::{
-        DatabaseBlocks, DatabaseChain, DatabaseContracts, DatabaseMessages,
-        OnChainDatabase, OnChainDatabaseAt,
+        DatabaseBlocks,
+        DatabaseChain,
+        DatabaseContracts,
+        DatabaseMessages,
+        OnChainDatabase,
+        OnChainDatabaseAt,
     },
     graphql_api::ports::worker,
 };
 use fuel_core_storage::{
-    ContractsAssetKey, ContractsStateKey, Result as StorageResult, StorageAsRef,
-    iter::{BoxedIter, IntoBoxedIter, IterDirection, IteratorOverTable},
+    ContractsAssetKey,
+    ContractsStateKey,
+    Result as StorageResult,
+    StorageAsRef,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterDirection,
+        IteratorOverTable,
+    },
     not_found,
     tables::{
-        ContractsAssets, ContractsState, FuelBlocks, SealedBlockConsensus, Transactions,
+        ContractsAssets,
+        ContractsState,
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
     },
 };
 use fuel_core_types::{
     blockchain::{
-        block::CompressedBlock, consensus::Consensus, primitives::DaBlockHeight,
+        block::CompressedBlock,
+        consensus::Consensus,
+        primitives::DaBlockHeight,
     },
     entities::relayer::message::Message,
-    fuel_tx::{AssetId, Bytes32, ContractId, Transaction, TxId},
-    fuel_types::{BlockHeight, Nonce},
+    fuel_tx::{
+        AssetId,
+        Bytes32,
+        ContractId,
+        Transaction,
+        TxId,
+    },
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     services::graphql_api::ContractBalance,
 };
 use itertools::Itertools;

@@ -1,12 +1,23 @@
-use std::{collections::HashSet, fmt::Debug, hash::Hash, time::SystemTime};
+use std::{
+    collections::HashSet,
+    fmt::Debug,
+    hash::Hash,
+    time::SystemTime,
+};
 
 use crate::{
-    error::{Error, InputValidationErrorType},
+    error::{
+        Error,
+        InputValidationErrorType,
+    },
     extracted_outputs::ExtractedOutputs,
     ports::TxPoolPersistentStorage,
     spent_inputs::SpentInputs,
 };
-use fuel_core_types::services::txpool::{ArcPoolTx, PoolTransaction};
+use fuel_core_types::services::txpool::{
+    ArcPoolTx,
+    PoolTransaction,
+};
 
 pub mod checked_collision;
 pub mod graph;

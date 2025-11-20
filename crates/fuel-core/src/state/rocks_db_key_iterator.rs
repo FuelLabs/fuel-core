@@ -1,8 +1,15 @@
-use crate::database::{Error as DatabaseError, Result as DatabaseResult};
+use crate::database::{
+    Error as DatabaseError,
+    Result as DatabaseResult,
+};
 use anyhow::anyhow;
 
 use fuel_core_storage::iter::IterDirection;
-use rocksdb::{DBAccess, DBRawIteratorWithThreadMode, IteratorMode};
+use rocksdb::{
+    DBAccess,
+    DBRawIteratorWithThreadMode,
+    IteratorMode,
+};
 
 pub struct RocksDBKeyIterator<'a, D: DBAccess, R> {
     raw: DBRawIteratorWithThreadMode<'a, D>,

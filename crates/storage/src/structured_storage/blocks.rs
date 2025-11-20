@@ -2,14 +2,24 @@
 
 use crate::{
     blueprint::merklized::Merklized,
-    codec::{Encode, postcard::Postcard, primitive::Primitive},
+    codec::{
+        Encode,
+        postcard::Postcard,
+        primitive::Primitive,
+    },
     column::Column,
     tables::{
         FuelBlocks,
-        merkle::{FuelBlockMerkleData, FuelBlockMerkleMetadata},
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
     },
 };
-use fuel_core_types::blockchain::block::{Block, CompressedBlock};
+use fuel_core_types::blockchain::block::{
+    Block,
+    CompressedBlock,
+};
 use fuel_vm_private::fuel_tx::Bytes32;
 
 use super::TableWithBlueprint;
@@ -56,21 +66,37 @@ impl TableWithBlueprint for FuelBlocks {
 mod tests {
     use super::*;
     use crate::{
-        StorageAsMut, StorageMutate,
-        blueprint::merklized::basic_tests_bmt::{BMTTestDataGenerator, Wrapper},
-        structured_storage::{TableWithBlueprint, test::InMemoryStorage},
+        StorageAsMut,
+        StorageMutate,
+        blueprint::merklized::basic_tests_bmt::{
+            BMTTestDataGenerator,
+            Wrapper,
+        },
+        structured_storage::{
+            TableWithBlueprint,
+            test::InMemoryStorage,
+        },
         transactional::ReadTransaction,
     };
     use fuel_core_types::{
         blockchain::{
             block::PartialFuelBlock,
-            header::{ConsensusHeader, PartialBlockHeader},
+            header::{
+                ConsensusHeader,
+                PartialBlockHeader,
+            },
             primitives::Empty,
         },
         fuel_types::ChainId,
     };
-    use fuel_vm_private::{crypto::ephemeral_merkle_root, fuel_storage::Mappable};
-    use rand::{Rng, rngs::StdRng};
+    use fuel_vm_private::{
+        crypto::ephemeral_merkle_root,
+        fuel_storage::Mappable,
+    };
+    use rand::{
+        Rng,
+        rngs::StdRng,
+    };
 
     impl BMTTestDataGenerator for FuelBlocks {
         type Key = <FuelBlocks as Mappable>::Key;

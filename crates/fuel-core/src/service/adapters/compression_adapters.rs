@@ -1,21 +1,35 @@
-use super::import_result_provider::{self};
+use super::import_result_provider::{
+    self,
+};
 use crate::{
     database::{
         Database,
-        database_description::{compression::CompressionDatabase, on_chain::OnChain},
+        database_description::{
+            compression::CompressionDatabase,
+            on_chain::OnChain,
+        },
     },
     service::adapters::BlockImporterAdapter,
 };
 use fuel_core_compression_service::{
     config,
     ports::{
-        block_source::{self, BlockAt},
-        canonical_height, compression_storage, configuration,
+        block_source::{
+            self,
+            BlockAt,
+        },
+        canonical_height,
+        compression_storage,
+        configuration,
     },
 };
-use fuel_core_storage::transactional::{AtomicView, HistoricalView};
+use fuel_core_storage::transactional::{
+    AtomicView,
+    HistoricalView,
+};
 use fuel_core_types::{
-    blockchain::block::Block, fuel_types::ChainId,
+    blockchain::block::Block,
+    fuel_types::ChainId,
     services::block_importer::SharedImportResult,
 };
 

@@ -1,34 +1,75 @@
 use crate::{
     database::{
-        Database, OnChainIterableKeyValueView, database_description::on_chain::OnChain,
+        Database,
+        OnChainIterableKeyValueView,
+        database_description::on_chain::OnChain,
     },
     fuel_core_graphql_api::api_service::ChainInfoProvider,
-    schema::scalars::{U32, U64},
+    schema::scalars::{
+        U32,
+        U64,
+    },
 };
 use anyhow::anyhow;
-use async_graphql::{Context, ID, Object, SchemaBuilder};
+use async_graphql::{
+    Context,
+    ID,
+    Object,
+    SchemaBuilder,
+};
 use fuel_core_storage::{
-    InterpreterStorage, not_found,
-    transactional::{AtomicView, IntoTransaction, StorageTransaction},
+    InterpreterStorage,
+    not_found,
+    transactional::{
+        AtomicView,
+        IntoTransaction,
+        StorageTransaction,
+    },
     vm_storage::VmStorage,
 };
 use fuel_core_types::{
-    fuel_asm::{Instruction, RegisterId, Word},
+    fuel_asm::{
+        Instruction,
+        RegisterId,
+        Word,
+    },
     fuel_tx::{
-        ConsensusParameters, Executable, Script, Transaction,
-        field::{Policies, ScriptGasLimit, Witnesses},
+        ConsensusParameters,
+        Executable,
+        Script,
+        Transaction,
+        field::{
+            Policies,
+            ScriptGasLimit,
+            Witnesses,
+        },
         policies::PolicyType,
     },
     fuel_vm::{
-        Interpreter, InterpreterError,
-        checked_transaction::{CheckedTransaction, IntoChecked},
-        interpreter::{InterpreterParams, MemoryInstance},
+        Interpreter,
+        InterpreterError,
+        checked_transaction::{
+            CheckedTransaction,
+            IntoChecked,
+        },
+        interpreter::{
+            InterpreterParams,
+            MemoryInstance,
+        },
         state::DebugEval,
     },
 };
 use futures::lock::Mutex;
-use std::{collections::HashMap, io, sync, sync::Arc};
-use tracing::{debug, trace};
+use std::{
+    collections::HashMap,
+    io,
+    sync,
+    sync::Arc,
+};
+use tracing::{
+    debug,
+    trace,
+};
 use uuid::Uuid;
 
 pub struct Config {
@@ -540,7 +581,10 @@ mod gql_types {
     //! GraphQL type wrappers
     use async_graphql::*;
 
-    use crate::schema::scalars::{ContractId, U64};
+    use crate::schema::scalars::{
+        ContractId,
+        U64,
+    };
 
     use fuel_core_types::fuel_vm::Breakpoint as FuelBreakpoint;
 

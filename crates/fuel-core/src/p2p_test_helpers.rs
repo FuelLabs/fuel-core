@@ -3,14 +3,26 @@
 #[cfg(feature = "rpc")]
 use crate::service::config::free_local_addr;
 use crate::{
-    chain_config::{CoinConfig, coin_config_helpers::CoinConfigGenerator},
+    chain_config::{
+        CoinConfig,
+        coin_config_helpers::CoinConfigGenerator,
+    },
     combined_database::CombinedDatabase,
-    database::{Database, database_description::off_chain::OffChain},
+    database::{
+        Database,
+        database_description::off_chain::OffChain,
+    },
     fuel_core_graphql_api::storage::transactions::TransactionStatuses,
     p2p::Multiaddr,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
-use fuel_core_chain_config::{ConsensusConfig, StateConfig};
+use fuel_core_chain_config::{
+    ConsensusConfig,
+    StateConfig,
+};
 use fuel_core_p2p::{
     codecs::{
         gossipsub::GossipsubMessageHandler,
@@ -18,25 +30,53 @@ use fuel_core_p2p::{
     },
     network_service::FuelP2PService,
     p2p_service::FuelP2PEvent,
-    request_response::messages::{RequestMessage, V2ResponseMessage},
+    request_response::messages::{
+        RequestMessage,
+        V2ResponseMessage,
+    },
     service::to_message_acceptance,
 };
-use fuel_core_poa::{Trigger, ports::BlockImporter};
-use fuel_core_storage::{StorageAsRef, transactional::AtomicView};
+use fuel_core_poa::{
+    Trigger,
+    ports::BlockImporter,
+};
+use fuel_core_storage::{
+    StorageAsRef,
+    transactional::AtomicView,
+};
 use fuel_core_types::{
-    fuel_asm::{RegId, op},
+    fuel_asm::{
+        RegId,
+        op,
+    },
     fuel_crypto::SecretKey,
-    fuel_tx::{Input, Transaction, TransactionBuilder, TxId, UniqueIdentifier},
-    fuel_types::{Address, Bytes32, ChainId},
+    fuel_tx::{
+        Input,
+        Transaction,
+        TransactionBuilder,
+        TxId,
+        UniqueIdentifier,
+    },
+    fuel_types::{
+        Address,
+        Bytes32,
+        ChainId,
+    },
     secrecy::Secret,
     services::p2p::GossipsubMessageAcceptance,
     signer::SignMode,
 };
 use futures::StreamExt;
-use rand::{SeedableRng, rngs::StdRng};
+use rand::{
+    SeedableRng,
+    rngs::StdRng,
+};
 use std::{
     collections::HashMap,
-    ops::{Index, IndexMut},
+    ops::{
+        Index,
+        IndexMut,
+    },
     time::Duration,
 };
 use tokio::sync::broadcast;

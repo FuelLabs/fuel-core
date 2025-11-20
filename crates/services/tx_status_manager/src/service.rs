@@ -2,33 +2,66 @@ use crate::{
     TxStatusStream,
     config::Config,
     manager::TxStatusManager,
-    ports::{P2PPreConfirmationGossipData, P2PPreConfirmationMessage, P2PSubscriptions},
+    ports::{
+        P2PPreConfirmationGossipData,
+        P2PPreConfirmationMessage,
+        P2PSubscriptions,
+    },
     subscriptions::Subscriptions,
     update_sender::TxStatusChange,
 };
 use fuel_core_services::{
-    RunnableService, RunnableTask, ServiceRunner, StateWatcher, TaskNextAction,
-    stream::{BoxStream, IntoBoxStream},
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
 };
 use fuel_core_types::{
     ed25519::Signature,
     ed25519_dalek::Verifier,
     fuel_crypto::Message,
-    fuel_tx::{Address, Bytes64, Input, TxId},
+    fuel_tx::{
+        Address,
+        Bytes64,
+        Input,
+        TxId,
+    },
     services::{
         p2p::{
-            DelegatePreConfirmationKey, DelegatePublicKey, GossipData,
-            GossipsubMessageAcceptance, GossipsubMessageInfo, PeerId,
-            PreConfirmationMessage, ProtocolSignature, Sealed,
+            DelegatePreConfirmationKey,
+            DelegatePublicKey,
+            GossipData,
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            PeerId,
+            PreConfirmationMessage,
+            ProtocolSignature,
+            Sealed,
         },
-        preconfirmation::{Preconfirmation, Preconfirmations},
-        transaction_status::{PreConfirmationStatus, TransactionStatus, statuses},
+        preconfirmation::{
+            Preconfirmation,
+            Preconfirmations,
+        },
+        transaction_status::{
+            PreConfirmationStatus,
+            TransactionStatus,
+            statuses,
+        },
     },
     tai64::Tai64,
 };
 use futures::StreamExt;
 use std::collections::HashMap;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{
+    broadcast,
+    mpsc,
+    oneshot,
+};
 
 enum ReadRequest {
     GetStatus {
@@ -453,46 +486,93 @@ where
 #[cfg(test)]
 #[allow(non_snake_case)]
 mod tests {
-    use std::{collections::HashSet, time::Duration};
+    use std::{
+        collections::HashSet,
+        time::Duration,
+    };
 
-    use fuel_core_services::{Service, ServiceRunner};
+    use fuel_core_services::{
+        Service,
+        ServiceRunner,
+    };
     use fuel_core_types::{
         fuel_crypto::{
-            Message, PublicKey, SecretKey, Signature,
-            rand::{SeedableRng, rngs::StdRng},
+            Message,
+            PublicKey,
+            SecretKey,
+            Signature,
+            rand::{
+                SeedableRng,
+                rngs::StdRng,
+            },
         },
-        fuel_tx::{Bytes32, Bytes64},
+        fuel_tx::{
+            Bytes32,
+            Bytes64,
+        },
         services::{
             p2p::{
-                DelegatePreConfirmationKey, DelegatePublicKey, GossipData,
-                GossipsubMessageAcceptance, GossipsubMessageInfo, Sealed,
+                DelegatePreConfirmationKey,
+                DelegatePublicKey,
+                GossipData,
+                GossipsubMessageAcceptance,
+                GossipsubMessageInfo,
+                Sealed,
             },
-            preconfirmation::{Preconfirmation, Preconfirmations},
+            preconfirmation::{
+                Preconfirmation,
+                Preconfirmations,
+            },
             transaction_status::TransactionStatus,
         },
         tai64::Tai64,
     };
-    use futures::{StreamExt, stream::BoxStream};
-    use status::transaction::{random_prunable_tx_status, random_tx_status};
+    use futures::{
+        StreamExt,
+        stream::BoxStream,
+    };
+    use status::transaction::{
+        random_prunable_tx_status,
+        random_tx_status,
+    };
     use tokio::{
-        sync::{broadcast, mpsc, oneshot},
+        sync::{
+            broadcast,
+            mpsc,
+            oneshot,
+        },
         time::Instant,
     };
     use tokio_stream::wrappers::ReceiverStream;
 
     use crate::{
-        TxStatusMessage, TxStatusStream,
+        TxStatusMessage,
+        TxStatusStream,
         manager::TxStatusManager,
         ports::{
-            P2PPreConfirmationGossipData, P2PPreConfirmationMessage, P2PSubscriptions,
+            P2PPreConfirmationGossipData,
+            P2PPreConfirmationMessage,
+            P2PSubscriptions,
         },
         subscriptions::Subscriptions,
-        update_sender::{MpscChannel, TxStatusChange, UpdateSender},
+        update_sender::{
+            MpscChannel,
+            TxStatusChange,
+            UpdateSender,
+        },
     };
 
-    use super::{ReadRequest, SharedData, SignatureVerification, Task, UpdateRequest};
+    use super::{
+        ReadRequest,
+        SharedData,
+        SignatureVerification,
+        Task,
+        UpdateRequest,
+    };
     use fuel_core_types::ed25519_dalek::{
-        Signer, SigningKey as DalekSigningKey, VerifyingKey as DalekVerifyingKey,
+        Signer,
+        SigningKey as DalekSigningKey,
+        VerifyingKey as DalekVerifyingKey,
     };
 
     const MORE_THAN_TTL: Duration = Duration::from_secs(5);
@@ -556,10 +636,16 @@ mod tests {
             use std::sync::Arc;
 
             use fuel_core_types::{
-                fuel_crypto::rand::{rngs::StdRng, seq::SliceRandom},
+                fuel_crypto::rand::{
+                    rngs::StdRng,
+                    seq::SliceRandom,
+                },
                 services::transaction_status::{
                     TransactionStatus,
-                    statuses::{PreConfirmationFailure, PreConfirmationSuccess},
+                    statuses::{
+                        PreConfirmationFailure,
+                        PreConfirmationSuccess,
+                    },
                 },
                 tai64::Tai64,
             };

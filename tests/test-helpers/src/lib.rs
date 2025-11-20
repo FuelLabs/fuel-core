@@ -1,15 +1,35 @@
 use crate::assemble_tx::SigningAccount;
-use fuel_core::{chain_config::TESTNET_WALLET_SECRETS, service::Config};
-use fuel_core_client::client::{FuelClient, types::TransactionStatus};
+use fuel_core::{
+    chain_config::TESTNET_WALLET_SECRETS,
+    service::Config,
+};
+use fuel_core_client::client::{
+    FuelClient,
+    types::TransactionStatus,
+};
 use fuel_core_types::{
-    fuel_asm::{RegId, op},
+    fuel_asm::{
+        RegId,
+        op,
+    },
     fuel_crypto::SecretKey,
     fuel_tx::{
-        AssetId, Input, Output, Transaction, TransactionBuilder, Upload,
-        UploadSubsection, policies::Policies,
+        AssetId,
+        Input,
+        Output,
+        Transaction,
+        TransactionBuilder,
+        Upload,
+        UploadSubsection,
+        policies::Policies,
     },
 };
-use rand::{CryptoRng, Rng, RngCore, rngs::StdRng};
+use rand::{
+    CryptoRng,
+    Rng,
+    RngCore,
+    rngs::StdRng,
+};
 
 pub mod assemble_tx;
 pub mod builder;

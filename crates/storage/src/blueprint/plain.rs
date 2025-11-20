@@ -4,11 +4,26 @@
 //! the key and value and puts/takes them into/from the storage.
 
 use crate::{
-    Error as StorageError, Mappable, Result as StorageResult,
-    blueprint::{BlueprintCodec, BlueprintInspect, BlueprintMutate, SupportsBatching},
-    codec::{Decode, Encode, Encoder},
+    Error as StorageError,
+    Mappable,
+    Result as StorageResult,
+    blueprint::{
+        BlueprintCodec,
+        BlueprintInspect,
+        BlueprintMutate,
+        SupportsBatching,
+    },
+    codec::{
+        Decode,
+        Encode,
+        Encoder,
+    },
     kv_store::{
-        BatchOperations, KeyValueInspect, KeyValueMutate, StorageColumn, WriteOperation,
+        BatchOperations,
+        KeyValueInspect,
+        KeyValueMutate,
+        StorageColumn,
+        WriteOperation,
     },
     structured_storage::TableWithBlueprint,
 };

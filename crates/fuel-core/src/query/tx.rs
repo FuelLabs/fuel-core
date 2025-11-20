@@ -1,14 +1,26 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    Error as StorageError, Result as StorageResult, iter::IterDirection, not_found,
+    Error as StorageError,
+    Result as StorageResult,
+    iter::IterDirection,
+    not_found,
     tables::Transactions,
 };
 use fuel_core_types::{
-    fuel_tx::{Receipt, Transaction, TxId, TxPointer},
+    fuel_tx::{
+        Receipt,
+        Transaction,
+        TxId,
+        TxPointer,
+    },
     fuel_types::Address,
     services::transaction_status::TransactionExecutionStatus,
 };
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{
+    Stream,
+    StreamExt,
+    TryStreamExt,
+};
 use std::sync::Arc;
 
 impl ReadView {

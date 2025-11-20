@@ -3,8 +3,14 @@
 
 use clap::Parser;
 use commands::{
-    build::{BuildCommand, cargo_build_and_dump_schema},
-    dump::{DumpCommand, dump_schema},
+    build::{
+        BuildCommand,
+        cargo_build_and_dump_schema,
+    },
+    dump::{
+        DumpCommand,
+        dump_schema,
+    },
 };
 
 mod commands;

@@ -2,7 +2,10 @@ use crate::futures::FuturesMetrics;
 use core::{
     future::Future,
     pin::Pin,
-    task::{Context, Poll},
+    task::{
+        Context,
+        Poll,
+    },
     time::Duration,
 };
 use std::time::Instant;

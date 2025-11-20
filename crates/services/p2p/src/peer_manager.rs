@@ -1,17 +1,35 @@
 use crate::{
-    gossipsub_config::GRAYLIST_THRESHOLD, peer_manager::heartbeat_data::HeartbeatData,
+    gossipsub_config::GRAYLIST_THRESHOLD,
+    peer_manager::heartbeat_data::HeartbeatData,
 };
-use fuel_core_services::seqlock::{SeqLock, SeqLockReader, SeqLockWriter};
+use fuel_core_services::seqlock::{
+    SeqLock,
+    SeqLockReader,
+    SeqLockWriter,
+};
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::p2p::peer_reputation::{
-        AppScore, DECAY_APP_SCORE, DEFAULT_APP_SCORE, MAX_APP_SCORE, MIN_APP_SCORE,
+        AppScore,
+        DECAY_APP_SCORE,
+        DEFAULT_APP_SCORE,
+        MAX_APP_SCORE,
+        MIN_APP_SCORE,
     },
 };
-use libp2p::{Multiaddr, PeerId};
+use libp2p::{
+    Multiaddr,
+    PeerId,
+};
 use rand::seq::IteratorRandom;
-use std::collections::{HashMap, HashSet};
-use tracing::{debug, info};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
+use tracing::{
+    debug,
+    info,
+};
 
 pub mod heartbeat_data;
 

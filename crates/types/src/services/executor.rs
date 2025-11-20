@@ -3,23 +3,45 @@
 use crate::{
     blockchain::{
         block::Block,
-        header::{BlockHeaderError, ConsensusParametersVersion},
+        header::{
+            BlockHeaderError,
+            ConsensusParametersVersion,
+        },
     },
     entities::{
         coins::coin::Coin,
-        relayer::{message::Message, transaction::RelayedTransactionId},
+        relayer::{
+            message::Message,
+            transaction::RelayedTransactionId,
+        },
     },
-    fuel_tx::{Receipt, TxId, UtxoId, ValidityError},
+    fuel_tx::{
+        Receipt,
+        TxId,
+        UtxoId,
+        ValidityError,
+    },
     fuel_types::{
-        BlockHeight, Bytes32, ContractId, Nonce, fmt_option_truncated_hex,
+        BlockHeight,
+        Bytes32,
+        ContractId,
+        Nonce,
+        fmt_option_truncated_hex,
         fmt_truncated_hex,
     },
-    fuel_vm::{ProgramState, checked_transaction::CheckError},
+    fuel_vm::{
+        ProgramState,
+        checked_transaction::CheckError,
+    },
     services::Uncommitted,
 };
 
 #[cfg(feature = "alloc")]
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{
+    string::String,
+    sync::Arc,
+    vec::Vec,
+};
 use fuel_vm_private::prelude::Transaction;
 
 pub mod memory;

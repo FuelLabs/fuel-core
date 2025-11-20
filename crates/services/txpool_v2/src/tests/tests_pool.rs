@@ -1,33 +1,67 @@
 use std::collections::HashSet;
 
 use crate::{
-    config::{Config, PoolLimits},
+    config::{
+        Config,
+        PoolLimits,
+    },
     error::{
-        BlacklistedError, CollisionReason, DependencyError, Error, InputValidationError,
+        BlacklistedError,
+        CollisionReason,
+        DependencyError,
+        Error,
+        InputValidationError,
     },
     ports::WasmValidityError,
     selection_algorithms::Constraints,
     tests::{
         mocks::MockWasmChecker,
         universe::{
-            GAS_LIMIT, IntoEstimated, TEST_COIN_AMOUNT, TestPoolUniverse,
-            create_contract_input, create_contract_output,
+            GAS_LIMIT,
+            IntoEstimated,
+            TEST_COIN_AMOUNT,
+            TestPoolUniverse,
+            create_contract_input,
+            create_contract_output,
             create_message_predicate_from_message,
         },
     },
 };
 use fuel_core_types::{
-    fuel_asm::{RegId, op},
+    fuel_asm::{
+        RegId,
+        op,
+    },
     fuel_tx::{
-        Address, AssetId, BlobBody, BlobId, BlobIdExt, Bytes32, Chargeable,
-        ConsensusParameters, Contract, Input, Output, PanicReason, PredicateParameters,
-        TransactionBuilder, TxParameters, UniqueIdentifier, UpgradePurpose, UtxoId,
-        ValidityError, input::coin::CoinPredicate,
+        Address,
+        AssetId,
+        BlobBody,
+        BlobId,
+        BlobIdExt,
+        Bytes32,
+        Chargeable,
+        ConsensusParameters,
+        Contract,
+        Input,
+        Output,
+        PanicReason,
+        PredicateParameters,
+        TransactionBuilder,
+        TxParameters,
+        UniqueIdentifier,
+        UpgradePurpose,
+        UtxoId,
+        ValidityError,
+        input::coin::CoinPredicate,
     },
     fuel_types::ChainId,
     fuel_vm::{
         PredicateVerificationFailed,
-        checked_transaction::{CheckError, CheckedTransaction, IntoChecked},
+        checked_transaction::{
+            CheckError,
+            CheckedTransaction,
+            IntoChecked,
+        },
     },
 };
 

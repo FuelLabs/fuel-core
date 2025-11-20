@@ -1,23 +1,39 @@
-use super::{Handler, import_task::ImportTable};
+use super::{
+    Handler,
+    import_task::ImportTable,
+};
 use crate::database::{
-    GenesisDatabase, balances::BalancesInitializer,
-    database_description::on_chain::OnChain, state::StateInitializer,
+    GenesisDatabase,
+    balances::BalancesInitializer,
+    database_description::on_chain::OnChain,
+    state::StateInitializer,
 };
 use anyhow::anyhow;
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
     StorageAsMut,
     tables::{
-        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
-        Messages, ProcessedTransactions,
-        merkle::{FuelBlockMerkleData, FuelBlockMerkleMetadata},
+        Coins,
+        ContractsAssets,
+        ContractsLatestUtxo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+        ProcessedTransactions,
+        merkle::{
+            FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
+        },
     },
     transactional::StorageTransaction,
 };
 use fuel_core_types::{
     self,
     blockchain::primitives::DaBlockHeight,
-    entities::{Message, coins::coin::Coin},
+    entities::{
+        Message,
+        coins::coin::Coin,
+    },
     fuel_types::BlockHeight,
     fuel_vm::BlobData,
 };

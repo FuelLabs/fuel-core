@@ -2,31 +2,65 @@
 
 use crate::{
     common::{
-        fuel_core_storage_adapter::{GasPriceSettings, GasPriceSettingsProvider},
+        fuel_core_storage_adapter::{
+            GasPriceSettings,
+            GasPriceSettingsProvider,
+        },
         l2_block_source::L2BlockSource,
         updater_metadata::UpdaterMetadata,
-        utils::{BlockInfo, Error as GasPriceError, Result as GasPriceResult},
+        utils::{
+            BlockInfo,
+            Error as GasPriceError,
+            Result as GasPriceResult,
+        },
     },
-    ports::{GasPriceData, GetMetadataStorage, L2Data, SetMetadataStorage},
+    ports::{
+        GasPriceData,
+        GetMetadataStorage,
+        L2Data,
+        SetMetadataStorage,
+    },
     v0::{
-        metadata::{V0AlgorithmConfig, V0Metadata},
+        metadata::{
+            V0AlgorithmConfig,
+            V0Metadata,
+        },
         service::GasPriceServiceV0,
-        uninitialized_task::{UninitializedTask, initialize_algorithm},
+        uninitialized_task::{
+            UninitializedTask,
+            initialize_algorithm,
+        },
     },
 };
 use anyhow::anyhow;
 use fuel_core_services::{
-    RunnableTask, StateWatcher,
-    stream::{BoxStream, IntoBoxStream},
+    RunnableTask,
+    StateWatcher,
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
 };
-use fuel_core_storage::{Result as StorageResult, transactional::AtomicView};
+use fuel_core_storage::{
+    Result as StorageResult,
+    transactional::AtomicView,
+};
 use fuel_core_types::{
-    blockchain::{block::Block, header::ConsensusParametersVersion},
+    blockchain::{
+        block::Block,
+        header::ConsensusParametersVersion,
+    },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
-    services::block_importer::{ImportResult, SharedImportResult},
+    services::block_importer::{
+        ImportResult,
+        SharedImportResult,
+    },
 };
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 use tokio::sync::mpsc::Receiver;
 
 struct FakeL2BlockSource {

@@ -5,32 +5,65 @@ use std::{
     collections::HashMap,
     iter,
     sync::Arc,
-    time::{Instant, SystemTime},
+    time::{
+        Instant,
+        SystemTime,
+    },
 };
 
 use collisions::CollisionsExt;
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_types::{
-    fuel_tx::{TxId, field::BlobId},
+    fuel_tx::{
+        TxId,
+        field::BlobId,
+    },
     services::{
-        transaction_status::{TransactionStatus, statuses},
-        txpool::{ArcPoolTx, PoolTransaction},
+        transaction_status::{
+            TransactionStatus,
+            statuses,
+        },
+        txpool::{
+            ArcPoolTx,
+            PoolTransaction,
+        },
     },
     tai64::Tai64,
 };
 use num_rational::Ratio;
 
 use crate::{
-    collision_manager::{CollisionManager, Collisions},
+    collision_manager::{
+        CollisionManager,
+        Collisions,
+    },
     config::Config,
-    error::{DependencyError, Error, InputValidationError, InsertionErrorType},
+    error::{
+        DependencyError,
+        Error,
+        InputValidationError,
+        InsertionErrorType,
+    },
     extracted_outputs::ExtractedOutputs,
-    ports::{TxPoolPersistentStorage, TxStatusManager as TxStatusManagerTrait},
-    selection_algorithms::{Constraints, SelectionAlgorithm},
-    storage::{CheckedTransaction, Storage, StorageData},
+    ports::{
+        TxPoolPersistentStorage,
+        TxStatusManager as TxStatusManagerTrait,
+    },
+    selection_algorithms::{
+        Constraints,
+        SelectionAlgorithm,
+    },
+    storage::{
+        CheckedTransaction,
+        Storage,
+        StorageData,
+    },
 };
 
-use crate::{error::RemovedReason, spent_inputs::SpentInputs};
+use crate::{
+    error::RemovedReason,
+    spent_inputs::SpentInputs,
+};
 #[cfg(test)]
 use std::collections::HashSet;
 

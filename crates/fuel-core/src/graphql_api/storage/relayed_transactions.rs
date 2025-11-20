@@ -1,14 +1,22 @@
 use fuel_core_chain_config::{
-    AddTable, AsTable, StateConfig, StateConfigBuilder, TableEntry,
+    AddTable,
+    AsTable,
+    StateConfig,
+    StateConfigBuilder,
+    TableEntry,
 };
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, raw::Raw},
+    codec::{
+        postcard::Postcard,
+        raw::Raw,
+    },
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::{
-    entities::relayer::transaction::RelayedTransactionStatus, fuel_tx::Bytes32,
+    entities::relayer::transaction::RelayedTransactionStatus,
+    fuel_tx::Bytes32,
 };
 
 /// Tracks the status of transactions from the L1. These are tracked separately from tx-pool

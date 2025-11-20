@@ -3,24 +3,42 @@ use crate::{
     blocks::BlockSourceEvent,
     db::{
         BlockAggregatorDB,
-        table::{Blocks, Column, LatestBlock},
+        table::{
+            Blocks,
+            Column,
+            LatestBlock,
+        },
     },
     protobuf_types::Block as ProtoBlock,
-    result::{Error, Result},
+    result::{
+        Error,
+        Result,
+    },
 };
 use anyhow::anyhow;
 use fuel_core_services::stream::Stream;
 use fuel_core_storage::{
-    Error as StorageError, StorageAsMut, StorageAsRef, StorageInspect, StorageMutate,
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
     kv_store::KeyValueInspect,
     transactional::{
-        AtomicView, Modifiable, ReadTransaction, StorageTransaction, WriteTransaction,
+        AtomicView,
+        Modifiable,
+        ReadTransaction,
+        StorageTransaction,
+        WriteTransaction,
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
     pin::Pin,
-    task::{Context, Poll},
+    task::{
+        Context,
+        Poll,
+    },
 };
 
 #[cfg(test)]

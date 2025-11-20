@@ -1,14 +1,28 @@
 use async_graphql::{
-    Response, ServerError, ServerResult, ValidationResult, Value, Variables,
+    Response,
+    ServerError,
+    ServerResult,
+    ValidationResult,
+    Value,
+    Variables,
     extensions::{
-        Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextRequest,
-        NextResolve, NextValidation, ResolveInfo,
+        Extension,
+        ExtensionContext,
+        ExtensionFactory,
+        NextParseQuery,
+        NextRequest,
+        NextResolve,
+        NextValidation,
+        ResolveInfo,
     },
     parser::types::ExecutableDocument,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use std::{
-    sync::{Arc, OnceLock},
+    sync::{
+        Arc,
+        OnceLock,
+    },
     time::Duration,
 };
 use tokio::time::Instant;

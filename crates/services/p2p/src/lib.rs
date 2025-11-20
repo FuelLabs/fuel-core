@@ -27,7 +27,11 @@ mod limited_behaviour;
 pub use gossipsub::config as gossipsub_config;
 pub use heartbeat::Config;
 
-pub use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
+pub use libp2p::{
+    Multiaddr,
+    PeerId,
+    multiaddr::Protocol,
+};
 use tracing::warn;
 
 #[cfg(feature = "test-helpers")]

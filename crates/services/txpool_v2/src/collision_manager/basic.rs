@@ -1,17 +1,30 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
     fmt::Debug,
     hash::Hash,
 };
 
 use fuel_core_types::{
     fuel_tx::{
-        BlobId, ContractId, Input, Output, TxId, UtxoId,
+        BlobId,
+        ContractId,
+        Input,
+        Output,
+        TxId,
+        UtxoId,
         field::BlobId as _,
         input::{
-            coin::{CoinPredicate, CoinSigned},
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
             message::{
-                MessageCoinPredicate, MessageCoinSigned, MessageDataPredicate,
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
                 MessageDataSigned,
             },
         },
@@ -21,11 +34,18 @@ use fuel_core_types::{
 };
 
 use crate::{
-    error::{CollisionReason, Error, InputValidationError},
+    error::{
+        CollisionReason,
+        Error,
+        InputValidationError,
+    },
     storage::StorageData,
 };
 
-use super::{CollisionManager, Collisions};
+use super::{
+    CollisionManager,
+    Collisions,
+};
 
 #[cfg(test)]
 use fuel_core_types::services::txpool::ArcPoolTx;

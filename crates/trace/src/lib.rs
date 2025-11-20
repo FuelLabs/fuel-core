@@ -3,7 +3,10 @@
 
 use ctor::ctor;
 use std::env::var;
-use tracing_subscriber::{EnvFilter, fmt::format};
+use tracing_subscriber::{
+    EnvFilter,
+    fmt::format,
+};
 
 pub mod subscriber;
 

@@ -1,31 +1,66 @@
 use crate::{
-    Config, ImporterResult,
+    Config,
+    ImporterResult,
     error::Error,
     local_runner::LocalRunner,
     ports::{
-        BlockVerifier, DatabaseTransaction, ImporterDatabase, Transactional, Validator,
+        BlockVerifier,
+        DatabaseTransaction,
+        ImporterDatabase,
+        Transactional,
+        Validator,
     },
 };
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
     not_found,
-    transactional::{Changes, StorageChanges},
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
 };
 use fuel_core_types::{
-    blockchain::{SealedBlock, consensus::Consensus},
-    fuel_tx::{Transaction, field::MintGasPrice},
-    fuel_types::{BlockHeight, ChainId},
+    blockchain::{
+        SealedBlock,
+        consensus::Consensus,
+    },
+    fuel_tx::{
+        Transaction,
+        field::MintGasPrice,
+    },
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::{
-        block_importer::{ImportResult, UncommittedResult},
-        executor::{Event, TransactionExecutionStatus, ValidationResult},
+        block_importer::{
+            ImportResult,
+            UncommittedResult,
+        },
+        executor::{
+            Event,
+            TransactionExecutionStatus,
+            ValidationResult,
+        },
     },
 };
 use std::{
     ops::Deref,
     sync::Arc,
-    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+    time::{
+        Duration,
+        Instant,
+        SystemTime,
+        UNIX_EPOCH,
+    },
 };
-use tokio::sync::{OwnedSemaphorePermit, Semaphore, broadcast, mpsc, oneshot};
+use tokio::sync::{
+    OwnedSemaphorePermit,
+    Semaphore,
+    broadcast,
+    mpsc,
+    oneshot,
+};
 use tracing::warn;
 
 #[cfg(test)]

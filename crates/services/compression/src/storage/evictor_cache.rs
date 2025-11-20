@@ -1,12 +1,18 @@
 //! Evictor Cache table.
 
 use fuel_core_storage::{
-    Mappable, blueprint::plain::Plain, codec::postcard::Postcard,
-    merkle::sparse::MerkleizedTableColumn, structured_storage::TableWithBlueprint,
+    Mappable,
+    blueprint::plain::Plain,
+    codec::postcard::Postcard,
+    merkle::sparse::MerkleizedTableColumn,
+    structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::fuel_compression::RegistryKey;
 
-use super::column::{CompressionColumn, MerkleizedColumnOf};
+use super::column::{
+    CompressionColumn,
+    MerkleizedColumnOf,
+};
 
 /// The metadata key used by `EvictorCache` table to
 /// store progress of the evictor.

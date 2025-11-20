@@ -1,18 +1,41 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque, hash_map::Entry},
-    time::{Duration, SystemTime},
+    collections::{
+        HashMap,
+        HashSet,
+        VecDeque,
+        hash_map::Entry,
+    },
+    time::{
+        Duration,
+        SystemTime,
+    },
 };
 
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
-    fuel_tx::{ContractId, Output, Transaction, TxId, UtxoId},
-    services::txpool::{ArcPoolTx, utxo_ids_with_outputs},
+    fuel_tx::{
+        ContractId,
+        Output,
+        Transaction,
+        TxId,
+        UtxoId,
+    },
+    services::txpool::{
+        ArcPoolTx,
+        utxo_ids_with_outputs,
+    },
 };
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    error::{Error, InputValidationError},
-    pool_worker::{InsertionSource, PoolNotification},
+    error::{
+        Error,
+        InputValidationError,
+    },
+    pool_worker::{
+        InsertionSource,
+        PoolNotification,
+    },
 };
 
 // This is a simple temporary storage for transactions that doesn't have all of their input created yet.
@@ -251,23 +274,42 @@ mod tests {
     use std::sync::Arc;
 
     use fuel_core_types::{
-        fuel_asm::{RegId, op},
+        fuel_asm::{
+            RegId,
+            op,
+        },
         fuel_tx::{
-            Address, AssetId, ConsensusParameters, Finalizable, Input, Output,
-            TransactionBuilder, UtxoId, output::contract::Contract as OutputContract,
+            Address,
+            AssetId,
+            ConsensusParameters,
+            Finalizable,
+            Input,
+            Output,
+            TransactionBuilder,
+            UtxoId,
+            output::contract::Contract as OutputContract,
         },
         fuel_vm::{
             Contract,
             checked_transaction::{
-                CheckPredicateParams, EstimatePredicates, IntoChecked,
+                CheckPredicateParams,
+                EstimatePredicates,
+                IntoChecked,
             },
             interpreter::MemoryInstance,
             predicate::EmptyStorage,
         },
-        services::txpool::{ArcPoolTx, Metadata, PoolTransaction},
+        services::txpool::{
+            ArcPoolTx,
+            Metadata,
+            PoolTransaction,
+        },
     };
     use futures::FutureExt;
-    use rand::{SeedableRng, rngs::StdRng};
+    use rand::{
+        SeedableRng,
+        rngs::StdRng,
+    };
 
     use super::*;
 

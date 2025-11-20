@@ -1,7 +1,16 @@
-use async_graphql::{Positioned, parser::types::Field};
-use std::collections::{HashMap, hash_map::Entry};
+use async_graphql::{
+    Positioned,
+    parser::types::Field,
+};
+use std::collections::{
+    HashMap,
+    hash_map::Entry,
+};
 
-use super::visitor::{Visitor, VisitorContext};
+use super::visitor::{
+    Visitor,
+    VisitorContext,
+};
 
 pub(super) struct RecursionFinder<'a> {
     visited: HashMap<&'a str, usize>,

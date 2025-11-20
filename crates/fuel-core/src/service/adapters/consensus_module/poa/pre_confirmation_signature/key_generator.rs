@@ -1,13 +1,24 @@
 use fuel_core_poa::pre_confirmation_signature_service::{
-    error::{Error as PoAError, Result as PoAResult},
-    key_generator::{ExpiringKey, KeyGenerator},
+    error::{
+        Error as PoAError,
+        Result as PoAResult,
+    },
+    key_generator::{
+        ExpiringKey,
+        KeyGenerator,
+    },
     signing_key::SigningKey,
 };
 use fuel_core_types::{
-    ed25519::signature::Signer, ed25519_dalek::SigningKey as DalekSigningKey,
-    fuel_crypto::SecretKey, tai64::Tai64,
+    ed25519::signature::Signer,
+    ed25519_dalek::SigningKey as DalekSigningKey,
+    fuel_crypto::SecretKey,
+    tai64::Tai64,
 };
-use rand::{SeedableRng, prelude::StdRng};
+use rand::{
+    SeedableRng,
+    prelude::StdRng,
+};
 use serde::Serialize;
 use std::ops::Deref;
 

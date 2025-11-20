@@ -1,6 +1,15 @@
-use crate::{TableEntry, serialization::HexIfHumanReadable};
-use fuel_core_types::{fuel_types::BlobId, fuel_vm::BlobData};
-use serde::{Deserialize, Serialize};
+use crate::{
+    TableEntry,
+    serialization::HexIfHumanReadable,
+};
+use fuel_core_types::{
+    fuel_types::BlobId,
+    fuel_vm::BlobData,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use serde_with::serde_as;
 
 #[serde_as]

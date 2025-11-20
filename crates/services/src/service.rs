@@ -1,9 +1,15 @@
 use crate::{
     Shared,
-    state::{State, StateWatcher},
+    state::{
+        State,
+        StateWatcher,
+    },
 };
 use anyhow::anyhow;
-use fuel_core_metrics::futures::{FuturesMetrics, future_tracker::FutureTracker};
+use fuel_core_metrics::futures::{
+    FuturesMetrics,
+    future_tracker::FutureTracker,
+};
 use futures::FutureExt;
 use std::any::Any;
 use tokio::sync::watch;

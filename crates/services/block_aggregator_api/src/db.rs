@@ -1,4 +1,7 @@
-use crate::{blocks::BlockSourceEvent, result::Result};
+use crate::{
+    blocks::BlockSourceEvent,
+    result::Result,
+};
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub mod remote_cache;

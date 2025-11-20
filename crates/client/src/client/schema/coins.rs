@@ -1,8 +1,23 @@
 use crate::client::{
-    PageDirection, PaginationRequest,
-    schema::{Address, AssetId, Nonce, PageInfo, U16, U32, U64, U128, UtxoId, schema},
+    PageDirection,
+    PaginationRequest,
+    schema::{
+        Address,
+        AssetId,
+        Nonce,
+        PageInfo,
+        U16,
+        U32,
+        U64,
+        U128,
+        UtxoId,
+        schema,
+    },
 };
-use fuel_core_types::{fuel_tx, fuel_types};
+use fuel_core_types::{
+    fuel_tx,
+    fuel_types,
+};
 
 #[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct CoinByIdArgs {

@@ -1,11 +1,28 @@
 //! Primitive types
 
-use crate::{fuel_crypto, fuel_crypto::SecretKey, fuel_types::Bytes32};
+use crate::{
+    fuel_crypto,
+    fuel_crypto::SecretKey,
+    fuel_types::Bytes32,
+};
 use core::array::TryFromSliceError;
 use derive_more::{
-    Add, AsRef, Deref, Display, From, FromStr, Into, LowerHex, Rem, Sub, UpperHex,
+    Add,
+    AsRef,
+    Deref,
+    Display,
+    From,
+    FromStr,
+    Into,
+    LowerHex,
+    Rem,
+    Sub,
+    UpperHex,
 };
-use secrecy::{CloneableSecret, DebugSecret};
+use secrecy::{
+    CloneableSecret,
+    DebugSecret,
+};
 use zeroize::Zeroize;
 
 #[cfg(feature = "alloc")]

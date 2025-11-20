@@ -1,32 +1,65 @@
 use fuel_core::{
     chain_config::{
-        ChainConfig, ContractConfig, MessageConfig, StateConfig, TESTNET_WALLET_SECRETS,
+        ChainConfig,
+        ContractConfig,
+        MessageConfig,
+        StateConfig,
+        TESTNET_WALLET_SECRETS,
     },
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
     types::{
-        CoinType, TransactionStatus,
-        assemble_tx::{ChangePolicy, RequiredBalance},
-        primitives::{Bytes32, ContractId},
+        CoinType,
+        TransactionStatus,
+        assemble_tx::{
+            ChangePolicy,
+            RequiredBalance,
+        },
+        primitives::{
+            Bytes32,
+            ContractId,
+        },
     },
 };
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
-    fuel_asm::{GTFArgs, RegId, op},
+    fuel_asm::{
+        GTFArgs,
+        RegId,
+        op,
+    },
     fuel_crypto::SecretKey,
     fuel_tx::{
-        Address, AssetId, Input, Output, Transaction, TransactionBuilder, TxPointer,
-        Word, policies::Policies,
+        Address,
+        AssetId,
+        Input,
+        Output,
+        Transaction,
+        TransactionBuilder,
+        TxPointer,
+        Word,
+        policies::Policies,
     },
-    fuel_types::{Nonce, canonical::Serialize},
+    fuel_types::{
+        Nonce,
+        canonical::Serialize,
+    },
     fuel_vm::consts::WORD_SIZE,
     services::executor::TransactionExecutionResult,
 };
 use test_helpers::{
-    assemble_tx::{AssembleAndRunTx, SigningAccount},
-    config_with_fee, default_signing_secret, default_signing_wallet,
+    assemble_tx::{
+        AssembleAndRunTx,
+        SigningAccount,
+    },
+    config_with_fee,
+    default_signing_secret,
+    default_signing_wallet,
 };
 
 #[tokio::test]

@@ -7,19 +7,33 @@
 
 use anyhow::anyhow;
 use cosmrs::{
-    AccountId, Coin, Denom,
+    AccountId,
+    Coin,
+    Denom,
     tendermint::chain::Id,
-    tx::{self, Fee, MessageExt, SignDoc, SignerInfo},
+    tx::{
+        self,
+        Fee,
+        MessageExt,
+        SignDoc,
+        SignerInfo,
+    },
 };
 use error::PostBlobError;
 use fuel_sequencer_proto::protos::fuelsequencer::sequencing::v1::MsgPostBlob;
-use http_api::{AccountMetadata, TopicInfo};
+use http_api::{
+    AccountMetadata,
+    TopicInfo,
+};
 use ports::Signer;
 use prost::Message;
 use tendermint_rpc::Client as _;
 
 // Re-exports
-pub use config::{Config, Endpoints};
+pub use config::{
+    Config,
+    Endpoints,
+};
 pub use prost::bytes::Bytes;
 
 mod config;

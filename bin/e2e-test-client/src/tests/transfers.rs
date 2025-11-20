@@ -1,4 +1,7 @@
-use crate::test_context::{BASE_AMOUNT, TestContext};
+use crate::test_context::{
+    BASE_AMOUNT,
+    TestContext,
+};
 use libtest_mimic::Failed;
 use tokio::time::timeout;
 

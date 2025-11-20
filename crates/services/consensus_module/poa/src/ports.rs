@@ -1,14 +1,25 @@
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::{Result as StorageResult, transactional::Changes};
+use fuel_core_storage::{
+    Result as StorageResult,
+    transactional::Changes,
+};
 use fuel_core_types::{
     blockchain::{
-        block::Block, consensus::Consensus, header::BlockHeader,
+        block::Block,
+        consensus::Consensus,
+        header::BlockHeader,
         primitives::DaBlockHeight,
     },
     fuel_tx::Transaction,
-    fuel_types::{BlockHeight, Bytes32},
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+    },
     services::{
-        block_importer::{BlockImportInfo, UncommittedResult as UncommittedImportResult},
+        block_importer::{
+            BlockImportInfo,
+            UncommittedResult as UncommittedImportResult,
+        },
         executor::UncommittedResult as UncommittedExecutionResult,
     },
     tai64::Tai64,

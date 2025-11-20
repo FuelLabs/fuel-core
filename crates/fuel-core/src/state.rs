@@ -8,7 +8,10 @@ use crate::{
 };
 use fuel_core_storage::{
     Result as StorageResult,
-    iter::{IterDirection, IterableStore},
+    iter::{
+        IterDirection,
+        IterableStore,
+    },
     kv_store::StorageColumn,
     transactional::StorageChanges,
 };

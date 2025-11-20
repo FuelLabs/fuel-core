@@ -1,24 +1,41 @@
 #[cfg(feature = "wasm-executor")]
 use crate::error::UpgradableError;
-use crate::{config::Config, storage_access_recorder::StorageAccessRecorder};
+use crate::{
+    config::Config,
+    storage_access_recorder::StorageAccessRecorder,
+};
 use fuel_core_executor::{
     executor::{
-        ExecutionInstance, ExecutionOptions, OnceTransactionsSource, TimeoutOnlyTxWaiter,
+        ExecutionInstance,
+        ExecutionOptions,
+        OnceTransactionsSource,
+        TimeoutOnlyTxWaiter,
         TransparentPreconfirmationSender,
     },
     ports::{
-        NewTxWaiterPort, PreconfirmationSenderPort, RelayerPort, TransactionsSource,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+        RelayerPort,
+        TransactionsSource,
     },
 };
 use fuel_core_storage::{
     column::Column,
     kv_store::KeyValueInspect,
-    transactional::{AtomicView, Changes, HistoricalView, Modifiable},
+    transactional::{
+        AtomicView,
+        Changes,
+        HistoricalView,
+        Modifiable,
+    },
 };
 use fuel_core_types::{
     blockchain::{
         block::Block,
-        header::{LATEST_STATE_TRANSITION_VERSION, StateTransitionBytecodeVersion},
+        header::{
+            LATEST_STATE_TRANSITION_VERSION,
+            StateTransitionBytecodeVersion,
+        },
     },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
@@ -26,8 +43,12 @@ use fuel_core_types::{
         Uncommitted,
         block_producer::Components,
         executor::{
-            DryRunResult, Error as ExecutorError, ExecutionResult,
-            Result as ExecutorResult, StorageReadReplayEvent, ValidationResult,
+            DryRunResult,
+            Error as ExecutorError,
+            ExecutionResult,
+            Result as ExecutorResult,
+            StorageReadReplayEvent,
+            ValidationResult,
         },
     },
 };
@@ -36,9 +57,13 @@ use std::sync::Arc;
 
 #[cfg(feature = "wasm-executor")]
 use fuel_core_storage::{
-    StorageAsRef, not_found,
+    StorageAsRef,
+    not_found,
     structured_storage::StructuredStorage,
-    tables::{StateTransitionBytecodeVersions, UploadedBytecodes},
+    tables::{
+        StateTransitionBytecodeVersions,
+        UploadedBytecodes,
+    },
 };
 #[cfg(any(test, feature = "test-helpers"))]
 use fuel_core_types::blockchain::block::PartialFuelBlock;
@@ -51,11 +76,17 @@ use fuel_core_types::services::executor::memory::MemoryPool;
 #[cfg(feature = "wasm-executor")]
 use fuel_core_types::{
     fuel_types::Bytes32,
-    services::preconfirmation::{Preconfirmation, PreconfirmationStatus, SqueezedOut},
+    services::preconfirmation::{
+        Preconfirmation,
+        PreconfirmationStatus,
+        SqueezedOut,
+    },
 };
 #[cfg(feature = "wasm-executor")]
 use fuel_core_wasm_executor::utils::{
-    ReturnType, convert_from_v0_execution_result, convert_from_v1_execution_result,
+    ReturnType,
+    convert_from_v0_execution_result,
+    convert_from_v1_execution_result,
 };
 
 #[cfg(feature = "wasm-executor")]
@@ -135,7 +166,13 @@ pub struct Executor<S, R> {
 #[cfg(feature = "wasm-executor")]
 mod private {
     use std::sync::OnceLock;
-    use wasmtime::{Cache, CacheConfig, Config, Engine, Module};
+    use wasmtime::{
+        Cache,
+        CacheConfig,
+        Config,
+        Engine,
+        Module,
+    };
 
     /// The default engine for the WASM executor. It is used to compile the WASM bytecode.
     static DEFAULT_ENGINE: OnceLock<Engine> = OnceLock::new();
@@ -1184,26 +1221,44 @@ where
 mod test {
     use super::*;
     use fuel_core_storage::{
-        Result as StorageResult, StorageAsMut, kv_store::Value,
-        structured_storage::test::InMemoryStorage, tables::ConsensusParametersVersions,
+        Result as StorageResult,
+        StorageAsMut,
+        kv_store::Value,
+        structured_storage::test::InMemoryStorage,
+        tables::ConsensusParametersVersions,
         transactional::WriteTransaction,
     };
     use fuel_core_types::{
         blockchain::{
-            block::{Block, PartialFuelBlock},
+            block::{
+                Block,
+                PartialFuelBlock,
+            },
             header::{
-                ApplicationHeader, ConsensusHeader, PartialBlockHeader,
+                ApplicationHeader,
+                ConsensusHeader,
+                PartialBlockHeader,
                 StateTransitionBytecodeVersion,
             },
-            primitives::{DaBlockHeight, Empty},
+            primitives::{
+                DaBlockHeight,
+                Empty,
+            },
         },
-        fuel_tx::{AssetId, Bytes32, Transaction},
+        fuel_tx::{
+            AssetId,
+            Bytes32,
+            Transaction,
+        },
         services::relayer::Event,
         tai64::Tai64,
     };
     use std::{
         cmp::Ordering,
-        collections::{BTreeMap, BTreeSet},
+        collections::{
+            BTreeMap,
+            BTreeSet,
+        },
     };
 
     #[derive(Clone, Debug)]
@@ -1463,7 +1518,10 @@ mod test {
     #[allow(non_snake_case)]
     mod wasm {
         use super::*;
-        use crate::{WASM_BYTECODE, executor::Executor};
+        use crate::{
+            WASM_BYTECODE,
+            executor::Executor,
+        };
         use fuel_core_storage::tables::UploadedBytecodes;
         use fuel_core_types::fuel_vm::UploadedBytecode;
 

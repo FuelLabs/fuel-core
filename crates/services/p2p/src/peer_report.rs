@@ -1,21 +1,54 @@
-use crate::{TryPeerId, utils::is_dialable};
+use crate::{
+    TryPeerId,
+    utils::is_dialable,
+};
 use libp2p::{
-    self, Multiaddr, PeerId,
-    core::{Endpoint, transport::PortUse},
+    self,
+    Multiaddr,
+    PeerId,
+    core::{
+        Endpoint,
+        transport::PortUse,
+    },
     swarm::{
-        ConnectionDenied, ConnectionId, NetworkBehaviour, THandler, THandlerInEvent,
-        THandlerOutEvent, ToSwarm,
-        derive_prelude::{ConnectionClosed, ConnectionEstablished, FromSwarm},
-        dial_opts::{DialOpts, PeerCondition},
+        ConnectionDenied,
+        ConnectionId,
+        NetworkBehaviour,
+        THandler,
+        THandlerInEvent,
+        THandlerOutEvent,
+        ToSwarm,
+        derive_prelude::{
+            ConnectionClosed,
+            ConnectionEstablished,
+            FromSwarm,
+        },
+        dial_opts::{
+            DialOpts,
+            PeerCondition,
+        },
         dummy,
     },
 };
 use std::{
-    collections::{BTreeMap, HashSet, VecDeque},
-    task::{Context, Poll},
-    time::{Duration, Instant},
+    collections::{
+        BTreeMap,
+        HashSet,
+        VecDeque,
+    },
+    task::{
+        Context,
+        Poll,
+    },
+    time::{
+        Duration,
+        Instant,
+    },
 };
-use tokio::time::{self, Interval};
+use tokio::time::{
+    self,
+    Interval,
+};
 use void::Void;
 
 const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;

@@ -2,10 +2,16 @@
 
 use crate::{
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, primitive::Primitive},
+    codec::{
+        postcard::Postcard,
+        primitive::Primitive,
+    },
     column::Column,
     structured_storage::TableWithBlueprint,
-    tables::merkle::{FuelBlockMerkleData, FuelBlockMerkleMetadata},
+    tables::merkle::{
+        FuelBlockMerkleData,
+        FuelBlockMerkleMetadata,
+    },
 };
 
 macro_rules! merkle_table {

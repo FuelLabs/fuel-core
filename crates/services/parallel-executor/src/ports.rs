@@ -4,7 +4,11 @@ use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::coins::coin::CompressedCoin,
-    fuel_tx::{ConsensusParameters, ContractId, UtxoId},
+    fuel_tx::{
+        ConsensusParameters,
+        ContractId,
+        UtxoId,
+    },
     fuel_types::BlockHeight,
     fuel_vm::checked_transaction::CheckedTransaction,
 };

@@ -1,15 +1,25 @@
 use crate::{
     fuel_core_graphql_api::{
-        database::{OffChainView, OffChainViewAt, OnChainView},
+        database::{
+            OffChainView,
+            OffChainViewAt,
+            OnChainView,
+        },
         ports::{
-            OffChainDatabase, OffChainDatabaseAt, OnChainDatabase, OnChainDatabaseAt,
+            OffChainDatabase,
+            OffChainDatabaseAt,
+            OnChainDatabase,
+            OnChainDatabaseAt,
         },
     },
     graphql_api::database::OnChainViewAt,
 };
 use fuel_core_storage::{
     Result as StorageResult,
-    transactional::{AtomicView, HistoricalView},
+    transactional::{
+        AtomicView,
+        HistoricalView,
+    },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;

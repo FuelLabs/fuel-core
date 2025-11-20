@@ -1,12 +1,22 @@
 use crate::{
     Quorum,
-    quorum::transport::{QuorumTransport, WeightedTransport},
+    quorum::transport::{
+        QuorumTransport,
+        WeightedTransport,
+    },
 };
-use alloy_provider::{Provider, RootProvider, network::Ethereum};
+use alloy_provider::{
+    Provider,
+    RootProvider,
+    network::Ethereum,
+};
 use alloy_rpc_client::RpcClient;
 use alloy_transport::IntoBoxTransport;
 #[cfg(feature = "test-helpers")]
-use alloy_transport::mock::{Asserter, MockTransport};
+use alloy_transport::mock::{
+    Asserter,
+    MockTransport,
+};
 use url::Url;
 
 pub struct QuorumProvider {
@@ -89,14 +99,24 @@ impl Provider for QuorumProvider {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Quorum, QuorumProvider, quorum::transport::WeightedTransport};
+    use crate::{
+        Quorum,
+        QuorumProvider,
+        quorum::transport::WeightedTransport,
+    };
     use alloy_json_rpc::ErrorPayload;
     use alloy_provider::Provider;
     use alloy_transport::{
         IntoBoxTransport,
-        mock::{Asserter, MockTransport},
+        mock::{
+            Asserter,
+            MockTransport,
+        },
     };
-    use std::num::{NonZeroU64, NonZeroUsize};
+    use std::num::{
+        NonZeroU64,
+        NonZeroUsize,
+    };
 
     #[tokio::test]
     async fn test_quorum_provider_majority_success() {

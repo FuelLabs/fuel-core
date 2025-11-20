@@ -1,7 +1,13 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_services::yield_stream::StreamYieldExt;
-use fuel_core_storage::{Result as StorageResult, iter::IterDirection};
-use fuel_core_types::{blockchain::block::CompressedBlock, fuel_types::BlockHeight};
+use fuel_core_storage::{
+    Result as StorageResult,
+    iter::IterDirection,
+};
+use fuel_core_types::{
+    blockchain::block::CompressedBlock,
+    fuel_types::BlockHeight,
+};
 use futures::Stream;
 
 impl ReadView {

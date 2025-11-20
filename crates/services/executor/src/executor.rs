@@ -1,22 +1,40 @@
 use crate::{
-    contract_state_hash::{compute_balances_hash, compute_state_hash},
+    contract_state_hash::{
+        compute_balances_hash,
+        compute_state_hash,
+    },
     ports::{
-        MaybeCheckedTransaction, NewTxWaiterPort, PreconfirmationSenderPort, RelayerPort,
+        MaybeCheckedTransaction,
+        NewTxWaiterPort,
+        PreconfirmationSenderPort,
+        RelayerPort,
         TransactionsSource,
     },
     refs::ContractRef,
-    storage_access_recorder::{ContractAccessesWithValues, StorageAccessRecorder},
+    storage_access_recorder::{
+        ContractAccessesWithValues,
+        StorageAccessRecorder,
+    },
 };
 use fuel_core_storage::{
-    StorageAsMut, StorageAsRef,
+    StorageAsMut,
+    StorageAsRef,
     column::Column,
     kv_store::KeyValueInspect,
     tables::{
-        Coins, ConsensusParametersVersions, ContractsLatestUtxo, FuelBlocks, Messages,
+        Coins,
+        ConsensusParametersVersions,
+        ContractsLatestUtxo,
+        FuelBlocks,
+        Messages,
         ProcessedTransactions,
     },
     transactional::{
-        Changes, ConflictPolicy, IntoTransaction, Modifiable, StorageTransaction,
+        Changes,
+        ConflictPolicy,
+        IntoTransaction,
+        Modifiable,
+        StorageTransaction,
         WriteTransaction,
     },
     vm_storage::VmStorage,
@@ -24,46 +42,95 @@ use fuel_core_storage::{
 use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_types::{
     blockchain::{
-        block::{Block, PartialFuelBlock},
-        header::{ConsensusParametersVersion, PartialBlockHeader},
+        block::{
+            Block,
+            PartialFuelBlock,
+        },
+        header::{
+            ConsensusParametersVersion,
+            PartialBlockHeader,
+        },
         primitives::DaBlockHeight,
         transaction::TransactionExt,
     },
     entities::{
         RelayedTransaction,
-        coins::coin::{CompressedCoin, CompressedCoinV1},
+        coins::coin::{
+            CompressedCoin,
+            CompressedCoinV1,
+        },
         contract::ContractUtxoInfo,
     },
-    fuel_asm::{PanicInstruction, Word, op},
+    fuel_asm::{
+        PanicInstruction,
+        Word,
+        op,
+    },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
-        Address, AssetId, Bytes32, Cacheable, Chargeable, ConsensusParameters, Input,
-        Mint, Output, PanicReason, Receipt, Transaction, TxId, TxPointer,
-        UniqueIdentifier, UtxoId,
+        Address,
+        AssetId,
+        Bytes32,
+        Cacheable,
+        Chargeable,
+        ConsensusParameters,
+        Input,
+        Mint,
+        Output,
+        PanicReason,
+        Receipt,
+        Transaction,
+        TxId,
+        TxPointer,
+        UniqueIdentifier,
+        UtxoId,
         field::{
-            InputContract, MaxFeeLimit, MintAmount, MintAssetId, MintGasPrice,
-            OutputContract, TxPointer as TxPointerField,
+            InputContract,
+            MaxFeeLimit,
+            MintAmount,
+            MintAssetId,
+            MintGasPrice,
+            OutputContract,
+            TxPointer as TxPointerField,
         },
         input::{
             self,
-            coin::{CoinPredicate, CoinSigned},
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
             message::{
-                MessageCoinPredicate, MessageCoinSigned, MessageDataPredicate,
+                MessageCoinPredicate,
+                MessageCoinSigned,
+                MessageDataPredicate,
                 MessageDataSigned,
             },
         },
         output,
     },
-    fuel_types::{BlockHeight, ContractId, MessageId, canonical::Deserialize},
+    fuel_types::{
+        BlockHeight,
+        ContractId,
+        MessageId,
+        canonical::Deserialize,
+    },
     fuel_vm::{
-        self, Interpreter, ProgramState,
+        self,
+        Interpreter,
+        ProgramState,
         checked_transaction::{
-            CheckPredicateParams, CheckPredicates, Checked, CheckedTransaction, Checks,
+            CheckPredicateParams,
+            CheckPredicates,
+            Checked,
+            CheckedTransaction,
+            Checks,
             IntoChecked,
         },
         interpreter::{
-            CheckedMetadata as CheckedMetadataTrait, ExecutableTransaction,
-            InterpreterParams, MemoryInstance,
+            CheckedMetadata as CheckedMetadataTrait,
+            ExecutableTransaction,
+            InterpreterParams,
+            MemoryInstance,
         },
         state::StateTransition,
         verification,
@@ -71,32 +138,57 @@ use fuel_core_types::{
     services::{
         block_producer::Components,
         executor::{
-            Error as ExecutorError, Event as ExecutorEvent, ExecutionResult,
-            ForcedTransactionFailure, Result as ExecutorResult,
-            TransactionExecutionResult, TransactionExecutionStatus,
-            TransactionValidityError, UncommittedResult, UncommittedValidationResult,
+            Error as ExecutorError,
+            Event as ExecutorEvent,
+            ExecutionResult,
+            ForcedTransactionFailure,
+            Result as ExecutorResult,
+            TransactionExecutionResult,
+            TransactionExecutionStatus,
+            TransactionValidityError,
+            UncommittedResult,
+            UncommittedValidationResult,
             ValidationResult,
         },
-        preconfirmation::{Preconfirmation, PreconfirmationStatus},
+        preconfirmation::{
+            Preconfirmation,
+            PreconfirmationStatus,
+        },
         relayer::Event,
     },
 };
 use parking_lot::Mutex as ParkingMutex;
-use tracing::{debug, warn};
+use tracing::{
+    debug,
+    warn,
+};
 
 #[cfg(feature = "std")]
-use std::{borrow::Cow, collections::BTreeMap};
+use std::{
+    borrow::Cow,
+    collections::BTreeMap,
+};
 
 #[cfg(not(feature = "alloc"))]
 use std::sync::Arc;
 
 #[cfg(not(feature = "std"))]
-use alloc::{borrow::Cow, collections::BTreeMap};
+use alloc::{
+    borrow::Cow,
+    collections::BTreeMap,
+};
 
 #[cfg(feature = "alloc")]
-use alloc::{format, string::ToString, sync::Arc, vec, vec::Vec};
+use alloc::{
+    format,
+    string::ToString,
+    sync::Arc,
+    vec,
+    vec::Vec,
+};
 use fuel_core_types::{
-    fuel_vm::interpreter::Memory, services::preconfirmation::SqueezedOut,
+    fuel_vm::interpreter::Memory,
+    services::preconfirmation::SqueezedOut,
 };
 
 /// The maximum amount of transactions that can be included in a block,

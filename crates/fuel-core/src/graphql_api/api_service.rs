@@ -3,38 +3,73 @@ use crate::{
         Config,
         extensions::unify_response,
         ports::{
-            BlockProducerPort, ChainStateProvider as ChainStateProviderTrait,
-            ConsensusModulePort, GasPriceEstimate, OffChainDatabase, OffChainDatabaseAt,
-            OnChainDatabase, P2pPort, TxPoolPort, TxStatusManager,
+            BlockProducerPort,
+            ChainStateProvider as ChainStateProviderTrait,
+            ConsensusModulePort,
+            GasPriceEstimate,
+            OffChainDatabase,
+            OffChainDatabaseAt,
+            OnChainDatabase,
+            P2pPort,
+            TxPoolPort,
+            TxStatusManager,
         },
     },
     graphql_api::{
         self,
         extensions::{
-            chain_state_info::ChainStateInfoExtension, metrics::MetricsExtension,
+            chain_state_info::ChainStateInfoExtension,
+            metrics::MetricsExtension,
             required_fuel_block_height::RequiredFuelBlockHeightExtension,
             validation::ValidationExtension,
         },
     },
-    schema::{CoreSchema, CoreSchemaBuilder},
-    service::{adapters::SharedMemoryPool, metrics::metrics},
+    schema::{
+        CoreSchema,
+        CoreSchemaBuilder,
+    },
+    service::{
+        adapters::SharedMemoryPool,
+        metrics::metrics,
+    },
 };
-use async_graphql::{Request, Response, http::GraphiQLSource};
+use async_graphql::{
+    Request,
+    Response,
+    http::GraphiQLSource,
+};
 use axum::{
-    Json, Router,
-    extract::{DefaultBodyLimit, Extension},
+    Json,
+    Router,
+    extract::{
+        DefaultBodyLimit,
+        Extension,
+    },
     http::{
         HeaderValue,
         header::{
-            ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS,
+            ACCESS_CONTROL_ALLOW_HEADERS,
+            ACCESS_CONTROL_ALLOW_METHODS,
             ACCESS_CONTROL_ALLOW_ORIGIN,
         },
     },
-    response::{Html, IntoResponse, Sse, sse::Event},
-    routing::{get, post},
+    response::{
+        Html,
+        IntoResponse,
+        Sse,
+        sse::Event,
+    },
+    routing::{
+        get,
+        post,
+    },
 };
 use fuel_core_services::{
-    AsyncProcessor, RunnableService, RunnableTask, StateWatcher, TaskNextAction,
+    AsyncProcessor,
+    RunnableService,
+    RunnableTask,
+    StateWatcher,
+    TaskNextAction,
 };
 use fuel_core_storage::transactional::HistoricalView;
 use fuel_core_types::fuel_types::BlockHeight;
@@ -43,20 +78,32 @@ use hyper::rt::Executor;
 use serde_json::json;
 use std::{
     future::Future,
-    net::{SocketAddr, TcpListener},
+    net::{
+        SocketAddr,
+        TcpListener,
+    },
     pin::Pin,
-    sync::{Arc, OnceLock},
+    sync::{
+        Arc,
+        OnceLock,
+    },
 };
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::{
-    set_header::SetResponseHeaderLayer, timeout::TimeoutLayer, trace::TraceLayer,
+    set_header::SetResponseHeaderLayer,
+    timeout::TimeoutLayer,
+    trace::TraceLayer,
 };
 
 pub type Service = fuel_core_services::ServiceRunner<GraphqlService>;
 
 pub use super::database::ReadDatabase;
-use super::ports::{DatabaseDaCompressedBlocks, OnChainDatabaseAt, worker};
+use super::ports::{
+    DatabaseDaCompressedBlocks,
+    OnChainDatabaseAt,
+    worker,
+};
 
 pub type BlockProducer = Box<dyn BlockProducerPort>;
 // In the future GraphQL should not be aware of `TxPool`. It should

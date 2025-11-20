@@ -1,17 +1,33 @@
 //! Contains types related to P2P data
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 #[cfg(feature = "serde")]
 use super::txpool::PoolTransaction;
-use super::{preconfirmation::Preconfirmations, txpool::ArcPoolTx};
+use super::{
+    preconfirmation::Preconfirmations,
+    txpool::ArcPoolTx,
+};
 #[cfg(feature = "test-helpers")]
-use crate::services::preconfirmation::{PreconfirmationStatus, SqueezedOut};
-use crate::{fuel_tx::Transaction, fuel_types::BlockHeight};
+use crate::services::preconfirmation::{
+    PreconfirmationStatus,
+    SqueezedOut,
+};
+use crate::{
+    fuel_tx::Transaction,
+    fuel_types::BlockHeight,
+};
 use std::{
     collections::HashSet,
-    fmt::{Debug, Display, Formatter},
+    fmt::{
+        Debug,
+        Display,
+        Formatter,
+    },
     str::FromStr,
     time::SystemTime,
 };
@@ -117,7 +133,10 @@ pub enum PreConfirmationMessage<DP, DS, S> {
 impl<DP, S> PreConfirmationMessage<DP, crate::fuel_tx::Bytes64, S> {
     /// Test helper for creating arbitrary, meaningless `TxConfirmations` data
     pub fn default_test_confirmation() -> Self {
-        use crate::{fuel_tx::TxId, services::preconfirmation::Preconfirmation};
+        use crate::{
+            fuel_tx::TxId,
+            services::preconfirmation::Preconfirmation,
+        };
         Self::Preconfirmations(SignedPreconfirmationByDelegate {
             entity: Preconfirmations {
                 expiration: Tai64::UNIX_EPOCH,
@@ -280,7 +299,13 @@ impl Serialize for NetworkableTransactionPool {
     where
         S: serde::Serializer,
     {
-        use crate::fuel_tx::{Blob, Create, Script, Upgrade, Upload};
+        use crate::fuel_tx::{
+            Blob,
+            Create,
+            Script,
+            Upgrade,
+            Upload,
+        };
 
         #[cfg(all(debug_assertions, feature = "test-helpers"))]
         // When a new variant is added to `Transaction`, the `TransactionRef`
@@ -358,7 +383,10 @@ impl TryFrom<NetworkableTransactionPool> for Transaction {
 
 #[cfg(test)]
 mod tests {
-    use crate::{fuel_tx::Transaction, services::p2p::NetworkableTransactionPool};
+    use crate::{
+        fuel_tx::Transaction,
+        services::p2p::NetworkableTransactionPool,
+    };
 
     #[test]
     fn ser_der() {

@@ -1,15 +1,31 @@
 //! This module provides storage trait implementations for sparse merkleized columns.
 
 use crate::{
-    Mappable, Result as StorageResult,
+    Mappable,
+    Result as StorageResult,
     blueprint::{
-        BlueprintCodec, BlueprintInspect,
+        BlueprintCodec,
+        BlueprintInspect,
         plain::Plain,
-        sparse::{PrimaryKey, Sparse},
+        sparse::{
+            PrimaryKey,
+            Sparse,
+        },
     },
-    codec::{postcard::Postcard, primitive::Primitive, raw::Raw},
-    kv_store::{KeyValueInspect, StorageColumn, Value},
-    merkle::column::{AsU32, MerkleizedColumn},
+    codec::{
+        postcard::Postcard,
+        primitive::Primitive,
+        raw::Raw,
+    },
+    kv_store::{
+        KeyValueInspect,
+        StorageColumn,
+        Value,
+    },
+    merkle::column::{
+        AsU32,
+        MerkleizedColumn,
+    },
     structured_storage::TableWithBlueprint,
     tables::merkle::SparseMerkleMetadata,
 };

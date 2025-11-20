@@ -1,24 +1,42 @@
 use fuel_core::{
-    chain_config::{LastBlockConfig, StateConfig},
+    chain_config::{
+        LastBlockConfig,
+        StateConfig,
+    },
     database::Database,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{PageDirection, PaginationRequest},
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
     types::TransactionStatus,
 };
 use fuel_core_executor::executor::max_tx_count;
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     StorageAsMut,
-    tables::{FuelBlocks, SealedBlockConsensus},
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
     transactional::WriteTransaction,
     vm_storage::VmStorageRequirements,
 };
-use fuel_core_txpool::config::{HeavyWorkConfig, PoolLimits};
+use fuel_core_txpool::config::{
+    HeavyWorkConfig,
+    PoolLimits,
+};
 use fuel_core_types::{
-    blockchain::{block::CompressedBlock, consensus::Consensus},
+    blockchain::{
+        block::CompressedBlock,
+        consensus::Consensus,
+    },
     fuel_tx::*,
     fuel_types::BlockHeight,
     secrecy::ExposeSecret,
@@ -26,11 +44,24 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use futures::StreamExt;
-use itertools::{Itertools, rev};
-use rand::{SeedableRng, prelude::StdRng};
+use itertools::{
+    Itertools,
+    rev,
+};
+use rand::{
+    SeedableRng,
+    prelude::StdRng,
+};
 use rstest::rstest;
-use std::{ops::Deref, time::Duration};
-use test_helpers::{client_ext::ClientExt, make_tx, send_graph_ql_query};
+use std::{
+    ops::Deref,
+    time::Duration,
+};
+use test_helpers::{
+    client_ext::ClientExt,
+    make_tx,
+    send_graph_ql_query,
+};
 
 #[tokio::test]
 async fn block() {

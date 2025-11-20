@@ -3,23 +3,37 @@
 use fuel_core::{
     chain_config::StateConfig,
     p2p_test_helpers::{
-        BootstrapSetup, BootstrapType, Nodes, ProducerSetup, ValidatorSetup, make_nodes,
+        BootstrapSetup,
+        BootstrapType,
+        Nodes,
+        ProducerSetup,
+        ValidatorSetup,
+        make_nodes,
     },
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_tx::{
-        input::{Empty, coin::CoinSigned},
+        input::{
+            Empty,
+            coin::CoinSigned,
+        },
         *,
     },
     fuel_vm::*,
     services::block_importer::SharedImportResult,
 };
 use futures::StreamExt;
-use rand::{SeedableRng, rngs::StdRng};
+use rand::{
+    SeedableRng,
+    rngs::StdRng,
+};
 use std::{
     collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
+    hash::{
+        Hash,
+        Hasher,
+    },
     time::Duration,
 };
 

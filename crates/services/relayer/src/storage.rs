@@ -1,16 +1,32 @@
 //! The module provides definition and implementation of the relayer storage.
 
-use crate::ports::{DatabaseTransaction, RelayerDb, Transactional};
+use crate::ports::{
+    DatabaseTransaction,
+    RelayerDb,
+    Transactional,
+};
 use fuel_core_storage::{
-    Error as StorageError, Mappable, Result as StorageResult, StorageAsMut,
+    Error as StorageError,
+    Mappable,
+    Result as StorageResult,
+    StorageAsMut,
     StorageMutate,
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, primitive::Primitive},
+    codec::{
+        postcard::Postcard,
+        primitive::Primitive,
+    },
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
-    transactional::{Modifiable, StorageTransaction},
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+    },
 };
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, services::relayer::Event};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    services::relayer::Event,
+};
 
 /// GraphQL database tables column ids to the corresponding [`fuel_core_storage::Mappable`] table.
 #[repr(u32)]

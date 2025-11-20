@@ -1,4 +1,7 @@
-use std::{cmp::max, num::NonZeroU64};
+use std::{
+    cmp::max,
+    num::NonZeroU64,
+};
 
 use crate::utils::cumulative_percentage_change;
 

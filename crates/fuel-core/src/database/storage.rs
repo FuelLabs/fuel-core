@@ -1,9 +1,19 @@
 use crate::state::generic_database::GenericDatabase;
 use fuel_core_storage::{
-    Error as StorageError, Mappable, Result as StorageResult, StorageAsMut,
-    StorageBatchMutate, StorageInspect, StorageMutate, StorageWrite,
+    Error as StorageError,
+    Mappable,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageBatchMutate,
+    StorageInspect,
+    StorageMutate,
+    StorageWrite,
     structured_storage::StructuredStorage,
-    transactional::{ConflictPolicy, Modifiable, StorageTransaction},
+    transactional::{
+        ConflictPolicy,
+        Modifiable,
+        StorageTransaction,
+    },
 };
 
 impl<Storage, M, Metadata> StorageMutate<M> for GenericDatabase<Storage, Metadata>

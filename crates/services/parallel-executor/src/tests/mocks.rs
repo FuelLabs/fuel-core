@@ -1,17 +1,28 @@
 use std::{
     collections::VecDeque,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 use fuel_core_executor::ports::RelayerPort;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx::{ConsensusParameters, Transaction},
-    fuel_vm::checked_transaction::{CheckedTransaction, IntoChecked},
+    fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+    },
+    fuel_vm::checked_transaction::{
+        CheckedTransaction,
+        IntoChecked,
+    },
 };
 
 use crate::ports::{
-    Filter, TransactionFiltered, TransactionSourceExecutableTransactions,
+    Filter,
+    TransactionFiltered,
+    TransactionSourceExecutableTransactions,
     TransactionsSource,
 };
 

@@ -1,6 +1,12 @@
-use fuel_core_types::{fuel_tx::TxId, fuel_types::BlockHeight};
+use fuel_core_types::{
+    fuel_tx::TxId,
+    fuel_types::BlockHeight,
+};
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{
+        BTreeMap,
+        VecDeque,
+    },
     time::SystemTime,
 };
 

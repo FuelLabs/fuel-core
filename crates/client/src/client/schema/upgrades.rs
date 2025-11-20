@@ -2,7 +2,10 @@ use crate::client::schema::schema;
 
 use crate::client::{
     ConversionError,
-    schema::{chain::ConsensusParameters, primitives::HexString},
+    schema::{
+        chain::ConsensusParameters,
+        primitives::HexString,
+    },
 };
 
 use fuel_core_types::fuel_vm::UploadedBytecode as VmUploadedBytecode;

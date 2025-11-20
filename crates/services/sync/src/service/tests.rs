@@ -1,10 +1,23 @@
-use fuel_core_services::{Service, stream::IntoBoxStream};
+use fuel_core_services::{
+    Service,
+    stream::IntoBoxStream,
+};
 use fuel_core_types::services::p2p::Transactions;
-use futures::{StreamExt, stream};
+use futures::{
+    StreamExt,
+    stream,
+};
 
 use crate::{
-    import::test_helpers::{empty_header, random_peer},
-    ports::{MockBlockImporterPort, MockConsensusPort, MockPeerToPeerPort},
+    import::test_helpers::{
+        empty_header,
+        random_peer,
+    },
+    ports::{
+        MockBlockImporterPort,
+        MockConsensusPort,
+        MockPeerToPeerPort,
+    },
 };
 
 use super::*;

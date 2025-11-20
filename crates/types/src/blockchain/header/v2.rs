@@ -1,13 +1,20 @@
 use crate::{
     blockchain::{
         header::{
-            ApplicationHeader, BlockHeaderMetadata, ConsensusHeader,
-            GeneratedConsensusFields, generate_txns_root,
+            ApplicationHeader,
+            BlockHeaderMetadata,
+            ConsensusHeader,
+            GeneratedConsensusFields,
+            generate_txns_root,
         },
         primitives::BlockId,
     },
     fuel_crypto,
-    fuel_tx::{Bytes32, Transaction, UniqueIdentifier},
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+        UniqueIdentifier,
+    },
     fuel_types::ChainId,
 };
 

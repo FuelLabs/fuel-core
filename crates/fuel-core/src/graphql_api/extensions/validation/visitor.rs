@@ -4,18 +4,41 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 use async_graphql::{
-    InputType, Name, Pos, Positioned, ServerError, ServerResult, Variables,
+    InputType,
+    Name,
+    Pos,
+    Positioned,
+    ServerError,
+    ServerResult,
+    Variables,
     parser::types::{
-        Directive, ExecutableDocument, Field, FragmentDefinition, FragmentSpread,
-        InlineFragment, OperationDefinition, OperationType, Selection, SelectionSet,
-        TypeCondition, VariableDefinition,
+        Directive,
+        ExecutableDocument,
+        Field,
+        FragmentDefinition,
+        FragmentSpread,
+        InlineFragment,
+        OperationDefinition,
+        OperationType,
+        Selection,
+        SelectionSet,
+        TypeCondition,
+        VariableDefinition,
     },
-    registry::{self, MetaType, MetaTypeName},
+    registry::{
+        self,
+        MetaType,
+        MetaTypeName,
+    },
 };
 use async_graphql_value::Value;
 use std::{
     collections::HashMap,
-    fmt::{self, Display, Formatter},
+    fmt::{
+        self,
+        Display,
+        Formatter,
+    },
 };
 
 #[doc(hidden)]

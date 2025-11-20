@@ -1,14 +1,29 @@
 use crate::{
-    import::test_helpers::{SharedCounts, empty_header, random_peer},
-    ports::{MockPeerToPeerPort, PeerReportReason, PeerToPeerPort},
+    import::test_helpers::{
+        SharedCounts,
+        empty_header,
+        random_peer,
+    },
+    ports::{
+        MockPeerToPeerPort,
+        PeerReportReason,
+        PeerToPeerPort,
+    },
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
     fuel_types::BlockHeight,
-    services::p2p::{PeerId, SourcePeer, Transactions},
+    services::p2p::{
+        PeerId,
+        SourcePeer,
+        Transactions,
+    },
 };
-use std::{ops::Range, time::Duration};
+use std::{
+    ops::Range,
+    time::Duration,
+};
 
 pub struct PressurePeerToPeer {
     p2p: MockPeerToPeerPort,

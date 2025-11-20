@@ -1,16 +1,33 @@
 //! Tests the behaviour of the tx pool.
 
-use crate::helpers::{TestContext, TestSetupBuilder};
+use crate::helpers::{
+    TestContext,
+    TestSetupBuilder,
+};
 use fuel_core::service::FuelService;
-use fuel_core_client::client::{FuelClient, types::TransactionStatus};
+use fuel_core_client::client::{
+    FuelClient,
+    types::TransactionStatus,
+};
 use fuel_core_poa::Trigger;
-use fuel_core_types::{fuel_asm::*, fuel_crypto::*, fuel_tx, fuel_tx::*};
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_crypto::*,
+    fuel_tx,
+    fuel_tx::*,
+};
 use futures::StreamExt;
 use itertools::Itertools;
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{
+    Rng,
+    SeedableRng,
+    rngs::StdRng,
+};
 use std::time::Duration;
 use test_helpers::{
-    assemble_tx::AssembleAndRunTx, config_with_fee, default_signing_wallet,
+    assemble_tx::AssembleAndRunTx,
+    config_with_fee,
+    default_signing_wallet,
 };
 
 #[tokio::test]

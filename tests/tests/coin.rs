@@ -1,14 +1,31 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig, coin_config_helpers::CoinConfigGenerator},
+    chain_config::{
+        CoinConfig,
+        StateConfig,
+        coin_config_helpers::CoinConfigGenerator,
+    },
     database::Database,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{PageDirection, PaginationRequest},
-    types::primitives::{Address, AssetId, UtxoId},
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+    types::primitives::{
+        Address,
+        AssetId,
+        UtxoId,
+    },
 };
-use fuel_core_types::{fuel_asm::*, fuel_tx::TxId};
+use fuel_core_types::{
+    fuel_asm::*,
+    fuel_tx::TxId,
+};
 use rstest::rstest;
 
 async fn setup_service(configs: Vec<CoinConfig>) -> FuelService {

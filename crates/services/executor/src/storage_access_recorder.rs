@@ -1,21 +1,44 @@
 use core::cell::RefCell;
 use fuel_core_storage::{
-    ContractsAssetKey, ContractsStateKey, Result as StorageResult, StorageAsRef,
+    ContractsAssetKey,
+    ContractsStateKey,
+    Result as StorageResult,
+    StorageAsRef,
     StorageInspect,
     column::Column,
     iter::changes_iterator::ChangesIterator,
-    kv_store::{KeyValueInspect, StorageColumn, Value},
-    tables::{ContractsAssets, ContractsState},
-    transactional::{Changes, StorageChanges},
+    kv_store::{
+        KeyValueInspect,
+        StorageColumn,
+        Value,
+    },
+    tables::{
+        ContractsAssets,
+        ContractsState,
+    },
+    transactional::{
+        Changes,
+        StorageChanges,
+    },
 };
-use fuel_core_types::fuel_tx::{AssetId, Bytes32, ContractId};
+use fuel_core_types::fuel_tx::{
+    AssetId,
+    Bytes32,
+    ContractId,
+};
 
 #[cfg(feature = "std")]
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{
+    BTreeMap,
+    BTreeSet,
+};
 
 #[cfg(not(feature = "std"))]
 use alloc::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{
+        BTreeMap,
+        BTreeSet,
+    },
     vec::Vec,
 };
 

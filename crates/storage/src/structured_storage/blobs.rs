@@ -3,7 +3,9 @@
 use fuel_vm_private::storage::BlobData;
 
 use crate::{
-    blueprint::plain::Plain, codec::raw::Raw, column::Column,
+    blueprint::plain::Plain,
+    codec::raw::Raw,
+    column::Column,
     structured_storage::TableWithBlueprint,
 };
 

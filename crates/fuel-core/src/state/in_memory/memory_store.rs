@@ -1,22 +1,49 @@
 use crate::{
     database::{
-        Error as DatabaseError, Result as DatabaseResult,
-        database_description::{DatabaseDescription, on_chain::OnChain},
+        Error as DatabaseError,
+        Result as DatabaseResult,
+        database_description::{
+            DatabaseDescription,
+            on_chain::OnChain,
+        },
     },
     state::{
-        IterDirection, IterableKeyValueView, KeyValueView, TransactableStorage,
+        IterDirection,
+        IterableKeyValueView,
+        KeyValueView,
+        TransactableStorage,
         in_memory::memory_view::MemoryView,
         iterable_key_value_view::IterableKeyValueViewWrapper,
     },
 };
 use fuel_core_storage::{
     Result as StorageResult,
-    iter::{BoxedIter, IntoBoxedIter, IterableStore, iterator, keys_iterator},
-    kv_store::{KVItem, KeyItem, KeyValueInspect, StorageColumn, Value, WriteOperation},
-    transactional::{Changes, ReferenceBytesKey, StorageChanges},
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterableStore,
+        iterator,
+        keys_iterator,
+    },
+    kv_store::{
+        KVItem,
+        KeyItem,
+        KeyValueInspect,
+        StorageColumn,
+        Value,
+        WriteOperation,
+    },
+    transactional::{
+        Changes,
+        ReferenceBytesKey,
+        StorageChanges,
+    },
 };
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{
+        BTreeMap,
+        HashSet,
+    },
     fmt::Debug,
     ops::Deref,
     sync::Mutex,
@@ -236,7 +263,9 @@ where
 mod tests {
     use super::*;
     use fuel_core_storage::{
-        column::Column, kv_store::KeyValueMutate, transactional::ReadTransaction,
+        column::Column,
+        kv_store::KeyValueMutate,
+        transactional::ReadTransaction,
     };
 
     impl<Description> KeyValueMutate for MemoryStore<Description>

@@ -3,7 +3,10 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use futures::{StreamExt, stream::FuturesUnordered};
+use futures::{
+    StreamExt,
+    stream::FuturesUnordered,
+};
 #[cfg(test)]
 use tracing_subscriber as _;
 

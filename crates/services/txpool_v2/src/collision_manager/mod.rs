@@ -1,5 +1,11 @@
-use crate::error::{CollisionReason, Error};
-use fuel_core_types::{fuel_tx::TxId, services::txpool::PoolTransaction};
+use crate::error::{
+    CollisionReason,
+    Error,
+};
+use fuel_core_types::{
+    fuel_tx::TxId,
+    services::txpool::PoolTransaction,
+};
 use std::collections::HashMap;
 
 use crate::storage::StorageData;

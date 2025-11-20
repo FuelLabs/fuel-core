@@ -5,10 +5,16 @@ use fuel_core::{
     combined_database::CombinedDatabase,
     state::{
         historical_rocksdb::StateRewindPolicy,
-        rocks_db::{ColumnsPolicy, DatabaseConfig},
+        rocks_db::{
+            ColumnsPolicy,
+            DatabaseConfig,
+        },
     },
 };
-use rlimit::{Resource, getrlimit};
+use rlimit::{
+    Resource,
+    getrlimit,
+};
 use std::path::PathBuf;
 
 /// Rollbacks the state of the blockchain to a specific block height.

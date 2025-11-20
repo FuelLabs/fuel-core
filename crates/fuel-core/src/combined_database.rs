@@ -1,14 +1,22 @@
 #[cfg(feature = "rocksdb")]
-use crate::state::{historical_rocksdb::StateRewindPolicy, rocks_db::DatabaseConfig};
+use crate::state::{
+    historical_rocksdb::StateRewindPolicy,
+    rocks_db::DatabaseConfig,
+};
 #[cfg(feature = "rpc")]
 use anyhow::anyhow;
 
 use crate::{
     database::{
-        Database, GenesisDatabase, Result as DatabaseResult,
+        Database,
+        GenesisDatabase,
+        Result as DatabaseResult,
         database_description::{
-            compression::CompressionDatabase, gas_price::GasPriceDatabase,
-            off_chain::OffChain, on_chain::OnChain, relayer::Relayer,
+            compression::CompressionDatabase,
+            gas_price::GasPriceDatabase,
+            off_chain::OffChain,
+            on_chain::OnChain,
+            relayer::Relayer,
         },
     },
     service::DbType,
@@ -16,23 +24,37 @@ use crate::{
 
 #[cfg(feature = "rpc")]
 use crate::database::database_description::block_aggregator::{
-    BlockAggregatorDatabaseS3, BlockAggregatorDatabaseStorage,
+    BlockAggregatorDatabaseS3,
+    BlockAggregatorDatabaseStorage,
 };
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::db::table::LatestBlock;
 #[cfg(feature = "test-helpers")]
-use fuel_core_chain_config::{StateConfig, StateConfigBuilder};
+use fuel_core_chain_config::{
+    StateConfig,
+    StateConfigBuilder,
+};
 #[cfg(feature = "backup")]
 use fuel_core_services::TraceErr;
 use fuel_core_storage::Result as StorageResult;
 #[cfg(feature = "test-helpers")]
 use fuel_core_storage::tables::{
-    Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+    Coins,
+    ContractsAssets,
+    ContractsLatestUtxo,
+    ContractsRawCode,
+    ContractsState,
     Messages,
 };
 #[cfg(feature = "rpc")]
-use fuel_core_storage::{Error as StorageError, StorageAsRef};
-use fuel_core_types::{blockchain::primitives::DaBlockHeight, fuel_types::BlockHeight};
+use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsRef,
+};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_types::BlockHeight,
+};
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -768,8 +790,14 @@ fn is_equal_or_less_than_or_none<T: PartialOrd>(maybe_left: Option<T>, right: T)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_storage::{StorageAsMut, StorageAsRef};
-    use fuel_core_types::{entities::coins::coin::CompressedCoin, fuel_tx::UtxoId};
+    use fuel_core_storage::{
+        StorageAsMut,
+        StorageAsRef,
+    };
+    use fuel_core_types::{
+        entities::coins::coin::CompressedCoin,
+        fuel_tx::UtxoId,
+    };
     use tempfile::TempDir;
 
     #[test]

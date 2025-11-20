@@ -1,15 +1,27 @@
 use crate::{
     blocks::{
-        BlockSource, BlockSourceEvent,
+        BlockSource,
+        BlockSourceEvent,
         importer_and_db_source::importer_service::ImporterTask,
     },
-    result::{Error, Result},
+    result::{
+        Error,
+        Result,
+    },
 };
 use anyhow::anyhow;
-use fuel_core_services::{Service, ServiceRunner, stream::BoxStream};
-use fuel_core_storage::{StorageInspect, tables::FuelBlocks};
+use fuel_core_services::{
+    Service,
+    ServiceRunner,
+    stream::BoxStream,
+};
+use fuel_core_storage::{
+    StorageInspect,
+    tables::FuelBlocks,
+};
 use fuel_core_types::{
-    blockchain::block::Block as FuelBlock, fuel_types::BlockHeight,
+    blockchain::block::Block as FuelBlock,
+    fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
 };
 

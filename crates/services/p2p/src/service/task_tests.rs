@@ -7,12 +7,21 @@ use crate::{
     gossipsub::topics::TX_PRECONFIRMATIONS_GOSSIP_TOPIC,
     peer_manager::heartbeat_data::HeartbeatData,
 };
-use fuel_core_services::{Service, State};
+use fuel_core_services::{
+    Service,
+    State,
+};
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{blockchain::consensus::Genesis, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::consensus::Genesis,
+    fuel_types::BlockHeight,
+};
 use futures::FutureExt;
 use libp2p::gossipsub::TopicHash;
-use std::{collections::VecDeque, time::SystemTime};
+use std::{
+    collections::VecDeque,
+    time::SystemTime,
+};
 
 #[derive(Clone, Debug)]
 struct FakeDb;

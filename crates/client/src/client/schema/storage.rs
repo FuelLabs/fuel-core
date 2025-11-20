@@ -1,5 +1,11 @@
 use crate::client::schema::{
-    AssetId, Bytes32, ContractId, HexString, U32, contract::ContractBalance, schema,
+    AssetId,
+    Bytes32,
+    ContractId,
+    HexString,
+    U32,
+    contract::ContractBalance,
+    schema,
 };
 use fuel_core_types::fuel_tx;
 

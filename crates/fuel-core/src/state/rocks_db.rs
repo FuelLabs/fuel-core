@@ -1,34 +1,75 @@
 use crate::{
     database::{
-        Error as DatabaseError, Result as DatabaseResult, convert_to_rocksdb_direction,
+        Error as DatabaseError,
+        Result as DatabaseResult,
+        convert_to_rocksdb_direction,
         database_description::DatabaseDescription,
     },
     state::IterDirection,
 };
 
-use super::rocks_db_key_iterator::{ExtractItem, RocksDBKeyIterator};
+use super::rocks_db_key_iterator::{
+    ExtractItem,
+    RocksDBKeyIterator,
+};
 use core::ops::Deref;
 use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
-    Error as StorageError, Result as StorageResult,
-    iter::{BoxedIter, IntoBoxedIter, IterableStore},
-    kv_store::{KVItem, KeyItem, KeyValueInspect, StorageColumn, Value, WriteOperation},
-    transactional::{Changes, ReferenceBytesKey, StorageChanges},
+    Error as StorageError,
+    Result as StorageResult,
+    iter::{
+        BoxedIter,
+        IntoBoxedIter,
+        IterableStore,
+    },
+    kv_store::{
+        KVItem,
+        KeyItem,
+        KeyValueInspect,
+        StorageColumn,
+        Value,
+        WriteOperation,
+    },
+    transactional::{
+        Changes,
+        ReferenceBytesKey,
+        StorageChanges,
+    },
 };
 use itertools::Itertools;
 use rocksdb::{
-    BlockBasedOptions, BoundColumnFamily, Cache, ColumnFamilyDescriptor, DBAccess,
-    DBCompressionType, DBRawIteratorWithThreadMode, DBWithThreadMode, IteratorMode,
-    MultiThreaded, Options, ReadOptions, SliceTransform, WriteBatch,
+    BlockBasedOptions,
+    BoundColumnFamily,
+    Cache,
+    ColumnFamilyDescriptor,
+    DBAccess,
+    DBCompressionType,
+    DBRawIteratorWithThreadMode,
+    DBWithThreadMode,
+    IteratorMode,
+    MultiThreaded,
+    Options,
+    ReadOptions,
+    SliceTransform,
+    WriteBatch,
 };
 use std::{
     cmp,
-    collections::{BTreeMap, HashSet},
+    collections::{
+        BTreeMap,
+        HashSet,
+    },
     fmt,
     fmt::Formatter,
     iter,
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    path::{
+        Path,
+        PathBuf,
+    },
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tempfile::TempDir;
 
@@ -727,7 +768,10 @@ where
     ) -> DatabaseResult<rocksdb::backup::BackupEngine> {
         use rocksdb::{
             Env,
-            backup::{BackupEngine, BackupEngineOptions},
+            backup::{
+                BackupEngine,
+                BackupEngineOptions,
+            },
         };
 
         let backup_dir = backup_dir.as_ref().join(Description::name());
@@ -1064,7 +1108,10 @@ fn next_prefix(mut prefix: Vec<u8>) -> Option<Vec<u8>> {
 #[cfg(feature = "test-helpers")]
 pub mod test_helpers {
     use super::*;
-    use fuel_core_storage::{kv_store::KeyValueMutate, transactional::ReadTransaction};
+    use fuel_core_storage::{
+        kv_store::KeyValueMutate,
+        transactional::ReadTransaction,
+    };
 
     impl<Description> KeyValueMutate for RocksDb<Description>
     where
@@ -1099,8 +1146,14 @@ pub mod test_helpers {
 mod tests {
     use super::*;
     use crate::database::database_description::on_chain::OnChain;
-    use fuel_core_storage::{column::Column, kv_store::KeyValueMutate};
-    use std::collections::{BTreeMap, HashMap};
+    use fuel_core_storage::{
+        column::Column,
+        kv_store::KeyValueMutate,
+    };
+    use std::collections::{
+        BTreeMap,
+        HashMap,
+    };
     use tempfile::TempDir;
 
     fn create_db() -> (RocksDb<OnChain>, TempDir) {

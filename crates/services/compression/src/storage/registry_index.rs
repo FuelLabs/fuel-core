@@ -1,16 +1,29 @@
 //! Registry index table
 
 use fuel_core_storage::{
-    Mappable, blueprint::plain::Plain, codec::postcard::Postcard,
-    merkle::sparse::MerkleizedTableColumn, structured_storage::TableWithBlueprint,
+    Mappable,
+    blueprint::plain::Plain,
+    codec::postcard::Postcard,
+    merkle::sparse::MerkleizedTableColumn,
+    structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::{
     fuel_compression::RegistryKey,
-    fuel_tx::{Address, AssetId, Bytes32, ContractId, ScriptCode, input::PredicateCode},
+    fuel_tx::{
+        Address,
+        AssetId,
+        Bytes32,
+        ContractId,
+        ScriptCode,
+        input::PredicateCode,
+    },
 };
 use std::ops::Deref;
 
-use super::column::{CompressionColumn, MerkleizedColumnOf};
+use super::column::{
+    CompressionColumn,
+    MerkleizedColumnOf,
+};
 
 #[derive(
     Debug,

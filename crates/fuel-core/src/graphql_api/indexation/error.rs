@@ -1,7 +1,11 @@
 use fuel_core_storage::Error as StorageError;
 
 use fuel_core_types::{
-    fuel_tx::{Address, AssetId, UtxoId},
+    fuel_tx::{
+        Address,
+        AssetId,
+        UtxoId,
+    },
     fuel_types::Nonce,
 };
 

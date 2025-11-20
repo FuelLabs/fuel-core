@@ -1,12 +1,27 @@
 use fork::Fork;
 use std::{
     io,
-    io::{Read, Write},
-    sync::{Arc, Mutex, MutexGuard},
+    io::{
+        Read,
+        Write,
+    },
+    sync::{
+        Arc,
+        Mutex,
+        MutexGuard,
+    },
 };
-use tracing::{dispatcher, info_span};
+use tracing::{
+    dispatcher,
+    info_span,
+};
 use tracing_core::Dispatch;
-use tracing_subscriber::{EnvFilter, fmt::MakeWriter, layer::SubscriberExt, registry};
+use tracing_subscriber::{
+    EnvFilter,
+    fmt::MakeWriter,
+    layer::SubscriberExt,
+    registry,
+};
 
 /// A fake writer that writes into a buffer (behind a mutex).
 #[derive(Default, Debug, Clone)]

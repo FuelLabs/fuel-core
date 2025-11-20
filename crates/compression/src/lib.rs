@@ -20,7 +20,12 @@ use crate::compressed_block_payload::v0::CompressedBlockPayloadV0;
 use crate::compressed_block_payload::v1::CompressedBlockPayloadV1;
 use fuel_core_types::{
     blockchain::{
-        header::{ApplicationHeader, BlockHeader, ConsensusHeader, PartialBlockHeader},
+        header::{
+            ApplicationHeader,
+            BlockHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
         primitives::Empty,
     },
     fuel_tx::CompressedTransaction,
@@ -86,7 +91,10 @@ mod tests {
     use fuel_core_compression as _;
     use fuel_core_types::{
         blockchain::{
-            header::{ApplicationHeader, ConsensusHeader},
+            header::{
+                ApplicationHeader,
+                ConsensusHeader,
+            },
             primitives::Empty,
         },
         fuel_compression::RegistryKey,
@@ -239,7 +247,8 @@ mod tests {
     #[test]
     fn postcard_roundtrip_v1() {
         use compressed_block_payload::v1::{
-            CompressedBlockHeader, CompressedBlockPayloadV1,
+            CompressedBlockHeader,
+            CompressedBlockPayloadV1,
         };
         use fuel_core_types::blockchain::primitives::BlockId;
         use std::str::FromStr;

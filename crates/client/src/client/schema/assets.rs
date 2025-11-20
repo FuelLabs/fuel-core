@@ -1,4 +1,10 @@
-use crate::client::schema::{AssetId, ContractId, SubId, U128, schema};
+use crate::client::schema::{
+    AssetId,
+    ContractId,
+    SubId,
+    U128,
+    schema,
+};
 
 #[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct AssetInfoArg {

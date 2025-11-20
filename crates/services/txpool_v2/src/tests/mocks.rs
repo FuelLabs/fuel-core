@@ -1,39 +1,87 @@
 use crate::{
     GasPrice,
     ports::{
-        self, AtomicView, BlockImporter as BlockImporterTrait, ChainStateInfoProvider,
-        GasPriceProvider, NotifyP2P, P2PRequests, P2PSubscriptions,
-        TxPoolPersistentStorage, WasmChecker, WasmValidityError,
+        self,
+        AtomicView,
+        BlockImporter as BlockImporterTrait,
+        ChainStateInfoProvider,
+        GasPriceProvider,
+        NotifyP2P,
+        P2PRequests,
+        P2PSubscriptions,
+        TxPoolPersistentStorage,
+        WasmChecker,
+        WasmValidityError,
     },
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    Mappable, PredicateStorageRequirements, Result as StorageResult, StorageInspect,
-    StorageRead, StorageSize,
+    Mappable,
+    PredicateStorageRequirements,
+    Result as StorageResult,
+    StorageInspect,
+    StorageRead,
+    StorageSize,
 };
 use fuel_core_types::{
-    blockchain::{SealedBlock, header::ConsensusParametersVersion},
-    entities::{coins::coin::CompressedCoin, relayer::message::Message},
+    blockchain::{
+        SealedBlock,
+        header::ConsensusParametersVersion,
+    },
+    entities::{
+        coins::coin::CompressedCoin,
+        relayer::message::Message,
+    },
     fuel_tx::{
-        BlobId, Bytes32, ConsensusParameters, Contract, ContractId, Transaction, TxId,
+        BlobId,
+        Bytes32,
+        ConsensusParameters,
+        Contract,
+        ContractId,
+        Transaction,
+        TxId,
         UtxoId,
     },
     fuel_types::Nonce,
-    fuel_vm::{BlobBytes, BlobData},
+    fuel_vm::{
+        BlobBytes,
+        BlobData,
+    },
     services::{
-        block_importer::{ImportResult, SharedImportResult},
-        p2p::{GossipData, GossipsubMessageAcceptance, GossipsubMessageInfo, PeerId},
-        transaction_status::{PreConfirmationStatus, TransactionStatus, statuses},
+        block_importer::{
+            ImportResult,
+            SharedImportResult,
+        },
+        p2p::{
+            GossipData,
+            GossipsubMessageAcceptance,
+            GossipsubMessageInfo,
+            PeerId,
+        },
+        transaction_status::{
+            PreConfirmationStatus,
+            TransactionStatus,
+            statuses,
+        },
     },
 };
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    collections::{
+        HashMap,
+        HashSet,
+    },
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 use tokio::sync::{
     broadcast,
-    mpsc::{Receiver, Sender},
+    mpsc::{
+        Receiver,
+        Sender,
+    },
 };
 use tokio_stream::wrappers::ReceiverStream;
 

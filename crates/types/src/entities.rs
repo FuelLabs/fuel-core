@@ -2,7 +2,10 @@
 
 use crate::entities::relayer::message::MessageV1;
 use coins::message_coin::MessageCoin;
-pub use relayer::{message::Message, transaction::RelayedTransaction};
+pub use relayer::{
+    message::Message,
+    transaction::RelayedTransaction,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::vec;

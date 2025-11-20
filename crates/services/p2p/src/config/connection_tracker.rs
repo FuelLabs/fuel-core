@@ -1,7 +1,13 @@
-use super::{fuel_authenticated::Approver, peer_ids_set_from};
+use super::{
+    fuel_authenticated::Approver,
+    peer_ids_set_from,
+};
 use crate::peer_manager::ConnectionState;
 use fuel_core_services::seqlock::SeqLockReader;
-use libp2p::{Multiaddr, PeerId};
+use libp2p::{
+    Multiaddr,
+    PeerId,
+};
 use std::collections::HashSet;
 
 /// A `ConnectionTracker` allows either Reserved Peers or other peers if there is an available slot.

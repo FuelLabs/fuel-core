@@ -2,20 +2,44 @@ use crate::{
     VersionedCompressedBlock,
     config::Config,
     eviction_policy::CacheEvictor,
-    ports::{EvictorDb, TemporalRegistry, UtxoIdToPointer},
+    ports::{
+        EvictorDb,
+        TemporalRegistry,
+        UtxoIdToPointer,
+    },
     registry::{
-        EvictorDbAll, PerRegistryKeyspace, RegistrationsPerTable, TemporalRegistryAll,
+        EvictorDbAll,
+        PerRegistryKeyspace,
+        RegistrationsPerTable,
+        TemporalRegistryAll,
     },
 };
 use anyhow::Context;
 use fuel_core_types::{
     blockchain::block::Block,
-    fuel_compression::{CompressibleBy, ContextError, RegistryKey},
-    fuel_tx::{CompressedUtxoId, ScriptCode, TxPointer, UtxoId, input::PredicateCode},
-    fuel_types::{Address, AssetId, ContractId},
+    fuel_compression::{
+        CompressibleBy,
+        ContextError,
+        RegistryKey,
+    },
+    fuel_tx::{
+        CompressedUtxoId,
+        ScriptCode,
+        TxPointer,
+        UtxoId,
+        input::PredicateCode,
+    },
+    fuel_types::{
+        Address,
+        AssetId,
+        ContractId,
+    },
     tai64::Tai64,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 
 #[cfg(not(feature = "fault-proving"))]
 pub mod not_fault_proving {

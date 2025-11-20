@@ -1,6 +1,13 @@
-use libp2p::gossipsub::{Sha256Topic, Topic, TopicHash};
+use libp2p::gossipsub::{
+    Sha256Topic,
+    Topic,
+    TopicHash,
+};
 
-use super::messages::{GossipTopicTag, GossipsubBroadcastRequest};
+use super::messages::{
+    GossipTopicTag,
+    GossipsubBroadcastRequest,
+};
 
 pub const NEW_TX_GOSSIP_TOPIC: &str = "new_tx";
 pub const TX_PRECONFIRMATIONS_GOSSIP_TOPIC: &str = "tx_preconfirmations";

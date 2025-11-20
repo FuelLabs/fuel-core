@@ -1,6 +1,12 @@
 use crate::client::{
-    PaginatedResult, schema,
-    types::primitives::{AssetId, Bytes, ContractId, Salt},
+    PaginatedResult,
+    schema,
+    types::primitives::{
+        AssetId,
+        Bytes,
+        ContractId,
+        Salt,
+    },
 };
 
 pub struct Contract {

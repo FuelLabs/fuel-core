@@ -1,17 +1,33 @@
-use crate::db_lookup_times_utils::full_block_table::{BenchDatabase, BenchDbColumn};
+use crate::db_lookup_times_utils::full_block_table::{
+    BenchDatabase,
+    BenchDbColumn,
+};
 use anyhow::anyhow;
 use fuel_core::{
     database::database_description::DatabaseDescription,
-    state::rocks_db::{ColumnsPolicy, DatabaseConfig, RocksDb},
+    state::rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+        RocksDb,
+    },
 };
-use fuel_core_storage::kv_store::{KeyValueInspect, StorageColumn};
+use fuel_core_storage::kv_store::{
+    KeyValueInspect,
+    StorageColumn,
+};
 use fuel_core_types::{
-    blockchain::block::{Block, CompressedBlock},
+    blockchain::block::{
+        Block,
+        CompressedBlock,
+    },
     fuel_tx::Transaction,
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use rand::{Rng, rngs::ThreadRng};
+use rand::{
+    Rng,
+    rngs::ThreadRng,
+};
 use std::path::Path;
 use strum_macros::AsRefStr;
 

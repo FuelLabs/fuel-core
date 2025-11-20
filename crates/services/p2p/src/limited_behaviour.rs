@@ -1,18 +1,39 @@
 use crate::connection_limits::Connections;
 use libp2p::{
-    core::{Endpoint, Multiaddr, transport::PortUse},
+    core::{
+        Endpoint,
+        Multiaddr,
+        transport::PortUse,
+    },
     identity::PeerId,
     swarm::{
-        AddressChange, ConnectionClosed, ConnectionDenied, ConnectionId, DialFailure,
-        FromSwarm, ListenFailure, NetworkBehaviour, THandler, THandlerInEvent,
-        THandlerOutEvent, ToSwarm, behaviour::ConnectionEstablished,
-        derive_prelude::Either, dummy,
+        AddressChange,
+        ConnectionClosed,
+        ConnectionDenied,
+        ConnectionId,
+        DialFailure,
+        FromSwarm,
+        ListenFailure,
+        NetworkBehaviour,
+        THandler,
+        THandlerInEvent,
+        THandlerOutEvent,
+        ToSwarm,
+        behaviour::ConnectionEstablished,
+        derive_prelude::Either,
+        dummy,
     },
 };
 use std::{
     collections::HashSet,
-    ops::{Deref, DerefMut},
-    task::{Context, Poll},
+    ops::{
+        Deref,
+        DerefMut,
+    },
+    task::{
+        Context,
+        Poll,
+    },
 };
 
 pub struct LimitedBehaviour<Behaviour> {

@@ -2,13 +2,32 @@
 
 use super::{
     consensus::ConsensusType,
-    header::{ApplicationHeader, BlockHeader, ConsensusHeader, PartialBlockHeader},
-    primitives::{BlockId, Empty},
+    header::{
+        ApplicationHeader,
+        BlockHeader,
+        ConsensusHeader,
+        PartialBlockHeader,
+    },
+    primitives::{
+        BlockId,
+        Empty,
+    },
 };
 use crate::{
-    blockchain::header::{BlockHeaderError, BlockHeaderV1},
-    fuel_tx::{Transaction, TxId, UniqueIdentifier},
-    fuel_types::{Bytes32, ChainId, MessageId},
+    blockchain::header::{
+        BlockHeaderError,
+        BlockHeaderV1,
+    },
+    fuel_tx::{
+        Transaction,
+        TxId,
+        UniqueIdentifier,
+    },
+    fuel_types::{
+        Bytes32,
+        ChainId,
+        MessageId,
+    },
 };
 
 #[cfg(feature = "alloc")]

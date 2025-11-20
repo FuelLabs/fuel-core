@@ -3,16 +3,20 @@
 use super::*;
 use crate::{
     blocks::importer_and_db_source::{
-        BlockSerializer, serializer_adapter::SerializerAdapter,
+        BlockSerializer,
+        serializer_adapter::SerializerAdapter,
     },
     db::table::Column,
 };
 use fuel_core_storage::{
-    StorageAsRef, structured_storage::test::InMemoryStorage,
+    StorageAsRef,
+    structured_storage::test::InMemoryStorage,
     transactional::IntoTransaction,
 };
 use fuel_core_types::{
-    blockchain::block::Block as FuelBlock, fuel_tx::Transaction, fuel_types::BlockHeight,
+    blockchain::block::Block as FuelBlock,
+    fuel_tx::Transaction,
+    fuel_types::BlockHeight,
 };
 use futures::StreamExt;
 

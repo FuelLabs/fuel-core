@@ -1,18 +1,34 @@
 use fuel_core_chain_config::{
-    AddTable, AsTable, StateConfig, StateConfigBuilder, TableEntry,
+    AddTable,
+    AsTable,
+    StateConfig,
+    StateConfigBuilder,
+    TableEntry,
 };
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{Decode, Encode, manual::Manual, postcard::Postcard, raw::Raw},
+    codec::{
+        Decode,
+        Encode,
+        manual::Manual,
+        postcard::Postcard,
+        raw::Raw,
+    },
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::{
-    fuel_tx::{Address, Bytes32},
+    fuel_tx::{
+        Address,
+        Bytes32,
+    },
     fuel_types::BlockHeight,
     services::transaction_status::TransactionExecutionStatus,
 };
-use std::{array::TryFromSliceError, mem::size_of};
+use std::{
+    array::TryFromSliceError,
+    mem::size_of,
+};
 
 /// These tables allow iteration over all transactions owned by an address.
 pub struct OwnedTransactions;

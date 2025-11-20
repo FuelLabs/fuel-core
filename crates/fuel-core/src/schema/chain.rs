@@ -1,15 +1,35 @@
 use crate::{
-    fuel_core_graphql_api::{api_service::ChainInfoProvider, query_costs},
+    fuel_core_graphql_api::{
+        api_service::ChainInfoProvider,
+        query_costs,
+    },
     graphql_api::Config,
     schema::{
         ReadViewProvider,
         block::Block,
-        scalars::{Address, AssetId, U16, U32, U64},
+        scalars::{
+            Address,
+            AssetId,
+            U16,
+            U32,
+            U64,
+        },
     },
 };
-use async_graphql::{Context, Enum, Object, Union};
-use fuel_core_types::{fuel_tx, fuel_tx::GasCostsValues};
-use std::{ops::Deref, sync::Arc};
+use async_graphql::{
+    Context,
+    Enum,
+    Object,
+    Union,
+};
+use fuel_core_types::{
+    fuel_tx,
+    fuel_tx::GasCostsValues,
+};
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 
 pub struct ChainInfo;
 pub struct ConsensusParameters(pub Arc<fuel_tx::ConsensusParameters>);

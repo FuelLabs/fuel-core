@@ -5,16 +5,26 @@ use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
     combined_database::CombinedDatabase,
     schema::tx::types::TransactionStatus,
-    service::{FuelService, config::fuel_core_importer::ports::Validator},
+    service::{
+        FuelService,
+        config::fuel_core_importer::ports::Validator,
+    },
 };
 use fuel_core_client::client::{
-    FuelClient, types::TransactionStatus as ClientTransactionStatus,
+    FuelClient,
+    types::TransactionStatus as ClientTransactionStatus,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
     fuel_tx::{
-        AssetId, Input, Output, Receipt, Transaction, TransactionBuilder, TxId,
+        AssetId,
+        Input,
+        Output,
+        Receipt,
+        Transaction,
+        TransactionBuilder,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::BlockHeight,
@@ -25,12 +35,24 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use itertools::Itertools;
-use rand::{Rng, SeedableRng, prelude::StdRng};
-use std::{collections::BTreeSet, str::FromStr, vec};
+use rand::{
+    Rng,
+    SeedableRng,
+    prelude::StdRng,
+};
+use std::{
+    collections::BTreeSet,
+    str::FromStr,
+    vec,
+};
 use tempfile::TempDir;
 use test_helpers::{
-    assemble_tx::{AssembleAndRunTx, SigningAccount},
-    config_with_fee, counter_contract,
+    assemble_tx::{
+        AssembleAndRunTx,
+        SigningAccount,
+    },
+    config_with_fee,
+    counter_contract,
     fuel_core_driver::FuelCoreDriver,
     produce_block_with_tx,
 };

@@ -1,23 +1,40 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    api::{BlockAggregatorApi, BlockAggregatorQuery, protobuf_adapter::ProtobufAPI},
-    block_range_response::{BlockRangeResponse, RemoteS3Response},
+    api::{
+        BlockAggregatorApi,
+        BlockAggregatorQuery,
+        protobuf_adapter::ProtobufAPI,
+    },
+    block_range_response::{
+        BlockRangeResponse,
+        RemoteS3Response,
+    },
     blocks::importer_and_db_source::{
-        BlockSerializer, serializer_adapter::SerializerAdapter,
+        BlockSerializer,
+        serializer_adapter::SerializerAdapter,
     },
     protobuf_types::{
-        Block as ProtoBlock, BlockHeightRequest, BlockRangeRequest,
+        Block as ProtoBlock,
+        BlockHeightRequest,
+        BlockRangeRequest,
         NewBlockSubscriptionRequest,
         block_aggregator_client::{
-            BlockAggregatorClient as ProtoBlockAggregatorClient, BlockAggregatorClient,
+            BlockAggregatorClient as ProtoBlockAggregatorClient,
+            BlockAggregatorClient,
         },
         block_response::Payload,
     },
 };
 use fuel_core_protobuf::remote_block_response::Location;
-use fuel_core_types::{blockchain::block::Block as FuelBlock, fuel_types::BlockHeight};
-use futures::{StreamExt, TryStreamExt};
+use fuel_core_types::{
+    blockchain::block::Block as FuelBlock,
+    fuel_types::BlockHeight,
+};
+use futures::{
+    StreamExt,
+    TryStreamExt,
+};
 
 fn free_local_addr() -> String {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

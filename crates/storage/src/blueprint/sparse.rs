@@ -4,22 +4,42 @@
 //! merkle tree parallel to the normal storage and maintains it.
 
 use crate::{
-    Error as StorageError, Mappable, MerkleRoot, Result as StorageResult, StorageAsMut,
-    StorageInspect, StorageMutate,
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageInspect,
+    StorageMutate,
     blueprint::{
-        BlueprintCodec, BlueprintInspect, BlueprintMutate, SupportsBatching,
+        BlueprintCodec,
+        BlueprintInspect,
+        BlueprintMutate,
+        SupportsBatching,
         SupportsMerkle,
     },
-    codec::{Decode, Encode, Encoder},
+    codec::{
+        Decode,
+        Encode,
+        Encoder,
+    },
     kv_store::{
-        BatchOperations, KeyValueInspect, KeyValueMutate, StorageColumn, WriteOperation,
+        BatchOperations,
+        KeyValueInspect,
+        KeyValueMutate,
+        StorageColumn,
+        WriteOperation,
     },
     structured_storage::TableWithBlueprint,
     tables::merkle::SparseMerkleMetadata,
 };
 use fuel_core_types::fuel_merkle::{
     sparse,
-    sparse::{MerkleTree, MerkleTreeKey, in_memory},
+    sparse::{
+        MerkleTree,
+        MerkleTreeKey,
+        in_memory,
+    },
 };
 use itertools::Itertools;
 
@@ -473,18 +493,43 @@ pub mod root_storage_tests_smt {
     use core::fmt;
     use fuel_core_types::fuel_merkle::storage::StorageMutate;
     use fuel_vm_private::{
-        fuel_merkle::sparse::{self, MerkleTree, MerkleTreeKey, proof::Proof},
-        fuel_storage::{Mappable, StorageAsMut},
+        fuel_merkle::sparse::{
+            self,
+            MerkleTree,
+            MerkleTreeKey,
+            proof::Proof,
+        },
+        fuel_storage::{
+            Mappable,
+            StorageAsMut,
+        },
     };
-    use rand::{SeedableRng, rngs::StdRng};
+    use rand::{
+        SeedableRng,
+        rngs::StdRng,
+    };
 
     use crate::{
-        MerkleRoot, MerkleRootStorage,
-        blueprint::sparse::{PrimaryKey, Sparse},
-        codec::{Decode, Encode, Encoder},
-        structured_storage::{TableWithBlueprint, test::InMemoryStorage},
+        MerkleRoot,
+        MerkleRootStorage,
+        blueprint::sparse::{
+            PrimaryKey,
+            Sparse,
+        },
+        codec::{
+            Decode,
+            Encode,
+            Encoder,
+        },
+        structured_storage::{
+            TableWithBlueprint,
+            test::InMemoryStorage,
+        },
         tables::merkle::SparseMerkleMetadata,
-        transactional::{StorageTransaction, WriteTransaction},
+        transactional::{
+            StorageTransaction,
+            WriteTransaction,
+        },
     };
 
     /// A wrapper type to allow for `AsRef` implementation.

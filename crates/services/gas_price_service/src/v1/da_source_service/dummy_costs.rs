@@ -1,6 +1,9 @@
 use crate::v1::da_source_service::{
     DaBlockCosts,
-    service::{DaBlockCostsSource, Result as DaBlockCostsResult},
+    service::{
+        DaBlockCostsSource,
+        Result as DaBlockCostsResult,
+    },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::sync::Arc;

@@ -1,19 +1,31 @@
 //! Defines the logic how to interact with the shared sequencer.
 
 use crate::{
-    Client, Config,
+    Client,
+    Config,
     http_api::AccountMetadata,
-    ports::{BlocksProvider, Signer},
+    ports::{
+        BlocksProvider,
+        Signer,
+    },
 };
 use async_trait::async_trait;
 use core::time::Duration;
 use fuel_core_services::{
-    EmptyShared, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
-    TaskNextAction, stream::BoxStream,
+    EmptyShared,
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
+    stream::BoxStream,
 };
 use fuel_core_types::services::{
     block_importer::SharedImportResult,
-    shared_sequencer::{SSBlob, SSBlobs},
+    shared_sequencer::{
+        SSBlob,
+        SSBlobs,
+    },
 };
 use futures::StreamExt;
 use std::sync::Arc;

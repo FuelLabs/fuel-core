@@ -1,12 +1,24 @@
 use error::Result;
 use fuel_core_services::{
-    EmptyShared, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
-    TaskNextAction, try_or_continue, try_or_stop,
+    EmptyShared,
+    RunnableService,
+    RunnableTask,
+    ServiceRunner,
+    StateWatcher,
+    TaskNextAction,
+    try_or_continue,
+    try_or_stop,
 };
 use fuel_core_types::{
     services::{
-        p2p::{DelegatePreConfirmationKey, Sealed},
-        preconfirmation::{Preconfirmation, Preconfirmations},
+        p2p::{
+            DelegatePreConfirmationKey,
+            Sealed,
+        },
+        preconfirmation::{
+            Preconfirmation,
+            Preconfirmations,
+        },
     },
     tai64::Tai64,
 };
@@ -15,7 +27,10 @@ use tokio::time::Interval;
 
 use crate::pre_confirmation_signature_service::{
     broadcast::Broadcast,
-    key_generator::{ExpiringKey, KeyGenerator},
+    key_generator::{
+        ExpiringKey,
+        KeyGenerator,
+    },
     parent_signature::ParentSignature,
     signing_key::SigningKey,
     trigger::KeyRotationTrigger,

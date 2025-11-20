@@ -1,31 +1,59 @@
 //! The wrapper around the storage for VM implements non-storage getters.
 
 use crate::{
-    ContractsAssetsStorage, ContractsStateKey, Error as StorageError, Mappable,
-    MerkleRoot, MerkleRootStorage, StorageAsMut, StorageBatchMutate, StorageInspect,
-    StorageMutate, StorageRead, StorageSize, not_found,
+    ContractsAssetsStorage,
+    ContractsStateKey,
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    StorageAsMut,
+    StorageBatchMutate,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
+    not_found,
     tables::{
-        ConsensusParametersVersions, ContractsAssets, ContractsRawCode, ContractsState,
-        FuelBlocks, StateTransitionBytecodeVersions,
+        ConsensusParametersVersions,
+        ContractsAssets,
+        ContractsRawCode,
+        ContractsState,
+        FuelBlocks,
+        StateTransitionBytecodeVersions,
     },
 };
 use anyhow::anyhow;
 use fuel_core_types::{
     blockchain::{
         header::{
-            ApplicationHeader, ConsensusHeader, ConsensusParametersVersion,
+            ApplicationHeader,
+            ConsensusHeader,
+            ConsensusParametersVersion,
             StateTransitionBytecodeVersion,
         },
         primitives::BlockId,
     },
-    fuel_tx::{ConsensusParameters, StorageSlot},
-    fuel_types::{BlockHeight, Bytes32, ContractId, Word},
+    fuel_tx::{
+        ConsensusParameters,
+        StorageSlot,
+    },
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        ContractId,
+        Word,
+    },
     fuel_vm::InterpreterStorage,
     tai64::Tai64,
 };
 use fuel_vm_private::{
     fuel_storage::StorageWrite,
-    storage::{BlobData, ContractsStateData, UploadedBytecodes},
+    storage::{
+        BlobData,
+        ContractsStateData,
+        UploadedBytecodes,
+    },
 };
 use itertools::Itertools;
 use primitive_types::U256;
@@ -37,7 +65,10 @@ use std::borrow::Cow;
 use alloc::borrow::Cow;
 
 #[cfg(feature = "alloc")]
-use alloc::{borrow::ToOwned, vec::Vec};
+use alloc::{
+    borrow::ToOwned,
+    vec::Vec,
+};
 
 /// Used to store metadata relevant during the execution of a transaction.
 #[derive(Clone, Debug)]

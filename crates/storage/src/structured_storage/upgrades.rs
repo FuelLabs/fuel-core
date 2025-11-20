@@ -2,10 +2,17 @@
 
 use crate::{
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, primitive::Primitive, raw::Raw},
+    codec::{
+        postcard::Postcard,
+        primitive::Primitive,
+        raw::Raw,
+    },
     column::Column,
     structured_storage::TableWithBlueprint,
-    tables::{ConsensusParametersVersions, StateTransitionBytecodeVersions},
+    tables::{
+        ConsensusParametersVersions,
+        StateTransitionBytecodeVersions,
+    },
 };
 use fuel_vm_private::storage::UploadedBytecodes;
 

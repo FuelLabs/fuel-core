@@ -1,12 +1,32 @@
-use crate::fuel_core_graphql_api::{api_service::ReadDatabase, database::ReadView};
+use crate::fuel_core_graphql_api::{
+    api_service::ReadDatabase,
+    database::ReadView,
+};
 use anyhow::anyhow;
 use async_graphql::{
-    Context, MergedObject, MergedSubscription, OutputType, Schema, SchemaBuilder,
-    connection::{Connection, CursorType, Edge, EmptyFields, query},
+    Context,
+    MergedObject,
+    MergedSubscription,
+    OutputType,
+    Schema,
+    SchemaBuilder,
+    connection::{
+        Connection,
+        CursorType,
+        Edge,
+        EmptyFields,
+        query,
+    },
     parser::types::OperationType,
 };
-use fuel_core_storage::{Result as StorageResult, iter::IterDirection};
-use futures::{Stream, TryStreamExt};
+use fuel_core_storage::{
+    Result as StorageResult,
+    iter::IterDirection,
+};
+use futures::{
+    Stream,
+    TryStreamExt,
+};
 use std::borrow::Cow;
 use tokio_stream::StreamExt;
 
@@ -114,9 +134,7 @@ where
             .into());
         }
         (_, _, None, None) => {
-            return Err(
-                anyhow!("The queries for the whole range is not supported").into()
-            );
+            return Err(anyhow!("The queries for the whole range is not supported").into());
         }
         (_, _, _, _) => { /* Other combinations are allowed */ }
     };

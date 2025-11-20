@@ -2,31 +2,68 @@
 //! that implements the storage traits for the tables with blueprint.
 
 use crate::{
-    Error as StorageError, Mappable, MerkleRoot, MerkleRootStorage,
-    Result as StorageResult, StorageBatchMutate, StorageInspect, StorageMutate,
-    StorageRead, StorageSize, StorageWrite,
+    Error as StorageError,
+    Mappable,
+    MerkleRoot,
+    MerkleRootStorage,
+    Result as StorageResult,
+    StorageBatchMutate,
+    StorageInspect,
+    StorageMutate,
+    StorageRead,
+    StorageSize,
+    StorageWrite,
     blueprint::{
-        BlueprintCodec, BlueprintInspect, BlueprintMutate, SupportsBatching,
+        BlueprintCodec,
+        BlueprintInspect,
+        BlueprintMutate,
+        SupportsBatching,
         SupportsMerkle,
     },
-    codec::{Encode, Encoder, raw::Raw},
-    iter::{BoxedIter, IterDirection, IterableStore},
-    kv_store::{
-        BatchOperations, KVItem, KeyItem, KeyValueInspect, KeyValueMutate, StorageColumn,
-        Value, WriteOperation,
+    codec::{
+        Encode,
+        Encoder,
+        raw::Raw,
     },
-    transactional::{Changes, Modifiable},
+    iter::{
+        BoxedIter,
+        IterDirection,
+        IterableStore,
+    },
+    kv_store::{
+        BatchOperations,
+        KVItem,
+        KeyItem,
+        KeyValueInspect,
+        KeyValueMutate,
+        StorageColumn,
+        Value,
+        WriteOperation,
+    },
+    transactional::{
+        Changes,
+        Modifiable,
+    },
 };
 
 #[cfg(feature = "std")]
-use std::{borrow::Cow, fmt::Debug};
+use std::{
+    borrow::Cow,
+    fmt::Debug,
+};
 
 #[cfg(not(feature = "std"))]
-use alloc::{borrow::Cow, fmt::Debug};
+use alloc::{
+    borrow::Cow,
+    fmt::Debug,
+};
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
-use fuel_vm_private::storage::{BlobData, predicate::PredicateStorageRequirements};
+use fuel_vm_private::storage::{
+    BlobData,
+    predicate::PredicateStorageRequirements,
+};
 
 pub mod balances;
 pub mod blobs;
@@ -385,11 +422,20 @@ where
 pub mod test {
     use crate as fuel_core_storage;
     use crate::{
-        kv_store::{KeyValueInspect, StorageColumn},
+        kv_store::{
+            KeyValueInspect,
+            StorageColumn,
+        },
         structured_storage::StructuredStorage,
-        transactional::{AtomicView, InMemoryTransaction},
+        transactional::{
+            AtomicView,
+            InMemoryTransaction,
+        },
     };
-    use fuel_core_storage::{Result as StorageResult, kv_store::Value};
+    use fuel_core_storage::{
+        Result as StorageResult,
+        kv_store::Value,
+    };
     use std::collections::HashMap;
 
     type Storage = HashMap<(u32, Vec<u8>), Value>;

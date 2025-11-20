@@ -1,19 +1,41 @@
 use crate::helpers::TestContext;
 use fuel_core::{
-    chain_config::{ChainConfig, StateConfig},
+    chain_config::{
+        ChainConfig,
+        StateConfig,
+    },
     schema::tx::receipt::all_receipts,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{PageDirection, PaginationRequest},
-    types::{StatusWithTransaction, TransactionStatus},
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
+    types::{
+        StatusWithTransaction,
+        TransactionStatus,
+    },
 };
-use fuel_core_poa::{Trigger, service::Mode};
+use fuel_core_poa::{
+    Trigger,
+    service::Mode,
+};
 use fuel_core_types::{
-    fuel_asm::{RegId, op},
+    fuel_asm::{
+        RegId,
+        op,
+    },
     fuel_crypto::SecretKey,
-    fuel_tx::{Chargeable, field::ReceiptsRoot, *},
+    fuel_tx::{
+        Chargeable,
+        field::ReceiptsRoot,
+        *,
+    },
     fuel_types::ChainId,
     fuel_vm::ProgramState,
     services::executor::TransactionExecutionResult,
@@ -21,10 +43,19 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use itertools::Itertools;
-use rand::{Rng, SeedableRng, prelude::StdRng};
-use std::{io::ErrorKind::NotFound, time::Duration};
+use rand::{
+    Rng,
+    SeedableRng,
+    prelude::StdRng,
+};
+use std::{
+    io::ErrorKind::NotFound,
+    time::Duration,
+};
 use test_helpers::{
-    assemble_tx::AssembleAndRunTx, config_with_fee, default_signing_wallet,
+    assemble_tx::AssembleAndRunTx,
+    config_with_fee,
+    default_signing_wallet,
 };
 
 mod log_syscall;

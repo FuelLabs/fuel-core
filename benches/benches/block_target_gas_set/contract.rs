@@ -1,6 +1,12 @@
-use crate::{utils::arb_dependent_cost_values, *};
+use crate::{
+    utils::arb_dependent_cost_values,
+    *,
+};
 use fuel_core_types::{
-    fuel_types::{Address, Word},
+    fuel_types::{
+        Address,
+        Word,
+    },
     fuel_vm::consts::WORD_SIZE,
 };
 use std::iter::repeat_n;

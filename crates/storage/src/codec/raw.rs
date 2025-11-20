@@ -2,7 +2,10 @@
 //! The codec is used for types that are already represented by bytes
 //! and can be deserialized into bytes-based objects.
 
-use crate::codec::{Decode, Encode};
+use crate::codec::{
+    Decode,
+    Encode,
+};
 
 #[cfg(feature = "std")]
 use std::borrow::Cow;

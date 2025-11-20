@@ -1,17 +1,25 @@
 use crate::{
     database::OffChainIterableKeyValueView,
     fuel_core_graphql_api::storage::transactions::{
-        OwnedTransactionIndexCursor, OwnedTransactionIndexKey, OwnedTransactions,
+        OwnedTransactionIndexCursor,
+        OwnedTransactionIndexKey,
+        OwnedTransactions,
         TransactionStatuses,
     },
 };
 use fuel_core_storage::{
     Result as StorageResult,
-    iter::{IterDirection, IteratorOverTable},
+    iter::{
+        IterDirection,
+        IteratorOverTable,
+    },
 };
 use fuel_core_types::{
     self,
-    fuel_tx::{Bytes32, TxPointer},
+    fuel_tx::{
+        Bytes32,
+        TxPointer,
+    },
     fuel_types::Address,
     services::transaction_status::TransactionExecutionStatus,
 };

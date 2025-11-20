@@ -2,8 +2,13 @@ use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
     fuel_tx::Bytes64,
     services::p2p::{
-        DelegatePublicKey, GossipData, GossipsubMessageAcceptance, GossipsubMessageInfo,
-        NetworkData, PreConfirmationMessage, ProtocolSignature,
+        DelegatePublicKey,
+        GossipData,
+        GossipsubMessageAcceptance,
+        GossipsubMessageInfo,
+        NetworkData,
+        PreConfirmationMessage,
+        ProtocolSignature,
     },
 };
 

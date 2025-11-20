@@ -1,40 +1,81 @@
 use crate::{
     coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
-        api_service::BlockProducer, database::ReadView, ports::MemoryPool,
+        api_service::BlockProducer,
+        database::ReadView,
+        ports::MemoryPool,
     },
     query::asset_query::Exclude,
     schema::{
-        coins::{CoinType, SpendQueryElementInput},
-        tx::{Account, ChangePolicy, RequiredBalance},
+        coins::{
+            CoinType,
+            SpendQueryElementInput,
+        },
+        tx::{
+            Account,
+            ChangePolicy,
+            RequiredBalance,
+        },
     },
     service::adapters::SharedMemoryPool,
 };
 use fuel_core_types::{
     entities::coins::CoinId,
-    fuel_asm::{PanicReason, Word, op},
+    fuel_asm::{
+        PanicReason,
+        Word,
+        op,
+    },
     fuel_crypto::Signature,
     fuel_tx::{
-        Address, AssetId, Cacheable, Chargeable, ConsensusParameters, Input, Output,
-        Receipt, Script, Transaction,
+        Address,
+        AssetId,
+        Cacheable,
+        Chargeable,
+        ConsensusParameters,
+        Input,
+        Output,
+        Receipt,
+        Script,
+        Transaction,
         field::{
-            Inputs, MaxFeeLimit, Outputs, Policies, Script as ScriptField,
-            ScriptGasLimit, Tip, WitnessLimit,
+            Inputs,
+            MaxFeeLimit,
+            Outputs,
+            Policies,
+            Script as ScriptField,
+            ScriptGasLimit,
+            Tip,
+            WitnessLimit,
         },
         input::{
             coin::CoinSigned,
-            message::{MessageCoinSigned, MessageDataSigned},
+            message::{
+                MessageCoinSigned,
+                MessageDataSigned,
+            },
         },
         policies::PolicyType,
     },
-    fuel_types::{ContractId, canonical::Serialize},
-    fuel_vm::{
-        checked_transaction::CheckPredicateParams, interpreter::ExecutableTransaction,
+    fuel_types::{
+        ContractId,
+        canonical::Serialize,
     },
-    services::executor::{TransactionExecutionResult, TransactionExecutionStatus},
+    fuel_vm::{
+        checked_transaction::CheckPredicateParams,
+        interpreter::ExecutableTransaction,
+    },
+    services::executor::{
+        TransactionExecutionResult,
+        TransactionExecutionStatus,
+    },
 };
 use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{
+        HashMap,
+        HashSet,
+        hash_map::Entry,
+    },
     sync::Arc,
 };
 

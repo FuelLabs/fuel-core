@@ -1,13 +1,23 @@
-use fuel_core_chain_config::{AsTable, StateConfig, TableEntry};
+use fuel_core_chain_config::{
+    AsTable,
+    StateConfig,
+    TableEntry,
+};
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, raw::Raw},
+    codec::{
+        postcard::Postcard,
+        raw::Raw,
+    },
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::{
     entities::contract::ContractsInfoType,
-    fuel_tx::{ContractId, Salt},
+    fuel_tx::{
+        ContractId,
+        Salt,
+    },
 };
 
 /// Contract info

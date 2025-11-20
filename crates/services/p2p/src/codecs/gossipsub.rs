@@ -1,10 +1,22 @@
-use super::{Decode, Encode, Encoder, GossipsubCodec};
+use super::{
+    Decode,
+    Encode,
+    Encoder,
+    GossipsubCodec,
+};
 use crate::{
-    gossipsub::messages::{GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage},
+    gossipsub::messages::{
+        GossipTopicTag,
+        GossipsubBroadcastRequest,
+        GossipsubMessage,
+    },
     ports::P2PPreConfirmationMessage,
 };
 use fuel_core_types::fuel_tx::Transaction;
-use std::{io, ops::Deref};
+use std::{
+    io,
+    ops::Deref,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct GossipsubMessageHandler<Codec> {

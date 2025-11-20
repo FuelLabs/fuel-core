@@ -3,13 +3,19 @@
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{postcard::Postcard, raw::Raw},
+    codec::{
+        postcard::Postcard,
+        raw::Raw,
+    },
     merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::fuel_compression::RegistryKey;
 
-use super::column::{CompressionColumn, MerkleizedColumnOf};
+use super::column::{
+    CompressionColumn,
+    MerkleizedColumnOf,
+};
 
 /// Table that indexes the addresses.
 pub struct ContractId;

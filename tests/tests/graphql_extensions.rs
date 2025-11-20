@@ -1,17 +1,36 @@
 use fuel_core::service::Config;
 use fuel_core_bin::FuelService;
-use fuel_core_client::client::{FuelClient, types::TransactionStatus};
+use fuel_core_client::client::{
+    FuelClient,
+    types::TransactionStatus,
+};
 use fuel_core_types::fuel_tx::{
-    Address, AssetId, Bytes32, GasCosts, Input, Transaction, UpgradePurpose, Upload,
-    UploadSubsection, policies::Policies,
+    Address,
+    AssetId,
+    Bytes32,
+    GasCosts,
+    Input,
+    Transaction,
+    UpgradePurpose,
+    Upload,
+    UploadSubsection,
+    policies::Policies,
 };
 use fuel_core_upgradable_executor::WASM_BYTECODE;
 use itertools::Itertools;
-use rand::{Rng, rngs::StdRng};
+use rand::{
+    Rng,
+    rngs::StdRng,
+};
 use serde_json::Value;
 use test_helpers::{
-    builder::{TestContext, TestSetupBuilder},
-    predicate, send_graph_ql_query, transactions_from_subsections,
+    builder::{
+        TestContext,
+        TestSetupBuilder,
+    },
+    predicate,
+    send_graph_ql_query,
+    transactions_from_subsections,
 };
 
 #[tokio::test]

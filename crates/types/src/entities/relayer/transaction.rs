@@ -3,11 +3,18 @@
 use crate::{
     blockchain::primitives::DaBlockHeight,
     fuel_crypto,
-    fuel_types::{BlockHeight, Bytes32, Nonce},
+    fuel_types::{
+        BlockHeight,
+        Bytes32,
+        Nonce,
+    },
 };
 
 #[cfg(feature = "alloc")]
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    string::String,
+    vec::Vec,
+};
 
 /// Transaction sent from the DA layer to fuel by the relayer
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

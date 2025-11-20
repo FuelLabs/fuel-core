@@ -2,16 +2,32 @@
 use std::sync::Arc;
 
 use crate::{
-    import::{Config, Import},
-    ports::{self, BlockImporterPort, ConsensusPort, PeerToPeerPort},
+    import::{
+        Config,
+        Import,
+    },
+    ports::{
+        self,
+        BlockImporterPort,
+        ConsensusPort,
+        PeerToPeerPort,
+    },
     state::State,
     sync::SyncHeights,
 };
 
 use fuel_core_services::{
-    RunnableService, RunnableTask, Service, ServiceRunner, SharedMutex, StateWatcher,
+    RunnableService,
+    RunnableTask,
+    Service,
+    ServiceRunner,
+    SharedMutex,
+    StateWatcher,
     TaskNextAction,
-    stream::{BoxStream, IntoBoxStream},
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;

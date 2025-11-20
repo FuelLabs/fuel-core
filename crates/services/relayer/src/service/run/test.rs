@@ -1,5 +1,8 @@
 use crate::service::state::test_builder::TestDataSource;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use super::*;
 

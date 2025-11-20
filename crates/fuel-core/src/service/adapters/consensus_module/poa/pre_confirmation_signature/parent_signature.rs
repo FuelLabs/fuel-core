@@ -1,8 +1,14 @@
 use fuel_core_poa::pre_confirmation_signature_service::{
-    error::{Error as PoaError, Result as PoAResult},
+    error::{
+        Error as PoaError,
+        Result as PoAResult,
+    },
     parent_signature::ParentSignature,
 };
-use fuel_core_types::{fuel_crypto, fuel_vm::Signature};
+use fuel_core_types::{
+    fuel_crypto,
+    fuel_vm::Signature,
+};
 use serde::Serialize;
 
 use crate::service::adapters::FuelBlockSigner;

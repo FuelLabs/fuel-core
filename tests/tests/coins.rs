@@ -1,20 +1,40 @@
 use fuel_core::{
-    chain_config::{CoinConfig, MessageConfig, StateConfig},
+    chain_config::{
+        CoinConfig,
+        MessageConfig,
+        StateConfig,
+    },
     coins_query::CoinsQueryError,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
-use fuel_core_client::client::{FuelClient, types::CoinType};
+use fuel_core_client::client::{
+    FuelClient,
+    types::CoinType,
+};
 use fuel_core_types::fuel_tx::*;
-use rand::{SeedableRng, prelude::StdRng};
-use test_helpers::{assemble_tx::AssembleAndRunTx, builder::TestContext};
+use rand::{
+    SeedableRng,
+    prelude::StdRng,
+};
+use test_helpers::{
+    assemble_tx::AssembleAndRunTx,
+    builder::TestContext,
+};
 
 mod coin {
     use super::*;
     use fuel_core::chain_config::{
-        ChainConfig, coin_config_helpers::CoinConfigGenerator,
+        ChainConfig,
+        coin_config_helpers::CoinConfigGenerator,
     };
     use fuel_core_client::client::types::CoinType;
-    use fuel_core_types::{fuel_crypto::SecretKey, fuel_tx::Address};
+    use fuel_core_types::{
+        fuel_crypto::SecretKey,
+        fuel_tx::Address,
+    };
     use rand::Rng;
     use test_helpers::assemble_tx::SigningAccount;
 
@@ -287,7 +307,8 @@ mod coin {
 mod message_coin {
     use fuel_core_client::client::types::CoinType;
     use fuel_core_types::{
-        blockchain::primitives::DaBlockHeight, fuel_crypto::SecretKey,
+        blockchain::primitives::DaBlockHeight,
+        fuel_crypto::SecretKey,
     };
     use rand::Rng;
     use test_helpers::assemble_tx::SigningAccount;

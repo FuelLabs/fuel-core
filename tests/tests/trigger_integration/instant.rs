@@ -1,15 +1,26 @@
 use fuel_core::service::FuelService;
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{PageDirection, PaginationRequest},
+    pagination::{
+        PageDirection,
+        PaginationRequest,
+    },
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
-    fuel_asm::*, fuel_crypto::SecretKey, secrecy::Secret, signer::SignMode,
+    fuel_asm::*,
+    fuel_crypto::SecretKey,
+    secrecy::Secret,
+    signer::SignMode,
 };
-use rand::{SeedableRng, rngs::StdRng};
+use rand::{
+    SeedableRng,
+    rngs::StdRng,
+};
 use test_helpers::{
-    assemble_tx::AssembleAndRunTx, config_with_fee, default_signing_wallet,
+    assemble_tx::AssembleAndRunTx,
+    config_with_fee,
+    default_signing_wallet,
 };
 
 #[tokio::test]

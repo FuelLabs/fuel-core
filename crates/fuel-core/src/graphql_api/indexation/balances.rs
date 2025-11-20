@@ -1,12 +1,20 @@
 use fuel_core_storage::StorageAsMut;
 use fuel_core_types::{
-    entities::{Message, coins::coin::Coin},
+    entities::{
+        Message,
+        coins::coin::Coin,
+    },
     services::executor::Event,
 };
 
 use crate::graphql_api::{
     ports::worker::OffChainDatabaseTransaction,
-    storage::balances::{CoinBalances, CoinBalancesKey, MessageBalance, MessageBalances},
+    storage::balances::{
+        CoinBalances,
+        CoinBalancesKey,
+        MessageBalance,
+        MessageBalances,
+    },
 };
 
 use super::error::IndexationError;
@@ -157,25 +165,39 @@ where
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_storage::{StorageAsMut, transactional::WriteTransaction};
+    use fuel_core_storage::{
+        StorageAsMut,
+        transactional::WriteTransaction,
+    };
     use fuel_core_types::{
-        fuel_tx::{Address, AssetId},
+        fuel_tx::{
+            Address,
+            AssetId,
+        },
         services::executor::Event,
     };
 
     use crate::{
-        database::{Database, database_description::off_chain::OffChain},
+        database::{
+            Database,
+            database_description::off_chain::OffChain,
+        },
         graphql_api::{
             indexation::{
                 balances::update,
                 error::IndexationError,
                 test_utils::{
-                    make_coin, make_nonretryable_message, make_retryable_message,
+                    make_coin,
+                    make_nonretryable_message,
+                    make_retryable_message,
                 },
             },
             ports::worker::OffChainDatabaseTransaction,
             storage::balances::{
-                CoinBalances, CoinBalancesKey, MessageBalance, MessageBalances,
+                CoinBalances,
+                CoinBalancesKey,
+                MessageBalance,
+                MessageBalances,
             },
         },
         state::rocks_db::DatabaseConfig,

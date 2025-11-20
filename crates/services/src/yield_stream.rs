@@ -1,9 +1,17 @@
 //! Stream that yields each `batch_size` items allowing other tasks to work.
 
-use futures::{Stream, StreamExt, ready, stream::Fuse};
+use futures::{
+    Stream,
+    StreamExt,
+    ready,
+    stream::Fuse,
+};
 use std::{
     pin::Pin,
-    task::{Context, Poll},
+    task::{
+        Context,
+        Poll,
+    },
 };
 
 pin_project_lite::pin_project! {

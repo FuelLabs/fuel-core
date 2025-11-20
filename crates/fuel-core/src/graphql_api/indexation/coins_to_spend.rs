@@ -1,14 +1,20 @@
 use fuel_core_storage::StorageAsMut;
 
 use fuel_core_types::{
-    entities::{Message, coins::coin::Coin},
+    entities::{
+        Message,
+        coins::coin::Coin,
+    },
     fuel_tx::AssetId,
     services::executor::Event,
 };
 
 use crate::graphql_api::{
     ports::worker::OffChainDatabaseTransaction,
-    storage::coins::{CoinsToSpendIndex, CoinsToSpendIndexKey},
+    storage::coins::{
+        CoinsToSpendIndex,
+        CoinsToSpendIndexKey,
+    },
 };
 
 use super::error::IndexationError;
@@ -129,28 +135,47 @@ where
 #[cfg(test)]
 mod tests {
     use fuel_core_storage::{
-        StorageAsMut, iter::IterDirection, transactional::WriteTransaction,
+        StorageAsMut,
+        iter::IterDirection,
+        transactional::WriteTransaction,
     };
     use fuel_core_types::{
-        fuel_tx::{Address, AssetId},
+        fuel_tx::{
+            Address,
+            AssetId,
+        },
         services::executor::Event,
     };
     use rand::seq::SliceRandom;
 
     use itertools::Itertools;
-    use proptest::{collection::vec, prelude::*};
+    use proptest::{
+        collection::vec,
+        prelude::*,
+    };
 
     use crate::{
-        database::{Database, database_description::off_chain::OffChain},
+        database::{
+            Database,
+            database_description::off_chain::OffChain,
+        },
         graphql_api::{
             indexation::{
-                coins_to_spend::{RETRYABLE_BYTE, update},
+                coins_to_spend::{
+                    RETRYABLE_BYTE,
+                    update,
+                },
                 error::IndexationError,
                 test_utils::{
-                    make_coin, make_nonretryable_message, make_retryable_message,
+                    make_coin,
+                    make_nonretryable_message,
+                    make_retryable_message,
                 },
             },
-            storage::coins::{CoinsToSpendIndex, CoinsToSpendIndexKey},
+            storage::coins::{
+                CoinsToSpendIndex,
+                CoinsToSpendIndexKey,
+            },
         },
         state::rocks_db::DatabaseConfig,
     };

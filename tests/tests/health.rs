@@ -1,13 +1,18 @@
 use fuel_core::{
     combined_database::CombinedDatabase,
     database::Database,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
     state::rocks_db::DatabaseConfig,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::fuel_asm::op;
 use test_helpers::{
-    assemble_tx::AssembleAndRunTx, config_with_fee, default_signing_wallet,
+    assemble_tx::AssembleAndRunTx,
+    config_with_fee,
+    default_signing_wallet,
 };
 
 #[tokio::test]

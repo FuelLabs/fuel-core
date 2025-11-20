@@ -1,7 +1,8 @@
 use crate::{
     blocks::importer_and_db_source::BlockSerializer,
     protobuf_types::{
-        Block as ProtoBlock, V1Block as ProtoV1Block,
+        Block as ProtoBlock,
+        V1Block as ProtoV1Block,
         block::VersionedBlock as ProtoVersionedBlock,
     },
 };

@@ -1,31 +1,41 @@
 #![allow(non_snake_case)]
 
 use aws_config::{
-    BehaviorVersion, default_provider::credentials::DefaultCredentialsChain,
+    BehaviorVersion,
+    default_provider::credentials::DefaultCredentialsChain,
 };
 use aws_sdk_s3::Client;
 use flate2::read::GzDecoder;
 use fuel_core::{
     database::Database,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
     db::remote_cache::block_height_to_key,
     integration::StorageMethod,
     protobuf_types::{
-        Block as ProtoBlock, BlockHeightRequest as ProtoBlockHeightRequest,
+        Block as ProtoBlock,
+        BlockHeightRequest as ProtoBlockHeightRequest,
         BlockRangeRequest as ProtoBlockRangeRequest,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
-        RemoteBlockResponse as ProtoRemoteBlockResponse, RemoteS3Bucket,
+        RemoteBlockResponse as ProtoRemoteBlockResponse,
+        RemoteS3Bucket,
         block::VersionedBlock as ProtoVersionedBlock,
         block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
         block_response::Payload as ProtoPayload,
-        header::VersionedHeader as ProtoVersionedHeader, remote_block_response::Location,
+        header::VersionedHeader as ProtoVersionedHeader,
+        remote_block_response::Location,
     },
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::{fuel_tx::*, fuel_types::BlockHeight};
+use fuel_core_types::{
+    fuel_tx::*,
+    fuel_types::BlockHeight,
+};
 use futures::StreamExt;
 use prost::bytes::Bytes;
 use std::io::Read;

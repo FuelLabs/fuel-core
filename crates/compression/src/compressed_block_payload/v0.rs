@@ -1,7 +1,15 @@
-use crate::{VersionedBlockPayload, registry::RegistrationsPerTable};
+use crate::{
+    VersionedBlockPayload,
+    registry::RegistrationsPerTable,
+};
 use fuel_core_types::{
     blockchain::{
-        header::{ApplicationHeader, BlockHeader, ConsensusHeader, PartialBlockHeader},
+        header::{
+            ApplicationHeader,
+            BlockHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
         primitives::Empty,
     },
     fuel_tx::CompressedTransaction,

@@ -2,15 +2,24 @@ use crate::{
     database::{
         Error as DatabaseError,
         database_description::{
-            DatabaseDescription, DatabaseHeight, DatabaseMetadata, off_chain::OffChain,
-            on_chain::OnChain, relayer::Relayer,
+            DatabaseDescription,
+            DatabaseHeight,
+            DatabaseMetadata,
+            off_chain::OffChain,
+            on_chain::OnChain,
+            relayer::Relayer,
         },
         metadata::MetadataTable,
     },
     graphql_api::storage::blocks::FuelBlockIdsToHeights,
     state::{
-        ColumnType, IterableKeyValueView, KeyValueView,
-        data_source::{DataSource, DataSourceType},
+        ColumnType,
+        IterableKeyValueView,
+        KeyValueView,
+        data_source::{
+            DataSource,
+            DataSourceType,
+        },
         generic_database::GenericDatabase,
         in_memory::memory_store::MemoryStore,
     },
@@ -21,37 +30,67 @@ pub use fuel_core_database::Error;
 use fuel_core_gas_price_service::common::fuel_core_storage_adapter::storage::GasPriceMetadata;
 use fuel_core_services::SharedMutex;
 use fuel_core_storage::{
-    self, Error as StorageError, Mappable, Result as StorageResult, StorageAsMut,
-    StorageInspect, StorageMutate,
+    self,
+    Error as StorageError,
+    Mappable,
+    Result as StorageResult,
+    StorageAsMut,
+    StorageInspect,
+    StorageMutate,
     iter::{
-        IterDirection, IterableTable, IteratorOverTable,
+        IterDirection,
+        IterableTable,
+        IteratorOverTable,
         changes_iterator::ChangesIterator,
     },
     not_found,
     tables::FuelBlocks,
     transactional::{
-        AtomicView, Changes, ConflictPolicy, HistoricalView, Modifiable, StorageChanges,
+        AtomicView,
+        Changes,
+        ConflictPolicy,
+        HistoricalView,
+        Modifiable,
+        StorageChanges,
         StorageTransaction,
     },
 };
-use fuel_core_types::{blockchain::block::CompressedBlock, fuel_types::BlockHeight};
+use fuel_core_types::{
+    blockchain::block::CompressedBlock,
+    fuel_types::BlockHeight,
+};
 use itertools::Itertools;
-use std::{borrow::Cow, fmt::Debug, io::Empty, sync::Arc};
+use std::{
+    borrow::Cow,
+    fmt::Debug,
+    io::Empty,
+    sync::Arc,
+};
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rpc")]
 use crate::database::database_description::block_aggregator::{
-    BlockAggregatorDatabaseS3, BlockAggregatorDatabaseStorage,
+    BlockAggregatorDatabaseS3,
+    BlockAggregatorDatabaseStorage,
 };
 #[cfg(feature = "rocksdb")]
 use crate::state::{
-    historical_rocksdb::{HistoricalRocksDB, StateRewindPolicy, description::Historical},
-    rocks_db::{ColumnsPolicy, DatabaseConfig, RocksDb},
+    historical_rocksdb::{
+        HistoricalRocksDB,
+        StateRewindPolicy,
+        description::Historical,
+    },
+    rocks_db::{
+        ColumnsPolicy,
+        DatabaseConfig,
+        RocksDb,
+    },
 };
 use crate::{
     database::database_description::{
-        gas_price::GasPriceDatabase, indexation_availability,
+        gas_price::GasPriceDatabase,
+        indexation_availability,
     },
     state::HeightType,
 };
@@ -652,7 +691,10 @@ pub fn convert_to_rocksdb_direction(direction: IterDirection) -> rocksdb::Direct
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{Database, database_description::DatabaseDescription};
+    use crate::database::{
+        Database,
+        database_description::DatabaseDescription,
+    };
 
     fn column_keys_not_exceed_count<Description>()
     where
@@ -668,10 +710,17 @@ mod tests {
 
     mod on_chain {
         use super::*;
-        use crate::database::{DatabaseHeight, database_description::on_chain::OnChain};
-        use fuel_core_storage::{tables::Coins, transactional::WriteTransaction};
+        use crate::database::{
+            DatabaseHeight,
+            database_description::on_chain::OnChain,
+        };
+        use fuel_core_storage::{
+            tables::Coins,
+            transactional::WriteTransaction,
+        };
         use fuel_core_types::{
-            blockchain::block::CompressedBlock, entities::coins::coin::CompressedCoin,
+            blockchain::block::CompressedBlock,
+            entities::coins::coin::CompressedCoin,
             fuel_tx::UtxoId,
         };
 
@@ -826,7 +875,10 @@ mod tests {
     mod off_chain {
         use super::*;
         use crate::{
-            database::{DatabaseHeight, database_description::off_chain::OffChain},
+            database::{
+                DatabaseHeight,
+                database_description::off_chain::OffChain,
+            },
             fuel_core_graphql_api::storage::messages::OwnedMessageKey,
             graphql_api::storage::messages::OwnedMessageIds,
         };
@@ -979,7 +1031,10 @@ mod tests {
     #[cfg(feature = "relayer")]
     mod relayer {
         use super::*;
-        use crate::database::{DatabaseHeight, database_description::relayer::Relayer};
+        use crate::database::{
+            DatabaseHeight,
+            database_description::relayer::Relayer,
+        };
         use fuel_core_relayer::storage::EventsHistory;
         use fuel_core_storage::transactional::WriteTransaction;
         use fuel_core_types::blockchain::primitives::DaBlockHeight;
@@ -1194,11 +1249,16 @@ mod tests {
     mod metadata {
         use crate::database::database_description::IndexationKind;
         use fuel_core_storage::kv_store::StorageColumn;
-        use std::{borrow::Cow, collections::HashSet};
+        use std::{
+            borrow::Cow,
+            collections::HashSet,
+        };
         use strum::EnumCount;
 
         use super::{
-            DatabaseHeight, DatabaseMetadata, database_description::DatabaseDescription,
+            DatabaseHeight,
+            DatabaseMetadata,
+            database_description::DatabaseDescription,
             update_metadata,
         };
 

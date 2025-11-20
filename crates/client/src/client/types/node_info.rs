@@ -1,6 +1,9 @@
 use crate::client::schema::{
     self,
-    node_info::{IndexationFlags, TxPoolStats},
+    node_info::{
+        IndexationFlags,
+        TxPoolStats,
+    },
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]

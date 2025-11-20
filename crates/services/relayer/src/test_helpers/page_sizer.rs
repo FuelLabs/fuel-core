@@ -1,4 +1,7 @@
-use crate::service::{PageSizer, RpcOutcome};
+use crate::service::{
+    PageSizer,
+    RpcOutcome,
+};
 
 pub struct IdentityPageSizer {
     page_size: u64,
