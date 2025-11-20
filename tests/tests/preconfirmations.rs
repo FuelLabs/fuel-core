@@ -26,11 +26,35 @@ use fuel_core_types::{
 };
 use futures::StreamExt;
 use rand::Rng;
+use rstest::rstest;
 use test_helpers::{
     assemble_tx::AssembleAndRunTx,
     config_with_fee,
     default_signing_wallet,
 };
+
+/// RAII guard to set/unset FUEL_ALWAYS_USE_WASM environment variable
+/// This avoids unsafe blocks and ensures cleanup happens automatically
+struct ExecutorGuard {
+    _private: (),
+}
+
+impl ExecutorGuard {
+    fn new_wasm() -> Self {
+        unsafe {
+            std::env::set_var("FUEL_ALWAYS_USE_WASM", "true");
+        }
+        Self { _private: () }
+    }
+}
+
+impl Drop for ExecutorGuard {
+    fn drop(&mut self) {
+        unsafe {
+            std::env::remove_var("FUEL_ALWAYS_USE_WASM");
+        }
+    }
+}
 
 #[tokio::test]
 async fn preconfirmation__received_after_successful_execution() {
@@ -99,6 +123,199 @@ async fn preconfirmation__received_after_successful_execution() {
         tx_statuses_subscriber.next().await.unwrap().unwrap(),
         TransactionStatus::Success { .. }
     ));
+}
+
+#[rstest]
+#[case::native(false)]
+#[case::wasm(true)]
+#[tokio::test]
+async fn preconfirmation__tx_index_correct_for_first_transaction(#[case] use_wasm: bool) {
+    // Given - Set executor type
+    let _guard = if use_wasm {
+        Some(ExecutorGuard::new_wasm())
+    } else {
+        None
+    };
+
+    let mut config = config_with_fee();
+    config.block_production = Trigger::Never;
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let script = vec![op::ret(RegId::ONE)];
+    let tx = client
+        .assemble_script(script, vec![], default_signing_wallet())
+        .await
+        .unwrap();
+
+    let mut tx_statuses_subscriber = client
+        .submit_and_await_status_opt(&tx, None, Some(true))
+        .await
+        .unwrap();
+
+    // When
+    assert!(matches!(
+        tx_statuses_subscriber.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    client.produce_blocks(1, None).await.unwrap();
+
+    // Then - First transaction should have index 0 (not 1)
+    match tx_statuses_subscriber.next().await.unwrap().unwrap() {
+        TransactionStatus::PreconfirmationSuccess { tx_pointer, .. } => {
+            assert_eq!(
+                tx_pointer,
+                TxPointer::new(BlockHeight::new(1), 0),
+                "First transaction should have index 0"
+            );
+        }
+        status => panic!("Expected PreconfirmationSuccess, got: {:?}", status),
+    }
+}
+
+#[rstest]
+#[case::native(false)]
+#[case::wasm(true)]
+#[tokio::test]
+async fn preconfirmation__tx_indices_correct_for_multiple_transactions(
+    #[case] use_wasm: bool,
+) {
+    // Given - Set executor type
+    let _guard = if use_wasm {
+        Some(ExecutorGuard::new_wasm())
+    } else {
+        None
+    };
+
+    let mut rng = rand::thread_rng();
+    let mut config = Config::local_node();
+    config.block_production = Trigger::Never;
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Create 3 transactions
+    let tx1 = TransactionBuilder::script(
+        vec![op::ret(RegId::ONE)].into_iter().collect(),
+        vec![],
+    )
+    .script_gas_limit(1_000_000)
+    .add_unsigned_coin_input(
+        SecretKey::random(&mut rng),
+        rng.r#gen(),
+        10,
+        AssetId::default(),
+        Default::default(),
+    )
+    .add_output(Output::variable(
+        Address::new([0; 32]),
+        0,
+        AssetId::default(),
+    ))
+    .finalize_as_transaction();
+
+    let tx2 = TransactionBuilder::script(
+        vec![op::ret(RegId::ONE)].into_iter().collect(),
+        vec![1],
+    )
+    .script_gas_limit(1_000_000)
+    .add_unsigned_coin_input(
+        SecretKey::random(&mut rng),
+        rng.r#gen(),
+        10,
+        AssetId::default(),
+        Default::default(),
+    )
+    .add_output(Output::variable(
+        Address::new([0; 32]),
+        0,
+        AssetId::default(),
+    ))
+    .finalize_as_transaction();
+
+    let tx3 = TransactionBuilder::script(
+        vec![op::ret(RegId::ONE)].into_iter().collect(),
+        vec![1, 2],
+    )
+    .script_gas_limit(1_000_000)
+    .add_unsigned_coin_input(
+        SecretKey::random(&mut rng),
+        rng.r#gen(),
+        10,
+        AssetId::default(),
+        Default::default(),
+    )
+    .add_output(Output::variable(
+        Address::new([0; 32]),
+        0,
+        AssetId::default(),
+    ))
+    .finalize_as_transaction();
+
+    // Submit all transactions
+    let mut sub1 = client
+        .submit_and_await_status_opt(&tx1, None, Some(true))
+        .await
+        .unwrap();
+    let mut sub2 = client
+        .submit_and_await_status_opt(&tx2, None, Some(true))
+        .await
+        .unwrap();
+    let mut sub3 = client
+        .submit_and_await_status_opt(&tx3, None, Some(true))
+        .await
+        .unwrap();
+
+    // When - produce block with all 3 transactions
+    assert!(matches!(
+        sub1.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    assert!(matches!(
+        sub2.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+    assert!(matches!(
+        sub3.next().await.unwrap().unwrap(),
+        TransactionStatus::Submitted { .. }
+    ));
+
+    client.produce_blocks(1, None).await.unwrap();
+
+    // Then - Verify each transaction has correct sequential index
+    match sub1.next().await.unwrap().unwrap() {
+        TransactionStatus::PreconfirmationSuccess { tx_pointer, .. } => {
+            assert_eq!(
+                tx_pointer,
+                TxPointer::new(BlockHeight::new(1), 0),
+                "First transaction should have index 0"
+            );
+        }
+        status => panic!("Expected PreconfirmationSuccess for tx1, got: {:?}", status),
+    }
+
+    match sub2.next().await.unwrap().unwrap() {
+        TransactionStatus::PreconfirmationSuccess { tx_pointer, .. } => {
+            assert_eq!(
+                tx_pointer,
+                TxPointer::new(BlockHeight::new(1), 1),
+                "Second transaction should have index 1"
+            );
+        }
+        status => panic!("Expected PreconfirmationSuccess for tx2, got: {:?}", status),
+    }
+
+    match sub3.next().await.unwrap().unwrap() {
+        TransactionStatus::PreconfirmationSuccess { tx_pointer, .. } => {
+            assert_eq!(
+                tx_pointer,
+                TxPointer::new(BlockHeight::new(1), 2),
+                "Third transaction should have index 2"
+            );
+        }
+        status => panic!("Expected PreconfirmationSuccess for tx3, got: {:?}", status),
+    }
 }
 
 #[tokio::test]
