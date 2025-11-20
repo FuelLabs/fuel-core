@@ -1,57 +1,27 @@
 #![allow(non_snake_case)]
 
 use fuel_core_storage::{
-    Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
+    Result as StorageResult, StorageAsMut, StorageAsRef,
     column::Column,
-    kv_store::{
-        KeyValueInspect,
-        Value,
-    },
+    kv_store::{KeyValueInspect, Value},
     not_found,
     structured_storage::test::InMemoryStorage,
-    tables::{
-        Coins,
-        ConsensusParametersVersions,
-    },
+    tables::{Coins, ConsensusParametersVersions},
     transactional::{
-        AtomicView,
-        Modifiable,
-        ReadTransaction,
-        StorageChanges,
-        WriteTransaction,
+        AtomicView, Modifiable, ReadTransaction, StorageChanges, WriteTransaction,
     },
 };
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
     entities::coins::coin::Coin,
-    fuel_asm::{
-        RegId,
-        op,
-    },
-    fuel_crypto::rand::{
-        Rng,
-        rngs::StdRng,
-    },
+    fuel_asm::{RegId, op},
+    fuel_crypto::rand::{Rng, rngs::StdRng},
     fuel_tx::{
-        Buildable,
-        Chargeable,
-        ConsensusParameters,
-        ContractId,
-        Input,
-        Output,
-        Transaction,
-        TransactionBuilder,
-        UniqueIdentifier,
-        UtxoId,
+        Buildable, Chargeable, ConsensusParameters, ContractId, Input, Output,
+        Transaction, TransactionBuilder, UniqueIdentifier, UtxoId,
     },
     fuel_types::ChainId,
-    fuel_vm::{
-        Salt,
-        SecretKey,
-        checked_transaction::IntoChecked,
-    },
+    fuel_vm::{Salt, SecretKey, checked_transaction::IntoChecked},
     services::block_producer::Components,
 };
 use rand::SeedableRng;
@@ -60,16 +30,8 @@ use crate::{
     config::Config,
     executor::Executor,
     once_transaction_source::OnceTransactionsSource,
-    ports::{
-        Filter,
-        Storage as StoragePort,
-        TransactionFiltered,
-    },
-    tests::mocks::{
-        MockRelayer,
-        MockTransactionsSource,
-        MockTxPoolResponse,
-    },
+    ports::{Filter, Storage as StoragePort, TransactionFiltered},
+    tests::mocks::{MockRelayer, MockTransactionsSource, MockTxPoolResponse},
 };
 
 #[derive(Clone, Debug, Default)]

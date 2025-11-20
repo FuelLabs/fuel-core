@@ -5,16 +5,10 @@ fn main() {
 }
 
 fn generate_dap_schema() {
-    use schemafy_lib::{
-        Expander,
-        Schema,
-    };
+    use schemafy_lib::{Expander, Schema};
     use std::{
         env,
-        fs::{
-            self,
-            File,
-        },
+        fs::{self, File},
         io::prelude::*,
         path::PathBuf,
     };

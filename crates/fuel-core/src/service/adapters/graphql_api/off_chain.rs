@@ -1,22 +1,12 @@
 use crate::{
     database::{
-        Database,
-        OffChainIterableKeyValueView,
-        OffChainKeyValueView,
-        database_description::{
-            IndexationKind,
-            off_chain::OffChain,
-        },
+        Database, OffChainIterableKeyValueView, OffChainKeyValueView,
+        database_description::{IndexationKind, off_chain::OffChain},
     },
     fuel_core_graphql_api::{
-        ports::{
-            OffChainDatabase,
-            OffChainDatabaseAt,
-            worker,
-        },
+        ports::{OffChainDatabase, OffChainDatabaseAt, worker},
         storage::{
-            contracts::ContractsInfo,
-            relayed_transactions::RelayedTransactionStatuses,
+            contracts::ContractsInfo, relayed_transactions::RelayedTransactionStatuses,
             transactions::OwnedTransactionIndexCursor,
         },
     },
@@ -24,64 +14,29 @@ use crate::{
         indexation::coins_to_spend::NON_RETRYABLE_BYTE,
         ports::CoinsToSpendIndexIter,
         storage::{
-            assets::{
-                AssetDetails,
-                AssetsInfo,
-            },
+            assets::{AssetDetails, AssetsInfo},
             balances::{
-                CoinBalances,
-                CoinBalancesKey,
-                MessageBalance,
-                MessageBalances,
+                CoinBalances, CoinBalancesKey, MessageBalance, MessageBalances,
                 TotalBalanceAmount,
             },
             coins::CoinsToSpendIndex,
-            old::{
-                OldFuelBlockConsensus,
-                OldFuelBlocks,
-                OldTransactions,
-            },
+            old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
         },
     },
 };
 use fuel_core_storage::{
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsRef,
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-        IteratorOverTable,
-    },
+    Error as StorageError, Result as StorageResult, StorageAsRef,
+    iter::{BoxedIter, IntoBoxedIter, IterDirection, IteratorOverTable},
     not_found,
-    transactional::{
-        IntoTransaction,
-        StorageTransaction,
-    },
+    transactional::{IntoTransaction, StorageTransaction},
 };
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        consensus::Consensus,
-        primitives::BlockId,
-    },
+    blockchain::{block::CompressedBlock, consensus::Consensus, primitives::BlockId},
     entities::relayer::transaction::RelayedTransactionStatus,
     fuel_tx::{
-        Address,
-        AssetId,
-        Bytes32,
-        ContractId,
-        Salt,
-        Transaction,
-        TxId,
-        TxPointer,
-        UtxoId,
+        Address, AssetId, Bytes32, ContractId, Salt, Transaction, TxId, TxPointer, UtxoId,
     },
-    fuel_types::{
-        BlockHeight,
-        Nonce,
-    },
+    fuel_types::{BlockHeight, Nonce},
     services::transaction_status,
 };
 use std::iter;

@@ -2,10 +2,7 @@ use super::dump::dump_schema;
 use clap::Parser;
 use std::{
     env,
-    path::{
-        Path,
-        PathBuf,
-    },
+    path::{Path, PathBuf},
     process::Command,
 };
 
@@ -22,7 +19,7 @@ pub fn cargo_build_and_dump_schema() -> Result<(), Box<dyn std::error::Error>> {
         .status()?;
 
     if !status.success() {
-        return Err("cargo build failed".into())
+        return Err("cargo build failed".into());
     }
 
     Ok(())

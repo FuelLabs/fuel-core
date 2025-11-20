@@ -1,11 +1,7 @@
 //! Clap configuration related to TxPool service.
 
 use fuel_core_types::{
-    fuel_tx::{
-        Address,
-        ContractId,
-        UtxoId,
-    },
+    fuel_tx::{Address, ContractId, UtxoId},
     fuel_types::Nonce,
 };
 

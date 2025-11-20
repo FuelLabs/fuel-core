@@ -1,32 +1,14 @@
 use fuel_core::{
-    chain_config::{
-        MessageConfig,
-        StateConfig,
-    },
-    service::{
-        Config,
-        FuelService,
-    },
+    chain_config::{MessageConfig, StateConfig},
+    service::{Config, FuelService},
 };
-use fuel_core_client::client::{
-    FuelClient,
-    types::TransactionStatus,
-};
+use fuel_core_client::client::{FuelClient, types::TransactionStatus};
 use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_asm::op,
-    fuel_crypto::SecretKey,
+    blockchain::primitives::DaBlockHeight, fuel_asm::op, fuel_crypto::SecretKey,
     fuel_tx::Input,
 };
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
-use test_helpers::assemble_tx::{
-    AssembleAndRunTx,
-    SigningAccount,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
+use test_helpers::assemble_tx::{AssembleAndRunTx, SigningAccount};
 
 #[tokio::test]
 async fn can_submit_genesis_message() {

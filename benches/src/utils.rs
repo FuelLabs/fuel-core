@@ -1,8 +1,5 @@
 use rand::RngCore;
-use std::{
-    env,
-    path::PathBuf,
-};
+use std::{env, path::PathBuf};
 
 /// Reimplementation of `tempdir::TempDir` that allows creating a new
 /// instance without actually creating a new directory on the filesystem.

@@ -3,13 +3,9 @@ use crate::{
     state::historical_rocksdb::description::Column,
 };
 use fuel_core_storage::{
-    self,
-    Mappable,
+    self, Mappable,
     blueprint::plain::Plain,
-    codec::{
-        postcard::Postcard,
-        primitive::Primitive,
-    },
+    codec::{postcard::Postcard, primitive::Primitive},
     structured_storage::TableWithBlueprint,
     transactional::Changes,
 };

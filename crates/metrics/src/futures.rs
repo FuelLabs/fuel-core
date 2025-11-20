@@ -1,8 +1,5 @@
 use crate::global_registry;
-use prometheus_client::{
-    encoding::text::encode,
-    metrics::counter::Counter,
-};
+use prometheus_client::{encoding::text::encode, metrics::counter::Counter};
 use std::ops::Deref;
 
 pub mod future_tracker;

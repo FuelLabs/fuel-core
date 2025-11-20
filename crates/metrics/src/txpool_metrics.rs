@@ -1,14 +1,8 @@
 use crate::{
-    buckets::{
-        Buckets,
-        buckets,
-    },
+    buckets::{Buckets, buckets},
     global_registry,
 };
-use prometheus_client::metrics::{
-    gauge::Gauge,
-    histogram::Histogram,
-};
+use prometheus_client::metrics::{gauge::Gauge, histogram::Histogram};
 use std::sync::OnceLock;
 
 pub struct TxPoolMetrics {

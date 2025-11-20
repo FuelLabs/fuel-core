@@ -1,46 +1,24 @@
 use super::{
-    blob::BlobConfig,
-    coin::CoinConfig,
-    contract::ContractConfig,
-    message::MessageConfig,
+    blob::BlobConfig, coin::CoinConfig, contract::ContractConfig, message::MessageConfig,
     table_entry::TableEntry,
 };
-use crate::{
-    ContractBalanceConfig,
-    ContractStateConfig,
-};
+use crate::{ContractBalanceConfig, ContractStateConfig};
 use fuel_core_storage::{
-    ContractsAssetKey,
-    ContractsStateKey,
-    Mappable,
+    ContractsAssetKey, ContractsStateKey, Mappable,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
-        ProcessedTransactions,
-        SealedBlockConsensus,
-        Transactions,
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        FuelBlocks, Messages, ProcessedTransactions, SealedBlockConsensus, Transactions,
     },
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     entities::contract::ContractUtxoInfo,
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::{BlockHeight, Bytes32},
     fuel_vm::BlobData,
 };
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;
@@ -48,26 +26,15 @@ use crate::SnapshotMetadata;
 #[cfg(feature = "test-helpers")]
 use crate::coin_config_helpers::CoinConfigGenerator;
 #[cfg(feature = "test-helpers")]
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
+use bech32::{ToBase32, Variant::Bech32m};
 #[cfg(feature = "test-helpers")]
 use core::str::FromStr;
-use fuel_core_storage::tables::merkle::{
-    FuelBlockMerkleData,
-    FuelBlockMerkleMetadata,
-};
+use fuel_core_storage::tables::merkle::{FuelBlockMerkleData, FuelBlockMerkleMetadata};
 use fuel_core_types::blockchain::header::{
-    BlockHeader,
-    ConsensusParametersVersion,
-    StateTransitionBytecodeVersion,
+    BlockHeader, ConsensusParametersVersion, StateTransitionBytecodeVersion,
 };
 #[cfg(feature = "test-helpers")]
-use fuel_core_types::{
-    fuel_types::Address,
-    fuel_vm::SecretKey,
-};
+use fuel_core_types::{fuel_types::Address, fuel_vm::SecretKey};
 
 #[cfg(feature = "parquet")]
 mod parquet;
@@ -657,33 +624,20 @@ impl StateConfig {
     }
 }
 
-pub use reader::{
-    GroupIter,
-    Groups,
-    SnapshotReader,
-};
+pub use reader::{GroupIter, Groups, SnapshotReader};
 #[cfg(feature = "parquet")]
 pub use writer::ZstdCompressionLevel;
 #[cfg(feature = "std")]
-pub use writer::{
-    SnapshotFragment,
-    SnapshotWriter,
-};
+pub use writer::{SnapshotFragment, SnapshotWriter};
 pub const MAX_GROUP_SIZE: usize = usize::MAX;
 
 #[cfg(test)]
 mod tests {
     use std::path::Path;
 
-    use crate::{
-        ChainConfig,
-        Randomize,
-    };
+    use crate::{ChainConfig, Randomize};
 
-    use rand::{
-        SeedableRng,
-        rngs::StdRng,
-    };
+    use rand::{SeedableRng, rngs::StdRng};
 
     use super::*;
 

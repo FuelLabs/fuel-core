@@ -1,7 +1,4 @@
-use crate::v0::{
-    Error,
-    tests::UpdaterBuilder,
-};
+use crate::v0::{Error, tests::UpdaterBuilder};
 
 #[test]
 fn update_l2_block_data__updates_l2_block() {

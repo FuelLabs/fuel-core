@@ -1,20 +1,9 @@
-use cynic::{
-    GraphQlResponse,
-    Operation,
-    http::CynicReqwestError,
-};
+use cynic::{GraphQlResponse, Operation, http::CynicReqwestError};
 use fuel_core_types::{
-    blockchain::header::{
-        ConsensusParametersVersion,
-        StateTransitionBytecodeVersion,
-    },
+    blockchain::header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
     fuel_types::BlockHeight,
 };
-use std::{
-    future::Future,
-    marker::PhantomData,
-    pin::Pin,
-};
+use std::{future::Future, marker::PhantomData, pin::Pin};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ExtensionsRequest {

@@ -1,10 +1,7 @@
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
     collections::VecDeque,
-    time::{
-        Duration,
-        SystemTime,
-    },
+    time::{Duration, SystemTime},
 };
 use tokio::time::Instant;
 

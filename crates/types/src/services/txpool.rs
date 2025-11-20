@@ -4,30 +4,14 @@ use crate::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
-        Blob,
-        Cacheable,
-        Chargeable,
-        Create,
-        Input,
-        Output,
-        Script,
-        Transaction,
-        TxId,
-        Upgrade,
-        Upload,
-        UtxoId,
-        field::{
-            Inputs,
-            Outputs,
-            ScriptGasLimit,
-            Tip,
-        },
+        Blob, Cacheable, Chargeable, Create, Input, Output, Script, Transaction, TxId,
+        Upgrade, Upload, UtxoId,
+        field::{Inputs, Outputs, ScriptGasLimit, Tip},
     },
     fuel_vm::checked_transaction::Checked,
 };
 use fuel_vm_private::{
-    checked_transaction::CheckedTransaction,
-    fuel_types::BlockHeight,
+    checked_transaction::CheckedTransaction, fuel_types::BlockHeight,
     prelude::field::Expiration,
 };
 use std::sync::Arc;

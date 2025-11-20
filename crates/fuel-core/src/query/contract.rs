@@ -1,18 +1,10 @@
 use crate::fuel_core_graphql_api::database::ReadView;
 use fuel_core_storage::{
-    Result as StorageResult,
-    StorageAsRef,
-    not_found,
-    tables::{
-        ContractsAssets,
-        ContractsRawCode,
-    },
+    Result as StorageResult, StorageAsRef, not_found,
+    tables::{ContractsAssets, ContractsRawCode},
 };
 use fuel_core_types::{
-    fuel_types::{
-        AssetId,
-        ContractId,
-    },
+    fuel_types::{AssetId, ContractId},
     services::graphql_api::ContractBalance,
 };
 

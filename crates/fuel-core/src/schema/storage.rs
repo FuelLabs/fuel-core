@@ -1,31 +1,15 @@
 use crate::{
     fuel_core_graphql_api::database::ReadView,
-    graphql_api::{
-        api_service::ReadDatabase,
-        require_historical_execution,
-    },
+    graphql_api::{api_service::ReadDatabase, require_historical_execution},
     schema::{
         contract::ContractBalance,
-        scalars::{
-            AssetId,
-            Bytes32,
-            ContractId,
-            HexString,
-            U32,
-        },
+        scalars::{AssetId, Bytes32, ContractId, HexString, U32},
     },
 };
-use async_graphql::{
-    Context,
-    Object,
-    Subscription,
-};
+use async_graphql::{Context, Object, Subscription};
 use fuel_core_services::stream::Stream;
 use fuel_core_types::fuel_types;
-use futures::{
-    StreamExt,
-    TryStreamExt,
-};
+use futures::{StreamExt, TryStreamExt};
 
 #[derive(Default)]
 pub struct StorageQuery;

@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use fuel_core_services::StateWatcher;
-use futures::{
-    StreamExt,
-    TryStreamExt,
-};
+use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use tokio::task::JoinSet;
 
@@ -137,10 +134,7 @@ mod tests {
     use anyhow::bail;
     use tokio_util::sync::CancellationToken as TokioCancelToken;
 
-    use crate::service::genesis::task_manager::{
-        NotifyCancel,
-        TaskManager,
-    };
+    use crate::service::genesis::task_manager::{NotifyCancel, TaskManager};
 
     #[tokio::test]
     async fn task_added_and_completed() {

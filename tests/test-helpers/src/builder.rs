@@ -1,19 +1,9 @@
 use fuel_core::{
     chain_config::{
-        ChainConfig,
-        CoinConfig,
-        ContractBalanceConfig,
-        ContractConfig,
-        LastBlockConfig,
-        SnapshotMetadata,
-        StateConfig,
+        ChainConfig, CoinConfig, ContractBalanceConfig, ContractConfig, LastBlockConfig,
+        SnapshotMetadata, StateConfig,
     },
-    service::{
-        Config,
-        DbType,
-        FuelService,
-        config::GasPriceConfig,
-    },
+    service::{Config, DbType, FuelService, config::GasPriceConfig},
     state::rocks_db::DatabaseConfig,
 };
 use fuel_core_client::client::FuelClient;
@@ -23,25 +13,15 @@ use fuel_core_types::{
     fuel_asm::op,
     fuel_tx::{
         field::Inputs,
-        input::coin::{
-            CoinPredicate,
-            CoinSigned,
-        },
+        input::coin::{CoinPredicate, CoinSigned},
         policies::Policies,
         *,
     },
     fuel_types::BlockHeight,
 };
 use itertools::Itertools;
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
-use std::{
-    collections::HashMap,
-    io,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
+use std::{collections::HashMap, io};
 
 /// Helper for wrapping a currently running node environment
 pub struct TestContext {

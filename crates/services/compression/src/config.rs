@@ -1,8 +1,5 @@
 use fuel_core_types::fuel_types::ChainId;
-use std::{
-    num::NonZeroU32,
-    time::Duration,
-};
+use std::{num::NonZeroU32, time::Duration};
 
 /// Compression configuration
 #[derive(Debug, Clone, Copy)]

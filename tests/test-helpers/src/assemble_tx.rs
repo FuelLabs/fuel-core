@@ -2,32 +2,17 @@ use fuel_core_client::client::{
     FuelClient,
     types::{
         TransactionStatus,
-        assemble_tx::{
-            Account,
-            ChangePolicy,
-            Predicate,
-            RequiredBalance,
-        },
+        assemble_tx::{Account, ChangePolicy, Predicate, RequiredBalance},
     },
 };
 use fuel_core_types::{
     fuel_asm::Instruction,
     fuel_crypto::SecretKey,
     fuel_tx::{
-        Address,
-        AssetId,
-        Input,
-        Output,
-        Signable,
-        Transaction,
-        TransactionBuilder,
+        Address, AssetId, Input, Output, Signable, Transaction, TransactionBuilder,
     },
 };
-use std::{
-    collections::HashMap,
-    future::Future,
-    io,
-};
+use std::{collections::HashMap, future::Future, io};
 
 pub trait AssembleAndRunTx {
     fn assemble_and_run_tx(

@@ -1,12 +1,7 @@
 //! Syscall handler that allows log emit endpoint using ECAL invocation when enabled.
 
 use alloc::{
-    borrow::ToOwned,
-    collections::BTreeMap,
-    format,
-    string::String,
-    sync::Arc,
-    vec::Vec,
+    borrow::ToOwned, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec,
 };
 use fuel_core_types::{
     fuel_asm::RegId,
@@ -14,10 +9,7 @@ use fuel_core_types::{
     fuel_vm::{
         Interpreter,
         error::SimpleResult,
-        interpreter::{
-            EcalHandler,
-            Memory,
-        },
+        interpreter::{EcalHandler, Memory},
     },
 };
 use parking_lot::Mutex;

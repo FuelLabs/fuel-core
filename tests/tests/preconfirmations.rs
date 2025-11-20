@@ -2,23 +2,12 @@ use std::time::Duration;
 
 use fuel_core::service::Config;
 use fuel_core_bin::FuelService;
-use fuel_core_client::client::{
-    FuelClient,
-    types::TransactionStatus,
-};
+use fuel_core_client::client::{FuelClient, types::TransactionStatus};
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
-    fuel_asm::{
-        RegId,
-        op,
-    },
+    fuel_asm::{RegId, op},
     fuel_tx::{
-        Address,
-        AssetId,
-        Output,
-        Receipt,
-        TransactionBuilder,
-        TxPointer,
+        Address, AssetId, Output, Receipt, TransactionBuilder, TxPointer,
         UniqueIdentifier,
     },
     fuel_types::BlockHeight,
@@ -27,9 +16,7 @@ use fuel_core_types::{
 use futures::StreamExt;
 use rand::Rng;
 use test_helpers::{
-    assemble_tx::AssembleAndRunTx,
-    config_with_fee,
-    default_signing_wallet,
+    assemble_tx::AssembleAndRunTx, config_with_fee, default_signing_wallet,
 };
 
 #[tokio::test]

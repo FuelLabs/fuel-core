@@ -1,20 +1,12 @@
 use std::{
-    hash::{
-        DefaultHasher,
-        Hash,
-        Hasher,
-    },
+    hash::{DefaultHasher, Hash, Hasher},
     time::Duration,
 };
 
 use fuel_core::{
     chain_config::TESTNET_WALLET_SECRETS,
     p2p_test_helpers::{
-        BootstrapSetup,
-        Nodes,
-        ProducerSetup,
-        ValidatorSetup,
-        make_nodes,
+        BootstrapSetup, Nodes, ProducerSetup, ValidatorSetup, make_nodes,
     },
     service::Config,
 };
@@ -22,43 +14,22 @@ use fuel_core_client::client::{
     FuelClient,
     types::{
         TransactionStatus,
-        assemble_tx::{
-            ChangePolicy,
-            RequiredBalance,
-        },
+        assemble_tx::{ChangePolicy, RequiredBalance},
     },
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
-    fuel_asm::{
-        GTFArgs,
-        RegId,
-        op,
-    },
+    fuel_asm::{GTFArgs, RegId, op},
     fuel_tx::{
-        Address,
-        AssetId,
-        Input,
-        Output,
-        Receipt,
-        TransactionBuilder,
-        TxPointer,
-        UniqueIdentifier,
-        UtxoId,
+        Address, AssetId, Input, Output, Receipt, TransactionBuilder, TxPointer,
+        UniqueIdentifier, UtxoId,
     },
     fuel_types::BlockHeight,
     fuel_vm::SecretKey,
 };
 use futures::StreamExt;
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
-use test_helpers::assemble_tx::{
-    AssembleAndRunTx,
-    SigningAccount,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
+use test_helpers::assemble_tx::{AssembleAndRunTx, SigningAccount};
 
 fn config_with_preconfirmations(block_production_period: Duration) -> Config {
     let mut config = Config::local_node();

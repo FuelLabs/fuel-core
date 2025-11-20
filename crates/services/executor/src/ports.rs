@@ -1,27 +1,16 @@
 use fuel_core_types::{
     blockchain::{
-        header::ConsensusParametersVersion,
-        primitives::DaBlockHeight,
+        header::ConsensusParametersVersion, primitives::DaBlockHeight,
         transaction::TransactionExt,
     },
     fuel_tx::{
-        self,
-        ConsensusParameters,
-        Input,
-        Output,
-        Transaction,
-        TxId,
-        UniqueIdentifier,
+        self, ConsensusParameters, Input, Output, Transaction, TxId, UniqueIdentifier,
         field::Expiration,
     },
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_types::{BlockHeight, ChainId},
     fuel_vm::checked_transaction::CheckedTransaction,
     services::{
-        executor::Result as ExecutorResult,
-        preconfirmation::Preconfirmation,
+        executor::Result as ExecutorResult, preconfirmation::Preconfirmation,
         relayer::Event,
     },
 };
@@ -29,10 +18,7 @@ use fuel_core_types::{
 use crate::executor::WaitNewTransactionsResult;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{
-    borrow::Cow,
-    vec::Vec,
-};
+use alloc::{borrow::Cow, vec::Vec};
 
 #[cfg(feature = "std")]
 use std::borrow::Cow;

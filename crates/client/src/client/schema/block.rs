@@ -1,23 +1,9 @@
-use super::{
-    Bytes32,
-    HexString,
-};
+use super::{Bytes32, HexString};
 use crate::client::schema::{
-    BlockId,
-    ConnectionArgsFields,
-    PageInfo,
-    Signature,
-    Tai64Timestamp,
-    TransactionId,
-    U16,
-    U32,
-    U64,
-    schema,
+    BlockId, ConnectionArgsFields, PageInfo, Signature, Tai64Timestamp, TransactionId,
+    U16, U32, U64, schema,
 };
-use fuel_core_types::{
-    fuel_crypto,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{fuel_crypto, fuel_types::BlockHeight};
 
 #[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BlockByIdArgs {

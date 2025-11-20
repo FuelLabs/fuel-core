@@ -1,26 +1,13 @@
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    StateWatcher,
-    TaskNextAction,
-    stream::{
-        BoxFuture,
-        BoxStream,
-    },
+    RunnableService, RunnableTask, StateWatcher, TaskNextAction,
+    stream::{BoxFuture, BoxStream},
 };
 use fuel_core_types::{
-    blockchain::header::BlockHeader,
-    services::block_importer::BlockImportInfo,
+    blockchain::header::BlockHeader, services::block_importer::BlockImportInfo,
 };
-use tokio::{
-    sync::watch,
-    time::MissedTickBehavior,
-};
+use tokio::{sync::watch, time::MissedTickBehavior};
 use tokio_stream::StreamExt;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -284,18 +271,12 @@ mod tests {
     use std::{
         collections::VecDeque,
         pin::Pin,
-        task::{
-            Context,
-            Poll,
-        },
+        task::{Context, Poll},
         time::Duration,
     };
 
     use fuel_core_services::stream::IntoBoxStream;
-    use fuel_core_types::{
-        fuel_types::BlockHeight,
-        tai64::Tai64,
-    };
+    use fuel_core_types::{fuel_types::BlockHeight, tai64::Tai64};
 
     struct MockStream<T> {
         items: VecDeque<T>,

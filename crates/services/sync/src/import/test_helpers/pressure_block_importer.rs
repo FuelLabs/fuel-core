@@ -1,15 +1,9 @@
 use crate::{
     import::test_helpers::SharedCounts,
-    ports::{
-        BlockImporterPort,
-        MockBlockImporterPort,
-    },
+    ports::{BlockImporterPort, MockBlockImporterPort},
 };
 use fuel_core_services::stream::BoxStream;
-use fuel_core_types::{
-    blockchain::SealedBlock,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::SealedBlock, fuel_types::BlockHeight};
 use std::time::Duration;
 
 pub struct PressureBlockImporter(MockBlockImporterPort, Duration, SharedCounts);

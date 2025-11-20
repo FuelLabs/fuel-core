@@ -1,38 +1,21 @@
-use fuel_core_storage::{
-    Result as StorageResult,
-    transactional::Changes,
-};
+use fuel_core_storage::{Result as StorageResult, transactional::Changes};
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-        },
-        header::{
-            ConsensusParametersVersion,
-            StateTransitionBytecodeVersion,
-        },
+        block::{Block, CompressedBlock},
+        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
         primitives::DaBlockHeight,
     },
-    fuel_tx::{
-        Bytes32,
-        Transaction,
-    },
+    fuel_tx::{Bytes32, Transaction},
     fuel_types::BlockHeight,
     services::{
         block_producer::Components,
         executor::{
-            DryRunResult,
-            Result as ExecutorResult,
-            StorageReadReplayEvent,
+            DryRunResult, Result as ExecutorResult, StorageReadReplayEvent,
             UncommittedResult,
         },
     },
 };
-use std::{
-    borrow::Cow,
-    future::Future,
-};
+use std::{borrow::Cow, future::Future};
 
 pub trait BlockProducerDatabase: Send + Sync {
     /// Returns the latest block height.

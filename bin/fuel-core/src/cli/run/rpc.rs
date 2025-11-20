@@ -1,7 +1,4 @@
-use clap::{
-    Args,
-    Subcommand,
-};
+use clap::{Args, Subcommand};
 use fuel_core_types::fuel_types::BlockHeight;
 use std::net;
 

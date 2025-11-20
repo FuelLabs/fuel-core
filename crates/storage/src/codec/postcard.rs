@@ -4,10 +4,7 @@
 //! The `serde` serialization and deserialization add their own overhead,
 //! so this codec shouldn't be used for simple types.
 
-use crate::codec::{
-    Decode,
-    Encode,
-};
+use crate::codec::{Decode, Encode};
 
 #[cfg(feature = "std")]
 use std::borrow::Cow;

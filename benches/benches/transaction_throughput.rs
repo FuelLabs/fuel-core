@@ -2,69 +2,30 @@
 //! `cargo bench --bench transaction_throughput -p fuel-core-benches`
 
 use criterion::{
-    BenchmarkGroup,
-    Criterion,
-    SamplingMode,
-    criterion_group,
-    criterion_main,
+    BenchmarkGroup, Criterion, SamplingMode, criterion_group, criterion_main,
     measurement::WallTime,
 };
 use ed25519_dalek::Signer;
 use fuel_core::{
-    service::{
-        DbType,
-        config::Trigger,
-    },
-    state::rocks_db::{
-        ColumnsPolicy,
-        DatabaseConfig,
-    },
+    service::{DbType, config::Trigger},
+    state::rocks_db::{ColumnsPolicy, DatabaseConfig},
 };
 use fuel_core_benches::*;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
-    fuel_asm::{
-        GMArgs,
-        GTFArgs,
-        RegId,
-        op,
-    },
+    fuel_asm::{GMArgs, GTFArgs, RegId, op},
     fuel_crypto::*,
-    fuel_tx::{
-        Finalizable,
-        Input,
-        Output,
-        Script,
-        Transaction,
-        TransactionBuilder,
-    },
-    fuel_types::{
-        AssetId,
-        Immediate12,
-        Immediate18,
-    },
+    fuel_tx::{Finalizable, Input, Output, Script, Transaction, TransactionBuilder},
+    fuel_types::{AssetId, Immediate12, Immediate18},
     fuel_vm::{
-        checked_transaction::{
-            CheckPredicateParams,
-            EstimatePredicates,
-        },
+        checked_transaction::{CheckPredicateParams, EstimatePredicates},
         interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
 };
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
-use std::{
-    sync::Arc,
-    time::Duration,
-};
-use test_helpers::builder::{
-    TestContext,
-    TestSetupBuilder,
-    local_chain_config,
-};
+use rand::{SeedableRng, rngs::StdRng};
+use std::{sync::Arc, time::Duration};
+use test_helpers::builder::{TestContext, TestSetupBuilder, local_chain_config};
 
 // Use Jemalloc during benchmarks
 #[global_allocator]

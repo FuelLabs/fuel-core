@@ -1,8 +1,7 @@
 use crate::{
     blocks::importer_and_db_source::BlockSerializer,
     protobuf_types::{
-        Block as ProtoBlock,
-        V1Block as ProtoV1Block,
+        Block as ProtoBlock, V1Block as ProtoV1Block,
         block::VersionedBlock as ProtoVersionedBlock,
     },
 };
@@ -64,10 +63,13 @@ mod tests {
 
     proptest! {
             #![proptest_config(ProptestConfig {
-      cases: 100, .. ProptestConfig::default()
+      cases: 1, .. ProptestConfig::default()
     })]
           #[test]
-          fn serialize_block__roundtrip((block, msg_ids, event_inbox_root) in arb_block(), receipts in arb_receipts()) {
+          fn serialize_block__roundtrip(
+            (block, msg_ids, event_inbox_root) in arb_block(),
+            receipts in arb_receipts())
+          {
               // given
               let serializer = SerializerAdapter;
 

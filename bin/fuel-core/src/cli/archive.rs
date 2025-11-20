@@ -1,7 +1,4 @@
-use clap::{
-    Parser,
-    Subcommand,
-};
+use clap::{Parser, Subcommand};
 use fuel_core::combined_database::CombinedDatabase;
 
 #[derive(Debug, Subcommand)]
@@ -90,26 +87,12 @@ mod archiver {
     use anyhow::anyhow;
     use rayon::prelude::*;
     use std::{
-        fs::{
-            self,
-            File,
-        },
-        io::{
-            BufReader,
-            BufWriter,
-            Write,
-        },
+        fs::{self, File},
+        io::{BufReader, BufWriter, Write},
         os::unix::fs::PermissionsExt,
-        path::{
-            Path,
-            PathBuf,
-        },
+        path::{Path, PathBuf},
     };
-    use tar::{
-        Archive,
-        Builder,
-        Header,
-    };
+    use tar::{Archive, Builder, Header};
 
     pub fn add_to_archive(
         src_dir: &Path,

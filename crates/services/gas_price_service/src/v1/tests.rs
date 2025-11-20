@@ -2,112 +2,55 @@
 use crate::{
     common::{
         fuel_core_storage_adapter::{
-            GasPriceSettings,
-            GasPriceSettingsProvider,
-            storage::{
-                GasPriceColumn,
-                GasPriceMetadata,
-            },
+            GasPriceSettings, GasPriceSettingsProvider,
+            storage::{GasPriceColumn, GasPriceMetadata},
         },
         l2_block_source::L2BlockSource,
         updater_metadata::UpdaterMetadata,
-        utils::{
-            BlockInfo,
-            Error as GasPriceError,
-            Result as GasPriceResult,
-        },
+        utils::{BlockInfo, Error as GasPriceError, Result as GasPriceResult},
     },
     ports::{
-        GasPriceData,
-        GasPriceServiceAtomicStorage,
-        GetLatestRecordedHeight,
-        GetMetadataStorage,
-        L2Data,
-        SetLatestRecordedHeight,
-        SetMetadataStorage,
+        GasPriceData, GasPriceServiceAtomicStorage, GetLatestRecordedHeight,
+        GetMetadataStorage, L2Data, SetLatestRecordedHeight, SetMetadataStorage,
     },
     sync_state::new_sync_state_channel,
     v1::{
         algorithm::SharedV1Algorithm,
         da_source_service::{
             DaBlockCosts,
-            service::{
-                DaBlockCostsSource,
-                new_da_service,
-            },
+            service::{DaBlockCostsSource, new_da_service},
         },
-        metadata::{
-            V1AlgorithmConfig,
-            V1Metadata,
-            updater_from_config,
-        },
-        service::{
-            GasPriceServiceV1,
-            LatestGasPrice,
-            initialize_algorithm,
-        },
+        metadata::{V1AlgorithmConfig, V1Metadata, updater_from_config},
+        service::{GasPriceServiceV1, LatestGasPrice, initialize_algorithm},
         uninitialized_task::{
-            UninitializedTask,
-            fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
+            UninitializedTask, fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
         },
     },
 };
-use anyhow::{
-    Result,
-    anyhow,
-};
+use anyhow::{Result, anyhow};
 use fuel_core_services::{
-    RunnableTask,
-    Service,
-    StateWatcher,
-    stream::{
-        BoxStream,
-        IntoBoxStream,
-    },
+    RunnableTask, Service, StateWatcher,
+    stream::{BoxStream, IntoBoxStream},
 };
 use fuel_core_storage::{
-    Result as StorageResult,
-    StorageAsMut,
+    Result as StorageResult, StorageAsMut,
     structured_storage::test::InMemoryStorage,
-    transactional::{
-        AtomicView,
-        IntoTransaction,
-        StorageTransaction,
-        WriteTransaction,
-    },
+    transactional::{AtomicView, IntoTransaction, StorageTransaction, WriteTransaction},
 };
 use fuel_core_types::{
-    blockchain::{
-        block::Block,
-        header::ConsensusParametersVersion,
-    },
-    fuel_tx::{
-        Mint,
-        Transaction,
-    },
+    blockchain::{block::Block, header::ConsensusParametersVersion},
+    fuel_tx::{Mint, Transaction},
     fuel_types::BlockHeight,
-    services::block_importer::{
-        ImportResult,
-        SharedImportResult,
-    },
+    services::block_importer::{ImportResult, SharedImportResult},
 };
-use fuel_gas_price_algorithm::v1::{
-    AlgorithmUpdaterV1,
-    Bytes,
-    Height,
-    UnrecordedBlocks,
-};
+use fuel_gas_price_algorithm::v1::{AlgorithmUpdaterV1, Bytes, Height, UnrecordedBlocks};
 use std::{
     collections::HashMap,
     num::NonZeroU64,
     ops::Deref,
     sync::{
-        Arc,
-        Mutex,
-        atomic::{
-            AtomicU32,
-            Ordering,
-        },
+        Arc, Mutex,
+        atomic::{AtomicU32, Ordering},
     },
     time::Duration,
 };

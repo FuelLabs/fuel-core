@@ -1,24 +1,13 @@
-use fuel_core::service::{
-    Config,
-    FuelService,
-};
+use fuel_core::service::{Config, FuelService};
 
 // Add methods on commands
 use fuel_core::service::config::Trigger;
-use fuel_core_chain_config::{
-    SnapshotMetadata,
-    SnapshotReader,
-};
+use fuel_core_chain_config::{SnapshotMetadata, SnapshotReader};
 use fuel_core_e2e_client::config::SuiteConfig;
 use fuel_core_types::{
-    blockchain::header::LATEST_STATE_TRANSITION_VERSION,
-    fuel_tx::ContractId,
+    blockchain::header::LATEST_STATE_TRANSITION_VERSION, fuel_tx::ContractId,
 };
-use std::{
-    fs,
-    str::FromStr,
-    time::Duration,
-};
+use std::{fs, str::FromStr, time::Duration};
 use tempfile::TempDir; // Used for writing assertions // Run programs
 
 // Use Jemalloc
@@ -42,10 +31,7 @@ async fn works_in_multinode_local_env() {
     use fuel_core_types::{
         fuel_crypto::{
             SecretKey,
-            rand::{
-                SeedableRng,
-                prelude::StdRng,
-            },
+            rand::{SeedableRng, prelude::StdRng},
         },
         fuel_tx::Input,
     };

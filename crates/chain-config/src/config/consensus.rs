@@ -1,15 +1,9 @@
 use alloc::collections::BTreeMap;
 use fuel_core_types::{
     fuel_tx::Input,
-    fuel_types::{
-        Address,
-        BlockHeight,
-    },
+    fuel_types::{Address, BlockHeight},
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 
 use crate as fuel_core_chain_config;
 use fuel_core_chain_config::default_consensus_dev_key;

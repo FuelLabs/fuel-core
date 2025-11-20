@@ -1,38 +1,18 @@
 use std::sync::Arc;
 
 use fuel_core_services::stream::BoxStream;
-use fuel_core_storage::{
-    PredicateStorageRequirements,
-    Result as StorageResult,
-};
+use fuel_core_storage::{PredicateStorageRequirements, Result as StorageResult};
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
-    entities::{
-        coins::coin::CompressedCoin,
-        relayer::message::Message,
-    },
+    entities::{coins::coin::CompressedCoin, relayer::message::Message},
     fuel_tx::{
-        BlobId,
-        Bytes32,
-        ConsensusParameters,
-        ContractId,
-        Transaction,
-        TxId,
-        UtxoId,
+        BlobId, Bytes32, ConsensusParameters, ContractId, Transaction, TxId, UtxoId,
     },
     fuel_types::Nonce,
     services::{
         block_importer::SharedImportResult,
-        p2p::{
-            GossipsubMessageAcceptance,
-            GossipsubMessageInfo,
-            NetworkData,
-            PeerId,
-        },
-        transaction_status::{
-            PreConfirmationStatus,
-            TransactionStatus,
-        },
+        p2p::{GossipsubMessageAcceptance, GossipsubMessageInfo, NetworkData, PeerId},
+        transaction_status::{PreConfirmationStatus, TransactionStatus},
     },
 };
 use tokio::sync::broadcast;

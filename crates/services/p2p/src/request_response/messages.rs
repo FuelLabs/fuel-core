@@ -2,19 +2,10 @@ use crate::service::TaskError;
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
     fuel_tx::TxId,
-    services::p2p::{
-        NetworkableTransactionPool,
-        Transactions,
-    },
+    services::p2p::{NetworkableTransactionPool, Transactions},
 };
-use libp2p::{
-    PeerId,
-    request_response::OutboundFailure,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use libp2p::{PeerId, request_response::OutboundFailure};
+use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use thiserror::Error;
 use tokio::sync::oneshot;

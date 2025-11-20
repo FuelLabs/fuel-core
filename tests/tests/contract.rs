@@ -1,23 +1,11 @@
-use crate::helpers::{
-    TestContext,
-    TestSetupBuilder,
-};
+use crate::helpers::{TestContext, TestSetupBuilder};
 use fuel_core::{
-    database::{
-        Database,
-        database_description::on_chain::OnChain,
-    },
-    service::{
-        Config,
-        FuelService,
-    },
+    database::{Database, database_description::on_chain::OnChain},
+    service::{Config, FuelService},
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{
-        PageDirection,
-        PaginationRequest,
-    },
+    pagination::{PageDirection, PaginationRequest},
     types::TransactionStatus,
 };
 use fuel_core_storage::tables::Coins;
@@ -25,18 +13,11 @@ use fuel_core_types::{
     fuel_asm::*,
     fuel_tx::*,
     fuel_types::canonical::Serialize,
-    fuel_vm::{
-        checked_transaction::IntoChecked,
-        *,
-    },
+    fuel_vm::{checked_transaction::IntoChecked, *},
 };
 use rand::SeedableRng;
 
-use fuel_core::chain_config::{
-    CoinConfig,
-    ContractConfig,
-    StateConfig,
-};
+use fuel_core::chain_config::{CoinConfig, ContractConfig, StateConfig};
 use rstest::rstest;
 
 const SEED: u64 = 2322;

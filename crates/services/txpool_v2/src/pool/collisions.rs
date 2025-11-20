@@ -1,8 +1,4 @@
-use crate::{
-    collision_manager::Collisions,
-    error::CollisionReason,
-    storage::Storage,
-};
+use crate::{collision_manager::Collisions, error::CollisionReason, storage::Storage};
 use fuel_core_types::services::txpool::PoolTransaction;
 use num_rational::Ratio;
 

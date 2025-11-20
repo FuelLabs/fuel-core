@@ -1,7 +1,6 @@
 use crate::service::adapters::fuel_gas_price_provider::tests::build_provider;
 use fuel_core_gas_price_service::{
-    common::gas_price_algorithm::GasPriceAlgorithm,
-    static_updater::StaticAlgorithm,
+    common::gas_price_algorithm::GasPriceAlgorithm, static_updater::StaticAlgorithm,
 };
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider;
 

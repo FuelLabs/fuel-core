@@ -1,50 +1,26 @@
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-        VecDeque,
-    },
+    collections::{HashMap, HashSet, VecDeque},
     time::SystemTime,
 };
 
 use fuel_core_types::{
     fuel_tx::{
-        ContractId,
-        Input,
-        Output,
-        TxId,
-        UtxoId,
+        ContractId, Input, Output, TxId, UtxoId,
         input::{
-            coin::{
-                CoinPredicate,
-                CoinSigned,
-            },
+            coin::{CoinPredicate, CoinSigned},
             contract::Contract,
             message::{
-                MessageCoinPredicate,
-                MessageCoinSigned,
-                MessageDataPredicate,
+                MessageCoinPredicate, MessageCoinSigned, MessageDataPredicate,
                 MessageDataSigned,
             },
         },
     },
-    services::txpool::{
-        ArcPoolTx,
-        PoolTransaction,
-    },
+    services::txpool::{ArcPoolTx, PoolTransaction},
 };
-use petgraph::{
-    graph::NodeIndex,
-    prelude::StableDiGraph,
-};
+use petgraph::{graph::NodeIndex, prelude::StableDiGraph};
 
 use crate::{
-    error::{
-        DependencyError,
-        Error,
-        InputValidationError,
-        InputValidationErrorType,
-    },
+    error::{DependencyError, Error, InputValidationError, InputValidationErrorType},
     extracted_outputs::ExtractedOutputs,
     pending_pool::MissingInput,
     ports::TxPoolPersistentStorage,
@@ -53,11 +29,7 @@ use crate::{
     storage::checked_collision::CheckedTransaction,
 };
 
-use super::{
-    RemovedTransactions,
-    Storage,
-    StorageData,
-};
+use super::{RemovedTransactions, Storage, StorageData};
 
 pub struct GraphStorage {
     /// The configuration of the graph
@@ -237,22 +209,22 @@ impl GraphStorage {
                 Output::Contract(_) => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedIoContractOutput,
-                    ))
+                    ));
                 }
                 Output::Change { .. } => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
-                    ))
+                    ));
                 }
                 Output::Variable { .. } => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedInputDependentOnChangeOrVariable,
-                    ))
+                    ));
                 }
                 Output::ContractCreated { .. } => {
                     return Err(Error::InputValidation(
                         InputValidationError::NotInsertedIoContractOutput,
-                    ))
+                    ));
                 }
             };
         }
@@ -488,7 +460,7 @@ impl Storage for GraphStorage {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
-                continue
+                continue;
             };
 
             node.number_dependents_in_chain =
@@ -580,7 +552,7 @@ impl Storage for GraphStorage {
                 // We got all dependencies from the graph it shouldn't be possible
                 debug_assert!(false, "Node with id {:?} not found", node_id);
                 tracing::warn!("Node with id {:?} not found", node_id);
-                continue
+                continue;
             };
 
             if dependency_node.number_dependents_in_chain
@@ -811,10 +783,7 @@ impl RatioTipGasSelectionAlgorithmStorage for GraphStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{
-        StorageData,
-        graph::GraphStorage,
-    };
+    use crate::storage::{StorageData, graph::GraphStorage};
     use std::ops::Add;
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -868,7 +837,7 @@ mod tests {
             visited: &mut HashMap<NodeIndex, HashSet<NodeIndex>>,
         ) -> HashSet<NodeIndex> {
             if let Some(sub_set) = visited.get(&root) {
-                return sub_set.clone()
+                return sub_set.clone();
             }
 
             let root_data = self.graph.node_weight(root).unwrap();

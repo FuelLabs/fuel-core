@@ -1,17 +1,8 @@
-use fuel_core_metrics::futures::{
-    FuturesMetrics,
-    metered_future::MeteredFuture,
-};
-use std::{
-    future::Future,
-    sync::Arc,
-};
+use fuel_core_metrics::futures::{FuturesMetrics, metered_future::MeteredFuture};
+use std::{future::Future, sync::Arc};
 use tokio::{
     runtime,
-    sync::{
-        OwnedSemaphorePermit,
-        Semaphore,
-    },
+    sync::{OwnedSemaphorePermit, Semaphore},
     task::JoinHandle,
 };
 
@@ -116,12 +107,7 @@ impl AsyncProcessor {
 mod tests {
     use super::*;
     use futures::future::join_all;
-    use std::{
-        collections::HashSet,
-        iter,
-        thread::sleep,
-        time::Duration,
-    };
+    use std::{collections::HashSet, iter, thread::sleep, time::Duration};
     use tokio::time::Instant;
 
     #[tokio::test]

@@ -1,37 +1,14 @@
 //! A simple contract that mints requested subtokens.
 
-use fuel_core_client::client::{
-    FuelClient,
-    types::TransactionStatus,
-};
+use fuel_core_client::client::{FuelClient, types::TransactionStatus};
 use fuel_core_types::{
-    fuel_asm::{
-        GTFArgs,
-        RegId,
-        op,
-    },
+    fuel_asm::{GTFArgs, RegId, op},
     fuel_tx::{
-        Bytes32,
-        ContractId,
-        Finalizable,
-        Input,
-        Output,
-        Receipt,
-        StorageSlot,
-        SubAssetId,
-        Transaction,
-        TransactionBuilder,
-        field::Outputs,
+        Bytes32, ContractId, Finalizable, Input, Output, Receipt, StorageSlot,
+        SubAssetId, Transaction, TransactionBuilder, field::Outputs,
     },
-    fuel_types::{
-        BlockHeight,
-        bytes::WORD_SIZE,
-        canonical::Serialize,
-    },
-    fuel_vm::{
-        Call,
-        SecretKey,
-    },
+    fuel_types::{BlockHeight, bytes::WORD_SIZE, canonical::Serialize},
+    fuel_vm::{Call, SecretKey},
 };
 use rand::Rng;
 

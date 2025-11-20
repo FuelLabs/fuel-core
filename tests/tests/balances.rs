@@ -1,40 +1,23 @@
 use fuel_core::{
     chain_config::{
-        CoinConfig,
-        MessageConfig,
-        StateConfig,
-        coin_config_helpers::CoinConfigGenerator,
+        CoinConfig, MessageConfig, StateConfig, coin_config_helpers::CoinConfigGenerator,
     },
-    service::{
-        Config,
-        FuelService,
-    },
+    service::{Config, FuelService},
     state::historical_rocksdb::StateRewindPolicy,
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{
-        PageDirection,
-        PaginationRequest,
-    },
-    types::primitives::{
-        Address,
-        AssetId,
-    },
+    pagination::{PageDirection, PaginationRequest},
+    types::primitives::{Address, AssetId},
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx::{
-        ContractIdExt,
-        SubAssetId,
-    },
+    fuel_tx::{ContractIdExt, SubAssetId},
 };
 use rand::SeedableRng;
 use test_helpers::{
-    assemble_tx::AssembleAndRunTx,
-    default_signing_wallet,
-    mint_contract,
+    assemble_tx::AssembleAndRunTx, default_signing_wallet, mint_contract,
 };
 
 const RETRYABLE: &[u8] = &[1];
@@ -297,10 +280,7 @@ async fn first_5_balances() {
 mod pagination {
     use fuel_core::{
         chain_config::{
-            ChainConfig,
-            CoinConfig,
-            MessageConfig,
-            StateConfig,
+            ChainConfig, CoinConfig, MessageConfig, StateConfig,
             coin_config_helpers::CoinConfigGenerator,
         },
         service::Config,
@@ -308,18 +288,11 @@ mod pagination {
     use fuel_core_bin::FuelService;
     use fuel_core_client::client::{
         FuelClient,
-        pagination::{
-            PageDirection,
-            PaginationRequest,
-        },
+        pagination::{PageDirection, PaginationRequest},
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
-        fuel_tx::{
-            Address,
-            AssetId,
-            ConsensusParameters,
-        },
+        fuel_tx::{Address, AssetId, ConsensusParameters},
     };
     use test_case::test_matrix;
 

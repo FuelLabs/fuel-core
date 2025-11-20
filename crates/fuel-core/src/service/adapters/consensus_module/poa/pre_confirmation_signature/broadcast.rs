@@ -1,17 +1,10 @@
 use crate::service::adapters::{
-    FuelBlockSigner,
-    P2PAdapter,
+    FuelBlockSigner, P2PAdapter,
     consensus_module::poa::pre_confirmation_signature::key_generator::Ed25519Key,
 };
 use fuel_core_poa::pre_confirmation_signature_service::{
-    broadcast::{
-        Broadcast,
-        PublicKey,
-    },
-    error::{
-        Error as PreConfServiceError,
-        Result as PreConfServiceResult,
-    },
+    broadcast::{Broadcast, PublicKey},
+    error::{Error as PreConfServiceError, Result as PreConfServiceResult},
     parent_signature::ParentSignature,
     signing_key::SigningKey,
 };
@@ -19,10 +12,8 @@ use fuel_core_types::{
     fuel_tx::Bytes64,
     services::{
         p2p::{
-            DelegatePreConfirmationKey,
-            PreConfirmationMessage,
-            SignedByBlockProducerDelegation,
-            SignedPreconfirmationByDelegate,
+            DelegatePreConfirmationKey, PreConfirmationMessage,
+            SignedByBlockProducerDelegation, SignedPreconfirmationByDelegate,
         },
         preconfirmation::Preconfirmations,
     },
@@ -79,26 +70,17 @@ impl Broadcast for P2PAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::adapters::{
-        P2PAdapter,
-        PeerReportConfig,
-    };
+    use crate::service::adapters::{P2PAdapter, PeerReportConfig};
     use fuel_core_p2p::{
         ports::P2PPreConfirmationMessage,
-        service::{
-            TaskRequest,
-            build_shared_state,
-        },
+        service::{TaskRequest, build_shared_state},
     };
     use fuel_core_types::{
         ed25519,
         ed25519_dalek::VerifyingKey,
         services::{
             p2p::ProtocolSignature,
-            preconfirmation::{
-                Preconfirmation,
-                PreconfirmationStatus,
-            },
+            preconfirmation::{Preconfirmation, PreconfirmationStatus},
         },
         tai64::Tai64,
     };

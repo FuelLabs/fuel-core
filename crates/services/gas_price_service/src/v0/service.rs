@@ -1,25 +1,14 @@
 use crate::{
     common::{
-        l2_block_source::L2BlockSource,
-        updater_metadata::UpdaterMetadata,
+        l2_block_source::L2BlockSource, updater_metadata::UpdaterMetadata,
         utils::BlockInfo,
     },
-    ports::{
-        GetMetadataStorage,
-        SetMetadataStorage,
-    },
+    ports::{GetMetadataStorage, SetMetadataStorage},
     v0::algorithm::SharedV0Algorithm,
 };
 use anyhow::anyhow;
-use fuel_core_services::{
-    RunnableTask,
-    StateWatcher,
-    TaskNextAction,
-};
-use fuel_gas_price_algorithm::v0::{
-    AlgorithmUpdaterV0,
-    AlgorithmV0,
-};
+use fuel_core_services::{RunnableTask, StateWatcher, TaskNextAction};
+use fuel_gas_price_algorithm::v0::{AlgorithmUpdaterV0, AlgorithmV0};
 use futures::FutureExt;
 use std::num::NonZeroU64;
 
@@ -174,25 +163,15 @@ mod tests {
         common::{
             l2_block_source::L2BlockSource,
             updater_metadata::UpdaterMetadata,
-            utils::{
-                BlockInfo,
-                Result as GasPriceResult,
-            },
+            utils::{BlockInfo, Result as GasPriceResult},
         },
-        ports::{
-            GetMetadataStorage,
-            SetMetadataStorage,
-        },
+        ports::{GetMetadataStorage, SetMetadataStorage},
         v0::{
-            metadata::V0AlgorithmConfig,
-            service::GasPriceServiceV0,
+            metadata::V0AlgorithmConfig, service::GasPriceServiceV0,
             uninitialized_task::initialize_algorithm,
         },
     };
-    use fuel_core_services::{
-        RunnableTask,
-        StateWatcher,
-    };
+    use fuel_core_services::{RunnableTask, StateWatcher};
     use fuel_core_types::fuel_types::BlockHeight;
     use std::sync::Arc;
     use tokio::sync::mpsc;

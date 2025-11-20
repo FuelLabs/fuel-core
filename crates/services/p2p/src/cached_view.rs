@@ -1,13 +1,9 @@
 use crate::ports::P2pDb;
 use fuel_core_metrics::p2p_metrics::{
-    increment_p2p_req_res_cache_hits,
-    increment_p2p_req_res_cache_misses,
+    increment_p2p_req_res_cache_hits, increment_p2p_req_res_cache_misses,
 };
 use fuel_core_storage::Result as StorageResult;
-use fuel_core_types::{
-    blockchain::SealedBlockHeader,
-    services::p2p::Transactions,
-};
+use fuel_core_types::{blockchain::SealedBlockHeader, services::p2p::Transactions};
 use quick_cache::sync::Cache;
 use std::ops::Range;
 

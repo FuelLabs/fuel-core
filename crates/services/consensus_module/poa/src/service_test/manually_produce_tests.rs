@@ -1,8 +1,5 @@
 use crate::service::Mode;
-use fuel_core_types::{
-    blockchain::block::Block,
-    tai64::Tai64,
-};
+use fuel_core_types::{blockchain::block::Block, tai64::Tai64};
 use test_case::test_case;
 
 use super::*;

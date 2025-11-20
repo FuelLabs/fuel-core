@@ -1,31 +1,13 @@
 use fuel_core_storage::{
-    Error as StorageError,
-    Mappable,
-    MerkleRoot,
-    MerkleRootStorage,
-    PredicateStorageRequirements,
-    Result as StorageResult,
-    StorageAsRef,
-    StorageInspect,
-    StorageRead,
-    StorageSize,
-    iter::{
-        BoxedIter,
-        IterDirection,
-        IterableStore,
-    },
-    kv_store::{
-        KVItem,
-        KeyValueInspect,
-        Value,
-    },
+    Error as StorageError, Mappable, MerkleRoot, MerkleRootStorage,
+    PredicateStorageRequirements, Result as StorageResult, StorageAsRef, StorageInspect,
+    StorageRead, StorageSize,
+    iter::{BoxedIter, IterDirection, IterableStore},
+    kv_store::{KVItem, KeyValueInspect, Value},
     structured_storage::StructuredStorage,
     tables::BlobData,
 };
-use std::{
-    borrow::Cow,
-    fmt::Debug,
-};
+use std::{borrow::Cow, fmt::Debug};
 
 #[derive(Debug, Clone)]
 pub struct GenericDatabase<Storage, Metadata> {

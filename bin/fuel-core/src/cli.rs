@@ -1,26 +1,9 @@
 use clap::Parser;
-use fuel_core::{
-    ShutdownListener,
-    upgradable_executor,
-};
-use fuel_core_chain_config::{
-    ChainConfig,
-    Owner,
-    SnapshotReader,
-    StateConfig,
-};
+use fuel_core::{ShutdownListener, upgradable_executor};
+use fuel_core_chain_config::{ChainConfig, Owner, SnapshotReader, StateConfig};
 use fuel_core_types::fuel_tx::Address;
-use std::{
-    env,
-    path::PathBuf,
-    str::FromStr,
-};
-use tracing_subscriber::{
-    Layer,
-    filter::EnvFilter,
-    layer::SubscriberExt,
-    registry,
-};
+use std::{env, path::PathBuf, str::FromStr};
+use tracing_subscriber::{Layer, filter::EnvFilter, layer::SubscriberExt, registry};
 
 #[cfg(feature = "env")]
 use dotenvy::dotenv;
@@ -198,10 +181,7 @@ mod tests {
     use fuel_core_types::fuel_types::ContractId;
     use std::path::PathBuf;
 
-    use crate::cli::{
-        Fuel,
-        snapshot,
-    };
+    use crate::cli::{Fuel, snapshot};
 
     use super::Opt;
 

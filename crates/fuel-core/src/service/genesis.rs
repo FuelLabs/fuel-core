@@ -1,15 +1,9 @@
 use self::importer::SnapshotImporter;
 use crate::{
-    combined_database::{
-        CombinedDatabase,
-        CombinedGenesisDatabase,
-    },
+    combined_database::{CombinedDatabase, CombinedGenesisDatabase},
     database::{
         Database,
-        database_description::{
-            off_chain::OffChain,
-            on_chain::OnChain,
-        },
+        database_description::{off_chain::OffChain, on_chain::OnChain},
         genesis_progress::GenesisMetadata,
     },
     service::config::Config,
@@ -21,32 +15,19 @@ use fuel_core_storage::{
     iter::IteratorOverTable,
     not_found,
     tables::{
-        ConsensusParametersVersions,
-        StateTransitionBytecodeVersions,
-        UploadedBytecodes,
+        ConsensusParametersVersions, StateTransitionBytecodeVersions, UploadedBytecodes,
     },
-    transactional::{
-        AtomicView,
-        Changes,
-        IntoTransaction,
-        ReadTransaction,
-    },
+    transactional::{AtomicView, Changes, IntoTransaction, ReadTransaction},
 };
 use fuel_core_types::{
     self,
     blockchain::{
         SealedBlock,
         block::Block,
-        consensus::{
-            Consensus,
-            Genesis,
-        },
+        consensus::{Consensus, Genesis},
         header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            ConsensusParametersVersion,
-            PartialBlockHeader,
-            StateTransitionBytecodeVersion,
+            ApplicationHeader, ConsensusHeader, ConsensusParametersVersion,
+            PartialBlockHeader, StateTransitionBytecodeVersion,
         },
         primitives::Empty,
     },
@@ -54,8 +35,7 @@ use fuel_core_types::{
     fuel_types::Bytes32,
     fuel_vm::UploadedBytecode,
     services::block_importer::{
-        ImportResult,
-        UncommittedResult as UncommittedImportResult,
+        ImportResult, UncommittedResult as UncommittedImportResult,
     },
 };
 use itertools::Itertools;
@@ -178,7 +158,7 @@ pub async fn recover_missing_tables_from_genesis_state_config(
     //  It is safe to initialize some missing data, for now, but it can change in the future.
     //  We plan to remove this code later, see: https://github.com/FuelLabs/fuel-core/issues/2326
     let Err(off_chain) = db.off_chain().clone().into_genesis() else {
-        return Ok(())
+        return Ok(());
     };
 
     let genesis_db = CombinedGenesisDatabase {
@@ -206,10 +186,7 @@ pub async fn execute_and_commit_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
-    use fuel_core_importer::ports::{
-        MockBlockVerifier,
-        MockValidator,
-    };
+    use fuel_core_importer::ports::{MockBlockVerifier, MockValidator};
 
     let result = execute_genesis_block(StateWatcher::default(), config, db).await?;
     let importer = fuel_core_importer::Importer::new(
@@ -316,51 +293,26 @@ mod tests {
         ShutdownListener,
         combined_database::CombinedDatabase,
         database::Database,
-        service::{
-            FuelService,
-            config::Config,
-        },
+        service::{FuelService, config::Config},
     };
     use fuel_core_chain_config::{
-        BlobConfig,
-        CoinConfig,
-        ContractConfig,
-        LastBlockConfig,
-        MessageConfig,
-        Randomize,
-        StateConfig,
+        BlobConfig, CoinConfig, ContractConfig, LastBlockConfig, MessageConfig,
+        Randomize, StateConfig,
     };
     use fuel_core_producer::ports::BlockProducerDatabase;
     use fuel_core_storage::{
-        ContractsStateData,
-        StorageAsRef,
-        tables::{
-            Coins,
-            ContractsAssets,
-            ContractsState,
-        },
-        transactional::{
-            AtomicView,
-            HistoricalView,
-        },
+        ContractsStateData, StorageAsRef,
+        tables::{Coins, ContractsAssets, ContractsState},
+        transactional::{AtomicView, HistoricalView},
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::coins::coin::Coin,
         fuel_tx::UtxoId,
-        fuel_types::{
-            Address,
-            AssetId,
-            BlockHeight,
-        },
+        fuel_types::{Address, AssetId, BlockHeight},
     };
     use itertools::Itertools;
-    use rand::{
-        Rng,
-        RngCore,
-        SeedableRng,
-        rngs::StdRng,
-    };
+    use rand::{Rng, RngCore, SeedableRng, rngs::StdRng};
     use std::vec;
 
     #[tokio::test]

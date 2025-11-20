@@ -4,33 +4,19 @@ use crate::{
         coins::OwnedCoins,
         messages::OwnedMessageIds,
         transactions::{
-            OwnedTransactionIndexKey,
-            OwnedTransactions,
-            TransactionStatuses,
+            OwnedTransactionIndexKey, OwnedTransactions, TransactionStatuses,
         },
     },
     graphql_api::ports::worker::OffChainDatabaseTransaction,
 };
 use fuel_core_storage::{
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
+    Error as StorageError, Result as StorageResult, StorageAsMut, StorageAsRef,
     StorageMutate,
-    kv_store::{
-        KeyValueInspect,
-        StorageColumn,
-    },
-    transactional::{
-        Modifiable,
-        StorageTransaction,
-    },
+    kv_store::{KeyValueInspect, StorageColumn},
+    transactional::{Modifiable, StorageTransaction},
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Address,
-        Bytes32,
-    },
+    fuel_tx::{Address, Bytes32},
     fuel_types::BlockHeight,
     services::transaction_status::TransactionExecutionStatus,
 };

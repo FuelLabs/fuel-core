@@ -1,8 +1,7 @@
 use fuel_core_poa::{
     ports::GetTime,
     pre_confirmation_signature_service::{
-        error::Result as PoAResult,
-        trigger::KeyRotationTrigger,
+        error::Result as PoAResult, trigger::KeyRotationTrigger,
     },
 };
 use fuel_core_types::tai64::Tai64;

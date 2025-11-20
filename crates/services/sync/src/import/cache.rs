@@ -1,17 +1,11 @@
 use std::{
     collections::BTreeMap,
     num::NonZeroU32,
-    ops::{
-        Range,
-        RangeInclusive,
-    },
+    ops::{Range, RangeInclusive},
 };
 
 use fuel_core_services::SharedMutex;
-use fuel_core_types::blockchain::{
-    SealedBlock,
-    SealedBlockHeader,
-};
+use fuel_core_types::blockchain::{SealedBlock, SealedBlockHeader};
 
 use super::Batch;
 
@@ -222,25 +216,15 @@ impl Cache {
 mod tests {
     use crate::import::{
         Batch,
-        cache::{
-            Cache,
-            CachedDataBatch,
-        },
+        cache::{Cache, CachedDataBatch},
     };
     use fuel_core_types::{
-        blockchain::{
-            block::Block,
-            consensus::Sealed,
-            header::BlockHeader,
-        },
+        blockchain::{block::Block, consensus::Sealed, header::BlockHeader},
         fuel_tx::Bytes32,
         tai64::Tai64,
     };
     use futures::StreamExt;
-    use std::{
-        num::NonZeroU32,
-        ops::RangeInclusive,
-    };
+    use std::{num::NonZeroU32, ops::RangeInclusive};
     use test_case::test_case;
 
     fn create_header(height: u32) -> Sealed<BlockHeader> {

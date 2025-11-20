@@ -1,8 +1,5 @@
 use crate::client::schema;
-use fuel_core_types::{
-    fuel_tx::SubAssetId,
-    fuel_types::ContractId,
-};
+use fuel_core_types::{fuel_tx::SubAssetId, fuel_types::ContractId};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AssetDetail {

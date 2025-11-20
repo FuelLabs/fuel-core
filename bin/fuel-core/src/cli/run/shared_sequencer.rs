@@ -42,7 +42,7 @@ impl TryFrom<Args> for fuel_core_shared_sequencer::Config {
             _ => {
                 return Err(anyhow::anyhow!(
                     "Both tendermint and blockchain API must be set or unset"
-                ))
+                ));
             }
         };
 

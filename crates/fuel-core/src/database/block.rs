@@ -1,35 +1,19 @@
 use crate::{
-    database::{
-        OffChainIterableKeyValueView,
-        OnChainIterableKeyValueView,
-    },
+    database::{OffChainIterableKeyValueView, OnChainIterableKeyValueView},
     fuel_core_graphql_api::storage::blocks::FuelBlockIdsToHeights,
 };
 use fuel_core_storage::{
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsRef,
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
+    Error as StorageError, Result as StorageResult, StorageAsRef,
+    iter::{IterDirection, IteratorOverTable},
     not_found,
     tables::{
-        FuelBlocks,
-        Transactions,
-        merkle::{
-            DenseMetadataKey,
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
-        },
+        FuelBlocks, Transactions,
+        merkle::{DenseMetadataKey, FuelBlockMerkleData, FuelBlockMerkleMetadata},
     },
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-        },
+        block::{Block, CompressedBlock},
         primitives::BlockId,
     },
     entities::relayer::message::MerkleProof,
@@ -133,17 +117,11 @@ impl OnChainIterableKeyValueView {
 mod tests {
     use super::*;
     use crate::database::Database;
-    use fuel_core_storage::{
-        StorageMutate,
-        transactional::AtomicView,
-    };
+    use fuel_core_storage::{StorageMutate, transactional::AtomicView};
     use fuel_core_types::{
         blockchain::{
             block::PartialFuelBlock,
-            header::{
-                ConsensusHeader,
-                PartialBlockHeader,
-            },
+            header::{ConsensusHeader, PartialBlockHeader},
             primitives::Empty,
         },
         fuel_types::ChainId,

@@ -1,9 +1,6 @@
 use crate::ext;
 use fuel_core_executor::ports::RelayerPort;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    services::relayer::Event,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, services::relayer::Event};
 
 pub struct WasmRelayer;
 

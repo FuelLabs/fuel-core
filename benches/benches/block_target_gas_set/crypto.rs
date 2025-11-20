@@ -1,11 +1,5 @@
-use crate::{
-    utils::arb_dependent_cost_values,
-    *,
-};
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
+use crate::{utils::arb_dependent_cost_values, *};
+use rand::{SeedableRng, rngs::StdRng};
 
 // ECK1: Secp251k1 signature recovery
 // ECR1: Secp256r1 signature recovery

@@ -1,29 +1,15 @@
 use fuel_core_chain_config::{
-    AddTable,
-    AsTable,
-    StateConfig,
-    StateConfigBuilder,
-    TableEntry,
+    AddTable, AsTable, StateConfig, StateConfigBuilder, TableEntry,
 };
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{
-        postcard::Postcard,
-        primitive::Primitive,
-        raw::Raw,
-    },
+    codec::{postcard::Postcard, primitive::Primitive, raw::Raw},
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        consensus::Consensus,
-    },
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    blockchain::{block::CompressedBlock, consensus::Consensus},
+    fuel_tx::{Transaction, TxId},
     fuel_types::BlockHeight,
 };
 

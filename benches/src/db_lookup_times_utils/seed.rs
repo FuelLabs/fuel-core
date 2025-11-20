@@ -1,37 +1,18 @@
 use crate::db_lookup_times_utils::{
-    full_block_table::{
-        BenchDatabase,
-        BenchDbColumn,
-    },
+    full_block_table::{BenchDatabase, BenchDbColumn},
     utils::Result as DbLookupBenchResult,
 };
 use anyhow::anyhow;
 use fuel_core::state::rocks_db::RocksDb;
-use fuel_core_storage::kv_store::{
-    KeyValueMutate,
-    Value,
-};
+use fuel_core_storage::kv_store::{KeyValueMutate, Value};
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            PartialFuelBlock,
-        },
-        header::{
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
+        block::{Block, PartialFuelBlock},
+        header::{ConsensusHeader, PartialBlockHeader},
         primitives::Empty,
     },
-    fuel_tx::{
-        Bytes32,
-        Transaction,
-        UniqueIdentifier,
-    },
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_tx::{Bytes32, Transaction, UniqueIdentifier},
+    fuel_types::{BlockHeight, ChainId},
 };
 use itertools::Itertools;
 

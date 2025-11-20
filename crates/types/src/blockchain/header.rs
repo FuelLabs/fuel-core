@@ -9,22 +9,13 @@ pub mod v2;
 
 use super::{
     consensus::ConsensusType,
-    primitives::{
-        BlockId,
-        DaBlockHeight,
-        Empty,
-    },
+    primitives::{BlockId, DaBlockHeight, Empty},
 };
 use crate::{
     fuel_merkle,
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::Transaction,
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-        MessageId,
-        canonical::Serialize,
-    },
+    fuel_types::{BlockHeight, Bytes32, MessageId, canonical::Serialize},
 };
 use educe::Educe;
 use tai64::Tai64;

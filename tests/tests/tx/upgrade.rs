@@ -1,32 +1,17 @@
 use fuel_core_client::client::types::TransactionStatus;
 use fuel_core_types::{
     fuel_tx::{
-        AssetId,
-        Bytes32,
-        GasCosts,
-        Input,
-        Receipt,
-        Transaction,
-        UpgradePurpose,
-        UploadSubsection,
-        policies::Policies,
+        AssetId, Bytes32, GasCosts, Input, Receipt, Transaction, UpgradePurpose,
+        UploadSubsection, policies::Policies,
     },
     fuel_vm::UploadedBytecode,
 };
 use fuel_core_upgradable_executor::WASM_BYTECODE;
 use itertools::Itertools;
-use rand::{
-    Rng,
-    rngs::StdRng,
-};
+use rand::{Rng, rngs::StdRng};
 use test_helpers::{
-    builder::{
-        TestContext,
-        TestSetupBuilder,
-    },
-    predicate,
-    transactions_from_subsections,
-    valid_input,
+    builder::{TestContext, TestSetupBuilder},
+    predicate, transactions_from_subsections, valid_input,
 };
 
 const SUBSECTION_SIZE: usize = 64 * 1024;
@@ -338,7 +323,7 @@ fn used_gas(receipts: Vec<Receipt>) -> u64 {
     for r in receipts {
         if let Receipt::ScriptResult { gas_used, .. } = r {
             used_gas = gas_used;
-            break
+            break;
         }
     }
     used_gas

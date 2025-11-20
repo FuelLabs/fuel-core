@@ -1,42 +1,21 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use fuel_core_types::{
-    fuel_tx::Bytes32,
-    services::transaction_status::TransactionStatus,
+    fuel_tx::Bytes32, services::transaction_status::TransactionStatus,
 };
 use parking_lot::lock_api::Mutex;
 use test_strategy::proptest;
 
 use crate::{
     tests::utils::{
-        SenderData,
-        box_senders,
-        construct_senders,
-        senders_strategy_any,
+        SenderData, box_senders, construct_senders, senders_strategy_any,
         tx_update_strategy,
     },
-    tx_status_stream::{
-        State,
-        TxStatusMessage,
-        TxUpdate,
-    },
-    update_sender::{
-        MockSendStatus,
-        SendError,
-        SendStatus,
-        Sender,
-        UpdateSender,
-    },
+    tx_status_stream::{State, TxStatusMessage, TxUpdate},
+    update_sender::{MockSendStatus, SendError, SendStatus, Sender, UpdateSender},
 };
 
-use super::tests_e2e::{
-    StateTransitions,
-    apply_tx_state_transition,
-};
+use super::tests_e2e::{StateTransitions, apply_tx_state_transition};
 
 /// Model the function that sends a message to the receiver.
 pub(super) fn validate_send(
@@ -154,7 +133,7 @@ fn test_send_inner(
 
                 // If the new state is closed, skip validation
                 if matches!(new_state, State::Closed) {
-                    continue
+                    continue;
                 }
 
                 // Verify the new state of the sender

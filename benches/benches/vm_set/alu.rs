@@ -1,30 +1,16 @@
 use super::run_group_ref;
 
-use criterion::{
-    Criterion,
-    Throughput,
-};
+use criterion::{Criterion, Throughput};
 use ethnum::U256;
 use fuel_core_benches::*;
 use fuel_core_types::fuel_asm::*;
 
-use crate::utils::{
-    linear_short,
-    set_full_word,
-};
+use crate::utils::{linear_short, set_full_word};
 use fuel_core_types::fuel_asm::wideint::{
-    CompareArgs,
-    CompareMode,
-    DivArgs,
-    MathArgs,
-    MathOp,
-    MulArgs,
+    CompareArgs, CompareMode, DivArgs, MathArgs, MathOp, MulArgs,
 };
 
-use super::utils::{
-    make_u128,
-    make_u256,
-};
+use super::utils::{make_u128, make_u256};
 
 pub fn run(c: &mut Criterion) {
     let linear_short = linear_short();

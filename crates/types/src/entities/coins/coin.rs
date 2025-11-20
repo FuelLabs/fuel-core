@@ -3,18 +3,10 @@
 use crate::{
     fuel_asm::Word,
     fuel_tx::{
-        Input,
-        TxPointer,
-        UtxoId,
-        input::coin::{
-            CoinPredicate,
-            CoinSigned,
-        },
+        Input, TxPointer, UtxoId,
+        input::coin::{CoinPredicate, CoinSigned},
     },
-    fuel_types::{
-        Address,
-        AssetId,
-    },
+    fuel_types::{Address, AssetId},
 };
 
 /// Represents the user's coin for some asset with `asset_id`.

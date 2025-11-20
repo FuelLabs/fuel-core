@@ -1,27 +1,16 @@
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
-    TaskNextAction,
+    RunnableService, RunnableTask, ServiceRunner, StateWatcher, TaskNextAction,
 };
 use std::{
     sync::{
-        Arc,
-        Mutex,
-        atomic::{
-            AtomicU32,
-            Ordering,
-        },
+        Arc, Mutex,
+        atomic::{AtomicU32, Ordering},
     },
     time::Duration,
 };
 use tokio::{
     sync::broadcast::Sender,
-    time::{
-        Interval,
-        interval,
-    },
+    time::{Interval, interval},
 };
 
 use crate::v1::da_source_service::DaBlockCosts;

@@ -1,21 +1,10 @@
 #![allow(non_snake_case)]
 
 use crate::helpers::TestSetupBuilder;
-use fuel_core::chain_config::{
-    self,
-    CoinConfig,
-    SnapshotWriter,
-};
+use fuel_core::chain_config::{self, CoinConfig, SnapshotWriter};
 use fuel_core_trace::subscriber::capture_logs_async;
-use fuel_core_types::{
-    fuel_asm::*,
-    fuel_tx::*,
-};
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
+use fuel_core_types::{fuel_asm::*, fuel_tx::*};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use test_helpers::fuel_core_driver::FuelCoreDriver;
 
 const SYSCALL_LOG: u64 = 1000;

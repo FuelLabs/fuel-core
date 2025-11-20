@@ -1,66 +1,33 @@
 use crate::{
     database::OnChainIterableKeyValueView,
     service::adapters::{
-        BlockImporterAdapter,
-        ChainStateInfoProvider,
-        P2PAdapter,
-        PreconfirmationSender,
+        BlockImporterAdapter, ChainStateInfoProvider, P2PAdapter, PreconfirmationSender,
         StaticGasPrice,
     },
 };
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
-    Result as StorageResult,
-    StorageAsRef,
-    tables::{
-        Coins,
-        ContractsRawCode,
-        Messages,
-        ProcessedTransactions,
-    },
+    Result as StorageResult, StorageAsRef,
+    tables::{Coins, ContractsRawCode, Messages, ProcessedTransactions},
 };
 use fuel_core_txpool::ports::{
-    BlockImporter,
-    ChainStateInfoProvider as ChainStateInfoProviderTrait,
-    GasPriceProvider,
-    TxStatusManager,
+    BlockImporter, ChainStateInfoProvider as ChainStateInfoProviderTrait,
+    GasPriceProvider, TxStatusManager,
 };
 use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
-    entities::{
-        coins::coin::CompressedCoin,
-        relayer::message::Message,
-    },
-    fuel_tx::{
-        BlobId,
-        ConsensusParameters,
-        Transaction,
-        TxId,
-        UtxoId,
-    },
-    fuel_types::{
-        ContractId,
-        Nonce,
-    },
+    entities::{coins::coin::CompressedCoin, relayer::message::Message},
+    fuel_tx::{BlobId, ConsensusParameters, Transaction, TxId, UtxoId},
+    fuel_types::{ContractId, Nonce},
     fuel_vm::BlobData,
     services::{
         block_importer::SharedImportResult,
         p2p::{
-            GossipsubMessageAcceptance,
-            GossipsubMessageInfo,
-            PeerId,
+            GossipsubMessageAcceptance, GossipsubMessageInfo, PeerId,
             TransactionGossipData,
         },
-        preconfirmation::{
-            Preconfirmation,
-            PreconfirmationStatus,
-            SqueezedOut,
-        },
-        transaction_status::{
-            PreConfirmationStatus,
-            TransactionStatus,
-            statuses,
-        },
+        preconfirmation::{Preconfirmation, PreconfirmationStatus, SqueezedOut},
+        transaction_status::{PreConfirmationStatus, TransactionStatus, statuses},
     },
 };
 use std::sync::Arc;
@@ -101,10 +68,7 @@ impl fuel_core_txpool::ports::P2PSubscriptions for P2PAdapter {
     type GossipedTransaction = TransactionGossipData;
 
     fn gossiped_transaction_events(&self) -> BoxStream<Self::GossipedTransaction> {
-        use tokio_stream::{
-            StreamExt,
-            wrappers::BroadcastStream,
-        };
+        use tokio_stream::{StreamExt, wrappers::BroadcastStream};
         match &self.service {
             Some(service) => Box::pin(
                 BroadcastStream::new(service.subscribe_tx())
@@ -117,10 +81,7 @@ impl fuel_core_txpool::ports::P2PSubscriptions for P2PAdapter {
     }
 
     fn subscribe_new_peers(&self) -> BoxStream<PeerId> {
-        use tokio_stream::{
-            StreamExt,
-            wrappers::BroadcastStream,
-        };
+        use tokio_stream::{StreamExt, wrappers::BroadcastStream};
         match &self.service {
             Some(service) => Box::pin(
                 BroadcastStream::new(service.subscribe_new_peers())

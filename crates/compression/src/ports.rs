@@ -2,13 +2,7 @@
 
 use fuel_core_types::{
     fuel_compression::RegistryKey,
-    fuel_tx::{
-        Address,
-        AssetId,
-        CompressedUtxoId,
-        UtxoId,
-        Word,
-    },
+    fuel_tx::{Address, AssetId, CompressedUtxoId, UtxoId, Word},
     fuel_types::Nonce,
     tai64::Tai64,
 };

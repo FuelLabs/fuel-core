@@ -1,21 +1,11 @@
 //! The module containing all types related to the preconfirmation service.
 
-use crate::fuel_tx::{
-    Receipt,
-    TxId,
-    TxPointer,
-    UtxoId,
-};
+use crate::fuel_tx::{Receipt, TxId, TxPointer, UtxoId};
 use fuel_vm_private::fuel_tx::Output;
 use tai64::Tai64;
 
 #[cfg(not(feature = "std"))]
-use alloc::{
-    format,
-    string::String,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{format, string::String, sync::Arc, vec::Vec};
 #[cfg(feature = "std")]
 use std::sync::Arc;
 

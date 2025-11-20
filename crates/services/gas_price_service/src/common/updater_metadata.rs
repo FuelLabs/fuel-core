@@ -1,13 +1,6 @@
-use crate::{
-    common::utils::Error,
-    v0::metadata::V0Metadata,
-    v1::metadata::V1Metadata,
-};
+use crate::{common::utils::Error, v0::metadata::V0Metadata, v1::metadata::V1Metadata};
 use fuel_core_types::fuel_types::BlockHeight;
-use fuel_gas_price_algorithm::{
-    v0::AlgorithmUpdaterV0,
-    v1::AlgorithmUpdaterV1,
-};
+use fuel_gas_price_algorithm::{v0::AlgorithmUpdaterV0, v1::AlgorithmUpdaterV1};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum UpdaterMetadata {

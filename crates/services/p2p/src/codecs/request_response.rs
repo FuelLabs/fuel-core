@@ -1,29 +1,15 @@
 use std::io;
 
 use crate::request_response::{
-    messages::{
-        RequestMessage,
-        V1ResponseMessage,
-        V2ResponseMessage,
-    },
+    messages::{RequestMessage, V1ResponseMessage, V2ResponseMessage},
     protocols::RequestResponseProtocol,
 };
 use async_trait::async_trait;
-use futures::{
-    AsyncRead,
-    AsyncReadExt,
-    AsyncWrite,
-    AsyncWriteExt,
-};
+use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use libp2p::request_response;
 use strum::IntoEnumIterator as _;
 
-use super::{
-    Decode,
-    Encode,
-    Encoder,
-    RequestResponseProtocols,
-};
+use super::{Decode, Encode, Encoder, RequestResponseProtocols};
 
 #[derive(Debug, Clone)]
 pub struct RequestResponseMessageHandler<Codec> {

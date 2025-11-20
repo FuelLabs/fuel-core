@@ -1,18 +1,12 @@
 use std::sync::Arc;
 
 use fuel_core_types::{
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::{Transaction, TxId},
     services::txpool::ArcPoolTx,
 };
 use tokio::sync::{
     mpsc,
-    oneshot::{
-        self,
-        error::TryRecvError,
-    },
+    oneshot::{self, error::TryRecvError},
     watch,
 };
 
@@ -20,14 +14,8 @@ use crate::{
     Constraints,
     error::Error,
     pool::TxPoolStats,
-    pool_worker::{
-        self,
-        PoolReadRequest,
-    },
-    service::{
-        TxInfo,
-        WritePoolRequest,
-    },
+    pool_worker::{self, PoolReadRequest},
+    service::{TxInfo, WritePoolRequest},
 };
 
 #[derive(Clone)]

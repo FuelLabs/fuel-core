@@ -5,14 +5,8 @@
 use test_strategy::proptest;
 
 use crate::{
-    tests::{
-        tests_e2e::apply_tx_state_transition,
-        utils,
-    },
-    tx_status_stream::{
-        State,
-        TxUpdateStream,
-    },
+    tests::{tests_e2e::apply_tx_state_transition, utils},
+    tx_status_stream::{State, TxUpdateStream},
 };
 
 use super::tests_e2e::StateTransitions;

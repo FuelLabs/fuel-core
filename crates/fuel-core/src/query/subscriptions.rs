@@ -2,14 +2,9 @@ use crate::schema::tx::types::TransactionStatus as ApiTxStatus;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
-    fuel_types::Bytes32,
-    services::transaction_status::TransactionStatus,
+    fuel_types::Bytes32, services::transaction_status::TransactionStatus,
 };
-use futures::{
-    Stream,
-    StreamExt,
-    stream::BoxStream,
-};
+use futures::{Stream, StreamExt, stream::BoxStream};
 
 #[cfg(test)]
 mod test;

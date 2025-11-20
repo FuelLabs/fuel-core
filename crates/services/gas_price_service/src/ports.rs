@@ -1,15 +1,10 @@
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    blockchain::block::Block,
-    fuel_tx::Transaction,
-    fuel_types::BlockHeight,
+    blockchain::block::Block, fuel_tx::Transaction, fuel_types::BlockHeight,
 };
 
 use crate::{
-    common::{
-        updater_metadata::UpdaterMetadata,
-        utils::Result,
-    },
+    common::{updater_metadata::UpdaterMetadata, utils::Result},
     v1::uninitialized_task::fuel_storage_unrecorded_blocks::AsUnrecordedBlocks,
 };
 

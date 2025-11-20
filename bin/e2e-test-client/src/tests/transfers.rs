@@ -1,7 +1,4 @@
-use crate::test_context::{
-    BASE_AMOUNT,
-    TestContext,
-};
+use crate::test_context::{BASE_AMOUNT, TestContext};
 use libtest_mimic::Failed;
 use tokio::time::timeout;
 
@@ -13,7 +10,7 @@ pub async fn basic_transfer(ctx: &TestContext) -> Result<(), Failed> {
         .transfer(ctx.bob.address, 4 * BASE_AMOUNT, None)
         .await?;
     if !result.success {
-        return Err("transfer failed".into())
+        return Err("transfer failed".into());
     }
     // wait until bob sees the transaction
     timeout(
@@ -37,7 +34,7 @@ pub async fn transfer_back(ctx: &TestContext) -> Result<(), Failed> {
         .transfer(ctx.alice.address, 3 * BASE_AMOUNT, None)
         .await?;
     if !result.success {
-        return Err("transfer failed".into())
+        return Err("transfer failed".into());
     }
     // wait until alice sees the transaction
     timeout(
@@ -51,7 +48,7 @@ pub async fn transfer_back(ctx: &TestContext) -> Result<(), Failed> {
     // external activity on these wallets
     let received_transfer = ctx.alice.owns_coin(result.transferred_utxo).await?;
     if !received_transfer {
-        return Err("Alice failed to receive transfer".into())
+        return Err("Alice failed to receive transfer".into());
     }
 
     Ok(())

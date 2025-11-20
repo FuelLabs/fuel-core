@@ -1,19 +1,7 @@
 use crate::schema::scalars::{
-    Address,
-    AssetId,
-    Bytes32,
-    ContractId,
-    HexString,
-    Nonce,
-    TxPointer,
-    U16,
-    U64,
-    UtxoId,
+    Address, AssetId, Bytes32, ContractId, HexString, Nonce, TxPointer, U16, U64, UtxoId,
 };
-use async_graphql::{
-    Object,
-    Union,
-};
+use async_graphql::{Object, Union};
 use fuel_core_types::fuel_tx;
 
 #[derive(Union)]

@@ -1,102 +1,54 @@
-use alloy_primitives::{
-    IntoLogData,
-    U256,
-};
-use alloy_rpc_types_eth::{
-    BlockId,
-    BlockNumberOrTag,
-    Log,
-    SyncStatus,
-};
+use alloy_primitives::{IntoLogData, U256};
+use alloy_rpc_types_eth::{BlockId, BlockNumberOrTag, Log, SyncStatus};
 use clap::Parser;
 use fuel_core::{
     chain_config::Randomize,
-    coins_query::CoinsQueryError::{
-        self,
-        InsufficientCoins,
-    },
+    coins_query::CoinsQueryError::{self, InsufficientCoins},
     combined_database::CombinedDatabase,
     database::Database,
     fuel_core_graphql_api::storage::relayed_transactions::RelayedTransactionStatuses,
     relayer,
-    service::{
-        Config,
-        FuelService,
-    },
+    service::{Config, FuelService},
     state::{
         historical_rocksdb::StateRewindPolicy,
-        rocks_db::{
-            ColumnsPolicy,
-            DatabaseConfig,
-        },
+        rocks_db::{ColumnsPolicy, DatabaseConfig},
     },
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{
-        PageDirection,
-        PaginationRequest,
-    },
+    pagination::{PageDirection, PaginationRequest},
     types::{
-        CoinType,
-        RelayedTransactionStatus as ClientRelayedTransactionStatus,
+        CoinType, RelayedTransactionStatus as ClientRelayedTransactionStatus,
         TransactionStatus,
     },
 };
 use fuel_core_poa::service::Mode;
 use fuel_core_provider::test_helpers::provider::MockProvider;
-use fuel_core_relayer::{
-    ports::Transactional,
-    test_helpers::LogTestHelper,
-};
-use fuel_core_storage::{
-    StorageAsMut,
-    StorageAsRef,
-    tables::Messages,
-};
+use fuel_core_relayer::{ports::Transactional, test_helpers::LogTestHelper};
+use fuel_core_storage::{StorageAsMut, StorageAsRef, tables::Messages};
 use fuel_core_types::{
     entities::relayer::transaction::RelayedTransactionStatus as FuelRelayedTransactionStatus,
     fuel_asm::*,
     fuel_crypto::*,
     fuel_tx::*,
-    fuel_types::{
-        BlockHeight,
-        Nonce,
-    },
+    fuel_types::{BlockHeight, Nonce},
 };
 use hyper::{
-    Body,
-    Request,
-    Response,
-    Server,
-    service::{
-        make_service_fn,
-        service_fn,
-    },
+    Body, Request, Response, Server,
+    service::{make_service_fn, service_fn},
 };
-use rand::{
-    Rng,
-    SeedableRng,
-    prelude::StdRng,
-};
+use rand::{Rng, SeedableRng, prelude::StdRng};
 use serde_json::json;
 use std::{
     convert::Infallible,
-    net::{
-        Ipv4Addr,
-        SocketAddr,
-    },
+    net::{Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
 use tempfile::TempDir;
 use test_helpers::{
-    assemble_tx::{
-        AssembleAndRunTx,
-        SigningAccount,
-    },
-    config_with_fee,
-    default_signing_wallet,
+    assemble_tx::{AssembleAndRunTx, SigningAccount},
+    config_with_fee, default_signing_wallet,
     fuel_core_driver::FuelCoreDriver,
 };
 use tokio::sync::oneshot::Sender;

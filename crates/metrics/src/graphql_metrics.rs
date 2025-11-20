@@ -1,17 +1,10 @@
 use crate::{
-    buckets::{
-        Buckets,
-        buckets,
-    },
+    buckets::{Buckets, buckets},
     global_registry,
 };
 use prometheus_client::{
     encoding::EncodeLabelSet,
-    metrics::{
-        family::Family,
-        gauge::Gauge,
-        histogram::Histogram,
-    },
+    metrics::{family::Family, gauge::Gauge, histogram::Histogram},
 };
 use std::sync::OnceLock;
 

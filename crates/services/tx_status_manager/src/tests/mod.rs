@@ -10,10 +10,7 @@ mod utils;
 use crate::service::ProtocolPublicKey;
 use fuel_core_types::{
     fuel_crypto::PublicKey,
-    fuel_tx::{
-        Address,
-        Input,
-    },
+    fuel_tx::{Address, Input},
 };
 
 impl ProtocolPublicKey for PublicKey {

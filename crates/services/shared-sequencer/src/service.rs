@@ -1,31 +1,19 @@
 //! Defines the logic how to interact with the shared sequencer.
 
 use crate::{
-    Client,
-    Config,
+    Client, Config,
     http_api::AccountMetadata,
-    ports::{
-        BlocksProvider,
-        Signer,
-    },
+    ports::{BlocksProvider, Signer},
 };
 use async_trait::async_trait;
 use core::time::Duration;
 use fuel_core_services::{
-    EmptyShared,
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
-    TaskNextAction,
-    stream::BoxStream,
+    EmptyShared, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
+    TaskNextAction, stream::BoxStream,
 };
 use fuel_core_types::services::{
     block_importer::SharedImportResult,
-    shared_sequencer::{
-        SSBlob,
-        SSBlobs,
-    },
+    shared_sequencer::{SSBlob, SSBlobs},
 };
 use futures::StreamExt;
 use std::sync::Arc;
@@ -185,10 +173,10 @@ where
             // We don't want to spam the RPC endpoint with a lot of queries,
             // so wait for one second before sending the next one.
             tokio::time::sleep(Duration::from_secs(1)).await;
-            return TaskNextAction::ErrorContinue(err)
+            return TaskNextAction::ErrorContinue(err);
         }
         if let Err(err) = self.ensure_prev_order().await {
-            return TaskNextAction::ErrorContinue(err)
+            return TaskNextAction::ErrorContinue(err);
         };
 
         tokio::select! {

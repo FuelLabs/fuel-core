@@ -1,7 +1,4 @@
-use fuel_core::service::{
-    Config,
-    FuelService,
-};
+use fuel_core::service::{Config, FuelService};
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::fuel_asm::*;
 use std::convert::TryInto;

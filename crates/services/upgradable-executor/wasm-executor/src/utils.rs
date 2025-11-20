@@ -6,10 +6,7 @@ use fuel_core_types::{
         Uncommitted,
         block_producer::Components,
         executor::{
-            Error as ExecutorError,
-            ExecutionResult,
-            UncommittedResult,
-            ValidationResult,
+            Error as ExecutorError, ExecutionResult, UncommittedResult, ValidationResult,
         },
     },
 };

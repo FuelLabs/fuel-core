@@ -1,14 +1,8 @@
 use crate::{
     config::BlackList,
-    error::{
-        Error,
-        InputValidationError,
-    },
+    error::{Error, InputValidationError},
     ports::{
-        ChainStateInfoProvider,
-        GasPriceProvider,
-        TxPoolPersistentStorage,
-        WasmChecker,
+        ChainStateInfoProvider, GasPriceProvider, TxPoolPersistentStorage, WasmChecker,
     },
 };
 use fuel_core_storage::transactional::AtomicView;
@@ -17,35 +11,20 @@ use fuel_core_types::{
     blockchain::header::ConsensusParametersVersion,
     fuel_asm::Word,
     fuel_tx::{
-        ConsensusParameters,
-        Transaction,
-        UpgradePurpose,
-        field::{
-            MaxFeeLimit,
-            UpgradePurpose as _,
-        },
+        ConsensusParameters, Transaction, UpgradePurpose,
+        field::{MaxFeeLimit, UpgradePurpose as _},
     },
     fuel_types::BlockHeight,
     fuel_vm::{
         checked_transaction::{
-            CheckPredicateParams,
-            CheckPredicates,
-            Checked,
-            CheckedTransaction,
-            Checks,
+            CheckPredicateParams, CheckPredicates, Checked, CheckedTransaction, Checks,
             IntoChecked,
         },
-        interpreter::{
-            ExecutableTransaction,
-            Memory,
-        },
+        interpreter::{ExecutableTransaction, Memory},
     },
     services::{
         executor::memory::MemoryPool,
-        txpool::{
-            Metadata,
-            PoolTransaction,
-        },
+        txpool::{Metadata, PoolTransaction},
     },
 };
 use std::sync::Arc;
@@ -170,7 +149,7 @@ impl GasPriceVerifiedTx {
     ) -> Result<InputDependenciesVerifiedTx, Error> {
         let pool_tx = checked_tx_into_pool(self.0, metadata)?;
         if pool_tx.max_gas() == 0 {
-            return Err(Error::InputValidation(InputValidationError::MaxGasZero))
+            return Err(Error::InputValidation(InputValidationError::MaxGasZero));
         }
         blacklist
             .check_blacklisting(&pool_tx)

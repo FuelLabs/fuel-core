@@ -1,91 +1,48 @@
 use crate::{
     TryPeerId,
-    behavior::{
-        FuelBehaviour,
-        FuelBehaviourEvent,
-    },
+    behavior::{FuelBehaviour, FuelBehaviourEvent},
     codecs::{
-        GossipsubCodec,
-        gossipsub::GossipsubMessageHandler,
-        postcard::PostcardCodec,
+        GossipsubCodec, gossipsub::GossipsubMessageHandler, postcard::PostcardCodec,
         request_response::RequestResponseMessageHandler,
     },
-    config::{
-        Config,
-        build_transport_function,
-    },
+    config::{Config, build_transport_function},
     dnsaddr_resolution::DnsResolver,
     gossipsub::{
         messages::{
-            GossipTopicTag,
-            GossipsubBroadcastRequest,
+            GossipTopicTag, GossipsubBroadcastRequest,
             GossipsubMessage as FuelGossipsubMessage,
         },
         topics::GossipsubTopics,
     },
     heartbeat,
-    peer_manager::{
-        ConnectionState,
-        PeerManager,
-        Punisher,
-    },
+    peer_manager::{ConnectionState, PeerManager, Punisher},
     peer_report::PeerReportEvent,
     request_response::messages::{
-        RequestError,
-        RequestMessage,
-        ResponseError,
-        ResponseSendError,
-        ResponseSender,
+        RequestError, RequestMessage, ResponseError, ResponseSendError, ResponseSender,
         V2ResponseMessage,
     },
 };
-use fuel_core_metrics::{
-    global_registry,
-    p2p_metrics::increment_unique_peers,
-};
+use fuel_core_metrics::{global_registry, p2p_metrics::increment_unique_peers};
 use fuel_core_types::{
-    fuel_types::BlockHeight,
-    services::p2p::peer_reputation::AppScore,
+    fuel_types::BlockHeight, services::p2p::peer_reputation::AppScore,
 };
 use futures::prelude::*;
 use libp2p::{
-    Multiaddr,
-    PeerId,
-    Swarm,
-    SwarmBuilder,
-    gossipsub::{
-        self,
-        MessageAcceptance,
-        MessageId,
-        PublishError,
-        TopicHash,
-    },
+    Multiaddr, PeerId, Swarm, SwarmBuilder,
+    gossipsub::{self, MessageAcceptance, MessageId, PublishError, TopicHash},
     identify,
-    metrics::{
-        Metrics,
-        Recorder,
-    },
+    metrics::{Metrics, Recorder},
     multiaddr::Protocol,
     request_response::{
-        self,
-        InboundRequestId,
-        OutboundFailure,
-        OutboundRequestId,
-        ResponseChannel,
+        self, InboundRequestId, OutboundFailure, OutboundRequestId, ResponseChannel,
     },
     swarm::SwarmEvent,
     tcp,
 };
 use rand::seq::IteratorRandom;
-use std::{
-    collections::HashMap,
-    time::Duration,
-};
+use std::{collections::HashMap, time::Duration};
 use tokio::sync::broadcast;
-use tracing::{
-    debug,
-    warn,
-};
+use tracing::{debug, warn};
 
 #[cfg(test)]
 mod tests;

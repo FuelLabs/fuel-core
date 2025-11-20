@@ -2,33 +2,19 @@ use crate::graphql_api::storage::Column as OffChainColumn;
 
 use super::{
     GenesisDatabase,
-    database_description::{
-        DatabaseDescription,
-        off_chain::OffChain,
-        on_chain::OnChain,
-    },
+    database_description::{DatabaseDescription, off_chain::OffChain, on_chain::OnChain},
 };
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_executor::refs::ContractRef;
 use fuel_core_storage::{
-    Error as StorageError,
-    Mappable,
-    MerkleRoot,
-    Result,
-    StorageAsMut,
-    StorageInspect,
+    Error as StorageError, Mappable, MerkleRoot, Result, StorageAsMut, StorageInspect,
     StorageMutate,
     blueprint::plain::Plain,
     codec::postcard::Postcard,
     column::Column,
     iter::IteratorOverTable,
     structured_storage::TableWithBlueprint,
-    tables::{
-        Coins,
-        ContractsLatestUtxo,
-        Messages,
-        ProcessedTransactions,
-    },
+    tables::{Coins, ContractsLatestUtxo, Messages, ProcessedTransactions},
 };
 use fuel_core_types::fuel_merkle::binary::root_calculator::MerkleRootCalculator;
 

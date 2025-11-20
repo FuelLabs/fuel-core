@@ -4,24 +4,15 @@ use fuel_core_types::{
     blockchain::header::StateTransitionBytecodeVersion,
     fuel_crypto::Hasher,
     fuel_tx::ConsensusParameters,
-    fuel_types::{
-        AssetId,
-        fmt_truncated_hex,
-    },
+    fuel_types::{AssetId, fmt_truncated_hex},
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
 use std::fs::File;
 #[cfg(feature = "std")]
 use std::path::Path;
 
-use crate::{
-    ConsensusConfig,
-    genesis::GenesisCommitment,
-};
+use crate::{ConsensusConfig, genesis::GenesisCommitment};
 
 #[cfg(feature = "std")]
 use crate::SnapshotMetadata;

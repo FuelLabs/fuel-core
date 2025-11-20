@@ -1,15 +1,12 @@
 use std::sync::Mutex;
 
 use fuel_core_executor::ports::{
-    MaybeCheckedTransaction,
-    TransactionsSource as ExecutorTransactionsSource,
+    MaybeCheckedTransaction, TransactionsSource as ExecutorTransactionsSource,
 };
 use fuel_core_types::fuel_vm::checked_transaction::CheckedTransaction;
 
 use crate::ports::{
-    TransactionFiltered,
-    TransactionSourceExecutableTransactions,
-    TransactionsSource,
+    TransactionFiltered, TransactionSourceExecutableTransactions, TransactionsSource,
 };
 
 pub struct OnceTransactionsSource {

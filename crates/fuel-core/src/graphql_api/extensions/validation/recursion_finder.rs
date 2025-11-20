@@ -1,16 +1,7 @@
-use async_graphql::{
-    Positioned,
-    parser::types::Field,
-};
-use std::collections::{
-    HashMap,
-    hash_map::Entry,
-};
+use async_graphql::{Positioned, parser::types::Field};
+use std::collections::{HashMap, hash_map::Entry};
 
-use super::visitor::{
-    Visitor,
-    VisitorContext,
-};
+use super::visitor::{Visitor, VisitorContext};
 
 pub(super) struct RecursionFinder<'a> {
     visited: HashMap<&'a str, usize>,
@@ -38,7 +29,7 @@ impl<'a> Visitor<'a> for RecursionFinder<'a> {
             let name = ty.name();
 
             if name == "__Type" {
-                return
+                return;
             }
 
             let old = self.visited.entry(name).or_default();
@@ -60,7 +51,7 @@ impl<'a> Visitor<'a> for RecursionFinder<'a> {
             let name = ty.name();
 
             if name == "__Type" {
-                return
+                return;
             }
 
             let old = self.visited.entry(name);

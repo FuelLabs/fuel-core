@@ -1,7 +1,6 @@
 use super::Result;
 use crate::pre_confirmation_signature_service::{
-    parent_signature::ParentSignature,
-    signing_key::SigningKey,
+    parent_signature::ParentSignature, signing_key::SigningKey,
 };
 use core::future::Future;
 use fuel_core_types::services::p2p::DelegatePreConfirmationKey;

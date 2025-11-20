@@ -1,7 +1,4 @@
-use crate::{
-    abi,
-    config,
-};
+use crate::{abi, config};
 use alloy_rpc_types_eth::Log;
 use alloy_sol_types::SolEvent;
 use anyhow::anyhow;
@@ -10,18 +7,11 @@ use fuel_core_types::{
     entities::{
         RelayedTransaction,
         relayer::{
-            message::{
-                Message,
-                MessageV1,
-            },
+            message::{Message, MessageV1},
             transaction::RelayedTransactionV1,
         },
     },
-    fuel_types::{
-        Address,
-        Nonce,
-        Word,
-    },
+    fuel_types::{Address, Nonce, Word},
 };
 
 /// Bridge message send from da to fuel network.

@@ -3,34 +3,19 @@
 use super::*;
 use crate::{
     api::BlockAggregatorQuery,
-    blocks::{
-        BlockBytes,
-        BlockSourceEvent,
-    },
-    result::{
-        Error,
-        Result,
-    },
+    blocks::{BlockBytes, BlockSourceEvent},
+    result::{Error, Result},
 };
 use anyhow::anyhow;
 use fuel_core_services::stream::BoxStream;
 use futures::StreamExt;
-use rand::{
-    SeedableRng,
-    prelude::StdRng,
-};
+use rand::{SeedableRng, prelude::StdRng};
 use std::{
     collections::HashMap,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 use tokio::{
-    sync::mpsc::{
-        Receiver,
-        Sender,
-    },
+    sync::mpsc::{Receiver, Sender},
     time::error::Elapsed,
 };
 

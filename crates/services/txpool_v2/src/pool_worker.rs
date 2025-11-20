@@ -1,58 +1,30 @@
 use fuel_core_services::TaskNextAction;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::{Transaction, TxId},
     fuel_types::BlockHeight,
     services::{
-        block_importer::SharedImportResult,
-        p2p::GossipsubMessageInfo,
-        transaction_status::PreConfirmationStatus,
-        txpool::ArcPoolTx,
+        block_importer::SharedImportResult, p2p::GossipsubMessageInfo,
+        transaction_status::PreConfirmationStatus, txpool::ArcPoolTx,
     },
 };
-use std::{
-    iter,
-    ops::Deref,
-    sync::Arc,
-    time::SystemTime,
-};
+use std::{iter, ops::Deref, sync::Arc, time::SystemTime};
 use tokio::{
     sync::{
         broadcast,
-        mpsc::{
-            self,
-            Receiver,
-            Sender,
-            UnboundedReceiver,
-            UnboundedSender,
-        },
+        mpsc::{self, Receiver, Sender, UnboundedReceiver, UnboundedSender},
         oneshot,
     },
-    time::{
-        Interval,
-        MissedTickBehavior,
-    },
+    time::{Interval, MissedTickBehavior},
 };
 
 use crate::{
     Constraints,
     config::ServiceChannelLimits,
-    error::{
-        Error,
-        InsertionErrorType,
-    },
+    error::{Error, InsertionErrorType},
     pending_pool::PendingPool,
-    ports::{
-        TxPoolPersistentStorage,
-        TxStatusManager as TxStatusManagerTrait,
-    },
-    service::{
-        TxInfo,
-        TxPool,
-    },
+    ports::{TxPoolPersistentStorage, TxStatusManager as TxStatusManagerTrait},
+    service::{TxInfo, TxPool},
 };
 
 const MAX_PENDING_READ_POOL_REQUESTS: usize = 10_000;

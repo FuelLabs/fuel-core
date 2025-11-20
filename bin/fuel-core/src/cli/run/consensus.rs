@@ -1,9 +1,6 @@
 //! Clap configuration related to consensus parameters
 
-use clap::{
-    ArgGroup,
-    ValueEnum,
-};
+use clap::{ArgGroup, ValueEnum};
 use fuel_core::service::config::Trigger as PoATrigger;
 use humantime::Duration;
 

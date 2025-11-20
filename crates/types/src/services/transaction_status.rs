@@ -1,15 +1,10 @@
 //! The status of the transaction during its lifecycle.
 
 use crate::{
-    fuel_tx::{
-        Output,
-        Receipt,
-        TxPointer,
-    },
+    fuel_tx::{Output, Receipt, TxPointer},
     fuel_vm::ProgramState,
     services::{
-        executor::TransactionExecutionResult,
-        preconfirmation::PreconfirmationStatus,
+        executor::TransactionExecutionResult, preconfirmation::PreconfirmationStatus,
     },
 };
 use fuel_vm_private::fuel_types::BlockHeight;
@@ -25,10 +20,7 @@ use crate::fuel_tx::TxId;
 #[cfg(feature = "alloc")]
 use alloc::{
     format,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
     vec::Vec,
 };
 
@@ -277,10 +269,7 @@ pub enum PreConfirmationStatus {
 /// The status of the transaction during its lifecycle.
 pub mod statuses {
     use super::*;
-    use crate::fuel_tx::{
-        TxId,
-        UtxoId,
-    };
+    use crate::fuel_tx::{TxId, UtxoId};
 
     /// Transaction was submitted into the TxPool
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

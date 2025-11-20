@@ -4,11 +4,7 @@
 use std::{
     cell::UnsafeCell,
     panic::UnwindSafe,
-    sync::atomic::{
-        AtomicU64,
-        Ordering,
-        fence,
-    },
+    sync::atomic::{AtomicU64, Ordering, fence},
 };
 
 /// A simple implementation of a sequential lock.

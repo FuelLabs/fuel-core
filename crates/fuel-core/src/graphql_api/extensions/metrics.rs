@@ -1,28 +1,14 @@
 use async_graphql::{
-    Response,
-    ServerError,
-    ServerResult,
-    ValidationResult,
-    Value,
-    Variables,
+    Response, ServerError, ServerResult, ValidationResult, Value, Variables,
     extensions::{
-        Extension,
-        ExtensionContext,
-        ExtensionFactory,
-        NextParseQuery,
-        NextRequest,
-        NextResolve,
-        NextValidation,
-        ResolveInfo,
+        Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextRequest,
+        NextResolve, NextValidation, ResolveInfo,
     },
     parser::types::ExecutableDocument,
 };
 use fuel_core_metrics::graphql_metrics::graphql_metrics;
 use std::{
-    sync::{
-        Arc,
-        OnceLock,
-    },
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 use tokio::time::Instant;
@@ -94,7 +80,7 @@ impl Extension for MetricsExtInner {
 
         // If it is not a query, skip time metering.
         if field_name.is_none() {
-            return next.run(ctx, info).await
+            return next.run(ctx, info).await;
         }
 
         let start_time = Instant::now();

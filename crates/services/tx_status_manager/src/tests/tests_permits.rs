@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use fuel_core_types::fuel_tx::Bytes32;
 use parking_lot::lock_api::Mutex;
@@ -11,20 +7,11 @@ use tokio::time::Instant;
 
 use crate::{
     tests::utils::{
-        MockCreateChannel,
-        SenderData,
-        box_senders,
-        construct_senders,
+        MockCreateChannel, SenderData, box_senders, construct_senders,
         senders_strategy_all_ok,
     },
     update_sender::{
-        MockSendStatus,
-        Permit,
-        PermitTrait,
-        Permits,
-        SendStatus,
-        Sender,
-        UpdateSender,
+        MockSendStatus, Permit, PermitTrait, Permits, SendStatus, Sender, UpdateSender,
     },
 };
 

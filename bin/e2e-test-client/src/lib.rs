@@ -1,18 +1,6 @@
-use crate::{
-    config::SuiteConfig,
-    test_context::TestContext,
-};
-use libtest_mimic::{
-    Arguments,
-    Failed,
-    Trial,
-};
-use std::{
-    env,
-    fs,
-    future::Future,
-    time::Duration,
-};
+use crate::{config::SuiteConfig, test_context::TestContext};
+use libtest_mimic::{Arguments, Failed, Trial};
+use std::{env, fs, future::Future, time::Duration};
 
 pub const CONFIG_FILE_KEY: &str = "FUEL_CORE_E2E_CONFIG";
 pub const SYNC_TIMEOUT: Duration = Duration::from_secs(20);

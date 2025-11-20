@@ -1,14 +1,5 @@
-use crate::{
-    api::BlockAggregatorApi,
-    blocks::BlockSource,
-    db::BlockAggregatorDB,
-};
-use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    StateWatcher,
-    TaskNextAction,
-};
+use crate::{api::BlockAggregatorApi, blocks::BlockSource, db::BlockAggregatorDB};
+use fuel_core_services::{RunnableService, RunnableTask, StateWatcher, TaskNextAction};
 use fuel_core_types::fuel_types::BlockHeight;
 use protobuf_types::Block as ProtoBlock;
 use std::fmt::Debug;
@@ -29,32 +20,19 @@ mod tests;
 pub mod integration {
     use crate::{
         BlockAggregator,
-        api::{
-            BlockAggregatorApi,
-            protobuf_adapter::ProtobufAPI,
-        },
-        blocks::importer_and_db_source::{
-            BlockSerializer,
-            ImporterAndDbSource,
-        },
+        api::{BlockAggregatorApi, protobuf_adapter::ProtobufAPI},
+        blocks::importer_and_db_source::{BlockSerializer, ImporterAndDbSource},
         db::BlockAggregatorDB,
         protobuf_types::Block as ProtoBlock,
     };
-    use fuel_core_services::{
-        ServiceRunner,
-        stream::BoxStream,
-    };
+    use fuel_core_services::{ServiceRunner, stream::BoxStream};
     use fuel_core_storage::{
         StorageInspect,
-        tables::{
-            FuelBlocks,
-            Transactions,
-        },
+        tables::{FuelBlocks, Transactions},
         transactional::HistoricalView,
     };
     use fuel_core_types::{
-        fuel_types::BlockHeight,
-        services::block_importer::SharedImportResult,
+        fuel_types::BlockHeight, services::block_importer::SharedImportResult,
     };
     use std::net::SocketAddr;
     #[derive(Clone, Debug)]

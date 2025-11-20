@@ -1,8 +1,5 @@
 use std::{
-    cmp::{
-        Ordering,
-        Reverse,
-    },
+    cmp::{Ordering, Reverse},
     collections::BTreeMap,
     fmt::Debug,
     time::SystemTime,
@@ -11,15 +8,9 @@ use std::{
 use fuel_core_types::fuel_tx::TxId;
 use num_rational::Ratio;
 
-use crate::storage::{
-    RemovedTransactions,
-    StorageData,
-};
+use crate::storage::{RemovedTransactions, StorageData};
 
-use super::{
-    Constraints,
-    SelectionAlgorithm,
-};
+use super::{Constraints, SelectionAlgorithm};
 
 #[cfg(test)]
 use fuel_core_types::services::txpool::ArcPoolTx;
@@ -189,7 +180,7 @@ where
                         "Transaction not found in the storage during `gather_best_txs`."
                     );
                     transactions_to_remove.push(*key);
-                    continue
+                    continue;
                 };
 
                 for input in stored_transaction.transaction.inputs() {

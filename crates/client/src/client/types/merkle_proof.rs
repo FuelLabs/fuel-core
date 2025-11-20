@@ -1,7 +1,4 @@
-use crate::client::{
-    schema,
-    types::primitives::MerkleRoot,
-};
+use crate::client::{schema, types::primitives::MerkleRoot};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MerkleProof {

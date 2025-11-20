@@ -1,23 +1,12 @@
 //! A type that allows to iterate over the `Changes`.
 
 use crate::{
-    Mappable,
-    Result as StorageResult,
+    Mappable, Result as StorageResult,
     blueprint::BlueprintCodec,
     codec::Decode,
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-        IterableStore,
-    },
+    iter::{BoxedIter, IntoBoxedIter, IterDirection, IterableStore},
     kv_store::{
-        KVItem,
-        KVWriteItem,
-        KeyValueInspect,
-        StorageColumn,
-        Value,
-        WriteOperation,
+        KVItem, KVWriteItem, KeyValueInspect, StorageColumn, Value, WriteOperation,
     },
     structured_storage::TableWithBlueprint,
     transactional::StorageChanges,

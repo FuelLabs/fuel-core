@@ -1,7 +1,6 @@
 use crate::fuel_core_graphql_api::extensions::{
     chain_state_info::{
-        CURRENT_CONSENSUS_PARAMETERS_VERSION,
-        CURRENT_FUEL_BLOCK_HEIGHT,
+        CURRENT_CONSENSUS_PARAMETERS_VERSION, CURRENT_FUEL_BLOCK_HEIGHT,
         CURRENT_STF_VERSION,
     },
     required_fuel_block_height::FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED,

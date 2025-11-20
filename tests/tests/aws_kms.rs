@@ -1,7 +1,4 @@
-use fuel_core::{
-    combined_database::CombinedDatabase,
-    state::rocks_db::DatabaseConfig,
-};
+use fuel_core::{combined_database::CombinedDatabase, state::rocks_db::DatabaseConfig};
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::blockchain::consensus::Consensus;
 use test_helpers::fuel_core_driver::FuelCoreDriver;

@@ -1,18 +1,10 @@
 use crate::config::fuel_upgrade::Checksum;
-use futures::{
-    AsyncRead,
-    AsyncWrite,
-    Future,
-};
+use futures::{AsyncRead, AsyncWrite, Future};
 use libp2p::{
-    self,
-    PeerId,
+    self, PeerId,
     core::{
         UpgradeInfo,
-        upgrade::{
-            InboundConnectionUpgrade,
-            OutboundConnectionUpgrade,
-        },
+        upgrade::{InboundConnectionUpgrade, OutboundConnectionUpgrade},
     },
     noise,
 };

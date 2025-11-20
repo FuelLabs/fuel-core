@@ -1,9 +1,6 @@
 //! Module defines types for shared sequencer.
 
-use crate::{
-    blockchain::primitives::BlockId,
-    fuel_types::BlockHeight,
-};
+use crate::{blockchain::primitives::BlockId, fuel_types::BlockHeight};
 
 /// The blob posted to the shared sequencer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

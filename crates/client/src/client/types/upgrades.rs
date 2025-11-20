@@ -1,8 +1,5 @@
 use crate::client::{
-    schema::{
-        self,
-        ConversionError,
-    },
+    schema::{self, ConversionError},
     types::primitives::MerkleRoot,
 };
 use fuel_core_types::fuel_vm::UploadedBytecode;

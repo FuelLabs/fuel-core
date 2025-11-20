@@ -1,10 +1,7 @@
 use anyhow::Context;
 use std::{
     io::Read,
-    path::{
-        Path,
-        PathBuf,
-    },
+    path::{Path, PathBuf},
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]

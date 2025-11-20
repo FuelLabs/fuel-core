@@ -1,8 +1,5 @@
 use crate::{
-    utils::{
-        arb_dependent_cost_values,
-        set_full_word,
-    },
+    utils::{arb_dependent_cost_values, set_full_word},
     *,
 };
 

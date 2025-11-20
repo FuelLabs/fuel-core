@@ -1,13 +1,6 @@
 use async_graphql::Context;
-use fuel_core_storage::{
-    Error as StorageError,
-    IsNotFound,
-};
-use std::{
-    net::SocketAddr,
-    sync::OnceLock,
-    time::Duration,
-};
+use fuel_core_storage::{Error as StorageError, IsNotFound};
+use std::{net::SocketAddr, sync::OnceLock, time::Duration};
 
 pub mod api_service;
 pub(crate) mod block_height_subscription;

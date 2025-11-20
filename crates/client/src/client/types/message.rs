@@ -1,15 +1,10 @@
 use crate::client::{
-    PaginatedResult,
-    schema,
+    PaginatedResult, schema,
     schema::ConversionError,
     types::{
         MerkleProof,
         block::Header,
-        primitives::{
-            Address,
-            Bytes,
-            Nonce,
-        },
+        primitives::{Address, Bytes, Nonce},
     },
 };
 

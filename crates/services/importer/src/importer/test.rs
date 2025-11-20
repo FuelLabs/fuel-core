@@ -2,49 +2,29 @@ use crate::{
     Importer,
     importer::Error,
     ports::{
-        ImporterDatabase,
-        MockBlockVerifier,
-        MockDatabaseTransaction,
-        MockValidator,
+        ImporterDatabase, MockBlockVerifier, MockDatabaseTransaction, MockValidator,
         Transactional,
     },
 };
 use anyhow::anyhow;
 use fuel_core_storage::{
-    Error as StorageError,
-    MerkleRoot,
-    Result as StorageResult,
-    transactional::{
-        Changes,
-        StorageChanges,
-    },
+    Error as StorageError, MerkleRoot, Result as StorageResult,
+    transactional::{Changes, StorageChanges},
 };
 use fuel_core_types::{
-    blockchain::{
-        SealedBlock,
-        block::Block,
-        consensus::Consensus,
-    },
+    blockchain::{SealedBlock, block::Block, consensus::Consensus},
     fuel_types::BlockHeight,
     services::{
         Uncommitted,
-        block_importer::{
-            ImportResult,
-            UncommittedResult,
-        },
+        block_importer::{ImportResult, UncommittedResult},
         executor::{
-            Error as ExecutorError,
-            Result as ExecutorResult,
-            UncommittedValidationResult,
-            ValidationResult,
+            Error as ExecutorError, Result as ExecutorResult,
+            UncommittedValidationResult, ValidationResult,
         },
     },
 };
 use test_case::test_case;
-use tokio::sync::{
-    TryAcquireError,
-    broadcast::error::TryRecvError,
-};
+use tokio::sync::{TryAcquireError, broadcast::error::TryRecvError};
 
 mockall::mock! {
     pub Database {}

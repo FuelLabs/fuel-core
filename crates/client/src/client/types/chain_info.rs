@@ -1,12 +1,5 @@
-use crate::client::{
-    schema,
-    schema::ConversionError,
-    types::Block,
-};
-use fuel_core_types::{
-    self,
-    fuel_tx::ConsensusParameters,
-};
+use crate::client::{schema, schema::ConversionError, types::Block};
+use fuel_core_types::{self, fuel_tx::ConsensusParameters};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChainInfo {

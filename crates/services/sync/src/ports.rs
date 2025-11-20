@@ -2,17 +2,9 @@
 
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
-    blockchain::{
-        SealedBlock,
-        SealedBlockHeader,
-        primitives::DaBlockHeight,
-    },
+    blockchain::{SealedBlock, SealedBlockHeader, primitives::DaBlockHeight},
     fuel_types::BlockHeight,
-    services::p2p::{
-        PeerId,
-        SourcePeer,
-        Transactions,
-    },
+    services::p2p::{PeerId, SourcePeer, Transactions},
 };
 use std::ops::Range;
 

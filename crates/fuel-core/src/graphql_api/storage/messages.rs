@@ -1,29 +1,16 @@
 use fuel_core_chain_config::{
-    AddTable,
-    AsTable,
-    StateConfig,
-    StateConfigBuilder,
-    TableEntry,
+    AddTable, AsTable, StateConfig, StateConfigBuilder, TableEntry,
 };
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{
-        postcard::Postcard,
-        raw::Raw,
-    },
+    codec::{postcard::Postcard, raw::Raw},
     structured_storage::TableWithBlueprint,
 };
-use fuel_core_types::fuel_types::{
-    Address,
-    Nonce,
-};
+use fuel_core_types::fuel_types::{Address, Nonce};
 use rand::{
     Rng,
-    distributions::{
-        Distribution,
-        Standard,
-    },
+    distributions::{Distribution, Standard},
 };
 
 fuel_core_types::fuel_vm::double_key!(OwnedMessageKey, Address, address, Nonce, nonce);

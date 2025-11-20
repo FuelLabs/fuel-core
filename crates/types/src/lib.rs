@@ -18,13 +18,7 @@ pub use ed25519_dalek;
 #[cfg(feature = "da-compression")]
 pub use fuel_vm_private::fuel_compression;
 #[doc(no_inline)]
-pub use fuel_vm_private::{
-    fuel_asm,
-    fuel_crypto,
-    fuel_merkle,
-    fuel_tx,
-    fuel_types,
-};
+pub use fuel_vm_private::{fuel_asm, fuel_crypto, fuel_merkle, fuel_tx, fuel_types};
 #[doc(no_inline)]
 pub use secrecy;
 #[doc(no_inline)]
@@ -42,42 +36,22 @@ pub mod fuel_vm {
 
     #[doc(no_inline)]
     pub use fuel_vm_private::{
-        checked_transaction,
-        constraints,
-        consts,
-        crypto,
-        double_key,
-        error,
+        checked_transaction, constraints, consts, crypto, double_key, error,
         error::PredicateVerificationFailed,
         interpreter,
         pool::VmMemoryPool,
         prelude::{
-            Backtrace,
-            Call,
-            CallFrame,
-            Contract,
-            Interpreter,
-            InterpreterError,
-            InterpreterStorage,
-            PredicateStorage,
-            ProgramState,
-            Salt,
-            SecretKey,
-            Signature,
-            Transactor,
+            Backtrace, Call, CallFrame, Contract, Interpreter, InterpreterError,
+            InterpreterStorage, PredicateStorage, ProgramState, Salt, SecretKey,
+            Signature, Transactor,
         },
-        script_with_data_offset,
-        state,
+        script_with_data_offset, state,
         storage::ContractsAssetKey,
         storage::ContractsStateKey,
         storage::UploadedBytecode,
         storage::predicate,
-        storage::{
-            BlobBytes,
-            BlobData,
-        },
-        util,
-        verification,
+        storage::{BlobBytes, BlobData},
+        util, verification,
     };
 }
 

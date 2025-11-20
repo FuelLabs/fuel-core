@@ -1,9 +1,6 @@
 use core::time::Duration;
 
-use fuel_core_types::tai64::{
-    Tai64,
-    Tai64N,
-};
+use fuel_core_types::tai64::{Tai64, Tai64N};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {

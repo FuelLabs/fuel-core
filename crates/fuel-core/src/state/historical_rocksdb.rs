@@ -1,24 +1,12 @@
 use crate::{
     database::{
-        Error as DatabaseError,
-        Result as DatabaseResult,
-        database_description::{
-            DatabaseDescription,
-            DatabaseHeight,
-        },
+        Error as DatabaseError, Result as DatabaseResult,
+        database_description::{DatabaseDescription, DatabaseHeight},
     },
     state::{
-        ColumnType,
-        HeightType,
-        IterableKeyValueView,
-        KeyValueView,
-        TransactableStorage,
+        ColumnType, HeightType, IterableKeyValueView, KeyValueView, TransactableStorage,
         historical_rocksdb::{
-            description::{
-                Column,
-                Historical,
-                historical_duplicate_column_id,
-            },
+            description::{Column, Historical, historical_duplicate_column_id},
             view_at_height::ViewAtHeight,
         },
         iterable_key_value_view::IterableKeyValueViewWrapper,
@@ -27,45 +15,19 @@ use crate::{
     },
 };
 use fuel_core_storage::{
-    Error as StorageError,
-    Result as StorageResult,
-    StorageAsMut,
-    StorageAsRef,
-    iter::{
-        BoxedIter,
-        IterDirection,
-        IterableStore,
-        IteratorOverTable,
-    },
-    kv_store::{
-        KVItem,
-        KeyValueInspect,
-        Value,
-        WriteOperation,
-    },
+    Error as StorageError, Result as StorageResult, StorageAsMut, StorageAsRef,
+    iter::{BoxedIter, IterDirection, IterableStore, IteratorOverTable},
+    kv_store::{KVItem, KeyValueInspect, Value, WriteOperation},
     not_found,
     structured_storage::TableWithBlueprint,
     transactional::{
-        Changes,
-        ConflictPolicy,
-        ReadTransaction,
-        StorageChanges,
-        StorageTransaction,
+        Changes, ConflictPolicy, ReadTransaction, StorageChanges, StorageTransaction,
     },
 };
 use itertools::Itertools;
-use modifications_history::{
-    ModificationsHistoryV1,
-    ModificationsHistoryV2,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use std::{
-    num::NonZeroU64,
-    path::Path,
-};
+use modifications_history::{ModificationsHistoryV1, ModificationsHistoryV2};
+use serde::{Deserialize, Serialize};
+use std::{num::NonZeroU64, path::Path};
 
 use super::rocks_db::DatabaseConfig;
 
@@ -288,7 +250,7 @@ where
 
     fn remove_v1_entries(&self) -> StorageResult<()> {
         if !self.has_v1_history() {
-            return Ok(())
+            return Ok(());
         }
 
         self.db
@@ -654,14 +616,9 @@ mod tests {
     use super::*;
     use crate::database::database_description::on_chain::OnChain;
     use fuel_core_storage::{
-        ContractsAssetKey,
-        StorageAsMut,
-        StorageAsRef,
+        ContractsAssetKey, StorageAsMut, StorageAsRef,
         tables::ContractsAssets,
-        transactional::{
-            IntoTransaction,
-            ReadTransaction,
-        },
+        transactional::{IntoTransaction, ReadTransaction},
     };
 
     #[test]

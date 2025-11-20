@@ -1,7 +1,4 @@
-use crate::common::gas_price_algorithm::{
-    GasPriceAlgorithm,
-    SharedGasPriceAlgo,
-};
+use crate::common::gas_price_algorithm::{GasPriceAlgorithm, SharedGasPriceAlgo};
 use fuel_core_types::fuel_types::BlockHeight;
 pub use fuel_gas_price_algorithm::v1::AlgorithmV1;
 

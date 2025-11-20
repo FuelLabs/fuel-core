@@ -1,40 +1,16 @@
 //! This module handles bridge communications between the fuel node and the data availability layer.
 
-use self::{
-    get_logs::*,
-    run::RelayerData,
-};
-use crate::{
-    Config,
-    log::EthEventLog,
-    ports::RelayerDb,
-    service::state::EthLocal,
-};
+use self::{get_logs::*, run::RelayerData};
+use crate::{Config, log::EthEventLog, ports::RelayerDb, service::state::EthLocal};
 use alloy_provider::Provider;
-use alloy_rpc_types_eth::{
-    BlockId,
-    BlockNumberOrTag,
-    Filter,
-    Log,
-    ValueOrArray,
-};
+use alloy_rpc_types_eth::{BlockId, BlockNumberOrTag, Filter, Log, ValueOrArray};
 use async_trait::async_trait;
 use core::time::Duration;
-use fuel_core_provider::{
-    Quorum,
-    QuorumProvider,
-};
+use fuel_core_provider::{Quorum, QuorumProvider};
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
-    TaskNextAction,
+    RunnableService, RunnableTask, ServiceRunner, StateWatcher, TaskNextAction,
 };
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    entities::Message,
-};
+use fuel_core_types::{blockchain::primitives::DaBlockHeight, entities::Message};
 use futures::StreamExt;
 use tokio::sync::watch;
 

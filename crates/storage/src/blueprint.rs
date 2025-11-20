@@ -4,18 +4,9 @@
 //! blueprint that maintains a valid Merkle tree over the storage entries.
 
 use crate::{
-    Mappable,
-    Result as StorageResult,
-    codec::{
-        Decode,
-        Encode,
-        Encoder,
-    },
-    kv_store::{
-        BatchOperations,
-        KeyValueInspect,
-        KeyValueMutate,
-    },
+    Mappable, Result as StorageResult,
+    codec::{Decode, Encode, Encoder},
+    kv_store::{BatchOperations, KeyValueInspect, KeyValueMutate},
 };
 use fuel_vm_private::prelude::MerkleRoot;
 

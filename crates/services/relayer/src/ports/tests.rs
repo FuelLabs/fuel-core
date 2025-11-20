@@ -1,23 +1,12 @@
 use crate::{
     Config,
-    ports::{
-        DatabaseTransaction,
-        MockDatabaseTransaction,
-        RelayerDb,
-        Transactional,
-    },
+    ports::{DatabaseTransaction, MockDatabaseTransaction, RelayerDb, Transactional},
     storage::EventsHistory,
 };
-use fuel_core_storage::test_helpers::{
-    MockBasic,
-    MockStorage,
-};
+use fuel_core_storage::test_helpers::{MockBasic, MockStorage};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        Message,
-        RelayedTransaction,
-    },
+    entities::{Message, RelayedTransaction},
     services::relayer::Event,
 };
 

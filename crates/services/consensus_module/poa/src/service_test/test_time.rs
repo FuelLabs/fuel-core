@@ -1,13 +1,7 @@
 use std::time::Duration;
 
-use fuel_core_types::tai64::{
-    Tai64,
-    Tai64N,
-};
-use tokio::{
-    sync::watch,
-    time::Instant,
-};
+use fuel_core_types::tai64::{Tai64, Tai64N};
+use tokio::{sync::watch, time::Instant};
 
 use crate::ports::GetTime;
 

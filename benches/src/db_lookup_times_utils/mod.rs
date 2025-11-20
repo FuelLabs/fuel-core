@@ -7,16 +7,12 @@ pub mod utils;
 mod tests {
     use crate::db_lookup_times_utils::{
         full_block_table::BenchDatabase,
-        utils::{
-            LookupMethod,
-            Result as DbLookupBenchResult,
-        },
+        utils::{LookupMethod, Result as DbLookupBenchResult},
     };
     use fuel_core::state::rocks_db::RocksDb;
 
     use crate::db_lookup_times_utils::seed::{
-        insert_compressed_block,
-        insert_full_block,
+        insert_compressed_block, insert_full_block,
     };
 
     const TEST_HEIGHT: u32 = 1;

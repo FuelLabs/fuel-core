@@ -25,16 +25,9 @@ pub use abi::*;
 #[cfg(any(test, feature = "test-helpers"))]
 pub use service::new_service_test;
 
-pub use alloy_primitives::{
-    Address,
-    B256,
-};
+pub use alloy_primitives::{Address, B256};
 pub use config::Config;
-pub use service::{
-    Service,
-    SharedState,
-    new_service,
-};
+pub use service::{Service, SharedState, new_service};
 
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();

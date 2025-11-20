@@ -7,16 +7,10 @@ use fuel_core_poa::ports::Database as PoAVerifierDatabase;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::{
-        SealedBlockHeader,
-        block::Block,
-        consensus::Consensus,
-        header::BlockHeader,
+        SealedBlockHeader, block::Block, consensus::Consensus, header::BlockHeader,
         primitives::DaBlockHeight,
     },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::{BlockHeight, Bytes32},
     tai64::Tai64,
 };
 

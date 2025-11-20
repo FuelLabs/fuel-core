@@ -1,30 +1,16 @@
 use crate::{
-    database::{
-        OffChainIterableKeyValueView,
-        OnChainIterableKeyValueView,
-    },
-    fuel_core_graphql_api::storage::coins::{
-        OwnedCoins,
-        owner_coin_id_key,
-    },
+    database::{OffChainIterableKeyValueView, OnChainIterableKeyValueView},
+    fuel_core_graphql_api::storage::coins::{OwnedCoins, owner_coin_id_key},
 };
 use fuel_core_storage::{
-    Result as StorageResult,
-    StorageAsRef,
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
+    Result as StorageResult, StorageAsRef,
+    iter::{IterDirection, IteratorOverTable},
     not_found,
     tables::Coins,
 };
 use fuel_core_types::{
     entities::coins::coin::CompressedCoin,
-    fuel_tx::{
-        Address,
-        TxId,
-        UtxoId,
-    },
+    fuel_tx::{Address, TxId, UtxoId},
 };
 
 impl OffChainIterableKeyValueView {

@@ -2,20 +2,11 @@ use crate::utils::aloc_bytearray;
 
 use super::run_group_ref;
 
-use criterion::{
-    Criterion,
-    Throughput,
-};
+use criterion::{Criterion, Throughput};
 use ed25519_dalek::Signer;
 use fuel_core_benches::*;
-use fuel_core_types::{
-    fuel_asm::*,
-    fuel_crypto::*,
-};
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
+use fuel_core_types::{fuel_asm::*, fuel_crypto::*};
+use rand::{SeedableRng, rngs::StdRng};
 
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);

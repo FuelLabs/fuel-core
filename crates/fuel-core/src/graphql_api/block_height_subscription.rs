@@ -1,8 +1,4 @@
-use std::{
-    cmp::Reverse,
-    collections::BTreeMap,
-    sync::Arc,
-};
+use std::{cmp::Reverse, collections::BTreeMap, sync::Arc};
 
 use fuel_core_types::fuel_types::BlockHeight;
 use parking_lot::RwLock;

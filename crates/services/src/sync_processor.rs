@@ -1,12 +1,6 @@
-use fuel_core_metrics::futures::{
-    FuturesMetrics,
-    metered_future::MeteredFuture,
-};
+use fuel_core_metrics::futures::{FuturesMetrics, metered_future::MeteredFuture};
 use std::sync::Arc;
-use tokio::sync::{
-    OwnedSemaphorePermit,
-    Semaphore,
-};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 /// A processor that can execute sync tasks with a limit on the number of tasks that can
 /// wait in the queue. The number of threads defines how many tasks can be executed in parallel.
@@ -94,10 +88,7 @@ impl SyncProcessor {
 #[allow(clippy::bool_assert_comparison)]
 mod tests {
     use super::*;
-    use std::{
-        thread::sleep,
-        time::Duration,
-    };
+    use std::{thread::sleep, time::Duration};
     use tokio::time::Instant;
 
     #[tokio::test]

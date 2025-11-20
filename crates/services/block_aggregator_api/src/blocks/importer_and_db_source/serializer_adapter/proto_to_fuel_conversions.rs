@@ -8,6 +8,7 @@ use crate::{
         Header as ProtoHeader,
         Input as ProtoInput,
         Output as ProtoOutput,
+        PanicInstruction as ProtoPanicInstruction,
         Policies as ProtoPolicies,
         StorageSlot as ProtoStorageSlot,
         Transaction as ProtoTransaction,
@@ -18,6 +19,8 @@ use crate::{
         header::VersionedHeader as ProtoVersionedHeader,
         input::Variant as ProtoInputVariant,
         output::Variant as ProtoOutputVariant,
+        receipt::Variant as ProtoReceiptVariant,
+        script_execution_result::Variant as ProtoScriptExecutionResultVariant,
         transaction::Variant as ProtoTransactionVariant,
         upgrade_purpose::Variant as ProtoUpgradePurposeVariant,
     },
@@ -37,6 +40,10 @@ use fuel_core_types::{
             Empty,
         },
     },
+    fuel_asm::{
+        PanicInstruction,
+        PanicReason,
+    },
     fuel_tx::{
         Address,
         BlobBody,
@@ -44,6 +51,7 @@ use fuel_core_types::{
         Input,
         Output,
         Receipt as FuelReceipt,
+        ScriptExecutionResult,
         StorageSlot,
         Transaction as FuelTransaction,
         TxPointer,
@@ -57,6 +65,12 @@ use fuel_core_types::{
             PoliciesBits,
             PolicyType,
         },
+    },
+    fuel_types::{
+        AssetId,
+        ContractId,
+        Nonce,
+        SubAssetId,
     },
     tai64,
 };
@@ -253,6 +267,236 @@ pub fn bytes32_to_vec(bytes: &fuel_core_types::fuel_types::Bytes32) -> Vec<u8> {
     bytes.as_ref().to_vec()
 }
 
+fn script_execution_result_from_proto(
+    proto: &crate::protobuf_types::ScriptExecutionResult,
+) -> crate::result::Result<ScriptExecutionResult> {
+    let variant = proto.variant.as_ref().ok_or_else(|| {
+        Error::Serialization(anyhow!("Missing script execution result variant"))
+    })?;
+
+    let result = match variant {
+        ProtoScriptExecutionResultVariant::Success(_) => ScriptExecutionResult::Success,
+        ProtoScriptExecutionResultVariant::Revert(_) => ScriptExecutionResult::Revert,
+        ProtoScriptExecutionResultVariant::Panic(_) => ScriptExecutionResult::Panic,
+        ProtoScriptExecutionResultVariant::GenericFailure(failure) => {
+            ScriptExecutionResult::GenericFailure(failure.code)
+        }
+    };
+
+    Ok(result)
+}
+
+fn panic_instruction_from_proto(proto: &ProtoPanicInstruction) -> PanicInstruction {
+    use crate::protobuf_types::PanicReason as ProtoPanicReason;
+
+    let reason_proto =
+        ProtoPanicReason::try_from(proto.reason).unwrap_or(ProtoPanicReason::Unknown);
+    let reason = PanicReason::from(reason_proto as u8);
+    PanicInstruction::error(reason, proto.instruction)
+}
+
+fn receipt_from_proto(
+    proto_receipt: &crate::protobuf_types::Receipt,
+) -> crate::result::Result<FuelReceipt> {
+    let variant = proto_receipt
+        .variant
+        .as_ref()
+        .ok_or_else(|| Error::Serialization(anyhow!("Missing receipt variant")))?;
+
+    let receipt = match variant {
+        ProtoReceiptVariant::Call(call) => {
+            let id = ContractId::try_from(call.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let to = ContractId::try_from(call.to.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let asset_id = AssetId::try_from(call.asset_id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            Ok(FuelReceipt::call(
+                id,
+                to,
+                call.amount,
+                asset_id,
+                call.gas,
+                call.param1,
+                call.param2,
+                call.pc,
+                call.is,
+            ))
+        }
+        ProtoReceiptVariant::ReturnReceipt(ret) => {
+            let id = ContractId::try_from(ret.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            Ok(FuelReceipt::ret(id, ret.val, ret.pc, ret.is))
+        }
+        ProtoReceiptVariant::ReturnData(rd) => {
+            let id = ContractId::try_from(rd.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let digest = Bytes32::try_from(rd.digest.as_slice()).map_err(|e| {
+                Error::Serialization(anyhow!(
+                    "Could not convert return data digest to Bytes32: {}",
+                    e
+                ))
+            })?;
+            Ok(FuelReceipt::return_data_with_len(
+                id,
+                rd.ptr,
+                rd.len,
+                digest,
+                rd.pc,
+                rd.is,
+                rd.data.clone(),
+            ))
+        }
+        ProtoReceiptVariant::Panic(panic_receipt) => {
+            let id = ContractId::try_from(panic_receipt.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let reason_proto = panic_receipt
+                .reason
+                .as_ref()
+                .ok_or_else(|| Error::Serialization(anyhow!("Missing panic reason")))?;
+            let reason = panic_instruction_from_proto(reason_proto);
+            let contract_id = panic_receipt
+                .contract_id
+                .as_ref()
+                .map(|cid| {
+                    ContractId::try_from(cid.as_slice())
+                        .map_err(|e| Error::Serialization(anyhow!(e)))
+                })
+                .transpose()?;
+            Ok(
+                FuelReceipt::panic(id, reason, panic_receipt.pc, panic_receipt.is)
+                    .with_panic_contract_id(contract_id),
+            )
+        }
+        ProtoReceiptVariant::Revert(revert) => {
+            let id = ContractId::try_from(revert.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            Ok(FuelReceipt::revert(id, revert.ra, revert.pc, revert.is))
+        }
+        ProtoReceiptVariant::Log(log) => {
+            let id = ContractId::try_from(log.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            Ok(FuelReceipt::log(
+                id, log.ra, log.rb, log.rc, log.rd, log.pc, log.is,
+            ))
+        }
+        ProtoReceiptVariant::LogData(log) => {
+            let id = ContractId::try_from(log.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let digest = Bytes32::try_from(log.digest.as_slice()).map_err(|e| {
+                Error::Serialization(anyhow!(
+                    "Could not convert log data digest to Bytes32: {}",
+                    e
+                ))
+            })?;
+            Ok(FuelReceipt::log_data_with_len(
+                id,
+                log.ra,
+                log.rb,
+                log.ptr,
+                log.len,
+                digest,
+                log.pc,
+                log.is,
+                log.data.clone(),
+            ))
+        }
+        ProtoReceiptVariant::Transfer(transfer) => {
+            let id = ContractId::try_from(transfer.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let to = ContractId::try_from(transfer.to.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let asset_id = AssetId::try_from(transfer.asset_id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            Ok(FuelReceipt::transfer(
+                id,
+                to,
+                transfer.amount,
+                asset_id,
+                transfer.pc,
+                transfer.is,
+            ))
+        }
+        ProtoReceiptVariant::TransferOut(transfer) => {
+            let id = ContractId::try_from(transfer.id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let to = Address::try_from(transfer.to.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let asset_id = AssetId::try_from(transfer.asset_id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            Ok(FuelReceipt::transfer_out(
+                id,
+                to,
+                transfer.amount,
+                asset_id,
+                transfer.pc,
+                transfer.is,
+            ))
+        }
+        ProtoReceiptVariant::ScriptResult(result) => {
+            let script_result = result.result.as_ref().ok_or_else(|| {
+                Error::Serialization(anyhow!("Missing script result payload"))
+            })?;
+            let execution_result = script_execution_result_from_proto(script_result)?;
+            Ok(FuelReceipt::script_result(
+                execution_result,
+                result.gas_used,
+            ))
+        }
+        ProtoReceiptVariant::MessageOut(msg) => {
+            let sender = Address::try_from(msg.sender.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let recipient = Address::try_from(msg.recipient.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let nonce = Nonce::try_from(msg.nonce.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let digest = Bytes32::try_from(msg.digest.as_slice()).map_err(|e| {
+                Error::Serialization(anyhow!(
+                    "Could not convert message digest to Bytes32: {}",
+                    e
+                ))
+            })?;
+            Ok(FuelReceipt::message_out_with_len(
+                sender,
+                recipient,
+                msg.amount,
+                nonce,
+                msg.len,
+                digest,
+                msg.data.clone(),
+            ))
+        }
+        ProtoReceiptVariant::Mint(mint) => {
+            let sub_id = SubAssetId::try_from(mint.sub_id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let contract_id = ContractId::try_from(mint.contract_id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            Ok(FuelReceipt::mint(
+                sub_id,
+                contract_id,
+                mint.val,
+                mint.pc,
+                mint.is,
+            ))
+        }
+        ProtoReceiptVariant::Burn(burn) => {
+            let sub_id = SubAssetId::try_from(burn.sub_id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            let contract_id = ContractId::try_from(burn.contract_id.as_slice())
+                .map_err(|e| Error::Serialization(anyhow!(e)))?;
+            Ok(FuelReceipt::burn(
+                sub_id,
+                contract_id,
+                burn.val,
+                burn.pc,
+                burn.is,
+            ))
+        }
+    }?;
+
+    Ok(receipt)
+}
+
 pub fn fuel_block_from_protobuf(
     proto_block: ProtoBlock,
     msg_ids: &[fuel_core_types::fuel_tx::MessageId],
@@ -262,22 +506,26 @@ pub fn fuel_block_from_protobuf(
         .versioned_block
         .ok_or_else(|| anyhow::anyhow!("Missing protobuf versioned_block"))
         .map_err(Error::Serialization)?;
-    let partial_header = match &versioned_block {
-        ProtoVersionedBlock::V1(v1_block) => {
-            let proto_header = v1_block
+    let (partial_header, txs, receipts) = match versioned_block {
+        ProtoVersionedBlock::V1(v1_inner) => {
+            let proto_header = v1_inner
                 .header
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("Missing protobuf header"))
                 .map_err(Error::Serialization)?;
-            partial_header_from_proto_header(&proto_header)?
+            let partial_header = partial_header_from_proto_header(&proto_header)?;
+            let txs = v1_inner
+                .transactions
+                .iter()
+                .map(tx_from_proto_tx)
+                .collect::<crate::result::Result<_>>()?;
+            let receipts = v1_inner
+                .receipts
+                .iter()
+                .map(receipt_from_proto)
+                .collect::<crate::result::Result<_>>()?;
+            (partial_header, txs, receipts)
         }
-    };
-    let txs = match versioned_block {
-        ProtoVersionedBlock::V1(v1_inner) => v1_inner
-            .transactions
-            .iter()
-            .map(tx_from_proto_tx)
-            .collect::<crate::result::Result<_>>()?,
     };
     let block = FuelBlock::new(
         partial_header,
@@ -289,7 +537,7 @@ pub fn fuel_block_from_protobuf(
     )
     .map_err(|e| anyhow!(e))
     .map_err(Error::Serialization)?;
-    Ok((block, vec![]))
+    Ok((block, receipts))
 }
 
 pub fn partial_header_from_proto_header(

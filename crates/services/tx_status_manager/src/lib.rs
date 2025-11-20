@@ -14,15 +14,8 @@ mod tx_status_stream;
 mod update_sender;
 pub mod utils;
 
-pub use service::{
-    SharedData,
-    Task,
-    new_service,
-};
-pub use tx_status_stream::{
-    TxStatusMessage,
-    TxStatusStream,
-};
+pub use service::{SharedData, Task, new_service};
+pub use tx_status_stream::{TxStatusMessage, TxStatusStream};
 pub use utils::from_executor_to_status;
 
 #[cfg(test)]

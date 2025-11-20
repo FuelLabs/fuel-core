@@ -3,10 +3,7 @@
 use crate::{
     fuel_asm::Word,
     fuel_tx::Address,
-    fuel_types::{
-        AssetId,
-        Nonce,
-    },
+    fuel_types::{AssetId, Nonce},
 };
 use coin::Coin;
 use fuel_vm_private::prelude::UtxoId;

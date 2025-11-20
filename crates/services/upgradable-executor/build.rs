@@ -1,10 +1,7 @@
 #[cfg(feature = "wasm-executor")]
 use std::{
     env,
-    path::{
-        Path,
-        PathBuf,
-    },
+    path::{Path, PathBuf},
     process::Command,
 };
 

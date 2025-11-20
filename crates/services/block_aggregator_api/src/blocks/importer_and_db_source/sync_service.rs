@@ -1,28 +1,14 @@
-use crate::blocks::{
-    BlockSourceEvent,
-    importer_and_db_source::BlockSerializer,
-};
+use crate::blocks::{BlockSourceEvent, importer_and_db_source::BlockSerializer};
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    StateWatcher,
-    TaskNextAction,
-    try_or_continue,
+    RunnableService, RunnableTask, StateWatcher, TaskNextAction, try_or_continue,
     try_or_stop,
 };
 use fuel_core_storage::{
-    self,
-    StorageInspect,
-    tables::{
-        FuelBlocks,
-        Transactions,
-    },
+    self, StorageInspect,
+    tables::{FuelBlocks, Transactions},
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    fuel_tx::{Transaction, TxId},
     fuel_types::BlockHeight,
 };
 use tokio::sync::mpsc::Sender;

@@ -1,22 +1,12 @@
 use super::run_group_ref;
 
-use crate::utils::{
-    arb_dependent_cost_values,
-    linear_short,
-    set_full_word,
-};
+use crate::utils::{arb_dependent_cost_values, linear_short, set_full_word};
 
-use criterion::{
-    Criterion,
-    Throughput,
-};
+use criterion::{Criterion, Throughput};
 use fuel_core_benches::*;
 use fuel_core_types::{
     fuel_asm::*,
-    fuel_vm::{
-        consts::MEM_SIZE,
-        interpreter::MemoryInstance,
-    },
+    fuel_vm::{consts::MEM_SIZE, interpreter::MemoryInstance},
 };
 
 pub fn run(c: &mut Criterion) {

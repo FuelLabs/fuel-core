@@ -2,10 +2,7 @@ use clap::Parser;
 use fuel_core::schema::build_schema;
 use std::{
     env,
-    fs::{
-        self,
-        File,
-    },
+    fs::{self, File},
     io::Write,
     path::PathBuf,
 };

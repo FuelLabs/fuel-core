@@ -2,14 +2,8 @@ use cynic::QueryBuilder;
 use fuel_core_client::client::{
     FuelClient,
     schema::{
-        BlockId,
-        U32,
-        block::{
-            BlockByHeightArgs,
-            BlockByHeightArgsFields,
-            Consensus,
-            Header,
-        },
+        BlockId, U32,
+        block::{BlockByHeightArgs, BlockByHeightArgsFields, Consensus, Header},
         schema,
         tx::OpaqueTransaction,
     },

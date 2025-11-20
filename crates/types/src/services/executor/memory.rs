@@ -1,13 +1,7 @@
 //! A pool of recyclable VM memory instances.
 
-use alloc::{
-    sync::Arc,
-    vec::Vec,
-};
-use core::{
-    fmt,
-    mem,
-};
+use alloc::{sync::Arc, vec::Vec};
+use core::{fmt, mem};
 use fuel_vm_private::interpreter::MemoryInstance;
 use parking_lot::Mutex;
 

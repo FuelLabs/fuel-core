@@ -2,43 +2,20 @@
 //! reserved nodes and [`LimitedBehaviour`].
 
 use libp2p::{
-    core::{
-        ConnectedPoint,
-        Endpoint,
-        Multiaddr,
-        transport::PortUse,
-    },
+    core::{ConnectedPoint, Endpoint, Multiaddr, transport::PortUse},
     identity::PeerId,
     swarm::{
-        ConnectionClosed,
-        ConnectionDenied,
-        ConnectionId,
-        FromSwarm,
-        NetworkBehaviour,
-        THandler,
-        THandlerInEvent,
-        THandlerOutEvent,
-        ToSwarm,
-        behaviour::{
-            ConnectionEstablished,
-            DialFailure,
-            ListenFailure,
-        },
+        ConnectionClosed, ConnectionDenied, ConnectionId, FromSwarm, NetworkBehaviour,
+        THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
+        behaviour::{ConnectionEstablished, DialFailure, ListenFailure},
         dummy,
     },
 };
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-        hash_map::Entry,
-    },
+    collections::{HashMap, HashSet, hash_map::Entry},
     fmt,
     sync::Arc,
-    task::{
-        Context,
-        Poll,
-    },
+    task::{Context, Poll},
 };
 use void::Void;
 
@@ -233,7 +210,7 @@ impl NetworkBehaviour for Behaviour {
             .remove(&connection_id);
 
         if connections.reserved_peers.contains(&peer) {
-            return Ok(dummy::ConnectionHandler)
+            return Ok(dummy::ConnectionHandler);
         }
 
         check_limit(
@@ -299,7 +276,7 @@ impl NetworkBehaviour for Behaviour {
             .remove(&connection_id);
 
         if connections.reserved_peers.contains(&peer) {
-            return Ok(dummy::ConnectionHandler)
+            return Ok(dummy::ConnectionHandler);
         }
 
         check_limit(

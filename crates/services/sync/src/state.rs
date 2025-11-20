@@ -1,9 +1,6 @@
 //! State of the sync service.
 
-use std::{
-    cmp::Ordering,
-    ops::RangeInclusive,
-};
+use std::{cmp::Ordering, ops::RangeInclusive};
 
 #[cfg(test)]
 mod test;

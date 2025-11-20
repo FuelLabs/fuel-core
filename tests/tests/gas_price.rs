@@ -1,89 +1,46 @@
 #![allow(non_snake_case)]
 
-use crate::helpers::{
-    TestContext,
-    TestSetupBuilder,
-};
+use crate::helpers::{TestContext, TestSetupBuilder};
 use fuel_core::{
-    chain_config::{
-        ChainConfig,
-        StateConfig,
-    },
+    chain_config::{ChainConfig, StateConfig},
     database::Database,
     p2p_test_helpers::{
-        BootstrapSetup,
-        CustomizeConfig,
-        Nodes,
-        ProducerSetup,
-        ValidatorSetup,
-        make_nodes,
+        BootstrapSetup, CustomizeConfig, Nodes, ProducerSetup, ValidatorSetup, make_nodes,
     },
-    service::{
-        Config,
-        FuelService,
-    },
+    service::{Config, FuelService},
 };
 use fuel_core_client::client::{
     FuelClient,
-    types::{
-        TransactionStatus,
-        TransactionType,
-        gas_price::LatestGasPrice,
-    },
+    types::{TransactionStatus, TransactionType, gas_price::LatestGasPrice},
 };
 use fuel_core_gas_price_service::{
     common::fuel_core_storage_adapter::storage::GasPriceMetadata,
-    ports::{
-        GasPriceData,
-        GetLatestRecordedHeight,
-        GetMetadataStorage,
-    },
+    ports::{GasPriceData, GetLatestRecordedHeight, GetMetadataStorage},
     v1::{
         da_source_service::block_committer_costs::{
-            RawDaBlockCosts,
-            fake_server::FakeServer,
+            RawDaBlockCosts, fake_server::FakeServer,
         },
         metadata::V1Metadata,
     },
 };
 use fuel_core_poa::Trigger;
-use fuel_core_storage::{
-    StorageAsRef,
-    transactional::AtomicView,
-};
+use fuel_core_storage::{StorageAsRef, transactional::AtomicView};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_asm::*,
-    fuel_crypto::{
-        SecretKey,
-        coins_bip32::ecdsa::signature::rand_core::SeedableRng,
-    },
+    fuel_crypto::{SecretKey, coins_bip32::ecdsa::signature::rand_core::SeedableRng},
     fuel_tx::{
-        AssetId,
-        ConsensusParameters,
-        Finalizable,
-        Input,
-        Receipt,
-        Transaction,
-        TransactionBuilder,
-        consensus_parameters::ConsensusParametersV1,
+        AssetId, ConsensusParameters, Finalizable, Input, Receipt, Transaction,
+        TransactionBuilder, consensus_parameters::ConsensusParametersV1,
         field::MintGasPrice,
     },
     fuel_types::BlockHeight,
     services::executor::TransactionExecutionResult,
 };
-use rand::{
-    Rng,
-    prelude::StdRng,
-};
-use std::{
-    self,
-    ops::Deref,
-    time::Duration,
-};
+use rand::{Rng, prelude::StdRng};
+use std::{self, ops::Deref, time::Duration};
 use test_helpers::{
-    assemble_tx::AssembleAndRunTx,
-    default_signing_wallet,
+    assemble_tx::AssembleAndRunTx, default_signing_wallet,
     fuel_core_driver::FuelCoreDriver,
 };
 

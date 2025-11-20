@@ -1,24 +1,12 @@
-use std::{
-    io::Write,
-    sync::Arc,
-};
+use std::{io::Write, sync::Arc};
 
 use itertools::Itertools;
 use parquet::{
-    basic::{
-        Compression,
-        Repetition,
-    },
-    file::{
-        properties::WriterProperties,
-        writer::SerializedFileWriter,
-    },
+    basic::{Compression, Repetition},
+    file::{properties::WriterProperties, writer::SerializedFileWriter},
 };
 
-use parquet::{
-    data_type::ByteArrayType,
-    schema::types::Type,
-};
+use parquet::{data_type::ByteArrayType, schema::types::Type};
 
 pub struct Encoder<W>
 where

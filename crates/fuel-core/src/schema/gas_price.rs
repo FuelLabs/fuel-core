@@ -1,24 +1,12 @@
-use super::scalars::{
-    U32,
-    U64,
-};
+use super::scalars::{U32, U64};
 use crate::{
-    graphql_api::{
-        api_service::GasPriceProvider,
-        query_costs,
-    },
+    graphql_api::{api_service::GasPriceProvider, query_costs},
     schema::ReadViewProvider,
 };
-use async_graphql::{
-    Context,
-    Object,
-};
+use async_graphql::{Context, Object};
 use fuel_core_types::{
     blockchain::block::Block,
-    fuel_tx::{
-        Transaction,
-        field::MintGasPrice,
-    },
+    fuel_tx::{Transaction, field::MintGasPrice},
 };
 
 pub struct LatestGasPrice {

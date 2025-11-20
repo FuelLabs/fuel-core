@@ -98,10 +98,7 @@ where
 mod tests {
     use super::*;
     use crate::database::database_description::{
-        DatabaseDescription,
-        off_chain::OffChain,
-        on_chain::OnChain,
-        relayer::Relayer,
+        DatabaseDescription, off_chain::OffChain, on_chain::OnChain, relayer::Relayer,
     };
     use strum::EnumCount;
 

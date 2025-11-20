@@ -3,11 +3,7 @@
 use crate::{
     Result as StorageResult,
     kv_store::{
-        BatchOperations,
-        KeyValueInspect,
-        KeyValueMutate,
-        StorageColumn,
-        Value,
+        BatchOperations, KeyValueInspect, KeyValueMutate, StorageColumn, Value,
         WriteOperation,
     },
     structured_storage::StructuredStorage,
@@ -17,24 +13,14 @@ use core::borrow::Borrow;
 #[cfg(feature = "alloc")]
 use alloc::{
     boxed::Box,
-    collections::{
-        BTreeMap,
-        btree_map,
-    },
+    collections::{BTreeMap, btree_map},
     vec::Vec,
 };
 
 #[cfg(feature = "test-helpers")]
 use crate::{
-    iter::{
-        BoxedIter,
-        IterDirection,
-        IterableStore,
-    },
-    kv_store::{
-        KVItem,
-        KeyItem,
-    },
+    iter::{BoxedIter, IterDirection, IterableStore},
+    kv_store::{KVItem, KeyItem},
 };
 
 /// Provides an atomic view of the storage at the latest height at
@@ -587,10 +573,7 @@ mod test {
     use super::*;
     use crate::structured_storage::test::InMemoryStorage;
     #[cfg(test)]
-    use crate::{
-        StorageAsMut,
-        tables::Messages,
-    };
+    use crate::{StorageAsMut, tables::Messages};
     #[allow(unused_imports)]
     use std::sync::Arc;
 

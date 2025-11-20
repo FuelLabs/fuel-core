@@ -1,68 +1,33 @@
 use crate::{
     combined_database::CombinedDatabase,
-    database::{
-        Database,
-        database_description::DatabaseDescription,
-    },
+    database::{Database, database_description::DatabaseDescription},
     fuel_core_graphql_api::storage::{
         messages::SpentMessages,
-        transactions::{
-            OwnedTransactions,
-            TransactionStatuses,
-        },
+        transactions::{OwnedTransactions, TransactionStatuses},
     },
-    graphql_api::storage::old::{
-        OldFuelBlockConsensus,
-        OldFuelBlocks,
-        OldTransactions,
-    },
+    graphql_api::storage::old::{OldFuelBlockConsensus, OldFuelBlocks, OldTransactions},
 };
 use fuel_core_chain_config::{
-    AddTable,
-    ChainConfig,
-    LastBlockConfig,
-    SnapshotFragment,
-    SnapshotMetadata,
-    SnapshotWriter,
-    StateConfigBuilder,
-    TableEntry,
+    AddTable, ChainConfig, LastBlockConfig, SnapshotFragment, SnapshotMetadata,
+    SnapshotWriter, StateConfigBuilder, TableEntry,
 };
 use fuel_core_poa::ports::Database as DatabaseTrait;
 use fuel_core_storage::{
-    iter::{
-        IterDirection,
-        IterableTable,
-    },
+    iter::{IterDirection, IterableTable},
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
     tables::{
-        Coins,
-        ContractsAssets,
-        ContractsLatestUtxo,
-        ContractsRawCode,
-        ContractsState,
-        FuelBlocks,
-        Messages,
-        ProcessedTransactions,
-        SealedBlockConsensus,
-        Transactions,
-        merkle::{
-            FuelBlockMerkleData,
-            FuelBlockMerkleMetadata,
-        },
+        Coins, ContractsAssets, ContractsLatestUtxo, ContractsRawCode, ContractsState,
+        FuelBlocks, Messages, ProcessedTransactions, SealedBlockConsensus, Transactions,
+        merkle::{FuelBlockMerkleData, FuelBlockMerkleMetadata},
     },
     transactional::AtomicView,
 };
-use fuel_core_types::{
-    fuel_types::ContractId,
-    fuel_vm::BlobData,
-};
+use fuel_core_types::{fuel_types::ContractId, fuel_vm::BlobData};
 use itertools::Itertools;
 
 use super::{
-    NotifyCancel,
-    progress::MultipleProgressReporter,
-    task_manager::TaskManager,
+    NotifyCancel, progress::MultipleProgressReporter, task_manager::TaskManager,
 };
 
 pub struct Exporter<Fun, N> {

@@ -1,11 +1,5 @@
-use crate::schema::scalars::{
-    Bytes32,
-    U16,
-};
-use async_graphql::{
-    Object,
-    Union,
-};
+use crate::schema::scalars::{Bytes32, U16};
+use async_graphql::{Object, Union};
 
 #[derive(Union)]
 pub enum UpgradePurpose {

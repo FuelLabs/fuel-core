@@ -5,10 +5,7 @@ pub mod request_response;
 use crate::gossipsub::messages::GossipTopicTag;
 use libp2p::request_response as libp2p_request_response;
 
-use std::{
-    borrow::Cow,
-    io,
-};
+use std::{borrow::Cow, io};
 
 pub trait Encoder: Send {
     /// Returns the serialized object as a slice.

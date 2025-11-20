@@ -1,8 +1,5 @@
 use mockall::Sequence;
-use tokio::{
-    sync::Notify,
-    time::Instant,
-};
+use tokio::{sync::Notify, time::Instant};
 
 use super::*;
 

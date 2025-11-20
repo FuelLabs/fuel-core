@@ -3,11 +3,7 @@
 use crate::Result as StorageResult;
 
 #[cfg(feature = "alloc")]
-use alloc::{
-    boxed::Box,
-    string::String,
-    vec::Vec,
-};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[cfg(feature = "std")]
 use core::ops::Deref;

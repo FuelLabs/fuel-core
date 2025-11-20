@@ -1,15 +1,9 @@
 use super::{
-    Decode,
-    Encode,
-    gossipsub::GossipsubMessageHandler,
+    Decode, Encode, gossipsub::GossipsubMessageHandler,
     request_response::RequestResponseMessageHandler,
 };
 
-use std::{
-    borrow::Cow,
-    io,
-    num::NonZeroU32,
-};
+use std::{borrow::Cow, io, num::NonZeroU32};
 
 #[derive(Clone, Default)]
 pub struct PostcardCodec;
@@ -63,8 +57,7 @@ where
 #[allow(non_snake_case)]
 mod tests {
     use fuel_core_types::{
-        blockchain::SealedBlockHeader,
-        fuel_tx::Transaction,
+        blockchain::SealedBlockHeader, fuel_tx::Transaction,
         services::p2p::NetworkableTransactionPool,
     };
     use libp2p::request_response::Codec;
@@ -74,9 +67,7 @@ mod tests {
         codecs::request_response::RequestResponseMessageHandler,
         request_response::{
             messages::{
-                RequestMessage,
-                ResponseMessageErrorCode,
-                V1ResponseMessage,
+                RequestMessage, ResponseMessageErrorCode, V1ResponseMessage,
                 V2ResponseMessage,
             },
             protocols::RequestResponseProtocol,

@@ -1,22 +1,9 @@
 use crate::client::schema::{
-    Address,
-    AssetId,
-    Bytes32,
-    ContractId,
-    ConversionError::{
-        self,
-        MissingField,
-    },
-    HexString,
-    Nonce,
-    SubId,
-    U64,
-    schema,
+    Address, AssetId, Bytes32, ContractId,
+    ConversionError::{self, MissingField},
+    HexString, Nonce, SubId, U64, schema,
 };
-use fuel_core_types::{
-    fuel_asm::Word,
-    fuel_tx,
-};
+use fuel_core_types::{fuel_asm::Word, fuel_tx};
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]

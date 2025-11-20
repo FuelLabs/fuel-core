@@ -3,16 +3,10 @@
 //! It includes all primitive types and types that are arrays inside
 //! or could be represented by arrays.
 
-use crate::codec::{
-    Decode,
-    Encode,
-};
+use crate::codec::{Decode, Encode};
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    fuel_tx::{
-        TxId,
-        UtxoId,
-    },
+    fuel_tx::{TxId, UtxoId},
     fuel_types::BlockHeight,
 };
 

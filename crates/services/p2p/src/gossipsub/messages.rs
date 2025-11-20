@@ -1,9 +1,6 @@
 use crate::ports::P2PPreConfirmationMessage;
 use fuel_core_types::fuel_tx::Transaction;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// Used to inform `GossipsubCodec` to which GossipsubMessage decode to

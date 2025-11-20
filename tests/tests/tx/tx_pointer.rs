@@ -1,34 +1,14 @@
-use crate::helpers::{
-    TestContext,
-    TestSetupBuilder,
-};
+use crate::helpers::{TestContext, TestSetupBuilder};
 use fuel_core::chain_config::CoinConfig;
 use fuel_core_types::{
     fuel_crypto::SecretKey,
     fuel_tx::{
-        Address,
-        AssetId,
-        ContractId,
-        Finalizable,
-        Input,
-        Output,
-        Script,
-        Transaction,
-        TransactionBuilder,
-        TxPointer,
-        UniqueIdentifier,
-        UtxoId,
-        field::{
-            Inputs,
-            Outputs,
-        },
+        Address, AssetId, ContractId, Finalizable, Input, Output, Script, Transaction,
+        TransactionBuilder, TxPointer, UniqueIdentifier, UtxoId,
+        field::{Inputs, Outputs},
     },
 };
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 /// Verifies that tx_pointer's are correctly set for both coin and contract input types when
 /// using resources from genesis.

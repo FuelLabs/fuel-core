@@ -1,16 +1,10 @@
-use fuel_core_types::fuel_tx::{
-    ContractIdExt,
-    Receipt,
-};
+use fuel_core_types::fuel_tx::{ContractIdExt, Receipt};
 
 use fuel_core_storage::StorageAsMut;
 
 use crate::graphql_api::{
     ports::worker::OffChainDatabaseTransaction,
-    storage::assets::{
-        AssetDetails,
-        AssetsInfo,
-    },
+    storage::assets::{AssetDetails, AssetsInfo},
 };
 
 use super::error::IndexationError;
@@ -105,28 +99,14 @@ where
 
 #[cfg(test)]
 mod tests {
-    use fuel_core_storage::{
-        StorageAsMut,
-        transactional::WriteTransaction,
-    };
-    use fuel_core_types::fuel_tx::{
-        ContractId,
-        ContractIdExt,
-        Receipt,
-        SubAssetId,
-    };
+    use fuel_core_storage::{StorageAsMut, transactional::WriteTransaction};
+    use fuel_core_types::fuel_tx::{ContractId, ContractIdExt, Receipt, SubAssetId};
 
     use crate::{
-        database::{
-            Database,
-            database_description::off_chain::OffChain,
-        },
+        database::{Database, database_description::off_chain::OffChain},
         graphql_api::{
             indexation::asset_metadata::update,
-            storage::assets::{
-                AssetDetails,
-                AssetsInfo,
-            },
+            storage::assets::{AssetDetails, AssetsInfo},
         },
         state::rocks_db::DatabaseConfig,
     };

@@ -2,31 +2,17 @@ use crate::{
     self as fuel_core_txpool,
     pool::TxPoolStats,
     pool_worker::{
-        PoolInsertRequest,
-        PoolNotification,
-        PoolReadRequest,
-        PoolWorkerInterface,
+        PoolInsertRequest, PoolNotification, PoolReadRequest, PoolWorkerInterface,
     },
 };
 use fuel_core_services::TaskNextAction;
 
-use crate::pool_worker::{
-    ExtendedInsertionSource,
-    InsertionSource,
-};
+use crate::pool_worker::{ExtendedInsertionSource, InsertionSource};
 use fuel_core_metrics::txpool_metrics::txpool_metrics;
 use fuel_core_services::{
-    AsyncProcessor,
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
+    AsyncProcessor, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
     SyncProcessor,
-    seqlock::{
-        SeqLock,
-        SeqLockReader,
-        SeqLockWriter,
-    },
+    seqlock::{SeqLock, SeqLockReader, SeqLockWriter},
 };
 use fuel_core_txpool::{
     collision_manager::basic::BasicCollisionManager,
@@ -34,48 +20,30 @@ use fuel_core_txpool::{
     error::Error,
     pool::Pool,
     ports::{
-        AtomicView,
-        BlockImporter as BlockImporterTrait,
-        ChainStateInfoProvider,
-        GasPriceProvider as GasPriceProviderTrait,
-        P2PRequests,
-        P2PSubscriptions,
-        TxPoolPersistentStorage,
-        TxStatusManager as TxStatusManagerTrait,
+        AtomicView, BlockImporter as BlockImporterTrait, ChainStateInfoProvider,
+        GasPriceProvider as GasPriceProviderTrait, P2PRequests, P2PSubscriptions,
+        TxPoolPersistentStorage, TxStatusManager as TxStatusManagerTrait,
         WasmChecker as WasmCheckerTrait,
     },
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
     service::{
-        pruner::TransactionPruner,
-        subscriptions::Subscriptions,
+        pruner::TransactionPruner, subscriptions::Subscriptions,
         verifications::Verification,
     },
     shared_state::SharedState,
     storage::{
         Storage,
-        graph::{
-            GraphConfig,
-            GraphStorage,
-        },
+        graph::{GraphConfig, GraphStorage},
     },
 };
 use fuel_core_types::{
-    fuel_tx::{
-        Transaction,
-        UniqueIdentifier,
-    },
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_tx::{Transaction, UniqueIdentifier},
+    fuel_types::{BlockHeight, ChainId},
     services::{
         block_importer::SharedImportResult,
         executor::memory::MemoryPool,
         p2p::{
-            GossipData,
-            GossipsubMessageAcceptance,
-            GossipsubMessageInfo,
-            PeerId,
+            GossipData, GossipsubMessageAcceptance, GossipsubMessageInfo, PeerId,
             TransactionGossipData,
         },
         transaction_status::TransactionStatus,
@@ -86,23 +54,12 @@ use fuel_core_types::{
 use futures::StreamExt;
 use parking_lot::RwLock;
 use std::{
-    collections::{
-        BTreeMap,
-        HashSet,
-        VecDeque,
-    },
+    collections::{BTreeMap, HashSet, VecDeque},
     sync::Arc,
-    time::{
-        SystemTime,
-        SystemTimeError,
-    },
+    time::{SystemTime, SystemTimeError},
 };
 use tokio::{
-    sync::{
-        mpsc,
-        oneshot,
-        watch,
-    },
+    sync::{mpsc, oneshot, watch},
     time::MissedTickBehavior,
 };
 
@@ -299,7 +256,7 @@ where
 
         if let Err(err) = self.pool_worker.process_block(Arc::clone(&result)) {
             tracing::error!("{err}");
-            return TaskNextAction::Stop
+            return TaskNextAction::Stop;
         }
         // We don't want block importer wait for us to process the result.
         drop(result);
@@ -324,7 +281,7 @@ where
 
                 if let Err(err) = result {
                     tracing::error!("{err}");
-                    return TaskNextAction::Stop
+                    return TaskNextAction::Stop;
                 }
             }
         }
@@ -436,7 +393,7 @@ where
         for transaction in transactions {
             let Ok(reservation) = self.transaction_verifier_process.reserve() else {
                 tracing::error!("Failed to insert transactions: Out of capacity");
-                continue
+                continue;
             };
             let op = self.insert_transaction(transaction, None, None);
 
@@ -516,7 +473,7 @@ where
                         tx_id,
                         TransactionStatus::squeezed_out(err.to_string(), tx_id),
                     );
-                    return
+                    return;
                 }
             };
 
@@ -581,7 +538,7 @@ where
 
                     // We already synced with this peer in the past.
                     if !tx_sync_history.insert(peer_id.clone()) {
-                        return
+                        return;
                     }
                 }
 

@@ -4,10 +4,7 @@ use fuel_core_client::client::FuelClient;
 use fuel_core_poa::ports::BlockImporter;
 use fuel_core_types::fuel_types::BlockHeight;
 use std::time::Duration;
-use tempfile::{
-    TempDir,
-    tempdir,
-};
+use tempfile::{TempDir, tempdir};
 
 pub struct FuelCoreDriver {
     /// This must be before the db_dir as the drop order matters here

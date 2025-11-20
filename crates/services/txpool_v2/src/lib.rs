@@ -65,8 +65,5 @@ fuel_core_trace::enable_tracing!();
 use fuel_core_types::fuel_asm::Word;
 pub use pool::TxPoolStats;
 pub use selection_algorithms::Constraints;
-pub use service::{
-    Service,
-    new_service,
-};
+pub use service::{Service, new_service};
 pub use shared_state::SharedState;

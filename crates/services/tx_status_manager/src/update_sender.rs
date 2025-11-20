@@ -1,29 +1,18 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use fuel_core_types::fuel_tx::Bytes32;
 use parking_lot::Mutex;
 use tokio::{
     sync::{
-        OwnedSemaphorePermit,
-        Semaphore,
-        mpsc::{
-            self,
-            error::TrySendError,
-        },
+        OwnedSemaphorePermit, Semaphore,
+        mpsc::{self, error::TrySendError},
     },
     time::Instant,
 };
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::tx_status_stream::{
-    TxStatusMessage,
-    TxStatusStream,
-    TxUpdate,
-    TxUpdateStream,
+    TxStatusMessage, TxStatusStream, TxUpdate, TxUpdateStream,
 };
 
 /// Subscriber channel buffer size.

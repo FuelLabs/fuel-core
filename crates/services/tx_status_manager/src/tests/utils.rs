@@ -1,38 +1,20 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use fuel_core_types::{
-    fuel_tx::Bytes32,
-    services::transaction_status::TransactionStatus,
+    fuel_tx::Bytes32, services::transaction_status::TransactionStatus,
 };
-use proptest::{
-    prelude::*,
-    prop_oneof,
-};
+use proptest::{prelude::*, prop_oneof};
 use test_strategy::Arbitrary;
 use tokio::time::Instant;
 
 use crate as fuel_core_tx_status_manager;
 use fuel_core_tx_status_manager::{
     tx_status_stream::{
-        State,
-        TxStatusMessage,
-        TxStatusStream,
-        TxUpdate,
-        TxUpdateStream,
+        State, TxStatusMessage, TxStatusStream, TxUpdate, TxUpdateStream,
     },
     update_sender::{
-        CreateChannel,
-        MockSendStatus,
-        Permit,
-        PermitTrait,
-        Permits,
-        SendError,
-        SendStatus,
-        Sender,
-        Tx,
+        CreateChannel, MockSendStatus, Permit, PermitTrait, Permits, SendError,
+        SendStatus, Sender, Tx,
     },
 };
 

@@ -1,43 +1,27 @@
 use self::schema::{
     block::ProduceBlockArgs,
-    message::{
-        MessageProofArgs,
-        NonceArgs,
-    },
+    message::{MessageProofArgs, NonceArgs},
 };
 #[cfg(feature = "subscriptions")]
 use crate::client::types::StatusWithTransaction;
 use crate::{
     client::{
         schema::{
-            Tai64Timestamp,
-            TransactionId,
+            Tai64Timestamp, TransactionId,
             block::BlockByHeightArgs,
-            coins::{
-                ExcludeInput,
-                SpendQueryElementInput,
-            },
+            coins::{ExcludeInput, SpendQueryElementInput},
             contract::ContractBalanceQueryArgs,
             gas_price::EstimateGasPrice,
             message::MessageStatusArgs,
             relayed_tx::RelayedTransactionStatusArgs,
-            tx::{
-                DryRunArg,
-                TxWithEstimatedPredicatesArg,
-            },
+            tx::{DryRunArg, TxWithEstimatedPredicatesArg},
         },
         types::{
             RelayedTransactionStatus,
             asset::AssetDetail,
             gas_price::LatestGasPrice,
             message::MessageStatus,
-            primitives::{
-                Address,
-                AssetId,
-                BlockId,
-                ContractId,
-                UtxoId,
-            },
+            primitives::{Address, AssetId, BlockId, ContractId, UtxoId},
             upgrades::StateTransitionBytecode,
         },
     },
@@ -48,123 +32,49 @@ use anyhow::Context;
 #[cfg(feature = "subscriptions")]
 use cynic::SubscriptionBuilder;
 use cynic::{
-    Id,
-    MutationBuilder,
-    Operation,
-    QueryBuilder,
-    QueryFragment,
-    QueryVariables,
+    Id, MutationBuilder, Operation, QueryBuilder, QueryFragment, QueryVariables,
 };
 use fuel_core_types::{
-    blockchain::header::{
-        ConsensusParametersVersion,
-        StateTransitionBytecodeVersion,
-    },
-    fuel_asm::{
-        Instruction,
-        Word,
-    },
-    fuel_tx::{
-        BlobId,
-        Bytes32,
-        ConsensusParameters,
-        Receipt,
-        Transaction,
-        TxId,
-    },
-    fuel_types::{
-        self,
-        BlockHeight,
-        Nonce,
-        canonical::Serialize,
-    },
-    services::executor::{
-        StorageReadReplayEvent,
-        TransactionExecutionStatus,
-    },
+    blockchain::header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
+    fuel_asm::{Instruction, Word},
+    fuel_tx::{BlobId, Bytes32, ConsensusParameters, Receipt, Transaction, TxId},
+    fuel_types::{self, BlockHeight, Nonce, canonical::Serialize},
+    services::executor::{StorageReadReplayEvent, TransactionExecutionStatus},
 };
 #[cfg(feature = "subscriptions")]
-use futures::{
-    Stream,
-    StreamExt,
-};
+use futures::{Stream, StreamExt};
 use itertools::Itertools;
-use pagination::{
-    PageDirection,
-    PaginatedResult,
-    PaginationRequest,
-};
+use pagination::{PageDirection, PaginatedResult, PaginationRequest};
 use reqwest::Url;
 use schema::{
-    Bytes,
-    ContinueTx,
-    ContinueTxArgs,
-    ConversionError,
-    HexString,
-    IdArg,
-    MemoryArgs,
-    RegisterArgs,
-    RunResult,
-    SetBreakpoint,
-    SetBreakpointArgs,
-    SetSingleStepping,
-    SetSingleSteppingArgs,
-    StartTx,
-    StartTxArgs,
-    U32,
-    U64,
+    Bytes, ContinueTx, ContinueTxArgs, ConversionError, HexString, IdArg, MemoryArgs,
+    RegisterArgs, RunResult, SetBreakpoint, SetBreakpointArgs, SetSingleStepping,
+    SetSingleSteppingArgs, StartTx, StartTxArgs, U32, U64,
     assets::AssetInfoArg,
     balance::BalanceArgs,
     blob::BlobByIdArgs,
     block::BlockByIdArgs,
-    coins::{
-        CoinByIdArgs,
-        CoinsConnectionArgs,
-    },
-    contract::{
-        ContractBalancesConnectionArgs,
-        ContractByIdArgs,
-    },
+    coins::{CoinByIdArgs, CoinsConnectionArgs},
+    contract::{ContractBalancesConnectionArgs, ContractByIdArgs},
     da_compressed::DaCompressedBlockByHeightArgs,
     gas_price::BlockHorizonArgs,
-    storage_read_replay::{
-        StorageReadReplay,
-        StorageReadReplayArgs,
-    },
-    tx::{
-        AssembleTxArg,
-        TransactionsByOwnerConnectionArgs,
-        TxArg,
-        TxIdArgs,
-    },
+    storage_read_replay::{StorageReadReplay, StorageReadReplayArgs},
+    tx::{AssembleTxArg, TransactionsByOwnerConnectionArgs, TxArg, TxIdArgs},
 };
 #[cfg(feature = "subscriptions")]
 use std::future;
 use std::{
     convert::TryInto,
-    io::{
-        self,
-        ErrorKind,
-    },
+    io::{self, ErrorKind},
     net,
-    str::{
-        self,
-        FromStr,
-    },
-    sync::{
-        Arc,
-        Mutex,
-    },
+    str::{self, FromStr},
+    sync::{Arc, Mutex},
 };
 use tai64::Tai64;
 use tracing as _;
 use types::{
-    TransactionResponse,
-    TransactionStatus,
-    assemble_tx::{
-        AssembleTransactionResult,
-        RequiredBalance,
-    },
+    TransactionResponse, TransactionStatus,
+    assemble_tx::{AssembleTransactionResult, RequiredBalance},
 };
 
 #[cfg(feature = "subscriptions")]
@@ -902,10 +812,7 @@ impl FuelClient {
         contract_id: &ContractId,
     ) -> io::Result<impl Stream<Item = io::Result<schema::contract::ContractBalance>> + '_>
     {
-        use schema::{
-            contract::ContractBalance,
-            storage::ContractStorageBalancesArgs,
-        };
+        use schema::{contract::ContractBalance, storage::ContractStorageBalancesArgs};
         let variables = ContractStorageBalancesArgs {
             contract_id: (*contract_id).into(),
         };
@@ -1159,10 +1066,7 @@ impl FuelClient {
         id: &TxId,
         include_preconfirmation: Option<bool>,
     ) -> io::Result<impl Stream<Item = io::Result<TransactionStatus>> + '_> {
-        use schema::tx::{
-            StatusChangeSubscription,
-            StatusChangeSubscriptionArgs,
-        };
+        use schema::tx::{StatusChangeSubscription, StatusChangeSubscriptionArgs};
         let tx_id: TransactionId = (*id).into();
         let variables = StatusChangeSubscriptionArgs {
             id: tx_id,

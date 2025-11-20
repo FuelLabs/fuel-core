@@ -5,10 +5,7 @@
 
 use clap::Parser;
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::fuel_tx::{
-    Transaction,
-    TxId,
-};
+use fuel_core_types::fuel_tx::{Transaction, TxId};
 use serde_json::json;
 
 #[derive(Parser)]

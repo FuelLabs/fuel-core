@@ -1,10 +1,6 @@
 use fuel_core_storage::{
     Result as StorageResult,
-    kv_store::{
-        KeyValueInspect,
-        StorageColumn,
-        Value,
-    },
+    kv_store::{KeyValueInspect, StorageColumn, Value},
 };
 use fuel_core_types::services::executor::StorageReadReplayEvent;
 use parking_lot::Mutex;

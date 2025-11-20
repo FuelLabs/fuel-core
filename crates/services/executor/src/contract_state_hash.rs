@@ -2,20 +2,10 @@
 use std::collections::BTreeMap;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{
-    collections::BTreeMap,
-    vec::Vec,
-};
+use alloc::{collections::BTreeMap, vec::Vec};
 
-use fuel_core_types::fuel_tx::{
-    AssetId,
-    Bytes32,
-    Word,
-};
-use sha2::{
-    Digest,
-    Sha256,
-};
+use fuel_core_types::fuel_tx::{AssetId, Bytes32, Word};
+use sha2::{Digest, Sha256};
 
 /// Computes a hash of all contract balances that were read or modified.
 /// The hash is not dependent on the order of reads or writes.

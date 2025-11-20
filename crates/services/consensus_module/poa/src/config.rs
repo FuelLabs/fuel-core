@@ -1,7 +1,4 @@
-use fuel_core_types::{
-    fuel_types::ChainId,
-    signer::SignMode,
-};
+use fuel_core_types::{fuel_types::ChainId, signer::SignMode};
 use tokio::time::Duration;
 
 #[derive(Debug, Clone)]

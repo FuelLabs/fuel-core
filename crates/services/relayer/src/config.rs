@@ -3,10 +3,7 @@ use alloy_primitives::B256;
 use alloy_sol_types::SolEvent;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use once_cell::sync::Lazy;
-use std::{
-    str::FromStr,
-    time::Duration,
-};
+use std::{str::FromStr, time::Duration};
 
 pub(crate) static ETH_LOG_MESSAGE: Lazy<B256> =
     Lazy::new(|| crate::abi::bridge::MessageSent::SIGNATURE_HASH);

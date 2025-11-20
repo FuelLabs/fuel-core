@@ -1,48 +1,25 @@
 use crate::{
-    VersionedBlockPayload,
-    VersionedCompressedBlock,
+    VersionedBlockPayload, VersionedCompressedBlock,
     config::Config,
-    ports::{
-        HistoryLookup,
-        TemporalRegistry,
-    },
+    ports::{HistoryLookup, TemporalRegistry},
     registry::TemporalRegistryAll,
 };
 use fuel_core_types::{
     blockchain::block::PartialFuelBlock,
     fuel_compression::{
-        Compressible,
-        ContextError,
-        Decompress,
-        DecompressibleBy,
-        RegistryKey,
+        Compressible, ContextError, Decompress, DecompressibleBy, RegistryKey,
     },
     fuel_tx::{
-        AssetId,
-        CompressedUtxoId,
-        Mint,
-        ScriptCode,
-        Transaction,
-        TxPointer as FuelTxPointer,
-        UtxoId,
+        AssetId, CompressedUtxoId, Mint, ScriptCode, Transaction,
+        TxPointer as FuelTxPointer, UtxoId,
         field::TxPointer,
         input::{
-            AsField,
-            PredicateCode,
-            coin::{
-                Coin,
-                CoinSpecification,
-            },
-            message::{
-                Message,
-                MessageSpecification,
-            },
+            AsField, PredicateCode,
+            coin::{Coin, CoinSpecification},
+            message::{Message, MessageSpecification},
         },
     },
-    fuel_types::{
-        Address,
-        ContractId,
-    },
+    fuel_types::{Address, ContractId},
     tai64::Tai64,
 };
 
@@ -283,10 +260,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde::{
-        Deserialize,
-        Serialize,
-    };
+    use serde::{Deserialize, Serialize};
 
     #[tokio::test]
     async fn decompress_block_with_unknown_version() {

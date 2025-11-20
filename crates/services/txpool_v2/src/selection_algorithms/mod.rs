@@ -2,10 +2,7 @@ use std::collections::HashSet;
 
 use fuel_core_types::fuel_tx::ContractId;
 
-use crate::storage::{
-    RemovedTransactions,
-    StorageData,
-};
+use crate::storage::{RemovedTransactions, StorageData};
 
 pub mod ratio_tip_gas;
 

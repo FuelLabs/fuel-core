@@ -2,25 +2,16 @@
 use crate::graphql_api::ports::TxStatusManager;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
-    fuel_tx::{
-        Transaction,
-        UniqueIdentifier,
-    },
+    fuel_tx::{Transaction, UniqueIdentifier},
     fuel_types::Bytes32,
     services::transaction_status::TransactionStatus as TxPoolTxStatus,
     tai64::Tai64,
 };
-use futures::{
-    Stream,
-    StreamExt,
-};
+use futures::{Stream, StreamExt};
 
 use crate::{
     database::OffChainIterableKeyValueView,
-    query::{
-        TxnStatusChangeState,
-        transaction_status_change,
-    },
+    query::{TxnStatusChangeState, transaction_status_change},
     schema::tx::types::TransactionStatus,
 };
 

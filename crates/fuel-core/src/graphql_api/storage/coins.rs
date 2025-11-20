@@ -1,34 +1,18 @@
 mod codecs;
 
 use crate::fuel_core_graphql_api::{
-    indexation::coins_to_spend::{
-        NON_RETRYABLE_BYTE,
-        RETRYABLE_BYTE,
-    },
+    indexation::coins_to_spend::{NON_RETRYABLE_BYTE, RETRYABLE_BYTE},
     storage::coins::codecs::UTXO_ID_SIZE,
 };
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{
-        manual::Manual,
-        postcard::Postcard,
-        primitive::utxo_id_to_bytes,
-        raw::Raw,
-    },
+    codec::{manual::Manual, postcard::Postcard, primitive::utxo_id_to_bytes, raw::Raw},
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::{
-    entities::{
-        Message,
-        coins::coin::Coin,
-    },
-    fuel_tx::{
-        Address,
-        AssetId,
-        TxId,
-        UtxoId,
-    },
+    entities::{Message, coins::coin::Coin},
+    fuel_tx::{Address, AssetId, TxId, UtxoId},
     fuel_types::Nonce,
 };
 
@@ -168,20 +152,12 @@ impl TableWithBlueprint for OwnedCoins {
 mod test {
     use crate::{
         fuel_core_graphql_api::storage::coins::codecs::{
-            AMOUNT_SIZE,
-            COIN_TYPE_SIZE,
-            RETRYABLE_FLAG_SIZE,
+            AMOUNT_SIZE, COIN_TYPE_SIZE, RETRYABLE_FLAG_SIZE,
         },
         graphql_api::storage::coins::codecs::CoinType,
     };
-    use fuel_core_storage::codec::{
-        Encode,
-        Encoder,
-    };
-    use fuel_core_types::{
-        entities::relayer::message::MessageV1,
-        fuel_types::Nonce,
-    };
+    use fuel_core_storage::codec::{Encode, Encoder};
+    use fuel_core_types::{entities::relayer::message::MessageV1, fuel_types::Nonce};
 
     use super::*;
 

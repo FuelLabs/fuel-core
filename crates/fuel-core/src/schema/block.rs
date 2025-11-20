@@ -1,64 +1,28 @@
-use super::scalars::{
-    Bytes32,
-    HexString,
-    Tai64Timestamp,
-    TransactionId,
-};
+use super::scalars::{Bytes32, HexString, Tai64Timestamp, TransactionId};
 use crate::{
     fuel_core_graphql_api::{
-        Config as GraphQLConfig,
-        IntoApiResult,
-        api_service::ConsensusModule,
-        database::ReadView,
-        query_costs,
-        require_expensive_subscriptions,
+        Config as GraphQLConfig, IntoApiResult, api_service::ConsensusModule,
+        database::ReadView, query_costs, require_expensive_subscriptions,
     },
     graphql_api,
     schema::{
         ReadViewProvider,
-        scalars::{
-            BlockId,
-            Signature,
-            U16,
-            U32,
-            U64,
-        },
+        scalars::{BlockId, Signature, U16, U32, U64},
         tx::types::Transaction,
     },
 };
 use anyhow::anyhow;
 use async_graphql::{
-    Context,
-    Enum,
-    Object,
-    SimpleObject,
-    Subscription,
-    Union,
-    connection::{
-        Connection,
-        EmptyFields,
-    },
+    Context, Enum, Object, SimpleObject, Subscription, Union,
+    connection::{Connection, EmptyFields},
 };
-use fuel_core_storage::{
-    Result as StorageResult,
-    iter::IterDirection,
-};
+use fuel_core_storage::{Result as StorageResult, iter::IterDirection};
 use fuel_core_types::{
-    blockchain::{
-        block::CompressedBlock,
-        header::BlockHeader,
-    },
+    blockchain::{block::CompressedBlock, header::BlockHeader},
     fuel_tx::TxId,
-    fuel_types::{
-        self,
-        BlockHeight,
-    },
+    fuel_types::{self, BlockHeight},
 };
-use futures::{
-    Stream,
-    StreamExt,
-    TryStreamExt,
-};
+use futures::{Stream, StreamExt, TryStreamExt};
 use tokio_stream::wrappers::BroadcastStream;
 
 pub struct Block(pub(crate) CompressedBlock);
@@ -282,7 +246,7 @@ impl BlockQuery {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
                     "Can't provide both an id and a height",
-                ))
+                ));
             }
             (Some(id), None) => query.block_height(&id.0.into()),
             (None, Some(height)) => {
@@ -290,7 +254,7 @@ impl BlockQuery {
                 Ok(height.into())
             }
             (None, None) => {
-                return Err(async_graphql::Error::new("Missing either id or height"))
+                return Err(async_graphql::Error::new("Missing either id or height"));
             }
         };
 
@@ -397,7 +361,7 @@ impl BlockMutation {
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
         if !config.debug {
-            return Err(anyhow!("`debug` must be enabled to use this endpoint").into())
+            return Err(anyhow!("`debug` must be enabled to use this endpoint").into());
         }
 
         let consensus_module = ctx.data_unchecked::<ConsensusModule>();

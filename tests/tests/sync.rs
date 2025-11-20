@@ -1,23 +1,11 @@
 #![allow(unexpected_cfgs)] // for cfg(coverage)
 
 use fuel_core::p2p_test_helpers::*;
-use fuel_core_types::{
-    fuel_crypto::SecretKey,
-    fuel_tx::Input,
-};
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
+use fuel_core_types::{fuel_crypto::SecretKey, fuel_tx::Input};
+use rand::{SeedableRng, rngs::StdRng};
 use std::{
-    collections::{
-        HashMap,
-        hash_map::DefaultHasher,
-    },
-    hash::{
-        Hash,
-        Hasher,
-    },
+    collections::{HashMap, hash_map::DefaultHasher},
+    hash::{Hash, Hasher},
 };
 use test_case::test_case;
 

@@ -1,44 +1,16 @@
-use alloy_consensus::{
-    Signed,
-    TxEip4844,
-    transaction::Recovered,
-};
-use alloy_primitives::{
-    Address,
-    BlockNumber,
-    Signature,
-    TxHash,
-    U64,
-};
+use alloy_consensus::{Signed, TxEip4844, transaction::Recovered};
+use alloy_primitives::{Address, BlockNumber, Signature, TxHash, U64};
 use alloy_provider::{
-    DynProvider,
-    EthGetBlock,
-    Provider,
-    ProviderBuilder,
-    ProviderCall,
-    RootProvider,
-    mock::Asserter,
-    network::Ethereum,
-    transport::TransportResult,
+    DynProvider, EthGetBlock, Provider, ProviderBuilder, ProviderCall, RootProvider,
+    mock::Asserter, network::Ethereum, transport::TransportResult,
 };
 use alloy_rpc_client::NoParams;
 use alloy_rpc_types_eth::{
-    Block,
-    BlockId,
-    Filter,
-    Header,
-    Log,
-    SyncStatus,
-    Transaction,
-    TransactionReceipt,
+    Block, BlockId, Filter, Header, Log, SyncStatus, Transaction, TransactionReceipt,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use std::{
-    fmt,
-    fmt::Debug,
-    sync::Arc,
-};
+use std::{fmt, fmt::Debug, sync::Arc};
 
 pub type EventFn = Box<dyn for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync>;
 pub type OverrideFn = Box<dyn FnMut(&mut MockData) + Send + Sync>;

@@ -1,27 +1,15 @@
 use crate::{
     database::database_description::IndexationKind,
-    fuel_core_graphql_api::{
-        api_service::ChainInfoProvider,
-        query_costs,
-    },
+    fuel_core_graphql_api::{api_service::ChainInfoProvider, query_costs},
     schema::{
         ReadViewProvider,
-        scalars::{
-            Address,
-            AssetId,
-            U128,
-        },
+        scalars::{Address, AssetId, U128},
     },
 };
 use anyhow::anyhow;
 use async_graphql::{
-    Context,
-    InputObject,
-    Object,
-    connection::{
-        Connection,
-        EmptyFields,
-    },
+    Context, InputObject, Object,
+    connection::{Connection, EmptyFields},
 };
 use fuel_core_types::services::graphql_api;
 use futures::StreamExt;
@@ -120,7 +108,7 @@ impl BalanceQuery {
             return Err(anyhow!(
                 "Can not use pagination when balances indexation is not available"
             )
-            .into())
+            .into());
         }
         let base_asset_id = *ctx
             .data_unchecked::<ChainInfoProvider>()

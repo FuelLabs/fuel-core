@@ -9,24 +9,14 @@ mod pressure_peer_to_peer;
 use fuel_core_types::{
     blockchain::{
         SealedBlockHeader,
-        consensus::{
-            Consensus,
-            Sealed,
-        },
+        consensus::{Consensus, Sealed},
         header::BlockHeader,
     },
     fuel_types::BlockHeight,
 };
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
-pub use counts::{
-    Count,
-    SharedCounts,
-};
+pub use counts::{Count, SharedCounts};
 use fuel_core_types::services::p2p::PeerId;
 
 pub use pressure_block_importer::PressureBlockImporter;

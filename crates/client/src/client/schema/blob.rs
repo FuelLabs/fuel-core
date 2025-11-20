@@ -1,8 +1,4 @@
-use crate::client::schema::{
-    BlobId,
-    HexString,
-    schema,
-};
+use crate::client::schema::{BlobId, HexString, schema};
 
 #[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BlobByIdArgs {

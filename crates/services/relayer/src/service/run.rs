@@ -3,11 +3,7 @@
 
 use super::{
     state,
-    state::{
-        EthLocal,
-        EthRemote,
-        EthState,
-    },
+    state::{EthLocal, EthRemote, EthState},
 };
 
 #[cfg(test)]

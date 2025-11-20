@@ -1,15 +1,7 @@
-use crate::blocks::{
-    BlockSourceEvent,
-    importer_and_db_source::BlockSerializer,
-};
+use crate::blocks::{BlockSourceEvent, importer_and_db_source::BlockSerializer};
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    StateWatcher,
-    TaskNextAction,
-    stream::BoxStream,
-    try_or_continue,
-    try_or_stop,
+    RunnableService, RunnableTask, StateWatcher, TaskNextAction, stream::BoxStream,
+    try_or_continue, try_or_stop,
 };
 use fuel_core_types::services::block_importer::SharedImportResult;
 use futures::StreamExt;

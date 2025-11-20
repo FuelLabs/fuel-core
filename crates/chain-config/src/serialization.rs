@@ -1,12 +1,5 @@
-use serde::{
-    Deserializer,
-    Serializer,
-};
-use serde_with::{
-    DeserializeAs,
-    SerializeAs,
-    formats::Lowercase,
-};
+use serde::{Deserializer, Serializer};
+use serde_with::{DeserializeAs, SerializeAs, formats::Lowercase};
 
 /// Encode/decode a byte vector as a hex string if the serializer is human readable. Otherwise, use the default encoding.
 pub(crate) struct HexIfHumanReadable;
@@ -41,15 +34,9 @@ impl<'a> DeserializeAs<'a, Vec<u8>> for HexIfHumanReadable {
 #[cfg(test)]
 mod tests {
     use super::HexIfHumanReadable;
-    use postcard::ser_flavors::{
-        AllocVec,
-        Flavor,
-    };
+    use postcard::ser_flavors::{AllocVec, Flavor};
     use serde_json::de::StrRead;
-    use serde_with::{
-        DeserializeAs,
-        SerializeAs,
-    };
+    use serde_with::{DeserializeAs, SerializeAs};
 
     const BYTES: [u8; 32] = [1u8; 32];
     const HUMAN_READABLE_FORM: &str =

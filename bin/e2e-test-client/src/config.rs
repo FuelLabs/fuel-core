@@ -1,16 +1,7 @@
 use crate::SYNC_TIMEOUT;
-use fuel_core_types::{
-    fuel_tx::ContractId,
-    fuel_vm::SecretKey,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use std::{
-    str::FromStr,
-    time::Duration,
-};
+use fuel_core_types::{fuel_tx::ContractId, fuel_vm::SecretKey};
+use serde::{Deserialize, Serialize};
+use std::{str::FromStr, time::Duration};
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct SuiteConfig {

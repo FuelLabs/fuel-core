@@ -37,10 +37,7 @@ impl LocalRunner {
 
 #[test]
 fn local_executor_executes_two_tasks_in_parallel() {
-    use std::time::{
-        Duration,
-        Instant,
-    };
+    use std::time::{Duration, Instant};
 
     let runner = LocalRunner::new().unwrap();
 

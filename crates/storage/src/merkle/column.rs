@@ -2,10 +2,7 @@
 use crate::kv_store::StorageColumn;
 use alloc::{
     format,
-    string::{
-        String,
-        ToString,
-    },
+    string::{String, ToString},
 };
 
 /// Almost in the case of all tables we need to prove exclusion of entries,

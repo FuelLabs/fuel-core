@@ -2,15 +2,9 @@ use super::*;
 use alloy_primitives::Address;
 use alloy_provider::{
     Provider,
-    transport::{
-        TransportError,
-        TransportErrorKind,
-    },
+    transport::{TransportError, TransportErrorKind},
 };
-use fuel_core_types::{
-    entities::RelayedTransaction,
-    services::relayer::Event,
-};
+use fuel_core_types::{entities::RelayedTransaction, services::relayer::Event};
 use futures::TryStreamExt;
 use std::collections::HashMap;
 

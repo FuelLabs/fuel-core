@@ -1,14 +1,8 @@
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    ContractsStateKey,
-    Error as StorageError,
-    StorageBatchMutate,
-    tables::ContractsState,
+    ContractsStateKey, Error as StorageError, StorageBatchMutate, tables::ContractsState,
 };
-use fuel_core_types::fuel_types::{
-    Bytes32,
-    ContractId,
-};
+use fuel_core_types::fuel_types::{Bytes32, ContractId};
 use itertools::Itertools;
 
 pub trait StateInitializer {
@@ -89,14 +83,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::database::{
-        Database,
-        database_description::on_chain::OnChain,
-    };
-    use fuel_core_storage::{
-        StorageAsMut,
-        transactional::IntoTransaction,
-    };
+    use crate::database::{Database, database_description::on_chain::OnChain};
+    use fuel_core_storage::{StorageAsMut, transactional::IntoTransaction};
     use fuel_core_types::fuel_types::Bytes32;
     use rand::Rng;
 
@@ -111,10 +99,7 @@ mod tests {
 
     #[test]
     fn init_contract_state_works() {
-        use rand::{
-            SeedableRng,
-            rngs::StdRng,
-        };
+        use rand::{SeedableRng, rngs::StdRng};
 
         let rng = &mut StdRng::seed_from_u64(1234);
         let r#gen = || Some((random_bytes32(rng), random_bytes32(rng).to_vec()));
@@ -156,16 +141,10 @@ mod tests {
 
     mod update_contract_state {
         use core::iter::repeat_with;
-        use fuel_core_chain_config::{
-            ContractStateConfig,
-            Randomize,
-        };
+        use fuel_core_chain_config::{ContractStateConfig, Randomize};
 
         use fuel_core_storage::iter::IteratorOverTable;
-        use rand::{
-            SeedableRng,
-            rngs::StdRng,
-        };
+        use rand::{SeedableRng, rngs::StdRng};
 
         use super::*;
 

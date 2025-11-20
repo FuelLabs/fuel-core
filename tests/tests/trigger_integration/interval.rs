@@ -1,30 +1,17 @@
 use fuel_core::{
     database::Database,
-    service::{
-        Config,
-        FuelService,
-    },
+    service::{Config, FuelService},
 };
 use fuel_core_client::client::{
     FuelClient,
-    pagination::{
-        PageDirection,
-        PaginationRequest,
-    },
+    pagination::{PageDirection, PaginationRequest},
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
-    fuel_asm::*,
-    fuel_crypto::SecretKey,
-    fuel_tx::TransactionBuilder,
-    secrecy::Secret,
+    fuel_asm::*, fuel_crypto::SecretKey, fuel_tx::TransactionBuilder, secrecy::Secret,
     signer::SignMode,
 };
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::time::Duration;
 
 #[tokio::test(start_paused = true)]
@@ -74,7 +61,7 @@ async fn poa_interval_produces_empty_blocks_at_correct_rate() {
         let count_now = resp.results.len();
 
         if count_now > count_start + rounds {
-            break
+            break;
         }
     }
 
@@ -160,7 +147,7 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
 
         let count_now = resp.results.len();
         if count_now > count_start + rounds {
-            break
+            break;
         }
     }
 

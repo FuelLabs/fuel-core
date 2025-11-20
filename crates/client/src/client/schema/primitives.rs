@@ -1,28 +1,11 @@
 use super::schema;
-use crate::client::schema::{
-    ConversionError,
-    ConversionError::HexStringPrefixError,
-};
+use crate::client::schema::{ConversionError, ConversionError::HexStringPrefixError};
 use core::fmt;
 use cynic::impl_scalar;
-use fuel_core_types::{
-    fuel_tx::PanicInstruction,
-    fuel_types::BlockHeight,
-};
-use serde::{
-    Deserialize,
-    Deserializer,
-    Serialize,
-    Serializer,
-    de::Error,
-};
+use fuel_core_types::{fuel_tx::PanicInstruction, fuel_types::BlockHeight};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error};
 use std::{
-    fmt::{
-        Debug,
-        Display,
-        Formatter,
-        LowerHex,
-    },
+    fmt::{Debug, Display, Formatter, LowerHex},
     ops::Deref,
     str::FromStr,
 };

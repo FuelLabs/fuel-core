@@ -1,16 +1,10 @@
 use super::scalars::HexString;
 use crate::{
-    fuel_core_graphql_api::{
-        IntoApiResult,
-        query_costs,
-    },
+    fuel_core_graphql_api::{IntoApiResult, query_costs},
     graphql_api::api_service::DaCompressionProvider,
     schema::scalars::U32,
 };
-use async_graphql::{
-    Context,
-    Object,
-};
+use async_graphql::{Context, Object};
 
 pub struct DaCompressedBlock {
     bytes: Vec<u8>,

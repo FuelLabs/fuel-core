@@ -1,12 +1,6 @@
-use clap::{
-    Args,
-    builder::ArgPredicate::IsPresent,
-};
+use clap::{Args, builder::ArgPredicate::IsPresent};
 use fuel_core::{
-    relayer::{
-        Address,
-        Config,
-    },
+    relayer::{Address, Config},
     types::blockchain::primitives::DaBlockHeight,
 };
 use fuel_core_types::fuel_types::Bytes20;

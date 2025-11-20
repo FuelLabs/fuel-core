@@ -4,109 +4,52 @@ use crate::{
         gossipsub::GossipsubMessageHandler,
         request_response::RequestResponseMessageHandler,
     },
-    config::{
-        Config,
-        NotInitialized,
-    },
-    gossipsub::messages::{
-        GossipTopicTag,
-        GossipsubBroadcastRequest,
-        GossipsubMessage,
-    },
-    p2p_service::{
-        FuelP2PEvent,
-        FuelP2PService,
-    },
+    config::{Config, NotInitialized},
+    gossipsub::messages::{GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage},
+    p2p_service::{FuelP2PEvent, FuelP2PService},
     peer_manager::PeerInfo,
     ports::{
-        BlockHeightImporter,
-        P2PPreConfirmationGossipData,
-        P2PPreConfirmationMessage,
-        P2pDb,
-        TxPool,
+        BlockHeightImporter, P2PPreConfirmationGossipData, P2PPreConfirmationMessage,
+        P2pDb, TxPool,
     },
     request_response::messages::{
-        OnResponse,
-        OnResponseWithPeerSelection,
-        RequestMessage,
-        ResponseMessageErrorCode,
-        ResponseSender,
-        V2ResponseMessage,
+        OnResponse, OnResponseWithPeerSelection, RequestMessage,
+        ResponseMessageErrorCode, ResponseSender, V2ResponseMessage,
     },
 };
 use anyhow::anyhow;
 use fuel_core_metrics::p2p_metrics::set_blocks_requested;
 use fuel_core_services::{
-    AsyncProcessor,
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    StateWatcher,
-    SyncProcessor,
-    TaskNextAction,
-    TraceErr,
-    stream::BoxStream,
+    AsyncProcessor, RunnableService, RunnableTask, ServiceRunner, StateWatcher,
+    SyncProcessor, TaskNextAction, TraceErr, stream::BoxStream,
 };
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::SealedBlockHeader,
-    fuel_tx::{
-        Transaction,
-        TxId,
-        UniqueIdentifier,
-    },
-    fuel_types::{
-        BlockHeight,
-        ChainId,
-    },
+    fuel_tx::{Transaction, TxId, UniqueIdentifier},
+    fuel_types::{BlockHeight, ChainId},
     services::p2p::{
-        BlockHeightHeartbeatData,
-        GossipData,
-        GossipsubMessageAcceptance,
-        GossipsubMessageInfo,
-        NetworkableTransactionPool,
-        PeerId as FuelPeerId,
-        TransactionGossipData,
-        Transactions,
-        peer_reputation::{
-            AppScore,
-            PeerReport,
-        },
+        BlockHeightHeartbeatData, GossipData, GossipsubMessageAcceptance,
+        GossipsubMessageInfo, NetworkableTransactionPool, PeerId as FuelPeerId,
+        TransactionGossipData, Transactions,
+        peer_reputation::{AppScore, PeerReport},
     },
 };
-use futures::{
-    StreamExt,
-    future::BoxFuture,
-};
+use futures::{StreamExt, future::BoxFuture};
 use libp2p::{
     PeerId,
-    gossipsub::{
-        MessageAcceptance,
-        MessageId,
-        PublishError,
-    },
+    gossipsub::{MessageAcceptance, MessageId, PublishError},
     request_response::InboundRequestId,
 };
-use std::{
-    fmt::Debug,
-    future::Future,
-    ops::Range,
-    sync::Arc,
-};
+use std::{fmt::Debug, future::Future, ops::Range, sync::Arc};
 use thiserror::Error;
 use tokio::{
     sync::{
         broadcast,
-        mpsc::{
-            self,
-            Receiver,
-        },
+        mpsc::{self, Receiver},
         oneshot,
     },
-    time::{
-        Duration,
-        Instant,
-    },
+    time::{Duration, Instant},
 };
 use tracing::warn;
 

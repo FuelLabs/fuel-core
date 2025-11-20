@@ -1,22 +1,6 @@
-use crate::schema::scalars::{
-    Address,
-    AssetId,
-    Bytes32,
-    ContractId,
-    U16,
-    U64,
-    UtxoId,
-};
-use async_graphql::{
-    Object,
-    Union,
-};
-use fuel_core_types::{
-    fuel_asm::Word,
-    fuel_tx,
-    fuel_tx::output,
-    fuel_types,
-};
+use crate::schema::scalars::{Address, AssetId, Bytes32, ContractId, U16, U64, UtxoId};
+use async_graphql::{Object, Union};
+use fuel_core_types::{fuel_asm::Word, fuel_tx, fuel_tx::output, fuel_types};
 
 pub struct ResolvedOutput {
     utxo_id: fuel_tx::UtxoId,

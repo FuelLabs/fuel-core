@@ -3,8 +3,7 @@
 use cosmrs::crypto::PublicKey;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_types::{
-    fuel_crypto::Signature,
-    services::block_importer::SharedImportResult,
+    fuel_crypto::Signature, services::block_importer::SharedImportResult,
 };
 
 /// A signer that can sign arbitrary data

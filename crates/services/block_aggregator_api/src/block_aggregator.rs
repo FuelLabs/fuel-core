@@ -1,19 +1,10 @@
 use crate::{
     BlockAggregator,
-    api::{
-        BlockAggregatorApi,
-        BlockAggregatorQuery,
-    },
-    blocks::{
-        BlockSource,
-        BlockSourceEvent,
-    },
+    api::{BlockAggregatorApi, BlockAggregatorQuery},
+    blocks::{BlockSource, BlockSourceEvent},
     db::BlockAggregatorDB,
 };
-use fuel_core_services::{
-    TaskNextAction,
-    try_or_stop,
-};
+use fuel_core_services::{TaskNextAction, try_or_stop};
 use fuel_core_types::fuel_types::BlockHeight;
 
 impl<Api, DB, Blocks, BlockRangeResponse> BlockAggregator<Api, DB, Blocks, Blocks::Block>

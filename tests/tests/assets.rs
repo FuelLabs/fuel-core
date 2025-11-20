@@ -2,34 +2,16 @@ use fuel_core::service::Config;
 use fuel_core_bin::FuelService;
 use fuel_core_client::client::{
     FuelClient,
-    types::{
-        TransactionStatus,
-        primitives::AssetId,
-    },
+    types::{TransactionStatus, primitives::AssetId},
 };
 use fuel_core_types::{
-    fuel_asm::{
-        GTFArgs,
-        RegId,
-        op,
-    },
+    fuel_asm::{GTFArgs, RegId, op},
     fuel_tx::{
-        Bytes32,
-        ContractIdExt,
-        Input,
-        Output,
-        SubAssetId,
-        TransactionBuilder,
-        TxPointer,
-        UtxoId,
-        Witness,
+        Bytes32, ContractIdExt, Input, Output, SubAssetId, TransactionBuilder, TxPointer,
+        UtxoId, Witness,
     },
     fuel_types::canonical::Serialize,
-    fuel_vm::{
-        Call,
-        Contract,
-        Salt,
-    },
+    fuel_vm::{Call, Contract, Salt},
 };
 
 #[tokio::test]

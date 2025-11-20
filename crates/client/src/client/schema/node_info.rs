@@ -1,20 +1,10 @@
-use crate::client::schema::{
-    U32,
-    U64,
-    schema,
-};
+use crate::client::schema::{U32, U64, schema};
 #[cfg(feature = "std")]
-use fuel_core_types::services::p2p::{
-    HeartbeatData,
-    PeerId,
-};
+use fuel_core_types::services::p2p::{HeartbeatData, PeerId};
 #[cfg(feature = "std")]
 use std::{
     str::FromStr,
-    time::{
-        Duration,
-        UNIX_EPOCH,
-    },
+    time::{Duration, UNIX_EPOCH},
 };
 
 #[derive(cynic::QueryFragment, Clone, Debug)]

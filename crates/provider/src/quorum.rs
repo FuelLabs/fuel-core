@@ -5,11 +5,7 @@ use crate::quorum::transport::WeightedTransport;
 use alloy_json_rpc::ResponsePacket;
 use alloy_provider::transport::TransportError;
 use std::{
-    num::{
-        NonZeroU8,
-        NonZeroU64,
-        NonZeroUsize,
-    },
+    num::{NonZeroU8, NonZeroU64, NonZeroUsize},
     sync::Arc,
 };
 use thiserror::Error;

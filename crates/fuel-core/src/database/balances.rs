@@ -1,16 +1,10 @@
 use fuel_core_chain_config::TableEntry;
 use fuel_core_storage::{
-    ContractsAssetKey,
-    Error as StorageError,
-    StorageBatchMutate,
-    tables::ContractsAssets,
+    ContractsAssetKey, Error as StorageError, StorageBatchMutate, tables::ContractsAssets,
 };
 use fuel_core_types::{
     fuel_asm::Word,
-    fuel_types::{
-        AssetId,
-        ContractId,
-    },
+    fuel_types::{AssetId, ContractId},
 };
 use itertools::Itertools;
 
@@ -79,20 +73,10 @@ mod tests {
     use std::iter::repeat_with;
 
     use super::*;
-    use crate::database::{
-        Database,
-        database_description::on_chain::OnChain,
-    };
-    use fuel_core_storage::{
-        StorageAsMut,
-        transactional::IntoTransaction,
-    };
+    use crate::database::{Database, database_description::on_chain::OnChain};
+    use fuel_core_storage::{StorageAsMut, transactional::IntoTransaction};
     use fuel_core_types::fuel_types::AssetId;
-    use rand::{
-        Rng,
-        SeedableRng,
-        rngs::StdRng,
-    };
+    use rand::{Rng, SeedableRng, rngs::StdRng};
 
     fn random_asset_id<R>(rng: &mut R) -> AssetId
     where
@@ -105,11 +89,7 @@ mod tests {
 
     #[test]
     fn init_contract_balances_works() {
-        use rand::{
-            RngCore,
-            SeedableRng,
-            rngs::StdRng,
-        };
+        use rand::{RngCore, SeedableRng, rngs::StdRng};
 
         let rng = &mut StdRng::seed_from_u64(1234);
         let r#gen = || Some((random_asset_id(rng), rng.next_u64()));
@@ -151,8 +131,7 @@ mod tests {
     mod update_contract_balance {
         use fuel_core_chain_config::Randomize;
         use fuel_core_storage::{
-            iter::IteratorOverTable,
-            transactional::WriteTransaction,
+            iter::IteratorOverTable, transactional::WriteTransaction,
         };
 
         use super::*;

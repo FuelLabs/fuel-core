@@ -1,27 +1,13 @@
 use async_graphql::{
-    ServerError,
-    ServerResult,
-    ValidationResult,
-    Variables,
+    ServerError, ServerResult, ValidationResult, Variables,
     extensions::{
-        Extension,
-        ExtensionContext,
-        ExtensionFactory,
-        NextParseQuery,
-        NextValidation,
+        Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextValidation,
     },
     parser::types::ExecutableDocument,
 };
 use recursion_finder::RecursionFinder;
-use std::sync::{
-    Arc,
-    Mutex,
-};
-use visitor::{
-    RuleError,
-    VisitorContext,
-    visit,
-};
+use std::sync::{Arc, Mutex};
+use visitor::{RuleError, VisitorContext, visit};
 
 mod recursion_finder;
 mod visitor;
@@ -99,7 +85,7 @@ impl Extension for ValidationInner {
                 .lock()
                 .expect("Only one instance owns `ValidationInner`; qed");
             if !errors.is_empty() {
-                return Err(errors.drain(..).map(Into::into).collect())
+                return Err(errors.drain(..).map(Into::into).collect());
             }
         }
 

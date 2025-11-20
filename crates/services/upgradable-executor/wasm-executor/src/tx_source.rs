@@ -1,8 +1,5 @@
 use crate::ext;
-use fuel_core_executor::ports::{
-    MaybeCheckedTransaction,
-    TransactionsSource,
-};
+use fuel_core_executor::ports::{MaybeCheckedTransaction, TransactionsSource};
 
 pub struct WasmTxSource;
 

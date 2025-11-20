@@ -2,28 +2,16 @@
 
 use crate::{
     blockchain::primitives::SecretKeyWrapper,
-    fuel_crypto::{
-        Message,
-        PublicKey,
-    },
-    fuel_tx::{
-        Address,
-        Input,
-    },
+    fuel_crypto::{Message, PublicKey},
+    fuel_tx::{Address, Input},
     fuel_vm::Signature,
-    secrecy::{
-        ExposeSecret,
-        Secret,
-    },
+    secrecy::{ExposeSecret, Secret},
 };
 use anyhow::anyhow;
 #[cfg(feature = "aws-kms")]
 use aws_sdk_kms::{
     primitives::Blob,
-    types::{
-        MessageType,
-        SigningAlgorithmSpec,
-    },
+    types::{MessageType, SigningAlgorithmSpec},
 };
 use core::ops::Deref;
 
@@ -55,7 +43,9 @@ impl SignMode {
     /// Sign a prehashed message
     pub async fn sign_message(&self, message: Message) -> anyhow::Result<Signature> {
         let signature = match self {
-            SignMode::Unavailable => return Err(anyhow!("no PoA signing key configured")),
+            SignMode::Unavailable => {
+                return Err(anyhow!("no PoA signing key configured"));
+            }
             SignMode::Key(key) => {
                 let signing_key = key.expose_secret().deref();
                 Signature::sign(signing_key, &message)
@@ -137,10 +127,7 @@ async fn sign_with_kms(
     message: Message,
 ) -> anyhow::Result<Signature> {
     use k256::{
-        ecdsa::{
-            RecoveryId,
-            VerifyingKey,
-        },
+        ecdsa::{RecoveryId, VerifyingKey},
         pkcs8::DecodePublicKey,
     };
 
@@ -204,10 +191,7 @@ mod tests {
     use super::*;
     use crate as fuel_core_types;
     use fuel_core_types::fuel_crypto::SecretKey;
-    use rand::{
-        SeedableRng,
-        rngs::StdRng,
-    };
+    use rand::{SeedableRng, rngs::StdRng};
 
     #[cfg(not(feature = "aws-kms"))]
     use aws_config as _;

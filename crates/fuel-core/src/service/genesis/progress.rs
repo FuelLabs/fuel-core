@@ -1,19 +1,9 @@
-use std::{
-    borrow::Cow,
-    io::IsTerminal,
-};
+use std::{borrow::Cow, io::IsTerminal};
 
 use indicatif::{
-    HumanDuration,
-    MultiProgress,
-    ProgressBar,
-    ProgressDrawTarget,
-    ProgressStyle,
+    HumanDuration, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle,
 };
-use tracing::{
-    Level,
-    Span,
-};
+use tracing::{Level, Span};
 
 #[derive(Clone)]
 pub struct ProgressReporter {

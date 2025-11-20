@@ -1,34 +1,18 @@
 use anyhow::anyhow;
 use std::{
-    collections::{
-        HashMap,
-        VecDeque,
-        hash_map::Entry,
-    },
+    collections::{HashMap, VecDeque, hash_map::Entry},
     time::Duration,
 };
-use tokio::{
-    sync::broadcast,
-    time::Instant,
-};
+use tokio::{sync::broadcast, time::Instant};
 
 use fuel_core_types::{
     fuel_tx::TxId,
-    services::transaction_status::{
-        PreConfirmationStatus,
-        TransactionStatus,
-    },
+    services::transaction_status::{PreConfirmationStatus, TransactionStatus},
 };
 
 use crate::{
-    tx_status_stream::{
-        TxStatusStream,
-        TxUpdate,
-    },
-    update_sender::{
-        MpscChannel,
-        TxStatusChange,
-    },
+    tx_status_stream::{TxStatusStream, TxUpdate},
+    update_sender::{MpscChannel, TxStatusChange},
 };
 
 use fuel_core_metrics::tx_status_manager_metrics::metrics_manager;
@@ -248,8 +232,7 @@ mod tests {
     use test_case::test_case;
 
     use fuel_core_types::{
-        services::transaction_status::TransactionStatus,
-        tai64::Tai64,
+        services::transaction_status::TransactionStatus, tai64::Tai64,
     };
 
     use super::TxStatusManager;

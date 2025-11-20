@@ -1,94 +1,44 @@
 use std::{
-    collections::{
-        BTreeSet,
-        HashSet,
-    },
+    collections::{BTreeSet, HashSet},
     sync::Arc,
 };
 
 use crate::{
-    GasPrice,
-    Service,
+    GasPrice, Service,
     collision_manager::basic::BasicCollisionManager,
-    config::{
-        BlackList,
-        Config,
-    },
-    error::{
-        Error,
-        InsertionErrorType,
-    },
+    config::{BlackList, Config},
+    error::{Error, InsertionErrorType},
     new_service,
-    pool::{
-        Pool,
-        TxPoolStats,
-    },
+    pool::{Pool, TxPoolStats},
     selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    service::{
-        Shared,
-        TxPool,
-        verifications::Verification,
-    },
-    storage::graph::{
-        GraphConfig,
-        GraphStorage,
-    },
-    tests::mocks::{
-        MockDBProvider,
-        MockDb,
-    },
+    service::{Shared, TxPool, verifications::Verification},
+    storage::graph::{GraphConfig, GraphStorage},
+    tests::mocks::{MockDBProvider, MockDb},
 };
 use fuel_core_types::{
     entities::{
-        coins::coin::{
-            Coin,
-            CompressedCoin,
-        },
-        relayer::message::{
-            Message,
-            MessageV1,
-        },
+        coins::coin::{Coin, CompressedCoin},
+        relayer::message::{Message, MessageV1},
     },
     fuel_asm::op,
-    fuel_crypto::rand::{
-        Rng,
-        SeedableRng,
-        rngs::StdRng,
-    },
+    fuel_crypto::rand::{Rng, SeedableRng, rngs::StdRng},
     fuel_tx::{
-        ConsensusParameters,
-        Contract,
-        ContractId,
-        Finalizable,
-        Output,
-        Transaction,
-        TransactionBuilder,
-        TxId,
-        UtxoId,
+        ConsensusParameters, Contract, ContractId, Finalizable, Output, Transaction,
+        TransactionBuilder, TxId, UtxoId,
         field::Inputs,
         input::{
             Input,
-            coin::{
-                CoinPredicate,
-                CoinSigned,
-            },
+            coin::{CoinPredicate, CoinSigned},
             contract::Contract as ContractInput,
         },
     },
-    fuel_types::{
-        AssetId,
-        BlockHeight,
-        ChainId,
-        Word,
-    },
+    fuel_types::{AssetId, BlockHeight, ChainId, Word},
     fuel_vm::{
-        checked_transaction::EstimatePredicates,
-        interpreter::MemoryInstance,
+        checked_transaction::EstimatePredicates, interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
     services::{
-        executor::memory::MemoryPool,
-        transaction_status::TransactionStatus,
+        executor::memory::MemoryPool, transaction_status::TransactionStatus,
         txpool::ArcPoolTx,
     },
 };
@@ -97,12 +47,8 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 use super::mocks::{
-    MockChainStateInfoProvider,
-    MockImporter,
-    MockP2P,
-    MockTxPoolGasPrice,
-    MockTxStatusManager,
-    MockWasmChecker,
+    MockChainStateInfoProvider, MockImporter, MockP2P, MockTxPoolGasPrice,
+    MockTxStatusManager, MockWasmChecker,
 };
 
 #[derive(Debug)]

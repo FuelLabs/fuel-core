@@ -1,11 +1,7 @@
 use clap::Parser;
 use fuel_core_chain_config::fee_collection_contract;
 use fuel_core_types::fuel_tx::Address;
-use std::{
-    fs::OpenOptions,
-    io::Write,
-    path::PathBuf,
-};
+use std::{fs::OpenOptions, io::Write, path::PathBuf};
 
 #[derive(Debug, Parser)]
 pub struct Command {

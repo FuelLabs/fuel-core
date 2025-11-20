@@ -1,17 +1,11 @@
 //! The table for the compressed blocks sent to DA.
 
-use super::column::{
-    CompressionColumn,
-    MerkleizedColumnOf,
-};
+use super::column::{CompressionColumn, MerkleizedColumnOf};
 use fuel_core_compression::VersionedCompressedBlock;
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{
-        postcard::Postcard,
-        primitive::Primitive,
-    },
+    codec::{postcard::Postcard, primitive::Primitive},
     merkle::sparse::MerkleizedTableColumn,
     structured_storage::TableWithBlueprint,
 };

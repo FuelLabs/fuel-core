@@ -1,8 +1,5 @@
 use crate::global_registry;
-use prometheus_client::metrics::{
-    counter::Counter,
-    gauge::Gauge,
-};
+use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
 use std::sync::OnceLock;
 
 pub struct P2PMetrics {

@@ -1,7 +1,6 @@
 use crate::{
     codecs::{
-        RequestResponseProtocols,
-        postcard::PostcardCodec,
+        RequestResponseProtocols, postcard::PostcardCodec,
         request_response::RequestResponseMessageHandler,
     },
     config::Config,
@@ -12,30 +11,14 @@ use crate::{
     heartbeat,
     limited_behaviour::LimitedBehaviour,
     peer_report,
-    request_response::messages::{
-        RequestMessage,
-        V2ResponseMessage,
-    },
+    request_response::messages::{RequestMessage, V2ResponseMessage},
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use libp2p::{
-    Multiaddr,
-    PeerId,
-    allow_block_list,
-    gossipsub::{
-        self,
-        MessageAcceptance,
-        MessageId,
-        PublishError,
-        TopicHash,
-    },
+    Multiaddr, PeerId, allow_block_list,
+    gossipsub::{self, MessageAcceptance, MessageId, PublishError, TopicHash},
     identify,
-    request_response::{
-        self,
-        OutboundRequestId,
-        ProtocolSupport,
-        ResponseChannel,
-    },
+    request_response::{self, OutboundRequestId, ProtocolSupport, ResponseChannel},
     swarm::NetworkBehaviour,
 };
 use std::collections::HashSet;

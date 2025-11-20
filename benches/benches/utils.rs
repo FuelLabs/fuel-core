@@ -3,22 +3,12 @@
 use core::iter::successors;
 use ethnum::U256;
 use fuel_core_types::{
-    fuel_asm::{
-        Instruction,
-        RegId,
-        op,
-    },
+    fuel_asm::{Instruction, RegId, op},
     fuel_tx,
-    fuel_types::{
-        RegisterId,
-        Word,
-    },
+    fuel_types::{RegisterId, Word},
     fuel_vm::interpreter::ReceiptsCtx,
 };
-use rand::{
-    Rng,
-    rngs::StdRng,
-};
+use rand::{Rng, rngs::StdRng};
 
 pub const STATE_SIZE: u64 = 10_000_000;
 

@@ -3,18 +3,12 @@ use educe::Educe;
 use crate::{
     blockchain::{
         header::{
-            ApplicationHeader,
-            BlockHeaderMetadata,
-            ConsensusHeader,
-            GeneratedConsensusFields,
-            generate_txns_root,
+            ApplicationHeader, BlockHeaderMetadata, ConsensusHeader,
+            GeneratedConsensusFields, generate_txns_root,
         },
         primitives::BlockId,
     },
-    fuel_tx::{
-        Bytes32,
-        Transaction,
-    },
+    fuel_tx::{Bytes32, Transaction},
 };
 
 /// A fuel block header that has all the fields generated because it

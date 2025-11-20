@@ -1,63 +1,33 @@
 use anyhow::anyhow;
-use std::{
-    sync::Arc,
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use tokio::{
-    sync::{
-        mpsc,
-        oneshot,
-    },
+    sync::{mpsc, oneshot},
     time::Instant,
 };
 
 use crate::{
-    Config,
-    Trigger,
+    Config, Trigger,
     ports::{
-        BlockImporter,
-        BlockProducer,
-        BlockProductionReadySignal,
-        BlockSigner,
-        GetTime,
-        P2pPort,
-        PredefinedBlocks,
-        TransactionPool,
-        TransactionsSource,
+        BlockImporter, BlockProducer, BlockProductionReadySignal, BlockSigner, GetTime,
+        P2pPort, PredefinedBlocks, TransactionPool, TransactionsSource,
         WaitForReadySignal,
     },
-    sync::{
-        SyncState,
-        SyncTask,
-    },
+    sync::{SyncState, SyncTask},
 };
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    Service as OtherService,
-    ServiceRunner,
-    StateWatcher,
-    TaskNextAction,
-    stream::BoxFuture,
+    RunnableService, RunnableTask, Service as OtherService, ServiceRunner, StateWatcher,
+    TaskNextAction, stream::BoxFuture,
 };
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
-    blockchain::{
-        SealedBlock,
-        block::Block,
-        header::BlockHeader,
-    },
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
+    blockchain::{SealedBlock, block::Block, header::BlockHeader},
+    fuel_tx::{Transaction, TxId},
     fuel_types::BlockHeight,
     services::{
         Uncommitted,
         block_importer::ImportResult,
         executor::{
-            Error as ExecutorError,
-            ExecutionResult,
+            Error as ExecutorError, ExecutionResult,
             UncommittedResult as UncommittedExecutionResult,
         },
     },
@@ -321,7 +291,7 @@ where
         if matches!(self.trigger, Trigger::Open { .. }) {
             return Err(anyhow!(
                 "Manual block production is not allowed with trigger `Open`"
-            ))
+            ));
         }
 
         let mut block_time = if let Some(time) = block_production.start_time {
@@ -365,11 +335,11 @@ where
         let last_block_created = Instant::now();
         // verify signing key is set
         if !self.signer.is_available() {
-            return Err(anyhow!("unable to produce blocks without a consensus key"))
+            return Err(anyhow!("unable to produce blocks without a consensus key"));
         }
 
         if self.last_timestamp > block_time {
-            return Err(anyhow!("The block timestamp should monotonically increase"))
+            return Err(anyhow!("The block timestamp should monotonically increase"));
         }
         // Ask the block producer to create the block
         let (
@@ -428,7 +398,7 @@ where
         tracing::info!("Producing predefined block");
         let last_block_created = Instant::now();
         if !self.signer.is_available() {
-            return Err(anyhow!("unable to produce blocks without a signer"))
+            return Err(anyhow!("unable to produce blocks without a signer"));
         }
 
         // Ask the block producer to create the block
@@ -523,7 +493,7 @@ where
             return match res {
                 Ok(()) => Some(TaskNextAction::Continue),
                 Err(err) => Some(TaskNextAction::ErrorContinue(err)),
-            }
+            };
         }
         None
     }
@@ -599,7 +569,7 @@ where
                 return Ok(Self {
                     last_block_created: Instant::now(),
                     ..self
-                })
+                });
             }
         }
 

@@ -1,9 +1,6 @@
 //! Contract entities
 
-use crate::fuel_tx::{
-    Salt,
-    TxPointer,
-};
+use crate::fuel_tx::{Salt, TxPointer};
 use fuel_vm_private::fuel_tx::UtxoId;
 
 /// Contains information related to the latest contract utxo

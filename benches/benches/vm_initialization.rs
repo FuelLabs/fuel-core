@@ -1,38 +1,18 @@
-use criterion::{
-    Criterion,
-    Throughput,
-    black_box,
-};
+use criterion::{Criterion, Throughput, black_box};
 use fuel_core_types::{
-    fuel_asm::{
-        Instruction,
-        op,
-    },
+    fuel_asm::{Instruction, op},
     fuel_tx::{
-        AssetId,
-        ConsensusParameters,
-        Input,
-        Output,
-        Script,
-        Transaction,
-        TxParameters,
+        AssetId, ConsensusParameters, Input, Output, Script, Transaction, TxParameters,
         policies::Policies,
     },
     fuel_types::canonical::Serialize,
     fuel_vm::{
         Interpreter,
-        checked_transaction::{
-            Checked,
-            IntoChecked,
-        },
+        checked_transaction::{Checked, IntoChecked},
         interpreter::NotSupportedEcal,
     },
 };
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 fn transaction<R: Rng>(
     rng: &mut R,

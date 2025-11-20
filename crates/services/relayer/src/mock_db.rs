@@ -4,20 +4,13 @@ use crate::ports::RelayerDb;
 use fuel_core_storage::Result as StorageResult;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        Message,
-        RelayedTransaction,
-        relayer::transaction::RelayedTransactionId,
-    },
+    entities::{Message, RelayedTransaction, relayer::transaction::RelayedTransactionId},
     fuel_types::Nonce,
     services::relayer::Event,
 };
 use std::{
     collections::BTreeMap,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::{Arc, Mutex},
 };
 
 #[derive(Default)]

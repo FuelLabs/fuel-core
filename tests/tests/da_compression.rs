@@ -6,62 +6,32 @@ use fuel_core::{
     database::database_description::DatabaseHeight,
     p2p_test_helpers::*,
     service::{
-        Config,
-        FuelService,
-        config::{
-            DaCompressionConfig,
-            DaCompressionMode,
-        },
+        Config, FuelService,
+        config::{DaCompressionConfig, DaCompressionMode},
     },
     state::{
         historical_rocksdb::StateRewindPolicy,
-        rocks_db::{
-            ColumnsPolicy,
-            DatabaseConfig,
-        },
+        rocks_db::{ColumnsPolicy, DatabaseConfig},
     },
 };
-use fuel_core_client::client::{
-    FuelClient,
-    types::TransactionStatus,
-};
-use fuel_core_compression::{
-    VersionedCompressedBlock,
-    decompress::decompress,
-};
+use fuel_core_client::client::{FuelClient, types::TransactionStatus};
+use fuel_core_compression::{VersionedCompressedBlock, decompress::decompress};
 use fuel_core_compression_service::temporal_registry::{
-    CompressionStorageWrapper,
-    DecompressionContext,
+    CompressionStorageWrapper, DecompressionContext,
 };
-use fuel_core_storage::transactional::{
-    AtomicView,
-    HistoricalView,
-    IntoTransaction,
-};
+use fuel_core_storage::transactional::{AtomicView, HistoricalView, IntoTransaction};
 use fuel_core_types::{
-    fuel_asm::{
-        RegId,
-        op,
-    },
+    fuel_asm::{RegId, op},
     fuel_crypto::SecretKey,
-    fuel_tx::{
-        Input,
-        UniqueIdentifier,
-    },
+    fuel_tx::{Input, UniqueIdentifier},
     fuel_types::BlockHeight,
     secrecy::Secret,
     signer::SignMode,
 };
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::{SeedableRng, rngs::StdRng};
 use std::str::FromStr;
 use test_helpers::{
-    assemble_tx::{
-        AssembleAndRunTx,
-        SigningAccount,
-    },
+    assemble_tx::{AssembleAndRunTx, SigningAccount},
     config_with_fee,
     fuel_core_driver::FuelCoreDriver,
 };

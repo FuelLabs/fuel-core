@@ -1,26 +1,12 @@
 use fuel_core::{
-    chain_config::{
-        LastBlockConfig,
-        Randomize,
-        StateConfig,
-    },
+    chain_config::{LastBlockConfig, Randomize, StateConfig},
     combined_database::CombinedDatabase,
-    service::{
-        Config,
-        FuelService,
-    },
+    service::{Config, FuelService},
 };
-use fuel_core_poa::{
-    Trigger,
-    ports::Database,
-};
+use fuel_core_poa::{Trigger, ports::Database};
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 
 #[tokio::test]
 async fn loads_snapshot() {

@@ -2,16 +2,10 @@
 
 use crate::{
     blueprint::plain::Plain,
-    codec::{
-        postcard::Postcard,
-        raw::Raw,
-    },
+    codec::{postcard::Postcard, raw::Raw},
     column::Column,
     structured_storage::TableWithBlueprint,
-    tables::{
-        ProcessedTransactions,
-        Transactions,
-    },
+    tables::{ProcessedTransactions, Transactions},
 };
 
 impl TableWithBlueprint for Transactions {

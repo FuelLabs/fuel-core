@@ -3,28 +3,15 @@ use crate::{
     fuel_core_graphql_api::{
         database::arc_wrapper::ArcWrapper,
         ports::{
-            OffChainDatabase,
-            OffChainDatabaseAt,
-            OnChainDatabase,
-            OnChainDatabaseAt,
+            OffChainDatabase, OffChainDatabaseAt, OnChainDatabase, OnChainDatabaseAt,
         },
     },
 };
 use fuel_core_services::yield_stream::StreamYieldExt;
 use fuel_core_storage::{
-    Error as StorageError,
-    IsNotFound,
-    Mappable,
-    PredicateStorageRequirements,
-    Result as StorageResult,
-    StorageInspect,
-    StorageRead,
-    StorageSize,
-    iter::{
-        BoxedIter,
-        IntoBoxedIter,
-        IterDirection,
-    },
+    Error as StorageError, IsNotFound, Mappable, PredicateStorageRequirements,
+    Result as StorageResult, StorageInspect, StorageRead, StorageSize,
+    iter::{BoxedIter, IntoBoxedIter, IterDirection},
     not_found,
     tables::Transactions,
     transactional::HistoricalView,
@@ -33,45 +20,23 @@ use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
-        primitives::{
-            BlockId,
-            DaBlockHeight,
-        },
+        primitives::{BlockId, DaBlockHeight},
     },
     entities::relayer::{
-        message::{
-            MerkleProof,
-            Message,
-        },
+        message::{MerkleProof, Message},
         transaction::RelayedTransactionStatus,
     },
     fuel_tx::{
-        Address,
-        AssetId,
-        Bytes32,
-        ContractId,
-        Salt,
-        Transaction,
-        TxId,
-        TxPointer,
-        UtxoId,
+        Address, AssetId, Bytes32, ContractId, Salt, Transaction, TxId, TxPointer, UtxoId,
     },
-    fuel_types::{
-        BlobId,
-        BlockHeight,
-        Nonce,
-    },
+    fuel_types::{BlobId, BlockHeight, Nonce},
     fuel_vm::BlobData,
     services::{
-        graphql_api::ContractBalance,
-        transaction_status::TransactionExecutionStatus,
+        graphql_api::ContractBalance, transaction_status::TransactionExecutionStatus,
     },
 };
 use futures::Stream;
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::{borrow::Cow, sync::Arc};
 use strum::IntoEnumIterator;
 
 use super::ports::worker;

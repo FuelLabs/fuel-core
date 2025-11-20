@@ -1,13 +1,6 @@
-use fuel_core::service::{
-    Config,
-    DbType,
-    FuelService,
-};
+use fuel_core::service::{Config, DbType, FuelService};
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::{
-    fuel_asm::*,
-    fuel_tx::*,
-};
+use fuel_core_types::{fuel_asm::*, fuel_tx::*};
 use tempfile::TempDir;
 use test_helpers::send_graph_ql_query;
 

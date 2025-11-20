@@ -2,10 +2,7 @@
 
 use crate::entities::relayer::message::MessageV1;
 use coins::message_coin::MessageCoin;
-pub use relayer::{
-    message::Message,
-    transaction::RelayedTransaction,
-};
+pub use relayer::{message::Message, transaction::RelayedTransaction};
 
 #[cfg(feature = "alloc")]
 use alloc::vec;
@@ -27,7 +24,7 @@ impl TryFrom<Message> for MessageCoin {
         if message.is_retryable_message() {
             return Err(anyhow::anyhow!(
                 "The data is not empty, impossible to convert into the `MessageCoin`"
-            ))
+            ));
         }
 
         let coin = MessageCoin {

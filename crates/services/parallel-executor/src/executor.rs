@@ -1,7 +1,4 @@
-use crate::{
-    config::Config,
-    ports::TransactionsSource,
-};
+use crate::{config::Config, ports::TransactionsSource};
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
@@ -10,9 +7,7 @@ use fuel_core_types::{
         Uncommitted,
         block_producer::Components,
         executor::{
-            ExecutionResult,
-            Result as ExecutorResult,
-            TransactionExecutionStatus,
+            ExecutionResult, Result as ExecutorResult, TransactionExecutionStatus,
             ValidationResult,
         },
     },
@@ -20,10 +15,7 @@ use fuel_core_types::{
 use fuel_core_upgradable_executor::executor::Executor as UpgradableExecutor;
 use std::{
     num::NonZeroUsize,
-    sync::{
-        Arc,
-        RwLock,
-    },
+    sync::{Arc, RwLock},
 };
 use tokio::runtime::Runtime;
 

@@ -1,61 +1,25 @@
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
-use adapters::{
-    TxStatusManagerAdapter,
-    ready_signal::ReadySignal,
-};
-pub use config::{
-    Config,
-    DbType,
-    RelayerConsensusConfig,
-};
-use fuel_core_chain_config::{
-    ConsensusConfig,
-    GenesisCommitment,
-};
-use fuel_core_poa::{
-    ports::BlockImporter,
-    verifier::verify_consensus,
-};
+use adapters::{TxStatusManagerAdapter, ready_signal::ReadySignal};
+pub use config::{Config, DbType, RelayerConsensusConfig};
+use fuel_core_chain_config::{ConsensusConfig, GenesisCommitment};
+use fuel_core_poa::{ports::BlockImporter, verifier::verify_consensus};
 pub use fuel_core_services::Service as ServiceTrait;
 use fuel_core_services::{
-    RunnableService,
-    RunnableTask,
-    ServiceRunner,
-    State,
-    StateWatcher,
-    TaskNextAction,
+    RunnableService, RunnableTask, ServiceRunner, State, StateWatcher, TaskNextAction,
 };
 use fuel_core_storage::{
-    IsNotFound,
-    StorageAsMut,
-    not_found,
+    IsNotFound, StorageAsMut, not_found,
     tables::SealedBlockConsensus,
-    transactional::{
-        AtomicView,
-        ReadTransaction,
-        StorageChanges,
-    },
+    transactional::{AtomicView, ReadTransaction, StorageChanges},
 };
-use fuel_core_types::{
-    blockchain::consensus::Consensus,
-    fuel_types::BlockHeight,
-};
+use fuel_core_types::{blockchain::consensus::Consensus, fuel_types::BlockHeight};
 
 use crate::{
-    combined_database::{
-        CombinedDatabase,
-        ShutdownListener,
-    },
+    combined_database::{CombinedDatabase, ShutdownListener},
     database::Database,
     service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
+        adapters::{ExecutorAdapter, PoAAdapter},
         sub_services::TxPoolSharedState,
     },
 };
@@ -530,16 +494,10 @@ impl RunnableTask for Task {
 mod tests {
     use crate::{
         ShutdownListener,
-        service::{
-            Config,
-            FuelService,
-        },
+        service::{Config, FuelService},
     };
     use fuel_core_services::State;
-    use std::{
-        thread::sleep,
-        time::Duration,
-    };
+    use std::{thread::sleep, time::Duration};
 
     #[tokio::test]
     async fn stop_sub_service_shutdown_all_services() {

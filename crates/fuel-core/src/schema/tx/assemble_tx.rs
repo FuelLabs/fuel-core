@@ -1,81 +1,40 @@
 use crate::{
     coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
-        api_service::BlockProducer,
-        database::ReadView,
-        ports::MemoryPool,
+        api_service::BlockProducer, database::ReadView, ports::MemoryPool,
     },
     query::asset_query::Exclude,
     schema::{
-        coins::{
-            CoinType,
-            SpendQueryElementInput,
-        },
-        tx::{
-            Account,
-            ChangePolicy,
-            RequiredBalance,
-        },
+        coins::{CoinType, SpendQueryElementInput},
+        tx::{Account, ChangePolicy, RequiredBalance},
     },
     service::adapters::SharedMemoryPool,
 };
 use fuel_core_types::{
     entities::coins::CoinId,
-    fuel_asm::{
-        PanicReason,
-        Word,
-        op,
-    },
+    fuel_asm::{PanicReason, Word, op},
     fuel_crypto::Signature,
     fuel_tx::{
-        Address,
-        AssetId,
-        Cacheable,
-        Chargeable,
-        ConsensusParameters,
-        Input,
-        Output,
-        Receipt,
-        Script,
-        Transaction,
+        Address, AssetId, Cacheable, Chargeable, ConsensusParameters, Input, Output,
+        Receipt, Script, Transaction,
         field::{
-            Inputs,
-            MaxFeeLimit,
-            Outputs,
-            Policies,
-            Script as ScriptField,
-            ScriptGasLimit,
-            Tip,
-            WitnessLimit,
+            Inputs, MaxFeeLimit, Outputs, Policies, Script as ScriptField,
+            ScriptGasLimit, Tip, WitnessLimit,
         },
         input::{
             coin::CoinSigned,
-            message::{
-                MessageCoinSigned,
-                MessageDataSigned,
-            },
+            message::{MessageCoinSigned, MessageDataSigned},
         },
         policies::PolicyType,
     },
-    fuel_types::{
-        ContractId,
-        canonical::Serialize,
-    },
+    fuel_types::{ContractId, canonical::Serialize},
     fuel_vm::{
-        checked_transaction::CheckPredicateParams,
-        interpreter::ExecutableTransaction,
+        checked_transaction::CheckPredicateParams, interpreter::ExecutableTransaction,
     },
-    services::executor::{
-        TransactionExecutionResult,
-        TransactionExecutionStatus,
-    },
+    services::executor::{TransactionExecutionResult, TransactionExecutionStatus},
 };
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-        hash_map::Entry,
-    },
+    collections::{HashMap, HashSet, hash_map::Entry},
     sync::Arc,
 };
 
@@ -584,7 +543,7 @@ where
         if let Some(script) = self.tx.as_script()
             && !script.script().is_empty()
         {
-            return true
+            return true;
         }
         false
     }
@@ -593,7 +552,7 @@ where
     //  `Variable` outputs.
     fn fill_with_variable_outputs(&mut self) -> anyhow::Result<()> {
         if !self.is_runnable_script() {
-            return Ok(())
+            return Ok(());
         }
 
         let max_outputs = self
@@ -616,11 +575,11 @@ where
 
     fn remove_unused_variable_outputs(&mut self) {
         if !self.is_runnable_script() {
-            return
+            return;
         }
 
         if self.index_of_first_fake_variable_output.is_none() {
-            return
+            return;
         }
 
         let index_of_first_fake_variable_output = self
@@ -630,7 +589,7 @@ where
 
         while let Some(output) = self.tx.outputs().last() {
             if self.tx.outputs().len() <= index_of_first_fake_variable_output as usize {
-                break
+                break;
             }
 
             if let Output::Variable { amount, .. } = output {
@@ -655,11 +614,11 @@ where
 
     async fn estimate_predicates(mut self) -> anyhow::Result<Self> {
         if !self.arguments.estimate_predicates {
-            return Ok(self)
+            return Ok(self);
         }
 
         if !self.has_predicates {
-            return Ok(self)
+            return Ok(self);
         }
 
         if self.estimated_predicates_count >= self.arguments.estimate_predicates_limit {
@@ -704,7 +663,7 @@ where
 
     async fn estimate_script_if_possible(&mut self) -> anyhow::Result<()> {
         if !self.is_runnable_script() {
-            return Ok(())
+            return Ok(());
         }
 
         let Some(script_ref) = self.tx.as_script_mut() else {
@@ -857,7 +816,7 @@ where
 
             for contract_id in contracts_not_in_inputs {
                 if !self.set_contracts.insert(contract_id) {
-                    continue
+                    continue;
                 }
 
                 let inptus = script.inputs_mut();
@@ -1021,7 +980,7 @@ where
     for item in items {
         let key = extractor(item);
         if !duplicates.insert(key) {
-            return true
+            return true;
         }
     }
 

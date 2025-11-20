@@ -1,8 +1,5 @@
 use fuel_core_poa::pre_confirmation_signature_service::{
-    error::{
-        Error as PoaError,
-        Result as PoAResult,
-    },
+    error::{Error as PoaError, Result as PoAResult},
     tx_receiver::TxReceiver,
 };
 use fuel_core_types::services::preconfirmation::Preconfirmation;
@@ -54,10 +51,7 @@ mod tests {
     use super::*;
     use fuel_core_types::{
         fuel_tx::TxId,
-        services::preconfirmation::{
-            PreconfirmationStatus,
-            SqueezedOut,
-        },
+        services::preconfirmation::{PreconfirmationStatus, SqueezedOut},
     };
 
     #[tokio::test]

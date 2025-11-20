@@ -2,60 +2,30 @@
 //! This module contains the import task which is responsible for
 //! importing blocks from the network into the local blockchain.
 
-use cache::{
-    Cache,
-    CachedDataBatch,
-};
-use fuel_core_services::{
-    SharedMutex,
-    StateWatcher,
-    TraceErr,
-};
+use cache::{Cache, CachedDataBatch};
+use fuel_core_services::{SharedMutex, StateWatcher, TraceErr};
 use fuel_core_types::{
     self,
-    blockchain::{
-        SealedBlock,
-        SealedBlockHeader,
-        block::Block,
-    },
+    blockchain::{SealedBlock, SealedBlockHeader, block::Block},
     fuel_types::BlockHeight,
-    services::p2p::{
-        PeerId,
-        SourcePeer,
-        Transactions,
-    },
+    services::p2p::{PeerId, SourcePeer, Transactions},
 };
-use futures::{
-    FutureExt,
-    Stream,
-    stream::StreamExt,
-};
+use futures::{FutureExt, Stream, stream::StreamExt};
 use std::{
     future::Future,
     num::NonZeroU32,
-    ops::{
-        Range,
-        RangeInclusive,
-    },
+    ops::{Range, RangeInclusive},
     sync::Arc,
 };
 use tokio::{
     pin,
-    sync::{
-        Notify,
-        mpsc,
-    },
+    sync::{Notify, mpsc},
     task::JoinHandle,
 };
 use tracing::Instrument;
 
 use crate::{
-    ports::{
-        BlockImporterPort,
-        ConsensusPort,
-        PeerReportReason,
-        PeerToPeerPort,
-    },
+    ports::{BlockImporterPort, ConsensusPort, PeerReportReason, PeerToPeerPort},
     state::State,
 };
 
@@ -624,7 +594,7 @@ where
         range.end
     );
     let Some(sourced_headers) = get_sealed_block_headers(range.clone(), p2p).await else {
-        return Batch::new(None, range, vec![])
+        return Batch::new(None, range, vec![]);
     };
     let SourcePeer {
         peer_id,
@@ -681,7 +651,7 @@ where
         data: transactions,
     }) = get_transactions(range.clone(), peer.clone(), p2p).await
     else {
-        return Batch::new(peer, range, vec![])
+        return Batch::new(peer, range, vec![]);
     };
 
     let iter = headers.into_iter().zip(transactions.into_iter());
@@ -704,7 +674,7 @@ where
                 Some(peer_id.clone()),
                 PeerReportReason::InvalidTransactions,
             );
-            break
+            break;
         }
     }
     Batch::new(Some(peer_id), range, blocks)

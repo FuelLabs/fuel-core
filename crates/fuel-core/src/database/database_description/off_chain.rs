@@ -1,7 +1,4 @@
-use crate::{
-    database::database_description::DatabaseDescription,
-    fuel_core_graphql_api,
-};
+use crate::{database::database_description::DatabaseDescription, fuel_core_graphql_api};
 use fuel_core_types::fuel_types::BlockHeight;
 
 #[derive(Copy, Clone, Debug)]

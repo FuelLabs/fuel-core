@@ -23,9 +23,7 @@
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_txpool::error::RemovedReason;
 use fuel_core_types::{
-    fuel_types::Bytes32,
-    services::transaction_status::TransactionStatus,
-    tai64::Tai64,
+    fuel_types::Bytes32, services::transaction_status::TransactionStatus, tai64::Tai64,
 };
 use futures::StreamExt;
 use std::ops::ControlFlow;
@@ -34,10 +32,7 @@ use fuel_core_storage::Error as StorageError;
 use proptest::{
     prelude::prop,
     prop_oneof,
-    strategy::{
-        Just,
-        Strategy,
-    },
+    strategy::{Just, Strategy},
 };
 use test_strategy::*;
 

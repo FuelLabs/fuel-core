@@ -1,19 +1,9 @@
 use crate::fuel_core_graphql_api::{
-    api_service::ReadDatabase,
-    block_height_subscription,
+    api_service::ReadDatabase, block_height_subscription,
 };
 use async_graphql::{
-    Pos,
-    Request,
-    ServerError,
-    ServerResult,
-    Value,
-    extensions::{
-        Extension,
-        ExtensionContext,
-        ExtensionFactory,
-        NextPrepareRequest,
-    },
+    Pos, Request, ServerError, ServerResult, Value,
+    extensions::{Extension, ExtensionContext, ExtensionFactory, NextPrepareRequest},
 };
 use async_graphql_value::ConstValue;
 use fuel_core_types::fuel_types::BlockHeight;
@@ -120,7 +110,7 @@ fn get_required_height(request: &Request) -> Option<BlockHeight> {
             required_fuel_block_height.try_into().unwrap_or(u32::MAX);
         let required_block_height: BlockHeight = required_fuel_block_height.into();
 
-        return Some(required_block_height)
+        return Some(required_block_height);
     }
     None
 }

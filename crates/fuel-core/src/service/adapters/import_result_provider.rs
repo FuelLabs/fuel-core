@@ -1,19 +1,10 @@
-use crate::{
-    database::Database,
-    service::adapters::ExecutorAdapter,
-};
+use crate::{database::Database, service::adapters::ExecutorAdapter};
 use fuel_core_importer::ports::Validator;
-use fuel_core_storage::{
-    not_found,
-    transactional::AtomicView,
-};
+use fuel_core_storage::{not_found, transactional::AtomicView};
 use fuel_core_types::{
     fuel_types::BlockHeight,
     services::{
-        block_importer::{
-            ImportResult,
-            SharedImportResult,
-        },
+        block_importer::{ImportResult, SharedImportResult},
         executor::ValidationResult,
     },
 };

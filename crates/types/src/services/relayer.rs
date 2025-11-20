@@ -2,10 +2,7 @@
 
 use crate::{
     blockchain::primitives::DaBlockHeight,
-    entities::{
-        Message,
-        RelayedTransaction,
-    },
+    entities::{Message, RelayedTransaction},
     fuel_types::Bytes32,
 };
 use core::ops::Deref;

@@ -1,58 +1,25 @@
 // Define arguments
 
 use fuel_core::service::config::Trigger;
-use fuel_core_chain_config::{
-    ChainConfig,
-    CoinConfig,
-    SnapshotMetadata,
-};
+use fuel_core_chain_config::{ChainConfig, CoinConfig, SnapshotMetadata};
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
-    fuel_asm::{
-        GMArgs,
-        GTFArgs,
-        RegId,
-        op,
-    },
-    fuel_crypto::{
-        coins_bip32::ecdsa::signature::Signer,
-        *,
-    },
+    fuel_asm::{GMArgs, GTFArgs, RegId, op},
+    fuel_crypto::{coins_bip32::ecdsa::signature::Signer, *},
     fuel_tx::{
-        AssetId,
-        Finalizable,
-        Input,
-        Output,
-        Transaction,
-        TransactionBuilder,
-        input::coin::{
-            CoinPredicate,
-            CoinSigned,
-        },
+        AssetId, Finalizable, Input, Output, Transaction, TransactionBuilder,
+        input::coin::{CoinPredicate, CoinSigned},
     },
-    fuel_types::{
-        Immediate12,
-        Immediate18,
-    },
+    fuel_types::{Immediate12, Immediate18},
     fuel_vm::{
-        checked_transaction::{
-            CheckPredicateParams,
-            EstimatePredicates,
-        },
+        checked_transaction::{CheckPredicateParams, EstimatePredicates},
         interpreter::MemoryInstance,
         predicate::EmptyStorage,
     },
 };
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
-use test_helpers::builder::{
-    TestContext,
-    TestSetupBuilder,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
+use test_helpers::builder::{TestContext, TestSetupBuilder};
 fn checked_parameters() -> CheckPredicateParams {
     let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
     let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();

@@ -3,17 +3,10 @@ use std::ops::Deref;
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
-        header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            PartialBlockHeader,
-        },
+        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
     },
     entities::relayer::message::MerkleProof,
-    fuel_tx::{
-        AssetId,
-        ContractId,
-    },
+    fuel_tx::{AssetId, ContractId},
     fuel_types::BlockHeight,
     tai64::Tai64,
 };

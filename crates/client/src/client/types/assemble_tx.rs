@@ -1,18 +1,10 @@
 use fuel_core_types::{
-    fuel_tx::{
-        Address,
-        AssetId,
-        Transaction,
-    },
+    fuel_tx::{Address, AssetId, Transaction},
     fuel_types::canonical::Deserialize,
     services::executor::TransactionExecutionResult,
 };
 
-use crate::client::schema::{
-    self,
-    ConversionError,
-    tx::Destroy,
-};
+use crate::client::schema::{self, ConversionError, tx::Destroy};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RequiredBalance {

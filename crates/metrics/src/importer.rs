@@ -1,18 +1,9 @@
 use crate::{
-    buckets::{
-        Buckets,
-        buckets,
-    },
+    buckets::{Buckets, buckets},
     global_registry,
 };
-use prometheus_client::metrics::{
-    gauge::Gauge,
-    histogram::Histogram,
-};
-use std::sync::{
-    OnceLock,
-    atomic::AtomicU64,
-};
+use prometheus_client::metrics::{gauge::Gauge, histogram::Histogram};
+use std::sync::{OnceLock, atomic::AtomicU64};
 
 pub struct ImporterMetrics {
     pub block_height: Gauge,

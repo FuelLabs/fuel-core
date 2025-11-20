@@ -2,15 +2,11 @@ use super::P2PAdapter;
 use fuel_core_chain_config::ConsensusConfig;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_tx_status_manager::{
-    ports::P2PPreConfirmationGossipData,
-    service::ProtocolPublicKey,
+    ports::P2PPreConfirmationGossipData, service::ProtocolPublicKey,
 };
 use fuel_core_types::{
     fuel_tx::Address,
-    services::p2p::{
-        GossipsubMessageAcceptance,
-        GossipsubMessageInfo,
-    },
+    services::p2p::{GossipsubMessageAcceptance, GossipsubMessageInfo},
 };
 
 #[cfg(feature = "p2p")]
@@ -18,10 +14,7 @@ impl fuel_core_tx_status_manager::ports::P2PSubscriptions for P2PAdapter {
     type GossipedStatuses = P2PPreConfirmationGossipData;
 
     fn gossiped_tx_statuses(&self) -> BoxStream<Self::GossipedStatuses> {
-        use tokio_stream::{
-            StreamExt,
-            wrappers::BroadcastStream,
-        };
+        use tokio_stream::{StreamExt, wrappers::BroadcastStream};
 
         match &self.service {
             Some(service) => Box::pin(

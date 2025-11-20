@@ -1,7 +1,6 @@
 use crate::service::adapters::UniversalGasPriceProvider;
 use fuel_core_gas_price_service::common::gas_price_algorithm::{
-    GasPriceAlgorithm,
-    SharedGasPriceAlgo,
+    GasPriceAlgorithm, SharedGasPriceAlgo,
 };
 use fuel_core_producer::block_producer::gas_price::GasPriceProvider as ProducerGasPriceProvider;
 use fuel_core_types::fuel_types::BlockHeight;

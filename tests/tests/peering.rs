@@ -1,23 +1,12 @@
 #![allow(non_snake_case)]
 
 use fuel_core::p2p_test_helpers::{
-    BootstrapSetup,
-    BootstrapType,
-    CustomizeConfig,
-    Nodes,
-    ProducerSetup,
-    ValidatorSetup,
+    BootstrapSetup, BootstrapType, CustomizeConfig, Nodes, ProducerSetup, ValidatorSetup,
     make_nodes,
 };
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::{
-    fuel_crypto::SecretKey,
-    fuel_tx::Input,
-};
-use rand::{
-    SeedableRng,
-    prelude::StdRng,
-};
+use fuel_core_types::{fuel_crypto::SecretKey, fuel_tx::Input};
+use rand::{SeedableRng, prelude::StdRng};
 use std::time::Duration;
 
 #[tokio::test]

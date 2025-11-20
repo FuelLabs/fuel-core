@@ -1,10 +1,7 @@
 //! Types related to block producer service.
 
 use crate::{
-    blockchain::header::{
-        ConsensusParametersVersion,
-        PartialBlockHeader,
-    },
+    blockchain::header::{ConsensusParametersVersion, PartialBlockHeader},
     fuel_tx::ContractId,
 };
 

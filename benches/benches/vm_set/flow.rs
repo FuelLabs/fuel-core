@@ -1,19 +1,10 @@
 use super::run_group_ref;
 
-use crate::utils::{
-    arb_dependent_cost_values,
-    make_receipts,
-};
-use criterion::{
-    Criterion,
-    Throughput,
-};
+use crate::utils::{arb_dependent_cost_values, make_receipts};
+use criterion::{Criterion, Throughput};
 use fuel_core_benches::VmBench;
 use fuel_core_types::fuel_asm::*;
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::{SeedableRng, rngs::StdRng};
 
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);

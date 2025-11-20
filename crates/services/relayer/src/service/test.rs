@@ -1,10 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::{
-    Config,
-    ports::RelayerDb,
-    service::NotInitializedTask,
-};
+use crate::{Config, ports::RelayerDb, service::NotInitializedTask};
 use alloy_primitives::LogData;
 use fuel_core_provider::test_helpers::provider::MockProvider;
 use fuel_core_services::RunnableService;
@@ -17,19 +13,13 @@ use super::*;
 const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
 
 use crate::{
-    service::{
-        download_logs,
-        state,
-    },
+    service::{download_logs, state},
     test_helpers::page_sizer::IdentityPageSizer,
 };
 use alloy_provider::{
     ProviderBuilder,
     mock::Asserter,
-    transport::{
-        TransportError,
-        TransportErrorKind,
-    },
+    transport::{TransportError, TransportErrorKind},
 };
 use alloy_rpc_types_eth::Log;
 

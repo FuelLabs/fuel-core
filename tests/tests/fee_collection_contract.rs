@@ -1,48 +1,19 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::arithmetic_side_effects)]
 
-use fuel_core::service::{
-    Config,
-    FuelService,
-};
-use fuel_core_client::client::{
-    FuelClient,
-    types::TransactionStatus,
-};
+use fuel_core::service::{Config, FuelService};
+use fuel_core_client::client::{FuelClient, types::TransactionStatus};
 use fuel_core_types::{
-    fuel_asm::{
-        GTFArgs,
-        RegId,
-        op,
-    },
+    fuel_asm::{GTFArgs, RegId, op},
     fuel_tx::{
-        Cacheable,
-        Contract,
-        Finalizable,
-        Input,
-        Output,
-        TransactionBuilder,
-        Witness,
+        Cacheable, Contract, Finalizable, Input, Output, TransactionBuilder, Witness,
     },
     fuel_types::{
-        Address,
-        AssetId,
-        BlockHeight,
-        ChainId,
-        ContractId,
-        Salt,
-        canonical::Serialize,
+        Address, AssetId, BlockHeight, ChainId, ContractId, Salt, canonical::Serialize,
     },
 };
-use rand::{
-    Rng,
-    SeedableRng,
-    rngs::StdRng,
-};
-use test_helpers::{
-    assemble_tx::AssembleAndRunTx,
-    default_signing_wallet,
-};
+use rand::{Rng, SeedableRng, rngs::StdRng};
+use test_helpers::{assemble_tx::AssembleAndRunTx, default_signing_wallet};
 
 struct TestContext {
     address: Address,

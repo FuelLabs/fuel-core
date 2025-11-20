@@ -15,27 +15,20 @@
 
 use crate as fuel_core_wasm_executor;
 use crate::utils::{
-    InputDeserializationType,
-    WasmDeserializationBlockTypes,
+    InputDeserializationType, WasmDeserializationBlockTypes,
     convert_to_v1_execution_result,
 };
 use fuel_core_executor::executor::ExecutionInstance;
 use fuel_core_types::{
     blockchain::block::Block,
     fuel_vm::interpreter::MemoryInstance,
-    services::{
-        block_producer::Components,
-        executor::Error as ExecutorError,
-    },
+    services::{block_producer::Components, executor::Error as ExecutorError},
 };
 use fuel_core_wasm_executor::{
     relayer::WasmRelayer,
     storage::WasmStorage,
     tx_source::WasmTxSource,
-    utils::{
-        ReturnType,
-        pack_ptr_and_len,
-    },
+    utils::{ReturnType, pack_ptr_and_len},
 };
 use futures::FutureExt;
 use new_tx_waiter::NewTxWaiter;

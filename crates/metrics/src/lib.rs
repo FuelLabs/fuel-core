@@ -3,14 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use prometheus_client::{
-    encoding::text::encode,
-    registry::Registry,
-};
-use std::{
-    ops::Deref,
-    sync::OnceLock,
-};
+use prometheus_client::{encoding::text::encode, registry::Registry};
+use std::{ops::Deref, sync::OnceLock};
 
 /// The global register of all metrics.
 #[derive(Default)]

@@ -1,105 +1,46 @@
 use block_target_gas_set::{
-    alu::run_alu,
-    contract::run_contract,
-    crypto::run_crypto,
-    flow::run_flow,
-    memory::run_memory,
-    other::run_other,
+    alu::run_alu, contract::run_contract, crypto::run_crypto, flow::run_flow,
+    memory::run_memory, other::run_other,
 };
 use criterion::{
-    BenchmarkGroup,
-    Criterion,
-    criterion_group,
-    criterion_main,
-    measurement::WallTime,
+    BenchmarkGroup, Criterion, criterion_group, criterion_main, measurement::WallTime,
 };
 use ed25519_dalek::Signer;
 use ethnum::U256;
 use fuel_core::{
     combined_database::CombinedDatabase,
-    database::{
-        Database,
-        balances::BalancesInitializer,
-        state::StateInitializer,
-    },
-    service::{
-        Config,
-        FuelService,
-        config::Trigger,
-    },
+    database::{Database, balances::BalancesInitializer, state::StateInitializer},
+    service::{Config, FuelService, config::Trigger},
     state::{
         historical_rocksdb::StateRewindPolicy,
-        rocks_db::{
-            ColumnsPolicy,
-            DatabaseConfig,
-        },
+        rocks_db::{ColumnsPolicy, DatabaseConfig},
     },
 };
-use fuel_core_benches::{
-    default_gas_costs::default_gas_costs,
-    *,
-};
-use fuel_core_chain_config::{
-    ChainConfig,
-    ContractConfig,
-    StateConfig,
-};
+use fuel_core_benches::{default_gas_costs::default_gas_costs, *};
+use fuel_core_chain_config::{ChainConfig, ContractConfig, StateConfig};
 use fuel_core_storage::{
-    StorageAsMut,
-    tables::ContractsRawCode,
-    vm_storage::IncreaseStorageKey,
+    StorageAsMut, tables::ContractsRawCode, vm_storage::IncreaseStorageKey,
 };
 use fuel_core_types::{
     fuel_asm::{
-        GTFArgs,
-        Instruction,
-        RegId,
-        Word,
-        op,
-        wideint::{
-            CompareArgs,
-            CompareMode,
-            DivArgs,
-            MathArgs,
-            MathOp,
-            MulArgs,
-        },
+        GTFArgs, Instruction, RegId, Word, op,
+        wideint::{CompareArgs, CompareMode, DivArgs, MathArgs, MathOp, MulArgs},
     },
-    fuel_crypto::{
-        secp256r1,
-        *,
-    },
+    fuel_crypto::{secp256r1, *},
     fuel_tx::{
-        ContractIdExt,
-        FeeParameters,
-        GasCosts,
-        Input,
-        Output,
-        PredicateParameters,
-        TxParameters,
-        TxPointer,
-        UniqueIdentifier,
-        UtxoId,
+        ContractIdExt, FeeParameters, GasCosts, Input, Output, PredicateParameters,
+        TxParameters, TxPointer, UniqueIdentifier, UtxoId,
     },
-    fuel_types::{
-        AssetId,
-        Bytes32,
-        ContractId,
-    },
+    fuel_types::{AssetId, Bytes32, ContractId},
     fuel_vm::{
-        checked_transaction::EstimatePredicates,
-        consts::WORD_SIZE,
-        interpreter::MemoryInstance,
-        predicate::EmptyStorage,
+        checked_transaction::EstimatePredicates, consts::WORD_SIZE,
+        interpreter::MemoryInstance, predicate::EmptyStorage,
     },
     services::executor::TransactionExecutionResult,
 };
 use fuel_types::SubAssetId;
 use rand::SeedableRng;
-use utils::{
-    make_u128,
-    make_u256,
-};
+use utils::{make_u128, make_u256};
 
 mod utils;
 

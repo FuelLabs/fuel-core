@@ -1,30 +1,17 @@
 use crate::{
     database::RelayerIterableKeyValueView,
-    service::adapters::{
-        NewTxWaiter,
-        TransactionsSource,
-    },
+    service::adapters::{NewTxWaiter, TransactionsSource},
 };
 use fuel_core_executor::{
     executor::WaitNewTransactionsResult,
-    ports::{
-        MaybeCheckedTransaction,
-        NewTxWaiterPort,
-        PreconfirmationSenderPort,
-    },
+    ports::{MaybeCheckedTransaction, NewTxWaiterPort, PreconfirmationSenderPort},
 };
 use fuel_core_txpool::Constraints;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
-    services::{
-        preconfirmation::Preconfirmation,
-        relayer::Event,
-    },
+    services::{preconfirmation::Preconfirmation, relayer::Event},
 };
-use std::{
-    collections::HashSet,
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 use tokio::sync::mpsc::error::TrySendError;
 
 use super::PreconfirmationSender;

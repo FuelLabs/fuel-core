@@ -2,13 +2,8 @@ use crate::{
     database::OnChainIterableKeyValueView,
     service::{
         adapters::{
-            BlockProducerAdapter,
-            ChainStateInfoProvider,
-            ExecutorAdapter,
-            MaybeRelayerAdapter,
-            NewTxWaiter,
-            StaticGasPrice,
-            TransactionsSource,
+            BlockProducerAdapter, ChainStateInfoProvider, ExecutorAdapter,
+            MaybeRelayerAdapter, NewTxWaiter, StaticGasPrice, TransactionsSource,
             TxPoolAdapter,
         },
         sub_services::BlockProducerService,
@@ -16,64 +11,37 @@ use crate::{
 };
 use fuel_core_producer::{
     block_producer::gas_price::{
-        ChainStateInfoProvider as ChainStateInfoProviderTrait,
-        GasPriceProvider,
+        ChainStateInfoProvider as ChainStateInfoProviderTrait, GasPriceProvider,
     },
-    ports::{
-        RelayerBlockInfo,
-        TxPool,
-    },
+    ports::{RelayerBlockInfo, TxPool},
 };
 use fuel_core_storage::{
-    Result as StorageResult,
-    StorageAsRef,
-    iter::{
-        IterDirection,
-        IteratorOverTable,
-    },
+    Result as StorageResult, StorageAsRef,
+    iter::{IterDirection, IteratorOverTable},
     not_found,
     tables::{
-        ConsensusParametersVersions,
-        FuelBlocks,
-        StateTransitionBytecodeVersions,
+        ConsensusParametersVersions, FuelBlocks, StateTransitionBytecodeVersions,
         Transactions,
     },
     transactional::Changes,
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-        },
-        header::{
-            ConsensusParametersVersion,
-            StateTransitionBytecodeVersion,
-        },
+        block::{Block, CompressedBlock},
+        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
         primitives::DaBlockHeight,
     },
-    fuel_tx::{
-        ConsensusParameters,
-        Transaction,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_tx::{ConsensusParameters, Transaction},
+    fuel_types::{BlockHeight, Bytes32},
     services::{
         block_producer::Components,
         executor::{
-            DryRunResult,
-            Result as ExecutorResult,
-            StorageReadReplayEvent,
+            DryRunResult, Result as ExecutorResult, StorageReadReplayEvent,
             UncommittedResult,
         },
     },
 };
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+use std::{borrow::Cow, sync::Arc};
 use tokio::time::Instant;
 
 impl BlockProducerAdapter {

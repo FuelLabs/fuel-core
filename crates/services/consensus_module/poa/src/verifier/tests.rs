@@ -2,11 +2,7 @@ use super::*;
 use crate as fuel_core_poa;
 use fuel_core_poa::ports::MockDatabase;
 use fuel_core_types::{
-    blockchain::header::{
-        ApplicationHeader,
-        ConsensusHeader,
-        PartialBlockHeader,
-    },
+    blockchain::header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
     fuel_tx::Transaction,
     tai64::Tai64,
 };

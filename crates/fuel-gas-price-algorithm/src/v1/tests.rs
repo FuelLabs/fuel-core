@@ -2,12 +2,7 @@
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::cast_possible_truncation)]
 
-use crate::v1::{
-    AlgorithmUpdaterV1,
-    Bytes,
-    Height,
-    L2ActivityTracker,
-};
+use crate::v1::{AlgorithmUpdaterV1, Bytes, Height, L2ActivityTracker};
 use std::collections::BTreeMap;
 
 #[cfg(test)]

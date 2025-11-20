@@ -1,16 +1,10 @@
 //! Types related to block importer service.
 
 use crate::{
-    blockchain::{
-        SealedBlock,
-        header::BlockHeader,
-    },
+    blockchain::{SealedBlock, header::BlockHeader},
     services::{
         Uncommitted,
-        executor::{
-            Event,
-            TransactionExecutionStatus,
-        },
+        executor::{Event, TransactionExecutionStatus},
     },
 };
 use core::ops::Deref;

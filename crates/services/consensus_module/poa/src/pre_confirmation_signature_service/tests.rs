@@ -2,23 +2,14 @@
 
 use super::*;
 use crate::pre_confirmation_signature_service::{
-    broadcast::{
-        PublicKey,
-        Signature,
-    },
+    broadcast::{PublicKey, Signature},
     error::Error,
 };
 use fuel_core_services::StateWatcher;
 use fuel_core_types::{
-    fuel_tx::{
-        Bytes32,
-        TxId,
-    },
+    fuel_tx::{Bytes32, TxId},
     fuel_types::BlockHeight,
-    services::preconfirmation::{
-        PreconfirmationStatus,
-        SqueezedOut,
-    },
+    services::preconfirmation::{PreconfirmationStatus, SqueezedOut},
 };
 use std::time::Duration;
 

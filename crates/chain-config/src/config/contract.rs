@@ -1,24 +1,10 @@
 use crate::serialization::HexIfHumanReadable;
 use fuel_core_types::{
-    fuel_tx::{
-        AssetId,
-        Contract,
-        ContractId,
-        StorageSlot,
-        TxPointer,
-        UtxoId,
-    },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-        Salt,
-    },
+    fuel_tx::{AssetId, Contract, ContractId, StorageSlot, TxPointer, UtxoId},
+    fuel_types::{BlockHeight, Bytes32, Salt},
 };
 use itertools::Itertools;
-use serde::{
-    Deserialize,
-    Serialize,
-};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
 #[serde_as]

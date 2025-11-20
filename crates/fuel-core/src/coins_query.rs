@@ -1,37 +1,17 @@
 use crate::{
-    fuel_core_graphql_api::{
-        database::ReadView,
-        storage::coins::CoinsToSpendIndexKey,
-    },
+    fuel_core_graphql_api::{database::ReadView, storage::coins::CoinsToSpendIndexKey},
     graphql_api::ports::CoinsToSpendIndexIter,
-    query::asset_query::{
-        AssetQuery,
-        AssetSpendTarget,
-        Exclude,
-    },
+    query::asset_query::{AssetQuery, AssetSpendTarget, Exclude},
 };
 use fuel_core_services::yield_stream::StreamYieldExt;
-use fuel_core_storage::{
-    Error as StorageError,
-    Result as StorageResult,
-};
+use fuel_core_storage::{Error as StorageError, Result as StorageResult};
 use fuel_core_types::{
     entities::coins::CoinType,
-    fuel_types::{
-        Address,
-        AssetId,
-    },
+    fuel_types::{Address, AssetId},
 };
-use futures::{
-    Stream,
-    StreamExt,
-    TryStreamExt,
-};
+use futures::{Stream, StreamExt, TryStreamExt};
 use rand::prelude::*;
-use std::{
-    borrow::Cow,
-    cmp::Reverse,
-};
+use std::{borrow::Cow, cmp::Reverse};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -459,71 +439,38 @@ impl From<anyhow::Error> for CoinsQueryError {
 mod tests {
     use crate::{
         coins_query::{
-            CoinsQueryError,
-            SpendQuery,
-            largest_first,
-            max_dust_count,
-            random_improve,
+            CoinsQueryError, SpendQuery, largest_first, max_dust_count, random_improve,
         },
         combined_database::CombinedDatabase,
         fuel_core_graphql_api::{
             api_service::ReadDatabase as ServiceDatabase,
             storage::{
-                coins::{
-                    OwnedCoins,
-                    owner_coin_id_key,
-                },
-                messages::{
-                    OwnedMessageIds,
-                    OwnedMessageKey,
-                },
+                coins::{OwnedCoins, owner_coin_id_key},
+                messages::{OwnedMessageIds, OwnedMessageKey},
             },
         },
-        query::asset_query::{
-            AssetQuery,
-            AssetSpendTarget,
-            Exclude,
-        },
+        query::asset_query::{AssetQuery, AssetSpendTarget, Exclude},
     };
     use assert_matches::assert_matches;
     use fuel_core_storage::{
         StorageMutate,
         iter::IterDirection,
-        tables::{
-            Coins,
-            Messages,
-        },
+        tables::{Coins, Messages},
     };
     use fuel_core_types::{
         blockchain::primitives::DaBlockHeight,
         entities::{
-            coins::coin::{
-                Coin,
-                CompressedCoin,
-            },
-            relayer::message::{
-                Message,
-                MessageV1,
-            },
+            coins::coin::{Coin, CompressedCoin},
+            relayer::message::{Message, MessageV1},
         },
         fuel_asm::Word,
         fuel_tx::*,
     };
     use futures::TryStreamExt;
     use itertools::Itertools;
-    use proptest::{
-        prelude::*,
-        proptest,
-    };
-    use rand::{
-        Rng,
-        SeedableRng,
-        rngs::StdRng,
-    };
-    use std::{
-        borrow::Cow,
-        cmp::Reverse,
-    };
+    use proptest::{prelude::*, proptest};
+    use rand::{Rng, SeedableRng, rngs::StdRng};
+    use std::{borrow::Cow, cmp::Reverse};
 
     fn setup_coins() -> (Address, [AssetId; 2], AssetId, TestDatabase) {
         let mut rng = StdRng::seed_from_u64(0xf00df00d);
@@ -745,10 +692,7 @@ mod tests {
 
         mod allow_partial {
             use crate::{
-                coins_query::tests::{
-                    largest_first::query,
-                    setup_coins,
-                },
+                coins_query::tests::{largest_first::query, setup_coins},
                 query::asset_query::AssetSpendTarget,
             };
 
@@ -1169,22 +1113,13 @@ mod tests {
         use super::*;
         use fuel_core_storage::iter::IntoBoxedIter;
         use fuel_core_types::{
-            entities::coins::{
-                CoinId,
-                coin::Coin,
-            },
-            fuel_tx::{
-                AssetId,
-                TxId,
-                UtxoId,
-            },
+            entities::coins::{CoinId, coin::Coin},
+            fuel_tx::{AssetId, TxId, UtxoId},
         };
 
         use crate::{
             coins_query::{
-                CoinsQueryError,
-                CoinsToSpendIndexKey,
-                select_coins_to_spend,
+                CoinsQueryError, CoinsToSpendIndexKey, select_coins_to_spend,
                 select_coins_until,
             },
             graphql_api::ports::CoinsToSpendIndexIter,
@@ -1619,22 +1554,14 @@ mod tests {
 
         mod allow_partial {
             use fuel_core_storage::iter::IntoBoxedIter;
-            use fuel_core_types::{
-                fuel_tx::AssetId,
-                fuel_types::Address,
-            };
+            use fuel_core_types::{fuel_tx::AssetId, fuel_types::Address};
 
             use crate::{
                 coins_query::tests::indexed_coins_to_spend::{
-                    BATCH_SIZE,
-                    select_coins_to_spend,
-                    setup_test_coins,
+                    BATCH_SIZE, select_coins_to_spend, setup_test_coins,
                 },
                 graphql_api::ports::CoinsToSpendIndexIter,
-                query::asset_query::{
-                    AssetSpendTarget,
-                    Exclude,
-                },
+                query::asset_query::{AssetSpendTarget, Exclude},
             };
 
             #[tokio::test]

@@ -1,8 +1,4 @@
-use crate::client::schema::{
-    RelayedTransactionId,
-    U32,
-    schema,
-};
+use crate::client::schema::{RelayedTransactionId, U32, schema};
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(
