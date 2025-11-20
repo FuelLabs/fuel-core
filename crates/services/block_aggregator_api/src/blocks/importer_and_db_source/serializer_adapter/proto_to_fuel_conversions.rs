@@ -43,6 +43,7 @@ use fuel_core_types::{
         Bytes32,
         Input,
         Output,
+        Receipt as FuelReceipt,
         StorageSlot,
         Transaction as FuelTransaction,
         TxPointer,
@@ -256,7 +257,7 @@ pub fn fuel_block_from_protobuf(
     proto_block: ProtoBlock,
     msg_ids: &[fuel_core_types::fuel_tx::MessageId],
     event_inbox_root: Bytes32,
-) -> crate::result::Result<FuelBlock> {
+) -> crate::result::Result<(FuelBlock, Vec<FuelReceipt>)> {
     let versioned_block = proto_block
         .versioned_block
         .ok_or_else(|| anyhow::anyhow!("Missing protobuf versioned_block"))
@@ -278,7 +279,7 @@ pub fn fuel_block_from_protobuf(
             .map(tx_from_proto_tx)
             .collect::<crate::result::Result<_>>()?,
     };
-    FuelBlock::new(
+    let block = FuelBlock::new(
         partial_header,
         txs,
         msg_ids,
@@ -287,7 +288,8 @@ pub fn fuel_block_from_protobuf(
         &ChainId::default(),
     )
     .map_err(|e| anyhow!(e))
-    .map_err(Error::Serialization)
+    .map_err(Error::Serialization)?;
+    Ok((block, vec![]))
 }
 
 pub fn partial_header_from_proto_header(

@@ -23,6 +23,7 @@ use crate::{
         Input,
         MessageId,
         Output,
+        Receipt,
         StorageSlot,
         Transaction,
         TransactionBuilder,
@@ -668,5 +669,14 @@ prop_compose! {
             Block::new(partial_block_header, txs, &msg_ids, event_root).unwrap()
         };
         (fuel_block, msg_ids, event_root)
+    }
+}
+
+prop_compose! {
+    /// generates a list of random receipts
+    pub fn arb_receipts()(
+        _ in any::<u64>(),
+    ) -> Vec<Receipt> {
+        vec![]
     }
 }

@@ -58,7 +58,7 @@ pub mod proto_to_fuel_conversions;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_types::test_helpers::arb_block;
+    use fuel_core_types::test_helpers::{arb_block, arb_receipts};
     use proptest::prelude::*;
     use crate::blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf;
 
@@ -67,18 +67,18 @@ mod tests {
       cases: 100, .. ProptestConfig::default()
     })]
           #[test]
-          fn serialize_block__roundtrip((block, msg_ids, event_inbox_root) in arb_block()) {
+          fn serialize_block__roundtrip((block, msg_ids, event_inbox_root) in arb_block(), receipts in arb_receipts()) {
               // given
               let serializer = SerializerAdapter;
 
               // when
-              let proto_block = serializer.serialize_block(&block, &[]).unwrap();
+              let proto_block = serializer.serialize_block(&block, &receipts).unwrap();
 
               // then
-              let deserialized_block = fuel_block_from_protobuf(proto_block, &msg_ids, event_inbox_root).unwrap();
+              let (deserialized_block, deserialized_receipts) = fuel_block_from_protobuf(proto_block, &msg_ids, event_inbox_root).unwrap();
               assert_eq!(block, deserialized_block);
-
-      }
+              assert_eq!(receipts, deserialized_receipts);
+          }
       }
 
     #[test]
