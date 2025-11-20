@@ -27,7 +27,6 @@ fn invalid_graphql_url(port: u16) -> Url {
     url
 }
 
-/// Test that client can be created with multiple URLs
 #[tokio::test]
 async fn client_can_be_created_with_multiple_urls() {
     // Given
