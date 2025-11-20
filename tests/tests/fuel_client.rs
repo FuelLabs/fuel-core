@@ -522,7 +522,6 @@ mod subscription_tests {
         );
     }
 
-    /// Test failover with multiple subscription requests
     #[tokio::test]
     async fn subscription_failover_persists_across_multiple_subscriptions() {
         // Given
