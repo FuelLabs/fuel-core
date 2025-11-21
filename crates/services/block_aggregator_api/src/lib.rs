@@ -36,6 +36,7 @@ pub mod integration {
         blocks::importer_and_db_source::{
             BlockSerializer,
             ImporterAndDbSource,
+            sync_service::TxReceipts,
         },
         db::BlockAggregatorDB,
         protobuf_types::Block as ProtoBlock,
@@ -45,6 +46,7 @@ pub mod integration {
         stream::BoxStream,
     };
     use fuel_core_storage::{
+        Error as StorageError,
         StorageInspect,
         tables::{
             FuelBlocks,
@@ -57,6 +59,7 @@ pub mod integration {
         services::block_importer::SharedImportResult,
     };
     use std::net::SocketAddr;
+
     #[derive(Clone, Debug)]
     pub struct Config {
         pub addr: SocketAddr,
@@ -76,18 +79,19 @@ pub mod integration {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn new_service<DB, S, OnchainDB, E>(
+    pub fn new_service<DB, S, OnchainDB, Receipts>(
         config: &Config,
         db: DB,
         serializer: S,
         onchain_db: OnchainDB,
+        receipts: Receipts,
         importer: BoxStream<SharedImportResult>,
         sync_from_height: BlockHeight,
     ) -> anyhow::Result<ServiceRunner<
         BlockAggregator<
             ProtobufAPI,
             DB,
-            ImporterAndDbSource<S, OnchainDB, E>,
+            ImporterAndDbSource<S, OnchainDB, Receipts>,
             ProtoBlock,
         >,
     >>
@@ -98,10 +102,10 @@ pub mod integration {
         >,
         S: BlockSerializer<Block=ProtoBlock> + Clone + Send + Sync + 'static,
         OnchainDB: Send + Sync,
-        OnchainDB: StorageInspect<FuelBlocks, Error = E>,
-        OnchainDB: StorageInspect<Transactions, Error = E>,
+        OnchainDB: StorageInspect<FuelBlocks, Error = StorageError>,
+        OnchainDB: StorageInspect<Transactions, Error = StorageError>,
         OnchainDB: HistoricalView<Height = BlockHeight>,
-        E: std::fmt::Debug + Send + Sync,
+        Receipts: TxReceipts,
     {
         let addr = config.addr.to_string();
         let api = ProtobufAPI::new(addr)
@@ -114,6 +118,7 @@ pub mod integration {
             importer,
             serializer,
             onchain_db,
+            receipts,
             sync_from_height,
             db_ending_height,
         );
