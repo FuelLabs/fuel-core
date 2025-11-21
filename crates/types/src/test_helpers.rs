@@ -741,6 +741,13 @@ fn arb_receipt() -> impl Strategy<Value = Receipt> {
             any::<u64>(),
             any::<u64>(),
             any::<u64>(),
+        )
+            .prop_map(|(id, ra, pc, is)| Receipt::revert(id, ra, pc, is)),
+        (
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
             any::<u64>(),
             any::<u64>(),
             any::<u64>(),
