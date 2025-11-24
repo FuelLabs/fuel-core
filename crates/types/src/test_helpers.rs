@@ -736,12 +736,7 @@ fn arb_receipt() -> impl Strategy<Value = Receipt> {
             .prop_map(|(id, reason, pc, is, panic_contract)| {
                 Receipt::panic(id, reason, pc, is).with_panic_contract_id(panic_contract)
             }),
-        (
-            arb_contract_id(),
-            any::<u64>(),
-            any::<u64>(),
-            any::<u64>(),
-        )
+        (arb_contract_id(), any::<u64>(), any::<u64>(), any::<u64>(),)
             .prop_map(|(id, ra, pc, is)| Receipt::revert(id, ra, pc, is)),
         (
             arb_contract_id(),
