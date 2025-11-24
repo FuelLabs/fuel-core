@@ -4635,8 +4635,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-protobuf"
-version = "0.3.0"
-source = "git+https://github.com/FuelLabs/fuel-core-protobuf.git?branch=chore%2Finclude-receipts-in-blocks#af38bbbc43a066f7097d34f0896f03be64ebf8c5"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a616726038fbe445bd3294d2700afa8487e38fbc6abc86a8af12be4b596db598"
 dependencies = [
  "prost 0.14.1",
  "serde",
