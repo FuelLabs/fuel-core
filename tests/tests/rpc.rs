@@ -24,10 +24,8 @@ use fuel_core_block_aggregator_api::{
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
         RemoteBlockResponse as ProtoRemoteBlockResponse,
         RemoteS3Bucket,
-        block::VersionedBlock as ProtoVersionedBlock,
         block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
         block_response::Payload as ProtoPayload,
-        header::VersionedHeader as ProtoVersionedHeader,
         remote_block_response::Location,
     },
 };
@@ -81,16 +79,9 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
         .await
         .expect("could not connect to server");
 
-    let expected_block = graphql_client
-        .full_block_by_height(1)
-        .await
-        .unwrap()
-        .unwrap();
-    let expected_header = expected_block.header;
-
     // when
     let request = ProtoBlockRangeRequest { start: 1, end: 1 };
-    let actual_block = if let Some(ProtoPayload::Literal(block)) = rpc_client
+    let proto_block = if let Some(ProtoPayload::Literal(block)) = rpc_client
         .get_block_range(request)
         .await
         .unwrap()
@@ -105,15 +96,31 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
     } else {
         panic!("expected literal block payload");
     };
-    let ProtoVersionedBlock::V1(v1_block) = actual_block.versioned_block.unwrap();
 
-    let actual_height = match v1_block.header.unwrap().versioned_header.unwrap() {
-        ProtoVersionedHeader::V1(v1_header) => v1_header.height,
-        ProtoVersionedHeader::V2(v2_header) => v2_header.height,
-    };
+    let (actual_block, receipts) =
+        fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).unwrap();
+    let actual_height = actual_block.header().height();
 
     // then
-    assert_eq!(expected_header.height.0, actual_height);
+    let expected_height = BlockHeight::new(1);
+    assert_eq!(&expected_height, actual_height);
+
+    assert!(
+        matches!(
+            receipts[1],
+            Receipt::ScriptResult {
+                result: ScriptExecutionResult::Success,
+                ..
+            }
+        ),
+        "should have a script result receipt, received: {:?}",
+        receipts
+    );
+    assert!(
+        matches!(receipts[0], Receipt::Return { .. }),
+        "should have a return receipt, received: {:?}",
+        receipts
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -276,22 +283,38 @@ async fn new_block_subscription__can_get_expect_block() {
     let next = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
         .await
         .unwrap();
-    let actual_block =
+    let proto_block =
         if let Some(ProtoPayload::Literal(block)) = next.unwrap().unwrap().payload {
             block
         } else {
             panic!("expected literal block payload");
         };
 
-    let ProtoVersionedBlock::V1(v1_block) = actual_block.versioned_block.unwrap();
-    let actual_height = match v1_block.header.unwrap().versioned_header.unwrap() {
-        ProtoVersionedHeader::V1(v1_header) => v1_header.height,
-        ProtoVersionedHeader::V2(v2_header) => v2_header.height,
-    };
+    let (actual_block, receipts) =
+        fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).unwrap();
+    let actual_height = actual_block.header().height();
 
     // then
-    let expected_height = 1;
-    assert_eq!(expected_height, actual_height);
+    let expected_height = BlockHeight::new(1);
+    assert_eq!(&expected_height, actual_height);
+
+    assert!(
+        matches!(
+            receipts[1],
+            Receipt::ScriptResult {
+                result: ScriptExecutionResult::Success,
+                ..
+            }
+        ),
+        "should have a script result receipt, received: {:?}",
+        receipts
+    );
+    assert!(
+        matches!(receipts[0], Receipt::Return { .. }),
+        "should have a return receipt, received: {:?}",
+        receipts
+    );
+
     if get_env_vars().is_some() {
         clean_s3_bucket().await;
     }
@@ -383,7 +406,24 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
     let data = unzip_bytes(&zipped_data);
     // can deserialize
     let actual_proto: ProtoBlock = prost::Message::decode(data.as_ref()).unwrap();
-    let _ = fuel_block_from_protobuf(actual_proto, &[], Bytes32::default()).unwrap();
+    let (_, receipts) =
+        fuel_block_from_protobuf(actual_proto, &[], Bytes32::default()).unwrap();
+    assert!(
+        matches!(
+            receipts[1],
+            Receipt::ScriptResult {
+                result: ScriptExecutionResult::Success,
+                ..
+            }
+        ),
+        "should have a script result receipt, received: {:?}",
+        receipts
+    );
+    assert!(
+        matches!(receipts[0], Receipt::Return { .. }),
+        "should have a return receipt, received: {:?}",
+        receipts
+    );
 
     // cleanup
     clean_s3_bucket().await;

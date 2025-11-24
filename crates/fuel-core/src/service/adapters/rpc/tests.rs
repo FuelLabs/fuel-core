@@ -21,9 +21,9 @@ async fn get_receipt__gets_the_receipt_for_expected_tx() {
 
     // given
     let mut db = Database::in_memory();
-    let tx_id = Standard.sample(&mut rng);
+    let tx_id = rng.r#gen();
     let expected = vec![Receipt::Return {
-        id: Standard.sample(&mut rng),
+        id: rng.r#gen(),
         val: 987,
         pc: 123,
         is: 456,
