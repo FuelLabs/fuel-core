@@ -8,7 +8,6 @@ use crate::{
         Result,
     },
 };
-use anyhow::anyhow;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
@@ -32,7 +31,6 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         TxId,
-        UniqueIdentifier,
     },
     fuel_types::BlockHeight,
 };
@@ -56,7 +54,7 @@ pub struct SyncTask<Serializer, DB, Receipts, B> {
 pub trait TxReceipts: 'static + Send + Sync {
     fn get_receipts(
         &self,
-        height: &TxId,
+        tx_id: &TxId,
     ) -> impl Future<Output = Result<Vec<Receipt>>> + Send;
 }
 
@@ -96,7 +94,7 @@ where
         if let Some(block) = maybe_block {
             let tx_ids = block.transactions();
             let txs = self.get_txs(tx_ids)?;
-            let receipts = self.get_receipts(&tx_ids).await?;
+            let receipts = self.get_receipts(tx_ids).await?;
             let block = block.into_owned().uncompress(txs);
             Ok(Some((block, receipts)))
         } else {
