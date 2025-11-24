@@ -6,11 +6,8 @@ use fuel_core_storage::{
     transactional::WriteTransaction,
 };
 use rand::{
+    Rng,
     SeedableRng,
-    distributions::{
-        Distribution,
-        Standard,
-    },
     prelude::StdRng,
 };
 use std::sync::Arc;

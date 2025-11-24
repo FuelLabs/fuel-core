@@ -30,10 +30,7 @@ use fuel_core_types::{
         UniqueIdentifier,
     },
     fuel_types::ChainId,
-    services::{
-        block_importer::ImportResult,
-        transaction_status::TransactionStatus,
-    },
+    services::block_importer::ImportResult,
 };
 use std::sync::Arc;
 
