@@ -1,6 +1,8 @@
 use crate::result::Result;
-use bytes::Bytes;
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::fuel_types::{
+    BlockHeight,
+    bytes::Bytes,
+};
 use std::fmt::Debug;
 
 pub mod importer_and_db_source;
@@ -45,8 +47,8 @@ impl BlockBytes {
 
     #[cfg(test)]
     pub fn arb_size<Rng: rand::Rng + ?Sized>(rng: &mut Rng, size: usize) -> Self {
-        let bytes: Bytes = (0..size).map(|_| rng.r#gen()).collect();
-        Self::new(bytes)
+        let bytes: Vec<u8> = (0..size).map(|_| rng.r#gen::<u8>()).collect();
+        Self::new(bytes.into())
     }
 
     #[cfg(test)]

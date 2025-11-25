@@ -160,7 +160,7 @@ async fn poa_interval_produces_nonempty_blocks_at_correct_rate() {
 
         let count_now = resp.results.len();
         if count_now > count_start + rounds {
-            break;
+            break
         }
     }
 

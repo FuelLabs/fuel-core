@@ -16,9 +16,7 @@ fault-proving = ["fuel-core-types/fault-proving"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-config = { workspace = true }
-aws-sdk-s3 = "1.111.0"
-aws-smithy-mocks = "0.2.0"
-bytes = { workspace = true, features = ["serde"] }
+aws-sdk-s3 = { workspace = true }
 enum-iterator = { workspace = true }
 flate2 = { workspace = true }
 fuel-core-protobuf = { workspace = true }
@@ -26,9 +24,7 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
-log = "0.4.27"
 num_enum = { workspace = true }
-postcard = { workspace = true }
 prost = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -42,9 +38,9 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 aws-sdk-s3 = { version = "1.111.0", features = ["test-util"] }
+aws-smithy-mocks = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
 proptest = { workspace = true }
 tokio-stream = { workspace = true }
-tracing-subscriber = { workspace = true }

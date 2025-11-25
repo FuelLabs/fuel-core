@@ -55,8 +55,6 @@ pub mod state;
 // In the future this module will be a separate crate for `fuel-core-graphql-api`.
 mod graphql_api;
 
-use fuel_core_block_aggregator_api as _;
-
 pub mod fuel_core_graphql_api {
     pub use crate::graphql_api::*;
 }
