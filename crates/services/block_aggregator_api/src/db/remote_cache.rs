@@ -3,7 +3,10 @@ use crate::{
     blocks::BlockSourceEvent,
     db::{
         BlockAggregatorDB,
-        table::LatestBlock,
+        table::{
+            LatestBlock,
+            Mode,
+        },
     },
     protobuf_types::Block as ProtoBlock,
     result::Error,
@@ -146,7 +149,7 @@ where
                     tracing::debug!("Updating latest block to {:?}", new_height);
                     let mut tx = self.local_persisted.write_transaction();
                     tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
+                        .insert(&(), &Mode::new_s3(new_height))
                         .map_err(|e| Error::DB(anyhow!(e)))?;
                     tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
                 } else if new_height == self.sync_from
@@ -158,7 +161,7 @@ where
                     self.orphaned_new_height = None;
                     let mut tx = self.local_persisted.write_transaction();
                     tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
+                        .insert(&(), &Mode::new_s3(new_height))
                         .map_err(|e| Error::DB(anyhow!(e)))?;
                     tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
                 } else if self.orphaned_new_height.is_none() {
@@ -179,7 +182,7 @@ where
                     height
                 };
                 tx.storage_as_mut::<LatestBlock>()
-                    .insert(&(), &latest_height)
+                    .insert(&(), &Mode::new_s3(latest_height))
                     .map_err(|e| Error::DB(anyhow!(e)))?;
                 tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
             }
@@ -219,7 +222,7 @@ where
             .get(&())
             .map_err(|e| Error::DB(anyhow!(e)))?;
 
-        Ok(height.map(|b| b.into_owned()))
+        Ok(height.map(|b| b.height()))
     }
 }
 
@@ -235,7 +238,8 @@ where
             .local_persisted
             .storage_as_ref::<LatestBlock>()
             .get(&())
-            .map_err(|e| Error::DB(anyhow!(e)))?;
+            .map_err(|e| Error::DB(anyhow!(e)))?
+            .map(|m| m.height());
         if let Some(latest_height) = maybe_latest_height {
             Ok(latest_height.succ() == Some(height))
         } else {

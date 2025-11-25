@@ -5,7 +5,10 @@ use crate::{
         BlockSerializer,
         serializer_adapter::SerializerAdapter,
     },
-    db::table::Column,
+    db::table::{
+        Column,
+        Mode,
+    },
 };
 use aws_sdk_s3::operation::put_object::PutObjectOutput;
 use aws_smithy_mocks::{
@@ -133,7 +136,7 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
     let mut tx = storage.write_transaction();
     let starting_height = BlockHeight::from(1u32);
     tx.storage_as_mut::<LatestBlock>()
-        .insert(&(), &starting_height)
+        .insert(&(), &Mode::new_s3(starting_height))
         .unwrap();
     tx.commit().unwrap();
     let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);

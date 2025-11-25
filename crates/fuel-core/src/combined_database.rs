@@ -503,7 +503,7 @@ impl CombinedDatabase {
                     .storage_as_ref::<LatestBlock>()
                     .get(&())
                     .map_err(|e: StorageError| anyhow!(e))?
-                    .map(|b| b.into_owned());
+                    .map(|b| b.height());
                 let block_aggregation_storage_rolled_back = is_equal_or_less_than_or_none(
                     block_aggregation_storage_height,
                     target_block_height,

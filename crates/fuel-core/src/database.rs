@@ -35,6 +35,7 @@ use fuel_core_storage::{
     Mappable,
     Result as StorageResult,
     StorageAsMut,
+    StorageAsRef,
     StorageInspect,
     StorageMutate,
     iter::{
@@ -96,6 +97,7 @@ use crate::{
 use anyhow::anyhow;
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::db::table::LatestBlock;
+use fuel_core_block_aggregator_api::db::table::Mode;
 #[cfg(feature = "rpc")]
 use fuel_core_storage::transactional::WriteTransaction;
 #[cfg(feature = "rocksdb")]
@@ -463,10 +465,19 @@ impl Modifiable for Database<BlockAggregatorDatabase> {
 impl Database<BlockAggregatorDatabase> {
     pub fn rollback_to(&mut self, block_height: BlockHeight) -> StorageResult<()> {
         let mut tx = self.write_transaction();
-        tx.storage_as_mut::<LatestBlock>()
-            .insert(&(), &block_height)
-            .map_err(|e: StorageError| anyhow!(e))?;
-        tx.commit().map_err(|e: StorageError| anyhow!(e))?;
+        let mode = tx
+            .storage_as_ref::<LatestBlock>()
+            .get(&())?
+            .map(|m| m.into_owned());
+        let new = match mode {
+            None => None,
+            Some(Mode::Local(_)) => Some(Mode::new_local(block_height)),
+            Some(Mode::S3(_)) => Some(Mode::new_s3(block_height)),
+        };
+        if let Some(new) = new {
+            tx.storage_as_mut::<LatestBlock>().insert(&(), &new)?;
+            tx.commit().map_err(|e: StorageError| anyhow!(e))?;
+        }
         Ok(())
     }
 }

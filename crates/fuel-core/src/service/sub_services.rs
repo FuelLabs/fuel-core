@@ -69,10 +69,7 @@ use crate::{
     },
 };
 #[cfg(feature = "rpc")]
-use anyhow::{
-    anyhow,
-    bail,
-};
+use anyhow::bail;
 use fuel_core_block_aggregator_api::{
     BlockAggregator,
     api::protobuf_adapter::ProtobufAPI,
@@ -86,7 +83,6 @@ use fuel_core_block_aggregator_api::{
     db::table::Mode,
     integration::StorageMethod,
     protobuf_types::Block as ProtoBlock,
-    result::Error,
 };
 use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
@@ -106,13 +102,8 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "rpc")]
 use fuel_core_storage::{
-    Error as StorageError,
-    StorageAsMut,
     StorageAsRef,
-    transactional::{
-        AtomicView,
-        WriteTransaction,
-    },
+    transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
@@ -602,29 +593,16 @@ fn init_rpc_server(
     let receipts = ReceiptSource::new(database.off_chain().clone());
     let db_adapter = match &block_aggregator_config.storage_method {
         StorageMethod::Local => {
-            let mut db = database.block_aggregation_storage().clone();
-            let mode = db.storage_as_ref::<Mode>().get(&())?;
-            match mode.clone().map(Cow::into_owned) {
-                Some(Mode::S3) => {
+            let db = database.block_aggregation_storage().clone();
+            let mode = db.storage_as_ref::<LatestBlock>().get(&())?;
+            let maybe_sync_from_height = match mode.clone().map(Cow::into_owned) {
+                Some(Mode::S3(_)) => {
                     bail!(
                         "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
                     );
                 }
-                Some(Mode::Local) => {
-                    // good, it's in the correct mode
-                }
-                None => {
-                    let mut tx = db.write_transaction();
-                    tx.storage_as_mut::<Mode>().insert(&(), &Mode::Local)?;
-                    tx.commit()?;
-                }
-            }
-            let maybe_sync_from_height = db
-                .storage_as_ref::<LatestBlock>()
-                .get(&())
-                .map_err(|e: StorageError| Error::DB(anyhow!(e)))?
-                .map(|c| *c)
-                .and_then(|h| h.succ());
+                _ => mode.map(|m| m.height()),
+            };
             sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
             StorageOrRemoteDB::new_storage(db, sync_from)
         }
@@ -633,28 +611,16 @@ fn init_rpc_server(
             endpoint_url,
             requester_pays,
         } => {
-            let mut db = database.block_aggregation_storage().clone();
-            let mode = db.storage_as_ref::<Mode>().get(&())?;
-            match mode.clone().map(Cow::into_owned) {
-                Some(Mode::S3) => {
-                    // good, it's in the correct mode
-                }
-                Some(Mode::Local) => {
+            let db = database.block_aggregation_storage().clone();
+            let mode = db.storage_as_ref::<LatestBlock>().get(&())?;
+            let maybe_sync_from_height = match mode.clone().map(Cow::into_owned) {
+                Some(Mode::Local(_)) => {
                     bail!(
-                        "Database is configured in Local mode, but S3 storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
+                        "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
                     );
                 }
-                None => {
-                    let mut tx = db.write_transaction();
-                    tx.storage_as_mut::<Mode>().insert(&(), &Mode::S3)?;
-                    tx.commit()?;
-                }
-            }
-            let maybe_sync_from_height = db
-                .storage_as_ref::<LatestBlock>()
-                .get(&())?
-                .map(|c| *c)
-                .and_then(|h| h.succ());
+                _ => mode.map(|m| m.height()),
+            };
             sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
 
             StorageOrRemoteDB::new_s3(
