@@ -70,10 +70,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
 #[cfg(feature = "rpc")]
-use crate::database::database_description::block_aggregator::{
-    BlockAggregatorDatabaseS3,
-    BlockAggregatorDatabaseStorage,
-};
+use crate::database::database_description::block_aggregator::BlockAggregatorDatabase;
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -454,7 +451,7 @@ impl Modifiable for Database<GasPriceDatabase> {
 }
 
 #[cfg(feature = "rpc")]
-impl Modifiable for Database<BlockAggregatorDatabaseStorage> {
+impl Modifiable for Database<BlockAggregatorDatabase> {
     fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
         // Does not need to be monotonically increasing because
         // storage values are modified in parallel from different heights
@@ -463,28 +460,7 @@ impl Modifiable for Database<BlockAggregatorDatabaseStorage> {
 }
 
 #[cfg(feature = "rpc")]
-impl Database<BlockAggregatorDatabaseStorage> {
-    pub fn rollback_to(&mut self, block_height: BlockHeight) -> StorageResult<()> {
-        let mut tx = self.write_transaction();
-        tx.storage_as_mut::<LatestBlock>()
-            .insert(&(), &block_height)
-            .map_err(|e: StorageError| anyhow!(e))?;
-        tx.commit().map_err(|e: StorageError| anyhow!(e))?;
-        Ok(())
-    }
-}
-
-#[cfg(feature = "rpc")]
-impl Modifiable for Database<BlockAggregatorDatabaseS3> {
-    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
-        // Does not need to be monotonically increasing because
-        // storage values are modified in parallel from different heights
-        commit_changes_with_height_update(self, changes, |_iter| Ok(Vec::new()))
-    }
-}
-
-#[cfg(feature = "rpc")]
-impl Database<BlockAggregatorDatabaseS3> {
+impl Database<BlockAggregatorDatabase> {
     pub fn rollback_to(&mut self, block_height: BlockHeight) -> StorageResult<()> {
         let mut tx = self.write_transaction();
         tx.storage_as_mut::<LatestBlock>()

@@ -23,10 +23,7 @@ use crate::{
 };
 
 #[cfg(feature = "rpc")]
-use crate::database::database_description::block_aggregator::{
-    BlockAggregatorDatabaseS3,
-    BlockAggregatorDatabaseStorage,
-};
+use crate::database::database_description::block_aggregator::BlockAggregatorDatabase;
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::db::table::LatestBlock;
 #[cfg(feature = "test-helpers")]
@@ -76,9 +73,7 @@ pub struct CombinedDatabase {
     gas_price: Database<GasPriceDatabase>,
     compression: Database<CompressionDatabase>,
     #[cfg(feature = "rpc")]
-    block_aggregation_storage: Database<BlockAggregatorDatabaseStorage>,
-    #[cfg(feature = "rpc")]
-    block_aggregation_s3: Database<BlockAggregatorDatabaseS3>,
+    block_aggregation_storage: Database<BlockAggregatorDatabase>,
 }
 
 impl CombinedDatabase {
@@ -89,9 +84,8 @@ impl CombinedDatabase {
         gas_price: Database<GasPriceDatabase>,
         compression: Database<CompressionDatabase>,
         #[cfg(feature = "rpc")] block_aggregation_storage: Database<
-            BlockAggregatorDatabaseStorage,
+            BlockAggregatorDatabase,
         >,
-        #[cfg(feature = "rpc")] block_aggregation_s3: Database<BlockAggregatorDatabaseS3>,
     ) -> Self {
         Self {
             on_chain,
@@ -101,8 +95,6 @@ impl CombinedDatabase {
             compression,
             #[cfg(feature = "rpc")]
             block_aggregation_storage,
-            #[cfg(feature = "rpc")]
-            block_aggregation_s3,
         }
     }
 
@@ -114,9 +106,7 @@ impl CombinedDatabase {
         crate::state::rocks_db::RocksDb::<GasPriceDatabase>::prune(path)?;
         crate::state::rocks_db::RocksDb::<CompressionDatabase>::prune(path)?;
         #[cfg(feature = "rpc")]
-        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseStorage>::prune(path)?;
-        #[cfg(feature = "rpc")]
-        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseS3>::prune(path)?;
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabase>::prune(path)?;
         Ok(())
     }
 
@@ -161,16 +151,10 @@ impl CombinedDatabase {
             .trace_err("Failed to backup compression database")?;
 
         #[cfg(feature = "rpc")]
-        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseStorage>::backup(
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabase>::backup(
             db_dir, temp_dir,
         )
         .trace_err("Failed to backup block aggregation storage database")?;
-
-        #[cfg(feature = "rpc")]
-        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseS3>::backup(
-            db_dir, temp_dir,
-        )
-        .trace_err("Failed to backup block aggregation s3 database")?;
 
         Ok(())
     }
@@ -227,18 +211,11 @@ impl CombinedDatabase {
         .trace_err("Failed to restore compression database")?;
 
         #[cfg(feature = "rpc")]
-        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseStorage>::restore(
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabase>::restore(
             temp_restore_dir,
             backup_dir,
         )
         .trace_err("Failed to restore block aggregation storage database")?;
-
-        #[cfg(feature = "rpc")]
-        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabaseS3>::restore(
-            temp_restore_dir,
-            backup_dir,
-        )
-        .trace_err("Failed to restore block aggregation s3 database")?;
 
         Ok(())
     }
@@ -306,15 +283,6 @@ impl CombinedDatabase {
                 ..database_config
             },
         )?;
-        #[cfg(feature = "rpc")]
-        let block_aggregation_s3 = Database::open_rocksdb(
-            path,
-            state_rewind_policy,
-            DatabaseConfig {
-                max_fds,
-                ..database_config
-            },
-        )?;
 
         Ok(Self {
             on_chain,
@@ -324,8 +292,6 @@ impl CombinedDatabase {
             compression,
             #[cfg(feature = "rpc")]
             block_aggregation_storage,
-            #[cfg(feature = "rpc")]
-            block_aggregation_s3,
         })
     }
 
@@ -343,8 +309,6 @@ impl CombinedDatabase {
             compression: Default::default(),
             #[cfg(feature = "rpc")]
             block_aggregation_storage: Default::default(),
-            #[cfg(feature = "rpc")]
-            block_aggregation_s3: Default::default(),
         })
     }
 
@@ -392,8 +356,6 @@ impl CombinedDatabase {
             Database::in_memory(),
             #[cfg(feature = "rpc")]
             Database::in_memory(),
-            #[cfg(feature = "rpc")]
-            Database::in_memory(),
         )
     }
 
@@ -405,8 +367,6 @@ impl CombinedDatabase {
         self.compression.check_version()?;
         #[cfg(feature = "rpc")]
         self.block_aggregation_storage.check_version()?;
-        #[cfg(feature = "rpc")]
-        self.block_aggregation_s3.check_version()?;
         Ok(())
     }
 
@@ -419,26 +379,15 @@ impl CombinedDatabase {
     }
 
     #[cfg(feature = "rpc")]
-    pub fn block_aggregation_storage(&self) -> &Database<BlockAggregatorDatabaseStorage> {
+    pub fn block_aggregation_storage(&self) -> &Database<BlockAggregatorDatabase> {
         &self.block_aggregation_storage
     }
 
     #[cfg(feature = "rpc")]
     pub fn block_aggregation_storage_mut(
         &mut self,
-    ) -> &mut Database<BlockAggregatorDatabaseStorage> {
+    ) -> &mut Database<BlockAggregatorDatabase> {
         &mut self.block_aggregation_storage
-    }
-
-    #[cfg(feature = "rpc")]
-    pub fn block_aggregation_s3(&self) -> &Database<BlockAggregatorDatabaseS3> {
-        &self.block_aggregation_s3
-    }
-    #[cfg(feature = "rpc")]
-    pub fn block_aggregation_s3_mut(
-        &mut self,
-    ) -> &mut Database<BlockAggregatorDatabaseS3> {
-        &mut self.block_aggregation_s3
     }
 
     #[cfg(any(feature = "test-helpers", test))]
@@ -560,24 +509,8 @@ impl CombinedDatabase {
                     target_block_height,
                 );
 
-                let block_aggregation_s3_height = self
-                    .block_aggregation_s3()
-                    .storage_as_ref::<LatestBlock>()
-                    .get(&())
-                    .map_err(|e: StorageError| anyhow!(e))?
-                    .map(|b| b.into_owned());
-                let block_aggregation_s3_rolled_back = is_equal_or_less_than_or_none(
-                    block_aggregation_s3_height,
-                    target_block_height,
-                );
-
                 if !block_aggregation_storage_rolled_back {
                     self.block_aggregation_storage_mut()
-                        .rollback_to(target_block_height)?;
-                }
-
-                if !block_aggregation_s3_rolled_back {
-                    self.block_aggregation_s3_mut()
                         .rollback_to(target_block_height)?;
                 }
             }
@@ -747,8 +680,6 @@ impl CombinedDatabase {
         self.compression.shutdown();
         #[cfg(feature = "rpc")]
         self.block_aggregation_storage.shutdown();
-        #[cfg(feature = "rpc")]
-        self.block_aggregation_s3.shutdown();
     }
 }
 

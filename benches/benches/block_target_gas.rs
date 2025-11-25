@@ -403,8 +403,6 @@ fn service_with_many_contracts(
                 Default::default(),
                 #[cfg(feature = "rpc")]
                 Default::default(),
-                #[cfg(feature = "rpc")]
-                Default::default(),
             ),
             config.clone(),
         )
