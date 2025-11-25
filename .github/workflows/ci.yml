@@ -228,8 +228,6 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
       - name: Run RPC Integration Tests
         run: cargo test --package fuel-core-tests --test integration_tests rpc --features rpc -- --test-threads=1
 
@@ -272,7 +270,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-      - uses: arduino/setup-protoc@v3
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
