@@ -36,6 +36,7 @@ pub mod integration {
         blocks::importer_and_db_source::{
             BlockSerializer,
             ImporterAndDbSource,
+            sync_service::TxReceipts,
         },
         db::BlockAggregatorDB,
         protobuf_types::Block as ProtoBlock,
@@ -45,11 +46,13 @@ pub mod integration {
         stream::BoxStream,
     };
     use fuel_core_storage::{
+        Error as StorageError,
         StorageInspect,
         tables::{
             FuelBlocks,
             Transactions,
         },
+        transactional::HistoricalView,
     };
     use fuel_core_types::{
         fuel_types::BlockHeight,
@@ -61,24 +64,37 @@ pub mod integration {
     pub struct Config {
         pub addr: SocketAddr,
         pub sync_from: Option<BlockHeight>,
+        pub storage_method: StorageMethod,
+    }
+
+    #[derive(Clone, Debug, Default)]
+    pub enum StorageMethod {
+        #[default]
+        Local,
+        S3 {
+            bucket: String,
+            endpoint_url: Option<String>,
+            requester_pays: bool,
+        },
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn new_service<DB, S, OnchainDB, E>(
+    pub fn new_service<DB, S, OnchainDB, Receipts>(
         config: &Config,
         db: DB,
         serializer: S,
         onchain_db: OnchainDB,
+        receipts: Receipts,
         importer: BoxStream<SharedImportResult>,
         sync_from_height: BlockHeight,
-    ) -> ServiceRunner<
+    ) -> anyhow::Result<ServiceRunner<
         BlockAggregator<
             ProtobufAPI,
             DB,
-            ImporterAndDbSource<S, OnchainDB, E>,
+            ImporterAndDbSource<S, OnchainDB, Receipts>,
             ProtoBlock,
         >,
-    >
+    >>
     where
         DB: BlockAggregatorDB<
             BlockRangeResponse = <ProtobufAPI as BlockAggregatorApi>::BlockRangeResponse,
@@ -86,17 +102,23 @@ pub mod integration {
         >,
         S: BlockSerializer<Block=ProtoBlock> + Clone + Send + Sync + 'static,
         OnchainDB: Send + Sync,
-        OnchainDB: StorageInspect<FuelBlocks, Error = E>,
-        OnchainDB: StorageInspect<Transactions, Error = E>,
-        E: std::fmt::Debug + Send + Sync,
+        OnchainDB: StorageInspect<FuelBlocks, Error = StorageError>,
+        OnchainDB: StorageInspect<Transactions, Error = StorageError>,
+        OnchainDB: HistoricalView<Height = BlockHeight>,
+        Receipts: TxReceipts,
     {
         let addr = config.addr.to_string();
-        let api = ProtobufAPI::new(addr);
-        let db_ending_height = None;
+        let api = ProtobufAPI::new(addr)
+            .map_err(|e| anyhow::anyhow!("Error creating API: {e}"))?;
+        let db_ending_height = onchain_db
+            .latest_height()
+            .and_then(BlockHeight::succ)
+            .unwrap_or(BlockHeight::from(0));
         let block_source = ImporterAndDbSource::new(
             importer,
             serializer,
             onchain_db,
+            receipts,
             sync_from_height,
             db_ending_height,
         );
@@ -106,7 +128,8 @@ pub mod integration {
             block_source,
             new_block_subscriptions: Vec::new(),
         };
-        ServiceRunner::new(block_aggregator)
+        let runner = ServiceRunner::new(block_aggregator);
+        Ok(runner)
     }
 }
 
@@ -118,7 +141,7 @@ pub struct BlockAggregator<Api, DB, Blocks, Block> {
     query: Api,
     database: DB,
     block_source: Blocks,
-    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<Block>>,
+    new_block_subscriptions: Vec<tokio::sync::mpsc::Sender<(BlockHeight, Block)>>,
 }
 
 pub struct NewBlock {

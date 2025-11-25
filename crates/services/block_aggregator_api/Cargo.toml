@@ -8,7 +8,6 @@ homepage = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
-build = "build.rs"
 
 [features]
 fault-proving = ["fuel-core-types/fault-proving"]
@@ -16,10 +15,13 @@ fault-proving = ["fuel-core-types/fault-proving"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+aws-config = { workspace = true }
 aws-sdk-s3 = "1.111.0"
 aws-smithy-mocks = "0.2.0"
 bytes = { workspace = true, features = ["serde"] }
 enum-iterator = { workspace = true }
+flate2 = { workspace = true }
+fuel-core-protobuf = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
@@ -36,11 +38,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
-tonic-prost = { workspace = true }
 tracing = { workspace = true }
-
-[build-dependencies]
-tonic-prost-build = { workspace = true }
 
 [dev-dependencies]
 aws-sdk-s3 = { version = "1.111.0", features = ["test-util"] }

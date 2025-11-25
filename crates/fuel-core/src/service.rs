@@ -193,7 +193,9 @@ impl FuelService {
             Default::default(),
             Default::default(),
             Default::default(),
+            #[cfg(feature = "rpc")]
             Default::default(),
+            #[cfg(feature = "rpc")]
             Default::default(),
         );
         Self::from_combined_database(combined_database, config).await
@@ -551,7 +553,7 @@ mod tests {
             service.start_and_await().await.unwrap();
             sleep(Duration::from_secs(1));
             for service in service.sub_services() {
-                assert_eq!(service.state(), State::Started);
+                assert_eq!(service.state(), State::Started,);
             }
 
             if i < service.sub_services().len() {

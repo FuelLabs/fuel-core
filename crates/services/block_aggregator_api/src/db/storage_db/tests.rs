@@ -28,7 +28,9 @@ fn proto_block_with_height(height: BlockHeight) -> ProtoBlock {
     let serializer_adapter = SerializerAdapter;
     let mut default_block = FuelBlock::<Transaction>::default();
     default_block.header_mut().set_block_height(height);
-    serializer_adapter.serialize_block(&default_block).unwrap()
+    serializer_adapter
+        .serialize_block(&default_block, &[])
+        .unwrap()
 }
 
 #[tokio::test]
@@ -90,7 +92,7 @@ async fn get_block__can_get_expected_range() {
     let actual = stream.collect::<Vec<_>>().await;
 
     // then
-    assert_eq!(actual, vec![expected_2, expected_3]);
+    assert_eq!(actual, vec![(height_2, expected_2), (height_3, expected_3)]);
 }
 
 #[tokio::test]

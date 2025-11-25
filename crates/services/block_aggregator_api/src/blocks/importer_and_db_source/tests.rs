@@ -1,8 +1,6 @@
 #![allow(non_snake_case)]
 
 use super::*;
-use crate::blocks::BlockBytes;
-use ::postcard::to_allocvec;
 use fuel_core_services::stream::{
     IntoBoxStream,
     pending,
@@ -18,12 +16,17 @@ use fuel_core_storage::{
     },
 };
 use futures::StreamExt;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
+use crate::blocks::importer_and_db_source::{
+    serializer_adapter::SerializerAdapter,
+    sync_service::TxReceipts,
+};
 use fuel_core_types::{
     blockchain::SealedBlock,
     fuel_tx::{
         Transaction,
+        TxId,
         UniqueIdentifier,
     },
     fuel_types::ChainId,
@@ -31,26 +34,28 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-#[derive(Clone)]
-pub struct MockSerializer;
-
-impl BlockSerializer for MockSerializer {
-    type Block = BlockBytes;
-
-    fn serialize_block(&self, block: &FuelBlock) -> Result<BlockBytes> {
-        let bytes_vec = to_allocvec(block).map_err(|e| {
-            Error::BlockSource(anyhow!("failed to serialize block: {}", e))
-        })?;
-        Ok(BlockBytes::from(bytes_vec))
-    }
-}
-
-fn database() -> StorageTransaction<InMemoryStorage<OnChainColumn>> {
+fn onchain_db() -> StorageTransaction<InMemoryStorage<OnChainColumn>> {
     InMemoryStorage::default().into_transaction()
 }
 
-fn stream_with_pending<T: Send + Sync + 'static>(items: Vec<T>) -> BoxStream<T> {
-    tokio_stream::iter(items).chain(pending()).into_boxed()
+struct MockTxReceiptsSource {
+    receipts_map: HashMap<TxId, Vec<FuelReceipt>>,
+}
+
+impl MockTxReceiptsSource {
+    fn new(receipts: &[(TxId, Vec<FuelReceipt>)]) -> Self {
+        let receipts_map = receipts.iter().cloned().collect();
+        Self { receipts_map }
+    }
+}
+
+impl TxReceipts for MockTxReceiptsSource {
+    async fn get_receipts(&self, tx_id: &TxId) -> Result<Vec<FuelReceipt>> {
+        let receipts = self.receipts_map.get(tx_id).cloned().ok_or_else(|| {
+            Error::BlockSource(anyhow!("no receipts found for a tx with id {}", tx_id))
+        })?;
+        Ok(receipts)
+    }
 }
 
 #[tokio::test]
@@ -69,22 +74,26 @@ async fn next_block__gets_new_block_from_importer() {
     );
     let blocks: Vec<SharedImportResult> = vec![import_result];
     let block_stream = tokio_stream::iter(blocks).chain(pending()).into_boxed();
-    let serializer = MockSerializer;
-    let db = database();
+    let serializer = SerializerAdapter;
+    let db = onchain_db();
+    let receipt_source = MockTxReceiptsSource::new(&[]);
     let db_starting_height = BlockHeight::from(0u32);
+    // we don't need to sync anything, so we can use the same height for both
+    let db_ending_height = db_starting_height;
     let mut adapter = ImporterAndDbSource::new(
         block_stream,
         serializer.clone(),
         db,
+        receipt_source,
         db_starting_height,
-        None,
+        db_ending_height,
     );
 
     // when
     let actual = adapter.next_block().await.unwrap();
 
     // then
-    let serialized = serializer.serialize_block(&block.entity).unwrap();
+    let serialized = serializer.serialize_block(&block.entity, &[]).unwrap();
     let expected = BlockSourceEvent::NewBlock(*height, serialized);
     assert_eq!(expected, actual);
 }
@@ -97,6 +106,25 @@ fn arbitrary_block_with_txs(height: BlockHeight) -> FuelBlock {
     block
 }
 
+fn arbitrary_receipts() -> Vec<FuelReceipt> {
+    let one = FuelReceipt::Mint {
+        sub_id: Default::default(),
+        contract_id: Default::default(),
+        val: 100,
+        pc: 0,
+        is: 0,
+    };
+    let two = FuelReceipt::Transfer {
+        id: Default::default(),
+        to: Default::default(),
+        amount: 50,
+        asset_id: Default::default(),
+        pc: 0,
+        is: 0,
+    };
+    vec![one, two]
+}
+
 #[tokio::test]
 async fn next_block__can_get_block_from_db() {
     // given
@@ -104,14 +132,16 @@ async fn next_block__can_get_block_from_db() {
     let height1 = BlockHeight::from(0u32);
     let height2 = BlockHeight::from(1u32);
     let block = arbitrary_block_with_txs(height1);
+    let receipts = arbitrary_receipts();
     let height = block.header().height();
-    let serializer = MockSerializer;
-    let mut db = database();
-    let mut tx = db.write_transaction();
+    let serializer = SerializerAdapter;
+    let mut onchain_db = onchain_db();
+    let mut tx = onchain_db.write_transaction();
     let compressed_block = block.compress(&chain_id);
     tx.storage_as_mut::<FuelBlocks>()
         .insert(height, &compressed_block)
         .unwrap();
+    let tx_id = block.transactions()[0].id(&chain_id);
     tx.storage_as_mut::<Transactions>()
         .insert(
             &block.transactions()[0].id(&chain_id),
@@ -119,13 +149,15 @@ async fn next_block__can_get_block_from_db() {
         )
         .unwrap();
     tx.commit().unwrap();
+    let receipt_source = MockTxReceiptsSource::new(&[(tx_id, receipts.clone())]);
     let block_stream = tokio_stream::pending().into_boxed();
     let db_starting_height = *height;
-    let db_ending_height = Some(height2);
+    let db_ending_height = height2;
     let mut adapter = ImporterAndDbSource::new(
         block_stream,
         serializer.clone(),
-        db,
+        onchain_db,
+        receipt_source,
         db_starting_height,
         db_ending_height,
     );
@@ -134,107 +166,7 @@ async fn next_block__can_get_block_from_db() {
     let actual = adapter.next_block().await.unwrap();
 
     // then
-    let serialized = serializer.serialize_block(&block).unwrap();
+    let serialized = serializer.serialize_block(&block, &receipts).unwrap();
     let expected = BlockSourceEvent::OldBlock(*height, serialized);
-    assert_eq!(expected, actual);
-}
-
-#[tokio::test]
-async fn next_block__will_sync_blocks_from_db_after_receiving_height_from_new_end() {
-    // given
-    let chain_id = ChainId::default();
-    let height1 = BlockHeight::from(0u32);
-    let height2 = BlockHeight::from(1u32);
-    let height3 = BlockHeight::from(2u32);
-    let block1 = arbitrary_block_with_txs(height1);
-    let block2 = arbitrary_block_with_txs(height2);
-    let serializer = MockSerializer;
-    let mut db = database();
-    let mut tx = db.write_transaction();
-    let compressed_block = block1.compress(&chain_id);
-    tx.storage_as_mut::<FuelBlocks>()
-        .insert(&height1, &compressed_block)
-        .unwrap();
-    tx.storage_as_mut::<Transactions>()
-        .insert(
-            &block1.transactions()[0].id(&chain_id),
-            &block1.transactions()[0],
-        )
-        .unwrap();
-    tx.commit().unwrap();
-    let mut tx = db.write_transaction();
-    let compressed_block = block2.compress(&chain_id);
-    tx.storage_as_mut::<FuelBlocks>()
-        .insert(&height2, &compressed_block)
-        .unwrap();
-    tx.storage_as_mut::<Transactions>()
-        .insert(
-            &block2.transactions()[0].id(&chain_id),
-            &block2.transactions()[0],
-        )
-        .unwrap();
-    tx.commit().unwrap();
-
-    // Add the imported block to db as well as streaming
-    let block3 = arbitrary_block_with_txs(height3);
-    let mut tx = db.write_transaction();
-    let compressed_block = block3.compress(&chain_id);
-    tx.storage_as_mut::<FuelBlocks>()
-        .insert(&height3, &compressed_block)
-        .unwrap();
-    tx.storage_as_mut::<Transactions>()
-        .insert(
-            &block3.transactions()[0].id(&chain_id),
-            &block3.transactions()[0],
-        )
-        .unwrap();
-    tx.commit().unwrap();
-
-    let sealed_block = SealedBlock {
-        entity: block3.clone(),
-        consensus: Default::default(),
-    };
-    let import_result = Arc::new(
-        ImportResult {
-            sealed_block,
-            tx_status: vec![],
-            events: vec![],
-            source: Default::default(),
-        }
-        .wrap(),
-    );
-    let blocks: Vec<SharedImportResult> = vec![import_result];
-    let block_stream = stream_with_pending(blocks);
-    let db_starting_height = height1;
-    let mut adapter = ImporterAndDbSource::new(
-        block_stream,
-        serializer.clone(),
-        db,
-        db_starting_height,
-        None,
-    );
-
-    // when
-    let actual1 = adapter.next_block().await.unwrap();
-    let actual2 = adapter.next_block().await.unwrap();
-    let actual3 = adapter.next_block().await.unwrap();
-
-    // then
-    let actual = vec![actual1, actual2, actual3]
-        .into_iter()
-        .collect::<HashSet<_>>();
-    // should receive the
-    let expected = vec![
-        BlockSourceEvent::OldBlock(height1, serializer.serialize_block(&block1).unwrap()),
-        BlockSourceEvent::OldBlock(height2, serializer.serialize_block(&block2).unwrap()),
-        BlockSourceEvent::NewBlock(height3, serializer.serialize_block(&block3).unwrap()),
-    ];
-    let expected: HashSet<_> = expected.into_iter().collect();
-    let length = actual.len();
-    let expected_length = expected.len();
-    for event in &actual {
-        tracing::debug!("actual event: {:?}", event);
-    }
-    assert_eq!(length, expected_length);
     assert_eq!(expected, actual);
 }

@@ -100,7 +100,7 @@ where
 
     async fn handle_new_block_subscription(
         &mut self,
-        response: tokio::sync::mpsc::Sender<Blocks::Block>,
+        response: tokio::sync::mpsc::Sender<(BlockHeight, Blocks::Block)>,
     ) -> TaskNextAction {
         self.new_block_subscriptions.push(response);
         TaskNextAction::Continue
@@ -120,7 +120,7 @@ where
         match &event {
             BlockSourceEvent::NewBlock(height, block) => {
                 self.new_block_subscriptions.retain_mut(|sub| {
-                    let send_res = sub.try_send(block.clone());
+                    let send_res = sub.try_send((*height, block.clone()));
                     match send_res {
                         Ok(_) => true,
                         Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {

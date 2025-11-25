@@ -9,10 +9,18 @@ use crate::{
     result::Error,
 };
 use anyhow::anyhow;
+use aws_config::{
+    BehaviorVersion,
+    default_provider::credentials::DefaultCredentialsChain,
+};
 use aws_sdk_s3::{
     self,
     Client,
     primitives::ByteStream,
+};
+use flate2::{
+    Compression,
+    write::GzEncoder,
 };
 use fuel_core_storage::{
     Error as StorageError,
@@ -28,6 +36,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use prost::Message;
+use std::io::Write;
 
 #[allow(non_snake_case)]
 #[cfg(test)]
@@ -36,12 +45,10 @@ mod tests;
 #[allow(unused)]
 pub struct RemoteCache<S> {
     // aws configuration
-    aws_id: String,
-    aws_secret: String,
-    aws_region: String,
     aws_bucket: String,
-    url_base: String,
-    client: Client,
+    requester_pays: bool,
+    aws_endpoint: Option<String>,
+    client: Option<Client>,
 
     // track consistency between runs
     local_persisted: S,
@@ -54,21 +61,17 @@ pub struct RemoteCache<S> {
 impl<S> RemoteCache<S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        aws_id: String,
-        aws_secret: String,
-        aws_region: String,
         aws_bucket: String,
-        url_base: String,
-        client: Client,
+        requester_pays: bool,
+        aws_endpoint: Option<String>,
+        client: Option<Client>,
         local_persisted: S,
         sync_from: BlockHeight,
     ) -> RemoteCache<S> {
         RemoteCache {
-            aws_id,
-            aws_secret,
-            aws_region,
             aws_bucket,
-            url_base,
+            requester_pays,
+            aws_endpoint,
             client,
             local_persisted,
             sync_from,
@@ -78,8 +81,29 @@ impl<S> RemoteCache<S> {
         }
     }
 
-    fn url_for_block(base: &str, key: &str) -> String {
-        format!("{}/{}", base, key,)
+    async fn client(&mut self) -> crate::result::Result<&Client> {
+        self.init_client().await;
+        self.client
+            .as_ref()
+            .ok_or(Error::db_error(anyhow!("AWS S3 client is uninitialized")))
+    }
+
+    // only runs the first time
+    async fn init_client(&mut self) {
+        if self.client.is_none() {
+            let credentials = DefaultCredentialsChain::builder().build().await;
+            let sdk_config = aws_config::defaults(BehaviorVersion::latest())
+                .credentials_provider(credentials)
+                .load()
+                .await;
+            let mut config_builder = aws_sdk_s3::config::Builder::from(&sdk_config);
+            if let Some(endpoint) = &self.aws_endpoint {
+                config_builder.set_endpoint_url(Some(endpoint.to_string()));
+            }
+            let config = config_builder.force_path_style(true).build();
+            let client = aws_sdk_s3::Client::from_conf(config);
+            self.client = Some(client);
+        }
     }
 }
 
@@ -102,13 +126,16 @@ where
         let key = block_height_to_key(&height);
         let mut buf = Vec::new();
         block.encode(&mut buf).map_err(Error::db_error)?;
-        let body = ByteStream::from(buf);
+        let zipped = gzip_bytes(&buf)?;
+        let body = ByteStream::from(zipped);
         let req = self
-            .client
+            .client()
+            .await?
             .put_object()
             .bucket(&self.aws_bucket)
             .key(&key)
             .body(body)
+            .content_encoding("gzip")
             .content_type("application/octet-stream");
         let _ = req.send().await.map_err(Error::db_error)?;
         match block_event {
@@ -176,21 +203,22 @@ where
         last: BlockHeight,
     ) -> crate::result::Result<Self::BlockRangeResponse> {
         // TODO: Check if it exists
-        let region = self.aws_region.clone();
         let bucket = self.aws_bucket.clone();
-        let base = self.url_base.clone();
+        let requester_pays = self.requester_pays;
+        let aws_endpoint = self.aws_endpoint.clone();
 
         let stream = futures::stream::iter((*first..=*last).map(move |height| {
-            let key = block_height_to_key(&BlockHeight::new(height));
-            let url = Self::url_for_block(&base, &key);
-            crate::block_range_response::RemoteBlockRangeResponse {
-                region: region.clone(),
+            let block_height = BlockHeight::new(height);
+            let key = block_height_to_key(&block_height);
+            let res = crate::block_range_response::RemoteS3Response {
                 bucket: bucket.clone(),
                 key: key.clone(),
-                url,
-            }
+                requester_pays,
+                aws_endpoint: aws_endpoint.clone(),
+            };
+            (block_height, res)
         }));
-        Ok(BlockRangeResponse::Remote(Box::pin(stream)))
+        Ok(BlockRangeResponse::S3(Box::pin(stream)))
     }
 
     async fn get_current_height(&self) -> crate::result::Result<Option<BlockHeight>> {
@@ -227,5 +255,15 @@ where
 }
 
 pub fn block_height_to_key(height: &BlockHeight) -> String {
-    format!("{:08x}", height)
+    let raw: [u8; 4] = height.to_bytes();
+    format!(
+        "{:02}/{:02}/{:02}/{:02}",
+        &raw[0], &raw[1], &raw[2], &raw[3]
+    )
+}
+
+pub fn gzip_bytes(data: &[u8]) -> crate::result::Result<Vec<u8>> {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(data).map_err(Error::db_error)?;
+    encoder.finish().map_err(Error::db_error)
 }

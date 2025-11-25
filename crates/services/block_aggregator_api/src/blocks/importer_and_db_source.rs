@@ -16,6 +16,7 @@ use fuel_core_services::{
     stream::BoxStream,
 };
 use fuel_core_storage::{
+    Error as StorageError,
     StorageInspect,
     tables::FuelBlocks,
 };
@@ -25,8 +26,12 @@ use fuel_core_types::{
     services::block_importer::SharedImportResult,
 };
 
-use crate::blocks::importer_and_db_source::sync_service::SyncTask;
+use crate::blocks::importer_and_db_source::sync_service::{
+    SyncTask,
+    TxReceipts,
+};
 use fuel_core_storage::tables::Transactions;
+use fuel_core_types::fuel_tx::Receipt as FuelReceipt;
 
 pub mod importer_service;
 pub mod sync_service;
@@ -37,62 +42,60 @@ pub mod serializer_adapter;
 
 pub trait BlockSerializer {
     type Block;
-    fn serialize_block(&self, block: &FuelBlock) -> Result<Self::Block>;
+    fn serialize_block(
+        &self,
+        block: &FuelBlock,
+        receipts: &[FuelReceipt],
+    ) -> Result<Self::Block>;
 }
 
 /// A block source that combines an importer and a database sync task.
 /// Old blocks will be synced from a target database and new blocks will be received from
 /// the importer
-pub struct ImporterAndDbSource<Serializer, DB, E>
+pub struct ImporterAndDbSource<Serializer, DB, Receipts>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
     <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
     DB: Send + Sync + 'static,
-    DB: StorageInspect<FuelBlocks, Error = E>,
-    DB: StorageInspect<Transactions, Error = E>,
-    E: std::fmt::Debug + Send,
+    DB: StorageInspect<FuelBlocks, Error = StorageError>,
+    DB: StorageInspect<Transactions, Error = StorageError>,
+    Receipts: TxReceipts,
 {
     importer_task: ServiceRunner<ImporterTask<Serializer, Serializer::Block>>,
-    sync_task: ServiceRunner<SyncTask<Serializer, DB, Serializer::Block>>,
+    sync_task: ServiceRunner<SyncTask<Serializer, DB, Receipts, Serializer::Block>>,
     /// Receive blocks from the importer and sync tasks
     receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent<Serializer::Block>>,
-
-    _error_marker: std::marker::PhantomData<E>,
 }
 
-impl<Serializer, DB, E> ImporterAndDbSource<Serializer, DB, E>
+impl<Serializer, DB, Receipts> ImporterAndDbSource<Serializer, DB, Receipts>
 where
     Serializer: BlockSerializer + Clone + Send + Sync + 'static,
     <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
-    DB: StorageInspect<FuelBlocks, Error = E> + Send + Sync,
-    DB: StorageInspect<Transactions, Error = E> + Send + 'static,
-    E: std::fmt::Debug + Send,
+    DB: StorageInspect<FuelBlocks, Error = StorageError> + Send + Sync,
+    DB: StorageInspect<Transactions, Error = StorageError> + Send + 'static,
+    Receipts: TxReceipts,
 {
     pub fn new(
         importer: BoxStream<SharedImportResult>,
         serializer: Serializer,
-        database: DB,
+        db: DB,
+        receipts: Receipts,
         db_starting_height: BlockHeight,
-        db_ending_height: Option<BlockHeight>,
+        db_ending_height: BlockHeight,
     ) -> Self {
         const ARB_CHANNEL_SIZE: usize = 100;
         let (block_return, receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let (new_end_sender, new_end_receiver) = tokio::sync::oneshot::channel();
-        let importer_task = ImporterTask::new(
-            importer,
-            serializer.clone(),
-            block_return.clone(),
-            Some(new_end_sender),
-        );
+        let importer_task =
+            ImporterTask::new(importer, serializer.clone(), block_return.clone());
         let importer_runner = ServiceRunner::new(importer_task);
         importer_runner.start().unwrap();
         let sync_task = SyncTask::new(
             serializer,
             block_return,
-            database,
+            db,
+            receipts,
             db_starting_height,
             db_ending_height,
-            new_end_receiver,
         );
         let sync_runner = ServiceRunner::new(sync_task);
         sync_runner.start().unwrap();
@@ -100,19 +103,19 @@ where
             importer_task: importer_runner,
             sync_task: sync_runner,
             receiver,
-            _error_marker: std::marker::PhantomData,
         }
     }
 }
 
-impl<Serializer, DB, E> BlockSource for ImporterAndDbSource<Serializer, DB, E>
+impl<Serializer, DB, Receipts> BlockSource
+    for ImporterAndDbSource<Serializer, DB, Receipts>
 where
     Serializer: BlockSerializer + Send + Sync + 'static,
     <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
-    DB: Send + Sync,
-    DB: StorageInspect<FuelBlocks, Error = E>,
-    DB: StorageInspect<Transactions, Error = E>,
-    E: std::fmt::Debug + Send + Sync,
+    DB: Send + Sync + 'static,
+    DB: StorageInspect<FuelBlocks, Error = StorageError>,
+    DB: StorageInspect<Transactions, Error = StorageError>,
+    Receipts: TxReceipts,
 {
     type Block = Serializer::Block;
 

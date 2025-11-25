@@ -42,6 +42,7 @@ fault-proving = [
     "fuel-core-executor/fault-proving",
     "fuel-core-storage/fault-proving",
     "fuel-core-chain-config/fault-proving",
+    "fuel-core-block-aggregator-api/fault-proving",
     "fuel-core-database/fault-proving",
     "fuel-core-sync?/fault-proving",
     "fuel-core-importer/fault-proving",
@@ -126,7 +127,7 @@ fuel-core-executor = { workspace = true, features = [
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
-fuel-core-types = { path = "./../types", features = ["test-helpers"] }
+fuel-core-types = { path = "./../types", features = ["test-helpers", "random"] }
 fuel-core-upgradable-executor = { workspace = true, features = [
     "test-helpers",
 ] }
