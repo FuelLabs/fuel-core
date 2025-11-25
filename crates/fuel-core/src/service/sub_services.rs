@@ -116,7 +116,10 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::signer::SignMode;
+use fuel_core_types::{
+    fuel_types::BlockHeight,
+    signer::SignMode,
+};
 use std::{
     borrow::Cow,
     sync::Arc,
@@ -494,7 +497,8 @@ pub fn init_sub_services(
     };
 
     #[cfg(feature = "rpc")]
-    let block_aggregator_rpc = init_rpc_server(config, &database, &importer_adapter)?;
+    let block_aggregator_rpc =
+        init_rpc_server(config, &database, &importer_adapter, genesis_block_height)?;
 
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
         *genesis_block.header().height(),
@@ -581,6 +585,7 @@ fn init_rpc_server(
     config: &Config,
     database: &CombinedDatabase,
     importer_adapter: &BlockImporterAdapter,
+    genesis_height: BlockHeight,
 ) -> anyhow::Result<
     ServiceRunner<
         BlockAggregator<
@@ -592,7 +597,7 @@ fn init_rpc_server(
     >,
 > {
     let block_aggregator_config = config.rpc_config.clone();
-    let sync_from = block_aggregator_config.sync_from.unwrap_or_default();
+    let sync_from = block_aggregator_config.sync_from.unwrap_or(genesis_height);
     let sync_from_height;
     let receipts = ReceiptSource::new(database.off_chain().clone());
     let db_adapter = match &block_aggregator_config.storage_method {

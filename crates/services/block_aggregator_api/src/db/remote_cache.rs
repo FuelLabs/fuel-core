@@ -136,32 +136,23 @@ where
             .key(&key)
             .body(body)
             .content_encoding("gzip")
-            .content_type("application/octet-stream");
+            .content_type("application/grpc-web");
         let _ = req.send().await.map_err(Error::db_error)?;
         match block_event {
             BlockSourceEvent::NewBlock(new_height, _) => {
                 tracing::debug!("New block: {:?}", new_height);
-                tracing::info!("New block: {:?}", new_height);
                 self.highest_new_height = Some(new_height);
                 if self.synced {
-                    tracing::info!("Updating latest block to {:?}", new_height);
+                    tracing::debug!("Updating latest block to {:?}", new_height);
                     let mut tx = self.local_persisted.write_transaction();
                     tx.storage_as_mut::<LatestBlock>()
                         .insert(&(), &new_height)
                         .map_err(|e| Error::DB(anyhow!(e)))?;
                     tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
-                } else if new_height == self.sync_from {
-                    tracing::info!("Updating latest block to {:?}", new_height);
-                    self.synced = true;
-                    self.highest_new_height = Some(new_height);
-                    self.orphaned_new_height = None;
-                    let mut tx = self.local_persisted.write_transaction();
-                    tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
-                        .map_err(|e| Error::DB(anyhow!(e)))?;
-                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
-                } else if self.height_is_next_height(new_height)? {
-                    tracing::info!("Updating latest block to {:?}", new_height);
+                } else if new_height == self.sync_from
+                    || self.height_is_next_height(new_height)?
+                {
+                    tracing::debug!("Updating latest block to {:?}", new_height);
                     self.synced = true;
                     self.highest_new_height = Some(new_height);
                     self.orphaned_new_height = None;
@@ -177,15 +168,14 @@ where
             }
             BlockSourceEvent::OldBlock(height, _) => {
                 tracing::debug!("Old block: {:?}", height);
-                tracing::info!("Old block: {:?}", height);
                 let mut tx = self.local_persisted.write_transaction();
                 let latest_height = if height.succ() == self.orphaned_new_height {
-                    tracing::info!("Marking block as synced: {:?}", height);
+                    tracing::debug!("Marking block as synced: {:?}", height);
                     self.orphaned_new_height = None;
                     self.synced = true;
                     self.highest_new_height.unwrap_or(height)
                 } else {
-                    tracing::info!("Updating latest block to {:?}", height);
+                    tracing::debug!("Updating latest block to {:?}", height);
                     height
                 };
                 tx.storage_as_mut::<LatestBlock>()
