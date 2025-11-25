@@ -300,7 +300,12 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
-    pub fn with_urls(urls: Vec<Url>) -> anyhow::Result<Self> {
+    pub fn with_urls(urls: &[impl AsRef<str>]) -> anyhow::Result<Self> {
+        let urls = urls
+            .iter()
+            .map(|url| Url::parse(url.as_ref()))
+            .collect::<Result<Vec<_>, _>>()
+            .context("failed to parse provided URLs")?;
         Ok(Self {
             transport: FailoverTransport::new(urls)?,
             require_height: ConsistencyPolicy::Auto {
