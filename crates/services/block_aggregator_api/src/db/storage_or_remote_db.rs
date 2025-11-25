@@ -29,19 +29,19 @@ use fuel_core_types::fuel_types::BlockHeight;
 
 /// A union of a storage and a remote cache for the block aggregator. This allows both to be
 /// supported in production depending on the configuration
-pub enum StorageOrRemoteDB<R, S> {
-    Remote(RemoteCache<R>),
+pub enum StorageOrRemoteDB<S> {
+    Remote(RemoteCache<S>),
     Storage(StorageDB<S>),
 }
 
-impl<R, S> StorageOrRemoteDB<R, S> {
+impl<S> StorageOrRemoteDB<S> {
     pub fn new_storage(storage: S, sync_from: BlockHeight) -> Self {
         StorageOrRemoteDB::Storage(StorageDB::new(storage, sync_from))
     }
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_s3(
-        storage: R,
+        storage: S,
         aws_bucket: &str,
         requester_pays: bool,
         aws_endpoint_url: Option<String>,
@@ -59,7 +59,7 @@ impl<R, S> StorageOrRemoteDB<R, S> {
     }
 }
 
-impl<R, S, T> BlockAggregatorDB for StorageOrRemoteDB<R, S>
+impl<S, T> BlockAggregatorDB for StorageOrRemoteDB<S>
 where
     // Storage Constraints
     S: Modifiable + std::fmt::Debug,
@@ -72,10 +72,10 @@ where
     T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
     StorageTransaction<T>: StorageInspect<Blocks, Error = StorageError>,
     // Remote Constraints
-    R: Send + Sync,
-    R: Modifiable,
-    R: StorageInspect<LatestBlock, Error = StorageError>,
-    for<'b> StorageTransaction<&'b mut R>:
+    S: Send + Sync,
+    S: Modifiable,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
         StorageMutate<LatestBlock, Error = StorageError>,
 {
     type Block = crate::protobuf_types::Block;
