@@ -167,8 +167,13 @@ use types::{
     },
 };
 
+use fuel_core_protobuf::{
+    self,
+    block_aggregator_client::BlockAggregatorClient,
+};
 #[cfg(feature = "subscriptions")]
 use std::pin::Pin;
+use tonic::codegen::StdError;
 
 pub mod pagination;
 pub mod schema;
@@ -246,6 +251,8 @@ pub struct FuelClient {
     transport: FailoverTransport,
     require_height: ConsistencyPolicy,
     chain_state_info: ChainStateInfo,
+    #[cfg(feature = "rpc")]
+    protobuf_client: Option<BlockAggregatorClient<tonic::transport::Channel>>,
 }
 
 impl FromStr for FuelClient {
@@ -268,6 +275,8 @@ impl FromStr for FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
+            protobuf_client: None,
         })
     }
 }
@@ -300,6 +309,23 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
+    #[cfg(feature = "rpc")]
+    pub async fn new_with_rpc<D>(
+        graphql_url: impl AsRef<str>,
+        rpc_url: D,
+    ) -> anyhow::Result<Self>
+    where
+        D: TryInto<tonic::transport::Endpoint>,
+        D::Error: Into<StdError>,
+    {
+        let mut client = Self::new(graphql_url)?;
+        let rpc_client = BlockAggregatorClient::connect(rpc_url)
+            .await
+            .context("Failed to connect to the Block Aggregator RPC")?;
+        client.protobuf_client = Some(rpc_client);
+        Ok(client)
+    }
+
     pub fn with_urls(urls: Vec<Url>) -> anyhow::Result<Self> {
         Ok(Self {
             transport: FailoverTransport::new(urls)?,
@@ -307,7 +333,26 @@ impl FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
+            protobuf_client: None,
         })
+    }
+
+    #[cfg(feature = "rpc")]
+    pub async fn with_urls_and_rpc<D>(
+        graph_ql_urls: Vec<Url>,
+        rpc_url: D,
+    ) -> anyhow::Result<Self>
+    where
+        D: TryInto<tonic::transport::Endpoint>,
+        D::Error: Into<StdError>,
+    {
+        let mut client = Self::with_urls(graph_ql_urls)?;
+        let rpc_client = BlockAggregatorClient::connect(rpc_url)
+            .await
+            .context("Failed to connect to the Block Aggregator RPC")?;
+        client.protobuf_client = Some(rpc_client);
+        Ok(client)
     }
 }
 
