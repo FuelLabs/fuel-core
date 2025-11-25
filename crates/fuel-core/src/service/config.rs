@@ -1,8 +1,21 @@
+use crate::{
+    combined_database::CombinedDatabaseConfig,
+    graphql_api::ServiceConfig as GraphQLConfig,
+};
 use clap::ValueEnum;
-#[cfg(feature = "test-helpers")]
-use std::net::{
-    SocketAddr,
-    TcpListener,
+use fuel_core_chain_config::SnapshotReader;
+pub use fuel_core_consensus_module::RelayerConsensusConfig;
+pub use fuel_core_importer;
+pub use fuel_core_poa::Trigger;
+use fuel_core_tx_status_manager::config::Config as TxStatusManagerConfig;
+use fuel_core_txpool::config::Config as TxPoolConfig;
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    fuel_types::{
+        AssetId,
+        ChainId,
+    },
+    signer::SignMode,
 };
 use std::{
     num::{
@@ -18,45 +31,33 @@ use strum_macros::{
     EnumVariantNames,
 };
 
-use fuel_core_chain_config::SnapshotReader;
-#[cfg(feature = "test-helpers")]
-use fuel_core_chain_config::{
-    ChainConfig,
-    StateConfig,
-};
-pub use fuel_core_consensus_module::RelayerConsensusConfig;
-pub use fuel_core_importer;
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZeroUsize;
+
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::integration::StorageMethod;
+#[cfg(feature = "rpc")]
+use fuel_core_types::fuel_types::BlockHeight;
+
+#[cfg(feature = "relayer")]
+use fuel_core_relayer::Config as RelayerConfig;
+
 #[cfg(feature = "p2p")]
 use fuel_core_p2p::config::{
     Config as P2PConfig,
     NotInitialized,
 };
-pub use fuel_core_poa::Trigger;
-#[cfg(feature = "relayer")]
-use fuel_core_relayer::Config as RelayerConfig;
-use fuel_core_tx_status_manager::config::Config as TxStatusManagerConfig;
-use fuel_core_txpool::config::Config as TxPoolConfig;
-use fuel_core_types::{
-    blockchain::header::StateTransitionBytecodeVersion,
-    signer::SignMode,
-};
 
-use crate::{
-    combined_database::CombinedDatabaseConfig,
-    graphql_api::ServiceConfig as GraphQLConfig,
+#[cfg(feature = "test-helpers")]
+use fuel_core_chain_config::{
+    ChainConfig,
+    StateConfig,
 };
-
-#[cfg(feature = "rpc")]
-use fuel_core_types::fuel_types::BlockHeight;
-use fuel_core_types::fuel_types::{
-    AssetId,
-    ChainId,
+#[cfg(feature = "test-helpers")]
+use std::net::{
+    SocketAddr,
+    TcpListener,
 };
-
-#[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::integration::StorageMethod;
-#[cfg(feature = "parallel-executor")]
-use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug)]
 pub struct Config {

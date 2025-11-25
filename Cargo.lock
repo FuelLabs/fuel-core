@@ -1290,9 +1290,9 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "aws-config"
-version = "1.8.10"
+version = "1.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1856b1b48b65f71a4dd940b1c0931f9a7b646d4a924b9828ffefc1454714668a"
+checksum = "a0149602eeaf915158e14029ba0c78dedb8c08d554b024d54c8f239aab46511d"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1320,9 +1320,9 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "1.2.8"
+version = "1.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "faf26925f4a5b59eb76722b63c2892b1d70d06fa053c72e4a100ec308c1d47bc"
+checksum = "b01c9521fa01558f750d183c8c68c81b0155b9d193a4ba7f84c36bd1b6d04a06"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -1355,9 +1355,9 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.13"
+version = "1.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f2402da1a5e16868ba98725e5d73f26b8116eaa892e56f2cd0bf5eec7985f70"
+checksum = "7ce527fb7e53ba9626fc47824f25e256250556c40d8f81d27dd92aa38239d632"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -1380,9 +1380,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-kms"
-version = "1.90.0"
+version = "1.96.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b08a2b564e660ad69be524f569fea985380b15eea28694b8fd9f6206a437702b"
+checksum = "995d40070271994fb774137aa603c10e7d29c4567a9605c6b801dff199c3d221"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1436,9 +1436,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sso"
-version = "1.88.0"
+version = "1.90.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d05b276777560aa9a196dbba2e3aada4d8006d3d7eeb3ba7fe0c317227d933c4"
+checksum = "4f18e53542c522459e757f81e274783a78f8c81acdfc8d1522ee8a18b5fb1c66"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1458,9 +1458,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssooidc"
-version = "1.90.0"
+version = "1.92.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9be14d6d9cd761fac3fd234a0f47f7ed6c0df62d83c0eeb7012750e4732879b"
+checksum = "532f4d866012ffa724a4385c82e8dd0e59f0ca0e600f3f22d4c03b6824b34e4a"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1480,9 +1480,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-sts"
-version = "1.90.0"
+version = "1.94.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98a862d704c817d865c8740b62d8bbeb5adcb30965e93b471df8a5bcefa20a80"
+checksum = "1be6fbbfa1a57724788853a623378223fe828fc4c09b146c992f0c95b6256174"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -1640,9 +1640,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-mocks"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99c0a641ee7f8a95a041659855f473166db87c3135b640029ba42772a4ea0a04"
+checksum = "ea6c97048c104438d40390bd5211267ea783fa0880a35017ff42730b6dfc9136"
 dependencies = [
  "aws-smithy-http-client",
  "aws-smithy-runtime-api",
@@ -4264,7 +4264,6 @@ dependencies = [
  "aws-config",
  "aws-sdk-s3",
  "aws-smithy-mocks",
- "bytes",
  "enum-iterator",
  "flate2",
  "fuel-core-protobuf",
@@ -4272,9 +4271,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-types 0.47.1",
  "futures",
- "log",
  "num_enum",
- "postcard",
  "proptest",
  "prost 0.14.1",
  "rand 0.8.5",
@@ -4286,7 +4283,6 @@ dependencies = [
  "tokio-stream",
  "tonic 0.14.2",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -4799,12 +4795,10 @@ dependencies = [
  "alloy-provider",
  "alloy-rpc-types-eth",
  "anyhow",
- "async-trait",
  "aws-config",
  "aws-sdk-kms",
  "aws-sdk-s3",
  "clap",
- "cynic",
  "flate2",
  "fuel-core",
  "fuel-core-benches",
@@ -4825,7 +4819,6 @@ dependencies = [
  "fuel-core-types 0.47.1",
  "fuel-core-upgradable-executor",
  "futures",
- "hex",
  "hyper 0.14.32",
  "insta",
  "itertools 0.12.1",
@@ -4840,7 +4833,6 @@ dependencies = [
  "reqwest 0.12.24",
  "rstest",
  "serde_json",
- "spki 0.7.3",
  "tempfile",
  "test-case",
  "test-helpers",
