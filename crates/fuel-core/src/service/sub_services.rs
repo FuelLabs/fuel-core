@@ -22,6 +22,8 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
     trigger::TimeBasedTrigger,
     tx_receiver::PreconfirmationsReceiver,
 };
+#[cfg(feature = "rpc")]
+use crate::service::adapters::rpc::ReceiptSource;
 use crate::{
     combined_database::CombinedDatabase,
     database::Database,
@@ -91,7 +93,6 @@ use fuel_core_storage::{
     Error as StorageError,
     StorageAsRef,
 };
-
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
 use fuel_core_types::signer::SignMode;
@@ -473,6 +474,7 @@ pub fn init_sub_services(
         let block_aggregator_config = config.rpc_config.clone();
         let sync_from = block_aggregator_config.sync_from.unwrap_or_default();
         let sync_from_height;
+        let receipts = ReceiptSource::new(database.off_chain().clone());
         let db_adapter = match &block_aggregator_config.storage_method {
             StorageMethod::Local => {
                 let db = database.block_aggregation_storage().clone();
@@ -516,6 +518,7 @@ pub fn init_sub_services(
             db_adapter,
             serializer,
             onchain_db,
+            receipts,
             importer,
             sync_from_height,
         )?

@@ -21,6 +21,7 @@ use crate::{
         MintTransaction as ProtoMintTx,
         Output as ProtoOutput,
         Policies as ProtoPolicies,
+        Receipt as ProtoReceipt,
         ScriptTransaction as ProtoScriptTx,
         StorageSlot as ProtoStorageSlot,
         Transaction as ProtoTransaction,
@@ -36,6 +37,8 @@ use crate::{
         header::VersionedHeader as ProtoVersionedHeader,
         input::Variant as ProtoInputVariant,
         output::Variant as ProtoOutputVariant,
+        receipt::Variant as ProtoReceiptVariant,
+        script_execution_result::Variant as ProtoScriptExecutionResultVariant,
         transaction::Variant as ProtoTransactionVariant,
         upgrade_purpose::Variant as ProtoUpgradePurposeVariant,
     },
@@ -53,9 +56,12 @@ use fuel_core_types::{
         },
         primitives::BlockId,
     },
+    fuel_asm::PanicInstruction,
     fuel_tx::{
         Input,
         Output,
+        Receipt as FuelReceipt,
+        ScriptExecutionResult,
         StorageSlot,
         Transaction as FuelTransaction,
         TxPointer,
@@ -562,5 +568,288 @@ fn proto_policies_from_policies(
     ProtoPolicies {
         bits,
         values: values.to_vec(),
+    }
+}
+
+fn proto_script_execution_result(
+    result: &ScriptExecutionResult,
+) -> crate::protobuf_types::ScriptExecutionResult {
+    use crate::protobuf_types::{
+        ScriptExecutionResult as ProtoScriptExecutionResult,
+        ScriptExecutionResultGenericFailure as ProtoScriptExecutionResultGenericFailure,
+        ScriptExecutionResultPanic as ProtoScriptExecutionResultPanic,
+        ScriptExecutionResultRevert as ProtoScriptExecutionResultRevert,
+        ScriptExecutionResultSuccess as ProtoScriptExecutionResultSuccess,
+    };
+
+    let variant = match result {
+        ScriptExecutionResult::Success => ProtoScriptExecutionResultVariant::Success(
+            ProtoScriptExecutionResultSuccess {},
+        ),
+        ScriptExecutionResult::Revert => {
+            ProtoScriptExecutionResultVariant::Revert(ProtoScriptExecutionResultRevert {})
+        }
+        ScriptExecutionResult::Panic => {
+            ProtoScriptExecutionResultVariant::Panic(ProtoScriptExecutionResultPanic {})
+        }
+        ScriptExecutionResult::GenericFailure(code) => {
+            ProtoScriptExecutionResultVariant::GenericFailure(
+                ProtoScriptExecutionResultGenericFailure { code: *code },
+            )
+        }
+    };
+
+    ProtoScriptExecutionResult {
+        variant: Some(variant),
+    }
+}
+
+fn proto_panic_instruction(
+    panic_instruction: &PanicInstruction,
+) -> crate::protobuf_types::PanicInstruction {
+    use crate::protobuf_types::PanicReason as ProtoPanicReason;
+
+    let reason_value = *panic_instruction.reason() as u8;
+    let reason = ProtoPanicReason::try_from(i32::from(reason_value))
+        .unwrap_or(ProtoPanicReason::Unknown);
+
+    crate::protobuf_types::PanicInstruction {
+        reason: reason as i32,
+        instruction: *panic_instruction.instruction(),
+    }
+}
+
+pub fn proto_receipt_from_receipt(receipt: &FuelReceipt) -> ProtoReceipt {
+    match receipt {
+        FuelReceipt::Call {
+            id,
+            to,
+            amount,
+            asset_id,
+            gas,
+            param1,
+            param2,
+            pc,
+            is,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::Call(
+                crate::protobuf_types::CallReceipt {
+                    id: id.as_ref().to_vec(),
+                    to: to.as_ref().to_vec(),
+                    amount: *amount,
+                    asset_id: asset_id.as_ref().to_vec(),
+                    gas: *gas,
+                    param1: *param1,
+                    param2: *param2,
+                    pc: *pc,
+                    is: *is,
+                },
+            )),
+        },
+        FuelReceipt::Return { id, val, pc, is } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::ReturnReceipt(
+                crate::protobuf_types::ReturnReceipt {
+                    id: id.as_ref().to_vec(),
+                    val: *val,
+                    pc: *pc,
+                    is: *is,
+                },
+            )),
+        },
+        FuelReceipt::ReturnData {
+            id,
+            ptr,
+            len,
+            digest,
+            pc,
+            is,
+            data,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::ReturnData(
+                crate::protobuf_types::ReturnDataReceipt {
+                    id: id.as_ref().to_vec(),
+                    ptr: *ptr,
+                    len: *len,
+                    digest: digest.as_ref().to_vec(),
+                    pc: *pc,
+                    is: *is,
+                    data: data.as_ref().map(|b| b.to_vec()),
+                },
+            )),
+        },
+        FuelReceipt::Panic {
+            id,
+            reason,
+            pc,
+            is,
+            contract_id,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::Panic(
+                crate::protobuf_types::PanicReceipt {
+                    id: id.as_ref().to_vec(),
+                    reason: Some(proto_panic_instruction(reason)),
+                    pc: *pc,
+                    is: *is,
+                    contract_id: contract_id.as_ref().map(|cid| cid.as_ref().to_vec()),
+                },
+            )),
+        },
+        FuelReceipt::Revert { id, ra, pc, is } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::Revert(
+                crate::protobuf_types::RevertReceipt {
+                    id: id.as_ref().to_vec(),
+                    ra: *ra,
+                    pc: *pc,
+                    is: *is,
+                },
+            )),
+        },
+        FuelReceipt::Log {
+            id,
+            ra,
+            rb,
+            rc,
+            rd,
+            pc,
+            is,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::Log(
+                crate::protobuf_types::LogReceipt {
+                    id: id.as_ref().to_vec(),
+                    ra: *ra,
+                    rb: *rb,
+                    rc: *rc,
+                    rd: *rd,
+                    pc: *pc,
+                    is: *is,
+                },
+            )),
+        },
+        FuelReceipt::LogData {
+            id,
+            ra,
+            rb,
+            ptr,
+            len,
+            digest,
+            pc,
+            is,
+            data,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::LogData(
+                crate::protobuf_types::LogDataReceipt {
+                    id: id.as_ref().to_vec(),
+                    ra: *ra,
+                    rb: *rb,
+                    ptr: *ptr,
+                    len: *len,
+                    digest: digest.as_ref().to_vec(),
+                    pc: *pc,
+                    is: *is,
+                    data: data.as_ref().map(|b| b.to_vec()),
+                },
+            )),
+        },
+        FuelReceipt::Transfer {
+            id,
+            to,
+            amount,
+            asset_id,
+            pc,
+            is,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::Transfer(
+                crate::protobuf_types::TransferReceipt {
+                    id: id.as_ref().to_vec(),
+                    to: to.as_ref().to_vec(),
+                    amount: *amount,
+                    asset_id: asset_id.as_ref().to_vec(),
+                    pc: *pc,
+                    is: *is,
+                },
+            )),
+        },
+        FuelReceipt::TransferOut {
+            id,
+            to,
+            amount,
+            asset_id,
+            pc,
+            is,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::TransferOut(
+                crate::protobuf_types::TransferOutReceipt {
+                    id: id.as_ref().to_vec(),
+                    to: to.as_ref().to_vec(),
+                    amount: *amount,
+                    asset_id: asset_id.as_ref().to_vec(),
+                    pc: *pc,
+                    is: *is,
+                },
+            )),
+        },
+        FuelReceipt::ScriptResult { result, gas_used } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::ScriptResult(
+                crate::protobuf_types::ScriptResultReceipt {
+                    result: Some(proto_script_execution_result(result)),
+                    gas_used: *gas_used,
+                },
+            )),
+        },
+        FuelReceipt::MessageOut {
+            sender,
+            recipient,
+            amount,
+            nonce,
+            len,
+            digest,
+            data,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::MessageOut(
+                crate::protobuf_types::MessageOutReceipt {
+                    sender: sender.as_ref().to_vec(),
+                    recipient: recipient.as_ref().to_vec(),
+                    amount: *amount,
+                    nonce: nonce.as_ref().to_vec(),
+                    len: *len,
+                    digest: digest.as_ref().to_vec(),
+                    data: data.as_ref().map(|b| b.to_vec()),
+                },
+            )),
+        },
+        FuelReceipt::Mint {
+            sub_id,
+            contract_id,
+            val,
+            pc,
+            is,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::Mint(
+                crate::protobuf_types::MintReceipt {
+                    sub_id: sub_id.as_ref().to_vec(),
+                    contract_id: contract_id.as_ref().to_vec(),
+                    val: *val,
+                    pc: *pc,
+                    is: *is,
+                },
+            )),
+        },
+        FuelReceipt::Burn {
+            sub_id,
+            contract_id,
+            val,
+            pc,
+            is,
+        } => ProtoReceipt {
+            variant: Some(ProtoReceiptVariant::Burn(
+                crate::protobuf_types::BurnReceipt {
+                    sub_id: sub_id.as_ref().to_vec(),
+                    contract_id: contract_id.as_ref().to_vec(),
+                    val: *val,
+                    pc: *pc,
+                    is: *is,
+                },
+            )),
+        },
     }
 }

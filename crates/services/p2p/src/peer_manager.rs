@@ -252,7 +252,7 @@ impl PeerManager {
             // check if all the slots are already taken
             if non_reserved_peers_connected >= self.max_non_reserved_peers {
                 // Too many peers already connected, disconnect the Peer
-                return true
+                return true;
             }
 
             if non_reserved_peers_connected.saturating_add(1)

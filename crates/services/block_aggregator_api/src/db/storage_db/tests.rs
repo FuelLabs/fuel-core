@@ -28,7 +28,9 @@ fn proto_block_with_height(height: BlockHeight) -> ProtoBlock {
     let serializer_adapter = SerializerAdapter;
     let mut default_block = FuelBlock::<Transaction>::default();
     default_block.header_mut().set_block_height(height);
-    serializer_adapter.serialize_block(&default_block).unwrap()
+    serializer_adapter
+        .serialize_block(&default_block, &[])
+        .unwrap()
 }
 
 #[tokio::test]

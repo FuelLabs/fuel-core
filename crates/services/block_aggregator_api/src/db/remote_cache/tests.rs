@@ -31,7 +31,7 @@ fn database() -> StorageTransaction<InMemoryStorage<Column>> {
 fn arb_proto_block() -> ProtoBlock {
     let block = FuelBlock::default();
     let serializer = SerializerAdapter;
-    serializer.serialize_block(&block).unwrap()
+    serializer.serialize_block(&block, &[]).unwrap()
 }
 fn put_happy_rule() -> Rule {
     mock!(Client::put_object)

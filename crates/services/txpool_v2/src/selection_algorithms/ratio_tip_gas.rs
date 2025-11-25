@@ -206,7 +206,7 @@ where
                     < constraints.minimal_gas_price;
 
                 if less_price {
-                    continue;
+                    continue
                 }
 
                 let not_enough_gas = stored_transaction.transaction.max_gas() > gas_left;
@@ -214,7 +214,7 @@ where
                     stored_transaction.transaction.metered_bytes_size() > space_left;
 
                 if not_enough_gas || too_big_tx {
-                    continue;
+                    continue
                 }
 
                 gas_left =

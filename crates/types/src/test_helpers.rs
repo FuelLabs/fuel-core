@@ -12,6 +12,7 @@ use crate::{
             v1::GeneratedApplicationFieldsV1,
         },
     },
+    fuel_asm::PanicInstruction,
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         BlobBody,
@@ -23,6 +24,8 @@ use crate::{
         Input,
         MessageId,
         Output,
+        Receipt,
+        ScriptExecutionResult,
         StorageSlot,
         Transaction,
         TransactionBuilder,
@@ -43,6 +46,7 @@ use crate::{
         BlobId,
         BlockHeight,
         Nonce,
+        SubAssetId,
     },
     fuel_vm::{
         Contract,
@@ -430,6 +434,27 @@ prop_compose! {
     }
 }
 
+fn arb_contract_id() -> impl Strategy<Value = ContractId> {
+    any::<[u8; 32]>().prop_map(ContractId::new)
+}
+
+fn arb_sub_asset_id() -> impl Strategy<Value = SubAssetId> {
+    any::<[u8; 32]>().prop_map(SubAssetId::new)
+}
+
+fn arb_panic_instruction() -> impl Strategy<Value = PanicInstruction> {
+    any::<u64>().prop_map(PanicInstruction::from)
+}
+
+fn arb_script_execution_result() -> impl Strategy<Value = ScriptExecutionResult> {
+    prop_oneof![
+        Just(ScriptExecutionResult::Success),
+        Just(ScriptExecutionResult::Revert),
+        Just(ScriptExecutionResult::Panic),
+        any::<u64>().prop_map(ScriptExecutionResult::GenericFailure),
+    ]
+}
+
 fn arb_msg_ids() -> impl Strategy<Value = Vec<MessageId>> {
     prop::collection::vec(arb_msg_id(), 0..10usize)
 }
@@ -668,5 +693,147 @@ prop_compose! {
             Block::new(partial_block_header, txs, &msg_ids, event_root).unwrap()
         };
         (fuel_block, msg_ids, event_root)
+    }
+}
+
+fn arb_receipt() -> impl Strategy<Value = Receipt> {
+    prop_oneof![
+        (
+            arb_contract_id(),
+            arb_contract_id(),
+            any::<u64>(),
+            arb_asset_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(
+                |(id, to, amount, asset_id, gas, param1, param2, pc, is)| {
+                    Receipt::call(id, to, amount, asset_id, gas, param1, param2, pc, is)
+                },
+            ),
+        (arb_contract_id(), any::<u64>(), any::<u64>(), any::<u64>(),)
+            .prop_map(|(id, val, pc, is)| Receipt::ret(id, val, pc, is)),
+        (
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            prop::collection::vec(any::<u8>(), 0..64),
+        )
+            .prop_map(|(id, ptr, pc, is, data)| Receipt::return_data(
+                id, ptr, pc, is, data,
+            )),
+        (
+            arb_contract_id(),
+            arb_panic_instruction(),
+            any::<u64>(),
+            any::<u64>(),
+            prop::option::of(arb_contract_id()),
+        )
+            .prop_map(|(id, reason, pc, is, panic_contract)| {
+                Receipt::panic(id, reason, pc, is).with_panic_contract_id(panic_contract)
+            }),
+        (arb_contract_id(), any::<u64>(), any::<u64>(), any::<u64>(),)
+            .prop_map(|(id, ra, pc, is)| Receipt::revert(id, ra, pc, is)),
+        (
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(id, ra, rb, rc, rd, pc, is)| {
+                Receipt::log(id, ra, rb, rc, rd, pc, is)
+            }),
+        (
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            prop::collection::vec(any::<u8>(), 0..64),
+        )
+            .prop_map(|(id, ra, rb, ptr, pc, is, data)| {
+                Receipt::log_data(id, ra, rb, ptr, pc, is, data)
+            }),
+        (
+            arb_contract_id(),
+            arb_contract_id(),
+            any::<u64>(),
+            arb_asset_id(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(id, to, amount, asset_id, pc, is)| {
+                Receipt::transfer(id, to, amount, asset_id, pc, is)
+            }),
+        (
+            arb_contract_id(),
+            arb_address(),
+            any::<u64>(),
+            arb_asset_id(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(id, to, amount, asset_id, pc, is)| {
+                Receipt::transfer_out(id, to, amount, asset_id, pc, is)
+            }),
+        (arb_script_execution_result(), any::<u64>())
+            .prop_map(|(result, gas_used)| Receipt::script_result(result, gas_used),),
+        (
+            arb_address(),
+            arb_address(),
+            any::<u64>(),
+            arb_nonce(),
+            prop::collection::vec(any::<u8>(), 0..64),
+        )
+            .prop_map(|(sender, recipient, amount, nonce, data)| {
+                let len = data.len() as u64;
+                let digest = Output::message_digest(&data);
+                Receipt::message_out_with_len(
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    len,
+                    digest,
+                    Some(data),
+                )
+            }),
+        (
+            arb_sub_asset_id(),
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(sub_id, contract_id, val, pc, is)| {
+                Receipt::mint(sub_id, contract_id, val, pc, is)
+            }),
+        (
+            arb_sub_asset_id(),
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(sub_id, contract_id, val, pc, is)| {
+                Receipt::burn(sub_id, contract_id, val, pc, is)
+            }),
+    ]
+}
+
+prop_compose! {
+    /// generates a list of random receipts
+    pub fn arb_receipts()(
+        receipts in prop::collection::vec(arb_receipt(), 0..10),
+    ) -> Vec<Receipt> {
+        receipts
     }
 }
