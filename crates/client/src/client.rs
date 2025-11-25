@@ -314,6 +314,10 @@ impl FuelClient {
             chain_state_info: Default::default(),
         })
     }
+
+    pub fn get_default_url(&self) -> &Url {
+        self.transport.get_default_url()
+    }
 }
 
 impl FuelClient {

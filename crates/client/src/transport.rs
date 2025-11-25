@@ -87,6 +87,11 @@ impl FailoverTransport {
         }
     }
 
+    pub fn get_default_url(&self) -> &Url {
+        let default_index = self.default_url_index.load(Ordering::Relaxed);
+        &self.urls[default_index]
+    }
+
     pub async fn query<ResponseData, Vars>(
         &self,
         q: Operation<ResponseData, Vars>,
