@@ -37,7 +37,7 @@ tonic = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-aws-sdk-s3 = { version = "1.111.0", features = ["test-util"] }
+aws-sdk-s3 = { workspace = true, features = ["test-util"] }
 aws-smithy-mocks = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
