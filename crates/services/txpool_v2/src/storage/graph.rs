@@ -221,17 +221,17 @@ impl GraphStorage {
                     if to != i_owner {
                         return Err(Error::InputValidation(
                             InputValidationError::NotInsertedIoWrongOwner,
-                        ));
+                        ))
                     }
                     if amount != i_amount {
                         return Err(Error::InputValidation(
                             InputValidationError::NotInsertedIoWrongAmount,
-                        ));
+                        ))
                     }
                     if asset_id != i_asset_id {
                         return Err(Error::InputValidation(
                             InputValidationError::NotInsertedIoWrongAssetId,
-                        ));
+                        ))
                     }
                 }
                 Output::Contract(_) => {
@@ -687,10 +687,10 @@ impl Storage for GraphStorage {
                                 if extracted_outputs
                                     .coin_exists(utxo_id, owner, amount, asset_id)
                                 {
-                                    continue;
+                                    continue
                                 }
                                 missing_inputs.push(MissingInput::Utxo(*utxo_id));
-                                continue;
+                                continue
                             }
                             Err(e) => {
                                 return Err(InputValidationErrorType::Inconsistency(
@@ -746,10 +746,10 @@ impl Storage for GraphStorage {
                             Ok(true) => {}
                             Ok(false) => {
                                 if extracted_outputs.contract_exists(contract_id) {
-                                    continue;
+                                    continue
                                 }
                                 missing_inputs.push(MissingInput::Contract(*contract_id));
-                                continue;
+                                continue
                             }
                             Err(e) => {
                                 return Err(InputValidationErrorType::Inconsistency(

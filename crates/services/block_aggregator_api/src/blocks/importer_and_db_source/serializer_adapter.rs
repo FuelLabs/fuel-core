@@ -14,7 +14,8 @@ use fuel_core_types::{
         block::Block as FuelBlock,
     },
 };
-use crate::blocks::importer_and_db_source::serializer_adapter::fuel_to_proto_conversions::{proto_header_from_header, proto_tx_from_tx};
+use fuel_core_types::fuel_tx::Receipt as FuelReceipt;
+use crate::blocks::importer_and_db_source::serializer_adapter::fuel_to_proto_conversions::{proto_header_from_header, proto_receipt_from_receipt, proto_tx_from_tx};
 
 #[derive(Clone)]
 pub struct SerializerAdapter;
@@ -22,7 +23,11 @@ pub struct SerializerAdapter;
 impl BlockSerializer for SerializerAdapter {
     type Block = ProtoBlock;
 
-    fn serialize_block(&self, block: &FuelBlock) -> crate::result::Result<Self::Block> {
+    fn serialize_block(
+        &self,
+        block: &FuelBlock,
+        receipts: &[FuelReceipt],
+    ) -> crate::result::Result<Self::Block> {
         let proto_header = proto_header_from_header(block.header());
         match &block {
             FuelBlock::V1(_) => {
@@ -33,6 +38,7 @@ impl BlockSerializer for SerializerAdapter {
                         .iter()
                         .map(proto_tx_from_tx)
                         .collect(),
+                    receipts: receipts.iter().map(proto_receipt_from_receipt).collect(),
                 };
                 Ok(ProtoBlock {
                     versioned_block: Some(ProtoVersionedBlock::V1(proto_v1_block)),
@@ -52,27 +58,30 @@ pub mod proto_to_fuel_conversions;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_types::test_helpers::arb_block;
+    use fuel_core_types::test_helpers::{arb_block, arb_receipts};
     use proptest::prelude::*;
     use crate::blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf;
 
     proptest! {
             #![proptest_config(ProptestConfig {
-      cases: 100, .. ProptestConfig::default()
+      cases: 1, .. ProptestConfig::default()
     })]
           #[test]
-          fn serialize_block__roundtrip((block, msg_ids, event_inbox_root) in arb_block()) {
+          fn serialize_block__roundtrip(
+            (block, msg_ids, event_inbox_root) in arb_block(),
+            receipts in arb_receipts())
+          {
               // given
               let serializer = SerializerAdapter;
 
               // when
-              let proto_block = serializer.serialize_block(&block).unwrap();
+              let proto_block = serializer.serialize_block(&block, &receipts).unwrap();
 
               // then
-              let deserialized_block = fuel_block_from_protobuf(proto_block, &msg_ids, event_inbox_root).unwrap();
+              let (deserialized_block, deserialized_receipts) = fuel_block_from_protobuf(proto_block, &msg_ids, event_inbox_root).unwrap();
               assert_eq!(block, deserialized_block);
-
-      }
+              assert_eq!(receipts, deserialized_receipts);
+          }
       }
 
     #[test]

@@ -1670,12 +1670,12 @@ where
         let Input::Contract(input) = core::mem::take(input) else {
             return Err(ExecutorError::Other(
                 "Input of the `Mint` transaction is not a contract".to_string(),
-            ))
+            ));
         };
         let Output::Contract(output) = outputs[0] else {
             return Err(ExecutorError::Other(
                 "The output of the `Mint` transaction is not a contract".to_string(),
-            ))
+            ));
         };
         Ok((input, output))
     }
@@ -1793,7 +1793,7 @@ where
                         );
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        })
+                        });
                     }
                 }
             }
@@ -2026,14 +2026,14 @@ where
                                 return Err(TransactionValidityError::CoinMismatch(
                                     *utxo_id,
                                 )
-                                .into())
+                                .into());
                             }
                         }
                         _ => {
                             return Err(TransactionValidityError::CoinDoesNotExist(
                                 *utxo_id,
                             )
-                            .into())
+                            .into());
                         }
                     }
                 }
@@ -2045,7 +2045,7 @@ where
                         return Err(TransactionValidityError::ContractDoesNotExist(
                             contract.contract_id,
                         )
-                        .into())
+                        .into());
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
@@ -2060,21 +2060,21 @@ where
                                         *nonce,
                                     )
                                     .into(),
-                                )
+                                );
                             }
 
                             if !message.matches_input(input).unwrap_or_default() {
                                 return Err(TransactionValidityError::MessageMismatch(
                                     *nonce,
                                 )
-                                .into())
+                                .into());
                             }
                         }
                         _ => {
                             return Err(TransactionValidityError::MessageDoesNotExist(
                                 *nonce,
                             )
-                            .into())
+                            .into());
                         }
                     }
                 }
@@ -2133,7 +2133,7 @@ where
                     if reverted =>
                 {
                     // Don't spend the retryable messages if transaction is reverted
-                    continue
+                    continue;
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
                 | Input::MessageCoinPredicate(MessageCoinPredicate { nonce, .. })
@@ -2170,7 +2170,7 @@ where
         for r in receipts.iter().rev() {
             if let Receipt::ScriptResult { gas_used, .. } = r {
                 used_gas = *gas_used;
-                break
+                break;
             }
         }
 
@@ -2278,7 +2278,7 @@ where
                     } else {
                         return Err(ExecutorError::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        })
+                        });
                     };
 
                 let empty = ContractAccessesWithValues::default();
@@ -2369,7 +2369,7 @@ where
                     } else {
                         return Err(ExecutorError::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
-                        ))
+                        ));
                     }
                 }
                 Output::Change {

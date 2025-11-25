@@ -8,7 +8,7 @@ use crate::{
     },
     block_range_response::{
         BlockRangeResponse,
-        RemoteBlockRangeResponse,
+        RemoteS3Response,
     },
     blocks::importer_and_db_source::{
         BlockSerializer,
@@ -26,6 +26,7 @@ use crate::{
         block_response::Payload,
     },
 };
+use fuel_core_protobuf::remote_block_response::Location;
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
     fuel_types::BlockHeight,
@@ -56,7 +57,7 @@ async fn await_query__get_current_height__client_receives_expected_value() {
     let handle = tokio::spawn(async move {
         tracing::info!("querying with client");
         client
-            .get_block_height(BlockHeightRequest {})
+            .get_synced_block_height(BlockHeightRequest {})
             .await
             .expect("could not get height")
     });
@@ -107,15 +108,16 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
     let serializer_adapter = SerializerAdapter;
     let fuel_block_1 = FuelBlock::default();
     let mut fuel_block_2 = FuelBlock::default();
-    let block_height_2 = fuel_block_1.header().height().succ().unwrap();
+    let block_height_1 = fuel_block_1.header().height();
+    let block_height_2 = block_height_1.succ().unwrap();
     fuel_block_2.header_mut().set_block_height(block_height_2);
     let block1 = serializer_adapter
-        .serialize_block(&fuel_block_1)
+        .serialize_block(&fuel_block_1, &[])
         .expect("could not serialize block");
     let block2 = serializer_adapter
-        .serialize_block(&fuel_block_2)
+        .serialize_block(&fuel_block_2, &[])
         .expect("could not serialize block");
-    let list = vec![block1, block2];
+    let list = vec![(*block_height_1, block1), (block_height_2, block2)];
     // return response through query's channel
     if let BlockAggregatorQuery::GetBlockRange {
         first,
@@ -135,7 +137,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
     tracing::info!("awaiting query");
     let response = handle.await.unwrap();
     let expected = list;
-    let actual: Vec<ProtoBlock> = response
+    let actual: Vec<(BlockHeight, ProtoBlock)> = response
         .into_inner()
         .try_collect::<Vec<_>>()
         .await
@@ -143,7 +145,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
         .into_iter()
         .map(|b| {
             if let Some(Payload::Literal(inner)) = b.payload {
-                inner
+                (BlockHeight::new(b.height), inner)
             } else {
                 panic!("unexpected response type")
             }
@@ -178,19 +180,18 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
     let query = api.await_query().await.unwrap();
 
     // then
-    let list: Vec<_> = ["1", "2"]
+    let list: Vec<_> = [(BlockHeight::new(1), "1"), (BlockHeight::new(2), "2")]
         .iter()
-        .map(|height| {
-            let region = "test-region".to_string();
+        .map(|(height, key)| {
             let bucket = "test-bucket".to_string();
-            let key = height.to_string();
-            let url = "good.url".to_string();
-            RemoteBlockRangeResponse {
-                region,
+            let key = key.to_string();
+            let res = RemoteS3Response {
                 bucket,
                 key,
-                url,
-            }
+                requester_pays: false,
+                aws_endpoint: None,
+            };
+            (*height, res)
         })
         .collect();
     // return response through query's channel
@@ -204,7 +205,7 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
         assert_eq!(last, BlockHeight::new(1));
         tracing::info!("correct query received, sending response");
         let stream = tokio_stream::iter(list.clone()).boxed();
-        let range = BlockRangeResponse::Remote(stream);
+        let range = BlockRangeResponse::S3(stream);
         response.send(range).unwrap();
     } else {
         panic!("expected GetBlockRange query");
@@ -212,7 +213,7 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
     tracing::info!("awaiting query");
     let response = handle.await.unwrap();
     let expected = list;
-    let actual: Vec<RemoteBlockRangeResponse> = response
+    let actual: Vec<(BlockHeight, RemoteS3Response)> = response
         .into_inner()
         .try_collect::<Vec<_>>()
         .await
@@ -220,12 +221,18 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
         .into_iter()
         .map(|b| {
             if let Some(Payload::Remote(inner)) = b.payload {
-                RemoteBlockRangeResponse {
-                    region: inner.region,
-                    bucket: inner.bucket,
-                    key: inner.key,
-                    url: inner.url,
-                }
+                let height = BlockHeight::new(b.height);
+                let location = inner.location.unwrap();
+                let Location::S3(s3) = location else {
+                    panic!("unexpected location type")
+                };
+                let res = RemoteS3Response {
+                    bucket: s3.bucket,
+                    key: s3.key,
+                    requester_pays: false,
+                    aws_endpoint: None,
+                };
+                (height, res)
             } else {
                 panic!("unexpected response type")
             }
@@ -269,16 +276,16 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     let mut fuel_block_2 = FuelBlock::default();
     fuel_block_2.header_mut().set_block_height(height2);
     let block1 = serializer_adapter
-        .serialize_block(&fuel_block_1)
+        .serialize_block(&fuel_block_1, &[])
         .expect("could not serialize block");
     let block2 = serializer_adapter
-        .serialize_block(&fuel_block_2)
+        .serialize_block(&fuel_block_2, &[])
         .expect("could not serialize block");
-    let list = vec![block1, block2];
+    let list = vec![(height1, block1), (height2, block2)];
     if let BlockAggregatorQuery::NewBlockSubscription { response } = query {
         tracing::info!("correct query received, sending response");
-        for block in list.clone() {
-            response.send(block).await.unwrap();
+        for (height, block) in list.clone() {
+            response.send((height, block)).await.unwrap();
         }
     } else {
         panic!("expected GetBlockRange query");
@@ -286,7 +293,7 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     tracing::info!("awaiting query");
     let response = handle.await.unwrap();
     let expected = list;
-    let actual: Vec<ProtoBlock> = response
+    let actual: Vec<(BlockHeight, ProtoBlock)> = response
         .into_inner()
         .try_collect::<Vec<_>>()
         .await
@@ -294,7 +301,7 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
         .into_iter()
         .map(|b| {
             if let Some(Payload::Literal(inner)) = b.payload {
-                inner
+                (BlockHeight::new(b.height), inner)
             } else {
                 panic!("unexpected response type")
             }

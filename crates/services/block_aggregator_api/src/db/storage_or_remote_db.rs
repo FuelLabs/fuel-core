@@ -13,10 +13,7 @@ use crate::{
     },
     result::Result,
 };
-use aws_sdk_s3::config::{
-    Credentials,
-    Region,
-};
+
 use fuel_core_storage::{
     Error as StorageError,
     StorageInspect,
@@ -29,7 +26,6 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use std::borrow::Cow;
 
 /// A union of a storage and a remote cache for the block aggregator. This allows both to be
 /// supported in production depending on the configuration
@@ -46,64 +42,21 @@ impl<R, S> StorageOrRemoteDB<R, S> {
     #[allow(clippy::too_many_arguments)]
     pub fn new_s3(
         storage: R,
-        aws_id: &str,
-        aws_secret: &str,
-        aws_region: &str,
         aws_bucket: &str,
-        url_base: &str,
+        requester_pays: bool,
         aws_endpoint_url: Option<String>,
         sync_from: BlockHeight,
     ) -> Self {
-        let client = {
-            let mut builder = aws_sdk_s3::config::Builder::new();
-            if let Some(aws_endpoint_url) = aws_endpoint_url {
-                builder.set_endpoint_url(Some(aws_endpoint_url.clone()));
-            }
-
-            let config = builder
-                .force_path_style(true)
-                .region(Region::new(Cow::Owned(aws_region.to_string())))
-                .credentials_provider(Credentials::new(
-                    aws_id,
-                    aws_secret,
-                    None,
-                    None,
-                    "block-aggregator",
-                ))
-                .behavior_version_latest()
-                .build();
-            aws_sdk_s3::Client::from_conf(config)
-        };
         let remote_cache = RemoteCache::new(
-            aws_id.to_string(),
-            aws_secret.to_string(),
-            aws_region.to_string(),
             aws_bucket.to_string(),
-            url_base.to_string(),
-            client,
+            requester_pays,
+            aws_endpoint_url,
+            None,
             storage,
             sync_from,
         );
         StorageOrRemoteDB::Remote(remote_cache)
     }
-}
-
-pub fn get_env_vars() -> Option<(String, String, String, String, String, Option<String>)>
-{
-    let aws_id = std::env::var("AWS_ACCESS_KEY_ID").ok()?;
-    let aws_secret = std::env::var("AWS_SECRET_ACCESS_KEY").ok()?;
-    let aws_region = std::env::var("AWS_REGION").ok()?;
-    let aws_bucket = std::env::var("AWS_BUCKET").ok()?;
-    let bucket_url_base = std::env::var("BUCKET_URL_BASE").ok()?;
-    let aws_endpoint_url = std::env::var("AWS_ENDPOINT_URL").ok();
-    Some((
-        aws_id,
-        aws_secret,
-        aws_region,
-        aws_bucket,
-        bucket_url_base,
-        aws_endpoint_url,
-    ))
 }
 
 impl<R, S, T> BlockAggregatorDB for StorageOrRemoteDB<R, S>

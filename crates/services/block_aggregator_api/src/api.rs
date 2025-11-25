@@ -29,7 +29,7 @@ pub enum BlockAggregatorQuery<BlockRangeResponse, Block> {
     },
     // TODO: Do we need a way to unsubscribe or can we just see that the receiver is dropped?
     NewBlockSubscription {
-        response: tokio::sync::mpsc::Sender<Block>,
+        response: tokio::sync::mpsc::Sender<(BlockHeight, Block)>,
     },
 }
 
@@ -75,7 +75,8 @@ impl<T, B> BlockAggregatorQuery<T, B> {
         (query, receiver)
     }
 
-    pub fn new_block_subscription() -> (Self, tokio::sync::mpsc::Receiver<B>) {
+    pub fn new_block_subscription()
+    -> (Self, tokio::sync::mpsc::Receiver<(BlockHeight, B)>) {
         const ARBITRARY_CHANNEL_SIZE: usize = 10;
         let (sender, receiver) = tokio::sync::mpsc::channel(ARBITRARY_CHANNEL_SIZE);
         let query = Self::NewBlockSubscription { response: sender };

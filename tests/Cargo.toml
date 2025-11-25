@@ -101,6 +101,8 @@ url = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true, default-features = false, features = ["reqwest-rustls-tls"] }
 alloy-rpc-types-eth = { workspace = true }
+aws-config = "1.8.10"
+flate2 = { workspace = true }
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
 pretty_assertions = "1.4"
 proptest = { workspace = true }

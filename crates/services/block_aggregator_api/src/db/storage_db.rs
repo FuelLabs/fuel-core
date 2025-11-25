@@ -207,7 +207,7 @@ where
     S: Unpin + ReadTransaction + std::fmt::Debug,
     for<'a> StorageTransaction<&'a S>: StorageInspect<Blocks, Error = StorageError>,
 {
-    type Item = ProtoBlock;
+    type Item = (BlockHeight, ProtoBlock);
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -233,7 +233,7 @@ where
                         None
                     };
                     this.next = next;
-                    Poll::Ready(Some(block.into_owned()))
+                    Poll::Ready(Some((height, block.into_owned())))
                 }
                 Ok(None) => {
                     tracing::debug!("No block at height: {:?}", height);
