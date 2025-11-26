@@ -48,8 +48,8 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 # We force the version because 4.1.0 update leap seconds that breaks our timestamps
 tai64 = { version = "=4.0.0", features = ["serde"] }
 thiserror = "1.0"
-tracing = "0.1"
 tonic = { workspace = true, optional = true }
+tracing = "0.1"
 
 [build-dependencies]
 schemafy_lib = { version = "0.5" }
