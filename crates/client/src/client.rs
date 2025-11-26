@@ -253,6 +253,8 @@ pub struct FuelClient {
     chain_state_info: ChainStateInfo,
     #[cfg(feature = "rpc")]
     protobuf_client: Option<BlockAggregatorClient<tonic::transport::Channel>>,
+    #[cfg(feature = "rpc")]
+    s3_client: (),
 }
 
 impl FromStr for FuelClient {
@@ -277,6 +279,8 @@ impl FromStr for FuelClient {
             chain_state_info: Default::default(),
             #[cfg(feature = "rpc")]
             protobuf_client: None,
+            #[cfg(feature = "rpc")]
+            s3_client: (),
         })
     }
 }
