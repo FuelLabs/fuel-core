@@ -1,11 +1,5 @@
 #![allow(non_snake_case)]
 
-use aws_config::{
-    BehaviorVersion,
-    default_provider::credentials::DefaultCredentialsChain,
-};
-use aws_sdk_s3::Client;
-use flate2::read::GzDecoder;
 use fuel_core::{
     database::Database,
     service::{
@@ -15,18 +9,12 @@ use fuel_core::{
 };
 use fuel_core_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
-    db::remote_cache::block_height_to_key,
-    integration::StorageMethod,
     protobuf_types::{
-        Block as ProtoBlock,
         BlockHeightRequest as ProtoBlockHeightRequest,
         BlockRangeRequest as ProtoBlockRangeRequest,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
-        RemoteBlockResponse as ProtoRemoteBlockResponse,
-        RemoteS3Bucket,
         block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
         block_response::Payload as ProtoPayload,
-        remote_block_response::Location,
     },
 };
 use fuel_core_client::client::FuelClient;
@@ -35,9 +23,6 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
-use prost::bytes::Bytes;
-use std::io::Read;
-use test_helpers::client_ext::ClientExt;
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -105,7 +90,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn get_block_height__can_get_value_from_rpc() {
-    let mut config = Config::local_node();
+    let config = Config::local_node();
     let rpc_url = config.rpc_config.addr;
 
     // given
@@ -140,7 +125,7 @@ async fn get_block_height__can_get_value_from_rpc() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn new_block_subscription__can_get_expect_block() {
-    let mut config = Config::local_node();
+    let config = Config::local_node();
 
     let rpc_url = config.rpc_config.addr;
 
