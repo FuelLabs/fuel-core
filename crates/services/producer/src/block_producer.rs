@@ -145,7 +145,7 @@ where
                 height,
                 previous_block: latest_height,
             }
-            .into());
+            .into())
         }
 
         let maybe_mint_tx = transactions_source.pop();
@@ -229,7 +229,7 @@ where
                 height,
                 previous_block: latest_height,
             }
-            .into());
+            .into())
         }
 
         let component = Components {

@@ -523,7 +523,7 @@ where
             return match res {
                 Ok(()) => Some(TaskNextAction::Continue),
                 Err(err) => Some(TaskNextAction::ErrorContinue(err)),
-            };
+            }
         }
         None
     }
@@ -599,7 +599,7 @@ where
                 return Ok(Self {
                     last_block_created: Instant::now(),
                     ..self
-                });
+                })
             }
         }
 
