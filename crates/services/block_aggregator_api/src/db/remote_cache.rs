@@ -12,10 +12,6 @@ use crate::{
     result::Error,
 };
 use anyhow::anyhow;
-use aws_config::{
-    BehaviorVersion,
-    default_provider::credentials::DefaultCredentialsChain,
-};
 use aws_sdk_s3::{
     self,
     Client,
@@ -51,7 +47,7 @@ pub struct RemoteCache<S> {
     aws_bucket: String,
     requester_pays: bool,
     aws_endpoint: Option<String>,
-    client: Option<Client>,
+    client: Client,
 
     // track consistency between runs
     local_persisted: S,
@@ -63,11 +59,11 @@ pub struct RemoteCache<S> {
 
 impl<S> RemoteCache<S> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         aws_bucket: String,
         requester_pays: bool,
         aws_endpoint: Option<String>,
-        client: Option<Client>,
+        client: Client,
         local_persisted: S,
         sync_from: BlockHeight,
     ) -> RemoteCache<S> {
@@ -81,31 +77,6 @@ impl<S> RemoteCache<S> {
             highest_new_height: None,
             orphaned_new_height: None,
             synced: false,
-        }
-    }
-
-    async fn client(&mut self) -> crate::result::Result<&Client> {
-        self.init_client().await;
-        self.client
-            .as_ref()
-            .ok_or(Error::db_error(anyhow!("AWS S3 client is uninitialized")))
-    }
-
-    // only runs the first time
-    async fn init_client(&mut self) {
-        if self.client.is_none() {
-            let credentials = DefaultCredentialsChain::builder().build().await;
-            let sdk_config = aws_config::defaults(BehaviorVersion::latest())
-                .credentials_provider(credentials)
-                .load()
-                .await;
-            let mut config_builder = aws_sdk_s3::config::Builder::from(&sdk_config);
-            if let Some(endpoint) = &self.aws_endpoint {
-                config_builder.set_endpoint_url(Some(endpoint.to_string()));
-            }
-            let config = config_builder.force_path_style(true).build();
-            let client = aws_sdk_s3::Client::from_conf(config);
-            self.client = Some(client);
         }
     }
 }
@@ -132,8 +103,7 @@ where
         let zipped = gzip_bytes(&buf)?;
         let body = ByteStream::from(zipped);
         let req = self
-            .client()
-            .await?
+            .client
             .put_object()
             .bucket(&self.aws_bucket)
             .key(&key)

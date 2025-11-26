@@ -68,21 +68,12 @@ use crate::{
     service::adapters::rpc::ReceiptSource,
 };
 #[cfg(feature = "rpc")]
-use anyhow::bail;
+use fuel_core_block_aggregator_api::blocks::importer_and_db_source::serializer_adapter::SerializerAdapter;
+use fuel_core_block_aggregator_api::integration::UninitializedTask;
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::{
-    BlockAggregator,
     api::protobuf_adapter::ProtobufAPI,
     blocks::importer_and_db_source::ImporterAndDbSource,
-};
-#[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::{
-    blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
-    db::storage_or_remote_db::StorageOrRemoteDB,
-    db::table::LatestBlock,
-    db::table::Mode,
-    integration::StorageMethod,
-    protobuf_types::Block as ProtoBlock,
 };
 use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
@@ -98,8 +89,6 @@ use fuel_core_gas_price_service::v1::{
 use fuel_core_poa::Trigger;
 #[cfg(feature = "rpc")]
 use fuel_core_services::ServiceRunner;
-#[cfg(feature = "rpc")]
-use fuel_core_storage::StorageAsRef;
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
@@ -574,69 +563,68 @@ fn init_rpc_server(
     genesis_height: BlockHeight,
 ) -> anyhow::Result<
     ServiceRunner<
-        BlockAggregator<
+        UninitializedTask<
             ProtobufAPI,
-            StorageOrRemoteDB<Database<BlockAggregatorDatabase>>,
             ImporterAndDbSource<SerializerAdapter, Database<OnChain>, ReceiptSource>,
-            ProtoBlock,
+            Database<BlockAggregatorDatabase>,
         >,
     >,
 > {
-    let block_aggregator_config = config.rpc_config.clone();
-    let sync_from = block_aggregator_config.sync_from.unwrap_or(genesis_height);
-    let sync_from_height;
+    // let block_aggregator_config = config.rpc_config.clone();
+    // // let sync_from = block_aggregator_config.sync_from.unwrap_or(genesis_height);
+    // let sync_from_height;
     let receipts = ReceiptSource::new(database.off_chain().clone());
-    let db_adapter = match &block_aggregator_config.storage_method {
-        StorageMethod::Local => {
-            let db = database.block_aggregation_storage().clone();
-            let mode = db.storage_as_ref::<LatestBlock>().get(&())?;
-            let maybe_sync_from_height = match mode.clone().map(|c| c.into_owned()) {
-                Some(Mode::S3(_)) => {
-                    bail!(
-                        "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
-                    );
-                }
-                _ => mode.map(|m| m.height()),
-            };
-            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
-            StorageOrRemoteDB::new_storage(db, sync_from)
-        }
-        StorageMethod::S3 {
-            bucket,
-            endpoint_url,
-            requester_pays,
-        } => {
-            let db = database.block_aggregation_storage().clone();
-            let mode = db.storage_as_ref::<LatestBlock>().get(&())?;
-            let maybe_sync_from_height = match mode.clone().map(|c| c.into_owned()) {
-                Some(Mode::Local(_)) => {
-                    bail!(
-                        "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
-                    );
-                }
-                _ => mode.map(|m| m.height()),
-            };
-            sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
-
-            StorageOrRemoteDB::new_s3(
-                db,
-                bucket,
-                *requester_pays,
-                endpoint_url.clone(),
-                sync_from,
-            )
-        }
-    };
+    // let db_adapter = match &block_aggregator_config.storage_method {
+    //     StorageMethod::Local => {
+    //         let db = database.block_aggregation_storage().clone();
+    //         let mode = db.storage_as_ref::<LatestBlock>().get(&())?;
+    //         let maybe_sync_from_height = match mode.clone().map(|c| c.into_owned()) {
+    //             Some(Mode::S3(_)) => {
+    //                 bail!(
+    //                     "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
+    //                 );
+    //             }
+    //             _ => mode.map(|m| m.height()),
+    //         };
+    //         sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
+    //         StorageOrRemoteDB::new_storage(db, sync_from)
+    //     }
+    //     StorageMethod::S3 {
+    //         bucket,
+    //         endpoint_url,
+    //         requester_pays,
+    //     } => {
+    //         let db = database.block_aggregation_storage().clone();
+    //         let mode = db.storage_as_ref::<LatestBlock>().get(&())?;
+    //         let maybe_sync_from_height = match mode.clone().map(|c| c.into_owned()) {
+    //             Some(Mode::Local(_)) => {
+    //                 bail!(
+    //                     "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
+    //                 );
+    //             }
+    //             _ => mode.map(|m| m.height()),
+    //         };
+    //         sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
+    //
+    //         StorageOrRemoteDB::new_s3(
+    //             db,
+    //             bucket,
+    //             *requester_pays,
+    //             endpoint_url.clone(),
+    //             sync_from,
+    //         )
+    //     }
+    // };
     let serializer = SerializerAdapter;
     let onchain_db = database.on_chain().clone();
     let importer = importer_adapter.events_shared_result();
     fuel_core_block_aggregator_api::integration::new_service(
-        &block_aggregator_config,
-        db_adapter,
+        database.block_aggregation_storage().clone(),
         serializer,
         onchain_db,
         receipts,
         importer,
-        sync_from_height,
+        config.rpc_config.clone(),
+        genesis_height,
     )
 }

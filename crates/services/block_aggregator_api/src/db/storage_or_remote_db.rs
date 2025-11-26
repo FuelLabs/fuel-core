@@ -13,6 +13,10 @@ use crate::{
     },
     result::Result,
 };
+use aws_config::{
+    BehaviorVersion,
+    default_provider::credentials::DefaultCredentialsChain,
+};
 
 use fuel_core_storage::{
     Error as StorageError,
@@ -40,21 +44,33 @@ impl<S> StorageOrRemoteDB<S> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn new_s3(
+    pub async fn new_s3(
         storage: S,
         aws_bucket: &str,
         requester_pays: bool,
         aws_endpoint_url: Option<String>,
         sync_from: BlockHeight,
     ) -> Self {
+        let credentials = DefaultCredentialsChain::builder().build().await;
+        let sdk_config = aws_config::defaults(BehaviorVersion::latest())
+            .credentials_provider(credentials)
+            .load()
+            .await;
+        let mut config_builder = aws_sdk_s3::config::Builder::from(&sdk_config);
+        if let Some(endpoint) = &aws_endpoint_url {
+            config_builder.set_endpoint_url(Some(endpoint.to_string()));
+        }
+        let config = config_builder.force_path_style(true).build();
+        let client = aws_sdk_s3::Client::from_conf(config);
         let remote_cache = RemoteCache::new(
             aws_bucket.to_string(),
             requester_pays,
             aws_endpoint_url,
-            None,
+            client,
             storage,
             sync_from,
-        );
+        )
+        .await;
         StorageOrRemoteDB::Remote(remote_cache)
     }
 }
