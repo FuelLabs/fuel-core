@@ -30,6 +30,14 @@ pub enum StorageMethod {
         #[clap(long = "requester_pays", env, default_value = "false")]
         requester_pays: bool,
     },
+    S3NoPublish {
+        #[clap(long = "bucket", env)]
+        bucket: String,
+        #[clap(long = "endpoint_url", env)]
+        endpoint_url: Option<String>,
+        #[clap(long = "requester_pays", env, default_value = "false")]
+        requester_pays: bool,
+    },
 }
 
 impl RpcArgs {
@@ -57,6 +65,17 @@ impl From<StorageMethod> for fuel_core_block_aggregator_api::integration::Storag
                 endpoint_url,
                 requester_pays,
             },
+            StorageMethod::S3NoPublish {
+                bucket,
+                endpoint_url,
+                requester_pays,
+            } => {
+                fuel_core_block_aggregator_api::integration::StorageMethod::S3NoPublish {
+                    bucket,
+                    endpoint_url,
+                    requester_pays,
+                }
+            }
         }
     }
 }

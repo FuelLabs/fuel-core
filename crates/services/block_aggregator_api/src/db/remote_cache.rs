@@ -48,6 +48,7 @@ pub struct RemoteCache<S> {
     requester_pays: bool,
     aws_endpoint: Option<String>,
     client: Client,
+    publishes_blocks: bool,
 
     // track consistency between runs
     local_persisted: S,
@@ -66,12 +67,14 @@ impl<S> RemoteCache<S> {
         client: Client,
         local_persisted: S,
         sync_from: BlockHeight,
+        publish: bool,
     ) -> RemoteCache<S> {
         RemoteCache {
             aws_bucket,
             requester_pays,
             aws_endpoint,
             client,
+            publishes_blocks: publish,
             local_persisted,
             sync_from,
             highest_new_height: None,
@@ -102,15 +105,17 @@ where
         block.encode(&mut buf).map_err(Error::db_error)?;
         let zipped = gzip_bytes(&buf)?;
         let body = ByteStream::from(zipped);
-        let req = self
-            .client
-            .put_object()
-            .bucket(&self.aws_bucket)
-            .key(&key)
-            .body(body)
-            .content_encoding("gzip")
-            .content_type("application/grpc-web");
-        let _ = req.send().await.map_err(Error::db_error)?;
+        if self.publishes_blocks {
+            let req = self
+                .client
+                .put_object()
+                .bucket(&self.aws_bucket)
+                .key(&key)
+                .body(body)
+                .content_encoding("gzip")
+                .content_type("application/grpc-web");
+            let _ = req.send().await.map_err(Error::db_error)?;
+        }
         match block_event {
             BlockSourceEvent::NewBlock(new_height, _) => {
                 tracing::debug!("New block: {:?}", new_height);

@@ -92,9 +92,17 @@ pub mod integration {
 
     #[derive(Clone, Debug, Default)]
     pub enum StorageMethod {
+        // Stores blocks in local DB
         #[default]
         Local,
+        // Publishes blocks to S3 bucket
         S3 {
+            bucket: String,
+            endpoint_url: Option<String>,
+            requester_pays: bool,
+        },
+        // Assumes another node is publishing blocks to S3 bucket, but relaying details
+        S3NoPublish {
             bucket: String,
             endpoint_url: Option<String>,
             requester_pays: bool,
@@ -192,12 +200,47 @@ pub mod integration {
                     };
                     let sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
 
+                    let publish = true;
+
                     StorageOrRemoteDB::new_s3(
                         storage,
                         &bucket,
                         requester_pays,
                         endpoint_url.clone(),
                         sync_from_height,
+                        publish,
+                    )
+                    .await
+                }
+
+                StorageMethod::S3NoPublish {
+                    bucket,
+                    endpoint_url,
+                    requester_pays,
+                } => {
+                    let mode = storage.storage_as_ref::<LatestBlock>().get(&())?;
+                    let maybe_sync_from_height = match mode
+                        .clone()
+                        .map(|c| c.into_owned())
+                    {
+                        Some(Mode::Local(_)) => {
+                            bail!(
+                                "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
+                            );
+                        }
+                        _ => mode.map(|m| m.height()),
+                    };
+                    let sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
+
+                    let publish = false;
+
+                    StorageOrRemoteDB::new_s3(
+                        storage,
+                        &bucket,
+                        requester_pays,
+                        endpoint_url.clone(),
+                        sync_from_height,
+                        publish,
                     )
                     .await
                 }
