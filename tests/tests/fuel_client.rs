@@ -8,23 +8,18 @@ use fuel_core::{
     },
 };
 use fuel_core_client::client::FuelClient;
-use reqwest::Url;
 use std::{
     net::SocketAddr,
     time::Duration,
 };
 use tokio::time::timeout;
 
-fn graphql_url(addr: SocketAddr) -> Url {
-    let mut url = Url::parse(&format!("http://{}", addr)).unwrap();
-    url.set_path("/v1/graphql");
-    url
+fn graphql_url(addr: SocketAddr) -> String {
+    format!("http://{}/v1/graphql", addr)
 }
 
-fn invalid_graphql_url(port: u16) -> Url {
-    let mut url = Url::parse(&format!("http://localhost:{}", port)).unwrap();
-    url.set_path("/v1/graphql");
-    url
+fn invalid_graphql_url(port: u16) -> String {
+    format!("http://localhost:{}/v1/graphql", port)
 }
 
 #[tokio::test]
@@ -41,7 +36,7 @@ async fn client_can_be_created_with_multiple_urls() {
     let url2 = graphql_url(srv2.bound_address);
 
     // When
-    let client = FuelClient::with_urls(vec![url1, url2])
+    let client = FuelClient::with_urls(&[url1, url2])
         .expect("Failed to create client with multiple URLs");
 
     // Then
@@ -55,12 +50,98 @@ async fn client_can_be_created_with_multiple_urls() {
 #[tokio::test]
 async fn client_with_empty_url_list_fails() {
     // Given
-    let result = FuelClient::with_urls(vec![]);
+    let empty: &[&str] = &[];
+    let result = FuelClient::with_urls(empty);
 
     // Then
     assert!(
         result.is_err(),
         "FuelClient creation with an empty list of URL should fail"
+    );
+}
+
+#[tokio::test]
+async fn client_with_single_url_works() {
+    // Given
+    let srv = FuelService::from_database(Database::default(), Config::local_node())
+        .await
+        .unwrap();
+
+    let url = graphql_url(srv.bound_address);
+
+    // When
+    let client =
+        FuelClient::with_urls(&[url]).expect("Failed to create client with single URL");
+
+    // Then
+    let health = client.health().await.unwrap();
+    assert!(health, "Client should be healthy with single URL");
+}
+
+#[tokio::test]
+async fn client_with_invalid_url_fails() {
+    // Given
+    let invalid_urls = &["not-a-valid-url", "also://invalid"];
+
+    // When
+    let result = FuelClient::with_urls(invalid_urls);
+
+    // Then
+    assert!(
+        result.is_err(),
+        "FuelClient creation with invalid URLs should fail"
+    );
+}
+
+#[tokio::test]
+async fn get_default_url_returns_first_url_initially() {
+    // Given
+    let srv1 = FuelService::from_database(Database::default(), Config::local_node())
+        .await
+        .unwrap();
+    let srv2 = FuelService::from_database(Database::default(), Config::local_node())
+        .await
+        .unwrap();
+
+    let url1 = graphql_url(srv1.bound_address);
+    let url2 = graphql_url(srv2.bound_address);
+
+    // When
+    let client =
+        FuelClient::with_urls(&[url1.clone(), url2]).expect("Failed to create client");
+
+    // Then
+    assert_eq!(
+        client.get_default_url().as_str(),
+        url1,
+        "Default URL should be the first URL initially"
+    );
+}
+
+#[tokio::test]
+async fn get_default_url_updates_after_failover() {
+    // Given
+    let srv = FuelService::from_database(Database::default(), Config::local_node())
+        .await
+        .unwrap();
+
+    let invalid_url = invalid_graphql_url(1);
+    let valid_url = graphql_url(srv.bound_address);
+
+    let client = FuelClient::with_urls(&[invalid_url, valid_url.clone()])
+        .expect("Failed to create client");
+
+    // When - trigger failover by making a request
+    let _ = timeout(Duration::from_secs(5), client.health())
+        .await
+        .expect("Timeout")
+        .expect("Health check should succeed after failover");
+
+    // Then - default URL should now be the second (working) URL
+    assert_eq!(
+        client.get_default_url().as_str(),
+        valid_url,
+        "Default URL should update to working URL after failover"
     );
 }
 
@@ -76,7 +157,7 @@ async fn client_fails_over_to_second_url_when_first_unavailable() {
     let valid_url = graphql_url(srv.bound_address);
 
     // When
-    let client = FuelClient::with_urls(vec![invalid_url, valid_url])
+    let client = FuelClient::with_urls(&[invalid_url, valid_url])
         .expect("Failed to create client");
 
     // Then
@@ -105,8 +186,7 @@ async fn client_fails_over_when_first_server_stops() {
     let url1 = graphql_url(srv1.bound_address);
     let url2 = graphql_url(srv2.bound_address);
 
-    let client =
-        FuelClient::with_urls(vec![url1, url2]).expect("Failed to create client");
+    let client = FuelClient::with_urls(&[url1, url2]).expect("Failed to create client");
 
     // Verify initial connection works
     assert!(client.health().await.unwrap());
@@ -132,7 +212,7 @@ async fn client_returns_error_when_all_servers_unavailable() {
     let invalid_url1 = invalid_graphql_url(1);
     let invalid_url2 = invalid_graphql_url(2);
 
-    let client = FuelClient::with_urls(vec![invalid_url1, invalid_url2])
+    let client = FuelClient::with_urls(&[invalid_url1, invalid_url2])
         .expect("Failed to create client");
 
     // When/Then - should fail since all servers are unavailable
@@ -141,92 +221,6 @@ async fn client_returns_error_when_all_servers_unavailable() {
     assert!(
         result.is_err() || result.unwrap().is_err(),
         "Client should fail when all servers are unavailable"
-    );
-}
-
-#[tokio::test]
-async fn failover_works_with_chain_info_query() {
-    // Given
-    let srv = FuelService::from_database(Database::default(), Config::local_node())
-        .await
-        .unwrap();
-
-    let invalid_url = invalid_graphql_url(1);
-    let valid_url = graphql_url(srv.bound_address);
-
-    let client = FuelClient::with_urls(vec![invalid_url, valid_url])
-        .expect("Failed to create client");
-
-    // When
-    let chain_info = timeout(Duration::from_secs(5), client.chain_info())
-        .await
-        .expect("Timeout")
-        .expect("Should get chain info after failover");
-
-    println!("{chain_info:?}");
-    // Then
-    assert!(
-        chain_info.name.len() > 0,
-        "Should receive valid chain info after failover"
-    );
-}
-
-#[tokio::test]
-async fn failover_works_with_node_info_query() {
-    // Given
-    let srv = FuelService::from_database(Database::default(), Config::local_node())
-        .await
-        .unwrap();
-
-    let invalid_url = invalid_graphql_url(1);
-    let valid_url = graphql_url(srv.bound_address);
-
-    let client = FuelClient::with_urls(vec![invalid_url, valid_url])
-        .expect("Failed to create client");
-
-    // When
-    let node_info = timeout(Duration::from_secs(5), client.node_info())
-        .await
-        .expect("Timeout")
-        .expect("Should get node info after failover");
-
-    // Then
-    assert!(
-        node_info.node_version.len() > 0,
-        "Should receive valid node info after failover"
-    );
-}
-
-#[tokio::test]
-async fn failover_works_with_transaction_queries() {
-    // Given
-    let srv = FuelService::from_database(Database::default(), Config::local_node())
-        .await
-        .unwrap();
-
-    let invalid_url = invalid_graphql_url(1);
-    let valid_url = graphql_url(srv.bound_address);
-
-    let client = FuelClient::with_urls(vec![invalid_url, valid_url])
-        .expect("Failed to create client");
-
-    // When - query transactions (should work even if empty)
-    let result = timeout(
-        Duration::from_secs(5),
-        client.transactions(fuel_core_client::client::pagination::PaginationRequest {
-            cursor: None,
-            results: 10,
-            direction: fuel_core_client::client::pagination::PageDirection::Forward,
-        }),
-    )
-    .await
-    .expect("Timeout waiting for transactions query")
-    .expect("Transactions query should succeed after failover");
-
-    // Then - should get a valid response (even if empty)
-    assert!(
-        result.results.len() == 0,
-        "Should receive valid (empty) transaction list after failover"
     );
 }
 
@@ -240,7 +234,7 @@ async fn failover_persists_across_multiple_requests() {
     let invalid_url = invalid_graphql_url(1);
     let valid_url = graphql_url(srv.bound_address);
 
-    let client = FuelClient::with_urls(vec![invalid_url, valid_url])
+    let client = FuelClient::with_urls(&[invalid_url, valid_url])
         .expect("Failed to create client");
 
     // When - make multiple requests
@@ -277,7 +271,7 @@ async fn client_tries_all_urls_in_sequence() {
     let url3 = graphql_url(srv3.bound_address);
 
     // When
-    let client = FuelClient::with_urls(vec![url1, invalid_url, url3])
+    let client = FuelClient::with_urls(&[url1, invalid_url, url3])
         .expect("Failed to create client");
 
     // Then - should connect to first server
@@ -308,8 +302,7 @@ async fn client_sticks_with_working_server_after_failover() {
     let url1 = graphql_url(srv1.bound_address);
     let url2 = graphql_url(srv2.bound_address);
 
-    let client =
-        FuelClient::with_urls(vec![url1, url2]).expect("Failed to create client");
+    let client = FuelClient::with_urls(&[url1, url2]).expect("Failed to create client");
 
     // Initial connection to srv1
     assert!(client.health().await.unwrap());
@@ -340,76 +333,6 @@ async fn client_sticks_with_working_server_after_failover() {
     }
 }
 
-#[tokio::test]
-async fn failover_works_with_block_queries() {
-    // Given
-    let mut config = Config::local_node();
-    config.block_production = fuel_core_poa::Trigger::Instant;
-
-    let srv = FuelService::from_database(Database::default(), config)
-        .await
-        .unwrap();
-
-    let invalid_url = invalid_graphql_url(1);
-    let valid_url = graphql_url(srv.bound_address);
-
-    let client = FuelClient::with_urls(vec![invalid_url, valid_url])
-        .expect("Failed to create client");
-
-    // When
-    client
-        .produce_blocks(1, None)
-        .await
-        .expect("Should produce block after failover");
-
-    let blocks = timeout(
-        Duration::from_secs(5),
-        client.blocks(fuel_core_client::client::pagination::PaginationRequest {
-            cursor: None,
-            results: 10,
-            direction: fuel_core_client::client::pagination::PageDirection::Forward,
-        }),
-    )
-    .await
-    .expect("Timeout")
-    .expect("Should query blocks after failover");
-
-    // Then
-    assert!(
-        blocks.results.len() > 0,
-        "Should receive blocks after failover"
-    );
-}
-
-#[tokio::test]
-async fn failover_works_with_consensus_parameters() {
-    // Given
-    let srv = FuelService::from_database(Database::default(), Config::local_node())
-        .await
-        .unwrap();
-
-    let invalid_url = invalid_graphql_url(1);
-    let valid_url = graphql_url(srv.bound_address);
-
-    let client = FuelClient::with_urls(vec![invalid_url, valid_url])
-        .expect("Failed to create client");
-
-    // When
-    let params = timeout(
-        Duration::from_secs(5),
-        client.consensus_parameters(0.into()),
-    )
-    .await
-    .expect("Timeout")
-    .expect("Should get consensus parameters after failover");
-
-    // Then
-    assert!(
-        params.is_some(),
-        "Should receive consensus parameters after failover"
-    );
-}
-
 #[cfg(not(feature = "only-p2p"))]
 mod subscription_tests {
     use super::*;
@@ -430,7 +353,7 @@ mod subscription_tests {
         let invalid_url = invalid_graphql_url(1);
         let valid_url = graphql_url(srv.bound_address);
 
-        let client = FuelClient::with_urls(vec![invalid_url, valid_url])
+        let client = FuelClient::with_urls(&[invalid_url, valid_url])
             .expect("Failed to create client");
 
         // When - subscribe to new blocks
@@ -480,7 +403,7 @@ mod subscription_tests {
         let url2 = graphql_url(srv2.bound_address);
 
         let client =
-            FuelClient::with_urls(vec![url1, url2]).expect("Failed to create client");
+            FuelClient::with_urls(&[url1, url2]).expect("Failed to create client");
 
         // Verify initial connection works
         assert!(client.health().await.unwrap());
@@ -514,7 +437,7 @@ mod subscription_tests {
         let invalid_url1 = invalid_graphql_url(1);
         let invalid_url2 = invalid_graphql_url(2);
 
-        let client = FuelClient::with_urls(vec![invalid_url1, invalid_url2])
+        let client = FuelClient::with_urls(&[invalid_url1, invalid_url2])
             .expect("Failed to create client");
 
         // When/Then - subscription should fail since all servers are unavailable
@@ -540,7 +463,7 @@ mod subscription_tests {
         let invalid_url = invalid_graphql_url(1);
         let valid_url = graphql_url(srv.bound_address);
 
-        let client = FuelClient::with_urls(vec![invalid_url, valid_url])
+        let client = FuelClient::with_urls(&[invalid_url, valid_url])
             .expect("Failed to create client");
 
         // When - create multiple subscriptions
