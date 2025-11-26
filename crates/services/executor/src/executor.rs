@@ -2045,7 +2045,7 @@ where
                         return Err(TransactionValidityError::ContractDoesNotExist(
                             contract.contract_id,
                         )
-                        .into());
+                        .into())
                     }
                 }
                 Input::MessageCoinSigned(MessageCoinSigned { nonce, .. })
