@@ -27,8 +27,8 @@ use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
-    let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr;
+    let config = Config::local_node_with_rpc();
+    let rpc_url = config.rpc_config.clone().unwrap().addr;
 
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
@@ -90,8 +90,8 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn get_block_height__can_get_value_from_rpc() {
-    let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr;
+    let config = Config::local_node_with_rpc();
+    let rpc_url = config.rpc_config.clone().unwrap().addr;
 
     // given
     let srv = FuelService::from_database(Database::default(), config.clone())
@@ -125,9 +125,8 @@ async fn get_block_height__can_get_value_from_rpc() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn new_block_subscription__can_get_expect_block() {
-    let config = Config::local_node();
-
-    let rpc_url = config.rpc_config.addr;
+    let config = Config::local_node_with_rpc();
+    let rpc_url = config.rpc_config.clone().unwrap().addr;
 
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await

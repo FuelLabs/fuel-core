@@ -34,11 +34,6 @@ use strum_macros::{
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
 
-#[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::integration::StorageMethod;
-#[cfg(feature = "rpc")]
-use fuel_core_types::fuel_types::BlockHeight;
-
 #[cfg(feature = "relayer")]
 use fuel_core_relayer::Config as RelayerConfig;
 
@@ -48,11 +43,15 @@ use fuel_core_p2p::config::{
     NotInitialized,
 };
 
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::integration::StorageMethod;
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
     ChainConfig,
     StateConfig,
 };
+#[cfg(feature = "rpc")]
+use fuel_core_types::fuel_types::BlockHeight;
 #[cfg(feature = "test-helpers")]
 use std::net::{
     SocketAddr,
@@ -88,7 +87,7 @@ pub struct Config {
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
     #[cfg(feature = "rpc")]
-    pub rpc_config: fuel_core_block_aggregator_api::integration::Config,
+    pub rpc_config: Option<fuel_core_block_aggregator_api::integration::Config>,
     pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -125,6 +124,32 @@ impl Config {
     #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
         Self::local_node_with_state_config(StateConfig::local_testnet())
+    }
+
+    #[cfg(feature = "test-helpers")]
+    #[cfg(feature = "rpc")]
+    pub fn local_node_with_rpc() -> Self {
+        let mut config = Self::local_node_with_state_config(StateConfig::local_testnet());
+        let rpc_config = fuel_core_block_aggregator_api::integration::Config {
+            addr: free_local_addr(),
+            sync_from: Some(BlockHeight::new(0)),
+            storage_method: StorageMethod::Local,
+        };
+        config.rpc_config = Some(rpc_config);
+        config
+    }
+
+    #[cfg(feature = "test-helpers")]
+    #[cfg(feature = "rpc")]
+    pub fn local_node_with_rpc_and_storage_method(storage_method: StorageMethod) -> Self {
+        let mut config = Self::local_node_with_state_config(StateConfig::local_testnet());
+        let rpc_config = fuel_core_block_aggregator_api::integration::Config {
+            addr: free_local_addr(),
+            sync_from: Some(BlockHeight::new(0)),
+            storage_method,
+        };
+        config.rpc_config = Some(rpc_config);
+        config
     }
 
     #[cfg(feature = "test-helpers")]
@@ -176,11 +201,7 @@ impl Config {
         const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
 
         #[cfg(feature = "rpc")]
-        let rpc_config = fuel_core_block_aggregator_api::integration::Config {
-            addr: free_local_addr(),
-            sync_from: Some(BlockHeight::from(0)),
-            storage_method: StorageMethod::Local,
-        };
+        let rpc_config = None;
 
         Self {
             graphql_config: GraphQLConfig {

@@ -21,7 +21,6 @@ use fuel_core_block_aggregator_api::{
         Block as ProtoBlock,
         BlockHeightRequest as ProtoBlockHeightRequest,
         BlockRangeRequest as ProtoBlockRangeRequest,
-        NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
         RemoteBlockResponse as ProtoRemoteBlockResponse,
         RemoteS3Bucket,
         block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
@@ -51,71 +50,6 @@ macro_rules! require_env_var_or_panic {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
-    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
-
-    let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr;
-
-    let srv = FuelService::from_database(Database::default(), config.clone())
-        .await
-        .unwrap();
-
-    let graphql_client = FuelClient::from(srv.bound_address);
-
-    let tx = Transaction::default_test_tx();
-    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
-
-    let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
-        .await
-        .expect("could not connect to server");
-
-    // when
-    let request = ProtoBlockRangeRequest { start: 1, end: 1 };
-    let proto_block = if let Some(ProtoPayload::Literal(block)) = rpc_client
-        .get_block_range(request)
-        .await
-        .unwrap()
-        .into_inner()
-        .next()
-        .await
-        .unwrap()
-        .unwrap()
-        .payload
-    {
-        block
-    } else {
-        panic!("expected literal block payload");
-    };
-
-    let (actual_block, receipts) =
-        fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).unwrap();
-    let actual_height = actual_block.header().height();
-
-    // then
-    let expected_height = BlockHeight::new(1);
-    assert_eq!(&expected_height, actual_height);
-
-    assert!(
-        matches!(
-            receipts[1],
-            Receipt::ScriptResult {
-                result: ScriptExecutionResult::Success,
-                ..
-            }
-        ),
-        "should have a script result receipt, received: {:?}",
-        receipts
-    );
-    assert!(
-        matches!(receipts[0], Receipt::Return { .. }),
-        "should have a return receipt, received: {:?}",
-        receipts
-    );
-}
-
-#[tokio::test(flavor = "multi_thread")]
 async fn get_block_range__can_get_serialized_block_from_rpc__remote() {
     // setup
     require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
@@ -123,13 +57,14 @@ async fn get_block_range__can_get_serialized_block_from_rpc__remote() {
     clean_s3_bucket().await;
 
     // given
-    let mut config = Config::local_node();
-    config.rpc_config.storage_method = StorageMethod::S3 {
+    let endpoint_url = AWS_ENDPOINT_URL.to_string();
+    let storage_method = StorageMethod::S3 {
         bucket: "test-bucket".to_string(),
-        endpoint_url: Some(AWS_ENDPOINT_URL.to_string()),
+        endpoint_url: Some(endpoint_url),
         requester_pays: false,
     };
-    let rpc_url = config.rpc_config.addr;
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let rpc_url = config.rpc_config.clone().unwrap().addr;
 
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
@@ -192,16 +127,16 @@ async fn get_block_height__can_get_value_from_rpc() {
     require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
 
     // setup
-    let mut config = Config::local_node();
     ensure_bucket_exists().await;
     clean_s3_bucket().await;
     let endpoint_url = AWS_ENDPOINT_URL.to_string();
-    config.rpc_config.storage_method = StorageMethod::S3 {
+    let storage_method = StorageMethod::S3 {
         bucket: "test-bucket".to_string(),
         endpoint_url: Some(endpoint_url),
         requester_pays: false,
     };
-    let rpc_url = config.rpc_config.addr;
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let rpc_url = config.rpc_config.clone().unwrap().addr;
 
     // given
     let srv = FuelService::from_database(Database::default(), config.clone())
@@ -236,84 +171,6 @@ async fn get_block_height__can_get_value_from_rpc() {
     clean_s3_bucket().await;
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn new_block_subscription__can_get_expect_block() {
-    // setup
-    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
-    let mut config = Config::local_node();
-    ensure_bucket_exists().await;
-    clean_s3_bucket().await;
-
-    // given
-    let endpoint_url = AWS_ENDPOINT_URL.to_string();
-    config.rpc_config.storage_method = StorageMethod::S3 {
-        bucket: "test-bucket".to_string(),
-        endpoint_url: Some(endpoint_url),
-        requester_pays: false,
-    };
-
-    let rpc_url = config.rpc_config.addr;
-
-    let srv = FuelService::from_database(Database::default(), config.clone())
-        .await
-        .unwrap();
-
-    let graphql_client = FuelClient::from(srv.bound_address);
-
-    let tx = Transaction::default_test_tx();
-
-    let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
-        .await
-        .expect("could not connect to server");
-
-    let request = ProtoNewBlockSubscriptionRequest {};
-    let mut stream = rpc_client
-        .new_block_subscription(request)
-        .await
-        .unwrap()
-        .into_inner();
-    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
-
-    // when
-    let next = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
-        .await
-        .unwrap();
-    let proto_block =
-        if let Some(ProtoPayload::Literal(block)) = next.unwrap().unwrap().payload {
-            block
-        } else {
-            panic!("expected literal block payload");
-        };
-
-    let (actual_block, receipts) =
-        fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).unwrap();
-    let actual_height = actual_block.header().height();
-
-    // then
-    let expected_height = BlockHeight::new(1);
-    assert_eq!(&expected_height, actual_height);
-
-    assert!(
-        matches!(
-            receipts[1],
-            Receipt::ScriptResult {
-                result: ScriptExecutionResult::Success,
-                ..
-            }
-        ),
-        "should have a script result receipt, received: {:?}",
-        receipts
-    );
-    assert!(
-        matches!(receipts[0], Receipt::Return { .. }),
-        "should have a return receipt, received: {:?}",
-        receipts
-    );
-
-    clean_s3_bucket().await;
-}
-
 async fn aws_client() -> Client {
     let credentials = DefaultCredentialsChain::builder().build().await;
     let _aws_region =
@@ -342,6 +199,19 @@ async fn get_block_from_s3_bucket() -> Bytes {
     obj.body.collect().await.expect(&message).into_bytes()
 }
 
+async fn block_found_in_s3_bucket() -> bool {
+    let client = aws_client().await;
+    let bucket = "test-bucket".to_string();
+    let key = block_height_to_key(&BlockHeight::new(1));
+    tracing::info!(
+        "checking if block is in bucket: {} with key {}",
+        bucket,
+        key
+    );
+    let req = client.get_object().bucket(&bucket).key(&key);
+    req.send().await.is_ok()
+}
+
 async fn ensure_bucket_exists() {
     let client = aws_client().await;
     let bucket = "test-bucket";
@@ -365,18 +235,17 @@ async fn clean_s3_bucket() {
 async fn get_block_range__can_get_from_remote_s3_bucket() {
     // setup
     require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
-
     ensure_bucket_exists().await;
     clean_s3_bucket().await;
 
     // given
-    let mut config = Config::local_node();
     let endpoint_url = AWS_ENDPOINT_URL.to_string();
-    config.rpc_config.storage_method = StorageMethod::S3 {
+    let storage_method = StorageMethod::S3 {
         bucket: "test-bucket".to_string(),
         endpoint_url: Some(endpoint_url),
         requester_pays: false,
     };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
@@ -424,4 +293,157 @@ fn unzip_bytes(bytes: &[u8]) -> Vec<u8> {
     let mut output = Vec::new();
     decoder.read_to_end(&mut output).unwrap();
     output
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn get_block_range__no_publish__can_get_block_info_from_rpc__remote() {
+    // setup
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+
+    // given
+    let endpoint_url = AWS_ENDPOINT_URL.to_string();
+    let storage_method = StorageMethod::S3NoPublish {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(endpoint_url),
+        requester_pays: false,
+    };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let rpc_url = config.rpc_config.clone().unwrap().addr;
+
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+
+    let graphql_client = FuelClient::from(srv.bound_address);
+
+    let tx = Transaction::default_test_tx();
+    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
+
+    let rpc_url = format!("http://{}", rpc_url);
+    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
+        .await
+        .expect("could not connect to server");
+
+    let expected_block = graphql_client
+        .full_block_by_height(1)
+        .await
+        .unwrap()
+        .unwrap();
+    let expected_header = expected_block.header;
+    let expected_height = BlockHeight::new(expected_header.height.0);
+
+    // when
+    let request = ProtoBlockRangeRequest { start: 1, end: 1 };
+    let remote_info = if let Some(ProtoPayload::Remote(remote_info)) = rpc_client
+        .get_block_range(request)
+        .await
+        .unwrap()
+        .into_inner()
+        .next()
+        .await
+        .unwrap()
+        .unwrap()
+        .payload
+    {
+        remote_info
+    } else {
+        panic!("expected literal block payload");
+    };
+
+    // then
+    let key = block_height_to_key(&expected_height);
+    let expected = ProtoRemoteBlockResponse {
+        location: Some(Location::S3(RemoteS3Bucket {
+            bucket: "test-bucket".to_string(),
+            key,
+            requester_pays: false,
+            endpoint: Some(AWS_ENDPOINT_URL.to_string()),
+        })),
+    };
+    assert_eq!(expected, remote_info);
+
+    // cleanup
+    clean_s3_bucket().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn get_block_height__no_publish__can_get_value_from_rpc() {
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+
+    // setup
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+    let endpoint_url = AWS_ENDPOINT_URL.to_string();
+    let storage_method = StorageMethod::S3NoPublish {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(endpoint_url),
+        requester_pays: false,
+    };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let rpc_url = config.rpc_config.clone().unwrap().addr;
+
+    // given
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+
+    let graphql_client = FuelClient::from(srv.bound_address);
+
+    let tx = Transaction::default_test_tx();
+    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
+
+    let rpc_url = format!("http://{}", rpc_url);
+    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
+        .await
+        .expect("could not connect to server");
+
+    // when
+    sleep(std::time::Duration::from_secs(1)).await;
+    let request = ProtoBlockHeightRequest {};
+    let expected_height = Some(1);
+    let actual_height = rpc_client
+        .get_synced_block_height(request)
+        .await
+        .unwrap()
+        .into_inner()
+        .height;
+
+    // then
+    assert_eq!(expected_height, actual_height);
+
+    // cleanup
+    clean_s3_bucket().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn get_block_range__no_publish__does_not_publish_to_s3_bucket() {
+    // setup
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+
+    // given
+    let endpoint_url = AWS_ENDPOINT_URL.to_string();
+    let storage_method = StorageMethod::S3NoPublish {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(endpoint_url),
+        requester_pays: false,
+    };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+    let graphql_client = FuelClient::from(srv.bound_address);
+    let tx = Transaction::default_test_tx();
+
+    // when
+    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
+
+    sleep(std::time::Duration::from_secs(1)).await;
+
+    // then
+    let found_block = block_found_in_s3_bucket().await;
+    assert!(!found_block);
 }

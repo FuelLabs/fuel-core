@@ -50,6 +50,7 @@ impl<S> StorageOrRemoteDB<S> {
         requester_pays: bool,
         aws_endpoint_url: Option<String>,
         sync_from: BlockHeight,
+        publish: bool,
     ) -> Self {
         let credentials = DefaultCredentialsChain::builder().build().await;
         let sdk_config = aws_config::defaults(BehaviorVersion::latest())
@@ -69,6 +70,7 @@ impl<S> StorageOrRemoteDB<S> {
             client,
             storage,
             sync_from,
+            publish,
         )
         .await;
         StorageOrRemoteDB::Remote(remote_cache)

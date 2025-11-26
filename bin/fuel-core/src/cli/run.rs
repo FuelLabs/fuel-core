@@ -295,7 +295,7 @@ pub struct Command {
 
     #[clap(flatten)]
     #[cfg(feature = "rpc")]
-    pub rpc_args: rpc::RpcArgs,
+    pub rpc_args: Option<rpc::RpcArgs>,
 
     #[cfg_attr(feature = "p2p", clap(flatten))]
     #[cfg(feature = "p2p")]
@@ -461,7 +461,7 @@ impl Command {
             };
 
         #[cfg(feature = "rpc")]
-        let rpc_config = rpc_args.into_config();
+        let rpc_config = rpc_args.map(|args| args.into_config());
 
         let trigger: Trigger = poa_trigger.into();
 
