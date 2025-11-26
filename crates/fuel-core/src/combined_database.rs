@@ -513,14 +513,25 @@ impl CombinedDatabase {
                     self.block_aggregation_storage_mut()
                         .rollback_to(target_block_height)?;
                 }
+                if on_chain_height == target_block_height
+                    && off_chain_height == target_block_height
+                    && gas_price_rolled_back
+                    && compression_db_rolled_back
+                    && block_aggregation_storage_rolled_back
+                {
+                    break;
+                }
             }
 
-            if on_chain_height == target_block_height
-                && off_chain_height == target_block_height
-                && gas_price_rolled_back
-                && compression_db_rolled_back
+            #[cfg(not(feature = "rpc"))]
             {
-                break;
+                if on_chain_height == target_block_height
+                    && off_chain_height == target_block_height
+                    && gas_price_rolled_back
+                    && compression_db_rolled_back
+                {
+                    break;
+                }
             }
 
             if on_chain_height < target_block_height {

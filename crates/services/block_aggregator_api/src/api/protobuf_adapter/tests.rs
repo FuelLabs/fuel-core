@@ -46,7 +46,7 @@ fn free_local_addr() -> String {
 async fn await_query__get_current_height__client_receives_expected_value() {
     // given
     let path = free_local_addr();
-    let mut api = ProtobufAPI::new(path.to_string()).unwrap();
+    let mut api = ProtobufAPI::new(path.to_string(), 100).unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // call get current height endpoint with client
@@ -83,7 +83,7 @@ async fn await_query__get_current_height__client_receives_expected_value() {
 async fn await_query__get_block_range__client_receives_expected_value__literal() {
     // given
     let path = free_local_addr();
-    let mut api = ProtobufAPI::new(path.to_string()).unwrap();
+    let mut api = ProtobufAPI::new(path.to_string(), 100).unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // call get current height endpoint with client
@@ -158,7 +158,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
 async fn await_query__get_block_range__client_receives_expected_value__remote() {
     // given
     let path = free_local_addr();
-    let mut api = ProtobufAPI::new(path.to_string()).unwrap();
+    let mut api = ProtobufAPI::new(path.to_string(), 100).unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // call get current height endpoint with client
@@ -246,7 +246,7 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
 async fn await_query__new_block_stream__client_receives_expected_value() {
     // given
     let path = free_local_addr();
-    let mut api = ProtobufAPI::new(path.to_string()).unwrap();
+    let mut api = ProtobufAPI::new(path.to_string(), 100).unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
     // call get current height endpoint with client

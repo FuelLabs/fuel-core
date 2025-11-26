@@ -17,6 +17,9 @@ pub struct RpcArgs {
 
     #[command(subcommand)]
     pub storage_method: Option<StorageMethod>,
+
+    #[clap(long = "api_buffer_size", default_value = "1000", env)]
+    pub api_buffer_size: usize,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -46,6 +49,7 @@ impl RpcArgs {
             addr: net::SocketAddr::new(self.rpc_ip, self.rpc_port),
             sync_from: Some(BlockHeight::from(0)),
             storage_method: self.storage_method.map(Into::into).unwrap_or_default(),
+            api_buffer_size: self.api_buffer_size,
         }
     }
 }

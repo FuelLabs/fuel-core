@@ -243,7 +243,7 @@ impl RunnableTask for ServerTask {
                 res = router.serve(self.addr) => {
                     if let Err(e) = res {
                         tracing::error!("BlockAggregator tonic server error: {}", e);
-                        TaskNextAction::ErrorContinue(anyhow!(e))
+                        TaskNextAction::Stop
                     } else {
                         tracing::info!("BlockAggregator tonic server stopped");
                         TaskNextAction::Stop
@@ -261,10 +261,10 @@ impl RunnableTask for ServerTask {
 }
 
 impl ProtobufAPI {
-    pub fn new(url: String) -> Result<Self> {
+    pub fn new(url: String, buffer_size: usize) -> Result<Self> {
         let (query_sender, query_receiver) = tokio::sync::mpsc::channel::<
             BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>,
-        >(100);
+        >(buffer_size);
         let addr = url.parse().unwrap();
         let _server_service = ServiceRunner::new(ServerTask {
             addr,

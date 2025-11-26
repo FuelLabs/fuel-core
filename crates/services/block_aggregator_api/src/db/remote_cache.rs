@@ -82,6 +82,28 @@ impl<S> RemoteCache<S> {
             synced: false,
         }
     }
+
+    fn stream_blocks(
+        &self,
+        first: BlockHeight,
+        last: BlockHeight,
+    ) -> crate::result::Result<BlockRangeResponse> {
+        let bucket = self.aws_bucket.clone();
+        let requester_pays = self.requester_pays;
+        let aws_endpoint = self.aws_endpoint.clone();
+        let stream = futures::stream::iter((*first..=*last).map(move |height| {
+            let block_height = BlockHeight::new(height);
+            let key = block_height_to_key(&block_height);
+            let res = crate::block_range_response::RemoteS3Response {
+                bucket: bucket.clone(),
+                key: key.clone(),
+                requester_pays,
+                aws_endpoint: aws_endpoint.clone(),
+            };
+            (block_height, res)
+        }));
+        Ok(BlockRangeResponse::S3(Box::pin(stream)))
+    }
 }
 
 impl<S> BlockAggregatorDB for RemoteCache<S>
@@ -170,23 +192,19 @@ where
         first: BlockHeight,
         last: BlockHeight,
     ) -> crate::result::Result<Self::BlockRangeResponse> {
-        // TODO: Check if it exists
-        let bucket = self.aws_bucket.clone();
-        let requester_pays = self.requester_pays;
-        let aws_endpoint = self.aws_endpoint.clone();
-
-        let stream = futures::stream::iter((*first..=*last).map(move |height| {
-            let block_height = BlockHeight::new(height);
-            let key = block_height_to_key(&block_height);
-            let res = crate::block_range_response::RemoteS3Response {
-                bucket: bucket.clone(),
-                key: key.clone(),
-                requester_pays,
-                aws_endpoint: aws_endpoint.clone(),
-            };
-            (block_height, res)
-        }));
-        Ok(BlockRangeResponse::S3(Box::pin(stream)))
+        let current_height = self
+            .get_current_height()
+            .await?
+            .unwrap_or(BlockHeight::new(0));
+        if last > current_height {
+            Err(Error::db_error(anyhow!(
+                "Requested block height {} is greater than current synced height {}",
+                last,
+                current_height
+            )))
+        } else {
+            self.stream_blocks(first, last)
+        }
     }
 
     async fn get_current_height(&self) -> crate::result::Result<Option<BlockHeight>> {

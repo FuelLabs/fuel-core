@@ -483,7 +483,7 @@ impl Database<BlockAggregatorDatabase> {
             let remove_heights = tx
                 .iter_all_keys::<Blocks>(Some(IterDirection::Reverse))
                 .flatten()
-                .take_while(|height| height <= &block_height)
+                .take_while(|height| height > &block_height)
                 .collect::<Vec<_>>();
             for height in remove_heights {
                 tx.storage_as_mut::<Blocks>().remove(&height)?;

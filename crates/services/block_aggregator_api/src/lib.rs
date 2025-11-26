@@ -86,6 +86,7 @@ pub mod integration {
     #[derive(Clone, Debug)]
     pub struct Config {
         pub addr: SocketAddr,
+        pub api_buffer_size: usize,
         pub sync_from: Option<BlockHeight>,
         pub storage_method: StorageMethod,
     }
@@ -294,7 +295,8 @@ pub mod integration {
             StorageMutate<LatestBlock, Error = StorageError>,
     {
         let addr = config.addr.to_string();
-        let api = ProtobufAPI::new(addr)
+        let api_buffer_size = config.api_buffer_size;
+        let api = ProtobufAPI::new(addr, api_buffer_size)
             .map_err(|e| anyhow::anyhow!("Error creating API: {e}"))?;
         let db_ending_height = onchain_db
             .latest_height()

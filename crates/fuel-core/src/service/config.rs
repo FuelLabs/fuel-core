@@ -134,6 +134,7 @@ impl Config {
             addr: free_local_addr(),
             sync_from: Some(BlockHeight::new(0)),
             storage_method: StorageMethod::Local,
+            api_buffer_size: 100,
         };
         config.rpc_config = Some(rpc_config);
         config
@@ -147,6 +148,7 @@ impl Config {
             addr: free_local_addr(),
             sync_from: Some(BlockHeight::new(0)),
             storage_method,
+            api_buffer_size: 100,
         };
         config.rpc_config = Some(rpc_config);
         config
