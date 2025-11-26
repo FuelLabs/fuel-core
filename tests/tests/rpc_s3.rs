@@ -296,7 +296,7 @@ fn unzip_bytes(bytes: &[u8]) -> Vec<u8> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn get_block_range__no_publish__can_get_serialized_block_from_rpc__remote() {
+async fn get_block_range__no_publish__can_get_block_info_from_rpc__remote() {
     // setup
     require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
     ensure_bucket_exists().await;
@@ -363,6 +363,55 @@ async fn get_block_range__no_publish__can_get_serialized_block_from_rpc__remote(
         })),
     };
     assert_eq!(expected, remote_info);
+
+    // cleanup
+    clean_s3_bucket().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn get_block_height__no_publish__can_get_value_from_rpc() {
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+
+    // setup
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+    let endpoint_url = AWS_ENDPOINT_URL.to_string();
+    let storage_method = StorageMethod::S3NoPublish {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(endpoint_url),
+        requester_pays: false,
+    };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let rpc_url = config.rpc_config.clone().unwrap().addr;
+
+    // given
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+
+    let graphql_client = FuelClient::from(srv.bound_address);
+
+    let tx = Transaction::default_test_tx();
+    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
+
+    let rpc_url = format!("http://{}", rpc_url);
+    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
+        .await
+        .expect("could not connect to server");
+
+    // when
+    sleep(std::time::Duration::from_secs(1)).await;
+    let request = ProtoBlockHeightRequest {};
+    let expected_height = Some(1);
+    let actual_height = rpc_client
+        .get_synced_block_height(request)
+        .await
+        .unwrap()
+        .into_inner()
+        .height;
+
+    // then
+    assert_eq!(expected_height, actual_height);
 
     // cleanup
     clean_s3_bucket().await;
