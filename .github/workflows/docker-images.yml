@@ -290,12 +290,12 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest
           cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest,mode=max,image-manifest=true,oci-mediatypes=true
 
-      - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
+      - uses: ./.github/actions/slack-notify-template
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-  
+
   publish-e2e-client-docker-image:
     runs-on: buildjet-4vcpu-ubuntu-2204
     permissions:
@@ -390,7 +390,7 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest
           cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest,mode=max,image-manifest=true,oci-mediatypes=true
 
-      - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
+      - uses: ./.github/actions/slack-notify-template
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
