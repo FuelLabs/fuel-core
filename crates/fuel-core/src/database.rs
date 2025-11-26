@@ -35,7 +35,6 @@ use fuel_core_storage::{
     Mappable,
     Result as StorageResult,
     StorageAsMut,
-    StorageAsRef,
     StorageInspect,
     StorageMutate,
     iter::{
@@ -96,10 +95,15 @@ use crate::{
 #[cfg(feature = "rpc")]
 use anyhow::anyhow;
 #[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::db::table::LatestBlock;
-use fuel_core_block_aggregator_api::db::table::Mode;
+use fuel_core_block_aggregator_api::db::table::{
+    LatestBlock,
+    Mode,
+};
 #[cfg(feature = "rpc")]
-use fuel_core_storage::transactional::WriteTransaction;
+use fuel_core_storage::{
+    StorageAsRef,
+    transactional::WriteTransaction,
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 

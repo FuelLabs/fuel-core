@@ -14,6 +14,8 @@ use super::{
     config::DaCompressionMode,
     genesis::create_genesis_block,
 };
+#[cfg(feature = "rpc")]
+use crate::database::database_description::on_chain::OnChain;
 #[cfg(feature = "relayer")]
 use crate::relayer::Config as RelayerConfig;
 #[cfg(feature = "p2p")]
@@ -22,17 +24,9 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
     trigger::TimeBasedTrigger,
     tx_receiver::PreconfirmationsReceiver,
 };
-#[cfg(feature = "rpc")]
-use crate::service::adapters::rpc::ReceiptSource;
 use crate::{
     combined_database::CombinedDatabase,
-    database::{
-        Database,
-        database_description::{
-            block_aggregator::BlockAggregatorDatabase,
-            on_chain::OnChain,
-        },
-    },
+    database::Database,
     fuel_core_graphql_api::{
         self,
         Config as GraphQLConfig,
@@ -69,7 +63,13 @@ use crate::{
     },
 };
 #[cfg(feature = "rpc")]
+use crate::{
+    database::database_description::block_aggregator::BlockAggregatorDatabase,
+    service::adapters::rpc::ReceiptSource,
+};
+#[cfg(feature = "rpc")]
 use anyhow::bail;
+#[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::{
     BlockAggregator,
     api::protobuf_adapter::ProtobufAPI,
@@ -96,25 +96,20 @@ use fuel_core_gas_price_service::v1::{
     uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::Trigger;
+#[cfg(feature = "rpc")]
 use fuel_core_services::ServiceRunner;
+#[cfg(feature = "rpc")]
+use fuel_core_storage::StorageAsRef;
 use fuel_core_storage::{
     self,
-};
-#[cfg(feature = "rpc")]
-use fuel_core_storage::{
-    StorageAsRef,
     transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::{
-    fuel_types::BlockHeight,
-    signer::SignMode,
-};
-use std::{
-    borrow::Cow,
-    sync::Arc,
-};
+#[cfg(feature = "rpc")]
+use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::signer::SignMode;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub type PoAService = fuel_core_poa::Service<
@@ -595,7 +590,7 @@ fn init_rpc_server(
         StorageMethod::Local => {
             let db = database.block_aggregation_storage().clone();
             let mode = db.storage_as_ref::<LatestBlock>().get(&())?;
-            let maybe_sync_from_height = match mode.clone().map(Cow::into_owned) {
+            let maybe_sync_from_height = match mode.clone().map(|c| c.into_owned()) {
                 Some(Mode::S3(_)) => {
                     bail!(
                         "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
@@ -613,7 +608,7 @@ fn init_rpc_server(
         } => {
             let db = database.block_aggregation_storage().clone();
             let mode = db.storage_as_ref::<LatestBlock>().get(&())?;
-            let maybe_sync_from_height = match mode.clone().map(Cow::into_owned) {
+            let maybe_sync_from_height = match mode.clone().map(|c| c.into_owned()) {
                 Some(Mode::Local(_)) => {
                     bail!(
                         "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
