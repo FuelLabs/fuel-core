@@ -68,12 +68,14 @@ use crate::{
     service::adapters::rpc::ReceiptSource,
 };
 #[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::blocks::importer_and_db_source::serializer_adapter::SerializerAdapter;
-use fuel_core_block_aggregator_api::integration::UninitializedTask;
-#[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::{
     api::protobuf_adapter::ProtobufAPI,
     blocks::importer_and_db_source::ImporterAndDbSource,
+};
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::{
+    blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
+    integration::UninitializedTask,
 };
 use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
