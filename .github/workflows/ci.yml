@@ -80,11 +80,6 @@ jobs:
         run: cargo install cargo-sort
       - name: Run Cargo.toml sort check
         run: cargo sort -w --check
-      - uses: ./.github/actions/slack-notify-template
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   prevent-openssl:
     runs-on: buildjet-4vcpu-ubuntu-2204
@@ -93,11 +88,6 @@ jobs:
       # ensure openssl hasn't crept into the dep tree
       - name: Check if openssl is included
         run: ./.github/workflows/scripts/verify_openssl.sh
-      - uses: ./.github/actions/slack-notify-template
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   cargo-verifications:
     needs:
@@ -192,11 +182,6 @@ jobs:
         continue-on-error: true
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
-      - uses: ./.github/actions/slack-notify-template
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204
@@ -298,12 +283,6 @@ jobs:
         with:
           publish-delay: 60000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - uses: ./.github/actions/slack-notify-template
-        if: always()
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   publish-fuel-core-binary:
     name: Release fuel-core binaries
@@ -444,12 +423,6 @@ jobs:
           asset_path: ./${{ env.ZIP_FILE_NAME }}
           asset_name: ${{ env.ZIP_FILE_NAME }}
           asset_content_type: application/gzip
-
-      - uses: ./.github/actions/slack-notify-template
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest'
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
   cargo-audit:
     runs-on: ubuntu-latest
     continue-on-error: true
