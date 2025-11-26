@@ -62,21 +62,6 @@ use crate::{
         },
     },
 };
-#[cfg(feature = "rpc")]
-use crate::{
-    database::database_description::block_aggregator::BlockAggregatorDatabase,
-    service::adapters::rpc::ReceiptSource,
-};
-#[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::{
-    api::protobuf_adapter::ProtobufAPI,
-    blocks::importer_and_db_source::ImporterAndDbSource,
-};
-#[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::{
-    blocks::importer_and_db_source::serializer_adapter::SerializerAdapter,
-    integration::UninitializedTask,
-};
 use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
     algorithm::AlgorithmV1,
@@ -89,19 +74,35 @@ use fuel_core_gas_price_service::v1::{
     uninitialized_task::new_gas_price_service_v1,
 };
 use fuel_core_poa::Trigger;
-#[cfg(feature = "rpc")]
-use fuel_core_services::ServiceRunner;
 use fuel_core_storage::{
     self,
     transactional::AtomicView,
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-#[cfg(feature = "rpc")]
-use fuel_core_types::fuel_types::BlockHeight;
 use fuel_core_types::signer::SignMode;
+#[cfg(feature = "rpc")]
+use rpc::*;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+#[cfg(feature = "rpc")]
+mod rpc {
+    pub use crate::{
+        database::database_description::block_aggregator::BlockAggregatorDatabase,
+        service::adapters::rpc::ReceiptSource,
+    };
+    pub use fuel_core_block_aggregator_api::{
+        api::protobuf_adapter::ProtobufAPI,
+        blocks::importer_and_db_source::{
+            ImporterAndDbSource,
+            serializer_adapter::SerializerAdapter,
+        },
+        integration::UninitializedTask,
+    };
+    pub use fuel_core_services::ServiceRunner;
+    pub use fuel_core_types::fuel_types::BlockHeight;
+}
 
 pub type PoAService = fuel_core_poa::Service<
     BlockProducerAdapter,

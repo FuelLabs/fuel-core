@@ -245,12 +245,7 @@ pub mod integration {
                     .await
                 }
             };
-            Ok(BlockAggregator {
-                query: api,
-                database: db_adapter,
-                block_source,
-                new_block_subscriptions: vec![],
-            })
+            Ok(BlockAggregator::new(api, db_adapter, block_source))
         }
     }
 
@@ -377,30 +372,3 @@ where
         Ok(())
     }
 }
-
-// #[async_trait::async_trait]
-// impl<Api, DB, Blocks, BlockRange> RunnableService
-//     for BlockAggregator<Api, DB, Blocks, Blocks::Block>
-// where
-//     Api:
-//         BlockAggregatorApi<Block = Blocks::Block, BlockRangeResponse = BlockRange> + Send,
-//     DB: BlockAggregatorDB<Block = Blocks::Block, BlockRangeResponse = BlockRange> + Send,
-//     Blocks: BlockSource,
-//     BlockRange: Send,
-//     <Blocks as BlockSource>::Block: Clone + Debug + Send,
-// {
-//     const NAME: &'static str = "BlockAggregatorService";
-//     type SharedData = ();
-//     type Task = Self;
-//     type TaskParams = ();
-//
-//     fn shared_data(&self) -> Self::SharedData {}
-//
-//     async fn into_task(
-//         self,
-//         _state_watcher: &StateWatcher,
-//         _params: Self::TaskParams,
-//     ) -> anyhow::Result<Self::Task> {
-//         Ok(self)
-//     }
-// }

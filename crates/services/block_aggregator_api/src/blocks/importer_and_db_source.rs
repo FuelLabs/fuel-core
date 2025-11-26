@@ -125,12 +125,6 @@ where
             block_res = self.receiver.recv() => {
                 block_res.ok_or(Error::BlockSource(anyhow!("Block source channel closed")))
             }
-            _ = self.importer_task.await_stop() => {
-                Err(Error::BlockSource(anyhow!("Importer task stopped unexpectedly")))
-            }
-            _ = self.sync_task.await_stop() => {
-                Err(Error::BlockSource(anyhow!("Sync task stopped unexpectedly")))
-            }
             importer_error = self.importer_task.await_stop() => {
                 Err(Error::BlockSource(anyhow!("Importer task stopped unexpectedly: {:?}", importer_error)))
             }
