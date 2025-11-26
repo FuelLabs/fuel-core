@@ -178,7 +178,7 @@ where
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         if !self.config.enabled {
             let _ = watcher.while_started().await;
-            return TaskNextAction::Stop;
+            return TaskNextAction::Stop
         }
 
         if let Err(err) = self.ensure_account_metadata().await {

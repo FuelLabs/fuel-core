@@ -1,0 +1,256 @@
+use crate::{
+    block_range_response::BlockRangeResponse,
+    blocks::BlockSourceEvent,
+    db::{
+        BlockAggregatorDB,
+        table::{
+            LatestBlock,
+            Mode,
+        },
+    },
+    protobuf_types::Block as ProtoBlock,
+    result::Error,
+};
+use anyhow::anyhow;
+use aws_sdk_s3::{
+    self,
+    Client,
+    primitives::ByteStream,
+};
+use flate2::{
+    Compression,
+    write::GzEncoder,
+};
+use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsMut,
+    StorageAsRef,
+    StorageInspect,
+    StorageMutate,
+    transactional::{
+        Modifiable,
+        StorageTransaction,
+        WriteTransaction,
+    },
+};
+use fuel_core_types::fuel_types::BlockHeight;
+use prost::Message;
+use std::io::Write;
+
+#[allow(non_snake_case)]
+#[cfg(test)]
+mod tests;
+
+#[allow(unused)]
+pub struct RemoteCache<S> {
+    // aws configuration
+    aws_bucket: String,
+    requester_pays: bool,
+    aws_endpoint: Option<String>,
+    client: Client,
+    publishes_blocks: bool,
+
+    // track consistency between runs
+    local_persisted: S,
+    sync_from: BlockHeight,
+    highest_new_height: Option<BlockHeight>,
+    orphaned_new_height: Option<BlockHeight>,
+    synced: bool,
+}
+
+impl<S> RemoteCache<S> {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new(
+        aws_bucket: String,
+        requester_pays: bool,
+        aws_endpoint: Option<String>,
+        client: Client,
+        local_persisted: S,
+        sync_from: BlockHeight,
+        publish: bool,
+    ) -> RemoteCache<S> {
+        RemoteCache {
+            aws_bucket,
+            requester_pays,
+            aws_endpoint,
+            client,
+            publishes_blocks: publish,
+            local_persisted,
+            sync_from,
+            highest_new_height: None,
+            orphaned_new_height: None,
+            synced: false,
+        }
+    }
+
+    fn stream_blocks(
+        &self,
+        first: BlockHeight,
+        last: BlockHeight,
+    ) -> crate::result::Result<BlockRangeResponse> {
+        let bucket = self.aws_bucket.clone();
+        let requester_pays = self.requester_pays;
+        let aws_endpoint = self.aws_endpoint.clone();
+        let stream = futures::stream::iter((*first..=*last).map(move |height| {
+            let block_height = BlockHeight::new(height);
+            let key = block_height_to_key(&block_height);
+            let res = crate::block_range_response::RemoteS3Response {
+                bucket: bucket.clone(),
+                key: key.clone(),
+                requester_pays,
+                aws_endpoint: aws_endpoint.clone(),
+            };
+            (block_height, res)
+        }));
+        Ok(BlockRangeResponse::S3(Box::pin(stream)))
+    }
+}
+
+impl<S> BlockAggregatorDB for RemoteCache<S>
+where
+    S: Send + Sync,
+    S: Modifiable,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
+{
+    type Block = ProtoBlock;
+    type BlockRangeResponse = BlockRangeResponse;
+
+    async fn store_block(
+        &mut self,
+        block_event: BlockSourceEvent<Self::Block>,
+    ) -> crate::result::Result<()> {
+        let (height, block) = block_event.clone().into_inner();
+        let key = block_height_to_key(&height);
+        let mut buf = Vec::new();
+        block.encode(&mut buf).map_err(Error::db_error)?;
+        let zipped = gzip_bytes(&buf)?;
+        let body = ByteStream::from(zipped);
+        if self.publishes_blocks {
+            let req = self
+                .client
+                .put_object()
+                .bucket(&self.aws_bucket)
+                .key(&key)
+                .body(body)
+                .content_encoding("gzip")
+                .content_type("application/grpc-web");
+            let _ = req.send().await.map_err(Error::db_error)?;
+        }
+        match block_event {
+            BlockSourceEvent::NewBlock(new_height, _) => {
+                tracing::debug!("New block: {:?}", new_height);
+                self.highest_new_height = Some(new_height);
+                if self.synced {
+                    tracing::debug!("Updating latest block to {:?}", new_height);
+                    let mut tx = self.local_persisted.write_transaction();
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &Mode::new_s3(new_height))
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if new_height == self.sync_from
+                    || self.height_is_next_height(new_height)?
+                {
+                    tracing::debug!("Updating latest block to {:?}", new_height);
+                    self.synced = true;
+                    self.highest_new_height = Some(new_height);
+                    self.orphaned_new_height = None;
+                    let mut tx = self.local_persisted.write_transaction();
+                    tx.storage_as_mut::<LatestBlock>()
+                        .insert(&(), &Mode::new_s3(new_height))
+                        .map_err(|e| Error::DB(anyhow!(e)))?;
+                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+                } else if self.orphaned_new_height.is_none() {
+                    tracing::info!("Marking block as orphaned: {:?}", new_height);
+                    self.orphaned_new_height = Some(new_height);
+                }
+            }
+            BlockSourceEvent::OldBlock(height, _) => {
+                tracing::debug!("Old block: {:?}", height);
+                let mut tx = self.local_persisted.write_transaction();
+                let latest_height = if height.succ() == self.orphaned_new_height {
+                    tracing::debug!("Marking block as synced: {:?}", height);
+                    self.orphaned_new_height = None;
+                    self.synced = true;
+                    self.highest_new_height.unwrap_or(height)
+                } else {
+                    tracing::debug!("Updating latest block to {:?}", height);
+                    height
+                };
+                tx.storage_as_mut::<LatestBlock>()
+                    .insert(&(), &Mode::new_s3(latest_height))
+                    .map_err(|e| Error::DB(anyhow!(e)))?;
+                tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn get_block_range(
+        &self,
+        first: BlockHeight,
+        last: BlockHeight,
+    ) -> crate::result::Result<Self::BlockRangeResponse> {
+        let current_height = self
+            .get_current_height()
+            .await?
+            .unwrap_or(BlockHeight::new(0));
+        if last > current_height {
+            Err(Error::db_error(anyhow!(
+                "Requested block height {} is greater than current synced height {}",
+                last,
+                current_height
+            )))
+        } else {
+            self.stream_blocks(first, last)
+        }
+    }
+
+    async fn get_current_height(&self) -> crate::result::Result<Option<BlockHeight>> {
+        tracing::debug!("Getting current height from local cache");
+        let height = self
+            .local_persisted
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?;
+
+        Ok(height.map(|b| b.height()))
+    }
+}
+
+impl<S> RemoteCache<S>
+where
+    S: Send + Sync,
+    S: StorageInspect<LatestBlock, Error = StorageError>,
+    for<'b> StorageTransaction<&'b mut S>:
+        StorageMutate<LatestBlock, Error = StorageError>,
+{
+    fn height_is_next_height(&self, height: BlockHeight) -> crate::result::Result<bool> {
+        let maybe_latest_height = self
+            .local_persisted
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| Error::DB(anyhow!(e)))?
+            .map(|m| m.height());
+        if let Some(latest_height) = maybe_latest_height {
+            Ok(latest_height.succ() == Some(height))
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+pub fn block_height_to_key(height: &BlockHeight) -> String {
+    let raw: [u8; 4] = height.to_bytes();
+    format!(
+        "{:02}/{:02}/{:02}/{:02}",
+        &raw[0], &raw[1], &raw[2], &raw[3]
+    )
+}
+
+pub fn gzip_bytes(data: &[u8]) -> crate::result::Result<Vec<u8>> {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(data).map_err(Error::db_error)?;
+    encoder.finish().map_err(Error::db_error)
+}

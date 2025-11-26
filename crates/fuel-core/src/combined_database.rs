@@ -3,6 +3,8 @@ use crate::state::{
     historical_rocksdb::StateRewindPolicy,
     rocks_db::DatabaseConfig,
 };
+#[cfg(feature = "rpc")]
+use anyhow::anyhow;
 
 use crate::{
     database::{
@@ -10,7 +12,6 @@ use crate::{
         GenesisDatabase,
         Result as DatabaseResult,
         database_description::{
-            block_aggregator::BlockAggregatorDatabase,
             compression::CompressionDatabase,
             gas_price::GasPriceDatabase,
             off_chain::OffChain,
@@ -20,6 +21,11 @@ use crate::{
     },
     service::DbType,
 };
+
+#[cfg(feature = "rpc")]
+use crate::database::database_description::block_aggregator::BlockAggregatorDatabase;
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::db::table::LatestBlock;
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
     StateConfig,
@@ -36,6 +42,11 @@ use fuel_core_storage::tables::{
     ContractsRawCode,
     ContractsState,
     Messages,
+};
+#[cfg(feature = "rpc")]
+use fuel_core_storage::{
+    Error as StorageError,
+    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -61,7 +72,8 @@ pub struct CombinedDatabase {
     relayer: Database<Relayer>,
     gas_price: Database<GasPriceDatabase>,
     compression: Database<CompressionDatabase>,
-    block_aggregation: Database<BlockAggregatorDatabase>,
+    #[cfg(feature = "rpc")]
+    block_aggregation_storage: Database<BlockAggregatorDatabase>,
 }
 
 impl CombinedDatabase {
@@ -71,7 +83,9 @@ impl CombinedDatabase {
         relayer: Database<Relayer>,
         gas_price: Database<GasPriceDatabase>,
         compression: Database<CompressionDatabase>,
-        block_aggregation: Database<BlockAggregatorDatabase>,
+        #[cfg(feature = "rpc")] block_aggregation_storage: Database<
+            BlockAggregatorDatabase,
+        >,
     ) -> Self {
         Self {
             on_chain,
@@ -79,7 +93,8 @@ impl CombinedDatabase {
             relayer,
             gas_price,
             compression,
-            block_aggregation,
+            #[cfg(feature = "rpc")]
+            block_aggregation_storage,
         }
     }
 
@@ -90,6 +105,8 @@ impl CombinedDatabase {
         crate::state::rocks_db::RocksDb::<Relayer>::prune(path)?;
         crate::state::rocks_db::RocksDb::<GasPriceDatabase>::prune(path)?;
         crate::state::rocks_db::RocksDb::<CompressionDatabase>::prune(path)?;
+        #[cfg(feature = "rpc")]
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabase>::prune(path)?;
         Ok(())
     }
 
@@ -132,6 +149,12 @@ impl CombinedDatabase {
 
         crate::state::rocks_db::RocksDb::<CompressionDatabase>::backup(db_dir, temp_dir)
             .trace_err("Failed to backup compression database")?;
+
+        #[cfg(feature = "rpc")]
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabase>::backup(
+            db_dir, temp_dir,
+        )
+        .trace_err("Failed to backup block aggregation storage database")?;
 
         Ok(())
     }
@@ -186,6 +209,13 @@ impl CombinedDatabase {
             backup_dir,
         )
         .trace_err("Failed to restore compression database")?;
+
+        #[cfg(feature = "rpc")]
+        crate::state::rocks_db::RocksDb::<BlockAggregatorDatabase>::restore(
+            temp_restore_dir,
+            backup_dir,
+        )
+        .trace_err("Failed to restore block aggregation storage database")?;
 
         Ok(())
     }
@@ -244,7 +274,8 @@ impl CombinedDatabase {
                 ..database_config
             },
         )?;
-        let block_aggregation = Database::open_rocksdb(
+        #[cfg(feature = "rpc")]
+        let block_aggregation_storage = Database::open_rocksdb(
             path,
             state_rewind_policy,
             DatabaseConfig {
@@ -259,7 +290,8 @@ impl CombinedDatabase {
             relayer,
             gas_price,
             compression,
-            block_aggregation,
+            #[cfg(feature = "rpc")]
+            block_aggregation_storage,
         })
     }
 
@@ -275,7 +307,8 @@ impl CombinedDatabase {
             relayer: Default::default(),
             gas_price: Default::default(),
             compression: Default::default(),
-            block_aggregation: Default::default(),
+            #[cfg(feature = "rpc")]
+            block_aggregation_storage: Default::default(),
         })
     }
 
@@ -321,6 +354,7 @@ impl CombinedDatabase {
             Database::in_memory(),
             Database::in_memory(),
             Database::in_memory(),
+            #[cfg(feature = "rpc")]
             Database::in_memory(),
         )
     }
@@ -331,6 +365,8 @@ impl CombinedDatabase {
         self.relayer.check_version()?;
         self.gas_price.check_version()?;
         self.compression.check_version()?;
+        #[cfg(feature = "rpc")]
+        self.block_aggregation_storage.check_version()?;
         Ok(())
     }
 
@@ -342,8 +378,16 @@ impl CombinedDatabase {
         &self.compression
     }
 
-    pub fn block_aggregation(&self) -> &Database<BlockAggregatorDatabase> {
-        &self.block_aggregation
+    #[cfg(feature = "rpc")]
+    pub fn block_aggregation_storage(&self) -> &Database<BlockAggregatorDatabase> {
+        &self.block_aggregation_storage
+    }
+
+    #[cfg(feature = "rpc")]
+    pub fn block_aggregation_storage_mut(
+        &mut self,
+    ) -> &mut Database<BlockAggregatorDatabase> {
+        &mut self.block_aggregation_storage
     }
 
     #[cfg(any(feature = "test-helpers", test))]
@@ -424,7 +468,7 @@ impl CombinedDatabase {
 
     /// Rollbacks the state of the blockchain to a specific block height.
     pub fn rollback_to<S>(
-        &self,
+        &mut self,
         target_block_height: BlockHeight,
         shutdown_listener: &mut S,
     ) -> anyhow::Result<()>
@@ -452,12 +496,42 @@ impl CombinedDatabase {
             let compression_db_rolled_back =
                 is_equal_or_none(compression_db_height, target_block_height);
 
-            if on_chain_height == target_block_height
-                && off_chain_height == target_block_height
-                && gas_price_rolled_back
-                && compression_db_rolled_back
+            #[cfg(feature = "rpc")]
             {
-                break;
+                let block_aggregation_storage_height = self
+                    .block_aggregation_storage()
+                    .storage_as_ref::<LatestBlock>()
+                    .get(&())
+                    .map_err(|e: StorageError| anyhow!(e))?
+                    .map(|b| b.height());
+                let block_aggregation_storage_rolled_back = is_equal_or_less_than_or_none(
+                    block_aggregation_storage_height,
+                    target_block_height,
+                );
+
+                if !block_aggregation_storage_rolled_back {
+                    self.block_aggregation_storage_mut()
+                        .rollback_to(target_block_height)?;
+                }
+                if on_chain_height == target_block_height
+                    && off_chain_height == target_block_height
+                    && gas_price_rolled_back
+                    && compression_db_rolled_back
+                    && block_aggregation_storage_rolled_back
+                {
+                    break;
+                }
+            }
+
+            #[cfg(not(feature = "rpc"))]
+            {
+                if on_chain_height == target_block_height
+                    && off_chain_height == target_block_height
+                    && gas_price_rolled_back
+                    && compression_db_rolled_back
+                {
+                    break;
+                }
             }
 
             if on_chain_height < target_block_height {
@@ -615,6 +689,8 @@ impl CombinedDatabase {
         self.relayer.shutdown();
         self.gas_price.shutdown();
         self.compression.shutdown();
+        #[cfg(feature = "rpc")]
+        self.block_aggregation_storage.shutdown();
     }
 }
 
@@ -644,6 +720,11 @@ impl CombinedGenesisDatabase {
 
 fn is_equal_or_none<T: PartialEq>(maybe_left: Option<T>, right: T) -> bool {
     maybe_left.map(|left| left == right).unwrap_or(true)
+}
+
+#[cfg(feature = "rpc")]
+fn is_equal_or_less_than_or_none<T: PartialOrd>(maybe_left: Option<T>, right: T) -> bool {
+    maybe_left.map(|left| left <= right).unwrap_or(true)
 }
 
 #[allow(non_snake_case)]

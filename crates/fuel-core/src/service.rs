@@ -193,6 +193,7 @@ impl FuelService {
             Default::default(),
             Default::default(),
             Default::default(),
+            #[cfg(feature = "rpc")]
             Default::default(),
         );
         Self::from_combined_database(combined_database, config).await
@@ -544,9 +545,12 @@ mod tests {
         let mut i = 0;
         loop {
             let mut shutdown = ShutdownListener::spawn();
+            #[cfg(not(feature = "rpc"))]
+            let config = Config::local_node();
+            #[cfg(feature = "rpc")]
+            let config = Config::local_node_with_rpc();
             let service =
-                FuelService::new(Default::default(), Config::local_node(), &mut shutdown)
-                    .unwrap();
+                FuelService::new(Default::default(), config, &mut shutdown).unwrap();
             service.start_and_await().await.unwrap();
             sleep(Duration::from_secs(1));
             for service in service.sub_services() {

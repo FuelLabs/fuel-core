@@ -11,10 +11,7 @@ use fuel_core_services::{
     try_or_continue,
     try_or_stop,
 };
-use fuel_core_types::{
-    fuel_types::BlockHeight,
-    services::block_importer::SharedImportResult,
-};
+use fuel_core_types::services::block_importer::SharedImportResult;
 use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
 
@@ -22,7 +19,6 @@ pub struct ImporterTask<Serializer, B> {
     importer: BoxStream<SharedImportResult>,
     serializer: Serializer,
     block_return_sender: Sender<BlockSourceEvent<B>>,
-    new_end_sender: Option<tokio::sync::oneshot::Sender<BlockHeight>>,
 }
 
 impl<Serializer, B> ImporterTask<Serializer, B>
@@ -34,13 +30,11 @@ where
         importer: BoxStream<SharedImportResult>,
         serializer: Serializer,
         block_return: Sender<BlockSourceEvent<B>>,
-        new_end_sender: Option<tokio::sync::oneshot::Sender<BlockHeight>>,
     ) -> Self {
         Self {
             importer,
             serializer,
             block_return_sender: block_return,
-            new_end_sender,
         }
     }
 }
@@ -75,25 +69,15 @@ where
         match maybe_import_result {
             Some(import_result) => {
                 let height = import_result.sealed_block.entity.header().height();
-                if let Some(sender) = self.new_end_sender.take() {
-                    match sender.send(*height) {
-                        Ok(_) => {
-                            tracing::debug!(
-                                "sent new end height to sync task: {:?}",
-                                height
-                            );
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                "failed to send new end height to sync task: {:?}",
-                                e
-                            );
-                        }
-                    }
-                }
+                let receipts = import_result
+                    .tx_status
+                    .iter()
+                    .flat_map(|status| status.result.receipts())
+                    .map(Clone::clone)
+                    .collect::<Vec<_>>();
                 let res = self
                     .serializer
-                    .serialize_block(&import_result.sealed_block.entity);
+                    .serialize_block(&import_result.sealed_block.entity, &receipts);
                 let block = try_or_continue!(res);
                 let event = BlockSourceEvent::NewBlock(*height, block);
                 let res = self.block_return_sender.send(event).await;

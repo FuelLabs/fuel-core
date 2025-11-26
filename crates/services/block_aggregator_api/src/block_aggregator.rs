@@ -85,7 +85,7 @@ where
 
     async fn handle_get_current_height_query(
         &mut self,
-        response: tokio::sync::oneshot::Sender<BlockHeight>,
+        response: tokio::sync::oneshot::Sender<Option<BlockHeight>>,
     ) -> TaskNextAction {
         let res = self.database.get_current_height().await;
         let height = try_or_stop!(res, |e| {
@@ -100,7 +100,7 @@ where
 
     async fn handle_new_block_subscription(
         &mut self,
-        response: tokio::sync::mpsc::Sender<Blocks::Block>,
+        response: tokio::sync::mpsc::Sender<(BlockHeight, Blocks::Block)>,
     ) -> TaskNextAction {
         self.new_block_subscriptions.push(response);
         TaskNextAction::Continue
@@ -117,14 +117,14 @@ where
         let event = try_or_stop!(res, |e| {
             tracing::error!("Error receiving block from source: {e:?}");
         });
-        let (id, block) = match event {
-            BlockSourceEvent::NewBlock(id, block) => {
+        match &event {
+            BlockSourceEvent::NewBlock(height, block) => {
                 self.new_block_subscriptions.retain_mut(|sub| {
-                    let send_res = sub.try_send(block.clone());
+                    let send_res = sub.try_send((*height, block.clone()));
                     match send_res {
                         Ok(_) => true,
                         Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                            tracing::error!("Error sending new block to subscriber due to full channel: {id:?}");
+                            tracing::error!("Error sending new block to subscriber due to full channel: {height:?}");
                             true
                         },
                         Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -133,11 +133,13 @@ where
                         },
                     }
                 });
-                (id, block)
             }
-            BlockSourceEvent::OldBlock(id, block) => (id, block),
+            BlockSourceEvent::OldBlock(_id, _block) => {
+                // Do nothing
+                // Only stream new blocks
+            }
         };
-        let res = self.database.store_block(id, block).await;
+        let res = self.database.store_block(event).await;
         try_or_stop!(res, |e| {
             tracing::error!("Error storing block in database: {e:?}");
         });

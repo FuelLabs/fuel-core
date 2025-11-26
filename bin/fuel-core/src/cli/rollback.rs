@@ -59,7 +59,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     use crate::cli::ShutdownListener;
 
     let path = command.database_path.as_path();
-    let db = CombinedDatabase::open(
+    let mut db = CombinedDatabase::open(
         path,
         StateRewindPolicy::RewindFullRange,
         DatabaseConfig {
