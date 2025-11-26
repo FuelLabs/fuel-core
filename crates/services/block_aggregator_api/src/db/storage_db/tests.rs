@@ -6,7 +6,10 @@ use crate::{
         BlockSerializer,
         serializer_adapter::SerializerAdapter,
     },
-    db::table::Column,
+    db::table::{
+        Column,
+        Mode,
+    },
 };
 use fuel_core_storage::{
     StorageAsRef,
@@ -120,7 +123,7 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
     let mut tx = db.write_transaction();
     let starting_height = BlockHeight::from(1u32);
     tx.storage_as_mut::<LatestBlock>()
-        .insert(&(), &starting_height)
+        .insert(&(), &Mode::Local(starting_height))
         .unwrap();
     tx.commit().unwrap();
     let mut adapter = StorageDB::new(db, BlockHeight::from(0u32));

@@ -7,6 +7,7 @@ use crate::{
             Blocks,
             Column,
             LatestBlock,
+            Mode,
         },
     },
     protobuf_types::Block as ProtoBlock,
@@ -97,23 +98,17 @@ where
                 if self.synced {
                     let mut tx = self.storage.write_transaction();
                     tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
+                        .insert(&(), &Mode::Local(new_height))
                         .map_err(|e| Error::DB(anyhow!(e)))?;
                     tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
-                } else if new_height == self.sync_from {
+                } else if new_height == self.sync_from
+                    || self.height_is_next_height(new_height)?
+                {
                     let mut tx = self.storage.write_transaction();
                     self.synced = true;
                     self.highest_new_height = Some(new_height);
                     tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
-                        .map_err(|e| Error::DB(anyhow!(e)))?;
-                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
-                } else if self.height_is_next_height(new_height)? {
-                    let mut tx = self.storage.write_transaction();
-                    self.synced = true;
-                    self.highest_new_height = Some(new_height);
-                    tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
+                        .insert(&(), &Mode::Local(new_height))
                         .map_err(|e| Error::DB(anyhow!(e)))?;
                     tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
                 } else if self.orphaned_new_height.is_none() {
@@ -131,7 +126,7 @@ where
                 };
                 let mut tx = self.storage.write_transaction();
                 tx.storage_as_mut::<LatestBlock>()
-                    .insert(&(), &latest_height)
+                    .insert(&(), &Mode::Local(latest_height))
                     .map_err(|e| Error::DB(anyhow!(e)))?;
                 tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
             }
@@ -159,7 +154,7 @@ where
             .get(&())
             .map_err(|e| Error::DB(anyhow!(e)))?;
 
-        Ok(height.map(|b| b.into_owned()))
+        Ok(height.map(|b| b.height()))
     }
 }
 
@@ -178,7 +173,8 @@ where
             .storage
             .storage_as_ref::<LatestBlock>()
             .get(&())
-            .map_err(|e| Error::DB(anyhow!(e)))?;
+            .map_err(|e| Error::DB(anyhow!(e)))?
+            .map(|m| m.height());
         if let Some(latest_height) = maybe_latest_height {
             Ok(latest_height.succ() == Some(height))
         } else {

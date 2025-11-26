@@ -229,7 +229,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - name: Run RPC Integration Tests
-        run: cargo test --package fuel-core-tests --test integration_tests rpc --features rpc -- --test-threads=1
+        run: cargo test --package fuel-core-tests --test integration_tests rpc_s3 --features rpc -- --test-threads=1
 
   publish-crates-check:
     runs-on: buildjet-4vcpu-ubuntu-2204

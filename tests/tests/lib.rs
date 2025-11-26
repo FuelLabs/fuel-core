@@ -59,7 +59,11 @@ mod relayer;
 #[cfg(not(feature = "only-p2p"))]
 mod required_fuel_block_height_extension;
 #[cfg(feature = "rpc")]
+#[cfg(feature = "local_rpc")]
 mod rpc;
+#[cfg(feature = "rpc")]
+#[cfg(not(feature = "local_rpc"))]
+mod rpc_s3;
 
 #[cfg(not(feature = "only-p2p"))]
 mod snapshot;

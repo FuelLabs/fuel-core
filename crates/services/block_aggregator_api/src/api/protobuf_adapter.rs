@@ -37,10 +37,14 @@ use fuel_core_services::{
     ServiceRunner,
     StateWatcher,
     TaskNextAction,
+    try_or_stop,
 };
 use futures::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::Status;
+use tonic::{
+    Status,
+    transport::server::Router,
+};
 
 #[cfg(test)]
 mod tests;
@@ -85,7 +89,6 @@ impl BlockAggregator for Server {
             ))),
         }
     }
-    // type GetBlockRangeStream = ReceiverStream<Result<ProtoBlockResponse, Status>>;
     type GetBlockRangeStream = BoxStream<Result<ProtoBlockResponse, Status>>;
 
     async fn get_block_range(
@@ -194,6 +197,7 @@ pub struct ServerTask {
     addr: std::net::SocketAddr,
     query_sender:
         tokio::sync::mpsc::Sender<BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>>,
+    router: Option<Router>,
 }
 #[async_trait::async_trait]
 impl RunnableService for ServerTask {
@@ -205,19 +209,38 @@ impl RunnableService for ServerTask {
     fn shared_data(&self) -> Self::SharedData {}
 
     async fn into_task(
-        self,
+        mut self,
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        self.start_router()?;
         Ok(self)
+    }
+}
+
+impl ServerTask {
+    fn start_router(&mut self) -> anyhow::Result<()> {
+        let server = Server::new(self.query_sender.clone());
+        let router = tonic::transport::Server::builder()
+            .add_service(ProtoBlockAggregatorServer::new(server));
+        self.router = Some(router);
+        Ok(())
+    }
+
+    fn get_router(&mut self) -> anyhow::Result<Router> {
+        self.router
+            .take()
+            .ok_or_else(|| anyhow!("Router has not been initialized yet"))
     }
 }
 
 impl RunnableTask for ServerTask {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        let server = Server::new(self.query_sender.clone());
-        let router = tonic::transport::Server::builder()
-            .add_service(ProtoBlockAggregatorServer::new(server));
+        let router_res = self.get_router();
+        let router = try_or_stop!(router_res, |e| tracing::error!(
+            "Failed to get router, has not been started: {:?}",
+            e
+        ));
         tokio::select! {
                 res = router.serve(self.addr) => {
                     if let Err(e) = res {
@@ -245,7 +268,11 @@ impl ProtobufAPI {
             BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>,
         >(100);
         let addr = url.parse().unwrap();
-        let _server_service = ServiceRunner::new(ServerTask { addr, query_sender });
+        let _server_service = ServiceRunner::new(ServerTask {
+            addr,
+            query_sender,
+            router: None,
+        });
         _server_service.start().map_err(Error::Api)?;
         let api = Self {
             _server_service,

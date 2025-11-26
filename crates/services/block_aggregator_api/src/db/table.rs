@@ -29,7 +29,6 @@ pub enum Column {
     Metadata = 0,
     Blocks = 1,
     LatestBlock = 2,
-    Mode = 3,
 }
 
 impl Column {
@@ -71,38 +70,41 @@ impl TableWithBlueprint for Blocks {
 
 pub struct LatestBlock;
 
-impl Mappable for LatestBlock {
-    type Key = Self::OwnedKey;
-    type OwnedKey = ();
-    type Value = Self::OwnedValue;
-    type OwnedValue = BlockHeight;
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum Mode {
+    Local(BlockHeight),
+    S3(BlockHeight),
 }
 
-impl TableWithBlueprint for LatestBlock {
-    type Blueprint = Plain<Postcard, Primitive<4>>;
-    type Column = Column;
-    fn column() -> Self::Column {
-        Column::LatestBlock
+impl Mode {
+    pub fn new_s3(height: BlockHeight) -> Self {
+        Self::S3(height)
+    }
+
+    pub fn new_local(height: BlockHeight) -> Self {
+        Self::Local(height)
+    }
+
+    pub fn height(&self) -> BlockHeight {
+        match self {
+            Self::Local(height) => *height,
+            Self::S3(height) => *height,
+        }
     }
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum Mode {
-    Local,
-    S3,
-}
 
-impl Mappable for Mode {
+impl Mappable for LatestBlock {
     type Key = Self::OwnedKey;
     type OwnedKey = ();
     type Value = Self::OwnedValue;
     type OwnedValue = Mode;
 }
 
-impl TableWithBlueprint for Mode {
+impl TableWithBlueprint for LatestBlock {
     type Blueprint = Plain<Postcard, Postcard>;
     type Column = Column;
     fn column() -> Self::Column {
-        Column::Mode
+        Column::LatestBlock
     }
 }
 
@@ -111,10 +113,6 @@ use fuel_core_storage::codec::{
     primitive::Primitive,
 };
 use prost::Message;
-use serde::{
-    Deserialize,
-    Serialize,
-};
 
 pub struct ProtoBufCodec;
 

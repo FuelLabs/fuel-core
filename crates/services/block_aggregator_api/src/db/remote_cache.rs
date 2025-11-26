@@ -3,16 +3,15 @@ use crate::{
     blocks::BlockSourceEvent,
     db::{
         BlockAggregatorDB,
-        table::LatestBlock,
+        table::{
+            LatestBlock,
+            Mode,
+        },
     },
     protobuf_types::Block as ProtoBlock,
     result::Error,
 };
 use anyhow::anyhow;
-use aws_config::{
-    BehaviorVersion,
-    default_provider::credentials::DefaultCredentialsChain,
-};
 use aws_sdk_s3::{
     self,
     Client,
@@ -48,7 +47,7 @@ pub struct RemoteCache<S> {
     aws_bucket: String,
     requester_pays: bool,
     aws_endpoint: Option<String>,
-    client: Option<Client>,
+    client: Client,
 
     // track consistency between runs
     local_persisted: S,
@@ -60,11 +59,11 @@ pub struct RemoteCache<S> {
 
 impl<S> RemoteCache<S> {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
         aws_bucket: String,
         requester_pays: bool,
         aws_endpoint: Option<String>,
-        client: Option<Client>,
+        client: Client,
         local_persisted: S,
         sync_from: BlockHeight,
     ) -> RemoteCache<S> {
@@ -78,31 +77,6 @@ impl<S> RemoteCache<S> {
             highest_new_height: None,
             orphaned_new_height: None,
             synced: false,
-        }
-    }
-
-    async fn client(&mut self) -> crate::result::Result<&Client> {
-        self.init_client().await;
-        self.client
-            .as_ref()
-            .ok_or(Error::db_error(anyhow!("AWS S3 client is uninitialized")))
-    }
-
-    // only runs the first time
-    async fn init_client(&mut self) {
-        if self.client.is_none() {
-            let credentials = DefaultCredentialsChain::builder().build().await;
-            let sdk_config = aws_config::defaults(BehaviorVersion::latest())
-                .credentials_provider(credentials)
-                .load()
-                .await;
-            let mut config_builder = aws_sdk_s3::config::Builder::from(&sdk_config);
-            if let Some(endpoint) = &self.aws_endpoint {
-                config_builder.set_endpoint_url(Some(endpoint.to_string()));
-            }
-            let config = config_builder.force_path_style(true).build();
-            let client = aws_sdk_s3::Client::from_conf(config);
-            self.client = Some(client);
         }
     }
 }
@@ -129,45 +103,35 @@ where
         let zipped = gzip_bytes(&buf)?;
         let body = ByteStream::from(zipped);
         let req = self
-            .client()
-            .await?
+            .client
             .put_object()
             .bucket(&self.aws_bucket)
             .key(&key)
             .body(body)
             .content_encoding("gzip")
-            .content_type("application/octet-stream");
+            .content_type("application/grpc-web");
         let _ = req.send().await.map_err(Error::db_error)?;
         match block_event {
             BlockSourceEvent::NewBlock(new_height, _) => {
                 tracing::debug!("New block: {:?}", new_height);
-                tracing::info!("New block: {:?}", new_height);
                 self.highest_new_height = Some(new_height);
                 if self.synced {
-                    tracing::info!("Updating latest block to {:?}", new_height);
+                    tracing::debug!("Updating latest block to {:?}", new_height);
                     let mut tx = self.local_persisted.write_transaction();
                     tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
+                        .insert(&(), &Mode::new_s3(new_height))
                         .map_err(|e| Error::DB(anyhow!(e)))?;
                     tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
-                } else if new_height == self.sync_from {
-                    tracing::info!("Updating latest block to {:?}", new_height);
+                } else if new_height == self.sync_from
+                    || self.height_is_next_height(new_height)?
+                {
+                    tracing::debug!("Updating latest block to {:?}", new_height);
                     self.synced = true;
                     self.highest_new_height = Some(new_height);
                     self.orphaned_new_height = None;
                     let mut tx = self.local_persisted.write_transaction();
                     tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
-                        .map_err(|e| Error::DB(anyhow!(e)))?;
-                    tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
-                } else if self.height_is_next_height(new_height)? {
-                    tracing::info!("Updating latest block to {:?}", new_height);
-                    self.synced = true;
-                    self.highest_new_height = Some(new_height);
-                    self.orphaned_new_height = None;
-                    let mut tx = self.local_persisted.write_transaction();
-                    tx.storage_as_mut::<LatestBlock>()
-                        .insert(&(), &new_height)
+                        .insert(&(), &Mode::new_s3(new_height))
                         .map_err(|e| Error::DB(anyhow!(e)))?;
                     tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
                 } else if self.orphaned_new_height.is_none() {
@@ -177,19 +141,18 @@ where
             }
             BlockSourceEvent::OldBlock(height, _) => {
                 tracing::debug!("Old block: {:?}", height);
-                tracing::info!("Old block: {:?}", height);
                 let mut tx = self.local_persisted.write_transaction();
                 let latest_height = if height.succ() == self.orphaned_new_height {
-                    tracing::info!("Marking block as synced: {:?}", height);
+                    tracing::debug!("Marking block as synced: {:?}", height);
                     self.orphaned_new_height = None;
                     self.synced = true;
                     self.highest_new_height.unwrap_or(height)
                 } else {
-                    tracing::info!("Updating latest block to {:?}", height);
+                    tracing::debug!("Updating latest block to {:?}", height);
                     height
                 };
                 tx.storage_as_mut::<LatestBlock>()
-                    .insert(&(), &latest_height)
+                    .insert(&(), &Mode::new_s3(latest_height))
                     .map_err(|e| Error::DB(anyhow!(e)))?;
                 tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
             }
@@ -229,7 +192,7 @@ where
             .get(&())
             .map_err(|e| Error::DB(anyhow!(e)))?;
 
-        Ok(height.map(|b| b.into_owned()))
+        Ok(height.map(|b| b.height()))
     }
 }
 
@@ -245,7 +208,8 @@ where
             .local_persisted
             .storage_as_ref::<LatestBlock>()
             .get(&())
-            .map_err(|e| Error::DB(anyhow!(e)))?;
+            .map_err(|e| Error::DB(anyhow!(e)))?
+            .map(|m| m.height());
         if let Some(latest_height) = maybe_latest_height {
             Ok(latest_height.succ() == Some(height))
         } else {

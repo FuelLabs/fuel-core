@@ -28,6 +28,7 @@ fault-proving = [
     "fuel-core-benches/fault-proving",
 ]
 rpc = ["fuel-core/rpc", "fuel-core-bin/rpc"]
+local_rpc = []
 
 [dependencies]
 anyhow = { workspace = true }

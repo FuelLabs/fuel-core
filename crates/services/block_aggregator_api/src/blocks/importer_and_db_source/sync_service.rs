@@ -145,7 +145,8 @@ where
                 "reached stop height {}, putting task into hibernation",
                 self.stop_height
             );
-            futures::future::pending().await
+            let _ = _watcher.while_started().await;
+            return TaskNextAction::Stop
         }
         let next_height = self.next_height;
         let res = self.get_block_and_receipts(&next_height).await;
@@ -166,7 +167,7 @@ where
             self.next_height = BlockHeight::from((*next_height).saturating_add(1));
             TaskNextAction::Continue
         } else {
-            tracing::warn!("no block found at height {:?}, retrying", next_height);
+            tracing::error!("no block found at height {:?}, retrying", next_height);
             TaskNextAction::Stop
         }
     }
