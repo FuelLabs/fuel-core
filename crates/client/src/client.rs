@@ -44,7 +44,10 @@ use crate::{
     reqwest_ext::FuelGraphQlResponse,
     transport::FailoverTransport,
 };
-use anyhow::Context;
+use anyhow::{
+    Context,
+    anyhow,
+};
 #[cfg(feature = "subscriptions")]
 use cynic::SubscriptionBuilder;
 use cynic::{
@@ -301,6 +304,9 @@ impl FuelClient {
     }
 
     pub fn with_urls(urls: &[impl AsRef<str>]) -> anyhow::Result<Self> {
+        if urls.is_empty() {
+            return Err(anyhow!("Failed to create FuelClient. No URL is provided."));
+        }
         let urls = urls
             .iter()
             .map(|url| Url::parse(url.as_ref()))
