@@ -43,12 +43,14 @@ use fuel_core_p2p::config::{
     NotInitialized,
 };
 
+#[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::integration::StorageMethod;
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
     ChainConfig,
     StateConfig,
 };
+#[cfg(feature = "rpc")]
 use fuel_core_types::fuel_types::BlockHeight;
 #[cfg(feature = "test-helpers")]
 use std::net::{
