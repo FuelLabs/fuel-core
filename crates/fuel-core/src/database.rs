@@ -96,6 +96,7 @@ use crate::{
 use anyhow::anyhow;
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::db::table::{
+    Blocks,
     LatestBlock,
     Mode,
 };
@@ -478,6 +479,16 @@ impl Database<BlockAggregatorDatabase> {
             Some(Mode::Local(_)) => Some(Mode::new_local(block_height)),
             Some(Mode::S3(_)) => Some(Mode::new_s3(block_height)),
         };
+        if let Some(Mode::Local(_)) = mode {
+            let remove_heights = tx
+                .iter_all_keys::<Blocks>(Some(IterDirection::Reverse))
+                .flatten()
+                .take_while(|height| height <= &block_height)
+                .collect::<Vec<_>>();
+            for height in remove_heights {
+                tx.storage_as_mut::<Blocks>().remove(&height)?;
+            }
+        }
         if let Some(new) = new {
             tx.storage_as_mut::<LatestBlock>().insert(&(), &new)?;
             tx.commit().map_err(|e: StorageError| anyhow!(e))?;
