@@ -4320,6 +4320,7 @@ dependencies = [
  "cynic",
  "derive_more 0.99.20",
  "eventsource-client",
+ "fuel-core-protobuf",
  "fuel-core-types 0.47.1",
  "futures",
  "hex",
@@ -4333,6 +4334,7 @@ dependencies = [
  "serde_json",
  "tai64",
  "thiserror 1.0.69",
+ "tonic 0.14.2",
  "tracing",
 ]
 
