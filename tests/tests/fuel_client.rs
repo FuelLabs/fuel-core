@@ -80,8 +80,8 @@ async fn client_with_single_url_works() {
 
 #[tokio::test]
 async fn client_with_invalid_url_fails() {
-    // Given
-    let invalid_urls = &["not-a-valid-url", "also://invalid"];
+    // Given - URLs that are truly invalid even after adding http:// prefix
+    let invalid_urls = &["http://[invalid", "http://host:not_a_port"];
 
     // When
     let result = FuelClient::with_urls(invalid_urls);
