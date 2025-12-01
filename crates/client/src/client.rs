@@ -251,19 +251,26 @@ pub struct FuelClient {
     chain_state_info: ChainStateInfo,
 }
 
+/// Normalizes a URL string by ensuring it has an http(s) scheme and the `/v1/graphql` path.
+fn normalize_url(url_str: &str) -> anyhow::Result<Url> {
+    let mut raw_url = url_str.to_string();
+    if !raw_url.starts_with("http") {
+        raw_url = format!("http://{raw_url}");
+    }
+
+    let mut url = reqwest::Url::parse(&raw_url)
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("Invalid fuel-core URL: {url_str}"))?;
+    url.set_path("/v1/graphql");
+
+    Ok(url)
+}
+
 impl FromStr for FuelClient {
     type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let mut raw_url = str.to_string();
-        if !raw_url.starts_with("http") {
-            raw_url = format!("http://{raw_url}");
-        }
-
-        let mut url = reqwest::Url::parse(&raw_url)
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
-        url.set_path("/v1/graphql");
+        let url = normalize_url(str)?;
 
         Ok(Self {
             transport: FailoverTransport::new(vec![url])?,
@@ -309,9 +316,8 @@ impl FuelClient {
         }
         let urls = urls
             .iter()
-            .map(|url| Url::parse(url.as_ref()))
-            .collect::<Result<Vec<_>, _>>()
-            .context("failed to parse provided URLs")?;
+            .map(|url| normalize_url(url.as_ref()))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             transport: FailoverTransport::new(urls)?,
             require_height: ConsistencyPolicy::Auto {
@@ -1633,5 +1639,72 @@ impl FuelClient {
                 Ok::<_, ConversionError>(response.transaction)
             })
             .transpose()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn with_urls_normalizes_urls_to_graphql_endpoint() {
+        // Given
+        let urls = &["http://localhost:8080", "http://example.com:4000"];
+
+        // When
+        let client = FuelClient::with_urls(urls).expect("should create client");
+
+        // Then
+        assert_eq!(
+            client.get_default_url().as_str(),
+            "http://localhost:8080/v1/graphql"
+        );
+    }
+
+    #[test]
+    fn with_urls_adds_http_scheme_if_missing() {
+        // Given
+        let urls = &["localhost:8080"];
+
+        // When
+        let client = FuelClient::with_urls(urls).expect("should create client");
+
+        // Then
+        assert_eq!(
+            client.get_default_url().as_str(),
+            "http://localhost:8080/v1/graphql"
+        );
+    }
+
+    #[test]
+    fn with_urls_overwrites_existing_path() {
+        // Given - URLs that already have some path
+        let urls = &["http://localhost:8080/some/path", "http://example.com/api"];
+
+        // When
+        let client = FuelClient::with_urls(urls).expect("should create client");
+
+        // Then - path should be normalized to /v1/graphql
+        assert_eq!(
+            client.get_default_url().as_str(),
+            "http://localhost:8080/v1/graphql"
+        );
+    }
+
+    #[test]
+    fn new_and_with_urls_produce_same_url() {
+        // Given
+        let url = "http://localhost:8080";
+
+        // When
+        let client_new = FuelClient::new(url).expect("should create client via new");
+        let client_with_urls =
+            FuelClient::with_urls(&[url]).expect("should create client via with_urls");
+
+        // Then
+        assert_eq!(
+            client_new.get_default_url().as_str(),
+            client_with_urls.get_default_url().as_str()
+        );
     }
 }
