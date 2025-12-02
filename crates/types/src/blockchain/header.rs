@@ -79,6 +79,17 @@ impl BlockHeader {
         }
     }
 
+    /// Get the application portion of the header.
+    pub fn application_v1(
+        &self,
+    ) -> Option<&ApplicationHeader<GeneratedApplicationFieldsV1>> {
+        match self {
+            BlockHeader::V1(header) => Some(header.application()),
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(_header) => None,
+        }
+    }
+
     /// Get the consensus portion of the header.
     pub fn consensus(&self) -> &ConsensusHeader<GeneratedConsensusFields> {
         match self {
@@ -130,6 +141,20 @@ impl BlockHeader {
             BlockHeader::V1(header) => header.application().transactions_count,
             #[cfg(feature = "fault-proving")]
             BlockHeader::V2(header) => header.application().transactions_count,
+        }
+    }
+
+    /// Setter for the transactions count
+    #[cfg(feature = "test-helpers")]
+    pub fn set_transactions_count(&mut self, count: u16) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.application_mut().generated.transactions_count = count
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.application_mut().generated.transactions_count = count
+            }
         }
     }
 
@@ -191,6 +216,25 @@ impl BlockHeader {
                 state_transition_bytecode_version: header
                     .application()
                     .state_transition_bytecode_version,
+                generated: Empty {},
+            },
+        }
+    }
+
+    /// Alias the consensus header into an empty one.
+    pub fn as_empty_consensus_header(&self) -> ConsensusHeader<Empty> {
+        match self {
+            BlockHeader::V1(header) => ConsensusHeader {
+                prev_root: header.consensus().prev_root,
+                height: header.consensus().height,
+                time: header.consensus().time,
+                generated: Empty {},
+            },
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => ConsensusHeader {
+                prev_root: header.consensus().prev_root,
+                height: header.consensus().height,
+                time: header.consensus().time,
                 generated: Empty {},
             },
         }
@@ -269,6 +313,45 @@ impl BlockHeader {
         }
     }
 
+    /// Set the message outbox root for the header
+    pub fn set_message_outbox_root(&mut self, root: Bytes32) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_message_outbox_root(root);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_message_outbox_root(root);
+            }
+        }
+    }
+
+    /// Set the message receipt count
+    pub fn set_message_receipt_count(&mut self, count: u32) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_message_receipt_count(count);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_message_receipt_count(count);
+            }
+        }
+    }
+
+    /// Set the event inbox root for the header
+    pub fn set_event_inbox_root(&mut self, root: Bytes32) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_event_inbox_root(root);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_event_inbox_root(root);
+            }
+        }
+    }
+
     /// Set the consensus parameters version
     pub fn set_consensus_parameters_version(
         &mut self,
@@ -281,6 +364,22 @@ impl BlockHeader {
             #[cfg(feature = "fault-proving")]
             BlockHeader::V2(header) => {
                 header.set_consensus_parameters_version(version);
+            }
+        }
+    }
+
+    /// Set the state transition bytecode version
+    pub fn set_state_transition_bytecode_version(
+        &mut self,
+        version: StateTransitionBytecodeVersion,
+    ) {
+        match self {
+            BlockHeader::V1(header) => {
+                header.set_stf_version(version);
+            }
+            #[cfg(feature = "fault-proving")]
+            BlockHeader::V2(header) => {
+                header.set_stf_version(version);
             }
         }
     }
@@ -674,7 +773,8 @@ impl PartialBlockHeader {
     }
 }
 
-fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
+/// Generate the transactions root from the list of transactions.
+pub fn generate_txns_root(transactions: &[Transaction]) -> Bytes32 {
     let transaction_ids = transactions.iter().map(|tx| tx.to_bytes());
     // Generate the transaction merkle root.
     let mut transaction_tree =
