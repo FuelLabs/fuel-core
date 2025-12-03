@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Setup e2e config secrets
         run: |
           export e2e_wallet_a="${{ secrets.E2E_WALLET_A }}"

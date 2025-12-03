@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check for a file with the PR number in a sub-directory of the .changes directory" or "no changelog" label.
         run: |
@@ -57,9 +57,9 @@ jobs:
           fi
 
   rustfmt:
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@master
         with:
@@ -70,9 +70,9 @@ jobs:
         run: cargo +${{ env.RUST_VERSION_FMT }} fmt --all -- --check
 
   lint-toml-files:
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -82,9 +82,9 @@ jobs:
         run: cargo sort -w --check
 
   prevent-openssl:
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # ensure openssl hasn't crept into the dep tree
       - name: Check if openssl is included
         run: ./.github/workflows/scripts/verify_openssl.sh
@@ -95,7 +95,7 @@ jobs:
       - prevent-openssl
       - rustfmt
       - check-changelog
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
     env:
       RUSTFLAGS: -D warnings
     strategy:
@@ -154,7 +154,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -165,14 +165,8 @@ jobs:
         with:
           version: "0.36.4"
       - uses: rui314/setup-mold@v1
-      - uses: buildjet/cache@v3
+      - uses: WarpBuilds/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
           key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - uses: actions-rs/cargo@v1
         if: ${{ matrix.command == 'nextest' }}
@@ -184,10 +178,10 @@ jobs:
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
 
   publish-crates-check:
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -204,7 +198,7 @@ jobs:
     needs:
       - rustfmt
       - check-changelog
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
     env:
       RUSTFLAGS: -D warnings
       FUEL_CORE_TEST_AWS_KMS_ARN: "arn:aws:kms:us-east-1:249945542445:key/mrk-e13c7118ce544f7da66294f6e87c8790"
@@ -218,19 +212,13 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: rui314/setup-mold@v1
-      - uses: buildjet/cache@v3
+      - uses: WarpBuilds/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
           key: cargo-test-kms-${{ hashFiles('**/Cargo.lock') }}
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
@@ -251,7 +239,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Verify tag version
         run: |
@@ -266,11 +254,11 @@ jobs:
       - verify-tag-version
       - verifications-complete
     if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
@@ -297,11 +285,11 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - os: buildjet-4vcpu-ubuntu-2204
+          - os: warp-ubuntu-2404-x64-4x
             platform: linux
             target: x86_64-unknown-linux-gnu
             cross_image: x86_64-linux-gnu
-          - os: buildjet-4vcpu-ubuntu-2204
+          - os: warp-ubuntu-2404-arm64-4x
             platform: linux-arm
             target: aarch64-unknown-linux-gnu
             cross_image: aarch64-linux-gnu
@@ -313,14 +301,14 @@ jobs:
             target: aarch64-apple-darwin
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
         if: matrix.job.cross_image
         uses: docker/setup-buildx-action@v1
 
       - name: Log in to the ghcr.io registry
-        if: matrix.job.os == 'buildjet-4vcpu-ubuntu-2204'
+        if: matrix.job.target == 'aarch64-unknown-linux-gnu'
         uses: docker/login-action@v1
         with:
           registry: ${{ env.REGISTRY }}
@@ -328,7 +316,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to the docker.io registry
-        if: matrix.job.os == 'buildjet-4vcpu-ubuntu-2204'
+        if: matrix.job.target == 'aarch64-unknown-linux-gnu'
         uses: docker/login-action@v2
         with:
           username: fuellabs
@@ -427,7 +415,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions-rs/audit-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
