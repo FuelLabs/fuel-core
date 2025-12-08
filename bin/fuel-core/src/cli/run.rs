@@ -659,6 +659,7 @@ impl Command {
             da_committer_url,
             block_activity_threshold: 0,
             da_poll_interval: gas_price.da_poll_interval.map(Into::into),
+            algorithm_disabled: gas_price.gas_price_algorithm_disabled,
         };
 
         let tx_pool_ttl: Duration = tx_pool_ttl.into();

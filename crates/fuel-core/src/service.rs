@@ -71,6 +71,21 @@ pub mod sub_services;
 pub mod vm_pool;
 
 #[derive(Clone)]
+pub enum GasPriceServiceState {
+    Full(fuel_core_gas_price_service::v1::service::SharedData),
+    Lightweight(fuel_core_gas_price_service::updater_service::SharedData),
+}
+
+impl GasPriceServiceState {
+    pub async fn await_synced(&self) -> anyhow::Result<()> {
+        match self {
+            GasPriceServiceState::Full(shared) => shared.await_synced().await,
+            GasPriceServiceState::Lightweight(shared) => shared.await_synced().await,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct SharedState {
     /// The PoA adaptor around the shared state of the consensus module.
     pub poa_adapter: PoAAdapter,
@@ -97,7 +112,7 @@ pub struct SharedState {
     /// The compression service shared data.
     pub compression: Option<fuel_core_compression_service::service::SharedData>,
     /// The gas price service shared data.
-    pub gas_price_service: fuel_core_gas_price_service::v1::service::SharedData,
+    pub gas_price_service: GasPriceServiceState,
 }
 
 pub struct FuelService {

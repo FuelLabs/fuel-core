@@ -4,15 +4,20 @@ use std::sync::Arc;
 
 use tokio::sync::Mutex;
 
-use fuel_core_gas_price_service::v1::{
-    algorithm::AlgorithmV1,
-    da_source_service::block_committer_costs::{
-        BlockCommitterDaBlockCosts,
-        BlockCommitterHttpApi,
+use fuel_core_gas_price_service::{
+    updater_service::new_gas_price_updater_service,
+    v1::{
+        da_source_service::block_committer_costs::{
+            BlockCommitterDaBlockCosts,
+            BlockCommitterHttpApi,
+        },
+        metadata::V1AlgorithmConfig,
+        service::{
+            LatestGasPrice,
+            SharedData,
+        },
+        uninitialized_task::new_gas_price_service_v1,
     },
-    metadata::V1AlgorithmConfig,
-    service::SharedData,
-    uninitialized_task::new_gas_price_service_v1,
 };
 
 use fuel_core_poa::Trigger;
@@ -22,7 +27,10 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::signer::SignMode;
+use fuel_core_types::{
+    fuel_tx::field::MintGasPrice,
+    signer::SignMode,
+};
 
 use fuel_core_compression_service::service::new_service as new_compression_service;
 
@@ -38,6 +46,7 @@ use crate::service::adapters::consensus_module::poa::pre_confirmation_signature:
 
 use super::{
     DbType,
+    GasPriceServiceState,
     adapters::{
         FuelBlockSigner,
         P2PAdapter,
@@ -80,7 +89,10 @@ use crate::{
             VerifierAdapter,
             chain_state_info_provider,
             consensus_module::poa::InDirectoryPredefinedBlocks,
-            fuel_gas_price_provider::FuelGasPriceProvider,
+            fuel_gas_price_provider::{
+                FuelGasPriceProvider,
+                ProducerGasPriceProvider,
+            },
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
             ready_signal::ReadySignal,
@@ -104,7 +116,7 @@ pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
     Database,
     TxPoolAdapter,
     ExecutorAdapter,
-    FuelGasPriceProvider<AlgorithmV1, u32, u64>,
+    ProducerGasPriceProvider,
     ChainStateInfoProvider,
 >;
 pub type GraphQL = fuel_core_graphql_api::api_service::Service;
@@ -250,36 +262,88 @@ pub fn init_sub_services(
 
     let genesis_block_height = *genesis_block.header().height();
     let settings = chain_state_info_provider.clone();
-    let block_stream = importer_adapter.events_shared_result();
 
-    let committer_api =
-        BlockCommitterHttpApi::new(config.gas_price_config.da_committer_url.clone());
-    let da_source = BlockCommitterDaBlockCosts::new(committer_api);
-    let v1_config = V1AlgorithmConfig::from(config.clone());
+    let initial_gas_price = {
+        let on_chain_view = database.on_chain().latest_view()?;
+        on_chain_view
+            .get_full_block(&last_height)?
+            .and_then(|block| {
+                block
+                    .transactions()
+                    .last()
+                    .and_then(|tx| tx.as_mint())
+                    .map(|mint| *mint.gas_price())
+            })
+            .unwrap_or(config.gas_price_config.starting_exec_gas_price)
+    };
 
-    let gas_price_service_v1 = new_gas_price_service_v1(
-        v1_config,
-        genesis_block_height,
-        settings,
-        block_stream,
-        database.gas_price().clone(),
-        da_source,
-        database.on_chain().clone(),
-    )?;
-    let SharedData {
-        gas_price_algo,
-        latest_gas_price,
-        ..
-    } = gas_price_service_v1.shared.clone();
-    let universal_gas_price_provider = UniversalGasPriceProvider::new_from_inner(
-        latest_gas_price,
-        DEFAULT_GAS_PRICE_CHANGE_PERCENT,
-    );
+    let (
+        gas_price_service_state,
+        universal_gas_price_provider,
+        producer_gas_price_provider,
+        gas_price_service_box,
+    ) = if config.gas_price_config.algorithm_disabled {
+        tracing::info!(
+            "Gas price algorithm disabled. Using lightweight updater service. \
+             Block production will not be available."
+        );
 
-    let producer_gas_price_provider = FuelGasPriceProvider::new(
-        gas_price_algo.clone(),
-        universal_gas_price_provider.clone(),
-    );
+        let latest_gas_price = LatestGasPrice::new(last_height.into(), initial_gas_price);
+        let block_stream = importer_adapter.events_shared_result();
+
+        let updater_service = new_gas_price_updater_service(latest_gas_price, block_stream);
+        let updater_shared = updater_service.shared.clone();
+
+        let universal_provider = UniversalGasPriceProvider::new_from_inner(
+            updater_shared.latest_gas_price.clone(),
+            DEFAULT_GAS_PRICE_CHANGE_PERCENT,
+        );
+
+        let producer_provider = ProducerGasPriceProvider::Disabled(universal_provider.clone());
+
+        let state = GasPriceServiceState::Lightweight(updater_shared);
+        let service_box: Box<dyn fuel_core_services::Service + Send + Sync> =
+            Box::new(updater_service);
+
+        (state, universal_provider, producer_provider, service_box)
+    } else {
+        let block_stream = importer_adapter.events_shared_result();
+
+        let committer_api =
+            BlockCommitterHttpApi::new(config.gas_price_config.da_committer_url.clone());
+        let da_source = BlockCommitterDaBlockCosts::new(committer_api);
+        let v1_config = V1AlgorithmConfig::from(config.clone());
+
+        let gas_price_service_v1 = new_gas_price_service_v1(
+            v1_config,
+            genesis_block_height,
+            settings,
+            block_stream,
+            database.gas_price().clone(),
+            da_source,
+            database.on_chain().clone(),
+        )?;
+
+        let SharedData {
+            gas_price_algo,
+            latest_gas_price,
+            ..
+        } = gas_price_service_v1.shared.clone();
+
+        let universal_provider = UniversalGasPriceProvider::new_from_inner(
+            latest_gas_price,
+            DEFAULT_GAS_PRICE_CHANGE_PERCENT,
+        );
+
+        let fuel_provider = FuelGasPriceProvider::new(gas_price_algo, universal_provider.clone());
+        let producer_provider = ProducerGasPriceProvider::Full(fuel_provider);
+
+        let state = GasPriceServiceState::Full(gas_price_service_v1.shared.clone());
+        let service_box: Box<dyn fuel_core_services::Service + Send + Sync> =
+            Box::new(gas_price_service_v1);
+
+        (state, universal_provider, producer_provider, service_box)
+    };
 
     let txpool = fuel_core_txpool::new_service(
         chain_id,
@@ -319,7 +383,7 @@ pub fn init_sub_services(
         executor: Arc::new(executor.clone()),
         relayer: Box::new(relayer_adapter.clone()),
         lock: Mutex::new(()),
-        gas_price_provider: producer_gas_price_provider.clone(),
+        gas_price_provider: producer_gas_price_provider,
         chain_state_info_provider: chain_state_info_provider.clone(),
     };
     let producer_adapter = BlockProducerAdapter::new(block_producer);
@@ -491,13 +555,13 @@ pub fn init_sub_services(
         config: config.clone(),
         tx_status_manager: tx_status_manager_adapter,
         compression: compression_service.as_ref().map(|c| c.shared.clone()),
-        gas_price_service: gas_price_service_v1.shared.clone(),
+        gas_price_service: gas_price_service_state,
     };
 
     #[allow(unused_mut)]
     // `FuelService` starts and shutdowns all sub-services in the `services` order
     let mut services: SubServices = vec![
-        Box::new(gas_price_service_v1),
+        gas_price_service_box,
         Box::new(txpool),
         Box::new(chain_state_info_provider_service),
     ];

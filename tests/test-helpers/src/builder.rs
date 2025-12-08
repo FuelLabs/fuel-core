@@ -106,6 +106,7 @@ pub struct TestSetupBuilder {
     pub database_config: DatabaseConfig,
     pub chain_config: Option<ChainConfig>,
     pub number_threads_pool_verif: usize,
+    pub gas_price_algorithm_disabled: bool,
 }
 
 impl TestSetupBuilder {
@@ -256,6 +257,7 @@ impl TestSetupBuilder {
 
         let gas_price_config = GasPriceConfig {
             starting_exec_gas_price: self.starting_gas_price,
+            algorithm_disabled: self.gas_price_algorithm_disabled,
             ..GasPriceConfig::local_node()
         };
 
@@ -297,6 +299,7 @@ impl Default for TestSetupBuilder {
             database_type: DbType::RocksDb,
             database_config: DatabaseConfig::config_for_tests(),
             chain_config: None,
+            gas_price_algorithm_disabled: false,
             number_threads_pool_verif: 0,
         }
     }
