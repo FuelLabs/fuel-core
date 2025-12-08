@@ -176,6 +176,14 @@ impl PeerManager {
             .saturating_add(self.non_reserved_connected_peers.len())
     }
 
+    pub fn non_reserved_peers_connected(&self) -> usize {
+        self.non_reserved_connected_peers.len()
+    }
+
+    pub fn reserved_peers_connected(&self) -> usize {
+        self.reserved_connected_peers.len()
+    }
+
     pub fn get_peers_ids(&self) -> impl Iterator<Item = &PeerId> {
         self.non_reserved_connected_peers
             .keys()
