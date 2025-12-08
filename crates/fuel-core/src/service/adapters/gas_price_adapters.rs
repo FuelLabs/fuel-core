@@ -86,6 +86,7 @@ impl From<Config> for V1AlgorithmConfig {
             activity_capped_range_size,
             activity_decrease_range_size,
             block_activity_threshold,
+            algorithm_disabled: _,
         } = value.gas_price_config;
         V1AlgorithmConfig {
             new_exec_gas_price: starting_exec_gas_price.max(min_exec_gas_price),

@@ -12,5 +12,6 @@ pub mod v0;
 pub mod common;
 
 pub mod sync_state;
+pub mod updater_service;
 #[allow(unused)]
 pub mod v1;

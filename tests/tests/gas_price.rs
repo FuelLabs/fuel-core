@@ -1148,3 +1148,55 @@ async fn gm_opcode__returns_the_same_gas_price_produced_by_the_gas_price_service
         &expected_metadata.v1().unwrap().new_exec_gas_price()
     );
 }
+
+mod lightweight_gas_price_mode {
+    use super::*;
+    use fuel_core::service::GasPriceServiceState;
+
+    #[allow(non_snake_case)]
+    #[tokio::test]
+    async fn node_starts_with_algorithm_disabled() {
+        let mut context = TestSetupBuilder::new(1234);
+        context.gas_price_algorithm_disabled = true;
+        context.starting_gas_price = 500;
+
+        let context = context.finalize().await;
+
+        match &context.srv.shared.gas_price_service {
+            GasPriceServiceState::Lightweight(_) => {}
+            GasPriceServiceState::Full(_) => {
+                panic!("Expected lightweight mode when algorithm is disabled");
+            }
+        }
+    }
+
+    #[allow(non_snake_case)]
+    #[tokio::test]
+    async fn estimate_gas_price_works_with_algorithm_disabled() {
+        let mut context = TestSetupBuilder::new(5678);
+        context.gas_price_algorithm_disabled = true;
+        context.starting_gas_price = 1000;
+
+        let context = context.finalize().await;
+
+        let estimate = context.client.estimate_gas_price(Some(10)).await;
+
+        assert!(estimate.is_ok(), "Gas price estimation should work");
+        let estimate = estimate.unwrap();
+        assert!(estimate.gas_price.0 >= 1000, "Estimated gas price should be >= starting price");
+    }
+
+    #[allow(non_snake_case)]
+    #[tokio::test]
+    async fn latest_gas_price_works_with_algorithm_disabled() {
+        let mut context = TestSetupBuilder::new(9012);
+        context.gas_price_algorithm_disabled = true;
+        context.starting_gas_price = 2000;
+
+        let context = context.finalize().await;
+
+        let result = context.client.latest_gas_price().await;
+
+        assert!(result.is_ok(), "Latest gas price query should work");
+    }
+}

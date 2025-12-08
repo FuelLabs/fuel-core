@@ -82,4 +82,8 @@ pub struct GasPriceArgs {
     /// i.e. If you want the Gas Price Service to look for the costs of block 1000, set to 999
     #[arg(long = "da-starting-recorded-height", env)]
     pub da_starting_recorded_height: Option<u32>,
+
+    /// Disable the gas price algorithm (for non-block-producing nodes)
+    #[arg(long = "gas-price-algorithm-disabled", env, default_value = "false")]
+    pub gas_price_algorithm_disabled: bool,
 }
