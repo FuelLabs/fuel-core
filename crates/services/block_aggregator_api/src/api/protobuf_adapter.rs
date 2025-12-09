@@ -217,7 +217,7 @@ impl RunnableTask for Task {
         let future = self
             .router
             .take()
-            .expect("Router is always initialzied; qed")
+            .expect("Router is always initialized; qed")
             .serve_with_shutdown(self.addr, async move {
                 let _ = watcher_local.while_started().await;
             });
