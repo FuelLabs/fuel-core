@@ -16,7 +16,6 @@ use fuel_core::{
 use fuel_core_block_aggregator_api::{
     blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
     db::remote_cache::block_height_to_key,
-    integration::StorageMethod,
     protobuf_types::{
         Block as ProtoBlock,
         BlockHeightRequest as ProtoBlockHeightRequest,
@@ -27,6 +26,7 @@ use fuel_core_block_aggregator_api::{
         block_response::Payload as ProtoPayload,
         remote_block_response::Location,
     },
+    service::StorageMethod,
 };
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
