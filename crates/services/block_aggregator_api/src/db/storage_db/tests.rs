@@ -14,7 +14,10 @@ use crate::{
 use fuel_core_storage::{
     StorageAsRef,
     structured_storage::test::InMemoryStorage,
-    transactional::IntoTransaction,
+    transactional::{
+        IntoTransaction,
+        StorageTransaction,
+    },
 };
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
@@ -46,7 +49,7 @@ async fn store_block__adds_to_storage() {
     let block = BlockSourceEvent::OldBlock(height, expected.clone());
 
     // when
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let actual = adapter
@@ -84,11 +87,11 @@ async fn get_block__can_get_expected_range() {
     tx.commit().unwrap();
     let db = db.commit().unwrap();
     let tx = db.into_transaction();
-    let adapter = StorageDB::new(tx, BlockHeight::from(0u32));
+    let adapter = StorageBlocksProvider::new(tx);
 
     // when
     let BlockRangeResponse::Literal(stream) =
-        adapter.get_block_range(height_2, height_3).await.unwrap()
+        adapter.get_block_range(height_2, height_3).unwrap()
     else {
         panic!("expected literal response")
     };
@@ -108,11 +111,11 @@ async fn store_block__updates_the_highest_continuous_block_if_contiguous() {
     let block = BlockSourceEvent::OldBlock(height, expected.clone());
 
     // when
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let expected = height;
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 }
 
@@ -132,11 +135,11 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
     let block = BlockSourceEvent::NewBlock(height, proto.clone());
 
     // when
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let expected = starting_height;
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 }
 
@@ -150,17 +153,17 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
         let height = BlockHeight::from(height);
         let block = proto_block_with_height(height);
         let block = BlockSourceEvent::NewBlock(height, block.clone());
-        adapter.store_block(block).await.unwrap();
+        adapter.store_block(&block).await.unwrap();
     }
     // when
     let height = BlockHeight::from(1u32);
     let some_block = proto_block_with_height(height);
     let block = BlockSourceEvent::OldBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let expected = BlockHeight::from(10u32);
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 }
 #[tokio::test]
@@ -172,17 +175,17 @@ async fn store_block__new_block_updates_the_highest_continuous_block_if_synced()
     let height = BlockHeight::from(0u32);
     let some_block = proto_block_with_height(height);
     let block = BlockSourceEvent::OldBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // when
     let height = BlockHeight::from(1u32);
     let some_block = proto_block_with_height(height);
     let block = BlockSourceEvent::NewBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let expected = BlockHeight::from(1u32);
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 
     assert!(adapter.synced)
@@ -198,11 +201,11 @@ async fn store_block__new_block_comes_first() {
     let height = BlockHeight::from(0u32);
     let some_block = proto_block_with_height(height);
     let block = BlockSourceEvent::NewBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let expected = BlockHeight::from(0u32);
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 
     assert!(adapter.synced);

@@ -93,12 +93,11 @@ mod rpc {
         service::adapters::rpc::ReceiptSource,
     };
     pub use fuel_core_block_aggregator_api::{
-        api::protobuf_adapter::ProtobufAPI,
         blocks::importer_and_db_source::{
             ImporterAndDbSource,
             serializer_adapter::SerializerAdapter,
         },
-        integration::UninitializedTask,
+        service::UninitializedTask,
     };
     pub use fuel_core_services::ServiceRunner;
     pub use fuel_core_types::fuel_types::BlockHeight;
@@ -570,15 +569,15 @@ pub fn init_sub_services(
 #[allow(clippy::type_complexity)]
 #[cfg(feature = "rpc")]
 fn init_rpc_server(
-    config: &fuel_core_block_aggregator_api::integration::Config,
+    config: &fuel_core_block_aggregator_api::service::Config,
     database: &CombinedDatabase,
     importer_adapter: &BlockImporterAdapter,
     genesis_height: BlockHeight,
 ) -> anyhow::Result<
     ServiceRunner<
         UninitializedTask<
-            ProtobufAPI,
             ImporterAndDbSource<SerializerAdapter, Database<OnChain>, ReceiptSource>,
+            Database<BlockAggregatorDatabase>,
             Database<BlockAggregatorDatabase>,
         >,
     >,
@@ -587,7 +586,7 @@ fn init_rpc_server(
     let serializer = SerializerAdapter;
     let onchain_db = database.on_chain().clone();
     let importer = importer_adapter.events_shared_result();
-    fuel_core_block_aggregator_api::integration::new_service(
+    fuel_core_block_aggregator_api::service::new_service(
         database.block_aggregation_storage().clone(),
         serializer,
         onchain_db,

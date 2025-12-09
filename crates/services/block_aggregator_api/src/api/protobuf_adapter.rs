@@ -1,8 +1,4 @@
 use crate::{
-    api::{
-        BlockAggregatorApi,
-        BlockAggregatorQuery,
-    },
     block_range_response::{
         BlockRangeResponse,
         BoxStream,
@@ -23,24 +19,24 @@ use crate::{
         block_response as proto_block_response,
         remote_block_response::Location as ProtoRemoteLocation,
     },
-    result::{
-        Error,
-        Result,
-    },
+    result::Result,
 };
-use anyhow::anyhow;
 use async_trait::async_trait;
 use fuel_core_services::{
     RunnableService,
     RunnableTask,
-    Service,
     ServiceRunner,
     StateWatcher,
     TaskNextAction,
-    try_or_stop,
+    stream::Stream,
 };
+use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
+use std::{
+    net::SocketAddr,
+    ops::Deref,
+    sync::Arc,
+};
 use tonic::{
     Status,
     transport::server::Router,
@@ -49,34 +45,39 @@ use tonic::{
 #[cfg(test)]
 mod tests;
 
-pub struct Server {
-    query_sender:
-        tokio::sync::mpsc::Sender<BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>>,
+#[cfg_attr(test, mockall::automock)]
+pub trait BlocksAggregatorApi: Send + Sync + 'static {
+    fn get_block_range<H>(&self, first: H, last: H) -> Result<BlockRangeResponse>
+    where
+        H: Into<BlockHeight> + 'static;
+
+    fn get_current_height(&self) -> Result<Option<BlockHeight>>;
+
+    fn new_block_subscription(
+        &self,
+    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<ProtoBlock>)>> + Send + 'static;
 }
 
-impl Server {
-    pub fn new(
-        query_sender: tokio::sync::mpsc::Sender<
-            BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>,
-        >,
-    ) -> Self {
-        Self { query_sender }
+pub struct Server<B> {
+    api: B,
+}
+
+impl<B> Server<B> {
+    pub fn new(api: B) -> Self {
+        Self { api }
     }
 }
 
 #[async_trait]
-impl BlockAggregator for Server {
+impl<B> BlockAggregator for Server<B>
+where
+    B: BlocksAggregatorApi,
+{
     async fn get_synced_block_height(
         &self,
-        request: tonic::Request<ProtoBlockHeightRequest>,
+        _: tonic::Request<ProtoBlockHeightRequest>,
     ) -> Result<tonic::Response<ProtoBlockHeightResponse>, tonic::Status> {
-        tracing::debug!("get_block_height: {:?}", request);
-        let (response, receiver) = tokio::sync::oneshot::channel();
-        let query = BlockAggregatorQuery::GetCurrentHeight { response };
-        self.query_sender.send(query).await.map_err(|e| {
-            tonic::Status::internal(format!("Failed to send query: {}", e))
-        })?;
-        let res = receiver.await;
+        let res = self.api.get_current_height();
         match res {
             Ok(height) => Ok(tonic::Response::new(ProtoBlockHeightResponse {
                 height: height.map(|inner| *inner),
@@ -94,17 +95,7 @@ impl BlockAggregator for Server {
         request: tonic::Request<ProtoBlockRangeRequest>,
     ) -> Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status> {
         let req = request.into_inner();
-        let (response, receiver) = tokio::sync::oneshot::channel();
-        let query = BlockAggregatorQuery::GetBlockRange {
-            first: req.start.into(),
-            last: req.end.into(),
-            response,
-        };
-        self.query_sender
-            .send(query)
-            .await
-            .map_err(|e| Status::internal(format!("Failed to send query: {}", e)))?;
-        let res = receiver.await;
+        let res = self.api.get_block_range(req.start, req.end);
         match res {
             Ok(block_range_response) => match block_range_response {
                 BlockRangeResponse::Literal(inner) => {
@@ -153,55 +144,53 @@ impl BlockAggregator for Server {
         }
     }
 
-    type NewBlockSubscriptionStream = ReceiverStream<Result<ProtoBlockResponse, Status>>;
+    type NewBlockSubscriptionStream = BoxStream<Result<ProtoBlockResponse, Status>>;
 
     async fn new_block_subscription(
         &self,
-        request: tonic::Request<ProtoNewBlockSubscriptionRequest>,
+        _: tonic::Request<ProtoNewBlockSubscriptionRequest>,
     ) -> Result<tonic::Response<Self::NewBlockSubscriptionStream>, tonic::Status> {
-        const ARB_CHANNEL_SIZE: usize = 100;
-        tracing::debug!("get_block_range: {:?}", request);
-        let (response, mut receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let query = BlockAggregatorQuery::NewBlockSubscription { response };
-        self.query_sender
-            .send(query)
-            .await
-            .map_err(|e| Status::internal(format!("Failed to send query: {}", e)))?;
-
-        let (task_sender, task_receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        tokio::spawn(async move {
-            while let Some((height, nb)) = receiver.recv().await {
-                let response = ProtoBlockResponse {
-                    height: *height,
-                    payload: Some(proto_block_response::Payload::Literal(nb)),
-                };
-                if task_sender.send(Ok(response)).await.is_err() {
-                    break;
+        let stream = self.api.new_block_subscription().map(|item| {
+            match item {
+                Ok((block_height, block)) => {
+                    let response = ProtoBlockResponse {
+                        height: *block_height,
+                        // TODO: Avoid clone
+                        payload: Some(proto_block_response::Payload::Literal(
+                            block.deref().clone(),
+                        )),
+                    };
+                    Ok(response)
                 }
+                Err(err) => Err(tonic::Status::internal(format!(
+                    "Failed to receive new block: {}",
+                    err
+                ))),
             }
         });
 
-        Ok(tonic::Response::new(ReceiverStream::new(task_receiver)))
+        Ok(tonic::Response::new(stream.boxed()))
     }
 }
 
-pub struct ProtobufAPI {
-    _server_service: ServiceRunner<ServerTask>,
-    query_receiver:
-        tokio::sync::mpsc::Receiver<BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>>,
+pub struct UninitializedTask<B> {
+    addr: SocketAddr,
+    api: B,
 }
 
-pub struct ServerTask {
-    addr: std::net::SocketAddr,
-    query_sender:
-        tokio::sync::mpsc::Sender<BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>>,
+pub struct Task {
+    addr: SocketAddr,
     router: Option<Router>,
 }
+
 #[async_trait::async_trait]
-impl RunnableService for ServerTask {
+impl<B> RunnableService for UninitializedTask<B>
+where
+    B: BlocksAggregatorApi,
+{
     const NAME: &'static str = "ProtobufServerTask";
     type SharedData = ();
-    type Task = Self;
+    type Task = Task;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {}
@@ -211,48 +200,39 @@ impl RunnableService for ServerTask {
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        self.start_router()?;
-        Ok(self)
-    }
-}
-
-impl ServerTask {
-    fn start_router(&mut self) -> anyhow::Result<()> {
-        let server = Server::new(self.query_sender.clone());
+        let server = Server::new(self.api);
         let router = tonic::transport::Server::builder()
             .add_service(ProtoBlockAggregatorServer::new(server));
-        self.router = Some(router);
-        Ok(())
-    }
-
-    fn get_router(&mut self) -> anyhow::Result<Router> {
-        self.router
-            .take()
-            .ok_or_else(|| anyhow!("Router has not been initialized yet"))
+        let task = Task {
+            addr: self.addr,
+            router: Some(router),
+        };
+        Ok(task)
     }
 }
 
-impl RunnableTask for ServerTask {
+impl RunnableTask for Task {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        let router_res = self.get_router();
-        let router = try_or_stop!(router_res, |e| tracing::error!(
-            "Failed to get router, has not been started: {:?}",
-            e
-        ));
+        let mut watcher_local = watcher.clone();
+        let future = self
+            .router
+            .take()
+            .expect("Router is always initialzied; qed")
+            .serve_with_shutdown(self.addr, async move {
+                let _ = watcher_local.while_started().await;
+            });
+
         tokio::select! {
-                res = router.serve(self.addr) => {
-                    if let Err(e) = res {
-                        tracing::error!("BlockAggregator tonic server error: {}", e);
-                        TaskNextAction::Stop
-                    } else {
-                        tracing::info!("BlockAggregator tonic server stopped");
-                        TaskNextAction::Stop
-                    }
-                },
-            _ = watcher.while_started() => {
-                TaskNextAction::Stop
-            }
+            res = future => {
+                if let Err(e) = res {
+                    tracing::error!("BlockAggregator tonic server error: {}", e);
+                } else {
+                    tracing::info!("BlockAggregator tonic server stopped");
+                }
+            },
+            _ = watcher.while_started() => {}
         }
+        TaskNextAction::Stop
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
@@ -260,38 +240,11 @@ impl RunnableTask for ServerTask {
     }
 }
 
-impl ProtobufAPI {
-    pub fn new(url: String, buffer_size: usize) -> Result<Self> {
-        let (query_sender, query_receiver) = tokio::sync::mpsc::channel::<
-            BlockAggregatorQuery<BlockRangeResponse, ProtoBlock>,
-        >(buffer_size);
-        let addr = url.parse().unwrap();
-        let _server_service = ServiceRunner::new(ServerTask {
-            addr,
-            query_sender,
-            router: None,
-        });
-        _server_service.start().map_err(Error::Api)?;
-        let api = Self {
-            _server_service,
-            query_receiver,
-        };
-        Ok(api)
-    }
-}
+pub type APIService<B> = ServiceRunner<UninitializedTask<B>>;
 
-impl BlockAggregatorApi for ProtobufAPI {
-    type BlockRangeResponse = BlockRangeResponse;
-    type Block = ProtoBlock;
-
-    async fn await_query(
-        &mut self,
-    ) -> Result<BlockAggregatorQuery<Self::BlockRangeResponse, Self::Block>> {
-        let query = self
-            .query_receiver
-            .recv()
-            .await
-            .ok_or_else(|| Error::Api(anyhow::anyhow!("Channel closed")))?;
-        Ok(query)
-    }
+pub fn new_service<B>(addr: SocketAddr, api: B) -> APIService<B>
+where
+    B: BlocksAggregatorApi,
+{
+    ServiceRunner::new(UninitializedTask { addr, api })
 }

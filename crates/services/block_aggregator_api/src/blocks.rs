@@ -33,6 +33,14 @@ impl<B> BlockSourceEvent<B> {
             }
         }
     }
+
+    pub fn as_inner(&self) -> (&BlockHeight, &B) {
+        match self {
+            Self::NewBlock(height, block) | Self::OldBlock(height, block) => {
+                (height, block)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

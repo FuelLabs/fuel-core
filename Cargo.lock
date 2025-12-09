@@ -4271,6 +4271,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-types 0.47.1",
  "futures",
+ "mockall",
  "num_enum",
  "proptest",
  "prost 0.14.1",

@@ -51,14 +51,13 @@ async fn store_block__happy_path() {
     let aws_bucket = "test-bucket".to_string();
     let storage = database();
     let sync_from = BlockHeight::new(0);
-    let mut adapter =
-        RemoteCache::new(aws_bucket, false, None, client, storage, sync_from, true).await;
+    let mut adapter = RemoteCache::new(aws_bucket, client, storage, sync_from, true);
     let block_height = BlockHeight::new(123);
     let block = arb_proto_block();
     let block = BlockSourceEvent::OldBlock(block_height, block);
 
     // when
-    let res = adapter.store_block(block).await;
+    let res = adapter.store_block(&block).await;
 
     // then
     assert!(res.is_ok());
@@ -67,25 +66,19 @@ async fn store_block__happy_path() {
 #[tokio::test]
 async fn get_block_range__happy_path() {
     // given
-    let client = mock_client!(aws_sdk_s3, []);
-    let aws_bucket = "test-bucket".to_string();
-    let storage = database();
-    let sync_from = BlockHeight::new(0);
-    let adapter = RemoteCache::new(
-        aws_bucket.clone(),
-        false,
-        None,
-        client,
-        storage,
-        sync_from,
-        true,
-    )
-    .await;
     let start = BlockHeight::new(999);
     let end = BlockHeight::new(1003);
+    let aws_bucket = "test-bucket".to_string();
+    let mut storage = database();
+    storage
+        .storage_as_mut::<LatestBlock>()
+        .insert(&(), &Mode::new_s3(end))
+        .unwrap();
+
+    let adapter = RemoteBlocksProvider::new(aws_bucket.clone(), false, None, storage);
 
     // when
-    let addresses = adapter.get_block_range(start, end).await.unwrap();
+    let addresses = adapter.get_block_range(start, end).unwrap();
 
     // then
     let actual = match addresses {
@@ -116,16 +109,15 @@ async fn get_current_height__returns_highest_continuous_block() {
     let aws_bucket = "test-bucket".to_string();
     let storage = database();
     let sync_from = BlockHeight::new(0);
-    let mut adapter =
-        RemoteCache::new(aws_bucket, false, None, client, storage, sync_from, true).await;
+    let mut adapter = RemoteCache::new(aws_bucket, client, storage, sync_from, true);
 
     let expected = BlockHeight::new(123);
     let block = arb_proto_block();
     let block = BlockSourceEvent::OldBlock(expected, block);
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // when
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
 
     // then
     assert_eq!(expected, actual);
@@ -144,17 +136,16 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
     let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_bucket = "test-bucket".to_string();
     let sync_from = BlockHeight::new(0);
-    let mut adapter =
-        RemoteCache::new(aws_bucket, false, None, client, storage, sync_from, true).await;
+    let mut adapter = RemoteCache::new(aws_bucket, client, storage, sync_from, true);
 
     let expected = BlockHeight::new(3);
     let block = arb_proto_block();
     let block = BlockSourceEvent::NewBlock(expected, block);
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // when
     let expected = starting_height;
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 }
 
@@ -167,24 +158,23 @@ async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
     // given
     let db = database();
     let sync_from = BlockHeight::new(0);
-    let mut adapter =
-        RemoteCache::new(aws_bucket, false, None, client, db, sync_from, true).await;
+    let mut adapter = RemoteCache::new(aws_bucket, client, db, sync_from, true);
 
     for height in 2..=10u32 {
         let height = BlockHeight::from(height);
         let block = arb_proto_block();
         let block = BlockSourceEvent::NewBlock(height, block.clone());
-        adapter.store_block(block).await.unwrap();
+        adapter.store_block(&block).await.unwrap();
     }
     // when
     let height = BlockHeight::from(1u32);
     let some_block = arb_proto_block();
     let block = BlockSourceEvent::OldBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let expected = BlockHeight::from(10u32);
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 
     assert!(adapter.synced)
@@ -199,23 +189,22 @@ async fn store_block__new_block_updates_the_highest_continuous_block_if_synced()
     // given
     let db = database();
     let sync_from = BlockHeight::new(0);
-    let mut adapter =
-        RemoteCache::new(aws_bucket, false, None, client, db, sync_from, true).await;
+    let mut adapter = RemoteCache::new(aws_bucket, client, db, sync_from, true);
 
     let height = BlockHeight::from(0u32);
     let some_block = arb_proto_block();
     let block = BlockSourceEvent::OldBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // when
     let height = BlockHeight::from(1u32);
     let some_block = arb_proto_block();
     let block = BlockSourceEvent::NewBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let expected = BlockHeight::from(1u32);
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 
     assert!(adapter.synced)
@@ -230,18 +219,17 @@ async fn store_block__new_block_comes_first() {
     // given
     let db = database();
     let sync_from = BlockHeight::new(0);
-    let mut adapter =
-        RemoteCache::new(aws_bucket, false, None, client, db, sync_from, true).await;
+    let mut adapter = RemoteCache::new(aws_bucket, client, db, sync_from, true);
 
     // when
     let height = BlockHeight::from(0u32);
     let some_block = arb_proto_block();
     let block = BlockSourceEvent::NewBlock(height, some_block.clone());
-    adapter.store_block(block).await.unwrap();
+    adapter.store_block(&block).await.unwrap();
 
     // then
     let expected = BlockHeight::from(0u32);
-    let actual = adapter.get_current_height().await.unwrap().unwrap();
+    let actual = adapter.get_current_height().unwrap().unwrap();
     assert_eq!(expected, actual);
 
     assert!(adapter.synced);
