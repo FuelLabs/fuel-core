@@ -124,7 +124,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
         .into_iter()
         .map(|b| {
             if let Some(Payload::Literal(inner)) = b.payload {
-                (BlockHeight::new(b.height), inner)
+                (BlockHeight::new(b.height), (*inner).clone())
             } else {
                 panic!("unexpected response type")
             }
@@ -267,7 +267,7 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
         .into_iter()
         .map(|b| {
             if let Some(Payload::Literal(inner)) = b.payload {
-                (BlockHeight::new(b.height), inner)
+                (BlockHeight::new(b.height), (*inner).clone())
             } else {
                 panic!("unexpected response type")
             }

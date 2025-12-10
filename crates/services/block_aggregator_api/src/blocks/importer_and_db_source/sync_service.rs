@@ -55,7 +55,7 @@ pub trait TxReceipts: 'static + Send + Sync {
     fn get_receipts(
         &self,
         tx_id: &TxId,
-    ) -> impl Future<Output = Result<Vec<Receipt>>> + Send;
+    ) -> impl Future<Output = Result<Vec<Vec<Receipt>>>> + Send;
 }
 
 impl<Serializer, DB, Receipts> SyncTask<Serializer, DB, Receipts, Serializer::Block>
@@ -88,7 +88,7 @@ where
     async fn get_block_and_receipts(
         &self,
         height: &BlockHeight,
-    ) -> Result<Option<(FuelBlock, Vec<Receipt>)>> {
+    ) -> Result<Option<(FuelBlock, Vec<Vec<Receipt>>)>> {
         let maybe_block = StorageInspect::<FuelBlocks>::get(&self.db, height)
             .map_err(Error::block_source_error)?;
         if let Some(block) = maybe_block {
@@ -120,7 +120,7 @@ where
         Ok(txs)
     }
 
-    async fn get_receipts(&self, tx_ids: &[TxId]) -> Result<Vec<Receipt>> {
+    async fn get_receipts(&self, tx_ids: &[TxId]) -> Result<Vec<Vec<Receipt>>> {
         let receipt_futs = tx_ids.iter().map(|tx_id| self.receipts.get_receipts(tx_id));
         FuturesOrdered::from_iter(receipt_futs)
             .then(|res| async move { res.map_err(Error::block_source_error) })

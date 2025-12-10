@@ -72,9 +72,8 @@ where
                 let receipts = import_result
                     .tx_status
                     .iter()
-                    .flat_map(|status| status.result.receipts())
-                    .map(Clone::clone)
-                    .collect::<Vec<_>>();
+                    .map(|status| status.result.receipts().to_vec())
+                    .collect::<Vec<Vec<_>>>();
                 let res = self
                     .serializer
                     .serialize_block(&import_result.sealed_block.entity, &receipts);

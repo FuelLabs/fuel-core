@@ -15,7 +15,7 @@ use fuel_core_types::{
     },
 };
 use fuel_core_types::fuel_tx::Receipt as FuelReceipt;
-use crate::blocks::importer_and_db_source::serializer_adapter::fuel_to_proto_conversions::{proto_header_from_header, proto_receipt_from_receipt, proto_tx_from_tx};
+use crate::blocks::importer_and_db_source::serializer_adapter::fuel_to_proto_conversions::{proto_header_from_header, proto_receipts_from_receipts, proto_tx_from_tx};
 
 #[derive(Clone)]
 pub struct SerializerAdapter;
@@ -26,7 +26,7 @@ impl BlockSerializer for SerializerAdapter {
     fn serialize_block(
         &self,
         block: &FuelBlock,
-        receipts: &[FuelReceipt],
+        receipts: &[Vec<FuelReceipt>],
     ) -> crate::result::Result<Self::Block> {
         let proto_header = proto_header_from_header(block.header());
         match &block {
@@ -38,7 +38,10 @@ impl BlockSerializer for SerializerAdapter {
                         .iter()
                         .map(proto_tx_from_tx)
                         .collect(),
-                    receipts: receipts.iter().map(proto_receipt_from_receipt).collect(),
+                    receipts: receipts
+                        .iter()
+                        .map(|rs| proto_receipts_from_receipts(rs))
+                        .collect(),
                 };
                 Ok(ProtoBlock {
                     versioned_block: Some(ProtoVersionedBlock::V1(proto_v1_block)),

@@ -45,7 +45,7 @@ pub trait BlockSerializer {
     fn serialize_block(
         &self,
         block: &FuelBlock,
-        receipts: &[FuelReceipt],
+        receipts: &[Vec<FuelReceipt>],
     ) -> Result<Self::Block>;
 }
 

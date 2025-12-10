@@ -832,8 +832,8 @@ fn arb_receipt() -> impl Strategy<Value = Receipt> {
 prop_compose! {
     /// generates a list of random receipts
     pub fn arb_receipts()(
-        receipts in prop::collection::vec(arb_receipt(), 0..10),
-    ) -> Vec<Receipt> {
+        receipts in prop::collection::vec(prop::collection::vec(arb_receipt(), 0..10), 0..10),
+    ) -> Vec<Vec<Receipt>> {
         receipts
     }
 }

@@ -34,7 +34,6 @@ use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
 use std::{
     net::SocketAddr,
-    ops::Deref,
     sync::Arc,
 };
 use tonic::{
@@ -104,7 +103,7 @@ where
                             let response = ProtoBlockResponse {
                                 height: *height,
                                 payload: Some(proto_block_response::Payload::Literal(
-                                    res,
+                                    res.into(),
                                 )),
                             };
                             Ok(response)
@@ -156,9 +155,7 @@ where
                     let response = ProtoBlockResponse {
                         height: *block_height,
                         // TODO: Avoid clone
-                        payload: Some(proto_block_response::Payload::Literal(
-                            block.deref().clone(),
-                        )),
+                        payload: Some(proto_block_response::Payload::Literal(block)),
                     };
                     Ok(response)
                 }
