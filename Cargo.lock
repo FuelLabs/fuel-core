@@ -4632,8 +4632,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-protobuf"
-version = "0.5.0"
-source = "git+https://github.com/FuelLabs/fuel-core-protobuf.git?branch=chore%2Fmake-receipts-nested#ebb535736254d49619b4c2db93e5089015b9f271"
+version = "0.4.0"
+source = "git+https://github.com/FuelLabs/fuel-core-protobuf.git?branch=chore%2Fmake-receipts-nested#27e9f4ba52ba326d1476d4c8e0ae4e5f07cc9e57"
 dependencies = [
  "prost 0.14.1",
  "serde",
