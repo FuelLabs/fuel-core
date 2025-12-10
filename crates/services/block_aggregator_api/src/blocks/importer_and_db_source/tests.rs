@@ -39,18 +39,18 @@ fn onchain_db() -> StorageTransaction<InMemoryStorage<OnChainColumn>> {
 }
 
 struct MockTxReceiptsSource {
-    receipts_map: HashMap<TxId, Vec<Vec<FuelReceipt>>>,
+    receipts_map: HashMap<TxId, Vec<FuelReceipt>>,
 }
 
 impl MockTxReceiptsSource {
-    fn new(receipts: &[(TxId, Vec<Vec<FuelReceipt>>)]) -> Self {
+    fn new(receipts: &[(TxId, Vec<FuelReceipt>)]) -> Self {
         let receipts_map = receipts.iter().cloned().collect();
         Self { receipts_map }
     }
 }
 
 impl TxReceipts for MockTxReceiptsSource {
-    async fn get_receipts(&self, tx_id: &TxId) -> Result<Vec<Vec<FuelReceipt>>> {
+    async fn get_receipts(&self, tx_id: &TxId) -> Result<Vec<FuelReceipt>> {
         let receipts = self.receipts_map.get(tx_id).cloned().ok_or_else(|| {
             Error::BlockSource(anyhow!("no receipts found for a tx with id {}", tx_id))
         })?;
@@ -106,7 +106,7 @@ fn arbitrary_block_with_txs(height: BlockHeight) -> FuelBlock {
     block
 }
 
-fn arbitrary_receipts() -> Vec<Vec<FuelReceipt>> {
+fn arbitrary_receipts() -> Vec<FuelReceipt> {
     let one = FuelReceipt::Mint {
         sub_id: Default::default(),
         contract_id: Default::default(),
@@ -122,7 +122,7 @@ fn arbitrary_receipts() -> Vec<Vec<FuelReceipt>> {
         pc: 0,
         is: 0,
     };
-    vec![vec![one, two]]
+    vec![one, two]
 }
 
 #[tokio::test]
@@ -166,7 +166,7 @@ async fn next_block__can_get_block_from_db() {
     let actual = adapter.next_block().await.unwrap();
 
     // then
-    let serialized = serializer.serialize_block(&block, &receipts).unwrap();
+    let serialized = serializer.serialize_block(&block, &[receipts]).unwrap();
     let expected = BlockSourceEvent::OldBlock(*height, serialized);
     assert_eq!(expected, actual);
 }

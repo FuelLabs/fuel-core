@@ -55,7 +55,7 @@ pub trait TxReceipts: 'static + Send + Sync {
     fn get_receipts(
         &self,
         tx_id: &TxId,
-    ) -> impl Future<Output = Result<Vec<Vec<Receipt>>>> + Send;
+    ) -> impl Future<Output = Result<Vec<Receipt>>> + Send;
 }
 
 impl<Serializer, DB, Receipts> SyncTask<Serializer, DB, Receipts, Serializer::Block>
@@ -124,7 +124,7 @@ where
         let receipt_futs = tx_ids.iter().map(|tx_id| self.receipts.get_receipts(tx_id));
         FuturesOrdered::from_iter(receipt_futs)
             .then(|res| async move { res.map_err(Error::block_source_error) })
-            .try_concat()
+            .try_collect()
             .await
     }
 }
