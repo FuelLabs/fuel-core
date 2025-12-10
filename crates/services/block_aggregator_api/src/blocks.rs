@@ -8,39 +8,14 @@ use std::fmt::Debug;
 pub mod importer_and_db_source;
 
 /// Source from which blocks can be gathered for aggregation
-pub trait BlockSource: Send + Sync {
+pub trait BlockSource: Send + Sync + 'static {
     type Block;
-    /// Asynchronously fetch the next block and its height
-    fn next_block(
-        &mut self,
-    ) -> impl Future<Output = Result<BlockSourceEvent<Self::Block>>> + Send;
 
-    /// Drain any remaining blocks from the source
-    fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum BlockSourceEvent<B> {
-    NewBlock(BlockHeight, B),
-    OldBlock(BlockHeight, B),
-}
-
-impl<B> BlockSourceEvent<B> {
-    pub fn into_inner(self) -> (BlockHeight, B) {
-        match self {
-            Self::NewBlock(height, block) | Self::OldBlock(height, block) => {
-                (height, block)
-            }
-        }
-    }
-
-    pub fn as_inner(&self) -> (&BlockHeight, &B) {
-        match self {
-            Self::NewBlock(height, block) | Self::OldBlock(height, block) => {
-                (height, block)
-            }
-        }
-    }
+    /// Returns an iterator over blocks starting from the given block height
+    fn blocks_starting_from(
+        &self,
+        block_height: BlockHeight,
+    ) -> impl Iterator<Item = Result<(BlockHeight, Self::Block)>> + Send + Sync + 'static;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]

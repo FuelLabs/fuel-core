@@ -26,7 +26,7 @@ impl BlockSerializer for SerializerAdapter {
     fn serialize_block(
         &self,
         block: &FuelBlock,
-        receipts: &[FuelReceipt],
+        receipts: &[Vec<FuelReceipt>],
     ) -> crate::result::Result<Self::Block> {
         let proto_header = proto_header_from_header(block.header());
         match &block {
@@ -38,7 +38,17 @@ impl BlockSerializer for SerializerAdapter {
                         .iter()
                         .map(proto_tx_from_tx)
                         .collect(),
-                    receipts: receipts.iter().map(proto_receipt_from_receipt).collect(),
+                    // TODO: It should be `Vec<Vec<Receipts>>`, but we need to update protobuf
+                    //  definition first
+                    receipts: receipts
+                        .iter()
+                        .flat_map(|receipts| {
+                            receipts
+                                .iter()
+                                .map(proto_receipt_from_receipt)
+                                .collect::<Vec<_>>()
+                        })
+                        .collect(),
                 };
                 Ok(ProtoBlock {
                     versioned_block: Some(ProtoVersionedBlock::V1(proto_v1_block)),
@@ -75,6 +85,7 @@ mod tests {
               let serializer = SerializerAdapter;
 
               // when
+              let receipts = vec![receipts];
               let proto_block = serializer.serialize_block(&block, &receipts).unwrap();
 
               // then

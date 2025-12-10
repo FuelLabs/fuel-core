@@ -24,6 +24,7 @@ fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
+itertools = { workspace = true }
 num_enum = { workspace = true }
 prost = { workspace = true, features = ["derive"] }
 rand = { workspace = true }

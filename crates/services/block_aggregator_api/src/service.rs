@@ -8,8 +8,8 @@ use crate::{
         BlockSource,
         importer_and_db_source::{
             BlockSerializer,
-            ImporterAndDbSource,
-            sync_service::TxReceipts,
+            OldBlocksSource,
+            TxReceipts,
         },
     },
     db::{
@@ -34,7 +34,10 @@ use fuel_core_services::{
     Service,
     ServiceRunner,
     StateWatcher,
-    stream::BoxStream,
+    stream::{
+        BoxStream,
+        IntoBoxStream,
+    },
 };
 use fuel_core_storage::{
     Error as StorageError,
@@ -183,6 +186,7 @@ where
 
 pub struct UninitializedTask<Blocks, S1, S2>
 where
+    Blocks: BlockSource,
     S2: KeyValueInspect<Column = Column> + 'static,
     S2: AtomicView,
     S2::LatestView: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static,
@@ -193,6 +197,7 @@ where
     config: Config,
     genesis_block_height: BlockHeight,
     shared_state: SharedState<StorageOrRemoteBlocksProvider<S2>>,
+    importer: BoxStream<anyhow::Result<(BlockHeight, <Blocks as BlockSource>::Block)>>,
 }
 
 #[async_trait::async_trait]
@@ -226,6 +231,7 @@ where
             config,
             genesis_block_height,
             shared_state,
+            importer,
         } = self;
         let sync_from = config.sync_from.unwrap_or(genesis_block_height);
 
@@ -238,16 +244,12 @@ where
                     .storage_as_ref::<LatestBlock>()
                     .get(&())?
                     .map(|c| c.into_owned());
-                let maybe_sync_from_height = match mode {
-                    Some(Mode::S3(_)) => {
-                        bail!(
-                            "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
-                        );
-                    }
-                    _ => mode.map(|m| m.height()),
+                if let Some(Mode::S3(_)) = mode {
+                    bail!(
+                        "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
+                    );
                 };
-                let sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
-                StorageOrRemoteDB::new_storage(storage, sync_from_height)
+                StorageOrRemoteDB::new_storage(storage)
             }
             StorageMethod::S3 {
                 bucket,
@@ -264,30 +266,27 @@ where
                     .storage_as_ref::<LatestBlock>()
                     .get(&())?
                     .map(|c| c.into_owned());
-                let maybe_sync_from_height = match mode {
-                    Some(Mode::Local(_)) => {
-                        bail!(
-                            "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
-                        );
-                    }
-                    _ => mode.map(|m| m.height()),
+                if let Some(Mode::Local(_)) = mode {
+                    bail!(
+                        "Database is configured in S3 mode, but Local storage method was requested. If you would like to run in S3 mode, then please use a clean DB"
+                    );
                 };
-                let sync_from_height = maybe_sync_from_height.unwrap_or(sync_from);
 
-                StorageOrRemoteDB::new_s3(
-                    storage,
-                    bucket,
-                    endpoint_url.clone(),
-                    sync_from_height,
-                    publish,
-                )
-                .await
+                StorageOrRemoteDB::new_s3(storage, bucket, endpoint_url.clone(), publish)
+                    .await
             }
         };
 
         api.start_and_await().await?;
 
-        Ok(Task::new(api, db_adapter, shared_state, block_source))
+        Ok(Task::new(
+            sync_from,
+            api,
+            db_adapter,
+            shared_state,
+            block_source,
+            importer,
+        ))
     }
 }
 
@@ -301,7 +300,7 @@ pub fn new_service<DB, S, OnchainDB, Receipts, T>(
     config: Config,
     genesis_block_height: BlockHeight,
 ) -> anyhow::Result<
-    ServiceRunner<UninitializedTask<ImporterAndDbSource<S, OnchainDB, Receipts>, DB, DB>>,
+    ServiceRunner<UninitializedTask<OldBlocksSource<S, OnchainDB, Receipts>, DB, DB>>,
 >
 where
     S: BlockSerializer<Block = ProtoBlock> + Clone + Send + Sync + 'static,
@@ -334,24 +333,33 @@ where
             endpoint_url.clone(),
         ),
     };
+
+    let serializer = Arc::new(serializer);
+    let serializer_stream = serializer.clone();
+
+    let importer = importer
+        .map(move |res| {
+            let receipts = res
+                .tx_status
+                .iter()
+                .map(|status| {
+                    // TODO: Avoid cloning of receipts
+                    status.result.receipts().to_vec()
+                })
+                .collect::<Vec<_>>();
+            let height = *res.sealed_block.entity.header().height();
+            let block =
+                serializer_stream.serialize_block(&res.sealed_block.entity, &receipts)?;
+
+            Ok((height, block))
+        })
+        .into_boxed();
+
     let shared_state = SharedState::new(db_adapter, config.api_buffer_size);
 
     let api = protobuf_adapter::new_service(config.addr, shared_state.clone());
 
-    let db_ending_height = onchain_db
-        .latest_height()
-        .and_then(BlockHeight::succ)
-        .unwrap_or(BlockHeight::from(0));
-
-    let sync_from_height = config.sync_from.unwrap_or(genesis_block_height);
-    let block_source = ImporterAndDbSource::new(
-        importer,
-        serializer,
-        onchain_db,
-        receipts,
-        sync_from_height,
-        db_ending_height,
-    );
+    let block_source = OldBlocksSource::new(serializer, onchain_db, receipts);
 
     let uninitialized_task = UninitializedTask {
         api: Box::new(api),
@@ -360,6 +368,7 @@ where
         config,
         storage: db,
         genesis_block_height,
+        importer,
     };
 
     let runner = ServiceRunner::new(uninitialized_task);

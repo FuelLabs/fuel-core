@@ -1,143 +1,190 @@
 use crate::{
-    blocks::{
-        BlockSource,
-        BlockSourceEvent,
-        importer_and_db_source::importer_service::ImporterTask,
-    },
+    blocks::BlockSource,
     result::{
         Error,
         Result,
     },
 };
-use anyhow::anyhow;
-use fuel_core_services::{
-    Service,
-    ServiceRunner,
-    stream::BoxStream,
-};
 use fuel_core_storage::{
     Error as StorageError,
     StorageInspect,
-    tables::FuelBlocks,
+    tables::{
+        FuelBlocks,
+        Transactions,
+    },
 };
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
+    fuel_tx::{
+        Receipt as FuelReceipt,
+        Receipt,
+        Transaction,
+        TxId,
+    },
     fuel_types::BlockHeight,
-    services::block_importer::SharedImportResult,
 };
-
-use crate::blocks::importer_and_db_source::sync_service::{
-    SyncTask,
-    TxReceipts,
-};
-use fuel_core_storage::tables::Transactions;
-use fuel_core_types::fuel_tx::Receipt as FuelReceipt;
-
-pub mod importer_service;
-pub mod sync_service;
-#[cfg(test)]
-mod tests;
+use std::sync::Arc;
 
 pub mod serializer_adapter;
 
-pub trait BlockSerializer {
+pub trait BlockSerializer: Send + Sync + 'static {
     type Block;
+
     fn serialize_block(
         &self,
         block: &FuelBlock,
-        receipts: &[FuelReceipt],
+        receipts: &[Vec<FuelReceipt>],
     ) -> Result<Self::Block>;
 }
 
-/// A block source that combines an importer and a database sync task.
-/// Old blocks will be synced from a target database and new blocks will be received from
-/// the importer
-pub struct ImporterAndDbSource<Serializer, DB, Receipts>
-where
-    Serializer: BlockSerializer + Send + Sync + 'static,
-    <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
-    DB: Send + Sync + 'static,
-    DB: StorageInspect<FuelBlocks, Error = StorageError>,
-    DB: StorageInspect<Transactions, Error = StorageError>,
-    Receipts: TxReceipts,
-{
-    importer_task: ServiceRunner<ImporterTask<Serializer, Serializer::Block>>,
-    sync_task: ServiceRunner<SyncTask<Serializer, DB, Receipts, Serializer::Block>>,
-    /// Receive blocks from the importer and sync tasks
-    receiver: tokio::sync::mpsc::Receiver<BlockSourceEvent<Serializer::Block>>,
+pub trait TxReceipts: Send + Sync + 'static {
+    fn get_receipts(&self, tx_id: &TxId) -> Result<Vec<Receipt>>;
 }
 
-impl<Serializer, DB, Receipts> ImporterAndDbSource<Serializer, DB, Receipts>
-where
-    Serializer: BlockSerializer + Clone + Send + Sync + 'static,
-    <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
-    DB: StorageInspect<FuelBlocks, Error = StorageError> + Send + Sync,
-    DB: StorageInspect<Transactions, Error = StorageError> + Send + 'static,
-    Receipts: TxReceipts,
-{
-    pub fn new(
-        importer: BoxStream<SharedImportResult>,
-        serializer: Serializer,
-        db: DB,
-        receipts: Receipts,
-        db_starting_height: BlockHeight,
-        db_ending_height: BlockHeight,
-    ) -> Self {
-        const ARB_CHANNEL_SIZE: usize = 100;
-        let (block_return, receiver) = tokio::sync::mpsc::channel(ARB_CHANNEL_SIZE);
-        let importer_task =
-            ImporterTask::new(importer, serializer.clone(), block_return.clone());
-        let importer_runner = ServiceRunner::new(importer_task);
-        importer_runner.start().unwrap();
-        let sync_task = SyncTask::new(
-            serializer,
-            block_return,
-            db,
-            receipts,
-            db_starting_height,
-            db_ending_height,
-        );
-        let sync_runner = ServiceRunner::new(sync_task);
-        sync_runner.start().unwrap();
+pub struct OldBlocksSource<Serializer, DB, Receipts> {
+    serializer: Arc<Serializer>,
+    db: Arc<DB>,
+    receipts: Arc<Receipts>,
+}
+
+impl<Serializer, DB, Receipts> OldBlocksSource<Serializer, DB, Receipts> {
+    pub fn new(serializer: Arc<Serializer>, db: DB, receipts: Receipts) -> Self {
         Self {
-            importer_task: importer_runner,
-            sync_task: sync_runner,
-            receiver,
+            serializer,
+            db: Arc::new(db),
+            receipts: Arc::new(receipts),
         }
     }
 }
 
-impl<Serializer, DB, Receipts> BlockSource
-    for ImporterAndDbSource<Serializer, DB, Receipts>
+impl<Serializer, DB, Receipts> OldBlocksSource<Serializer, DB, Receipts>
 where
-    Serializer: BlockSerializer + Send + Sync + 'static,
-    <Serializer as BlockSerializer>::Block: Send + Sync + 'static,
     DB: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
+    Serializer: BlockSerializer,
+{
+    pub fn blocks_stream_starting(
+        &self,
+        block_height: BlockHeight,
+    ) -> impl Iterator<Item = Result<(BlockHeight, Serializer::Block)>> + Send + Sync + 'static
+    {
+        StorageIterator {
+            serializer: self.serializer.clone(),
+            db: self.db.clone(),
+            receipts: self.receipts.clone(),
+            next_height: Some(block_height),
+        }
+    }
+}
+
+impl<Serializer, DB, Receipts> BlockSource for OldBlocksSource<Serializer, DB, Receipts>
+where
+    DB: Send + Sync + 'static,
+    DB: StorageInspect<FuelBlocks, Error = StorageError>,
+    DB: StorageInspect<Transactions, Error = StorageError>,
+    Receipts: TxReceipts,
+    Serializer: BlockSerializer,
 {
     type Block = Serializer::Block;
 
-    async fn next_block(&mut self) -> Result<BlockSourceEvent<Self::Block>> {
-        tracing::debug!("awaiting next block");
-        tokio::select! {
-            block_res = self.receiver.recv() => {
-                block_res.ok_or(Error::BlockSource(anyhow!("Block source channel closed")))
-            }
-            importer_error = self.importer_task.await_stop() => {
-                Err(Error::BlockSource(anyhow!("Importer task stopped unexpectedly: {:?}", importer_error)))
-            }
-            sync_error = self.sync_task.await_stop() => {
-                Err(Error::BlockSource(anyhow!("Sync task stopped unexpectedly: {:?}", sync_error)))
-            }
+    fn blocks_starting_from(
+        &self,
+        block_height: BlockHeight,
+    ) -> impl Iterator<Item = Result<(BlockHeight, Self::Block)>> + Send + Sync + 'static
+    {
+        self.blocks_stream_starting(block_height)
+    }
+}
+
+pub struct StorageIterator<Serializer, DB, Receipts> {
+    serializer: Arc<Serializer>,
+    db: Arc<DB>,
+    receipts: Arc<Receipts>,
+    next_height: Option<BlockHeight>,
+}
+
+impl<Serializer, DB, Receipts> StorageIterator<Serializer, DB, Receipts>
+where
+    DB: StorageInspect<FuelBlocks, Error = StorageError>,
+    DB: StorageInspect<Transactions, Error = StorageError>,
+    Receipts: TxReceipts,
+    Serializer: BlockSerializer,
+{
+    fn get_block_and_receipts(
+        &self,
+        height: &BlockHeight,
+    ) -> Result<Option<(FuelBlock, Vec<Vec<Receipt>>)>> {
+        let maybe_block = StorageInspect::<FuelBlocks>::get(self.db.as_ref(), height)
+            .map_err(Error::block_source_error)?;
+        if let Some(block) = maybe_block {
+            let tx_ids = block.transactions();
+            let txs = self.get_txs(tx_ids)?;
+            let receipts = self.get_receipts(tx_ids)?;
+            let block = block.into_owned().uncompress(txs);
+            Ok(Some((block, receipts)))
+        } else {
+            Ok(None)
         }
     }
 
-    async fn drain(&mut self) -> Result<()> {
-        self.importer_task.stop();
-        self.sync_task.stop();
-        self.receiver.close();
-        Ok(())
+    fn get_txs(&self, tx_ids: &[TxId]) -> Result<Vec<Transaction>> {
+        let mut txs = Vec::new();
+        for tx_id in tx_ids {
+            match StorageInspect::<Transactions>::get(self.db.as_ref(), tx_id)
+                .map_err(Error::block_source_error)?
+            {
+                Some(tx) => {
+                    tracing::debug!("found tx id: {:?}", tx_id);
+                    txs.push(tx.into_owned());
+                }
+                None => {
+                    return Ok(vec![]);
+                }
+            }
+        }
+        Ok(txs)
+    }
+
+    fn get_receipts(&self, tx_ids: &[TxId]) -> Result<Vec<Vec<Receipt>>> {
+        use itertools::Itertools;
+        tx_ids
+            .iter()
+            .map(|tx_id| {
+                self.receipts
+                    .get_receipts(tx_id)
+                    .map_err(|err| Error::DB(anyhow::anyhow!(err)))
+            })
+            .try_collect()
+    }
+}
+
+impl<Serializer, DB, Receipts> Iterator for StorageIterator<Serializer, DB, Receipts>
+where
+    DB: StorageInspect<FuelBlocks, Error = StorageError>,
+    DB: StorageInspect<Transactions, Error = StorageError>,
+    Receipts: TxReceipts,
+    Serializer: BlockSerializer,
+{
+    type Item = Result<(BlockHeight, Serializer::Block)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_height = self.next_height?;
+
+        let res = self.get_block_and_receipts(&next_height);
+        match res {
+            Ok(Some((block, receipts))) => {
+                let block = match self.serializer.serialize_block(&block, &receipts) {
+                    Ok(b) => b,
+                    Err(e) => return Some(Err(e)),
+                };
+
+                self.next_height = next_height.succ();
+                Some(Ok((next_height, block)))
+            }
+            Ok(None) => None,
+            Err(e) => Some(Err(e)),
+        }
     }
 }

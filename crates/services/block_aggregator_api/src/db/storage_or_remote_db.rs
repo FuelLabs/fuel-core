@@ -1,6 +1,5 @@
 use crate::{
     block_range_response::BlockRangeResponse,
-    blocks::BlockSourceEvent,
     db::{
         BlocksProvider,
         BlocksStorage,
@@ -66,15 +65,14 @@ pub enum StorageOrRemoteDB<S> {
 }
 
 impl<S> StorageOrRemoteDB<S> {
-    pub fn new_storage(storage: S, sync_from: BlockHeight) -> Self {
-        StorageOrRemoteDB::Storage(StorageDB::new(storage, sync_from))
+    pub fn new_storage(storage: S) -> Self {
+        StorageOrRemoteDB::Storage(StorageDB::new(storage))
     }
 
     pub async fn new_s3(
         storage: S,
         aws_bucket: String,
         aws_endpoint_url: Option<String>,
-        sync_from: BlockHeight,
         publish: bool,
     ) -> Self {
         let credentials = DefaultCredentialsChain::builder().build().await;
@@ -88,8 +86,7 @@ impl<S> StorageOrRemoteDB<S> {
         }
         let config = config_builder.force_path_style(true).build();
         let client = aws_sdk_s3::Client::from_conf(config);
-        let remote_cache =
-            RemoteCache::new(aws_bucket, client, storage, sync_from, publish);
+        let remote_cache = RemoteCache::new(aws_bucket, client, storage, publish);
         StorageOrRemoteDB::Remote(remote_cache)
     }
 }
@@ -102,11 +99,17 @@ where
     type Block = crate::protobuf_types::Block;
     type BlockRangeResponse = BlockRangeResponse;
 
-    async fn store_block(&mut self, block: &BlockSourceEvent<Self::Block>) -> Result<()> {
+    async fn store_block(
+        &mut self,
+        block_height: BlockHeight,
+        block: &Self::Block,
+    ) -> Result<()> {
         match self {
-            StorageOrRemoteDB::Remote(remote_db) => remote_db.store_block(block).await?,
+            StorageOrRemoteDB::Remote(remote_db) => {
+                remote_db.store_block(block_height, block).await?
+            }
             StorageOrRemoteDB::Storage(storage_db) => {
-                storage_db.store_block(block).await?
+                storage_db.store_block(block_height, block).await?
             }
         }
         Ok(())

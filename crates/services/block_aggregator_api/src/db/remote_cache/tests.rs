@@ -25,7 +25,6 @@ use fuel_core_storage::{
 };
 use fuel_core_types::blockchain::block::Block as FuelBlock;
 use futures::StreamExt;
-use std::iter;
 
 fn database() -> StorageTransaction<InMemoryStorage<Column>> {
     InMemoryStorage::default().into_transaction()
@@ -50,14 +49,12 @@ async fn store_block__happy_path() {
     let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_bucket = "test-bucket".to_string();
     let storage = database();
-    let sync_from = BlockHeight::new(0);
-    let mut adapter = RemoteCache::new(aws_bucket, client, storage, sync_from, true);
+    let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
     let block_height = BlockHeight::new(123);
     let block = arb_proto_block();
-    let block = BlockSourceEvent::OldBlock(block_height, block);
 
     // when
-    let res = adapter.store_block(&block).await;
+    let res = adapter.store_block(block_height, &block).await;
 
     // then
     assert!(res.is_ok());
@@ -108,13 +105,11 @@ async fn get_current_height__returns_highest_continuous_block() {
     let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_bucket = "test-bucket".to_string();
     let storage = database();
-    let sync_from = BlockHeight::new(0);
-    let mut adapter = RemoteCache::new(aws_bucket, client, storage, sync_from, true);
+    let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
 
     let expected = BlockHeight::new(123);
     let block = arb_proto_block();
-    let block = BlockSourceEvent::OldBlock(expected, block);
-    adapter.store_block(&block).await.unwrap();
+    adapter.store_block(expected, &block).await.unwrap();
 
     // when
     let actual = adapter.get_current_height().unwrap().unwrap();
@@ -124,9 +119,10 @@ async fn get_current_height__returns_highest_continuous_block() {
 }
 
 #[tokio::test]
-async fn store_block__does_not_update_the_highest_continuous_block_if_not_contiguous() {
-    // given
+async fn store_block__fails_if_not_contiguous() {
     let mut storage = database();
+
+    // Given
     let mut tx = storage.write_transaction();
     let starting_height = BlockHeight::from(1u32);
     tx.storage_as_mut::<LatestBlock>()
@@ -135,102 +131,14 @@ async fn store_block__does_not_update_the_highest_continuous_block_if_not_contig
     tx.commit().unwrap();
     let client = mock_client!(aws_sdk_s3, [&put_happy_rule()]);
     let aws_bucket = "test-bucket".to_string();
-    let sync_from = BlockHeight::new(0);
-    let mut adapter = RemoteCache::new(aws_bucket, client, storage, sync_from, true);
+    let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
 
     let expected = BlockHeight::new(3);
     let block = arb_proto_block();
-    let block = BlockSourceEvent::NewBlock(expected, block);
-    adapter.store_block(&block).await.unwrap();
 
-    // when
-    let expected = starting_height;
-    let actual = adapter.get_current_height().unwrap().unwrap();
-    assert_eq!(expected, actual);
-}
+    // When
+    let result = adapter.store_block(expected, &block).await;
 
-#[tokio::test]
-async fn store_block__updates_the_highest_continuous_block_if_filling_a_gap() {
-    let rules: Vec<_> = iter::repeat_with(put_happy_rule).take(10).collect();
-    let client = mock_client!(aws_sdk_s3, rules.iter());
-    let aws_bucket = "test-bucket".to_string();
-
-    // given
-    let db = database();
-    let sync_from = BlockHeight::new(0);
-    let mut adapter = RemoteCache::new(aws_bucket, client, db, sync_from, true);
-
-    for height in 2..=10u32 {
-        let height = BlockHeight::from(height);
-        let block = arb_proto_block();
-        let block = BlockSourceEvent::NewBlock(height, block.clone());
-        adapter.store_block(&block).await.unwrap();
-    }
-    // when
-    let height = BlockHeight::from(1u32);
-    let some_block = arb_proto_block();
-    let block = BlockSourceEvent::OldBlock(height, some_block.clone());
-    adapter.store_block(&block).await.unwrap();
-
-    // then
-    let expected = BlockHeight::from(10u32);
-    let actual = adapter.get_current_height().unwrap().unwrap();
-    assert_eq!(expected, actual);
-
-    assert!(adapter.synced)
-}
-
-#[tokio::test]
-async fn store_block__new_block_updates_the_highest_continuous_block_if_synced() {
-    let rules: Vec<_> = iter::repeat_with(put_happy_rule).take(10).collect();
-    let client = mock_client!(aws_sdk_s3, rules.iter());
-    let aws_bucket = "test-bucket".to_string();
-
-    // given
-    let db = database();
-    let sync_from = BlockHeight::new(0);
-    let mut adapter = RemoteCache::new(aws_bucket, client, db, sync_from, true);
-
-    let height = BlockHeight::from(0u32);
-    let some_block = arb_proto_block();
-    let block = BlockSourceEvent::OldBlock(height, some_block.clone());
-    adapter.store_block(&block).await.unwrap();
-
-    // when
-    let height = BlockHeight::from(1u32);
-    let some_block = arb_proto_block();
-    let block = BlockSourceEvent::NewBlock(height, some_block.clone());
-    adapter.store_block(&block).await.unwrap();
-
-    // then
-    let expected = BlockHeight::from(1u32);
-    let actual = adapter.get_current_height().unwrap().unwrap();
-    assert_eq!(expected, actual);
-
-    assert!(adapter.synced)
-}
-
-#[tokio::test]
-async fn store_block__new_block_comes_first() {
-    let rules: Vec<_> = iter::repeat_with(put_happy_rule).take(10).collect();
-    let client = mock_client!(aws_sdk_s3, rules.iter());
-    let aws_bucket = "test-bucket".to_string();
-
-    // given
-    let db = database();
-    let sync_from = BlockHeight::new(0);
-    let mut adapter = RemoteCache::new(aws_bucket, client, db, sync_from, true);
-
-    // when
-    let height = BlockHeight::from(0u32);
-    let some_block = arb_proto_block();
-    let block = BlockSourceEvent::NewBlock(height, some_block.clone());
-    adapter.store_block(&block).await.unwrap();
-
-    // then
-    let expected = BlockHeight::from(0u32);
-    let actual = adapter.get_current_height().unwrap().unwrap();
-    assert_eq!(expected, actual);
-
-    assert!(adapter.synced);
+    // Then
+    result.expect_err("expected error");
 }

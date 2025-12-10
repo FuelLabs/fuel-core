@@ -94,7 +94,7 @@ mod rpc {
     };
     pub use fuel_core_block_aggregator_api::{
         blocks::importer_and_db_source::{
-            ImporterAndDbSource,
+            OldBlocksSource,
             serializer_adapter::SerializerAdapter,
         },
         service::UninitializedTask,
@@ -576,7 +576,7 @@ fn init_rpc_server(
 ) -> anyhow::Result<
     ServiceRunner<
         UninitializedTask<
-            ImporterAndDbSource<SerializerAdapter, Database<OnChain>, ReceiptSource>,
+            OldBlocksSource<SerializerAdapter, Database<OnChain>, ReceiptSource>,
             Database<BlockAggregatorDatabase>,
             Database<BlockAggregatorDatabase>,
         >,
