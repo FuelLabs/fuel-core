@@ -192,3 +192,6 @@ lto = "fat"
 # To speedup iterations between compilation.
 #lto = "thin"
 panic = "unwind"
+
+[patch.crates-io]
+fuel-core-protobuf = { version = "0.4.0", git = "https://github.com/FuelLabs/fuel-core-protobuf.git", branch = "chore/make-receipts-nested" }

@@ -290,7 +290,7 @@ async fn run__new_block_subscription__sends_new_block() {
         .unwrap()
         .unwrap()
         .unwrap();
-    assert_eq!((sync_from, Arc::new(block)), actual_block);
+    assert_eq!((sync_from, block), actual_block);
 }
 
 #[tokio::test]

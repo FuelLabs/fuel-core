@@ -27,7 +27,7 @@ use std::sync::Arc;
 
 pub mod convertor_adapter;
 
-pub trait BlockConvector: Send + Sync + 'static {
+pub trait BlockConverter: Send + Sync + 'static {
     type Block;
 
     fn convert_block(
@@ -63,7 +63,7 @@ where
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
-    Convertor: BlockConvector,
+    Convertor: BlockConverter,
 {
     pub fn blocks_stream_starting(
         &self,
@@ -85,7 +85,7 @@ where
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
-    Convertor: BlockConvector,
+    Convertor: BlockConverter,
 {
     type Block = Convertor::Block;
 
@@ -110,7 +110,7 @@ where
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
-    Convertor: BlockConvector,
+    Convertor: BlockConverter,
 {
     fn get_block_and_receipts(
         &self,
@@ -165,7 +165,7 @@ where
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
-    Convertor: BlockConvector,
+    Convertor: BlockConverter,
 {
     type Item = Result<(BlockHeight, Convertor::Block)>;
 

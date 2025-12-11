@@ -10,7 +10,10 @@ use fuel_core_storage::{
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    sync::Arc,
+};
 
 #[repr(u32)]
 #[derive(
@@ -56,11 +59,11 @@ impl Mappable for Blocks {
     type Key = Self::OwnedKey;
     type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
-    type OwnedValue = ProtoBlock;
+    type OwnedValue = Arc<Vec<u8>>;
 }
 
 impl TableWithBlueprint for Blocks {
-    type Blueprint = Plain<Primitive<4>, ProtoBufCodec>;
+    type Blueprint = Plain<Primitive<4>, Postcard>;
     type Column = Column;
 
     fn column() -> Self::Column {

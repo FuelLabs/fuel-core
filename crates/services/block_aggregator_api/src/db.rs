@@ -8,7 +8,7 @@ pub mod storage_or_remote_db;
 pub mod table;
 
 pub trait BlocksProvider: Send + Sync + 'static {
-    type Block: Send + Sync + 'static;
+    type Block: Clone + Send + Sync + 'static;
     /// The type used to report a range of blocks
     type BlockRangeResponse;
 

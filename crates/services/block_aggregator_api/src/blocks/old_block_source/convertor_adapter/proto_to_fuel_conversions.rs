@@ -520,13 +520,16 @@ pub fn fuel_block_from_protobuf(
                 .map(tx_from_proto_tx)
                 .collect::<crate::result::Result<_>>()?;
             // TODO: It should be `Vec<Vec<Receipts>>`, but we need to update protobuf
-            let receipts = vec![
-                v1_inner
-                    .receipts
-                    .iter()
-                    .map(receipt_from_proto)
-                    .collect::<crate::result::Result<_>>()?,
-            ];
+            let receipts = v1_inner
+                .receipts
+                .iter()
+                .map(|rs| {
+                    rs.receipts
+                        .iter()
+                        .map(receipt_from_proto)
+                        .collect::<crate::result::Result<Vec<_>>>()
+                })
+                .collect::<crate::result::Result<Vec<_>>>()?;
             (partial_header, txs, receipts)
         }
     };
