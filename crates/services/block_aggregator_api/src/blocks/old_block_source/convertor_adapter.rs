@@ -1,5 +1,12 @@
 use crate::{
-    blocks::old_block_source::BlockConvector,
+    blocks::old_block_source::{
+        BlockConverter,
+        convertor_adapter::fuel_to_proto_conversions::{
+            proto_header_from_header,
+            proto_receipts_from_receipts,
+            proto_tx_from_tx,
+        },
+    },
     protobuf_types::{
         Block as ProtoBlock,
         V1Block as ProtoV1Block,
@@ -8,22 +15,18 @@ use crate::{
 };
 #[cfg(feature = "fault-proving")]
 use fuel_core_types::fuel_types::ChainId;
-
-use crate::blocks::old_block_source::convertor_adapter::fuel_to_proto_conversions::{
-    proto_header_from_header,
-    proto_receipts_from_receipts,
-    proto_tx_from_tx,
-};
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
     fuel_tx::Receipt as FuelReceipt,
 };
+use prost::Message;
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct ConvertorAdapter;
+pub struct ProtobufBlockConverter;
 
-impl BlockConvector for ConvertorAdapter {
-    type Block = ProtoBlock;
+impl BlockConverter for ProtobufBlockConverter {
+    type Block = Arc<Vec<u8>>;
 
     fn convert_block(
         &self,
@@ -45,9 +48,14 @@ impl BlockConvector for ConvertorAdapter {
                         .map(|rs| proto_receipts_from_receipts(rs))
                         .collect(),
                 };
-                Ok(ProtoBlock {
+                let proto_block = ProtoBlock {
                     versioned_block: Some(ProtoVersionedBlock::V1(proto_v1_block)),
-                })
+                };
+                let mut bytes = Vec::new();
+                proto_block
+                    .encode(&mut bytes)
+                    .map_err(crate::result::Error::serialization_error)?;
+                Ok(Arc::new(bytes))
             }
         }
     }
@@ -80,7 +88,7 @@ mod tests {
             receipts in arb_receipts())
           {
               // given
-              let convertor = ConvertorAdapter;
+              let convertor = ProtobufBlockConverter;
 
               // when
               let receipts = vec![receipts];

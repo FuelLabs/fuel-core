@@ -53,9 +53,11 @@ pub trait BlocksAggregatorApi: Send + Sync + 'static {
 
     fn get_current_height(&self) -> Result<Option<BlockHeight>>;
 
+    // TODO: This doesn't actually need to be bytes, it could just be the ProtoBlock type since we
+    //   don't need to deserialize it, but this works for now
     fn new_block_subscription(
         &self,
-    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<ProtoBlock>)>> + Send + 'static;
+    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<Vec<u8>>)>> + Send + 'static;
 }
 
 pub struct Server<B> {
@@ -112,6 +114,20 @@ where
                         .boxed();
                     Ok(tonic::Response::new(stream))
                 }
+                BlockRangeResponse::Bytes(inner) => {
+                    let stream = inner
+                        .map(|(height, res)| {
+                            let response = ProtoBlockResponse {
+                                height: *height,
+                                payload: Some(proto_block_response::Payload::Bytes(
+                                    (*res).clone(),
+                                )),
+                            };
+                            Ok(response)
+                        })
+                        .boxed();
+                    Ok(tonic::Response::new(stream))
+                }
                 BlockRangeResponse::S3(inner) => {
                     let stream = inner
                         .map(|(height, res)| {
@@ -156,7 +172,7 @@ where
                     let response = ProtoBlockResponse {
                         height: *block_height,
                         // TODO: Avoid clone
-                        payload: Some(proto_block_response::Payload::Literal(
+                        payload: Some(proto_block_response::Payload::Bytes(
                             block.deref().clone(),
                         )),
                     };

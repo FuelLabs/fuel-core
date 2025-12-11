@@ -7,7 +7,7 @@ use crate::{
     blocks::{
         BlockSource,
         old_block_source::{
-            BlockConvector,
+            BlockConverter,
             OldBlocksSource,
             TxReceipts,
         },
@@ -100,7 +100,7 @@ where
     S: BlocksProvider,
 {
     pub(crate) storage: Arc<S>,
-    pub(crate) blocks_broadcast: broadcast::Sender<(BlockHeight, Arc<S::Block>)>,
+    pub(crate) blocks_broadcast: broadcast::Sender<(BlockHeight, S::Block)>,
 }
 
 impl<S> SharedState<S>
@@ -153,7 +153,7 @@ where
 
     pub fn new_block_subscription(
         &self,
-    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<S::Block>)>> + 'static {
+    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, S::Block)>> + 'static {
         let receiver = self.blocks_broadcast.subscribe();
         tokio_stream::wrappers::BroadcastStream::new(receiver)
             .map(|result| result.map_err(|e| anyhow::anyhow!("Broadcast error: {:?}", e)))
@@ -162,7 +162,7 @@ where
 
 impl<S> BlocksAggregatorApi for SharedState<S>
 where
-    S: BlocksProvider<Block = ProtoBlock, BlockRangeResponse = BlockRangeResponse>,
+    S: BlocksProvider<Block = Arc<Vec<u8>>, BlockRangeResponse = BlockRangeResponse>,
 {
     fn get_block_range<H: Into<BlockHeight>>(
         &self,
@@ -178,7 +178,7 @@ where
 
     fn new_block_subscription(
         &self,
-    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<S::Block>)>> + Send + 'static
+    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, S::Block)>> + Send + 'static
     {
         self.new_block_subscription()
     }
@@ -203,7 +203,7 @@ where
 #[async_trait::async_trait]
 impl<Blocks, S1, S2> RunnableService for UninitializedTask<Blocks, S1, S2>
 where
-    Blocks: BlockSource<Block = ProtoBlock>,
+    Blocks: BlockSource<Block = Arc<Vec<u8>>>,
     S1: Send + Sync + Modifiable + Debug + 'static,
     S1: KeyValueInspect<Column = Column>,
     S2: KeyValueInspect<Column = Column> + 'static,
@@ -303,7 +303,7 @@ pub fn new_service<DB, S, OnchainDB, Receipts, T>(
     ServiceRunner<UninitializedTask<OldBlocksSource<S, OnchainDB, Receipts>, DB, DB>>,
 >
 where
-    S: BlockConvector<Block = ProtoBlock> + Clone + Send + Sync + 'static,
+    S: BlockConverter<Block = Arc<Vec<u8>>> + Clone + Send + Sync + 'static,
     OnchainDB: Send + Sync,
     OnchainDB: StorageInspect<FuelBlocks, Error = StorageError>,
     OnchainDB: StorageInspect<Transactions, Error = StorageError>,

@@ -10,8 +10,8 @@ use crate::{
         RemoteS3Response,
     },
     blocks::old_block_source::{
-        BlockConvector,
-        convertor_adapter::ConvertorAdapter,
+        BlockConverter,
+        convertor_adapter::ProtobufBlockConverter,
     },
     protobuf_types::{
         Block as ProtoBlock,
@@ -22,7 +22,10 @@ use crate::{
         block_response::Payload,
     },
 };
-use fuel_core_protobuf::remote_block_response::Location;
+use fuel_core_protobuf::{
+    Block,
+    remote_block_response::Location,
+};
 use fuel_core_services::Service;
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,
@@ -78,7 +81,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
     let mut api = MockBlocksAggregatorApi::default();
 
     // Given
-    let convertor_adapter = ConvertorAdapter;
+    let convertor_adapter = ProtobufBlockConverter;
     let fuel_block_1 = FuelBlock::default();
     let mut fuel_block_2 = FuelBlock::default();
     let block_height_1 = fuel_block_1.header().height();
@@ -95,7 +98,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
     api.expect_get_block_range()
         .times(1)
         .returning(move |_: u32, _: u32| {
-            let response = BlockRangeResponse::Literal(
+            let response = BlockRangeResponse::Bytes(
                 futures::stream::iter(list.clone().into_iter()).boxed(),
             );
             Ok(response)
@@ -116,15 +119,15 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
 
     // Then
     let response = result.unwrap();
-    let actual: Vec<(BlockHeight, ProtoBlock)> = response
+    let actual: Vec<(BlockHeight, Arc<Vec<u8>>)> = response
         .into_inner()
         .try_collect::<Vec<_>>()
         .await
         .unwrap()
         .into_iter()
         .map(|b| {
-            if let Some(Payload::Literal(inner)) = b.payload {
-                (BlockHeight::new(b.height), inner)
+            if let Some(Payload::Bytes(inner)) = b.payload {
+                (BlockHeight::new(b.height), Arc::new(inner))
             } else {
                 panic!("unexpected response type")
             }
@@ -216,7 +219,7 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     let (sender, receiver) = broadcast::channel(100);
 
     // Given
-    let convertor_adapter = ConvertorAdapter;
+    let convertor_adapter = ProtobufBlockConverter;
     let fuel_block_1 = FuelBlock::default();
     let mut fuel_block_2 = FuelBlock::default();
     let block_height_1 = fuel_block_1.header().height();
@@ -253,21 +256,21 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     let result = client.new_block_subscription(request).await;
     // Send blocks
     for (height, block) in list.clone() {
-        sender.send((height, Arc::new(block))).unwrap();
+        sender.send((height, block)).unwrap();
     }
 
     // Then
     let stream = result.unwrap().into_inner();
 
-    let actual: Vec<(BlockHeight, ProtoBlock)> = stream
+    let actual: Vec<(BlockHeight, Arc<Vec<u8>>)> = stream
         .take(2)
         .try_collect::<Vec<_>>()
         .await
         .unwrap()
         .into_iter()
         .map(|b| {
-            if let Some(Payload::Literal(inner)) = b.payload {
-                (BlockHeight::new(b.height), inner)
+            if let Some(Payload::Bytes(inner)) = b.payload {
+                (BlockHeight::new(b.height), Arc::new(inner))
             } else {
                 panic!("unexpected response type")
             }
