@@ -8,7 +8,7 @@ use fuel_core::{
     },
 };
 use fuel_core_block_aggregator_api::{
-    blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
+    blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
     protobuf_types::{
         BlockHeightRequest as ProtoBlockHeightRequest,
         BlockRangeRequest as ProtoBlockRangeRequest,
@@ -72,7 +72,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
 
     assert!(
         matches!(
-            receipts[1],
+            receipts[0][1],
             Receipt::ScriptResult {
                 result: ScriptExecutionResult::Success,
                 ..
@@ -82,7 +82,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
         receipts
     );
     assert!(
-        matches!(receipts[0], Receipt::Return { .. }),
+        matches!(receipts[0][0], Receipt::Return { .. }),
         "should have a return receipt, received: {:?}",
         receipts
     );
@@ -170,7 +170,7 @@ async fn new_block_subscription__can_get_expect_block() {
 
     assert!(
         matches!(
-            receipts[1],
+            receipts[0][1],
             Receipt::ScriptResult {
                 result: ScriptExecutionResult::Success,
                 ..
@@ -180,7 +180,7 @@ async fn new_block_subscription__can_get_expect_block() {
         receipts
     );
     assert!(
-        matches!(receipts[0], Receipt::Return { .. }),
+        matches!(receipts[0][0], Receipt::Return { .. }),
         "should have a return receipt, received: {:?}",
         receipts
     );

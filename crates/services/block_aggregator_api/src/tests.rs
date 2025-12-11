@@ -4,20 +4,15 @@ use crate::{
     blocks::{
         BlockBytes,
         BlockSource,
-        BlockSourceEvent,
     },
     db::{
         BlocksProvider,
         BlocksStorage,
     },
-    result::{
-        Error,
-        Result,
-    },
+    result::Result,
     service::SharedState,
     task::Task,
 };
-use anyhow::anyhow;
 use fuel_core_services::{
     RunnableTask,
     Service,
@@ -40,10 +35,6 @@ use std::{
         Arc,
         Mutex,
     },
-};
-use tokio::sync::mpsc::{
-    Receiver,
-    Sender,
 };
 
 type BlockRangeResponse = BoxStream<BlockBytes>;
@@ -105,9 +96,8 @@ impl BlocksStorage for FakeDB {
     type Block = BlockBytes;
     type BlockRangeResponse = BlockRangeResponse;
 
-    async fn store_block(&mut self, block: &BlockSourceEvent<BlockBytes>) -> Result<()> {
-        let (id, block) = block.as_inner();
-        self.map.lock().unwrap().insert(*id, block.clone());
+    async fn store_block(&mut self, id: BlockHeight, block: &BlockBytes) -> Result<()> {
+        self.map.lock().unwrap().insert(id, block.clone());
         Ok(())
     }
 }
@@ -145,30 +135,45 @@ impl BlocksProvider for FakeDB {
 }
 
 struct FakeBlockSource {
-    blocks: Receiver<BlockSourceEvent<BlockBytes>>,
+    blocks: Vec<(BlockHeight, BlockBytes)>,
 }
 
 impl FakeBlockSource {
-    fn new() -> (Self, Sender<BlockSourceEvent<BlockBytes>>) {
-        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
-        let _self = Self { blocks: receiver };
-        (_self, _sender)
+    fn new(blocks: Vec<(BlockHeight, BlockBytes)>) -> Self {
+        Self { blocks }
     }
 }
 
 impl BlockSource for FakeBlockSource {
     type Block = BlockBytes;
 
-    async fn next_block(&mut self) -> Result<BlockSourceEvent<BlockBytes>> {
+    fn blocks_starting_from(
+        &self,
+        block_height: BlockHeight,
+    ) -> impl Iterator<Item = Result<(BlockHeight, Self::Block)>> + Send + Sync + 'static
+    {
+        let start_height: u32 = block_height.into();
         self.blocks
-            .recv()
-            .await
-            .ok_or(Error::BlockSource(anyhow!("Channel closed")))
+            .clone()
+            .into_iter()
+            .filter(move |(height, _)| {
+                let h: u32 = (*height).into();
+                h >= start_height
+            })
+            .map(|(height, block)| Ok((height, block)))
     }
+}
 
-    async fn drain(&mut self) -> Result<()> {
-        todo!()
-    }
+fn importer_stream(
+    blocks: Vec<(BlockHeight, BlockBytes)>,
+) -> BoxStream<anyhow::Result<(BlockHeight, BlockBytes)>> {
+    let stream = futures::stream::iter(
+        blocks
+            .into_iter()
+            .map(|(height, block)| Ok((height, block))),
+    )
+    .chain(futures::stream::once(futures::future::pending()));
+    Box::pin(stream)
 }
 
 #[tokio::test]
@@ -199,24 +204,32 @@ async fn run__new_block_gets_added_to_db() {
 
     // Given
     let db = FakeDB::new();
-    let (source, source_sender) = FakeBlockSource::new();
+    let source = FakeBlockSource::new(vec![]);
 
+    let sync_from = BlockHeight::from(123u32);
+    let block = BlockBytes::random(&mut rng);
+    let importer = importer_stream(vec![(sync_from, block.clone())]);
     let shared_state = SharedState::new(db.clone(), 1_000);
-    let mut srv = Task::new(Box::new(FakeApi {}), db, shared_state.clone(), source);
+    let mut srv = Task::new(
+        sync_from,
+        Box::new(FakeApi {}),
+        db,
+        shared_state.clone(),
+        source,
+        importer,
+    );
     let mut watcher = StateWatcher::started();
 
-    let block = BlockBytes::random(&mut rng);
-    let id = BlockHeight::from(123u32);
-
     // When
-    let event = BlockSourceEvent::NewBlock(id, block.clone());
-    source_sender.send(event).await.unwrap();
+    // Import block event
+    let _ = srv.run(&mut watcher).await;
+    // Process event
     let _ = srv.run(&mut watcher).await;
 
     // Then
 
     let actual = shared_state
-        .get_block_range(id, id)
+        .get_block_range(sync_from, sync_from)
         .unwrap()
         .next()
         .await
@@ -248,21 +261,26 @@ async fn run__get_current_height__returns_expected_height() {
 async fn run__new_block_subscription__sends_new_block() {
     let mut rng = StdRng::seed_from_u64(42);
     let db = FakeDB::new();
-    let (source, source_sender) = FakeBlockSource::new();
+    let source = FakeBlockSource::new(vec![]);
 
+    let sync_from = BlockHeight::from(123u32);
+    let block = BlockBytes::random(&mut rng);
+    let importer = importer_stream(vec![(sync_from, block.clone())]);
     let shared_state = SharedState::new(db.clone(), 1_000);
-    let mut srv = Task::new(Box::new(FakeApi {}), db, shared_state.clone(), source);
+    let mut srv = Task::new(
+        sync_from,
+        Box::new(FakeApi {}),
+        db,
+        shared_state.clone(),
+        source,
+        importer,
+    );
     let mut watcher = StateWatcher::started();
-
-    let expected_block = BlockBytes::random(&mut rng);
-    let expected_height = BlockHeight::from(123u32);
 
     // Given
     let mut subscription = shared_state.new_block_subscription();
 
     // When
-    let event = BlockSourceEvent::NewBlock(expected_height, expected_block.clone());
-    source_sender.send(event).await.unwrap();
     let _ = srv.run(&mut watcher).await;
 
     // Then
@@ -272,28 +290,35 @@ async fn run__new_block_subscription__sends_new_block() {
         .unwrap()
         .unwrap()
         .unwrap();
-    assert_eq!((expected_height, Arc::new(expected_block)), actual_block);
+    assert_eq!((sync_from, Arc::new(block)), actual_block);
 }
 
 #[tokio::test]
 async fn run__new_block_subscription__does_not_send_syncing_blocks() {
     let mut rng = StdRng::seed_from_u64(42);
     let db = FakeDB::new();
-    let (source, source_sender) = FakeBlockSource::new();
 
+    let sync_from = BlockHeight::from(123u32);
+    let block = BlockBytes::random(&mut rng);
+
+    let source = FakeBlockSource::new(vec![(sync_from, block.clone())]);
+
+    let importer = importer_stream(vec![]);
     let shared_state = SharedState::new(db.clone(), 1_000);
-    let mut srv = Task::new(Box::new(FakeApi {}), db, shared_state.clone(), source);
+    let mut srv = Task::new(
+        sync_from,
+        Box::new(FakeApi {}),
+        db,
+        shared_state.clone(),
+        source,
+        importer,
+    );
     let mut watcher = StateWatcher::started();
-
-    let expected_block = BlockBytes::random(&mut rng);
-    let expected_height = BlockHeight::from(123u32);
 
     // Given
     let mut subscription = shared_state.new_block_subscription();
 
     // When
-    let event = BlockSourceEvent::OldBlock(expected_height, expected_block.clone());
-    source_sender.send(event).await.unwrap();
     let _ = srv.run(&mut watcher).await;
 
     // Then

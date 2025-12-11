@@ -93,9 +93,9 @@ mod rpc {
         service::adapters::rpc::ReceiptSource,
     };
     pub use fuel_core_block_aggregator_api::{
-        blocks::importer_and_db_source::{
-            ImporterAndDbSource,
-            serializer_adapter::SerializerAdapter,
+        blocks::old_block_source::{
+            OldBlocksSource,
+            convertor_adapter::ConvertorAdapter,
         },
         service::UninitializedTask,
     };
@@ -576,14 +576,14 @@ fn init_rpc_server(
 ) -> anyhow::Result<
     ServiceRunner<
         UninitializedTask<
-            ImporterAndDbSource<SerializerAdapter, Database<OnChain>, ReceiptSource>,
+            OldBlocksSource<ConvertorAdapter, Database<OnChain>, ReceiptSource>,
             Database<BlockAggregatorDatabase>,
             Database<BlockAggregatorDatabase>,
         >,
     >,
 > {
     let receipts = ReceiptSource::new(database.off_chain().clone());
-    let serializer = SerializerAdapter;
+    let serializer = ConvertorAdapter;
     let onchain_db = database.on_chain().clone();
     let importer = importer_adapter.events_shared_result();
     fuel_core_block_aggregator_api::service::new_service(

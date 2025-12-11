@@ -1,7 +1,4 @@
-use crate::{
-    blocks::BlockSourceEvent,
-    result::Result,
-};
+use crate::result::Result;
 use fuel_core_types::fuel_types::BlockHeight;
 
 pub mod remote_cache;
@@ -37,6 +34,7 @@ pub trait BlocksStorage: Send + Sync {
     /// Stores a block with the given ID
     fn store_block(
         &mut self,
-        block: &BlockSourceEvent<Self::Block>,
+        block_height: BlockHeight,
+        block: &Self::Block,
     ) -> impl Future<Output = Result<()>> + Send;
 }
