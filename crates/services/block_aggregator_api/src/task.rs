@@ -43,7 +43,8 @@ where
     pub(crate) importer:
         BoxStream<anyhow::Result<(BlockHeight, <Blocks as BlockSource>::Block)>>,
     pub(crate) last_seen_importer_height: Option<BlockHeight>,
-    pub(crate) continuous_stream_of_events:
+    /// A joint stream of old blocks from the block source and new blocks from the importer
+    pub(crate) old_and_new_block_stream:
         BoxStream<AggregatorResult<(BlockHeight, Arc<<Blocks as BlockSource>::Block>)>>,
 }
 
@@ -72,7 +73,7 @@ where
             block_source,
             importer,
             last_seen_importer_height: None,
-            continuous_stream_of_events: futures::stream::empty().into_boxed(),
+            old_and_new_block_stream: futures::stream::empty().into_boxed(),
         };
 
         let _ = task.restart_blocks_stream();
@@ -116,7 +117,7 @@ where
             });
 
         let stream = old_blocks_stream.chain(life_stream).into_boxed();
-        self.continuous_stream_of_events = stream;
+        self.old_and_new_block_stream = stream;
 
         TaskNextAction::Continue
     }
@@ -166,6 +167,8 @@ where
                     Some(res) => {
                         let (height, block) = try_or_stop!(res);
 
+                        // The new block is added to the stream fo old and new blocks and will be
+                        // processed later during future iterations.
                         let _ = self
                             .shared_state
                             .blocks_broadcast
@@ -178,7 +181,7 @@ where
                     }
                 }
             },
-            event = self.continuous_stream_of_events.next() => {
+            event = self.old_and_new_block_stream.next() => {
                 match event {
                     Some(Ok((block_height, block))) => {
                         self.handle_block(block_height, block).await

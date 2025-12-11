@@ -1,5 +1,5 @@
 #[cfg(feature = "fault-proving")]
-use crate::blocks::importer_and_db_source::serializer_adapter::ChainId;
+use crate::blocks::old_block_source::convertor_adapter::ChainId;
 use crate::{
     protobuf_types::{
         Block as ProtoBlock,

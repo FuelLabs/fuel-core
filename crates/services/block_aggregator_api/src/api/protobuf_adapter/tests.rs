@@ -9,9 +9,9 @@ use crate::{
         BlockRangeResponse,
         RemoteS3Response,
     },
-    blocks::importer_and_db_source::{
-        BlockSerializer,
-        serializer_adapter::SerializerAdapter,
+    blocks::old_block_source::{
+        BlockConvector,
+        convertor_adapter::ConvertorAdapter,
     },
     protobuf_types::{
         Block as ProtoBlock,
@@ -78,17 +78,17 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
     let mut api = MockBlocksAggregatorApi::default();
 
     // Given
-    let serializer_adapter = SerializerAdapter;
+    let convertor_adapter = ConvertorAdapter;
     let fuel_block_1 = FuelBlock::default();
     let mut fuel_block_2 = FuelBlock::default();
     let block_height_1 = fuel_block_1.header().height();
     let block_height_2 = block_height_1.succ().unwrap();
     fuel_block_2.header_mut().set_block_height(block_height_2);
-    let block1 = serializer_adapter
-        .serialize_block(&fuel_block_1, &[])
+    let block1 = convertor_adapter
+        .convert_block(&fuel_block_1, &[])
         .expect("could not serialize block");
-    let block2 = serializer_adapter
-        .serialize_block(&fuel_block_2, &[])
+    let block2 = convertor_adapter
+        .convert_block(&fuel_block_2, &[])
         .expect("could not serialize block");
     let list = vec![(*block_height_1, block1), (block_height_2, block2)];
     let expected = list.clone();
@@ -216,17 +216,17 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     let (sender, receiver) = broadcast::channel(100);
 
     // Given
-    let serializer_adapter = SerializerAdapter;
+    let convertor_adapter = ConvertorAdapter;
     let fuel_block_1 = FuelBlock::default();
     let mut fuel_block_2 = FuelBlock::default();
     let block_height_1 = fuel_block_1.header().height();
     let block_height_2 = block_height_1.succ().unwrap();
     fuel_block_2.header_mut().set_block_height(block_height_2);
-    let block1 = serializer_adapter
-        .serialize_block(&fuel_block_1, &[])
+    let block1 = convertor_adapter
+        .convert_block(&fuel_block_1, &[])
         .expect("could not serialize block");
-    let block2 = serializer_adapter
-        .serialize_block(&fuel_block_2, &[])
+    let block2 = convertor_adapter
+        .convert_block(&fuel_block_2, &[])
         .expect("could not serialize block");
     let list = vec![(*block_height_1, block1), (block_height_2, block2)];
 

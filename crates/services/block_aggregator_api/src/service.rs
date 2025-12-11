@@ -6,8 +6,8 @@ use crate::{
     block_range_response::BlockRangeResponse,
     blocks::{
         BlockSource,
-        importer_and_db_source::{
-            BlockSerializer,
+        old_block_source::{
+            BlockConvector,
             OldBlocksSource,
             TxReceipts,
         },
@@ -293,7 +293,7 @@ where
 #[allow(clippy::type_complexity)]
 pub fn new_service<DB, S, OnchainDB, Receipts, T>(
     db: DB,
-    serializer: S,
+    convertor: S,
     onchain_db: OnchainDB,
     receipts: Receipts,
     importer: BoxStream<SharedImportResult>,
@@ -303,7 +303,7 @@ pub fn new_service<DB, S, OnchainDB, Receipts, T>(
     ServiceRunner<UninitializedTask<OldBlocksSource<S, OnchainDB, Receipts>, DB, DB>>,
 >
 where
-    S: BlockSerializer<Block = ProtoBlock> + Clone + Send + Sync + 'static,
+    S: BlockConvector<Block = ProtoBlock> + Clone + Send + Sync + 'static,
     OnchainDB: Send + Sync,
     OnchainDB: StorageInspect<FuelBlocks, Error = StorageError>,
     OnchainDB: StorageInspect<Transactions, Error = StorageError>,
@@ -334,8 +334,8 @@ where
         ),
     };
 
-    let serializer = Arc::new(serializer);
-    let serializer_stream = serializer.clone();
+    let convertor = Arc::new(convertor);
+    let convertor_stream = convertor.clone();
 
     let importer = importer
         .map(move |res| {
@@ -349,7 +349,7 @@ where
                 .collect::<Vec<_>>();
             let height = *res.sealed_block.entity.header().height();
             let block =
-                serializer_stream.serialize_block(&res.sealed_block.entity, &receipts)?;
+                convertor_stream.convert_block(&res.sealed_block.entity, &receipts)?;
 
             Ok((height, block))
         })
@@ -359,7 +359,7 @@ where
 
     let api = protobuf_adapter::new_service(config.addr, shared_state.clone());
 
-    let block_source = OldBlocksSource::new(serializer, onchain_db, receipts);
+    let block_source = OldBlocksSource::new(convertor, onchain_db, receipts);
 
     let uninitialized_task = UninitializedTask {
         api: Box::new(api),

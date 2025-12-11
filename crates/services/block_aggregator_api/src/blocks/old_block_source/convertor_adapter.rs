@@ -1,5 +1,5 @@
 use crate::{
-    blocks::importer_and_db_source::BlockSerializer,
+    blocks::old_block_source::BlockConvector,
     protobuf_types::{
         Block as ProtoBlock,
         V1Block as ProtoV1Block,
@@ -9,21 +9,23 @@ use crate::{
 #[cfg(feature = "fault-proving")]
 use fuel_core_types::fuel_types::ChainId;
 
-use fuel_core_types::{
-    blockchain::{
-        block::Block as FuelBlock,
-    },
+use crate::blocks::old_block_source::convertor_adapter::fuel_to_proto_conversions::{
+    proto_header_from_header,
+    proto_receipt_from_receipt,
+    proto_tx_from_tx,
 };
-use fuel_core_types::fuel_tx::Receipt as FuelReceipt;
-use crate::blocks::importer_and_db_source::serializer_adapter::fuel_to_proto_conversions::{proto_header_from_header, proto_receipt_from_receipt, proto_tx_from_tx};
+use fuel_core_types::{
+    blockchain::block::Block as FuelBlock,
+    fuel_tx::Receipt as FuelReceipt,
+};
 
 #[derive(Clone)]
-pub struct SerializerAdapter;
+pub struct ConvertorAdapter;
 
-impl BlockSerializer for SerializerAdapter {
+impl BlockConvector for ConvertorAdapter {
     type Block = ProtoBlock;
 
-    fn serialize_block(
+    fn convert_block(
         &self,
         block: &FuelBlock,
         receipts: &[Vec<FuelReceipt>],
@@ -68,9 +70,12 @@ pub mod proto_to_fuel_conversions;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_types::test_helpers::{arb_block, arb_receipts};
+    use crate::blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf;
+    use fuel_core_types::test_helpers::{
+        arb_block,
+        arb_receipts,
+    };
     use proptest::prelude::*;
-    use crate::blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf;
 
     proptest! {
             #![proptest_config(ProptestConfig {
@@ -82,11 +87,11 @@ mod tests {
             receipts in arb_receipts())
           {
               // given
-              let serializer = SerializerAdapter;
+              let convertor = ConvertorAdapter;
 
               // when
               let receipts = vec![receipts];
-              let proto_block = serializer.serialize_block(&block, &receipts).unwrap();
+              let proto_block = convertor.convert_block(&block, &receipts).unwrap();
 
               // then
               let (deserialized_block, deserialized_receipts) = fuel_block_from_protobuf(proto_block, &msg_ids, event_inbox_root).unwrap();

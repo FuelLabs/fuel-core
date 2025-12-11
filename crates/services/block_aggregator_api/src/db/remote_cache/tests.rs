@@ -1,9 +1,9 @@
 use super::*;
 use crate::{
     block_range_response::RemoteS3Response,
-    blocks::importer_and_db_source::{
-        BlockSerializer,
-        serializer_adapter::SerializerAdapter,
+    blocks::old_block_source::{
+        BlockConvector,
+        convertor_adapter::ConvertorAdapter,
     },
     db::table::{
         Column,
@@ -32,8 +32,8 @@ fn database() -> StorageTransaction<InMemoryStorage<Column>> {
 
 fn arb_proto_block() -> ProtoBlock {
     let block = FuelBlock::default();
-    let serializer = SerializerAdapter;
-    serializer.serialize_block(&block, &[]).unwrap()
+    let convertor = ConvertorAdapter;
+    convertor.convert_block(&block, &[]).unwrap()
 }
 fn put_happy_rule() -> Rule {
     mock!(Client::put_object)

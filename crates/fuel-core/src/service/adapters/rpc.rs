@@ -6,7 +6,7 @@ use crate::{
     fuel_core_graphql_api::storage::transactions::TransactionStatuses,
 };
 use fuel_core_block_aggregator_api::{
-    blocks::importer_and_db_source::TxReceipts,
+    blocks::old_block_source::TxReceipts,
     result::{
         Error as RPCError,
         Result as RPCResult,

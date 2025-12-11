@@ -2,9 +2,9 @@
 
 use super::*;
 use crate::{
-    blocks::importer_and_db_source::{
-        BlockSerializer,
-        serializer_adapter::SerializerAdapter,
+    blocks::old_block_source::{
+        BlockConvector,
+        convertor_adapter::ConvertorAdapter,
     },
     db::table::{
         Column,
@@ -31,11 +31,11 @@ fn database() -> StorageTransaction<InMemoryStorage<Column>> {
 }
 
 fn proto_block_with_height(height: BlockHeight) -> ProtoBlock {
-    let serializer_adapter = SerializerAdapter;
+    let convertor_adapter = ConvertorAdapter;
     let mut default_block = FuelBlock::<Transaction>::default();
     default_block.header_mut().set_block_height(height);
-    serializer_adapter
-        .serialize_block(&default_block, &[])
+    convertor_adapter
+        .convert_block(&default_block, &[])
         .unwrap()
 }
 

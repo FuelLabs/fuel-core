@@ -8,7 +8,7 @@ use fuel_core::{
     },
 };
 use fuel_core_block_aggregator_api::{
-    blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
+    blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
     protobuf_types::{
         BlockHeightRequest as ProtoBlockHeightRequest,
         BlockRangeRequest as ProtoBlockRangeRequest,

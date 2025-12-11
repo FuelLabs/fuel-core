@@ -25,12 +25,12 @@ use fuel_core_types::{
 };
 use std::sync::Arc;
 
-pub mod serializer_adapter;
+pub mod convertor_adapter;
 
-pub trait BlockSerializer: Send + Sync + 'static {
+pub trait BlockConvector: Send + Sync + 'static {
     type Block;
 
-    fn serialize_block(
+    fn convert_block(
         &self,
         block: &FuelBlock,
         receipts: &[Vec<FuelReceipt>],
@@ -41,37 +41,37 @@ pub trait TxReceipts: Send + Sync + 'static {
     fn get_receipts(&self, tx_id: &TxId) -> Result<Vec<Receipt>>;
 }
 
-pub struct OldBlocksSource<Serializer, DB, Receipts> {
-    serializer: Arc<Serializer>,
+pub struct OldBlocksSource<Convertor, DB, Receipts> {
+    convertor: Arc<Convertor>,
     db: Arc<DB>,
     receipts: Arc<Receipts>,
 }
 
-impl<Serializer, DB, Receipts> OldBlocksSource<Serializer, DB, Receipts> {
-    pub fn new(serializer: Arc<Serializer>, db: DB, receipts: Receipts) -> Self {
+impl<Convertor, DB, Receipts> OldBlocksSource<Convertor, DB, Receipts> {
+    pub fn new(convertor: Arc<Convertor>, db: DB, receipts: Receipts) -> Self {
         Self {
-            serializer,
+            convertor,
             db: Arc::new(db),
             receipts: Arc::new(receipts),
         }
     }
 }
 
-impl<Serializer, DB, Receipts> OldBlocksSource<Serializer, DB, Receipts>
+impl<Convertor, DB, Receipts> OldBlocksSource<Convertor, DB, Receipts>
 where
     DB: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
-    Serializer: BlockSerializer,
+    Convertor: BlockConvector,
 {
     pub fn blocks_stream_starting(
         &self,
         block_height: BlockHeight,
-    ) -> impl Iterator<Item = Result<(BlockHeight, Serializer::Block)>> + Send + Sync + 'static
+    ) -> impl Iterator<Item = Result<(BlockHeight, Convertor::Block)>> + Send + Sync + 'static
     {
         StorageIterator {
-            serializer: self.serializer.clone(),
+            convertor: self.convertor.clone(),
             db: self.db.clone(),
             receipts: self.receipts.clone(),
             next_height: Some(block_height),
@@ -79,15 +79,15 @@ where
     }
 }
 
-impl<Serializer, DB, Receipts> BlockSource for OldBlocksSource<Serializer, DB, Receipts>
+impl<Convertor, DB, Receipts> BlockSource for OldBlocksSource<Convertor, DB, Receipts>
 where
     DB: Send + Sync + 'static,
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
-    Serializer: BlockSerializer,
+    Convertor: BlockConvector,
 {
-    type Block = Serializer::Block;
+    type Block = Convertor::Block;
 
     fn blocks_starting_from(
         &self,
@@ -98,19 +98,19 @@ where
     }
 }
 
-pub struct StorageIterator<Serializer, DB, Receipts> {
-    serializer: Arc<Serializer>,
+pub struct StorageIterator<Convertor, DB, Receipts> {
+    convertor: Arc<Convertor>,
     db: Arc<DB>,
     receipts: Arc<Receipts>,
     next_height: Option<BlockHeight>,
 }
 
-impl<Serializer, DB, Receipts> StorageIterator<Serializer, DB, Receipts>
+impl<Convertor, DB, Receipts> StorageIterator<Convertor, DB, Receipts>
 where
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
-    Serializer: BlockSerializer,
+    Convertor: BlockConvector,
 {
     fn get_block_and_receipts(
         &self,
@@ -160,14 +160,14 @@ where
     }
 }
 
-impl<Serializer, DB, Receipts> Iterator for StorageIterator<Serializer, DB, Receipts>
+impl<Convertor, DB, Receipts> Iterator for StorageIterator<Convertor, DB, Receipts>
 where
     DB: StorageInspect<FuelBlocks, Error = StorageError>,
     DB: StorageInspect<Transactions, Error = StorageError>,
     Receipts: TxReceipts,
-    Serializer: BlockSerializer,
+    Convertor: BlockConvector,
 {
-    type Item = Result<(BlockHeight, Serializer::Block)>;
+    type Item = Result<(BlockHeight, Convertor::Block)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let next_height = self.next_height?;
@@ -175,7 +175,7 @@ where
         let res = self.get_block_and_receipts(&next_height);
         match res {
             Ok(Some((block, receipts))) => {
-                let block = match self.serializer.serialize_block(&block, &receipts) {
+                let block = match self.convertor.convert_block(&block, &receipts) {
                     Ok(b) => b,
                     Err(e) => return Some(Err(e)),
                 };
