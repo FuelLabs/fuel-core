@@ -167,7 +167,7 @@ where
                     Some(res) => {
                         let (height, block) = try_or_stop!(res);
 
-                        // The new block is added to the stream fo old and new blocks and will be
+                        // The new block is added to the stream of old and new blocks and will be
                         // processed later during future iterations.
                         let _ = self
                             .shared_state
