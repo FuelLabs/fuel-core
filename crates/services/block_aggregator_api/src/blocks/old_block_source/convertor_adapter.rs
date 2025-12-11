@@ -11,7 +11,7 @@ use fuel_core_types::fuel_types::ChainId;
 
 use crate::blocks::old_block_source::convertor_adapter::fuel_to_proto_conversions::{
     proto_header_from_header,
-    proto_receipt_from_receipt,
+    proto_receipts_from_receipts,
     proto_tx_from_tx,
 };
 use fuel_core_types::{
@@ -40,16 +40,9 @@ impl BlockConvector for ConvertorAdapter {
                         .iter()
                         .map(proto_tx_from_tx)
                         .collect(),
-                    // TODO: It should be `Vec<Vec<Receipts>>`, but we need to update protobuf
-                    //  definition first
                     receipts: receipts
                         .iter()
-                        .flat_map(|receipts| {
-                            receipts
-                                .iter()
-                                .map(proto_receipt_from_receipt)
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|rs| proto_receipts_from_receipts(rs))
                         .collect(),
                 };
                 Ok(ProtoBlock {

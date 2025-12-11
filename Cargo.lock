@@ -4634,8 +4634,7 @@ dependencies = [
 [[package]]
 name = "fuel-core-protobuf"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a616726038fbe445bd3294d2700afa8487e38fbc6abc86a8af12be4b596db598"
+source = "git+https://github.com/FuelLabs/fuel-core-protobuf.git?branch=chore%2Fmake-receipts-nested#e580106fd9e955b1603773e7fd1818205e02213d"
 dependencies = [
  "prost 0.14.1",
  "serde",
