@@ -1,5 +1,5 @@
 #[cfg(feature = "fault-proving")]
-use crate::blocks::importer_and_db_source::serializer_adapter::ChainId;
+use crate::blocks::old_block_source::convertor_adapter::ChainId;
 use crate::{
     protobuf_types::{
         Block as ProtoBlock,
@@ -501,7 +501,7 @@ pub fn fuel_block_from_protobuf(
     proto_block: ProtoBlock,
     msg_ids: &[fuel_core_types::fuel_tx::MessageId],
     event_inbox_root: Bytes32,
-) -> crate::result::Result<(FuelBlock, Vec<FuelReceipt>)> {
+) -> crate::result::Result<(FuelBlock, Vec<Vec<FuelReceipt>>)> {
     let versioned_block = proto_block
         .versioned_block
         .ok_or_else(|| anyhow::anyhow!("Missing protobuf versioned_block"))
@@ -519,11 +519,14 @@ pub fn fuel_block_from_protobuf(
                 .iter()
                 .map(tx_from_proto_tx)
                 .collect::<crate::result::Result<_>>()?;
-            let receipts = v1_inner
-                .receipts
-                .iter()
-                .map(receipt_from_proto)
-                .collect::<crate::result::Result<_>>()?;
+            // TODO: It should be `Vec<Vec<Receipts>>`, but we need to update protobuf
+            let receipts = vec![
+                v1_inner
+                    .receipts
+                    .iter()
+                    .map(receipt_from_proto)
+                    .collect::<crate::result::Result<_>>()?,
+            ];
             (partial_header, txs, receipts)
         }
     };

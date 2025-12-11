@@ -3,8 +3,6 @@ use crate::state::{
     historical_rocksdb::StateRewindPolicy,
     rocks_db::DatabaseConfig,
 };
-#[cfg(feature = "rpc")]
-use anyhow::anyhow;
 
 use crate::{
     database::{
@@ -24,8 +22,6 @@ use crate::{
 
 #[cfg(feature = "rpc")]
 use crate::database::database_description::block_aggregator::BlockAggregatorDatabase;
-#[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::db::table::LatestBlock;
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
     StateConfig,
@@ -42,11 +38,6 @@ use fuel_core_storage::tables::{
     ContractsRawCode,
     ContractsState,
     Messages,
-};
-#[cfg(feature = "rpc")]
-use fuel_core_storage::{
-    Error as StorageError,
-    StorageAsRef,
 };
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
@@ -488,31 +479,26 @@ impl CombinedDatabase {
 
             let gas_price_chain_height =
                 self.gas_price().latest_height_from_metadata()?;
-            let gas_price_rolled_back =
-                is_equal_or_none(gas_price_chain_height, target_block_height);
+            let gas_price_rolled_back = is_equal_or_less_than_or_none(
+                gas_price_chain_height,
+                target_block_height,
+            );
 
             let compression_db_height =
                 self.compression().latest_height_from_metadata()?;
             let compression_db_rolled_back =
-                is_equal_or_none(compression_db_height, target_block_height);
+                is_equal_or_less_than_or_none(compression_db_height, target_block_height);
 
             #[cfg(feature = "rpc")]
             {
                 let block_aggregation_storage_height = self
                     .block_aggregation_storage()
-                    .storage_as_ref::<LatestBlock>()
-                    .get(&())
-                    .map_err(|e: StorageError| anyhow!(e))?
-                    .map(|b| b.height());
+                    .latest_height_from_metadata()?;
                 let block_aggregation_storage_rolled_back = is_equal_or_less_than_or_none(
                     block_aggregation_storage_height,
                     target_block_height,
                 );
 
-                if !block_aggregation_storage_rolled_back {
-                    self.block_aggregation_storage_mut()
-                        .rollback_to(target_block_height)?;
-                }
                 if on_chain_height == target_block_height
                     && off_chain_height == target_block_height
                     && gas_price_rolled_back
@@ -584,6 +570,20 @@ impl CombinedDatabase {
                 && compression_db_height > target_block_height
             {
                 self.compression().rollback_last_block()?;
+            }
+
+            #[cfg(feature = "rpc")]
+            {
+                let block_aggregation_storage_height = self
+                    .block_aggregation_storage()
+                    .latest_height_from_metadata()?;
+
+                if let Some(block_aggregation_storage_height) =
+                    block_aggregation_storage_height
+                    && block_aggregation_storage_height > target_block_height
+                {
+                    self.block_aggregation_storage().rollback_last_block()?;
+                }
             }
         }
 
@@ -722,7 +722,6 @@ fn is_equal_or_none<T: PartialEq>(maybe_left: Option<T>, right: T) -> bool {
     maybe_left.map(|left| left == right).unwrap_or(true)
 }
 
-#[cfg(feature = "rpc")]
 fn is_equal_or_less_than_or_none<T: PartialOrd>(maybe_left: Option<T>, right: T) -> bool {
     maybe_left.map(|left| left <= right).unwrap_or(true)
 }

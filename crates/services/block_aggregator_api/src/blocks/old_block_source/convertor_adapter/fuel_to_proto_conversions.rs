@@ -1,7 +1,7 @@
 #[cfg(feature = "fault-proving")]
 use crate::protobuf_types::V2Header as ProtoV2Header;
 use crate::{
-    blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::bytes32_to_vec,
+    blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::bytes32_to_vec,
     protobuf_types::{
         BlobTransaction as ProtoBlobTx,
         ChangeOutput as ProtoChangeOutput,

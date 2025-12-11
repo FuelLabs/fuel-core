@@ -39,7 +39,7 @@ async fn get_receipt__gets_the_receipt_for_expected_tx() {
     let receipt_source = ReceiptSource::new(db);
 
     // when
-    let actual = receipt_source.get_receipts(&tx_id).await.unwrap();
+    let actual = receipt_source.get_receipts(&tx_id).unwrap();
 
     // then
     assert_eq!(actual, expected);
