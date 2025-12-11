@@ -199,6 +199,7 @@ where
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
+        self.api.stop_and_await().await?;
         Ok(())
     }
 }
