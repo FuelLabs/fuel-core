@@ -4330,12 +4330,14 @@ dependencies = [
  "insta",
  "itertools 0.12.1",
  "postcard",
+ "prost 0.14.1",
  "reqwest 0.12.24",
  "schemafy_lib",
  "serde",
  "serde_json",
  "tai64",
  "thiserror 1.0.69",
+ "tonic 0.14.2",
  "tracing",
 ]
 

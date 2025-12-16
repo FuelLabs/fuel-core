@@ -113,6 +113,9 @@ pub struct FuelService {
     pub shared: SharedState,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
+    /// RPC address
+    #[cfg(feature = "rpc")]
+    pub rpc_address: Option<SocketAddr>,
 }
 
 impl Drop for FuelService {
@@ -164,12 +167,21 @@ impl FuelService {
             },
         );
         let bound_address = runner.shared.graph_ql.bound_address;
+        // TODO: Fix unwrap
+        let rpc_address = runner
+            .shared
+            .config
+            .rpc_config
+            .clone()
+            .map(|config| config.addr);
 
         Ok(FuelService {
             sub_services,
             bound_address,
             shared,
             runner,
+            #[cfg(feature = "rpc")]
+            rpc_address,
         })
     }
 

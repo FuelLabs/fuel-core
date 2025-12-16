@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use self::schema::{
     block::ProduceBlockArgs,
     message::{
@@ -167,8 +169,33 @@ use types::{
     },
 };
 
+use futures::TryStreamExt;
 #[cfg(feature = "subscriptions")]
 use std::pin::Pin;
+
+#[cfg(feature = "rpc")]
+mod rpc_deps {
+    pub use fuel_core_block_aggregator_api::{
+        blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
+        protobuf_types::{
+            Block as ProtoBlock,
+            BlockHeightRequest as ProtoBlockHeightRequest,
+            BlockRangeRequest as ProtoBlockRangeRequest,
+            BlockResponse,
+            NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+            block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
+            block_response::{
+                Payload as ProtoPayload,
+                Payload,
+            },
+        },
+    };
+    pub use prost::Message;
+    pub use tonic::transport::Channel;
+}
+use crate::client::types::Block;
+#[cfg(feature = "rpc")]
+use rpc_deps::*;
 
 pub mod pagination;
 pub mod schema;
@@ -246,6 +273,8 @@ pub struct FuelClient {
     transport: FailoverTransport,
     require_height: ConsistencyPolicy,
     chain_state_info: ChainStateInfo,
+    #[cfg(feature = "rpc")]
+    rpc_client: Option<ProtoBlockAggregatorClient<Channel>>,
 }
 
 impl FromStr for FuelClient {
@@ -268,6 +297,7 @@ impl FromStr for FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            rpc_client: None,
         })
     }
 }
@@ -300,6 +330,34 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
+    #[cfg(feature = "rpc")]
+    pub async fn new_with_rpc<G: AsRef<str>, R: AsRef<str>>(
+        graph_ql_url: G,
+        rpc_url: R,
+    ) -> anyhow::Result<Self> {
+        let mut raw_url = <G as AsRef<str>>::as_ref(&graph_ql_url).to_string();
+        if !raw_url.starts_with("http") {
+            raw_url = format!("http://{raw_url}");
+        }
+
+        let mut url = reqwest::Url::parse(&raw_url)
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("Invalid Fuel GraphQL URL: {raw_url}"))?;
+        url.set_path("/v1/graphql");
+        let inner_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url);
+        let raw_rpc_url = format!("http://{}", inner_rpc_url);
+        let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
+
+        Ok(Self {
+            transport: FailoverTransport::new(vec![url])?,
+            require_height: ConsistencyPolicy::Auto {
+                height: Arc::new(Mutex::new(None)),
+            },
+            chain_state_info: Default::default(),
+            rpc_client: Some(rpc_client),
+        })
+    }
+
     pub fn with_urls(urls: Vec<Url>) -> anyhow::Result<Self> {
         Ok(Self {
             transport: FailoverTransport::new(urls)?,
@@ -307,6 +365,7 @@ impl FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            rpc_client: None,
         })
     }
 }
@@ -1621,20 +1680,76 @@ impl FuelClient {
     }
 }
 
-
-#[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::{
-    blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
-    protobuf_types::{
-        BlockHeightRequest as ProtoBlockHeightRequest,
-        BlockRangeRequest as ProtoBlockRangeRequest,
-        NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
-        block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
-        block_response::Payload as ProtoPayload,
-    },
-};
-
 #[cfg(feature = "rpc")]
 impl FuelClient {
-    pub async fn get_block_range() ->
+    pub async fn get_block_range(
+        &mut self,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> io::Result<
+        impl Stream<
+            Item = io::Result<(
+                fuel_core_types::blockchain::block::Block,
+                Vec<Vec<Receipt>>,
+            )>,
+        >,
+    > {
+        let request = ProtoBlockRangeRequest {
+            start: *start,
+            end: *end,
+        };
+
+        let stream = self
+            .rpc_client
+            .clone()
+            .ok_or(io::Error::new(
+                ErrorKind::Other,
+                "RPC client not initialized",
+            ))?
+            .get_block_range(request)
+            .await
+            .unwrap()
+            .into_inner()
+            .map(|res| {
+                res.map_err(|e| {
+                    io::Error::new(ErrorKind::Other, format!("RPC error: {:?}", e))
+                })
+                .and_then(Self::convert_block_response)
+            });
+        Ok(stream)
+    }
+
+    fn convert_block_response(
+        resp: BlockResponse,
+    ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
+        let payload = resp.payload.ok_or(io::Error::new(
+            ErrorKind::Other,
+            "No RPC payload for `BlockResponse`",
+        ))?;
+        match payload {
+            Payload::Literal(_) => {
+                // Should never happen, as we don't return blocks as literal payloads
+                Err(io::Error::new(
+                    ErrorKind::Other,
+                    "Literal payloads are not supported yet",
+                ))
+            }
+            Payload::Bytes(bytes) => {
+                let proto_block = ProtoBlock::decode(bytes.as_slice()).unwrap();
+                fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).map_err(
+                    |e| {
+                        io::Error::new(
+                            ErrorKind::Other,
+                            format!(
+                                "Failed to convert RPC block to internal block: {e:?}"
+                            ),
+                        )
+                    },
+                )
+            }
+            Payload::Remote(_) => {
+                todo!()
+            }
+        }
+    }
 }

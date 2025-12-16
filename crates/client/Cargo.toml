@@ -14,7 +14,7 @@ description = "Tx client and schema specification."
 [features]
 std = ["fuel-core-types/std"]
 default = ["subscriptions", "std"]
-rpc = ["dep:fuel-core-block-aggregator-api"]
+rpc = ["dep:fuel-core-block-aggregator-api", "dep:prost", "dep:tonic"]
 test-helpers = []
 subscriptions = [
     "base64",
@@ -42,12 +42,14 @@ hyper-rustls = { version = "0.24", features = [
 ], optional = true }
 itertools = { workspace = true }
 postcard = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
 reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 # We force the version because 4.1.0 update leap seconds that breaks our timestamps
 tai64 = { version = "=4.0.0", features = ["serde"] }
 thiserror = "1.0"
+tonic = { workspace = true, optional = true }
 tracing = "0.1"
 
 [build-dependencies]
