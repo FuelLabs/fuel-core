@@ -14,6 +14,7 @@ description = "Tx client and schema specification."
 [features]
 std = ["fuel-core-types/std"]
 default = ["subscriptions", "std"]
+rpc = ["dep:fuel-core-block-aggregator-api"]
 test-helpers = []
 subscriptions = [
     "base64",
@@ -32,6 +33,7 @@ cynic = { workspace = true }
 derive_more = { workspace = true }
 eventsource-client = { version = "0.13.0", optional = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
+fuel-core-block-aggregator-api = { path = "../services/block_aggregator_api", optional = true }
 futures = { workspace = true, optional = true }
 hex = { workspace = true }
 # Included to enable webpki in the eventsource client

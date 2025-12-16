@@ -1620,3 +1620,21 @@ impl FuelClient {
             .transpose()?)
     }
 }
+
+
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::{
+    blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
+    protobuf_types::{
+        BlockHeightRequest as ProtoBlockHeightRequest,
+        BlockRangeRequest as ProtoBlockRangeRequest,
+        NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+        block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
+        block_response::Payload as ProtoPayload,
+    },
+};
+
+#[cfg(feature = "rpc")]
+impl FuelClient {
+    pub async fn get_block_range() ->
+}

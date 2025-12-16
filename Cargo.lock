@@ -4322,6 +4322,7 @@ dependencies = [
  "cynic",
  "derive_more 0.99.20",
  "eventsource-client",
+ "fuel-core-block-aggregator-api",
  "fuel-core-types 0.47.1",
  "futures",
  "hex",
