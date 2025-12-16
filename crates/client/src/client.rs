@@ -297,6 +297,7 @@ impl FromStr for FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
             rpc_client: None,
         })
     }
@@ -1682,8 +1683,14 @@ impl FuelClient {
 
 #[cfg(feature = "rpc")]
 impl FuelClient {
+    fn rpc_client(&self) -> io::Result<ProtoBlockAggregatorClient<Channel>> {
+        self.rpc_client.clone().ok_or(io::Error::new(
+            ErrorKind::Other,
+            "RPC client not initialized",
+        ))
+    }
     pub async fn get_block_range(
-        &mut self,
+        &self,
         start: BlockHeight,
         end: BlockHeight,
     ) -> io::Result<
@@ -1700,15 +1707,10 @@ impl FuelClient {
         };
 
         let stream = self
-            .rpc_client
-            .clone()
-            .ok_or(io::Error::new(
-                ErrorKind::Other,
-                "RPC client not initialized",
-            ))?
+            .rpc_client()?
             .get_block_range(request)
             .await
-            .unwrap()
+            .map_err(|e| io::Error::new(ErrorKind::Other, e))?
             .into_inner()
             .map(|res| {
                 res.map_err(|e| {
@@ -1751,5 +1753,23 @@ impl FuelClient {
                 todo!()
             }
         }
+    }
+
+    /// Used to get the synced height of the block aggregator,
+    /// as it doesn't always match the latest block height
+    pub async fn get_aggregated_height(&self) -> io::Result<BlockHeight> {
+        let request = ProtoBlockHeightRequest {};
+        let height = self
+            .rpc_client()?
+            .get_synced_block_height(request)
+            .await
+            .map_err(|e| io::Error::new(ErrorKind::Other, e))?
+            .into_inner()
+            .height
+            .ok_or(io::Error::new(
+                ErrorKind::Other,
+                "No height in RPC response",
+            ))?;
+        Ok(BlockHeight::from(height))
     }
 }

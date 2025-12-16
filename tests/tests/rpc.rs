@@ -11,7 +11,6 @@ use fuel_core_block_aggregator_api::{
     blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
     protobuf_types::{
         Block as ProtoBlock,
-        BlockHeightRequest as ProtoBlockHeightRequest,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
         block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
         block_response::Payload as ProtoPayload,
@@ -34,7 +33,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
         .await
         .unwrap();
 
-    let mut fuel_client = FuelClient::new_with_rpc(
+    let fuel_client = FuelClient::new_with_rpc(
         srv.bound_address.to_string(),
         srv.rpc_address.unwrap().to_string(),
     )
@@ -78,35 +77,29 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn get_block_height__can_get_value_from_rpc() {
+async fn get_aggregated_height__can_get_value_from_rpc() {
     let config = Config::local_node_with_rpc();
-    let rpc_url = config.rpc_config.clone().unwrap().addr;
 
     // given
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
 
-    let fuel_client = FuelClient::from(srv.bound_address);
+    let fuel_client = FuelClient::new_with_rpc(
+        srv.bound_address.to_string(),
+        srv.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
 
     let tx = Transaction::default_test_tx();
     let _ = fuel_client.submit_and_await_commit(&tx).await.unwrap();
 
-    let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
-        .await
-        .expect("could not connect to server");
+    sleep(std::time::Duration::from_secs(1)).await;
+    let expected_height = BlockHeight::new(1);
 
     // when
-    sleep(std::time::Duration::from_secs(1)).await;
-    let request = ProtoBlockHeightRequest {};
-    let expected_height = Some(1);
-    let actual_height = rpc_client
-        .get_synced_block_height(request)
-        .await
-        .unwrap()
-        .into_inner()
-        .height;
+    let actual_height = fuel_client.get_aggregated_height().await.unwrap();
 
     // then
     assert_eq!(expected_height, actual_height);
