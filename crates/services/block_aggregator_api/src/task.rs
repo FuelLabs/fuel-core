@@ -23,10 +23,7 @@ use fuel_core_services::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
-use std::{
-    fmt::Debug,
-    sync::Arc,
-};
+use std::fmt::Debug;
 
 /// The Block Aggregator service, which aggregates blocks from a source and stores them in a database
 /// Queries can be made to the service to retrieve data from the `DB`

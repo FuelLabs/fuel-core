@@ -4,7 +4,6 @@ use crate::{
         BoxStream,
     },
     protobuf_types::{
-        Block as ProtoBlock,
         BlockHeightRequest as ProtoBlockHeightRequest,
         BlockHeightResponse as ProtoBlockHeightResponse,
         BlockRangeRequest as ProtoBlockRangeRequest,

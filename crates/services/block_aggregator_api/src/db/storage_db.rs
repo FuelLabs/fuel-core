@@ -10,7 +10,6 @@ use crate::{
             Mode,
         },
     },
-    protobuf_types::Block as ProtoBlock,
     result::{
         Error,
         Result,
