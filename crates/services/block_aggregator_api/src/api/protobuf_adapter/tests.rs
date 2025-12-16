@@ -14,7 +14,6 @@ use crate::{
         convertor_adapter::ProtobufBlockConverter,
     },
     protobuf_types::{
-        Block as ProtoBlock,
         BlockHeightRequest,
         BlockRangeRequest,
         NewBlockSubscriptionRequest,
@@ -22,10 +21,7 @@ use crate::{
         block_response::Payload,
     },
 };
-use fuel_core_protobuf::{
-    Block,
-    remote_block_response::Location,
-};
+use fuel_core_protobuf::remote_block_response::Location;
 use fuel_core_services::Service;
 use fuel_core_types::{
     blockchain::block::Block as FuelBlock,

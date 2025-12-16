@@ -1,4 +1,3 @@
-use crate::protobuf_types::Block as ProtoBlock;
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,

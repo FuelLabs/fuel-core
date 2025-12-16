@@ -24,7 +24,6 @@ use crate::{
             Mode,
         },
     },
-    protobuf_types::Block as ProtoBlock,
     result::Result as BlockAggregatorResult,
     task::Task,
 };

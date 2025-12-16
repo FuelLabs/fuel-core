@@ -13,7 +13,6 @@ use crate::{
         },
         table::Column,
     },
-    protobuf_types::Block as ProtoBlock,
     result::Result,
 };
 use aws_config::{
