@@ -85,25 +85,22 @@ where
             .and_then(|height| height.succ())
             .unwrap_or(self.sync_from);
 
-        let old_blocks_stream = futures::stream::iter(
-            self.block_source
-                .blocks_starting_from(next_height)
-                .map(|r| r.map(|(block_height, block)| (block_height, block))),
-        )
-        .take_while(move |result| {
-            let take = match result {
-                Ok((block_height, _)) => {
-                    if let Some(importer_height) = importer_height {
-                        *block_height < importer_height
-                    } else {
-                        true
-                    }
-                }
-                Err(_) => true,
-            };
+        let old_blocks_stream =
+            futures::stream::iter(self.block_source.blocks_starting_from(next_height))
+                .take_while(move |result| {
+                    let take = match result {
+                        Ok((block_height, _)) => {
+                            if let Some(importer_height) = importer_height {
+                                *block_height < importer_height
+                            } else {
+                                true
+                            }
+                        }
+                        Err(_) => true,
+                    };
 
-            async move { take }
-        });
+                    async move { take }
+                });
 
         let receiver = self.shared_state.blocks_broadcast.subscribe();
         let life_stream =
