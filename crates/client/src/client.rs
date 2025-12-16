@@ -1772,4 +1772,30 @@ impl FuelClient {
             ))?;
         Ok(BlockHeight::from(height))
     }
+
+    pub async fn new_block_subscription(
+        &self,
+    ) -> io::Result<
+        impl Stream<
+            Item = io::Result<(
+                fuel_core_types::blockchain::block::Block,
+                Vec<Vec<Receipt>>,
+            )>,
+        >,
+    > {
+        let request = ProtoNewBlockSubscriptionRequest {};
+        let stream = self
+            .rpc_client()?
+            .new_block_subscription(request)
+            .await
+            .unwrap()
+            .into_inner()
+            .map(|resp| {
+                resp.map_err(|e| {
+                    io::Error::new(ErrorKind::Other, format!("RPC error: {:?}", e))
+                })
+                .and_then(Self::convert_block_response)
+            });
+        Ok(stream)
+    }
 }
