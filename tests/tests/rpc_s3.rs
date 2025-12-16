@@ -265,7 +265,7 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
         fuel_block_from_protobuf(actual_proto, &[], Bytes32::default()).unwrap();
     assert!(
         matches!(
-            receipts[1],
+            receipts[0][1],
             Receipt::ScriptResult {
                 result: ScriptExecutionResult::Success,
                 ..
@@ -275,7 +275,7 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
         receipts
     );
     assert!(
-        matches!(receipts[0], Receipt::Return { .. }),
+        matches!(receipts[0][0], Receipt::Return { .. }),
         "should have a return receipt, received: {:?}",
         receipts
     );

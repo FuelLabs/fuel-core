@@ -32,7 +32,6 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use prost::Message;
 use std::{
     io::Write,
     sync::Arc,
@@ -183,9 +182,7 @@ where
         }
 
         let key = block_height_to_key(&height);
-        let mut buf = Vec::new();
-        block.encode(&mut buf).map_err(Error::db_error)?;
-        let zipped = gzip_bytes(&buf)?;
+        let zipped = gzip_bytes(block.as_slice())?;
         let body = ByteStream::from(zipped);
         if self.publishes_blocks {
             let req = self
