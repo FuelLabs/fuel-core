@@ -34,13 +34,12 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
     let _ = fuel_client.submit_and_await_commit(&tx).await.unwrap();
 
     // when
-    let next = fuel_client
+    let stream = fuel_client
         .get_block_range(BlockHeight::new(1), BlockHeight::new(1))
         .await
-        .unwrap()
-        .next()
-        .await
         .unwrap();
+    futures::pin_mut!(stream);
+    let next = stream.next().await.unwrap();
     let (actual_block, receipts) = next.unwrap();
     let actual_height = actual_block.header().height();
 
@@ -112,7 +111,8 @@ async fn new_block_subscription__can_get_expect_block() {
 
     let tx = Transaction::default_test_tx();
 
-    let mut stream = fuel_client.new_block_subscription().await.unwrap();
+    let stream = fuel_client.new_block_subscription().await.unwrap();
+    futures::pin_mut!(stream);
     let _ = fuel_client.submit_and_await_commit(&tx).await.unwrap();
     let expected_height = BlockHeight::new(1);
 

@@ -1729,10 +1729,9 @@ impl FuelClient {
 #[cfg(feature = "rpc")]
 impl FuelClient {
     fn rpc_client(&self) -> io::Result<ProtoBlockAggregatorClient<Channel>> {
-        self.rpc_client.clone().ok_or(io::Error::new(
-            ErrorKind::Other,
-            "RPC client not initialized",
-        ))
+        self.rpc_client
+            .clone()
+            .ok_or(io::Error::other("RPC client not initialized"))
     }
     pub async fn get_block_range(
         &self,
@@ -1755,12 +1754,11 @@ impl FuelClient {
             .rpc_client()?
             .get_block_range(request)
             .await
-            .map_err(|e| io::Error::new(ErrorKind::Other, e))?
+            .map_err(io::Error::other)?
             .into_inner()
             .then(|res| async move {
-                let resp = res.map_err(|e| {
-                    io::Error::new(ErrorKind::Other, format!("RPC error: {:?}", e))
-                })?;
+                let resp =
+                    res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
                 Self::convert_block_response(resp).await
             });
         Ok(stream)
@@ -1769,28 +1767,21 @@ impl FuelClient {
     async fn convert_block_response(
         resp: BlockResponse,
     ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
-        let payload = resp.payload.ok_or(io::Error::new(
-            ErrorKind::Other,
-            "No RPC payload for `BlockResponse`",
-        ))?;
+        let payload = resp
+            .payload
+            .ok_or(io::Error::other("No RPC payload for `BlockResponse`"))?;
         match payload {
             Payload::Literal(_) => {
                 // Should never happen, as we don't return blocks as literal payloads
-                Err(io::Error::new(
-                    ErrorKind::Other,
-                    "Literal payloads are not supported yet",
-                ))
+                Err(io::Error::other("Literal payloads are not supported yet"))
             }
             Payload::Bytes(bytes) => {
                 let proto_block = ProtoBlock::decode(bytes.as_slice()).unwrap();
                 fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).map_err(
                     |e| {
-                        io::Error::new(
-                            ErrorKind::Other,
-                            format!(
-                                "Failed to convert RPC block to internal block: {e:?}"
-                            ),
-                        )
+                        io::Error::other(format!(
+                            "Failed to convert RPC block to internal block: {e:?}"
+                        ))
                     },
                 )
             }
@@ -1812,10 +1803,7 @@ impl FuelClient {
                         let block_bytes = Self::unzip_bytes(&zipped_bytes);
                         let block =
                             ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
-                                io::Error::new(
-                                    ErrorKind::Other,
-                                    format!("Failed to decode block: {e}"),
-                                )
+                                io::Error::other(format!("Failed to decode block: {e}"))
                             })?;
                         let (block, receipts) = fuel_block_from_protobuf(
                             block,
@@ -1823,19 +1811,13 @@ impl FuelClient {
                             Bytes32::default(),
                         )
                         .map_err(|e| {
-                            io::Error::new(
-                                ErrorKind::Other,
-                                format!(
-                                    "Failed to convert RPC block to internal block: {e:?}"
-                                ),
-                            )
+                            io::Error::other(format!(
+                                "Failed to convert RPC block to internal block: {e:?}"
+                            ))
                         })?;
                         Ok((block, receipts))
                     }
-                    _ => Err(io::Error::new(
-                        ErrorKind::Other,
-                        "Remote blocks are not supported yet",
-                    )),
+                    _ => Err(io::Error::other("Remote blocks are not supported yet")),
                 }
             }
         }
@@ -1849,20 +1831,14 @@ impl FuelClient {
         tracing::info!("getting block from bucket: {} with key {}", bucket, key);
         let req = client.get_object().bucket(bucket).key(key);
         let obj = req.send().await.map_err(|e| {
-            io::Error::new(
-                ErrorKind::Other,
-                format!("Failed to get object from S3: {e:?}"),
-            )
+            io::Error::other(format!("Failed to get object from S3: {e:?}"))
         })?;
         let bytes = obj
             .body
             .collect()
             .await
             .map_err(|e| {
-                io::Error::new(
-                    ErrorKind::Other,
-                    format!("Failed to get object from S3: {e:?}"),
-                )
+                io::Error::other(format!("Failed to get object from S3: {e:?}"))
             })?
             .into_bytes();
         Ok(bytes)
@@ -1897,13 +1873,10 @@ impl FuelClient {
             .rpc_client()?
             .get_synced_block_height(request)
             .await
-            .map_err(|e| io::Error::new(ErrorKind::Other, e))?
+            .map_err(io::Error::other)?
             .into_inner()
             .height
-            .ok_or(io::Error::new(
-                ErrorKind::Other,
-                "No height in RPC response",
-            ))?;
+            .ok_or(io::Error::other("No height in RPC response"))?;
         Ok(BlockHeight::from(height))
     }
 
@@ -1925,9 +1898,8 @@ impl FuelClient {
             .unwrap()
             .into_inner()
             .then(|res| async move {
-                let resp = res.map_err(|e| {
-                    io::Error::new(ErrorKind::Other, format!("RPC error: {:?}", e))
-                })?;
+                let resp =
+                    res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
                 Self::convert_block_response(resp).await
             });
         Ok(stream)
