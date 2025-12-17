@@ -339,62 +339,15 @@ impl FuelClient {
         graph_ql_url: G,
         rpc_url: R,
     ) -> anyhow::Result<Self> {
-        let mut raw_url = <G as AsRef<str>>::as_ref(&graph_ql_url).to_string();
-        if !raw_url.starts_with("http") {
-            raw_url = format!("http://{raw_url}");
-        }
-
-        let mut url = Url::parse(&raw_url)
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("Invalid Fuel GraphQL URL: {raw_url}"))?;
-        url.set_path("/v1/graphql");
+        let mut client = Self::new(graph_ql_url)?;
         let inner_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url);
         let mut raw_rpc_url = format!("http://{}", inner_rpc_url);
         if !raw_rpc_url.starts_with("http") {
-            raw_rpc_url = format!("http://{raw_url}");
+            raw_rpc_url = format!("http://{raw_rpc_url}");
         }
         let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
-
-        Ok(Self {
-            transport: FailoverTransport::new(vec![url])?,
-            require_height: ConsistencyPolicy::Auto {
-                height: Arc::new(Mutex::new(None)),
-            },
-            chain_state_info: Default::default(),
-            rpc_client: Some(rpc_client),
-        })
-    }
-
-    #[cfg(feature = "rpc")]
-    pub async fn new_with_rpc_and_s3<G, R>(
-        graph_ql_url: G,
-        rpc_url: R,
-    ) -> anyhow::Result<Self>
-    where
-        G: AsRef<str>,
-        R: AsRef<str>,
-    {
-        let mut raw_url = <G as AsRef<str>>::as_ref(&graph_ql_url).to_string();
-        if !raw_url.starts_with("http") {
-            raw_url = format!("http://{raw_url}");
-        }
-
-        let mut url = reqwest::Url::parse(&raw_url)
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("Invalid Fuel GraphQL URL: {raw_url}"))?;
-        url.set_path("/v1/graphql");
-        let inner_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url);
-        let raw_rpc_url = format!("http://{}", inner_rpc_url);
-        let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
-
-        Ok(Self {
-            transport: FailoverTransport::new(vec![url])?,
-            require_height: ConsistencyPolicy::Auto {
-                height: Arc::new(Mutex::new(None)),
-            },
-            chain_state_info: Default::default(),
-            rpc_client: Some(rpc_client),
-        })
+        client.rpc_client = Some(rpc_client);
+        Ok(client)
     }
 
     pub fn with_urls(urls: Vec<Url>) -> anyhow::Result<Self> {
