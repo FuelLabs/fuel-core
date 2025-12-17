@@ -170,7 +170,6 @@ use types::{
     },
 };
 
-use futures::TryStreamExt;
 #[cfg(feature = "subscriptions")]
 use std::pin::Pin;
 
@@ -201,6 +200,7 @@ mod rpc_deps {
             remote_block_response::Location,
         },
     };
+    use futures::TryStreamExt;
     pub use prost::Message;
     pub use tonic::transport::Channel;
 }
