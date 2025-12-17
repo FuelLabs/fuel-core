@@ -1794,7 +1794,7 @@ impl FuelClient {
                         let zipped_bytes =
                             Self::get_block_from_s3_bucket(&s3_url, &bucket, &key)
                                 .await?;
-                        let block_bytes = Self::unzip_bytes(&zipped_bytes);
+                        let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
                         let block =
                             ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
                                 io::Error::other(format!("Failed to decode block: {e}"))
@@ -1852,11 +1852,11 @@ impl FuelClient {
         Client::from_conf(config)
     }
 
-    fn unzip_bytes(bytes: &[u8]) -> Vec<u8> {
+    fn unzip_bytes(bytes: &[u8]) -> io::Result<Vec<u8>> {
         let mut decoder = GzDecoder::new(bytes);
         let mut output = Vec::new();
-        decoder.read_to_end(&mut output).unwrap();
-        output
+        decoder.read_to_end(&mut output).map_err(io::Error::other)?;
+        Ok(output)
     }
 
     /// Used to get the synced height of the block aggregator,
@@ -1889,7 +1889,7 @@ impl FuelClient {
             .rpc_client()?
             .new_block_subscription(request)
             .await
-            .unwrap()
+            .map_err(io::Error::other)?
             .into_inner()
             .then(|res| async move {
                 let resp =
