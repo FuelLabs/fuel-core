@@ -93,7 +93,7 @@ mod tests {
               // when
               let receipts = vec![receipts];
               let bytes = convertor.convert_block(&block, &receipts).unwrap();
-              let proto_block = ProtoBlock::decode(bytes.as_slice()).unwrap();
+              let proto_block = ProtoBlock::decode(&*bytes).unwrap();
 
               // then
               let (deserialized_block, deserialized_receipts) = fuel_block_from_protobuf(proto_block, &msg_ids, event_inbox_root).unwrap();
