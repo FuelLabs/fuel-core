@@ -1794,8 +1794,6 @@ impl FuelClient {
 
     async fn aws_client(url: Option<&String>) -> Client {
         let credentials = DefaultCredentialsChain::builder().build().await;
-        let _aws_region =
-            std::env::var("AWS_REGION").expect("AWS_REGION env var must be set");
         let mut config_builder = aws_config::defaults(BehaviorVersion::latest())
             .credentials_provider(credentials);
         if let Some(url) = url {
