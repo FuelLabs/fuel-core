@@ -145,7 +145,6 @@ use std::{
     io::{
         self,
         ErrorKind,
-        Read,
     },
     net,
     str::{
@@ -195,6 +194,7 @@ mod rpc_deps {
         },
     };
     pub use prost::Message;
+    pub use std::io::Read;
     pub use tonic::transport::Channel;
 }
 #[cfg(feature = "rpc")]
