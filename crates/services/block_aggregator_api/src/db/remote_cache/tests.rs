@@ -31,7 +31,7 @@ fn database() -> StorageTransaction<InMemoryStorage<Column>> {
     InMemoryStorage::default().into_transaction()
 }
 
-fn arb_proto_block_bytes() -> Arc<Vec<u8>> {
+fn arb_proto_block_bytes() -> Arc<[u8]> {
     let block = FuelBlock::default();
     let convertor = ProtobufBlockConverter;
     convertor.convert_block(&block, &[]).unwrap()

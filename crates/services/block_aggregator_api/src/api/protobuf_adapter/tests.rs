@@ -115,7 +115,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
 
     // Then
     let response = result.unwrap();
-    let actual: Vec<(BlockHeight, Arc<Vec<u8>>)> = response
+    let actual: Vec<(BlockHeight, Arc<[u8]>)> = response
         .into_inner()
         .try_collect::<Vec<_>>()
         .await
@@ -123,7 +123,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
         .into_iter()
         .map(|b| {
             if let Some(Payload::Bytes(inner)) = b.payload {
-                (BlockHeight::new(b.height), Arc::new(inner))
+                (BlockHeight::new(b.height), inner.into())
             } else {
                 panic!("unexpected response type")
             }
@@ -258,7 +258,7 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
     // Then
     let stream = result.unwrap().into_inner();
 
-    let actual: Vec<(BlockHeight, Arc<Vec<u8>>)> = stream
+    let actual: Vec<(BlockHeight, Arc<[u8]>)> = stream
         .take(2)
         .try_collect::<Vec<_>>()
         .await
@@ -266,7 +266,7 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
         .into_iter()
         .map(|b| {
             if let Some(Payload::Bytes(inner)) = b.payload {
-                (BlockHeight::new(b.height), Arc::new(inner))
+                (BlockHeight::new(b.height), inner.into())
             } else {
                 panic!("unexpected response type")
             }

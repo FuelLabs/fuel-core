@@ -10,7 +10,7 @@ pub enum BlockRangeResponse {
     /// A literal stream of blocks
     Literal(BoxStream<(BlockHeight, ProtoBlock)>),
     /// Bytes of blocks
-    Bytes(BoxStream<(BlockHeight, Arc<Vec<u8>>)>),
+    Bytes(BoxStream<(BlockHeight, Arc<[u8]>)>),
     /// A remote URL where the blocks can be fetched
     S3(BoxStream<(BlockHeight, RemoteS3Response)>),
 }

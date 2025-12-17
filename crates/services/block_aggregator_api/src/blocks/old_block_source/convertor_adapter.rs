@@ -26,7 +26,7 @@ use std::sync::Arc;
 pub struct ProtobufBlockConverter;
 
 impl BlockConverter for ProtobufBlockConverter {
-    type Block = Arc<Vec<u8>>;
+    type Block = Arc<[u8]>;
 
     fn convert_block(
         &self,
@@ -55,7 +55,7 @@ impl BlockConverter for ProtobufBlockConverter {
                 proto_block
                     .encode(&mut bytes)
                     .map_err(crate::result::Error::serialization_error)?;
-                Ok(Arc::new(bytes))
+                Ok(bytes.into())
             }
         }
     }
