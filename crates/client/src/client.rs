@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 use self::schema::{
     block::ProduceBlockArgs,
     message::{
@@ -183,7 +181,6 @@ mod rpc_deps {
     pub use flate2::read::GzDecoder;
     pub use fuel_core_block_aggregator_api::{
         blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
-        db::remote_cache::block_height_to_key,
         protobuf_types::{
             Block as ProtoBlock,
             BlockHeightRequest as ProtoBlockHeightRequest,
@@ -193,18 +190,13 @@ mod rpc_deps {
             RemoteBlockResponse,
             RemoteS3Bucket,
             block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
-            block_response::{
-                Payload as ProtoPayload,
-                Payload,
-            },
+            block_response::Payload,
             remote_block_response::Location,
         },
     };
-    use futures::TryStreamExt;
     pub use prost::Message;
     pub use tonic::transport::Channel;
 }
-use crate::client::types::Block;
 #[cfg(feature = "rpc")]
 use rpc_deps::*;
 
@@ -352,12 +344,15 @@ impl FuelClient {
             raw_url = format!("http://{raw_url}");
         }
 
-        let mut url = reqwest::Url::parse(&raw_url)
+        let mut url = Url::parse(&raw_url)
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("Invalid Fuel GraphQL URL: {raw_url}"))?;
         url.set_path("/v1/graphql");
         let inner_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url);
-        let raw_rpc_url = format!("http://{}", inner_rpc_url);
+        let mut raw_rpc_url = format!("http://{}", inner_rpc_url);
+        if !raw_rpc_url.starts_with("http") {
+            raw_rpc_url = format!("http://{raw_url}");
+        }
         let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
 
         Ok(Self {
@@ -371,14 +366,13 @@ impl FuelClient {
     }
 
     #[cfg(feature = "rpc")]
-    pub async fn new_with_rpc_and_s3<G, R, S>(
+    pub async fn new_with_rpc_and_s3<G, R>(
         graph_ql_url: G,
         rpc_url: R,
     ) -> anyhow::Result<Self>
     where
         G: AsRef<str>,
         R: AsRef<str>,
-        S: AsRef<str>,
     {
         let mut raw_url = <G as AsRef<str>>::as_ref(&graph_ql_url).to_string();
         if !raw_url.starts_with("http") {
