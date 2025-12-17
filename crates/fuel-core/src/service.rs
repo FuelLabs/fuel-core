@@ -167,7 +167,8 @@ impl FuelService {
             },
         );
         let bound_address = runner.shared.graph_ql.bound_address;
-        // TODO: Fix unwrap
+
+        #[cfg(feature = "rpc")]
         let rpc_address = runner
             .shared
             .config

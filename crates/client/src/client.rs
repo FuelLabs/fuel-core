@@ -147,6 +147,7 @@ use std::{
     io::{
         self,
         ErrorKind,
+        Read,
     },
     net,
     str::{
@@ -175,19 +176,29 @@ use std::pin::Pin;
 
 #[cfg(feature = "rpc")]
 mod rpc_deps {
+    pub use aws_config::{
+        BehaviorVersion,
+        default_provider::credentials::DefaultCredentialsChain,
+    };
+    pub use aws_sdk_s3::Client;
+    pub use flate2::read::GzDecoder;
     pub use fuel_core_block_aggregator_api::{
         blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
+        db::remote_cache::block_height_to_key,
         protobuf_types::{
             Block as ProtoBlock,
             BlockHeightRequest as ProtoBlockHeightRequest,
             BlockRangeRequest as ProtoBlockRangeRequest,
             BlockResponse,
             NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+            RemoteBlockResponse,
+            RemoteS3Bucket,
             block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
             block_response::{
                 Payload as ProtoPayload,
                 Payload,
             },
+            remote_block_response::Location,
         },
     };
     pub use prost::Message;
@@ -359,6 +370,39 @@ impl FuelClient {
         })
     }
 
+    #[cfg(feature = "rpc")]
+    pub async fn new_with_rpc_and_s3<G, R, S>(
+        graph_ql_url: G,
+        rpc_url: R,
+    ) -> anyhow::Result<Self>
+    where
+        G: AsRef<str>,
+        R: AsRef<str>,
+        S: AsRef<str>,
+    {
+        let mut raw_url = <G as AsRef<str>>::as_ref(&graph_ql_url).to_string();
+        if !raw_url.starts_with("http") {
+            raw_url = format!("http://{raw_url}");
+        }
+
+        let mut url = reqwest::Url::parse(&raw_url)
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("Invalid Fuel GraphQL URL: {raw_url}"))?;
+        url.set_path("/v1/graphql");
+        let inner_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url);
+        let raw_rpc_url = format!("http://{}", inner_rpc_url);
+        let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
+
+        Ok(Self {
+            transport: FailoverTransport::new(vec![url])?,
+            require_height: ConsistencyPolicy::Auto {
+                height: Arc::new(Mutex::new(None)),
+            },
+            chain_state_info: Default::default(),
+            rpc_client: Some(rpc_client),
+        })
+    }
+
     pub fn with_urls(urls: Vec<Url>) -> anyhow::Result<Self> {
         Ok(Self {
             transport: FailoverTransport::new(urls)?,
@@ -366,6 +410,7 @@ impl FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
             rpc_client: None,
         })
     }
@@ -1712,16 +1757,16 @@ impl FuelClient {
             .await
             .map_err(|e| io::Error::new(ErrorKind::Other, e))?
             .into_inner()
-            .map(|res| {
-                res.map_err(|e| {
+            .then(|res| async move {
+                let resp = res.map_err(|e| {
                     io::Error::new(ErrorKind::Other, format!("RPC error: {:?}", e))
-                })
-                .and_then(Self::convert_block_response)
+                })?;
+                Self::convert_block_response(resp).await
             });
         Ok(stream)
     }
 
-    fn convert_block_response(
+    async fn convert_block_response(
         resp: BlockResponse,
     ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
         let payload = resp.payload.ok_or(io::Error::new(
@@ -1749,10 +1794,99 @@ impl FuelClient {
                     },
                 )
             }
-            Payload::Remote(_) => {
-                todo!()
+            Payload::Remote(remote) => {
+                let RemoteBlockResponse { location } = remote;
+                match location {
+                    Some(Location::S3(s3)) => {
+                        let RemoteS3Bucket {
+                            bucket,
+                            key,
+                            endpoint,
+                            ..
+                        } = s3;
+                        let s3_url = endpoint
+                            .unwrap_or_else(|| "https://s3.amazonaws.com".to_string());
+                        let zipped_bytes =
+                            Self::get_block_from_s3_bucket(&s3_url, &bucket, &key)
+                                .await?;
+                        let block_bytes = Self::unzip_bytes(&zipped_bytes);
+                        let block =
+                            ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
+                                io::Error::new(
+                                    ErrorKind::Other,
+                                    format!("Failed to decode block: {e}"),
+                                )
+                            })?;
+                        let (block, receipts) = fuel_block_from_protobuf(
+                            block,
+                            &[],
+                            Bytes32::default(),
+                        )
+                        .map_err(|e| {
+                            io::Error::new(
+                                ErrorKind::Other,
+                                format!(
+                                    "Failed to convert RPC block to internal block: {e:?}"
+                                ),
+                            )
+                        })?;
+                        Ok((block, receipts))
+                    }
+                    _ => Err(io::Error::new(
+                        ErrorKind::Other,
+                        "Remote blocks are not supported yet",
+                    )),
+                }
             }
         }
+    }
+    async fn get_block_from_s3_bucket(
+        url: &str,
+        bucket: &str,
+        key: &str,
+    ) -> io::Result<prost::bytes::Bytes> {
+        let client = Self::aws_client(url).await;
+        tracing::info!("getting block from bucket: {} with key {}", bucket, key);
+        let req = client.get_object().bucket(bucket).key(key);
+        let obj = req.send().await.map_err(|e| {
+            io::Error::new(
+                ErrorKind::Other,
+                format!("Failed to get object from S3: {e:?}"),
+            )
+        })?;
+        let bytes = obj
+            .body
+            .collect()
+            .await
+            .map_err(|e| {
+                io::Error::new(
+                    ErrorKind::Other,
+                    format!("Failed to get object from S3: {e:?}"),
+                )
+            })?
+            .into_bytes();
+        Ok(bytes)
+    }
+
+    async fn aws_client(url: &str) -> Client {
+        let credentials = DefaultCredentialsChain::builder().build().await;
+        let _aws_region =
+            std::env::var("AWS_REGION").expect("AWS_REGION env var must be set");
+        let sdk_config = aws_config::defaults(BehaviorVersion::latest())
+            .credentials_provider(credentials)
+            .endpoint_url(url)
+            .load()
+            .await;
+        let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
+        let config = builder.force_path_style(true).build();
+        Client::from_conf(config)
+    }
+
+    fn unzip_bytes(bytes: &[u8]) -> Vec<u8> {
+        let mut decoder = GzDecoder::new(bytes);
+        let mut output = Vec::new();
+        decoder.read_to_end(&mut output).unwrap();
+        output
     }
 
     /// Used to get the synced height of the block aggregator,
@@ -1790,11 +1924,11 @@ impl FuelClient {
             .await
             .unwrap()
             .into_inner()
-            .map(|resp| {
-                resp.map_err(|e| {
+            .then(|res| async move {
+                let resp = res.map_err(|e| {
                     io::Error::new(ErrorKind::Other, format!("RPC error: {:?}", e))
-                })
-                .and_then(Self::convert_block_response)
+                })?;
+                Self::convert_block_response(resp).await
             });
         Ok(stream)
     }
