@@ -1742,11 +1742,12 @@ impl FuelClient {
                             endpoint,
                             ..
                         } = s3;
-                        let s3_url = endpoint
-                            .unwrap_or_else(|| "https://s3.amazonaws.com".to_string());
-                        let zipped_bytes =
-                            Self::get_block_from_s3_bucket(&s3_url, &bucket, &key)
-                                .await?;
+                        let zipped_bytes = Self::get_block_from_s3_bucket(
+                            endpoint.as_ref(),
+                            &bucket,
+                            &key,
+                        )
+                        .await?;
                         let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
                         let block =
                             ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
@@ -1770,7 +1771,7 @@ impl FuelClient {
         }
     }
     async fn get_block_from_s3_bucket(
-        url: &str,
+        url: Option<&String>,
         bucket: &str,
         key: &str,
     ) -> io::Result<prost::bytes::Bytes> {
@@ -1791,15 +1792,16 @@ impl FuelClient {
         Ok(bytes)
     }
 
-    async fn aws_client(url: &str) -> Client {
+    async fn aws_client(url: Option<&String>) -> Client {
         let credentials = DefaultCredentialsChain::builder().build().await;
         let _aws_region =
             std::env::var("AWS_REGION").expect("AWS_REGION env var must be set");
-        let sdk_config = aws_config::defaults(BehaviorVersion::latest())
-            .credentials_provider(credentials)
-            .endpoint_url(url)
-            .load()
-            .await;
+        let mut config_builder = aws_config::defaults(BehaviorVersion::latest())
+            .credentials_provider(credentials);
+        if let Some(url) = url {
+            config_builder = config_builder.endpoint_url(url);
+        }
+        let sdk_config = config_builder.load().await;
         let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
         let config = builder.force_path_style(true).build();
         Client::from_conf(config)
