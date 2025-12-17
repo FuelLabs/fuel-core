@@ -58,7 +58,7 @@ impl Mappable for Blocks {
     type Key = Self::OwnedKey;
     type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
-    type OwnedValue = Arc<Vec<u8>>;
+    type OwnedValue = Arc<[u8]>;
 }
 
 impl TableWithBlueprint for Blocks {

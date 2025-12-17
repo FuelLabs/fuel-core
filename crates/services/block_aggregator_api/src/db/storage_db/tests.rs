@@ -31,7 +31,7 @@ fn database() -> StorageTransaction<InMemoryStorage<Column>> {
     InMemoryStorage::default().into_transaction()
 }
 
-fn proto_block_bytes_with_height(height: BlockHeight) -> Arc<Vec<u8>> {
+fn proto_block_bytes_with_height(height: BlockHeight) -> Arc<[u8]> {
     let convertor_adapter = ProtobufBlockConverter;
     let mut default_block = FuelBlock::<Transaction>::default();
     default_block.header_mut().set_block_height(height);

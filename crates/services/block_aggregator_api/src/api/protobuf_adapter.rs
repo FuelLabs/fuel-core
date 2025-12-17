@@ -33,7 +33,6 @@ use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
 use std::{
     net::SocketAddr,
-    ops::Deref,
     sync::Arc,
 };
 use tonic::{
@@ -56,7 +55,7 @@ pub trait BlocksAggregatorApi: Send + Sync + 'static {
     //   don't need to deserialize it, but this works for now
     fn new_block_subscription(
         &self,
-    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<Vec<u8>>)>> + Send + 'static;
+    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<[u8]>)>> + Send + 'static;
 }
 
 pub struct Server<B> {
@@ -119,7 +118,7 @@ where
                             let response = ProtoBlockResponse {
                                 height: *height,
                                 payload: Some(proto_block_response::Payload::Bytes(
-                                    (*res).clone(),
+                                    (*res).to_vec(),
                                 )),
                             };
                             Ok(response)
@@ -172,7 +171,7 @@ where
                         height: *block_height,
                         // TODO: Avoid clone
                         payload: Some(proto_block_response::Payload::Bytes(
-                            block.deref().clone(),
+                            block.to_vec(),
                         )),
                     };
                     Ok(response)

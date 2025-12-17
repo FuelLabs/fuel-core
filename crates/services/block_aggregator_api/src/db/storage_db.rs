@@ -66,7 +66,7 @@ where
     S: Modifiable + Send + Sync,
     S: KeyValueInspect<Column = Column>,
 {
-    type Block = Arc<Vec<u8>>;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(
@@ -107,7 +107,7 @@ where
     S: AtomicView,
     S::LatestView: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static,
 {
-    type Block = Arc<Vec<u8>>;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     fn get_block_range(
@@ -173,7 +173,7 @@ where
     S: Unpin,
     S: KeyValueInspect<Column = Column>,
 {
-    type Item = (BlockHeight, Arc<Vec<u8>>);
+    type Item = (BlockHeight, Arc<[u8]>);
 
     fn poll_next(
         self: Pin<&mut Self>,

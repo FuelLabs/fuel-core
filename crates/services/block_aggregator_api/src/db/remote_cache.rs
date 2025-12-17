@@ -120,7 +120,7 @@ where
     S: Send + Sync + 'static,
     S: KeyValueInspect<Column = Column>,
 {
-    type Block = Arc<Vec<u8>>;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     fn get_block_range(
@@ -159,7 +159,7 @@ where
     S: Modifiable,
     S: KeyValueInspect<Column = Column>,
 {
-    type Block = Arc<Vec<u8>>;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(
@@ -182,7 +182,7 @@ where
         }
 
         let key = block_height_to_key(&height);
-        let zipped = gzip_bytes(block.as_slice())?;
+        let zipped = gzip_bytes(block)?;
         let body = ByteStream::from(zipped);
         if self.publishes_blocks {
             let req = self
