@@ -340,8 +340,7 @@ impl FuelClient {
         rpc_url: R,
     ) -> anyhow::Result<Self> {
         let mut client = Self::new(graph_ql_url)?;
-        let inner_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url);
-        let mut raw_rpc_url = format!("http://{}", inner_rpc_url);
+        let mut raw_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url).to_string();
         if !raw_rpc_url.starts_with("http") {
             raw_rpc_url = format!("http://{raw_rpc_url}");
         }
