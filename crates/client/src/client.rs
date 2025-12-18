@@ -167,6 +167,7 @@ use types::{
     },
 };
 
+use aws_sdk_s3::types::RequestPayer;
 #[cfg(feature = "subscriptions")]
 use std::pin::Pin;
 
@@ -1752,13 +1753,14 @@ impl FuelClient {
                             bucket,
                             key,
                             endpoint,
-                            ..
+                            requester_pays,
                         } = s3;
                         let zipped_bytes = Self::get_block_from_s3_bucket(
                             s3_client,
                             endpoint.as_ref(),
                             &bucket,
                             &key,
+                            requester_pays,
                         )
                         .await?;
                         let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
@@ -1788,6 +1790,7 @@ impl FuelClient {
         url: Option<&String>,
         bucket: &str,
         key: &str,
+        requester_pays: bool,
     ) -> io::Result<prost::bytes::Bytes> {
         let client = if let Some(inner) = url {
             Self::new_aws_client(Some(inner)).await
@@ -1795,7 +1798,10 @@ impl FuelClient {
             s3_client.ok_or(io::Error::other("No AWS client configured"))?
         };
         tracing::debug!("getting block from bucket: {} with key {}", bucket, key);
-        let req = client.get_object().bucket(bucket).key(key);
+        let mut req = client.get_object().bucket(bucket).key(key);
+        if requester_pays {
+            req = req.request_payer(RequestPayer::Requester);
+        }
         let obj = req.send().await.map_err(|e| {
             io::Error::other(format!("Failed to get object from S3: {e:?}"))
         })?;
