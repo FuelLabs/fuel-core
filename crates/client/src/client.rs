@@ -1794,7 +1794,7 @@ impl FuelClient {
         } else {
             s3_client.ok_or(io::Error::other("No AWS client configured"))?
         };
-        tracing::info!("getting block from bucket: {} with key {}", bucket, key);
+        tracing::debug!("getting block from bucket: {} with key {}", bucket, key);
         let req = client.get_object().bucket(bucket).key(key);
         let obj = req.send().await.map_err(|e| {
             io::Error::other(format!("Failed to get object from S3: {e:?}"))
