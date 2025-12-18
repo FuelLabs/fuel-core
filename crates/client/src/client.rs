@@ -1734,7 +1734,8 @@ impl FuelClient {
                 Err(io::Error::other("Literal payloads are not supported yet"))
             }
             Payload::Bytes(bytes) => {
-                let proto_block = ProtoBlock::decode(bytes.as_slice()).map_err(io::Error::other)?;
+                let proto_block =
+                    ProtoBlock::decode(bytes.as_slice()).map_err(io::Error::other)?;
                 fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).map_err(
                     |e| {
                         io::Error::other(format!(
