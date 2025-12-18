@@ -5,7 +5,6 @@ use aws_config::{
     default_provider::credentials::DefaultCredentialsChain,
 };
 use aws_sdk_s3::Client;
-// use flate2::read::GzDecoder;
 use fuel_core::{
     database::Database,
     service::{
