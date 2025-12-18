@@ -176,7 +176,7 @@ mod rpc_deps {
         BehaviorVersion,
         default_provider::credentials::DefaultCredentialsChain,
     };
-    pub use aws_sdk_s3::Client;
+    pub use aws_sdk_s3::Client as AWSClient;
     pub use flate2::read::GzDecoder;
     pub use fuel_core_block_aggregator_api::{
         blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
@@ -278,6 +278,8 @@ pub struct FuelClient {
     chain_state_info: ChainStateInfo,
     #[cfg(feature = "rpc")]
     rpc_client: Option<ProtoBlockAggregatorClient<Channel>>,
+    #[cfg(feature = "rpc")]
+    aws_client: Option<AWSClient>,
 }
 
 impl FromStr for FuelClient {
@@ -302,6 +304,8 @@ impl FromStr for FuelClient {
             chain_state_info: Default::default(),
             #[cfg(feature = "rpc")]
             rpc_client: None,
+            #[cfg(feature = "rpc")]
+            aws_client: None,
         })
     }
 }
@@ -346,6 +350,7 @@ impl FuelClient {
         }
         let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
         client.rpc_client = Some(rpc_client);
+        client.aws_client = Some(Self::new_aws_client(None).await);
         Ok(client)
     }
 
@@ -358,6 +363,8 @@ impl FuelClient {
             chain_state_info: Default::default(),
             #[cfg(feature = "rpc")]
             rpc_client: None,
+            #[cfg(feature = "rpc")]
+            aws_client: None,
         })
     }
 }
@@ -1702,16 +1709,21 @@ impl FuelClient {
             .await
             .map_err(io::Error::other)?
             .into_inner()
-            .then(|res| async move {
-                let resp =
-                    res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
-                Self::convert_block_response(resp).await
+            .then(|res| {
+                let maybe_aws_client = self.aws_client.clone();
+                async move {
+                    let maybe_aws_client = maybe_aws_client.clone();
+                    let resp =
+                        res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
+                    Self::convert_block_response(resp, maybe_aws_client).await
+                }
             });
         Ok(stream)
     }
 
     async fn convert_block_response(
         resp: BlockResponse,
+        s3_client: Option<AWSClient>,
     ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
         let payload = resp
             .payload
@@ -1742,6 +1754,7 @@ impl FuelClient {
                             ..
                         } = s3;
                         let zipped_bytes = Self::get_block_from_s3_bucket(
+                            s3_client,
                             endpoint.as_ref(),
                             &bucket,
                             &key,
@@ -1770,11 +1783,16 @@ impl FuelClient {
         }
     }
     async fn get_block_from_s3_bucket(
+        s3_client: Option<AWSClient>,
         url: Option<&String>,
         bucket: &str,
         key: &str,
     ) -> io::Result<prost::bytes::Bytes> {
-        let client = Self::aws_client(url).await;
+        let client = if let Some(inner) = url {
+            Self::new_aws_client(Some(inner)).await
+        } else {
+            s3_client.ok_or(io::Error::other("No AWS client configured"))?
+        };
         tracing::info!("getting block from bucket: {} with key {}", bucket, key);
         let req = client.get_object().bucket(bucket).key(key);
         let obj = req.send().await.map_err(|e| {
@@ -1791,7 +1809,7 @@ impl FuelClient {
         Ok(bytes)
     }
 
-    async fn aws_client(url: Option<&String>) -> Client {
+    async fn new_aws_client(url: Option<&String>) -> AWSClient {
         let credentials = DefaultCredentialsChain::builder().build().await;
         let mut config_builder = aws_config::defaults(BehaviorVersion::latest())
             .credentials_provider(credentials);
@@ -1801,7 +1819,7 @@ impl FuelClient {
         let sdk_config = config_builder.load().await;
         let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
         let config = builder.force_path_style(true).build();
-        Client::from_conf(config)
+        AWSClient::from_conf(config)
     }
 
     fn unzip_bytes(bytes: &[u8]) -> io::Result<Vec<u8>> {
@@ -1843,10 +1861,14 @@ impl FuelClient {
             .await
             .map_err(io::Error::other)?
             .into_inner()
-            .then(|res| async move {
-                let resp =
-                    res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
-                Self::convert_block_response(resp).await
+            .then(|res| {
+                let maybe_aws_client = self.aws_client.clone();
+                async move {
+                    let maybe_aws_client = maybe_aws_client.clone();
+                    let resp =
+                        res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
+                    Self::convert_block_response(resp, maybe_aws_client).await
+                }
             });
         Ok(stream)
     }
