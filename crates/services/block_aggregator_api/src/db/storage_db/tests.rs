@@ -3,8 +3,8 @@
 use super::*;
 use crate::{
     blocks::old_block_source::{
-        BlockConvector,
-        convertor_adapter::ConvertorAdapter,
+        BlockConverter,
+        convertor_adapter::ProtobufBlockConverter,
     },
     db::table::{
         Column,
@@ -25,13 +25,14 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
+use std::sync::Arc;
 
 fn database() -> StorageTransaction<InMemoryStorage<Column>> {
     InMemoryStorage::default().into_transaction()
 }
 
-fn proto_block_with_height(height: BlockHeight) -> ProtoBlock {
-    let convertor_adapter = ConvertorAdapter;
+fn proto_block_bytes_with_height(height: BlockHeight) -> Arc<[u8]> {
+    let convertor_adapter = ProtobufBlockConverter;
     let mut default_block = FuelBlock::<Transaction>::default();
     default_block.header_mut().set_block_height(height);
     convertor_adapter
@@ -45,7 +46,7 @@ async fn store_block__adds_to_storage() {
     let db = database();
     let mut adapter = StorageDB::new(db);
     let height = BlockHeight::from(1u32);
-    let expected = proto_block_with_height(height);
+    let expected = proto_block_bytes_with_height(height);
 
     // when
     adapter.store_block(height, &expected).await.unwrap();
@@ -69,9 +70,9 @@ async fn get_block__can_get_expected_range() {
     let height_2 = BlockHeight::from(2u32);
     let height_3 = BlockHeight::from(3u32);
 
-    let expected_1 = proto_block_with_height(height_1);
-    let expected_2 = proto_block_with_height(height_2);
-    let expected_3 = proto_block_with_height(height_3);
+    let expected_1 = proto_block_bytes_with_height(height_1);
+    let expected_2 = proto_block_bytes_with_height(height_2);
+    let expected_3 = proto_block_bytes_with_height(height_3);
 
     let mut tx = db.write_transaction();
     tx.storage_as_mut::<Blocks>()
@@ -89,10 +90,10 @@ async fn get_block__can_get_expected_range() {
     let adapter = StorageBlocksProvider::new(tx);
 
     // when
-    let BlockRangeResponse::Literal(stream) =
+    let BlockRangeResponse::Bytes(stream) =
         adapter.get_block_range(height_2, height_3).unwrap()
     else {
-        panic!("expected literal response")
+        panic!("expected bytes response")
     };
     let actual = stream.collect::<Vec<_>>().await;
 
@@ -106,7 +107,7 @@ async fn store_block__updates_continuous_block_if_contiguous() {
     let db = database();
     let mut adapter = StorageDB::new(db);
     let height = BlockHeight::from(1u32);
-    let expected = proto_block_with_height(height);
+    let expected = proto_block_bytes_with_height(height);
 
     // when
     adapter.store_block(height, &expected).await.unwrap();
@@ -129,7 +130,7 @@ async fn store_block__fails_if_not_contiguous() {
     tx.commit().unwrap();
     let mut adapter = StorageDB::new(db);
     let height = BlockHeight::from(3u32);
-    let proto = proto_block_with_height(height);
+    let proto = proto_block_bytes_with_height(height);
 
     // when
     let result = adapter.store_block(height, &proto).await;

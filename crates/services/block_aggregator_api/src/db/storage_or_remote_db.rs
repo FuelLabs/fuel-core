@@ -13,7 +13,6 @@ use crate::{
         },
         table::Column,
     },
-    protobuf_types::Block as ProtoBlock,
     result::Result,
 };
 use aws_config::{
@@ -28,6 +27,7 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
+use std::sync::Arc;
 
 /// A union of a storage and a remote cache for the block aggregator. This allows both to be
 /// supported in production depending on the configuration
@@ -96,7 +96,7 @@ where
     S: Modifiable + Send + Sync,
     S: KeyValueInspect<Column = Column>,
 {
-    type Block = crate::protobuf_types::Block;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(
@@ -123,7 +123,7 @@ where
     S: AtomicView,
     S::LatestView: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static,
 {
-    type Block = ProtoBlock;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     fn get_block_range(

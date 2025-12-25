@@ -2,8 +2,8 @@ use super::*;
 use crate::{
     block_range_response::RemoteS3Response,
     blocks::old_block_source::{
-        BlockConvector,
-        convertor_adapter::ConvertorAdapter,
+        BlockConverter,
+        convertor_adapter::ProtobufBlockConverter,
     },
     db::table::{
         Column,
@@ -25,14 +25,15 @@ use fuel_core_storage::{
 };
 use fuel_core_types::blockchain::block::Block as FuelBlock;
 use futures::StreamExt;
+use std::sync::Arc;
 
 fn database() -> StorageTransaction<InMemoryStorage<Column>> {
     InMemoryStorage::default().into_transaction()
 }
 
-fn arb_proto_block() -> ProtoBlock {
+fn arb_proto_block_bytes() -> Arc<[u8]> {
     let block = FuelBlock::default();
-    let convertor = ConvertorAdapter;
+    let convertor = ProtobufBlockConverter;
     convertor.convert_block(&block, &[]).unwrap()
 }
 fn put_happy_rule() -> Rule {
@@ -51,7 +52,7 @@ async fn store_block__happy_path() {
     let storage = database();
     let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
     let block_height = BlockHeight::new(123);
-    let block = arb_proto_block();
+    let block = arb_proto_block_bytes();
 
     // when
     let res = adapter.store_block(block_height, &block).await;
@@ -79,10 +80,10 @@ async fn get_block_range__happy_path() {
 
     // then
     let actual = match addresses {
-        BlockRangeResponse::Literal(_) => {
+        BlockRangeResponse::S3(stream) => stream.collect::<Vec<_>>().await,
+        _ => {
             panic!("Expected remote response, got literal");
         }
-        BlockRangeResponse::S3(stream) => stream.collect::<Vec<_>>().await,
     };
     let expected = (999..=1003)
         .map(|height| {
@@ -108,7 +109,7 @@ async fn get_current_height__returns_highest_continuous_block() {
     let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
 
     let expected = BlockHeight::new(123);
-    let block = arb_proto_block();
+    let block = arb_proto_block_bytes();
     adapter.store_block(expected, &block).await.unwrap();
 
     // when
@@ -134,7 +135,7 @@ async fn store_block__fails_if_not_contiguous() {
     let mut adapter = RemoteCache::new(aws_bucket, client, storage, true);
 
     let expected = BlockHeight::new(3);
-    let block = arb_proto_block();
+    let block = arb_proto_block_bytes();
 
     // When
     let result = adapter.store_block(expected, &block).await;

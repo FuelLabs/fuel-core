@@ -9,7 +9,6 @@ use crate::{
             Mode,
         },
     },
-    protobuf_types::Block as ProtoBlock,
     result::Error,
 };
 use anyhow::anyhow;
@@ -33,8 +32,10 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use prost::Message;
-use std::io::Write;
+use std::{
+    io::Write,
+    sync::Arc,
+};
 
 #[allow(non_snake_case)]
 #[cfg(test)]
@@ -119,7 +120,7 @@ where
     S: Send + Sync + 'static,
     S: KeyValueInspect<Column = Column>,
 {
-    type Block = ProtoBlock;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     fn get_block_range(
@@ -158,7 +159,7 @@ where
     S: Modifiable,
     S: KeyValueInspect<Column = Column>,
 {
-    type Block = ProtoBlock;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(
@@ -181,9 +182,7 @@ where
         }
 
         let key = block_height_to_key(&height);
-        let mut buf = Vec::new();
-        block.encode(&mut buf).map_err(Error::db_error)?;
-        let zipped = gzip_bytes(&buf)?;
+        let zipped = gzip_bytes(block)?;
         let body = ByteStream::from(zipped);
         if self.publishes_blocks {
             let req = self

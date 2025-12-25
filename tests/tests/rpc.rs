@@ -10,6 +10,7 @@ use fuel_core::{
 use fuel_core_block_aggregator_api::{
     blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
     protobuf_types::{
+        Block as ProtoBlock,
         BlockHeightRequest as ProtoBlockHeightRequest,
         BlockRangeRequest as ProtoBlockRangeRequest,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
@@ -23,6 +24,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
+use prost::Message;
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -46,7 +48,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
 
     // when
     let request = ProtoBlockRangeRequest { start: 1, end: 1 };
-    let proto_block = if let Some(ProtoPayload::Literal(block)) = rpc_client
+    let bytes = if let Some(ProtoPayload::Bytes(block)) = rpc_client
         .get_block_range(request)
         .await
         .unwrap()
@@ -62,6 +64,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
         panic!("expected literal block payload");
     };
 
+    let proto_block = ProtoBlock::decode(bytes.as_slice()).unwrap();
     let (actual_block, receipts) =
         fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).unwrap();
     let actual_height = actual_block.header().height();
@@ -153,13 +156,13 @@ async fn new_block_subscription__can_get_expect_block() {
     let next = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
         .await
         .unwrap();
-    let proto_block =
-        if let Some(ProtoPayload::Literal(block)) = next.unwrap().unwrap().payload {
-            block
-        } else {
-            panic!("expected literal block payload");
-        };
+    let bytes = if let Some(ProtoPayload::Bytes(block)) = next.unwrap().unwrap().payload {
+        block
+    } else {
+        panic!("expected literal block payload");
+    };
 
+    let proto_block = ProtoBlock::decode(bytes.as_slice()).unwrap();
     let (actual_block, receipts) =
         fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).unwrap();
     let actual_height = actual_block.header().height();

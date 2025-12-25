@@ -10,7 +10,6 @@ use crate::{
             Mode,
         },
     },
-    protobuf_types::Block as ProtoBlock,
     result::{
         Error,
         Result,
@@ -32,6 +31,7 @@ use fuel_core_storage::{
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
     pin::Pin,
+    sync::Arc,
     task::{
         Context,
         Poll,
@@ -66,7 +66,7 @@ where
     S: Modifiable + Send + Sync,
     S: KeyValueInspect<Column = Column>,
 {
-    type Block = ProtoBlock;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     async fn store_block(
@@ -107,7 +107,7 @@ where
     S: AtomicView,
     S::LatestView: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static,
 {
-    type Block = ProtoBlock;
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
     fn get_block_range(
@@ -120,7 +120,7 @@ where
             .latest_view()
             .map_err(|e| Error::DB(anyhow!(e)))?;
         let stream = StorageStream::new(latest_view, first, last);
-        Ok(BlockRangeResponse::Literal(Box::pin(stream)))
+        Ok(BlockRangeResponse::Bytes(Box::pin(stream)))
     }
 
     fn get_current_height(&self) -> Result<Option<BlockHeight>> {
@@ -173,7 +173,7 @@ where
     S: Unpin,
     S: KeyValueInspect<Column = Column>,
 {
-    type Item = (BlockHeight, ProtoBlock);
+    type Item = (BlockHeight, Arc<[u8]>);
 
     fn poll_next(
         self: Pin<&mut Self>,

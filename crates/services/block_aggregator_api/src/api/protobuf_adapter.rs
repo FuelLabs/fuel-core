@@ -4,7 +4,6 @@ use crate::{
         BoxStream,
     },
     protobuf_types::{
-        Block as ProtoBlock,
         BlockHeightRequest as ProtoBlockHeightRequest,
         BlockHeightResponse as ProtoBlockHeightResponse,
         BlockRangeRequest as ProtoBlockRangeRequest,
@@ -34,7 +33,6 @@ use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
 use std::{
     net::SocketAddr,
-    ops::Deref,
     sync::Arc,
 };
 use tonic::{
@@ -53,9 +51,11 @@ pub trait BlocksAggregatorApi: Send + Sync + 'static {
 
     fn get_current_height(&self) -> Result<Option<BlockHeight>>;
 
+    // TODO: This doesn't actually need to be bytes, it could just be the ProtoBlock type since we
+    //   don't need to deserialize it, but this works for now
     fn new_block_subscription(
         &self,
-    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<ProtoBlock>)>> + Send + 'static;
+    ) -> impl Stream<Item = anyhow::Result<(BlockHeight, Arc<[u8]>)>> + Send + 'static;
 }
 
 pub struct Server<B> {
@@ -112,6 +112,20 @@ where
                         .boxed();
                     Ok(tonic::Response::new(stream))
                 }
+                BlockRangeResponse::Bytes(inner) => {
+                    let stream = inner
+                        .map(|(height, res)| {
+                            let response = ProtoBlockResponse {
+                                height: *height,
+                                payload: Some(proto_block_response::Payload::Bytes(
+                                    (*res).to_vec(),
+                                )),
+                            };
+                            Ok(response)
+                        })
+                        .boxed();
+                    Ok(tonic::Response::new(stream))
+                }
                 BlockRangeResponse::S3(inner) => {
                     let stream = inner
                         .map(|(height, res)| {
@@ -156,8 +170,8 @@ where
                     let response = ProtoBlockResponse {
                         height: *block_height,
                         // TODO: Avoid clone
-                        payload: Some(proto_block_response::Payload::Literal(
-                            block.deref().clone(),
+                        payload: Some(proto_block_response::Payload::Bytes(
+                            block.to_vec(),
                         )),
                     };
                     Ok(response)

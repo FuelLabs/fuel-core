@@ -23,10 +23,7 @@ use fuel_core_services::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use futures::StreamExt;
-use std::{
-    fmt::Debug,
-    sync::Arc,
-};
+use std::fmt::Debug;
 
 /// The Block Aggregator service, which aggregates blocks from a source and stores them in a database
 /// Queries can be made to the service to retrieve data from the `DB`
@@ -45,7 +42,7 @@ where
     pub(crate) last_seen_importer_height: Option<BlockHeight>,
     /// A joint stream of old blocks from the block source and new blocks from the importer
     pub(crate) old_and_new_block_stream:
-        BoxStream<AggregatorResult<(BlockHeight, Arc<<Blocks as BlockSource>::Block>)>>,
+        BoxStream<AggregatorResult<(BlockHeight, <Blocks as BlockSource>::Block)>>,
 }
 
 impl<S1, S2, Blocks> Task<S1, S2, Blocks>
@@ -53,7 +50,7 @@ where
     S1: BlocksStorage<Block = Blocks::Block>,
     S2: BlocksProvider<Block = Blocks::Block>,
     Blocks: BlockSource,
-    <Blocks as BlockSource>::Block: Send + Sync + Debug + 'static,
+    <Blocks as BlockSource>::Block: Clone + Send + Sync + Debug + 'static,
 {
     pub fn new(
         sync_from: BlockHeight,
@@ -88,25 +85,22 @@ where
             .and_then(|height| height.succ())
             .unwrap_or(self.sync_from);
 
-        let old_blocks_stream = futures::stream::iter(
-            self.block_source
-                .blocks_starting_from(next_height)
-                .map(|r| r.map(|(block_height, block)| (block_height, Arc::new(block)))),
-        )
-        .take_while(move |result| {
-            let take = match result {
-                Ok((block_height, _)) => {
-                    if let Some(importer_height) = importer_height {
-                        *block_height < importer_height
-                    } else {
-                        true
-                    }
-                }
-                Err(_) => true,
-            };
+        let old_blocks_stream =
+            futures::stream::iter(self.block_source.blocks_starting_from(next_height))
+                .take_while(move |result| {
+                    let take = match result {
+                        Ok((block_height, _)) => {
+                            if let Some(importer_height) = importer_height {
+                                *block_height < importer_height
+                            } else {
+                                true
+                            }
+                        }
+                        Err(_) => true,
+                    };
 
-            async move { take }
-        });
+                    async move { take }
+                });
 
         let receiver = self.shared_state.blocks_broadcast.subscribe();
         let life_stream =
@@ -125,7 +119,7 @@ where
     pub async fn handle_block(
         &mut self,
         block_height: BlockHeight,
-        block: Arc<<Blocks as BlockSource>::Block>,
+        block: <Blocks as BlockSource>::Block,
     ) -> TaskNextAction {
         let next_height = try_or_stop!(self.shared_state.get_current_height())
             .and_then(|height| height.succ())
@@ -138,7 +132,7 @@ where
             return self.restart_blocks_stream();
         }
 
-        let res = self.storage.store_block(block_height, block.as_ref()).await;
+        let res = self.storage.store_block(block_height, &block).await;
         match res {
             Ok(_) => TaskNextAction::Continue,
             // If we have an error, it means height is not updated in DB, and it will trigger
@@ -153,7 +147,7 @@ where
     S1: BlocksStorage<Block = Blocks::Block>,
     S2: BlocksProvider<Block = Blocks::Block>,
     Blocks: BlockSource,
-    <Blocks as BlockSource>::Block: Send + Sync + Debug,
+    <Blocks as BlockSource>::Block: Clone + Send + Sync + Debug,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -172,7 +166,7 @@ where
                         let _ = self
                             .shared_state
                             .blocks_broadcast
-                            .send((height, Arc::new(block)));
+                            .send((height, block));
                         self.last_seen_importer_height = Some(height);
                         TaskNextAction::Continue
                     }

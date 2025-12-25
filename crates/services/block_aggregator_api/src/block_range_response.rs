@@ -1,6 +1,7 @@
 use crate::protobuf_types::Block as ProtoBlock;
 use fuel_core_services::stream::Stream;
 use fuel_core_types::fuel_types::BlockHeight;
+use std::sync::Arc;
 
 pub type BoxStream<T> = core::pin::Pin<Box<dyn Stream<Item = T> + Send + 'static>>;
 
@@ -8,6 +9,8 @@ pub type BoxStream<T> = core::pin::Pin<Box<dyn Stream<Item = T> + Send + 'static
 pub enum BlockRangeResponse {
     /// A literal stream of blocks
     Literal(BoxStream<(BlockHeight, ProtoBlock)>),
+    /// Bytes of blocks
+    Bytes(BoxStream<(BlockHeight, Arc<[u8]>)>),
     /// A remote URL where the blocks can be fetched
     S3(BoxStream<(BlockHeight, RemoteS3Response)>),
 }
@@ -25,7 +28,8 @@ impl std::fmt::Debug for BlockRangeResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BlockRangeResponse::Literal(_) => f.debug_struct("Literal").finish(),
-            BlockRangeResponse::S3(_url) => f.debug_struct("Remote").finish(),
+            BlockRangeResponse::S3(_) => f.debug_struct("Remote").finish(),
+            BlockRangeResponse::Bytes(_) => f.debug_struct("Bytes").finish(),
         }
     }
 }

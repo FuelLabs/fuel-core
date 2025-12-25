@@ -22,6 +22,7 @@ use crate::{
         Output as ProtoOutput,
         Policies as ProtoPolicies,
         Receipt as ProtoReceipt,
+        Receipts as ProtoReceipts,
         ScriptTransaction as ProtoScriptTx,
         StorageSlot as ProtoStorageSlot,
         Transaction as ProtoTransaction,
@@ -616,6 +617,12 @@ fn proto_panic_instruction(
     crate::protobuf_types::PanicInstruction {
         reason: reason as i32,
         instruction: *panic_instruction.instruction(),
+    }
+}
+
+pub fn proto_receipts_from_receipts(receipts: &[FuelReceipt]) -> ProtoReceipts {
+    ProtoReceipts {
+        receipts: receipts.iter().map(proto_receipt_from_receipt).collect(),
     }
 }
 
