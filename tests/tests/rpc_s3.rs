@@ -22,6 +22,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
+use std::iter;
 use tokio::time::sleep;
 
 const AWS_ENDPOINT_URL: &str = "http://127.0.0.1:4566";

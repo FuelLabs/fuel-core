@@ -47,7 +47,7 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
 ] }
 fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
-fuel-core-block-aggregator-api = { workspace = true }
+fuel-core-block-aggregator-api = { path = "../crates/services/block_aggregator_api" }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
 fuel-core-compression-service = { path = "../crates/services/compression", features = [
