@@ -93,12 +93,11 @@ mod rpc {
         service::adapters::rpc::ReceiptSource,
     };
     pub use fuel_core_block_aggregator_api::{
-        api::protobuf_adapter::ProtobufAPI,
-        blocks::importer_and_db_source::{
-            ImporterAndDbSource,
-            serializer_adapter::SerializerAdapter,
+        blocks::old_block_source::{
+            OldBlocksSource,
+            convertor_adapter::ProtobufBlockConverter,
         },
-        integration::UninitializedTask,
+        service::UninitializedTask,
     };
     pub use fuel_core_services::ServiceRunner;
     pub use fuel_core_types::fuel_types::BlockHeight;
@@ -519,6 +518,8 @@ pub fn init_sub_services(
         tx_status_manager: tx_status_manager_adapter,
         compression: compression_service.as_ref().map(|c| c.shared.clone()),
         gas_price_service: gas_price_service_v1.shared.clone(),
+        #[cfg(feature = "rpc")]
+        block_aggregator_rpc: block_aggregator_rpc.as_ref().map(|s| s.shared.clone()),
     };
 
     #[allow(unused_mut)]
@@ -570,24 +571,24 @@ pub fn init_sub_services(
 #[allow(clippy::type_complexity)]
 #[cfg(feature = "rpc")]
 fn init_rpc_server(
-    config: &fuel_core_block_aggregator_api::integration::Config,
+    config: &fuel_core_block_aggregator_api::service::Config,
     database: &CombinedDatabase,
     importer_adapter: &BlockImporterAdapter,
     genesis_height: BlockHeight,
 ) -> anyhow::Result<
     ServiceRunner<
         UninitializedTask<
-            ProtobufAPI,
-            ImporterAndDbSource<SerializerAdapter, Database<OnChain>, ReceiptSource>,
+            OldBlocksSource<ProtobufBlockConverter, Database<OnChain>, ReceiptSource>,
+            Database<BlockAggregatorDatabase>,
             Database<BlockAggregatorDatabase>,
         >,
     >,
 > {
     let receipts = ReceiptSource::new(database.off_chain().clone());
-    let serializer = SerializerAdapter;
+    let serializer = ProtobufBlockConverter;
     let onchain_db = database.on_chain().clone();
     let importer = importer_adapter.events_shared_result();
-    fuel_core_block_aggregator_api::integration::new_service(
+    fuel_core_block_aggregator_api::service::new_service(
         database.block_aggregation_storage().clone(),
         serializer,
         onchain_db,

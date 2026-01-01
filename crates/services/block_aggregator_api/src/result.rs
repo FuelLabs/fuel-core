@@ -25,6 +25,10 @@ impl Error {
     pub fn receipt_error<T: Into<anyhow::Error>>(err: T) -> Self {
         Error::Receipt(err.into())
     }
+
+    pub fn serialization_error<T: Into<anyhow::Error>>(err: T) -> Self {
+        Error::Serialization(err.into())
+    }
 }
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;

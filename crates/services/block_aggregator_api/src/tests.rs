@@ -1,61 +1,87 @@
 #![allow(non_snake_case)]
 
-use super::*;
 use crate::{
-    api::BlockAggregatorQuery,
     blocks::{
         BlockBytes,
-        BlockSourceEvent,
+        BlockSource,
     },
-    result::{
-        Error,
-        Result,
+    db::{
+        BlocksProvider,
+        BlocksStorage,
     },
+    result::Result,
+    service::SharedState,
+    task::Task,
 };
-use anyhow::anyhow;
-use fuel_core_services::stream::BoxStream;
-use futures::StreamExt;
+use fuel_core_services::{
+    RunnableTask,
+    Service,
+    State,
+    StateWatcher,
+    stream::BoxStream,
+};
+use fuel_core_types::fuel_types::BlockHeight;
+use futures::{
+    FutureExt,
+    StreamExt,
+};
 use rand::{
     SeedableRng,
     prelude::StdRng,
 };
 use std::{
     collections::HashMap,
+    net::{
+        IpAddr,
+        Ipv4Addr,
+        SocketAddr,
+    },
     sync::{
         Arc,
         Mutex,
     },
 };
-use tokio::{
-    sync::mpsc::{
-        Receiver,
-        Sender,
-    },
-    time::error::Elapsed,
-};
 
 type BlockRangeResponse = BoxStream<BlockBytes>;
 
-struct FakeApi<T, B> {
-    receiver: Receiver<BlockAggregatorQuery<T, B>>,
-}
+struct FakeApi {}
 
-impl<T, B> FakeApi<T, B> {
-    fn new() -> (Self, Sender<BlockAggregatorQuery<T, B>>) {
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        let api = Self { receiver };
-        (api, sender)
+#[async_trait::async_trait]
+impl Service for FakeApi {
+    fn start(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn start_and_await(&self) -> anyhow::Result<State> {
+        Ok(State::Started)
+    }
+
+    async fn await_start_or_stop(&self) -> anyhow::Result<State> {
+        futures::future::pending().await
+    }
+
+    fn stop(&self) -> bool {
+        false
+    }
+
+    async fn stop_and_await(&self) -> anyhow::Result<State> {
+        Ok(State::Stopped)
+    }
+
+    async fn await_stop(&self) -> anyhow::Result<State> {
+        futures::future::pending().await
+    }
+
+    fn state(&self) -> State {
+        State::Started
+    }
+
+    fn state_watcher(&self) -> StateWatcher {
+        StateWatcher::started()
     }
 }
 
-impl<T: Send, B: Send> BlockAggregatorApi for FakeApi<T, B> {
-    type BlockRangeResponse = T;
-    type Block = B;
-    async fn await_query(&mut self) -> Result<BlockAggregatorQuery<T, B>> {
-        Ok(self.receiver.recv().await.unwrap())
-    }
-}
-
+#[derive(Clone)]
 struct FakeDB {
     map: Arc<Mutex<HashMap<BlockHeight, BlockBytes>>>,
 }
@@ -69,23 +95,23 @@ impl FakeDB {
     fn add_block(&mut self, height: BlockHeight, block: BlockBytes) {
         self.map.lock().unwrap().insert(height, block);
     }
-
-    fn clone_inner(&self) -> Arc<Mutex<HashMap<BlockHeight, BlockBytes>>> {
-        self.map.clone()
-    }
 }
 
-impl BlockAggregatorDB for FakeDB {
+impl BlocksStorage for FakeDB {
     type Block = BlockBytes;
     type BlockRangeResponse = BlockRangeResponse;
 
-    async fn store_block(&mut self, block: BlockSourceEvent<BlockBytes>) -> Result<()> {
-        let (id, block) = block.into_inner();
-        self.map.lock().unwrap().insert(id, block);
+    async fn store_block(&mut self, id: BlockHeight, block: &BlockBytes) -> Result<()> {
+        self.map.lock().unwrap().insert(id, block.clone());
         Ok(())
     }
+}
 
-    async fn get_block_range(
+impl BlocksProvider for FakeDB {
+    type Block = BlockBytes;
+    type BlockRangeResponse = BlockRangeResponse;
+
+    fn get_block_range(
         &self,
         first: BlockHeight,
         last: BlockHeight,
@@ -106,7 +132,7 @@ impl BlockAggregatorDB for FakeDB {
         Ok(Box::pin(futures::stream::iter(blocks)))
     }
 
-    async fn get_current_height(&self) -> Result<Option<BlockHeight>> {
+    fn get_current_height(&self) -> Result<Option<BlockHeight>> {
         let map = self.map.lock().unwrap();
         let max_height = map.keys().max().cloned();
         Ok(max_height)
@@ -114,85 +140,113 @@ impl BlockAggregatorDB for FakeDB {
 }
 
 struct FakeBlockSource {
-    blocks: Receiver<BlockSourceEvent<BlockBytes>>,
+    blocks: Vec<(BlockHeight, BlockBytes)>,
 }
 
 impl FakeBlockSource {
-    fn new() -> (Self, Sender<BlockSourceEvent<BlockBytes>>) {
-        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
-        let _self = Self { blocks: receiver };
-        (_self, _sender)
+    fn new(blocks: Vec<(BlockHeight, BlockBytes)>) -> Self {
+        Self { blocks }
     }
 }
 
 impl BlockSource for FakeBlockSource {
     type Block = BlockBytes;
 
-    async fn next_block(&mut self) -> Result<BlockSourceEvent<BlockBytes>> {
+    fn blocks_starting_from(
+        &self,
+        block_height: BlockHeight,
+    ) -> impl Iterator<Item = Result<(BlockHeight, Self::Block)>> + Send + Sync + 'static
+    {
+        let start_height: u32 = block_height.into();
         self.blocks
-            .recv()
-            .await
-            .ok_or(Error::BlockSource(anyhow!("Channel closed")))
+            .clone()
+            .into_iter()
+            .filter(move |(height, _)| {
+                let h: u32 = (*height).into();
+                h >= start_height
+            })
+            .map(|(height, block)| Ok((height, block)))
     }
+}
 
-    async fn drain(&mut self) -> Result<()> {
-        todo!()
-    }
+fn importer_stream(
+    blocks: Vec<(BlockHeight, BlockBytes)>,
+) -> BoxStream<anyhow::Result<(BlockHeight, BlockBytes)>> {
+    let stream = futures::stream::iter(
+        blocks
+            .into_iter()
+            .map(|(height, block)| Ok((height, block))),
+    )
+    .chain(futures::stream::once(futures::future::pending()));
+    Box::pin(stream)
 }
 
 #[tokio::test]
 async fn run__get_block_range__returns_expected_blocks() {
     let mut rng = StdRng::seed_from_u64(42);
-    // given
-    let (api, sender) = FakeApi::new();
+    // Given
     let mut db = FakeDB::new();
     db.add_block(1.into(), BlockBytes::random(&mut rng));
     db.add_block(2.into(), BlockBytes::random(&mut rng));
     db.add_block(3.into(), BlockBytes::random(&mut rng));
 
-    let (source, _block_sender) = FakeBlockSource::new();
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
 
-    let mut srv = BlockAggregator::new(api, db, source);
-    let mut watcher = StateWatcher::started();
-    let (query, response) = BlockAggregatorQuery::get_block_range(2, 3);
+    // When
+    let result = shared_state.get_block_range(2, 3);
 
-    // when
-    sender.send(query).await.unwrap();
-    let _ = srv.run(&mut watcher).await;
-
-    // then
-    let stream = response.await.unwrap();
+    // Then
+    let stream = result.unwrap();
     let blocks = stream.collect::<Vec<BlockBytes>>().await;
 
     // TODO: Check values
     assert_eq!(blocks.len(), 2);
-
-    // cleanup
-    drop(_block_sender);
 }
 
 #[tokio::test]
 async fn run__new_block_gets_added_to_db() {
     let mut rng = StdRng::seed_from_u64(42);
-    // given
-    let (api, _sender) = FakeApi::new();
-    let db = FakeDB::new();
-    let db_map = db.clone_inner();
-    let (source, source_sender) = FakeBlockSource::new();
-    let mut srv = BlockAggregator::new(api, db, source);
 
+    // Given
+    let db = FakeDB::new();
+    let source = FakeBlockSource::new(vec![]);
+
+    let sync_from = BlockHeight::from(123u32);
     let block = BlockBytes::random(&mut rng);
-    let id = BlockHeight::from(123u32);
+    let importer = importer_stream(vec![(sync_from, block.clone())]);
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
+    let mut srv = Task::new(
+        sync_from,
+        Box::new(FakeApi {}),
+        db,
+        shared_state.clone(),
+        source,
+        importer,
+    );
     let mut watcher = StateWatcher::started();
 
-    // when
-    let event = BlockSourceEvent::NewBlock(id, block.clone());
-    source_sender.send(event).await.unwrap();
+    // When
+    // Import block event
+    let _ = srv.run(&mut watcher).await;
+    // Process event
     let _ = srv.run(&mut watcher).await;
 
-    // then
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    let actual = db_map.lock().unwrap().get(&id).unwrap().clone();
+    // Then
+
+    let actual = shared_state
+        .get_block_range(sync_from, sync_from)
+        .unwrap()
+        .next()
+        .await
+        .unwrap();
     assert_eq!(block, actual);
 }
 
@@ -200,98 +254,99 @@ async fn run__new_block_gets_added_to_db() {
 async fn run__get_current_height__returns_expected_height() {
     let mut rng = StdRng::seed_from_u64(42);
     // given
-    let (api, sender) = FakeApi::new();
     let mut db = FakeDB::new();
     let expected_height = BlockHeight::from(3u32);
     db.add_block(1.into(), BlockBytes::random(&mut rng));
     db.add_block(2.into(), BlockBytes::random(&mut rng));
     db.add_block(expected_height, BlockBytes::random(&mut rng));
 
-    let (source, _block_sender) = FakeBlockSource::new();
-    let mut srv = BlockAggregator::new(api, db, source);
-
-    let mut watcher = StateWatcher::started();
-    let (query, response) = BlockAggregatorQuery::get_current_height();
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
 
     // when
-    sender.send(query).await.unwrap();
-    let _ = srv.run(&mut watcher).await;
+    let result = shared_state.get_current_height();
 
     // then
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    let height = response.await.unwrap().unwrap();
+    let height = result.unwrap().unwrap();
     assert_eq!(expected_height, height);
-
-    // cleanup
-    drop(_block_sender);
 }
 
 #[tokio::test]
 async fn run__new_block_subscription__sends_new_block() {
     let mut rng = StdRng::seed_from_u64(42);
-    // given
-    let (api, sender) = FakeApi::new();
     let db = FakeDB::new();
-    let (source, source_sender) = FakeBlockSource::new();
-    let mut srv = BlockAggregator::new(api, db, source);
+    let source = FakeBlockSource::new(vec![]);
 
-    let expected_block = BlockBytes::random(&mut rng);
-    let expected_height = BlockHeight::from(123u32);
+    let sync_from = BlockHeight::from(123u32);
+    let block = BlockBytes::random(&mut rng);
+    let importer = importer_stream(vec![(sync_from, block.clone())]);
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
+    let mut srv = Task::new(
+        sync_from,
+        Box::new(FakeApi {}),
+        db,
+        shared_state.clone(),
+        source,
+        importer,
+    );
     let mut watcher = StateWatcher::started();
-    let (query, response) = BlockAggregatorQuery::new_block_subscription();
 
-    // when
-    sender.send(query).await.unwrap();
-    let _ = srv.run(&mut watcher).await;
-    let event = BlockSourceEvent::NewBlock(expected_height, expected_block.clone());
-    source_sender.send(event).await.unwrap();
+    // Given
+    let mut subscription = shared_state.new_block_subscription();
+
+    // When
     let _ = srv.run(&mut watcher).await;
 
-    // then
-    let actual_block = await_response_with_timeout(response).await.unwrap();
-    assert_eq!((expected_height, expected_block), actual_block);
-
-    // cleanup
-    drop(source_sender);
+    // Then
+    let actual_block = subscription
+        .next()
+        .now_or_never()
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!((sync_from, block), actual_block);
 }
 
 #[tokio::test]
 async fn run__new_block_subscription__does_not_send_syncing_blocks() {
     let mut rng = StdRng::seed_from_u64(42);
-    // given
-    let (api, sender) = FakeApi::new();
     let db = FakeDB::new();
-    let (source, source_sender) = FakeBlockSource::new();
-    let mut srv = BlockAggregator::new(api, db, source);
 
+    let sync_from = BlockHeight::from(123u32);
     let block = BlockBytes::random(&mut rng);
-    let height = BlockHeight::from(123u32);
+
+    let source = FakeBlockSource::new(vec![(sync_from, block.clone())]);
+
+    let importer = importer_stream(vec![]);
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
+    let mut srv = Task::new(
+        sync_from,
+        Box::new(FakeApi {}),
+        db,
+        shared_state.clone(),
+        source,
+        importer,
+    );
     let mut watcher = StateWatcher::started();
-    let (query, response) = BlockAggregatorQuery::new_block_subscription();
 
-    // when
-    sender.send(query).await.unwrap();
-    let _ = srv.run(&mut watcher).await;
-    let event = BlockSourceEvent::OldBlock(height, block);
-    source_sender.send(event).await.unwrap();
+    // Given
+    let mut subscription = shared_state.new_block_subscription();
+
+    // When
     let _ = srv.run(&mut watcher).await;
 
-    // then
-    let res = await_response_with_timeout(response).await;
-    assert!(res.is_err(), "should have timed out");
-
-    // cleanup
-    drop(source_sender);
-}
-
-async fn await_response_with_timeout<T>(mut response: Receiver<T>) -> Result<T, Elapsed> {
-    tokio::time::timeout(tokio::time::Duration::from_secs(1), async {
-        loop {
-            if let Ok(result) = response.try_recv() {
-                return result;
-            }
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        }
-    })
-    .await
+    // Then
+    let result = subscription.next().now_or_never();
+    assert!(result.is_none());
 }

@@ -93,7 +93,7 @@ pub struct CustomizeConfig {
     max_discovery_peers_connected: Option<u32>,
     subscribe_to_transactions: Option<bool>,
     #[cfg(feature = "rpc")]
-    rpc_config: Option<fuel_core_block_aggregator_api::integration::Config>,
+    rpc_config: Option<fuel_core_block_aggregator_api::service::Config>,
 }
 
 impl CustomizeConfig {

@@ -44,8 +44,8 @@ pub enum StorageMethod {
 }
 
 impl RpcArgs {
-    pub fn into_config(self) -> fuel_core_block_aggregator_api::integration::Config {
-        fuel_core_block_aggregator_api::integration::Config {
+    pub fn into_config(self) -> fuel_core_block_aggregator_api::service::Config {
+        fuel_core_block_aggregator_api::service::Config {
             addr: net::SocketAddr::new(self.rpc_ip, self.rpc_port),
             sync_from: Some(BlockHeight::from(0)),
             storage_method: self.storage_method.map(Into::into).unwrap_or_default(),
@@ -54,17 +54,17 @@ impl RpcArgs {
     }
 }
 
-impl From<StorageMethod> for fuel_core_block_aggregator_api::integration::StorageMethod {
+impl From<StorageMethod> for fuel_core_block_aggregator_api::service::StorageMethod {
     fn from(storage_method: StorageMethod) -> Self {
         match storage_method {
             StorageMethod::Local => {
-                fuel_core_block_aggregator_api::integration::StorageMethod::Local
+                fuel_core_block_aggregator_api::service::StorageMethod::Local
             }
             StorageMethod::S3 {
                 bucket,
                 endpoint_url,
                 requester_pays,
-            } => fuel_core_block_aggregator_api::integration::StorageMethod::S3 {
+            } => fuel_core_block_aggregator_api::service::StorageMethod::S3 {
                 bucket,
                 endpoint_url,
                 requester_pays,
@@ -73,13 +73,11 @@ impl From<StorageMethod> for fuel_core_block_aggregator_api::integration::Storag
                 bucket,
                 endpoint_url,
                 requester_pays,
-            } => {
-                fuel_core_block_aggregator_api::integration::StorageMethod::S3NoPublish {
-                    bucket,
-                    endpoint_url,
-                    requester_pays,
-                }
-            }
+            } => fuel_core_block_aggregator_api::service::StorageMethod::S3NoPublish {
+                bucket,
+                endpoint_url,
+                requester_pays,
+            },
         }
     }
 }

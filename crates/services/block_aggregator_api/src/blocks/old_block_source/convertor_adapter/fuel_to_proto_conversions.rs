@@ -1,7 +1,7 @@
 #[cfg(feature = "fault-proving")]
 use crate::protobuf_types::V2Header as ProtoV2Header;
 use crate::{
-    blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::bytes32_to_vec,
+    blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::bytes32_to_vec,
     protobuf_types::{
         BlobTransaction as ProtoBlobTx,
         ChangeOutput as ProtoChangeOutput,
@@ -22,6 +22,7 @@ use crate::{
         Output as ProtoOutput,
         Policies as ProtoPolicies,
         Receipt as ProtoReceipt,
+        Receipts as ProtoReceipts,
         ScriptTransaction as ProtoScriptTx,
         StorageSlot as ProtoStorageSlot,
         Transaction as ProtoTransaction,
@@ -616,6 +617,12 @@ fn proto_panic_instruction(
     crate::protobuf_types::PanicInstruction {
         reason: reason as i32,
         instruction: *panic_instruction.instruction(),
+    }
+}
+
+pub fn proto_receipts_from_receipts(receipts: &[FuelReceipt]) -> ProtoReceipts {
+    ProtoReceipts {
+        receipts: receipts.iter().map(proto_receipt_from_receipt).collect(),
     }
 }
 

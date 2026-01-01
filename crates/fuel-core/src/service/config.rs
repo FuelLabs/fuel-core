@@ -44,7 +44,7 @@ use fuel_core_p2p::config::{
 };
 
 #[cfg(feature = "rpc")]
-use fuel_core_block_aggregator_api::integration::StorageMethod;
+use fuel_core_block_aggregator_api::service::StorageMethod;
 #[cfg(feature = "test-helpers")]
 use fuel_core_chain_config::{
     ChainConfig,
@@ -87,7 +87,7 @@ pub struct Config {
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
     #[cfg(feature = "rpc")]
-    pub rpc_config: Option<fuel_core_block_aggregator_api::integration::Config>,
+    pub rpc_config: Option<fuel_core_block_aggregator_api::service::Config>,
     pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -130,7 +130,7 @@ impl Config {
     #[cfg(feature = "rpc")]
     pub fn local_node_with_rpc() -> Self {
         let mut config = Self::local_node_with_state_config(StateConfig::local_testnet());
-        let rpc_config = fuel_core_block_aggregator_api::integration::Config {
+        let rpc_config = fuel_core_block_aggregator_api::service::Config {
             addr: free_local_addr(),
             sync_from: Some(BlockHeight::new(0)),
             storage_method: StorageMethod::Local,
@@ -144,7 +144,7 @@ impl Config {
     #[cfg(feature = "rpc")]
     pub fn local_node_with_rpc_and_storage_method(storage_method: StorageMethod) -> Self {
         let mut config = Self::local_node_with_state_config(StateConfig::local_testnet());
-        let rpc_config = fuel_core_block_aggregator_api::integration::Config {
+        let rpc_config = fuel_core_block_aggregator_api::service::Config {
             addr: free_local_addr(),
             sync_from: Some(BlockHeight::new(0)),
             storage_method,

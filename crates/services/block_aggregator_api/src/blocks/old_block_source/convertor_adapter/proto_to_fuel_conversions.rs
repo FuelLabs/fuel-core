@@ -1,5 +1,5 @@
 #[cfg(feature = "fault-proving")]
-use crate::blocks::importer_and_db_source::serializer_adapter::ChainId;
+use crate::blocks::old_block_source::convertor_adapter::ChainId;
 use crate::{
     protobuf_types::{
         Block as ProtoBlock,
@@ -51,6 +51,7 @@ use fuel_core_types::{
         Input,
         Output,
         Receipt as FuelReceipt,
+        Receipt,
         ScriptExecutionResult,
         StorageSlot,
         Transaction as FuelTransaction,
@@ -499,21 +500,19 @@ fn receipt_from_proto(
 
 pub fn fuel_block_from_protobuf(
     proto_block: ProtoBlock,
-    msg_ids: &[fuel_core_types::fuel_tx::MessageId],
-    event_inbox_root: Bytes32,
-) -> crate::result::Result<(FuelBlock, Vec<FuelReceipt>)> {
+) -> crate::result::Result<(FuelBlock, Vec<Vec<FuelReceipt>>)> {
     let versioned_block = proto_block
         .versioned_block
         .ok_or_else(|| anyhow::anyhow!("Missing protobuf versioned_block"))
         .map_err(Error::Serialization)?;
-    let (partial_header, txs, receipts) = match versioned_block {
+    let (partial_header, event_inbox_root, txs, receipts) = match versioned_block {
         ProtoVersionedBlock::V1(v1_inner) => {
             let proto_header = v1_inner
                 .header
-                .clone()
                 .ok_or_else(|| anyhow::anyhow!("Missing protobuf header"))
                 .map_err(Error::Serialization)?;
-            let partial_header = partial_header_from_proto_header(&proto_header)?;
+            let (partial_header, event_inbox_root) =
+                partial_header_from_proto_header(&proto_header)?;
             let txs = v1_inner
                 .transactions
                 .iter()
@@ -522,15 +521,32 @@ pub fn fuel_block_from_protobuf(
             let receipts = v1_inner
                 .receipts
                 .iter()
-                .map(receipt_from_proto)
-                .collect::<crate::result::Result<_>>()?;
-            (partial_header, txs, receipts)
+                .map(|rs| {
+                    rs.receipts
+                        .iter()
+                        .map(receipt_from_proto)
+                        .collect::<crate::result::Result<Vec<_>>>()
+                })
+                .collect::<crate::result::Result<Vec<_>>>()?;
+            (partial_header, event_inbox_root, txs, receipts)
         }
     };
+
+    let mut msg_ids = Vec::new();
+    for receipts in &receipts {
+        let reverted = receipts
+            .iter()
+            .any(|r| matches!(r, Receipt::Revert { .. } | Receipt::Panic { .. }));
+
+        if !reverted {
+            msg_ids.extend(receipts.iter().filter_map(|r| r.message_id()));
+        }
+    }
+
     let block = FuelBlock::new(
         partial_header,
         txs,
-        msg_ids,
+        &msg_ids,
         event_inbox_root,
         #[cfg(feature = "fault-proving")]
         &ChainId::default(),
@@ -542,12 +558,13 @@ pub fn fuel_block_from_protobuf(
 
 pub fn partial_header_from_proto_header(
     proto_header: &ProtoHeader,
-) -> crate::result::Result<PartialBlockHeader> {
+) -> crate::result::Result<(PartialBlockHeader, Bytes32)> {
     let partial_header = PartialBlockHeader {
         consensus: proto_header_to_empty_consensus_header(proto_header)?,
         application: proto_header_to_empty_application_header(proto_header)?,
     };
-    Ok(partial_header)
+    let event_inbox_root = proto_header_to_event_inbox_root(proto_header)?;
+    Ok((partial_header, event_inbox_root))
 }
 
 pub fn tx_from_proto_tx(
@@ -1099,7 +1116,7 @@ fn policies_from_proto_policies(proto_policies: &ProtoPolicies) -> FuelPolicies 
 pub fn proto_header_to_empty_application_header(
     proto_header: &ProtoHeader,
 ) -> crate::result::Result<ApplicationHeader<Empty>> {
-    match proto_header.versioned_header.clone() {
+    match &proto_header.versioned_header {
         Some(ProtoVersionedHeader::V1(header)) => {
             let app_header = ApplicationHeader {
                 da_height: DaBlockHeight::from(header.da_height),
@@ -1134,7 +1151,7 @@ pub fn proto_header_to_empty_application_header(
 pub fn proto_header_to_empty_consensus_header(
     proto_header: &ProtoHeader,
 ) -> crate::result::Result<ConsensusHeader<Empty>> {
-    match proto_header.versioned_header.clone() {
+    match &proto_header.versioned_header {
         Some(ProtoVersionedHeader::V1(header)) => {
             let consensus_header = ConsensusHeader {
                 prev_root: *Bytes32::from_bytes_ref_checked(&header.prev_root).ok_or(
@@ -1162,6 +1179,31 @@ pub fn proto_header_to_empty_consensus_header(
                 Err(anyhow!("V2 headers require the 'fault-proving' feature"))
                     .map_err(Error::Serialization)
             }
+        }
+        None => Err(anyhow!("Missing protobuf versioned_header"))
+            .map_err(Error::Serialization),
+    }
+}
+
+pub fn proto_header_to_event_inbox_root(
+    proto_header: &ProtoHeader,
+) -> crate::result::Result<Bytes32> {
+    match &proto_header.versioned_header {
+        Some(ProtoVersionedHeader::V1(header)) => {
+            let bytes = *Bytes32::from_bytes_ref_checked(&header.event_inbox_root)
+                .ok_or(Error::Serialization(anyhow!(
+                    "Could create `Bytes32` from bytes"
+                )))?;
+
+            Ok(bytes)
+        }
+        Some(ProtoVersionedHeader::V2(header)) => {
+            let bytes = *Bytes32::from_bytes_ref_checked(&header.event_inbox_root)
+                .ok_or(Error::Serialization(anyhow!(
+                    "Could create `Bytes32` from bytes"
+                )))?;
+
+            Ok(bytes)
         }
         None => Err(anyhow!("Missing protobuf versioned_header"))
             .map_err(Error::Serialization),

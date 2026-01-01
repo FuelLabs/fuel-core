@@ -1,5 +1,12 @@
 use crate::{
-    blocks::importer_and_db_source::BlockSerializer,
+    blocks::old_block_source::{
+        BlockConverter,
+        convertor_adapter::fuel_to_proto_conversions::{
+            proto_header_from_header,
+            proto_receipts_from_receipts,
+            proto_tx_from_tx,
+        },
+    },
     protobuf_types::{
         Block as ProtoBlock,
         V1Block as ProtoV1Block,
@@ -8,25 +15,23 @@ use crate::{
 };
 #[cfg(feature = "fault-proving")]
 use fuel_core_types::fuel_types::ChainId;
-
 use fuel_core_types::{
-    blockchain::{
-        block::Block as FuelBlock,
-    },
+    blockchain::block::Block as FuelBlock,
+    fuel_tx::Receipt as FuelReceipt,
 };
-use fuel_core_types::fuel_tx::Receipt as FuelReceipt;
-use crate::blocks::importer_and_db_source::serializer_adapter::fuel_to_proto_conversions::{proto_header_from_header, proto_receipt_from_receipt, proto_tx_from_tx};
+use prost::Message;
+use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct SerializerAdapter;
+pub struct ProtobufBlockConverter;
 
-impl BlockSerializer for SerializerAdapter {
-    type Block = ProtoBlock;
+impl BlockConverter for ProtobufBlockConverter {
+    type Block = Arc<[u8]>;
 
-    fn serialize_block(
+    fn convert_block(
         &self,
         block: &FuelBlock,
-        receipts: &[FuelReceipt],
+        receipts: &[Vec<FuelReceipt>],
     ) -> crate::result::Result<Self::Block> {
         let proto_header = proto_header_from_header(block.header());
         match &block {
@@ -38,11 +43,19 @@ impl BlockSerializer for SerializerAdapter {
                         .iter()
                         .map(proto_tx_from_tx)
                         .collect(),
-                    receipts: receipts.iter().map(proto_receipt_from_receipt).collect(),
+                    receipts: receipts
+                        .iter()
+                        .map(|rs| proto_receipts_from_receipts(rs))
+                        .collect(),
                 };
-                Ok(ProtoBlock {
+                let proto_block = ProtoBlock {
                     versioned_block: Some(ProtoVersionedBlock::V1(proto_v1_block)),
-                })
+                };
+                let mut bytes = Vec::new();
+                proto_block
+                    .encode(&mut bytes)
+                    .map_err(crate::result::Error::serialization_error)?;
+                Ok(bytes.into())
             }
         }
     }
@@ -58,9 +71,9 @@ pub mod proto_to_fuel_conversions;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_types::test_helpers::{arb_block, arb_receipts};
+    use crate::blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf;
+    use fuel_core_types::test_helpers::arb_block;
     use proptest::prelude::*;
-    use crate::blocks::importer_and_db_source::serializer_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf;
 
     proptest! {
             #![proptest_config(ProptestConfig {
@@ -68,17 +81,18 @@ mod tests {
     })]
           #[test]
           fn serialize_block__roundtrip(
-            (block, msg_ids, event_inbox_root) in arb_block(),
-            receipts in arb_receipts())
+            (block, receipts) in arb_block())
           {
               // given
-              let serializer = SerializerAdapter;
+              let convertor = ProtobufBlockConverter;
 
               // when
-              let proto_block = serializer.serialize_block(&block, &receipts).unwrap();
+              let receipts = vec![receipts];
+              let bytes = convertor.convert_block(&block, &receipts).unwrap();
+              let proto_block = ProtoBlock::decode(&*bytes).unwrap();
 
               // then
-              let (deserialized_block, deserialized_receipts) = fuel_block_from_protobuf(proto_block, &msg_ids, event_inbox_root).unwrap();
+              let (deserialized_block, deserialized_receipts) = fuel_block_from_protobuf(proto_block).unwrap();
               assert_eq!(block, deserialized_block);
               assert_eq!(receipts, deserialized_receipts);
           }

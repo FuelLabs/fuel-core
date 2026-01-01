@@ -100,7 +100,7 @@ flate2 = "1.1.5"
 fuel-core = { version = "0.47.1", path = "./crates/fuel-core", default-features = false }
 fuel-core-bin = { version = "0.47.1", path = "./bin/fuel-core" }
 # Workspace members
-fuel-core-block-aggregator-api = { version = "0.47.1", path = "crates/services/block_aggregator_api" }
+fuel-core-block-aggregator-api = { version = "0.47.1", path = "./crates/services/block_aggregator_api" }
 fuel-core-chain-config = { version = "0.47.1", path = "./crates/chain-config", default-features = false }
 fuel-core-client = { version = "0.47.1", path = "./crates/client" }
 fuel-core-compression = { version = "0.47.1", path = "./crates/compression" }
@@ -116,7 +116,7 @@ fuel-core-p2p = { version = "0.47.1", path = "./crates/services/p2p" }
 fuel-core-parallel-executor = { version = "0.47.1", path = "./crates/services/parallel-executor" }
 fuel-core-poa = { version = "0.47.1", path = "./crates/services/consensus_module/poa" }
 fuel-core-producer = { version = "0.47.1", path = "./crates/services/producer" }
-fuel-core-protobuf = { version = "0.4.0" }
+fuel-core-protobuf = { version = "0.5.0" }
 fuel-core-provider = { version = "0.47.1", path = "./crates/provider" }
 fuel-core-relayer = { version = "0.47.1", path = "./crates/services/relayer" }
 fuel-core-services = { version = "0.47.1", path = "./crates/services" }

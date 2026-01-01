@@ -1,16 +1,11 @@
-use crate::protobuf_types::Block as ProtoBlock;
 use fuel_core_storage::{
     Mappable,
     blueprint::plain::Plain,
-    codec::{
-        Decode,
-        Encode,
-    },
     kv_store::StorageColumn,
     structured_storage::TableWithBlueprint,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use std::borrow::Cow;
+use std::sync::Arc;
 
 #[repr(u32)]
 #[derive(
@@ -56,11 +51,11 @@ impl Mappable for Blocks {
     type Key = Self::OwnedKey;
     type OwnedKey = BlockHeight;
     type Value = Self::OwnedValue;
-    type OwnedValue = ProtoBlock;
+    type OwnedValue = Arc<[u8]>;
 }
 
 impl TableWithBlueprint for Blocks {
-    type Blueprint = Plain<Primitive<4>, ProtoBufCodec>;
+    type Blueprint = Plain<Primitive<4>, Raw>;
     type Column = Column;
 
     fn column() -> Self::Column {
@@ -111,34 +106,5 @@ impl TableWithBlueprint for LatestBlock {
 use fuel_core_storage::codec::{
     postcard::Postcard,
     primitive::Primitive,
+    raw::Raw,
 };
-use prost::Message;
-
-pub struct ProtoBufCodec;
-
-impl<T> Encode<T> for ProtoBufCodec
-where
-    T: Sized + Message,
-{
-    type Encoder<'a>
-        = Cow<'a, [u8]>
-    where
-        T: 'a;
-
-    fn encode(value: &T) -> Self::Encoder<'_> {
-        let mut buffer = Vec::new();
-        value.encode(&mut buffer).expect(
-            "It should be impossible to fail unless serialization is not implemented, which is not true for our types.",
-        );
-        buffer.into()
-    }
-}
-
-impl<T> Decode<T> for ProtoBufCodec
-where
-    T: Message + Default,
-{
-    fn decode(bytes: &[u8]) -> anyhow::Result<T> {
-        Ok(T::decode(bytes)?)
-    }
-}
