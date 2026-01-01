@@ -55,7 +55,7 @@ async fn get_block_height__can_get_value_from_rpc() {
         .unwrap();
 
     let fuel_client = FuelClient::new_with_rpc(
-        srv.bound_address.to_string(),
+        iter::once(srv.bound_address.to_string()),
         srv.rpc_address.unwrap().to_string(),
     )
     .await
@@ -141,7 +141,7 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
         .await
         .unwrap();
     let fuel_client = FuelClient::new_with_rpc(
-        srv.bound_address.to_string(),
+        iter::once(srv.bound_address.to_string()),
         srv.rpc_address.unwrap().to_string(),
     )
     .await
@@ -207,7 +207,7 @@ async fn get_block_height__no_publish__can_get_value_from_rpc() {
         .unwrap();
 
     let fuel_client = FuelClient::new_with_rpc(
-        srv.bound_address.to_string(),
+        iter::once(srv.bound_address.to_string()),
         srv.rpc_address.unwrap().to_string(),
     )
     .await

@@ -450,9 +450,10 @@ impl Modifiable for Database<BlockAggregatorDatabase> {
         // Does not need to be monotonically increasing because
         // storage values are modified in parallel from different heights
         commit_changes_with_height_update(self, changes, |iter| {
-            iter.iter_all_keys::<fuel_core_block_aggregator_api::db::table::Blocks>(Some(
+            iter.iter_all::<fuel_core_block_aggregator_api::db::table::LatestBlock>(Some(
                 IterDirection::Reverse,
             ))
+            .map(|result| result.map(|(_, mode)| mode.height()))
             .try_collect()
         })
     }

@@ -91,7 +91,7 @@ where
                     let take = match result {
                         Ok((block_height, _)) => {
                             if let Some(importer_height) = importer_height {
-                                *block_height < importer_height
+                                *block_height <= importer_height
                             } else {
                                 true
                             }

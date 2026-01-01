@@ -62,12 +62,12 @@ pub trait BlocksAggregatorApi: Send + Sync + 'static {
 }
 
 pub struct Server<B> {
-    api: B,
+    block_aggregator: B,
 }
 
 impl<B> Server<B> {
-    pub fn new(api: B) -> Self {
-        Self { api }
+    pub fn new(block_aggregator: B) -> Self {
+        Self { block_aggregator }
     }
 }
 
@@ -80,7 +80,7 @@ where
         &self,
         _: tonic::Request<ProtoBlockHeightRequest>,
     ) -> Result<tonic::Response<ProtoBlockHeightResponse>, tonic::Status> {
-        let res = self.api.get_current_height();
+        let res = self.block_aggregator.get_current_height();
         match res {
             Ok(height) => Ok(tonic::Response::new(ProtoBlockHeightResponse {
                 height: height.map(|inner| *inner),
@@ -98,7 +98,7 @@ where
         request: tonic::Request<ProtoBlockRangeRequest>,
     ) -> Result<tonic::Response<Self::GetBlockRangeStream>, tonic::Status> {
         let req = request.into_inner();
-        let res = self.api.get_block_range(req.start, req.end);
+        let res = self.block_aggregator.get_block_range(req.start, req.end);
         match res {
             Ok(block_range_response) => match block_range_response {
                 BlockRangeResponse::Literal(inner) => {
@@ -167,7 +167,7 @@ where
         &self,
         _: tonic::Request<ProtoNewBlockSubscriptionRequest>,
     ) -> Result<tonic::Response<Self::NewBlockSubscriptionStream>, tonic::Status> {
-        let stream = self.api.new_block_subscription().map(|item| {
+        let stream = self.block_aggregator.new_block_subscription().map(|item| {
             match item {
                 Ok((block_height, block)) => {
                     let response = ProtoBlockResponse {
@@ -280,23 +280,23 @@ pub fn incoming_and_server(
 pub fn new_service_with_custom_incoming<B>(
     mut tonic_server: tonic::transport::Server,
     incoming: TcpIncoming,
-    api: B,
+    block_aggregator: B,
 ) -> anyhow::Result<APIService>
 where
     B: BlocksAggregatorApi,
 {
-    let server = Server::new(api);
+    let server = Server::new(block_aggregator);
 
     let router = tonic_server.add_service(ProtoBlockAggregatorServer::new(server));
 
     Ok(ServiceRunner::new(UninitializedTask { incoming, router }))
 }
 
-pub fn new_service<B>(addr: SocketAddr, api: B) -> anyhow::Result<APIService>
+pub fn new_service<B>(addr: SocketAddr, block_aggregator: B) -> anyhow::Result<APIService>
 where
     B: BlocksAggregatorApi,
 {
     let (incoming, tonic_server) = incoming_and_server(addr)?;
 
-    new_service_with_custom_incoming(tonic_server, incoming, api)
+    new_service_with_custom_incoming(tonic_server, incoming, block_aggregator)
 }
