@@ -7,12 +7,24 @@ use fuel_core::{
         FuelService,
     },
 };
+use fuel_core_block_aggregator_api::{
+    blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
+    protobuf_types::{
+        Block as ProtoBlock,
+        BlockHeightRequest as ProtoBlockHeightRequest,
+        BlockRangeRequest as ProtoBlockRangeRequest,
+        NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+        block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
+        block_response::Payload as ProtoPayload,
+    },
+};
 use fuel_core_client::client::FuelClient;
 use fuel_core_types::{
     fuel_tx::*,
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
+use prost::Message;
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread")]
