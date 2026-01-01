@@ -37,7 +37,10 @@ use std::{
 };
 use tonic::{
     Status,
-    transport::server::Router,
+    transport::server::{
+        Router,
+        TcpIncoming,
+    },
 };
 
 #[cfg(test)]
@@ -187,21 +190,18 @@ where
     }
 }
 
-pub struct UninitializedTask<B> {
-    addr: SocketAddr,
-    api: B,
+pub struct UninitializedTask {
+    incoming: TcpIncoming,
+    router: Router,
 }
 
 pub struct Task {
-    addr: SocketAddr,
+    incoming: Option<TcpIncoming>,
     router: Option<Router>,
 }
 
 #[async_trait::async_trait]
-impl<B> RunnableService for UninitializedTask<B>
-where
-    B: BlocksAggregatorApi,
-{
+impl RunnableService for UninitializedTask {
     const NAME: &'static str = "ProtobufServerTask";
     type SharedData = ();
     type Task = Task;
@@ -214,12 +214,9 @@ where
         _state_watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
-        let server = Server::new(self.api);
-        let router = tonic::transport::Server::builder()
-            .add_service(ProtoBlockAggregatorServer::new(server));
         let task = Task {
-            addr: self.addr,
-            router: Some(router),
+            incoming: Some(self.incoming),
+            router: Some(self.router),
         };
         Ok(task)
     }
@@ -228,11 +225,15 @@ where
 impl RunnableTask for Task {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         let mut watcher_local = watcher.clone();
+        let incoming = self
+            .incoming
+            .take()
+            .expect("Incoming is always initialized; qed");
         let future = self
             .router
             .take()
             .expect("Router is always initialized; qed")
-            .serve_with_shutdown(self.addr, async move {
+            .serve_with_incoming_shutdown(incoming, async move {
                 let _ = watcher_local.while_started().await;
             });
 
@@ -254,11 +255,48 @@ impl RunnableTask for Task {
     }
 }
 
-pub type APIService<B> = ServiceRunner<UninitializedTask<B>>;
+pub type APIService = ServiceRunner<UninitializedTask>;
 
-pub fn new_service<B>(addr: SocketAddr, api: B) -> APIService<B>
+pub fn incoming_and_server(
+    addr: SocketAddr,
+) -> anyhow::Result<(TcpIncoming, tonic::transport::Server)> {
+    let tcp_nodelay = true;
+    let tcp_keepalive = None;
+    let accept_http1 = false;
+
+    let tonic_server = tonic::transport::Server::default()
+        .tcp_nodelay(tcp_nodelay)
+        .tcp_keepalive(tcp_keepalive)
+        .accept_http1(accept_http1);
+
+    let incoming = TcpIncoming::bind(addr)
+        .map_err(|e| anyhow::anyhow!("Failed to bind to address {}: {}", addr, e))?
+        .with_nodelay(Some(tcp_nodelay))
+        .with_keepalive(tcp_keepalive);
+
+    Ok((incoming, tonic_server))
+}
+
+pub fn new_service_with_custom_incoming<B>(
+    mut tonic_server: tonic::transport::Server,
+    incoming: TcpIncoming,
+    api: B,
+) -> anyhow::Result<APIService>
 where
     B: BlocksAggregatorApi,
 {
-    ServiceRunner::new(UninitializedTask { addr, api })
+    let server = Server::new(api);
+
+    let router = tonic_server.add_service(ProtoBlockAggregatorServer::new(server));
+
+    Ok(ServiceRunner::new(UninitializedTask { incoming, router }))
+}
+
+pub fn new_service<B>(addr: SocketAddr, api: B) -> anyhow::Result<APIService>
+where
+    B: BlocksAggregatorApi,
+{
+    let (incoming, tonic_server) = incoming_and_server(addr)?;
+
+    new_service_with_custom_incoming(tonic_server, incoming, api)
 }

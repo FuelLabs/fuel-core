@@ -286,28 +286,22 @@ impl FromStr for FuelClient {
     type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let mut raw_url = str.to_string();
-        if !raw_url.starts_with("http") {
-            raw_url = format!("http://{raw_url}");
-        }
-
-        let mut url = reqwest::Url::parse(&raw_url)
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
-        url.set_path("/v1/graphql");
-
-        Ok(Self {
-            transport: FailoverTransport::new(vec![url])?,
-            require_height: ConsistencyPolicy::Auto {
-                height: Arc::new(Mutex::new(None)),
-            },
-            chain_state_info: Default::default(),
-            #[cfg(feature = "rpc")]
-            rpc_client: None,
-            #[cfg(feature = "rpc")]
-            aws_client: None,
-        })
+        Self::with_urls(vec![str_to_url(str)?])
     }
+}
+
+fn str_to_url(str: &str) -> anyhow::Result<Url> {
+    let mut raw_url = str.to_string();
+    if !raw_url.starts_with("http") {
+        raw_url = format!("http://{raw_url}");
+    }
+
+    let mut url = reqwest::Url::parse(&raw_url)
+        .map_err(anyhow::Error::msg)
+        .with_context(|| format!("Invalid fuel-core URL: {str}"))?;
+    url.set_path("/v1/graphql");
+
+    Ok(url)
 }
 
 impl<S> From<S> for FuelClient
@@ -340,10 +334,13 @@ impl FuelClient {
 
     #[cfg(feature = "rpc")]
     pub async fn new_with_rpc<G: AsRef<str>, R: AsRef<str>>(
-        graph_ql_url: G,
+        graph_ql_urls: impl Iterator<Item = G>,
         rpc_url: R,
     ) -> anyhow::Result<Self> {
-        let mut client = Self::new(graph_ql_url)?;
+        let urls = graph_ql_urls
+            .map(|str| str_to_url(str.as_ref()))
+            .try_collect()?;
+        let mut client = Self::with_urls(urls)?;
         let mut raw_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url).to_string();
         if !raw_rpc_url.starts_with("http") {
             raw_rpc_url = format!("http://{raw_rpc_url}");
@@ -1686,6 +1683,7 @@ impl FuelClient {
             .clone()
             .ok_or(io::Error::other("RPC client not initialized"))
     }
+
     pub async fn get_block_range(
         &self,
         start: BlockHeight,
@@ -1736,13 +1734,11 @@ impl FuelClient {
             Payload::Bytes(bytes) => {
                 let proto_block =
                     ProtoBlock::decode(bytes.as_slice()).map_err(io::Error::other)?;
-                fuel_block_from_protobuf(proto_block, &[], Bytes32::default()).map_err(
-                    |e| {
-                        io::Error::other(format!(
-                            "Failed to convert RPC block to internal block: {e:?}"
-                        ))
-                    },
-                )
+                fuel_block_from_protobuf(proto_block).map_err(|e| {
+                    io::Error::other(format!(
+                        "Failed to convert RPC block to internal block: {e:?}"
+                    ))
+                })
             }
             Payload::Remote(remote) => {
                 let RemoteBlockResponse { location } = remote;
@@ -1767,16 +1763,12 @@ impl FuelClient {
                             ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
                                 io::Error::other(format!("Failed to decode block: {e}"))
                             })?;
-                        let (block, receipts) = fuel_block_from_protobuf(
-                            block,
-                            &[],
-                            Bytes32::default(),
-                        )
-                        .map_err(|e| {
-                            io::Error::other(format!(
-                                "Failed to convert RPC block to internal block: {e:?}"
-                            ))
-                        })?;
+                        let (block, receipts) =
+                            fuel_block_from_protobuf(block).map_err(|e| {
+                                io::Error::other(format!(
+                                    "Failed to convert RPC block to internal block: {e:?}"
+                                ))
+                            })?;
                         Ok((block, receipts))
                     }
                     _ => Err(io::Error::other("Remote blocks are not supported yet")),

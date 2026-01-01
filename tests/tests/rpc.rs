@@ -13,6 +13,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
+use std::iter;
 use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -24,7 +25,7 @@ async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
         .unwrap();
 
     let fuel_client = FuelClient::new_with_rpc(
-        srv.bound_address.to_string(),
+        iter::once(srv.bound_address.to_string()),
         srv.rpc_address.unwrap().to_string(),
     )
     .await
@@ -75,7 +76,7 @@ async fn get_aggregated_height__can_get_value_from_rpc() {
         .unwrap();
 
     let fuel_client = FuelClient::new_with_rpc(
-        srv.bound_address.to_string(),
+        iter::once(srv.bound_address.to_string()),
         srv.rpc_address.unwrap().to_string(),
     )
     .await
@@ -103,7 +104,7 @@ async fn new_block_subscription__can_get_expect_block() {
         .unwrap();
 
     let fuel_client = FuelClient::new_with_rpc(
-        srv.bound_address.to_string(),
+        iter::once(srv.bound_address.to_string()),
         srv.rpc_address.unwrap().to_string(),
     )
     .await

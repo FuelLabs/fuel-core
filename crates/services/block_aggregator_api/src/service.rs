@@ -1,7 +1,10 @@
 use crate::{
     api::{
         protobuf_adapter,
-        protobuf_adapter::BlocksAggregatorApi,
+        protobuf_adapter::{
+            BlocksAggregatorApi,
+            incoming_and_server,
+        },
     },
     block_range_response::BlockRangeResponse,
     blocks::{
@@ -100,17 +103,19 @@ where
 {
     pub(crate) storage: Arc<S>,
     pub(crate) blocks_broadcast: broadcast::Sender<(BlockHeight, S::Block)>,
+    pub bound_address: SocketAddr,
 }
 
 impl<S> SharedState<S>
 where
     S: BlocksProvider,
 {
-    pub fn new(storage: S, channel_size: usize) -> Self {
+    pub fn new(storage: S, channel_size: usize, bound_address: SocketAddr) -> Self {
         let (blocks_broadcast, _) = broadcast::channel(channel_size);
         SharedState {
             storage: Arc::new(storage),
             blocks_broadcast,
+            bound_address,
         }
     }
 }
@@ -123,6 +128,7 @@ where
         SharedState {
             storage: Arc::clone(&self.storage),
             blocks_broadcast: self.blocks_broadcast.clone(),
+            bound_address: self.bound_address,
         }
     }
 }
@@ -354,9 +360,17 @@ where
         })
         .into_boxed();
 
-    let shared_state = SharedState::new(db_adapter, config.api_buffer_size);
+    let (incoming, tonic_server) = incoming_and_server(config.addr)?;
 
-    let api = protobuf_adapter::new_service(config.addr, shared_state.clone());
+    let local_addr = incoming.local_addr()?;
+
+    let shared_state = SharedState::new(db_adapter, config.api_buffer_size, local_addr);
+
+    let api = protobuf_adapter::new_service_with_custom_incoming(
+        tonic_server,
+        incoming,
+        shared_state.clone(),
+    )?;
 
     let block_source = OldBlocksSource::new(convertor, onchain_db, receipts);
 
