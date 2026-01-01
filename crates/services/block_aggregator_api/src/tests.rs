@@ -31,6 +31,11 @@ use rand::{
 };
 use std::{
     collections::HashMap,
+    net::{
+        IpAddr,
+        Ipv4Addr,
+        SocketAddr,
+    },
     sync::{
         Arc,
         Mutex,
@@ -185,7 +190,11 @@ async fn run__get_block_range__returns_expected_blocks() {
     db.add_block(2.into(), BlockBytes::random(&mut rng));
     db.add_block(3.into(), BlockBytes::random(&mut rng));
 
-    let shared_state = SharedState::new(db.clone(), 1_000);
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
 
     // When
     let result = shared_state.get_block_range(2, 3);
@@ -209,7 +218,11 @@ async fn run__new_block_gets_added_to_db() {
     let sync_from = BlockHeight::from(123u32);
     let block = BlockBytes::random(&mut rng);
     let importer = importer_stream(vec![(sync_from, block.clone())]);
-    let shared_state = SharedState::new(db.clone(), 1_000);
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
     let mut srv = Task::new(
         sync_from,
         Box::new(FakeApi {}),
@@ -247,7 +260,11 @@ async fn run__get_current_height__returns_expected_height() {
     db.add_block(2.into(), BlockBytes::random(&mut rng));
     db.add_block(expected_height, BlockBytes::random(&mut rng));
 
-    let shared_state = SharedState::new(db.clone(), 1_000);
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
 
     // when
     let result = shared_state.get_current_height();
@@ -266,7 +283,11 @@ async fn run__new_block_subscription__sends_new_block() {
     let sync_from = BlockHeight::from(123u32);
     let block = BlockBytes::random(&mut rng);
     let importer = importer_stream(vec![(sync_from, block.clone())]);
-    let shared_state = SharedState::new(db.clone(), 1_000);
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
     let mut srv = Task::new(
         sync_from,
         Box::new(FakeApi {}),
@@ -304,7 +325,11 @@ async fn run__new_block_subscription__does_not_send_syncing_blocks() {
     let source = FakeBlockSource::new(vec![(sync_from, block.clone())]);
 
     let importer = importer_stream(vec![]);
-    let shared_state = SharedState::new(db.clone(), 1_000);
+    let shared_state = SharedState::new(
+        db.clone(),
+        1_000,
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+    );
     let mut srv = Task::new(
         sync_from,
         Box::new(FakeApi {}),

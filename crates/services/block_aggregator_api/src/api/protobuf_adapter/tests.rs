@@ -52,7 +52,7 @@ async fn await_query__get_current_height__client_receives_expected_value() {
         .times(1)
         .returning(|| Ok(Some(BlockHeight::new(42))));
 
-    let service = new_service(socket, api);
+    let service = new_service(socket, api).unwrap();
     service.start_and_await().await.unwrap();
 
     // call get current height endpoint with client
@@ -100,7 +100,7 @@ async fn await_query__get_block_range__client_receives_expected_value__literal()
             Ok(response)
         });
 
-    let service = new_service(socket, api);
+    let service = new_service(socket, api).unwrap();
     service.start_and_await().await.unwrap();
 
     // call get current height endpoint with client
@@ -163,7 +163,7 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
             Ok(response)
         });
 
-    let service = new_service(socket, api);
+    let service = new_service(socket, api).unwrap();
     service.start_and_await().await.unwrap();
 
     // call get current height endpoint with client
@@ -238,7 +238,7 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
             stream.boxed()
         });
 
-    let service = new_service(socket, api);
+    let service = new_service(socket, api).unwrap();
     service.start_and_await().await.unwrap();
 
     // call get current height endpoint with client

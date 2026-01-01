@@ -651,7 +651,8 @@ prop_compose! {
         msg_ids in arb_msg_ids(),
         event_root in any::<[u8; 32]>(),
         chain_id in any::<u64>(),
-    ) -> (Block, Vec<MessageId>, Bytes32) {
+        receipts in arb_receipts()
+    ) -> (Block, Vec<Receipt>) {
         let transactions_count = txs.len().try_into().expect("we shouldn't have more than u16::MAX transactions");
         let message_receipt_count = msg_ids.len().try_into().expect("we shouldn't have more than u32::MAX messages");
         let transactions_root = generate_txns_root(&txs);
@@ -663,6 +664,16 @@ prop_compose! {
             })
             .root()
             .into();
+
+        let mut msg_ids = Vec::new();
+        let reverted = receipts
+            .iter()
+            .any(|r| matches!(r, Receipt::Revert { .. } | Receipt::Panic { .. }));
+
+        if !reverted {
+            msg_ids.extend(receipts.iter().filter_map(|r| r.message_id()));
+        }
+
         let event_root: Bytes32 = event_root.into();
         let header = {
             let mut default = BlockHeaderV1::default();
@@ -692,7 +703,7 @@ prop_compose! {
             let _ = chain_id;
             Block::new(partial_block_header, txs, &msg_ids, event_root).unwrap()
         };
-        (fuel_block, msg_ids, event_root)
+        (fuel_block, receipts)
     }
 }
 

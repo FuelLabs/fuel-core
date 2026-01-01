@@ -518,6 +518,8 @@ pub fn init_sub_services(
         tx_status_manager: tx_status_manager_adapter,
         compression: compression_service.as_ref().map(|c| c.shared.clone()),
         gas_price_service: gas_price_service_v1.shared.clone(),
+        #[cfg(feature = "rpc")]
+        block_aggregator_rpc: block_aggregator_rpc.as_ref().map(|s| s.shared.clone()),
     };
 
     #[allow(unused_mut)]
