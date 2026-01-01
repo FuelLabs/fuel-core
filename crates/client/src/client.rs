@@ -167,7 +167,6 @@ use types::{
     },
 };
 
-use aws_sdk_s3::types::RequestPayer;
 #[cfg(feature = "subscriptions")]
 use std::pin::Pin;
 
@@ -1792,6 +1791,8 @@ impl FuelClient {
         key: &str,
         requester_pays: bool,
     ) -> io::Result<prost::bytes::Bytes> {
+        use aws_sdk_s3::types::RequestPayer;
+
         let client = if let Some(inner) = url {
             Self::new_aws_client(Some(inner)).await
         } else {
