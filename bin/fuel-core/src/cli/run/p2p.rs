@@ -25,7 +25,10 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
-    num::NonZeroU32,
+    num::{
+        NonZeroU32,
+        NonZeroUsize,
+    },
     path::PathBuf,
     str::FromStr,
 };
@@ -209,6 +212,14 @@ pub struct P2PArgs {
     /// Subscribe to pre-confirmation gossip topic
     #[clap(long = "subscribe-to-pre-confirmations", env)]
     subscribe_to_pre_confirmations: bool,
+
+    /// Subscribe to transaction gossip topic
+    #[clap(long = "subscribe-to-transactions", env)]
+    subscribe_to_transactions: bool,
+
+    /// Size of the cache for the P2P req/res protocol.
+    #[clap(long = "p2p-cache-size", default_value = "1000", env)]
+    pub cache_size: Option<NonZeroUsize>,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -350,6 +361,8 @@ impl P2PArgs {
             tx_pool_threads: self.tx_pool_threads,
             state: NotInitialized,
             subscribe_to_pre_confirmations: self.subscribe_to_pre_confirmations,
+            subscribe_to_transactions: self.subscribe_to_transactions,
+            cache_size: self.cache_size,
         };
         Ok(Some(config))
     }

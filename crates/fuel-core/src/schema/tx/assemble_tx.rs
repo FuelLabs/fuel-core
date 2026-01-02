@@ -1,4 +1,5 @@
 use crate::{
+    coins_query::CoinsQueryError,
     fuel_core_graphql_api::{
         api_service::BlockProducer,
         database::ReadView,
@@ -580,10 +581,10 @@ where
     }
 
     fn is_runnable_script(&self) -> bool {
-        if let Some(script) = self.tx.as_script() {
-            if !script.script().is_empty() {
-                return true
-            }
+        if let Some(script) = self.tx.as_script()
+            && !script.script().is_empty()
+        {
+            return true
         }
         false
     }
@@ -840,13 +841,11 @@ where
                             contract_id,
                             ..
                         } = receipt
+                            && reason.reason() == &PanicReason::ContractNotInInputs
                         {
-                            if reason.reason() == &PanicReason::ContractNotInInputs {
-                                let contract_id = contract_id.ok_or_else(|| {
-                                    anyhow::anyhow!("missing contract id")
-                                })?;
-                                contracts_not_in_inputs.push(contract_id);
-                            }
+                            let contract_id = contract_id
+                                .ok_or_else(|| anyhow::anyhow!("missing contract id"))?;
+                            contracts_not_in_inputs.push(contract_id);
                         }
                     }
                 }
@@ -954,6 +953,15 @@ where
             }
 
             let remaining_input_slots = self.remaining_input_slots()?;
+            if remaining_input_slots == 0 {
+                return Err(CoinsQueryError::MaxCoinsReached {
+                    owner: fee_payer_account.owner(),
+                    asset_id: base_asset_id,
+                    collected_amount: total_base_asset.into(),
+                    max: self.arguments.consensus_parameters.tx_params().max_inputs(),
+                }
+                .into());
+            }
 
             let how_much_to_add = need_to_cover.saturating_sub(total_base_asset);
             let coins = self

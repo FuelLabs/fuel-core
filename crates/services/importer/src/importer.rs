@@ -199,7 +199,7 @@ impl Importer {
         self.broadcast.subscribe()
     }
 
-    pub(crate) fn lock(&self) -> Result<tokio::sync::SemaphorePermit, Error> {
+    pub(crate) fn lock(&self) -> Result<tokio::sync::SemaphorePermit<'_>, Error> {
         let guard = self.guard.try_acquire();
         match guard {
             Ok(permit) => Ok(permit),

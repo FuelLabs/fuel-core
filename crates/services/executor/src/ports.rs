@@ -125,14 +125,14 @@ impl MaybeCheckedTransaction {
 }
 
 impl TransactionExt for MaybeCheckedTransaction {
-    fn inputs(&self) -> Cow<[Input]> {
+    fn inputs(&self) -> Cow<'_, [Input]> {
         match self {
             MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.inputs(),
             MaybeCheckedTransaction::Transaction(tx) => tx.inputs(),
         }
     }
 
-    fn outputs(&self) -> Cow<[Output]> {
+    fn outputs(&self) -> Cow<'_, [Output]> {
         match self {
             MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.outputs(),
             MaybeCheckedTransaction::Transaction(tx) => tx.outputs(),

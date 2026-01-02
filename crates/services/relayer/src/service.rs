@@ -1,27 +1,28 @@
 //! This module handles bridge communications between the fuel node and the data availability layer.
 
+use self::{
+    get_logs::*,
+    run::RelayerData,
+};
 use crate::{
     Config,
     log::EthEventLog,
     ports::RelayerDb,
     service::state::EthLocal,
 };
-use async_trait::async_trait;
-use core::time::Duration;
-use ethers_core::types::{
+use alloy_provider::Provider;
+use alloy_rpc_types_eth::{
+    BlockId,
+    BlockNumberOrTag,
     Filter,
     Log,
-    SyncingStatus,
     ValueOrArray,
 };
-use ethers_providers::{
-    Http,
-    Middleware,
-    Provider,
-    ProviderError,
+use async_trait::async_trait;
+use core::time::Duration;
+use fuel_core_provider::{
     Quorum,
     QuorumProvider,
-    WeightedProvider,
 };
 use fuel_core_services::{
     RunnableService,
@@ -35,13 +36,7 @@ use fuel_core_types::{
     entities::Message,
 };
 use futures::StreamExt;
-use std::convert::TryInto;
 use tokio::sync::watch;
-
-use self::{
-    get_logs::*,
-    run::RelayerData,
-};
 
 mod get_logs;
 mod run;
@@ -78,7 +73,7 @@ type Synced = watch::Receiver<SyncState>;
 type NotifySynced = watch::Sender<SyncState>;
 
 /// The alias of runnable relayer service.
-pub type Service<D> = CustomizableService<Provider<QuorumProvider<Http>>, D>;
+pub type Service<D> = CustomizableService<QuorumProvider, D>;
 type CustomizableService<P, D> = ServiceRunner<NotInitializedTask<P, D>>;
 
 /// The shared state of the relayer task.
@@ -102,8 +97,87 @@ pub struct NotInitializedTask<P, D> {
     retry_on_error: bool,
 }
 
+pub enum RpcOutcome {
+    Success { logs_downloaded: u64 },
+    Error,
+}
+
+/// A trait for controlling the number of blocks queried per RPC call when downloading logs.
+/// Implementations may adapt the block range based on feedback from previous calls.
+pub trait PageSizer {
+    /// Updates the internal state of the page sizer based on the outcome of an RPC call.
+    ///
+    /// This method should be called after each log-fetching RPC call to allow the sizer
+    /// to adjust its block range strategy. It receives the number of logs downloaded and
+    /// whether the RPC call resulted in an error.
+    fn update(&mut self, outcome: RpcOutcome);
+
+    /// Returns the current number of blocks to include in the next RPC query.
+    fn page_size(&self) -> u64;
+}
+
+pub struct AdaptivePageSizer {
+    current: u64,
+    max: u64,
+    successful_rpc_calls: u64,
+    grow_threshold: u64,
+    max_logs_per_rpc: u64,
+}
+
+impl AdaptivePageSizer {
+    fn new(current: u64, max: u64, grow_threshold: u64, max_logs_per_rpc: u64) -> Self {
+        Self {
+            current,
+            max,
+            grow_threshold,
+            max_logs_per_rpc,
+            successful_rpc_calls: 0,
+        }
+    }
+}
+
+impl PageSizer for AdaptivePageSizer {
+    fn update(&mut self, outcome: RpcOutcome) {
+        const PAGE_GROW_FACTOR_NUM: u64 = 125;
+        const PAGE_GROW_FACTOR_DEN: u64 = 100;
+        const PAGE_SHRINK_FACTOR: u64 = 2;
+
+        match outcome {
+            RpcOutcome::Error => {
+                self.successful_rpc_calls = 0;
+                self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
+            }
+            RpcOutcome::Success { logs_downloaded }
+                if logs_downloaded > self.max_logs_per_rpc =>
+            {
+                self.successful_rpc_calls = 0;
+                self.current = (self.current / PAGE_SHRINK_FACTOR).max(1);
+            }
+            _ => {
+                self.successful_rpc_calls = self.successful_rpc_calls.saturating_add(1);
+                if self.successful_rpc_calls >= self.grow_threshold
+                    && self.current < self.max
+                {
+                    let grown = self.current.saturating_mul(PAGE_GROW_FACTOR_NUM)
+                        / PAGE_GROW_FACTOR_DEN;
+                    self.current = if grown > self.current {
+                        grown.min(self.max)
+                    } else {
+                        (self.current.saturating_add(1)).min(self.max)
+                    };
+                    self.successful_rpc_calls = 0;
+                }
+            }
+        }
+    }
+
+    fn page_size(&self) -> u64 {
+        self.current
+    }
+}
+
 /// The actual relayer background task that syncs with the DA layer.
-pub struct Task<P, D> {
+pub struct Task<P, D, S> {
     /// Sends signals when the relayer reaches consistency with the DA layer.
     synced: NotifySynced,
     /// The node that communicates with Ethereum.
@@ -117,10 +191,14 @@ pub struct Task<P, D> {
     shutdown: StateWatcher,
     /// Retry on error
     retry_on_error: bool,
+    /// Determines how many pages to request per RPC call, adapting based on success/failure feedback.
+    /// Allows dynamic tuning of log pagination to optimize performance and reliability.
+    page_sizer: S,
 }
 
 impl<P, D> NotInitializedTask<P, D>
 where
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     /// Create a new relayer task.
@@ -142,10 +220,11 @@ where
     }
 }
 
-impl<P, D> RelayerData for Task<P, D>
+impl<P, D, S> RelayerData for Task<P, D, S>
 where
-    P: Middleware<Error = ProviderError> + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
+    S: PageSizer + 'static + Send + Sync,
 {
     async fn wait_if_eth_syncing(&self) -> anyhow::Result<()> {
         let mut shutdown = self.shutdown.clone();
@@ -172,10 +251,10 @@ where
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
             &self.eth_node,
-            self.config.log_page_size,
+            &mut self.page_sizer,
         );
-        let logs = logs.take_until(self.shutdown.while_started());
 
+        let logs = logs.take_until(self.shutdown.while_started());
         write_logs(&mut self.database, logs).await
     }
 
@@ -201,13 +280,13 @@ where
 #[async_trait]
 impl<P, D> RunnableService for NotInitializedTask<P, D>
 where
-    P: Middleware<Error = ProviderError> + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     const NAME: &'static str = "Relayer";
 
     type SharedData = SharedState;
-    type Task = Task<P, D>;
+    type Task = Task<P, D, AdaptivePageSizer>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -229,23 +308,31 @@ where
             config,
             retry_on_error,
         } = self;
+        let page_sizer = AdaptivePageSizer::new(
+            config.log_page_size,
+            config.log_page_size,
+            50,
+            config.max_logs_per_rpc,
+        );
         let task = Task {
             synced,
             eth_node,
             database,
-            config,
             shutdown,
             retry_on_error,
+            page_sizer,
+            config,
         };
 
         Ok(task)
     }
 }
 
-impl<P, D> RunnableTask for Task<P, D>
+impl<P, D, S> RunnableTask for Task<P, D, S>
 where
-    P: Middleware<Error = ProviderError> + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
+    S: PageSizer + 'static + Send + Sync,
 {
     async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
         let now = tokio::time::Instant::now();
@@ -332,10 +419,11 @@ impl SharedState {
     }
 }
 
-impl<P, D> state::EthRemote for Task<P, D>
+impl<P, D, S> state::EthRemote for Task<P, D, S>
 where
-    P: Middleware<Error = ProviderError>,
+    P: Provider,
     D: RelayerDb + 'static,
+    S: PageSizer + 'static + Send + Sync,
 {
     async fn finalized(&self) -> anyhow::Result<u64> {
         let mut shutdown = self.shutdown.clone();
@@ -344,21 +432,22 @@ where
             _ = shutdown.while_started() => {
                 Err(anyhow::anyhow!("The relayer got a stop signal"))
             },
-            block = self.eth_node.get_block(ethers_core::types::BlockNumber::Finalized) => {
-                let block_number = block.map_err(|err| anyhow::anyhow!("failed to get block from Eth node: {err:?}"))?
-                    .and_then(|block| block.number)
-                    .ok_or(anyhow::anyhow!("Block pending"))?
-                    .as_u64();
-                Ok(block_number)
+            block = self.eth_node.get_block(BlockId::Number(BlockNumberOrTag::Finalized)) => {
+                let block = block.map_err(|err| anyhow::anyhow!("Failed to fetch finalized block: {err:?}"))?;
+                let number = block
+                    .map(|b| b.header.number)
+                    .ok_or_else(|| anyhow::anyhow!("Finalized block is pending"))?;
+                Ok(number)
             }
         }
     }
 }
 
-impl<P, D> EthLocal for Task<P, D>
+impl<P, D, S> EthLocal for Task<P, D, S>
 where
-    P: Middleware<Error = ProviderError>,
+    P: Provider,
     D: RelayerDb + 'static,
+    S: PageSizer + 'static + Send + Sync,
 {
     fn observed(&self) -> u64 {
         self.synced.borrow().da_block_height().into()
@@ -370,18 +459,13 @@ pub fn new_service<D>(database: D, config: Config) -> anyhow::Result<Service<D>>
 where
     D: RelayerDb + 'static,
 {
-    let urls = config
-        .relayer
-        .clone()
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "Tried to start Relayer without setting an eth_client in the config"
-            )
-        })?
-        .into_iter()
-        .map(|url| WeightedProvider::new(Http::new(url)));
+    let urls = config.relayer.clone().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Tried to start Relayer without setting an eth_client in the config"
+        )
+    })?;
 
-    let eth_node = Provider::new(QuorumProvider::new(Quorum::Majority, urls));
+    let eth_node = QuorumProvider::new(Quorum::Majority, urls);
     let retry_on_error = true;
     Ok(new_service_internal(
         eth_node,
@@ -399,7 +483,7 @@ pub fn new_service_test<P, D>(
     config: Config,
 ) -> CustomizableService<P, D>
 where
-    P: Middleware<Error = ProviderError> + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     let retry_on_fail = false;
@@ -413,10 +497,151 @@ fn new_service_internal<P, D>(
     retry_on_error: bool,
 ) -> CustomizableService<P, D>
 where
-    P: Middleware<Error = ProviderError> + 'static,
+    P: Provider + 'static,
     D: RelayerDb + 'static,
 {
     let task = NotInitializedTask::new(eth_node, database, config, retry_on_error);
 
     CustomizableService::new(task)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adaptive_page_sizer_grows_when_threshold_exceeded() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(4, 10, grow_threshold, 10_000);
+        for _ in 0..grow_threshold {
+            sizer.update(RpcOutcome::Success {
+                logs_downloaded: 100,
+            });
+        }
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 100,
+        });
+        assert_eq!(sizer.page_size(), 5);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_does_not_grow_if_below_threshold() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(4, 10, grow_threshold, 10_000);
+        for _ in 0..grow_threshold - 10 {
+            sizer.update(RpcOutcome::Success {
+                logs_downloaded: 100,
+            });
+        }
+        assert_eq!(sizer.page_size(), 4);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_does_not_grow_if_at_max() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(10, 10, grow_threshold, 10_000);
+        for _ in 0..grow_threshold + 1 {
+            sizer.update(RpcOutcome::Success {
+                logs_downloaded: 100,
+            });
+        }
+        assert_eq!(sizer.page_size(), 10);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_shrinks_on_rpc_error() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(6, 10, grow_threshold, 10_000);
+        sizer.update(RpcOutcome::Error);
+        assert_eq!(sizer.page_size(), 3);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_shrinks_on_excessive_logs() {
+        let mut sizer = AdaptivePageSizer::new(6, 10, 50, 100);
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 101,
+        });
+        assert_eq!(sizer.page_size(), 3);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_never_goes_below_one() {
+        let mut sizer = AdaptivePageSizer::new(1, 10, 50, 10_000);
+        sizer.update(RpcOutcome::Error);
+        assert_eq!(sizer.page_size(), 1);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_resets_successful_calls_after_growth() {
+        let grow_threshold = 3;
+        let max_logs_per_rpc = 100;
+        let mut sizer = AdaptivePageSizer::new(2, 10, grow_threshold, max_logs_per_rpc);
+
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 50,
+        });
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 60,
+        });
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 70,
+        }); // triggers growth
+
+        assert_eq!(sizer.successful_rpc_calls, 0, "Should reset after growth");
+    }
+
+    #[test]
+    fn adaptive_page_sizer_accumulates_successful_calls_until_threshold() {
+        let grow_threshold = 3;
+        let max_logs_per_rpc = 100;
+        let mut sizer = AdaptivePageSizer::new(4, 10, grow_threshold, max_logs_per_rpc);
+
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 20,
+        });
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 25,
+        });
+        assert_eq!(sizer.page_size(), 4); // not yet grown
+
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 30,
+        }); // threshold reached
+        assert_eq!(sizer.page_size(), 5);
+    }
+
+    #[test]
+    fn adaptive_page_sizer_grows_by_one_if_growth_factor_stalls() {
+        let grow_threshold = 50;
+        let mut sizer = AdaptivePageSizer::new(2, 10, grow_threshold, 10_000);
+        for _ in 0..grow_threshold {
+            sizer.update(RpcOutcome::Success {
+                logs_downloaded: 100,
+            });
+        }
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: 100,
+        });
+        assert_eq!(sizer.page_size(), 3, "Page size should grow by at least 1");
+    }
+
+    #[test]
+    fn adaptive_page_sizer_shrinks_when_logs_exceed_max_allowed() {
+        let grow_threshold = 50;
+        let max_logs_per_rpc = 100;
+        let mut sizer = AdaptivePageSizer::new(6, 10, grow_threshold, max_logs_per_rpc);
+
+        // Simulate a successful RPC call that returns more logs than allowed
+        sizer.update(RpcOutcome::Success {
+            logs_downloaded: max_logs_per_rpc + 1,
+        });
+
+        // Expect the page size to shrink
+        assert_eq!(
+            sizer.page_size(),
+            3,
+            "Page size should shrink when log count exceeds max_logs_per_rpc"
+        );
+    }
 }

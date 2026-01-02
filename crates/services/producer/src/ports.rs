@@ -39,7 +39,7 @@ pub trait BlockProducerDatabase: Send + Sync {
     fn latest_height(&self) -> Option<BlockHeight>;
 
     /// Gets the committed block at the `height`.
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>>;
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<'_, CompressedBlock>>;
 
     /// Gets the full committed block at the `height`.
     fn get_full_block(&self, height: &BlockHeight) -> StorageResult<Block>;

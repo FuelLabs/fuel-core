@@ -128,13 +128,25 @@ pub struct MultiContractBenchmarkRunnerBuilder {
     rng: rand::rngs::StdRng,
 }
 
+#[derive(Debug, Clone)]
+pub struct BenchContract {
+    contract_id: ContractId,
+    bytecode: Option<Vec<u8>>,
+}
+
 impl SanityBenchmarkRunnerBuilder {
     /// Creates a factory for benchmarks that share a service with a contract, `contract_id`, pre-
     /// deployed.
     /// The size of the database can be overridden with the `STATE_SIZE` environment variable.
     pub fn new_shared(contract_id: ContractId) -> SharedSanityBenchmarkRunnerBuilder {
         let state_size = crate::utils::get_state_size();
-        let (service, rt) = service_with_many_contracts(state_size, vec![contract_id]);
+        let (service, rt) = service_with_many_contracts(
+            state_size,
+            vec![BenchContract {
+                contract_id,
+                bytecode: None,
+            }],
+        );
         let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
         SharedSanityBenchmarkRunnerBuilder {
             service,
@@ -144,11 +156,37 @@ impl SanityBenchmarkRunnerBuilder {
         }
     }
 
+    pub fn new_shared_with_contract(
+        contract: BenchContract,
+    ) -> SharedSanityBenchmarkRunnerBuilder {
+        let state_size = crate::utils::get_state_size();
+        let contract_id = *contract.contract_id;
+        let (service, rt) = service_with_many_contracts(state_size, vec![contract]);
+        let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+
+        SharedSanityBenchmarkRunnerBuilder {
+            service,
+            rt,
+            contract_id: contract_id.into(),
+            rng,
+        }
+    }
+
     pub fn new_with_many_contracts(
         contract_ids: Vec<ContractId>,
     ) -> MultiContractBenchmarkRunnerBuilder {
         let state_size = 1000; // Arbitrary small state size
-        let (service, rt) = service_with_many_contracts(state_size, contract_ids.clone());
+        let (service, rt) = service_with_many_contracts(
+            state_size,
+            contract_ids
+                .iter()
+                .cloned()
+                .map(|id| BenchContract {
+                    contract_id: id,
+                    bytecode: None,
+                })
+                .collect(),
+        );
         let rng = rand::rngs::StdRng::seed_from_u64(2322u64);
         MultiContractBenchmarkRunnerBuilder {
             service,
@@ -160,7 +198,7 @@ impl SanityBenchmarkRunnerBuilder {
 }
 
 impl SharedSanityBenchmarkRunnerBuilder {
-    fn build(&mut self) -> SanityBenchmarkRunner {
+    fn build(&mut self) -> SanityBenchmarkRunner<'_> {
         SanityBenchmarkRunner {
             service: &mut self.service,
             rt: &self.rt,
@@ -174,7 +212,7 @@ impl SharedSanityBenchmarkRunnerBuilder {
     pub fn build_with_new_contract(
         &mut self,
         contract_instructions: Vec<Instruction>,
-    ) -> SanityBenchmarkRunner {
+    ) -> SanityBenchmarkRunner<'_> {
         replace_contract_in_service(
             &mut self.service,
             &self.contract_id,
@@ -185,7 +223,7 @@ impl SharedSanityBenchmarkRunnerBuilder {
 }
 
 impl MultiContractBenchmarkRunnerBuilder {
-    pub fn build(&mut self) -> SanityBenchmarkRunner {
+    pub fn build(&mut self) -> SanityBenchmarkRunner<'_> {
         SanityBenchmarkRunner {
             service: &mut self.service,
             rt: &self.rt,
@@ -247,7 +285,7 @@ fn run(
 ) {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
     let contract_ids = vec![];
-    let (service, rt) = service_with_many_contracts(0, contract_ids.clone()); // Doesn't need any contracts
+    let (service, rt) = service_with_many_contracts(0, vec![]); // Doesn't need any contracts
     run_with_service_with_extra_inputs(
         id,
         group,
@@ -266,9 +304,9 @@ fn run(
 /// `state_size` for each contract.
 fn service_with_many_contracts(
     state_size: u64,
-    contract_ids: Vec<ContractId>,
+    contracts: Vec<BenchContract>,
 ) -> (FuelService, tokio::runtime::Runtime) {
-    let rt = tokio::runtime::Builder::new_current_thread()
+    let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
@@ -301,10 +339,11 @@ fn service_with_many_contracts(
         .consensus_parameters
         .set_gas_costs(GasCosts::new(default_gas_costs()));
 
-    let contract_configs = contract_ids
+    let contract_configs = contracts
         .iter()
-        .map(|contract_id| ContractConfig {
-            contract_id: *contract_id,
+        .map(|contract| ContractConfig {
+            contract_id: (*contract.contract_id).into(),
+            code: contract.bytecode.clone().unwrap_or_default(),
             ..Default::default()
         })
         .collect::<Vec<_>>();
@@ -320,10 +359,11 @@ fn service_with_many_contracts(
     let mut storage_key = primitive_types::U256::zero();
     let mut key_bytes = Bytes32::zeroed();
 
-    for contract_id in contract_ids.iter() {
+    for contract in contracts.iter() {
+        let contract_id = contract.contract_id;
         database
             .init_contract_state(
-                contract_id,
+                &contract_id,
                 (0..state_size).map(|_| {
                     storage_key.to_big_endian(key_bytes.as_mut());
                     storage_key.increase().unwrap();
@@ -336,7 +376,7 @@ fn service_with_many_contracts(
         let mut sub_id = SubAssetId::zeroed();
         database
             .init_contract_balances(
-                contract_id,
+                &contract_id,
                 (0..state_size).map(|k| {
                     storage_key.to_big_endian(sub_id.as_mut());
 

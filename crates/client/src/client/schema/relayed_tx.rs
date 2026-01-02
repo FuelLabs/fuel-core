@@ -15,7 +15,7 @@ pub struct RelayedTransactionStatusQuery {
     pub relayed_transaction_status: Option<RelayedTransactionStatus>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct RelayedTransactionStatusArgs {
     /// Transaction id that contains the output message.
     pub id: RelayedTransactionId,

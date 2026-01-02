@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.86.0 AS chef
+FROM rust:1.90.0-bookworm AS chef
 RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
 WORKDIR /build/
 # hadolint ignore=DL3008
@@ -38,7 +38,7 @@ RUN \
     && cp ./target/release/fuel-core-e2e-client.d /root/fuel-core-e2e-client.d
 
 # Stage 2: Run
-FROM ubuntu:22.04 as run
+FROM debian:bookworm-slim as run
 
 WORKDIR /root/
 

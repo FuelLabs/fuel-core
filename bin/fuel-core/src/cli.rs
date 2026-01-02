@@ -5,9 +5,11 @@ use fuel_core::{
 };
 use fuel_core_chain_config::{
     ChainConfig,
+    Owner,
     SnapshotReader,
     StateConfig,
 };
+use fuel_core_types::fuel_tx::Address;
 use std::{
     env,
     path::PathBuf,
@@ -27,6 +29,7 @@ pub fn default_db_path() -> PathBuf {
     dirs::home_dir().unwrap().join(".fuel").join("db")
 }
 
+pub mod archive;
 pub mod fee_contract;
 #[cfg(feature = "rocksdb")]
 pub mod rollback;
@@ -58,6 +61,9 @@ pub enum Fuel {
     #[cfg(feature = "rocksdb")]
     Rollback(rollback::Command),
     GenerateFeeContract(fee_contract::Command),
+    #[cfg(feature = "rocksdb")]
+    #[clap(subcommand)]
+    Archive(archive::Command),
 }
 
 pub const LOG_FILTER: &str = "RUST_LOG";
@@ -141,6 +147,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
             Fuel::Snapshot(command) => snapshot::exec(command).await,
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
             Fuel::Rollback(command) => rollback::exec(command).await,
+            Fuel::Archive(command) => archive::exec(command),
         },
         Err(e) => {
             // Prints the error and exits.
@@ -166,6 +173,19 @@ pub fn local_testnet_reader() -> SnapshotReader {
         include_bytes!("../chainspec/local-testnet/state_config.json");
 
     let state_config: StateConfig = serde_json::from_slice(TESTNET_STATE_CONFIG).unwrap();
+
+    for coin in &state_config.coins {
+        let amount = coin.amount;
+        let (address, secret) = match coin.owner {
+            Owner::Address(address) => (address.to_string(), "not provided".to_string()),
+            Owner::SecretKey(secret) => (
+                Address::from(coin.owner.clone()).to_string(),
+                secret.to_string(),
+            ),
+        };
+
+        tracing::info!(amount, address, secret, "Reading genesis coin");
+    }
 
     SnapshotReader::new_in_memory(local_testnet_chain_config(), state_config)
 }

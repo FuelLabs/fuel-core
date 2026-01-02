@@ -36,7 +36,6 @@ use fuel_core_types::{
     },
     fuel_tx::{
         ConsensusParameters,
-        Contract,
         StorageSlot,
     },
     fuel_types::{
@@ -143,7 +142,7 @@ where
 {
     type Error = StorageError;
 
-    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
+    fn get(&self, key: &M::Key) -> Result<Option<Cow<'_, M::OwnedValue>>, Self::Error> {
         StorageInspect::<M>::get(&self.database, key)
     }
 
@@ -327,7 +326,7 @@ where
     fn deploy_contract_with_id(
         &mut self,
         slots: &[StorageSlot],
-        contract: &Contract,
+        contract: &[u8],
         id: &ContractId,
     ) -> Result<(), Self::DataError> {
         self.storage_contract_insert(id, contract)?;
@@ -342,7 +341,7 @@ where
         contract_id: &ContractId,
         start_key: &Bytes32,
         range: usize,
-    ) -> Result<Vec<Option<Cow<ContractsStateData>>>, Self::DataError> {
+    ) -> Result<Vec<Option<Cow<'_, ContractsStateData>>>, Self::DataError> {
         use crate::StorageAsRef;
 
         let mut key = U256::from_big_endian(start_key.as_ref());

@@ -264,7 +264,7 @@ async fn da_compression__starts_and_compresses_blocks_correctly_from_empty_datab
 }
 
 #[tokio::test]
-async fn da_compression__db_can_be_rewinded() {
+async fn da_compression__db_can_be_rewound() {
     // given
     let rollback_target_height = 0;
     let blocks_to_produce = 10;

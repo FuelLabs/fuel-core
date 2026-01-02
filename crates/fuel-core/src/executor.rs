@@ -73,13 +73,9 @@ mod tests {
             op,
         },
         fuel_crypto::SecretKey,
-        fuel_merkle::{
-            common::empty_sum_sha256,
-            sparse,
-        },
+        fuel_merkle::common::empty_sum_sha256,
         fuel_tx::{
             Bytes32,
-            Cacheable,
             ConsensusParameters,
             Create,
             DependentCost,
@@ -104,10 +100,10 @@ mod tests {
                 Inputs,
                 MintAmount,
                 MintAssetId,
+                MintGasPrice,
                 OutputContract,
                 Outputs,
                 Policies,
-                Script as ScriptField,
                 TxPointer as TxPointerTraitTrait,
             },
             input::{
@@ -167,6 +163,10 @@ mod tests {
         SeedableRng,
         prelude::StdRng,
     };
+    use sha2::{
+        Digest,
+        Sha256,
+    };
 
     #[derive(Clone, Debug, Default)]
     struct Config {
@@ -220,7 +220,8 @@ mod tests {
     ) -> Executor<Database, DisabledRelayer> {
         let executor_config = fuel_core_upgradable_executor::config::Config {
             forbid_unauthorized_inputs_default: config.forbid_unauthorized_inputs_default,
-            forbid_fake_utxo_default: config.forbid_fake_utxo_default,
+            forbid_fake_coins_default: config.forbid_fake_coins_default,
+            allow_syscall: true,
             native_executor_version: None,
             allow_historical_execution: true,
         };
@@ -490,6 +491,19 @@ mod tests {
             assert!(expected_fee_amount_1 > 0);
             let first_mint;
 
+            let mut h = Sha256::new();
+            h.update(consensus_parameters.base_asset_id().as_ref());
+            h.update([0u8]);
+            let input_balances_hash = Bytes32::new(h.finalize().into());
+
+            let mut h = Sha256::new();
+            h.update(consensus_parameters.base_asset_id().as_ref());
+            h.update([1u8]);
+            h.update(expected_fee_amount_1.to_be_bytes());
+            let output_balances_hash = Bytes32::new(h.finalize().into());
+
+            let empty_hash = Bytes32::zeroed();
+
             if let Some(mint) = block.transactions()[1].as_mint() {
                 assert_eq!(
                     mint.tx_pointer(),
@@ -498,12 +512,12 @@ mod tests {
                 assert_eq!(mint.mint_asset_id(), &AssetId::BASE);
                 assert_eq!(mint.mint_amount(), &expected_fee_amount_1);
                 assert_eq!(mint.input_contract().contract_id, recipient);
-                assert_eq!(mint.input_contract().balance_root, Bytes32::zeroed());
-                assert_eq!(mint.input_contract().state_root, Bytes32::zeroed());
+                assert_eq!(mint.input_contract().balance_root, input_balances_hash);
+                assert_eq!(mint.input_contract().state_root, empty_hash);
                 assert_eq!(mint.input_contract().utxo_id, UtxoId::default());
                 assert_eq!(mint.input_contract().tx_pointer, TxPointer::default());
-                assert_ne!(mint.output_contract().balance_root, Bytes32::zeroed());
-                assert_eq!(mint.output_contract().state_root, Bytes32::zeroed());
+                assert_eq!(mint.output_contract().balance_root, output_balances_hash);
+                assert_eq!(mint.output_contract().state_root, empty_hash);
                 assert_eq!(mint.output_contract().input_index, 0);
                 first_mint = mint.clone();
             } else {
@@ -574,28 +588,12 @@ mod tests {
                 assert_eq!(second_mint.mint_amount(), &expected_fee_amount_2);
                 assert_eq!(second_mint.input_contract().contract_id, recipient);
                 assert_eq!(
-                    second_mint.input_contract().balance_root,
-                    first_mint.output_contract().balance_root
-                );
-                assert_eq!(
-                    second_mint.input_contract().state_root,
-                    first_mint.output_contract().state_root
-                );
-                assert_eq!(
                     second_mint.input_contract().utxo_id,
                     UtxoId::new(first_mint.id(&consensus_parameters.chain_id()), 0)
                 );
                 assert_eq!(
                     second_mint.input_contract().tx_pointer,
                     TxPointer::new(1.into(), 1)
-                );
-                assert_ne!(
-                    second_mint.output_contract().balance_root,
-                    first_mint.output_contract().balance_root
-                );
-                assert_eq!(
-                    second_mint.output_contract().state_root,
-                    first_mint.output_contract().state_root
                 );
                 assert_eq!(second_mint.output_contract().input_index, 0);
             } else {
@@ -1235,10 +1233,10 @@ mod tests {
             producer.produce_and_commit(block.into()).unwrap();
 
         // modify change amount
-        if let Transaction::Script(script) = &mut block.transactions_mut()[0] {
-            if let Output::Change { amount, .. } = &mut script.outputs_mut()[0] {
-                *amount = fake_output_amount
-            }
+        if let Transaction::Script(script) = &mut block.transactions_mut()[0]
+            && let Output::Change { amount, .. } = &mut script.outputs_mut()[0]
+        {
+            *amount = fake_output_amount
         }
 
         // then
@@ -1673,8 +1671,8 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let db = &mut Database::default();
 
+        let db = &mut Database::default();
         let mut executor = create_executor(
             db.clone(),
             Config {
@@ -1699,17 +1697,31 @@ mod tests {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
 
-        // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = (*sparse::empty_sum()).into();
+        // Ensure all txs succeeded.
+        assert!(
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. }))
+        );
+
+        // Assert the balance and state roots are same before and after execution.
         let executed_tx = block.transactions()[1].as_script().unwrap();
-        assert!(matches!(
-            tx_status[2].result,
-            TransactionExecutionResult::Success { .. }
-        ));
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-        assert_eq!(executed_tx.outputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&empty_state));
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::zeroed())
+        );
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::zeroed())
+        );
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::zeroed())
+        );
+        assert_eq!(
+            executed_tx.outputs()[0].balance_root(),
+            Some(&Bytes32::zeroed())
+        );
     }
 
     #[test]
@@ -1729,8 +1741,8 @@ mod tests {
             .transaction()
             .clone()
             .into();
-        let db = &mut Database::default();
 
+        let db = &mut Database::default();
         let mut executor = create_executor(
             db.clone(),
             Config {
@@ -1756,7 +1768,6 @@ mod tests {
         } = executor.produce_and_commit(block).unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
-        let empty_state = (*sparse::empty_sum()).into();
         let executed_tx = block.transactions()[1].as_script().unwrap();
         assert!(matches!(
             tx_status[1].result,
@@ -1770,8 +1781,16 @@ mod tests {
             executed_tx.inputs()[0].balance_root(),
             executed_tx.outputs()[0].balance_root()
         );
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
+
+        // Both balance and state roots are empty, and should match hash of empty data.
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::zeroed())
+        );
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::zeroed())
+        );
     }
 
     #[test]
@@ -1782,9 +1801,11 @@ mod tests {
 
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
+            // Increment the slot matching the tx id by one
             vec![
-                // Sets the state STATE[0x1; 32] = value of `RegId::PC`;
-                op::sww(0x1, 0x29, RegId::PC),
+                op::srw(0x10, 0x29, RegId::ZERO),
+                op::addi(0x10, 0x10, 1),
+                op::sww(RegId::ZERO, 0x29, 0x10),
                 op::ret(1),
             ]
             .into_iter()
@@ -1795,7 +1816,7 @@ mod tests {
 
         let transfer_amount = 100 as Word;
         let asset_id = AssetId::from([2; 32]);
-        let (script, data_offset) = script_with_data_offset!(
+        let (script, _) = script_with_data_offset!(
             data_offset,
             vec![
                 // Set register `0x10` to `Call`
@@ -1812,9 +1833,7 @@ mod tests {
 
         let script_data: Vec<u8> = [
             asset_id.as_ref(),
-            Call::new(contract_id, transfer_amount, data_offset as Word)
-                .to_bytes()
-                .as_ref(),
+            Call::new(contract_id, 0, 0).to_bytes().as_ref(),
         ]
         .into_iter()
         .flatten()
@@ -1858,39 +1877,78 @@ mod tests {
             block, tx_status, ..
         } = executor.produce_and_commit(block).unwrap();
 
-        let empty_state = (*sparse::empty_sum()).into();
-        let executed_tx = block.transactions()[1].as_script().unwrap();
-        assert!(matches!(
-            tx_status[2].result,
-            TransactionExecutionResult::Success { .. }
-        ));
-        assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
-        assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
-        // Roots should be different
-        assert_ne!(
-            executed_tx.inputs()[0].state_root(),
-            executed_tx.outputs()[0].state_root()
+        assert!(
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. }))
         );
-        assert_ne!(
+
+        let executed_tx = block.transactions()[1].as_script().unwrap();
+        let tx_id = executed_tx.id(&ConsensusParameters::standard().chain_id());
+
+        // Check resulting roots
+
+        // Input balances: 0 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([0u8]);
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
             executed_tx.inputs()[0].balance_root(),
-            executed_tx.outputs()[0].balance_root()
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Output balances: 100 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([1u8]);
+        hasher.update(100u64.to_be_bytes()); // balance
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.outputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Input state: empty slot tx_id
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id); // the slot key that is modified
+        hasher.update([0u8]); // the slot did not contain any value
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+
+        // Output state: slot tx_id with value 1
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id); // the slot key that is modified
+        hasher.update([1u8]); // the slot contains a value
+        hasher.update(32u64.to_be_bytes()); // slot size is 32 bytes
+        hasher.update({
+            let mut value = [0u8; 32];
+            value[..8].copy_from_slice(&1u64.to_be_bytes()); // the value is 1
+            value
+        }); // The value in the slot is 1
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
         );
     }
 
     #[test]
-    fn contracts_balance_and_state_roots_in_inputs_updated() {
+    fn contracts_balance_and_state_roots_are_zero_after_reverted_execution() {
         // Values in inputs and outputs are random. If the execution of the transaction that
         // modifies the state and the balance is successful, it should update roots.
-        // The first transaction updates the `balance_root` and `state_root`.
-        // The second transaction is empty. The executor should update inputs of the second
-        // transaction with the same value from `balance_root` and `state_root`.
         let mut rng = StdRng::seed_from_u64(2322u64);
 
         // Create a contract that modifies the state
         let (create, contract_id) = create_contract(
+            // Increment the slot matching the tx id by one
             vec![
-                // Sets the state STATE[0x1; 32] = value of `RegId::PC`;
-                op::sww(0x1, 0x29, RegId::PC),
+                op::srw(0x10, 0x29, RegId::ZERO),
+                op::addi(0x10, 0x10, 1),
+                op::sww(RegId::ZERO, 0x29, 0x10),
                 op::ret(1),
             ]
             .into_iter()
@@ -1901,7 +1959,7 @@ mod tests {
 
         let transfer_amount = 100 as Word;
         let asset_id = AssetId::from([2; 32]);
-        let (script, data_offset) = script_with_data_offset!(
+        let (script, _) = script_with_data_offset!(
             data_offset,
             vec![
                 // Set register `0x10` to `Call`
@@ -1911,16 +1969,15 @@ mod tests {
                 // Set register `0x12` with `transfer_amount`
                 op::movi(0x12, transfer_amount as u32),
                 op::call(0x10, 0x12, 0x11, RegId::CGAS),
-                op::ret(RegId::ONE),
+                // Revert the execution
+                op::rvrt(RegId::ONE),
             ],
             TxParameters::DEFAULT.tx_offset()
         );
 
         let script_data: Vec<u8> = [
             asset_id.as_ref(),
-            Call::new(contract_id, transfer_amount, data_offset as Word)
-                .to_bytes()
-                .as_ref(),
+            Call::new(contract_id, 0, 0).to_bytes().as_ref(),
         ]
         .into_iter()
         .flatten()
@@ -1940,13 +1997,11 @@ mod tests {
             .clone();
         let db = Database::default();
 
-        let consensus_parameters = ConsensusParameters::default();
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_unauthorized_inputs_default: false,
-                forbid_fake_utxo_default: false,
-                consensus_parameters: consensus_parameters.clone(),
+                forbid_fake_coins_default: false,
+                ..Default::default()
             },
         );
 
@@ -1961,49 +2016,631 @@ mod tests {
             transactions: vec![create.into(), modify_balance_and_state_tx.into()],
         };
 
-        let ExecutionResult { block, .. } = executor.produce_and_commit(block).unwrap();
+        let ExecutionResult {
+            block, tx_status, ..
+        } = executor.produce_and_commit(block).unwrap();
+
+        assert!(matches!(
+            tx_status[1].result,
+            TransactionExecutionResult::Failed { .. }
+        ));
 
         let executed_tx = block.transactions()[1].as_script().unwrap();
-        let state_root = executed_tx.outputs()[0].state_root();
-        let balance_root = executed_tx.outputs()[0].balance_root();
+        let tx_id = executed_tx.id(&ConsensusParameters::standard().chain_id());
 
-        let mut new_tx = executed_tx.clone();
-        *new_tx.script_mut() = vec![];
-        new_tx.precompute(&consensus_parameters.chain_id()).unwrap();
+        // Check resulting roots
+
+        // Input balances: 0 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([0u8]);
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Output balances: 100 of asset_id [2; 32]
+        assert_eq!(
+            executed_tx.outputs()[0].balance_root(),
+            Some(&Bytes32::zeroed())
+        );
+
+        // Input state: empty slot tx_id
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id); // the slot key that is modified
+        hasher.update([0u8]); // the slot did not contain any value
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+
+        // Output state: slot tx_id with value 1
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::zeroed())
+        );
+    }
+
+    #[test]
+    fn contracts_balance_and_state_roots_updated_correctly_with_multiple_modifications() {
+        // Values in inputs and outputs are random. If the execution of the transaction that
+        // modifies the state and the balance is successful, it should update roots.
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        // Create a contract that modifies the state
+        let (create, contract_id) = create_contract(
+            // Increment the slot matching the tx id by one
+            vec![
+                op::srw(0x10, 0x29, RegId::ZERO),
+                op::addi(0x10, 0x10, 1),
+                op::sww(RegId::ZERO, 0x29, 0x10),
+                op::ret(1),
+            ]
+            .into_iter()
+            .collect::<Vec<u8>>()
+            .as_slice(),
+            &mut rng,
+        );
+
+        let transfer_amount = 100 as Word;
+        let asset_id = AssetId::from([2; 32]);
+        let (script, _) = script_with_data_offset!(
+            data_offset,
+            vec![
+                // Set register `0x10` to `Call`
+                op::movi(0x10, data_offset + AssetId::LEN as u32),
+                // Set register `0x11` with offset to data that contains `asset_id`
+                op::movi(0x11, data_offset),
+                // Set register `0x12` with `transfer_amount`
+                op::movi(0x12, transfer_amount as u32),
+                op::call(0x10, 0x12, 0x11, RegId::CGAS),
+                // call again for the second increment, but don't transfer any tokens
+                op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+                op::ret(RegId::ONE),
+            ],
+            TxParameters::DEFAULT.tx_offset()
+        );
+
+        let script_data: Vec<u8> = [
+            asset_id.as_ref(),
+            Call::new(contract_id, 0, 0).to_bytes().as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+
+        let modify_balance_and_state_tx = TxBuilder::new(2322)
+            .script_gas_limit(10000)
+            .coin_input(AssetId::zeroed(), 10000)
+            .start_script(script, script_data)
+            .contract_input(contract_id)
+            .coin_input(asset_id, transfer_amount)
+            .fee_input()
+            .contract_output(&contract_id)
+            .build()
+            .transaction()
+            .clone();
+
+        let db = Database::default();
+        let mut executor = create_executor(
+            db.clone(),
+            Config {
+                forbid_unauthorized_inputs_default: false,
+                forbid_fake_coins_default: false,
+                ..Default::default()
+            },
+        );
 
         let block = PartialFuelBlock {
             header: PartialBlockHeader {
                 consensus: ConsensusHeader {
-                    height: 2.into(),
+                    height: 1.into(),
                     ..Default::default()
                 },
                 ..Default::default()
             },
-            transactions: vec![new_tx.into()],
+            transactions: vec![create.into(), modify_balance_and_state_tx.into()],
         };
 
         let ExecutionResult {
             block, tx_status, ..
-        } = executor
-            .produce_without_commit_with_source_direct_resolve(Components {
-                header_to_produce: block.header,
-                transactions_source: OnceTransactionsSource::new(block.transactions),
-                gas_price: 0,
-                coinbase_recipient: Default::default(),
-            })
-            .unwrap()
-            .into_result();
+        } = executor.produce_and_commit(block).unwrap();
+        assert!(
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. }))
+        );
+
+        let executed_tx = block.transactions()[1].as_script().unwrap();
+        let tx_id = executed_tx.id(&ConsensusParameters::standard().chain_id());
+
+        // Check resulting roots
+
+        // Input balances: 0 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([0u8]);
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Output balances: 100 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([1u8]);
+        hasher.update(100u64.to_be_bytes()); // balance
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.outputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Input state: empty slot tx_id
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id); // the slot key that is modified
+        hasher.update([0u8]); // the slot did not contain any value
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+
+        // Output state: slot tx_id with value 2
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id); // the slot key that is modified
+        hasher.update([1u8]); // the slot has a value
+        hasher.update(32u64.to_be_bytes()); // slot size is 32 bytes
+        hasher.update({
+            let mut value = [0u8; 32];
+            value[..8].copy_from_slice(&2u64.to_be_bytes()); // the value is 2
+            value
+        }); // The value in the slot is 1
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+    }
+
+    #[test]
+    fn contracts_balance_and_state_roots_updated_correctly_after_modifying_multiple_slots()
+     {
+        // Values in inputs and outputs are random. If the execution of the transaction that
+        // modifies the state and the balance is successful, it should update roots.
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        // Create a contract that modifies the state
+        let (create, contract_id) = create_contract(
+            // Set first four slots to contain their slot keysz
+            vec![
+                // Allocate space for the ids
+                op::movi(0x10, 32),
+                op::aloc(0x10),
+                // Store the values
+                op::movi(0x10, 0),
+                op::sww(RegId::HP, 0x29, 0x10),
+                op::addi(0x10, 0x10, 1),
+                op::sw(RegId::HP, 0x10, 0),
+                op::sww(RegId::HP, 0x29, 0x10),
+                op::addi(0x10, 0x10, 1),
+                op::sw(RegId::HP, 0x10, 0),
+                op::sww(RegId::HP, 0x29, 0x10),
+                op::addi(0x10, 0x10, 1),
+                op::sw(RegId::HP, 0x10, 0),
+                op::sww(RegId::HP, 0x29, 0x10),
+                // Done
+                op::ret(1),
+            ]
+            .into_iter()
+            .collect::<Vec<u8>>()
+            .as_slice(),
+            &mut rng,
+        );
+
+        let transfer_amount = 100 as Word;
+        let asset_id = AssetId::from([2; 32]);
+        let (script, _) = script_with_data_offset!(
+            data_offset,
+            vec![
+                // Set register `0x10` to `Call`
+                op::movi(0x10, data_offset + AssetId::LEN as u32),
+                op::call(0x10, RegId::ZERO, RegId::ZERO, RegId::CGAS),
+                op::ret(RegId::ONE),
+            ],
+            TxParameters::DEFAULT.tx_offset()
+        );
+
+        let script_data: Vec<u8> = [
+            asset_id.as_ref(),
+            Call::new(contract_id, 0, 0).to_bytes().as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+
+        let mut builder = TxBuilder::new(2322);
+
+        let tx_1 = builder
+            .script_gas_limit(10000)
+            .coin_input(AssetId::zeroed(), 10000)
+            .start_script(script.clone(), script_data.clone())
+            .contract_input(contract_id)
+            .coin_input(asset_id, transfer_amount)
+            .fee_input()
+            .contract_output(&contract_id)
+            .build()
+            .transaction()
+            .clone();
+
+        let tx_2 = builder
+            .script_gas_limit(10000)
+            .coin_input(AssetId::zeroed(), 10000)
+            .start_script(script, script_data)
+            .contract_input(contract_id)
+            .coin_input(asset_id, transfer_amount)
+            .fee_input()
+            .contract_output(&contract_id)
+            .build()
+            .transaction()
+            .clone();
+
+        let db = Database::default();
+        let mut executor = create_executor(
+            db.clone(),
+            Config {
+                forbid_fake_coins_default: false,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: 1.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![create.into(), tx_1.into(), tx_2.into()],
+        };
+
+        let ExecutionResult {
+            block, tx_status, ..
+        } = executor.produce_and_commit(block).unwrap();
         assert!(matches!(
-            tx_status[1].result,
+            tx_status[3].result,
             TransactionExecutionResult::Success { .. }
         ));
-        let tx = block.transactions()[0].as_script().unwrap();
-        assert_eq!(tx.inputs()[0].balance_root(), balance_root);
-        assert_eq!(tx.inputs()[0].state_root(), state_root);
 
-        let _ = executor
-            .validate(&block)
-            .expect("Validation of block should be successful");
+        let executed_tx_1 = block.transactions()[1].as_script().unwrap();
+        let executed_tx_2 = block.transactions()[2].as_script().unwrap();
+
+        // Check resulting roots
+
+        // Input/Output balances for both txs: None
+        assert_eq!(
+            executed_tx_1.inputs()[0].balance_root(),
+            Some(&Bytes32::zeroed())
+        );
+        assert_eq!(
+            executed_tx_1.outputs()[0].balance_root(),
+            Some(&Bytes32::zeroed())
+        );
+        assert_eq!(
+            executed_tx_2.inputs()[0].balance_root(),
+            Some(&Bytes32::zeroed())
+        );
+        assert_eq!(
+            executed_tx_2.outputs()[0].balance_root(),
+            Some(&Bytes32::zeroed())
+        );
+
+        // Input state for tx 1: empty slots
+        let mut hasher = Sha256::new();
+        for i in 0..4u64 {
+            let mut slot_id = [0u8; 32];
+            slot_id[..8].copy_from_slice(&i.to_be_bytes());
+            hasher.update(slot_id); // the slot key that is modified
+            hasher.update([0u8]); // the slot did not contain any value
+        }
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx_1.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+
+        // Output state for tx 1 and input/output state for tx 1: slots with values 0, 1, 2, 3
+        let mut hasher = Sha256::new();
+        for i in 0..4u64 {
+            let mut slot_id = [0u8; 32];
+            slot_id[..8].copy_from_slice(&i.to_be_bytes());
+            hasher.update(slot_id); // the slot key that is modified
+            hasher.update([1u8]); // the slot contains a value
+            hasher.update(32u64.to_be_bytes()); // slot size is 32 bytes
+            hasher.update(slot_id); // slot value (matches the id)
+        }
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx_1.outputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+        assert_eq!(
+            executed_tx_2.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+        assert_eq!(
+            executed_tx_2.outputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+    }
+
+    /// Creates two different contracts that modify the state and calls them both from a single
+    /// transaction. Then creates another transaction that calls one of the contracts again.
+    /// Ensures the balance and state roots are updated correctly after each call, and that they
+    /// are properly independent between the two contracts.
+    #[test]
+    fn contracts_balance_and_state_roots_updated_correctly_after_calling_multiple_contracts()
+     {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        // Increment the slot matching the tx id by one
+        let contract_code = vec![
+            op::srw(0x10, 0x29, RegId::ZERO),
+            op::addi(0x10, 0x10, 1),
+            op::sww(RegId::ZERO, 0x29, 0x10),
+            op::ret(1),
+        ]
+        .into_iter()
+        .collect::<Vec<u8>>();
+
+        // Create a two different contracts that modify the state
+        let (create1, contract_id1) = create_contract(&contract_code, &mut rng);
+        let (create2, contract_id2) = create_contract(&contract_code, &mut rng);
+
+        let transfer_amount = 100 as Word;
+        let asset_id = AssetId::from([2; 32]);
+
+        let mut builder = TxBuilder::new(2322);
+
+        let (script1, _) = script_with_data_offset!(
+            data_offset,
+            vec![
+                // Set register `0x11` with offset to data that contains `asset_id`
+                op::movi(0x11, data_offset),
+                // Set register `0x12` with `transfer_amount`
+                op::movi(0x12, transfer_amount as u32),
+                // Call first contract
+                op::movi(0x10, data_offset + AssetId::LEN as u32),
+                op::call(0x10, 0x12, 0x11, RegId::CGAS),
+                // Call second contract
+                op::movi(0x10, data_offset + AssetId::LEN as u32 + Call::LEN as u32),
+                op::call(0x10, 0x12, 0x11, RegId::CGAS),
+                op::ret(RegId::ONE),
+            ],
+            TxParameters::DEFAULT.tx_offset()
+        );
+
+        let script_data1: Vec<u8> = [
+            asset_id.as_ref(),
+            Call::new(contract_id1, 0, 0).to_bytes().as_ref(),
+            Call::new(contract_id2, 0, 0).to_bytes().as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+
+        let tx1 = builder
+            .script_gas_limit(10000)
+            .coin_input(AssetId::zeroed(), 10000)
+            .start_script(script1, script_data1)
+            .contract_input(contract_id1)
+            .contract_input(contract_id2)
+            .coin_input(asset_id, transfer_amount * 2)
+            .fee_input()
+            .contract_output(&contract_id1)
+            .contract_output(&contract_id2)
+            .build()
+            .transaction()
+            .clone();
+
+        let (script2, _) = script_with_data_offset!(
+            data_offset,
+            vec![
+                // Set register `0x11` with offset to data that contains `asset_id`
+                op::movi(0x11, data_offset),
+                // Set register `0x12` with `transfer_amount`
+                op::movi(0x12, transfer_amount as u32),
+                // Call first contract
+                op::movi(0x10, data_offset + AssetId::LEN as u32),
+                op::call(0x10, 0x12, 0x11, RegId::CGAS),
+                op::ret(RegId::ONE),
+            ],
+            TxParameters::DEFAULT.tx_offset()
+        );
+
+        let script_data2: Vec<u8> = [
+            asset_id.as_ref(),
+            Call::new(contract_id1, 0, 0).to_bytes().as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+
+        let tx2 = builder
+            .script_gas_limit(10000)
+            .coin_input(AssetId::zeroed(), 10000)
+            .start_script(script2, script_data2)
+            .contract_input(contract_id1)
+            .coin_input(asset_id, transfer_amount)
+            .fee_input()
+            .contract_output(&contract_id1)
+            .build()
+            .transaction()
+            .clone();
+
+        let db = Database::default();
+        let mut executor = create_executor(
+            db.clone(),
+            Config {
+                forbid_fake_coins_default: false,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: 1.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![create1.into(), create2.into(), tx1.into(), tx2.into()],
+        };
+
+        let ExecutionResult {
+            block, tx_status, ..
+        } = executor.produce_and_commit(block).unwrap();
+        assert!(
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. }))
+        );
+
+        // Check resulting roots
+
+        // Tx 1
+        let executed_tx = block.transactions()[2].as_script().unwrap();
+        let tx_id1 = executed_tx.id(&ConsensusParameters::standard().chain_id());
+
+        let mut contract_ids = [contract_id1, contract_id2];
+        contract_ids.sort();
+
+        // Input balances: 0 of asset_id [2; 32] for both contracts
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([0u8]);
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+        assert_eq!(
+            executed_tx.inputs()[1].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Output balances: 100 of asset_id [2; 32] for both contracts
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([1u8]);
+        hasher.update(100u64.to_be_bytes()); // balance
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.outputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+        assert_eq!(
+            executed_tx.outputs()[1].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Input state: empty slots for both contracts
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id1); // the slot key matches tx_id
+        hasher.update([0u8]); // the slot did not contain any value
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+        assert_eq!(
+            executed_tx.inputs()[1].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+
+        // Output state: the slot tx_id with value 1 for both contracts
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id1); // the slot key matches tx_id
+        hasher.update([1u8]); // the slot contains a value
+        hasher.update(32u64.to_be_bytes()); // slot size is 32 bytes
+        hasher.update({
+            let mut value = [0u8; 32];
+            value[..8].copy_from_slice(&1u64.to_be_bytes()); // the value is 1
+            value
+        });
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+        assert_eq!(
+            executed_tx.outputs()[1].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+
+        // Tx 2
+        let executed_tx = block.transactions()[3].as_script().unwrap();
+        let tx_id2 = executed_tx.id(&ConsensusParameters::standard().chain_id());
+
+        let mut tx_ids = [tx_id1, tx_id2];
+        tx_ids.sort();
+
+        // Input balance: 100 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([1u8]);
+        hasher.update(100u64.to_be_bytes()); // balance
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Output balance: 200 of asset_id [2; 32]
+        let mut hasher = Sha256::new();
+        hasher.update(asset_id);
+        hasher.update([1u8]);
+        hasher.update(200u64.to_be_bytes()); // balance
+        let expected_balance_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.outputs()[0].balance_root(),
+            Some(&Bytes32::new(expected_balance_root))
+        );
+
+        // Input state: one empty slot (from tx 2), the slot from tx 1 is not accessed
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id2); // the slot key matches tx_id
+        hasher.update([0u8]); // the slot contains no value
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.inputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
+
+        // Input state: one slot with value 1 (from tx 2), the slot from tx 1 is not accessed
+        let mut hasher = Sha256::new();
+        hasher.update(tx_id2); // the slot key matches tx_id
+        hasher.update([1u8]); // the slot contains a value
+        hasher.update(32u64.to_be_bytes()); // slot size is 32 bytes
+        hasher.update({
+            let mut value = [0u8; 32];
+            value[..8].copy_from_slice(&1u64.to_be_bytes()); // the value is 1
+            value
+        });
+        let expected_state_root: [u8; 32] = hasher.finalize().into();
+        assert_eq!(
+            executed_tx.outputs()[0].state_root(),
+            Some(&Bytes32::new(expected_state_root))
+        );
     }
 
     #[test]
@@ -2052,10 +2689,9 @@ mod tests {
         let _ = executor.produce_and_commit(block).unwrap();
 
         // Assert the balance root should not be affected.
-        let empty_state = (*sparse::empty_sum()).into();
         assert_eq!(
             ContractRef::new(db, contract_id).balance_root().unwrap(),
-            empty_state
+            Bytes32::zeroed()
         );
     }
 
@@ -2257,13 +2893,12 @@ mod tests {
             .unwrap()
             .into_result();
         // Corrupt the utxo_id of the contract output
-        if let Transaction::Script(script) = &mut second_block.transactions_mut()[0] {
-            if let Input::Contract(contract::Contract { utxo_id, .. }) =
+        if let Transaction::Script(script) = &mut second_block.transactions_mut()[0]
+            && let Input::Contract(contract::Contract { utxo_id, .. }) =
                 &mut script.inputs_mut()[0]
-            {
-                // use a previously valid contract id which isn't the correct one for this block
-                *utxo_id = UtxoId::new(tx_id, 0);
-            }
+        {
+            // use a previously valid contract id which isn't the correct one for this block
+            *utxo_id = UtxoId::new(tx_id, 0);
         }
 
         let verifier = create_executor(db, Default::default());
@@ -2724,7 +3359,7 @@ mod tests {
                 recipient,
                 nonce,
                 amount,
-                data: data.unwrap_or_default(),
+                data: data.unwrap_or_default().into(),
                 da_height: 1u64.into(),
             })
             .message_id()
@@ -3203,6 +3838,354 @@ mod tests {
         ));
         assert_eq!(res.skipped_transactions.len(), 0);
         assert_eq!(res.block.transactions().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn preconfirmation__tx_index_correct_for_first_transaction() {
+        use fuel_core_executor::{
+            executor::TimeoutOnlyTxWaiter,
+            ports::PreconfirmationSenderPort,
+        };
+        use fuel_core_types::services::preconfirmation::{
+            Preconfirmation,
+            PreconfirmationStatus,
+        };
+
+        // Given
+        struct MockPreconfirmationsSender {
+            sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+        }
+
+        impl PreconfirmationSenderPort for MockPreconfirmationsSender {
+            fn try_send(
+                &self,
+                preconfirmations: Vec<Preconfirmation>,
+            ) -> Vec<Preconfirmation> {
+                preconfirmations
+            }
+
+            async fn send(&self, preconfirmations: Vec<Preconfirmation>) {
+                self.sender.send(preconfirmations).await.unwrap();
+            }
+        }
+
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.r#gen();
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let tx_id = tx.id(&ChainId::default());
+
+        let config = Config {
+            forbid_fake_coins_default: false,
+            ..Default::default()
+        };
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let _res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price: 0,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                MockPreconfirmationsSender { sender },
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let preconfirmations = receiver.recv().await.unwrap();
+        // Find the preconfirmation for our transaction
+        let our_preconfirmation = preconfirmations
+            .iter()
+            .find(|p| p.tx_id == tx_id)
+            .expect("Should have preconfirmation for our transaction");
+
+        match &our_preconfirmation.status {
+            PreconfirmationStatus::Success { tx_pointer, .. } => {
+                assert_eq!(
+                    tx_pointer.tx_index(),
+                    0,
+                    "First transaction should have index 0"
+                );
+            }
+            status => panic!("Expected Success status, got: {:?}", status),
+        }
+    }
+
+    #[tokio::test]
+    async fn preconfirmation__tx_indices_correct_for_multiple_transactions() {
+        use fuel_core_executor::{
+            executor::TimeoutOnlyTxWaiter,
+            ports::PreconfirmationSenderPort,
+        };
+        use fuel_core_types::services::preconfirmation::{
+            Preconfirmation,
+            PreconfirmationStatus,
+        };
+
+        // Given
+        struct MockPreconfirmationsSender {
+            sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+        }
+
+        impl PreconfirmationSenderPort for MockPreconfirmationsSender {
+            fn try_send(
+                &self,
+                preconfirmations: Vec<Preconfirmation>,
+            ) -> Vec<Preconfirmation> {
+                preconfirmations
+            }
+
+            async fn send(&self, preconfirmations: Vec<Preconfirmation>) {
+                self.sender.send(preconfirmations).await.unwrap();
+            }
+        }
+
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.r#gen();
+
+        // Create 3 transactions with different script data to ensure unique tx ids
+        let tx1 = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let tx2 = TransactionBuilder::script(vec![], vec![1])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let tx3 = TransactionBuilder::script(vec![], vec![1, 2])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let tx1_id = tx1.id(&ChainId::default());
+        let tx2_id = tx2.id(&ChainId::default());
+        let tx3_id = tx3.id(&ChainId::default());
+
+        let config = Config {
+            forbid_fake_coins_default: false,
+            ..Default::default()
+        };
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let _res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![
+                        tx1.into(),
+                        tx2.into(),
+                        tx3.into(),
+                    ]),
+                    gas_price: 0,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                MockPreconfirmationsSender { sender },
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let preconfirmations = receiver.recv().await.unwrap();
+
+        // Find preconfirmations for our transactions
+        let tx1_preconf = preconfirmations
+            .iter()
+            .find(|p| p.tx_id == tx1_id)
+            .expect("Should have preconfirmation for tx1");
+        let tx2_preconf = preconfirmations
+            .iter()
+            .find(|p| p.tx_id == tx2_id)
+            .expect("Should have preconfirmation for tx2");
+        let tx3_preconf = preconfirmations
+            .iter()
+            .find(|p| p.tx_id == tx3_id)
+            .expect("Should have preconfirmation for tx3");
+
+        // Verify tx1 has index 0
+        match &tx1_preconf.status {
+            PreconfirmationStatus::Success { tx_pointer, .. } => {
+                assert_eq!(
+                    tx_pointer.tx_index(),
+                    0,
+                    "First transaction should have index 0"
+                );
+            }
+            status => panic!("Expected Success status for tx1, got: {:?}", status),
+        }
+
+        // Verify tx2 has index 1
+        match &tx2_preconf.status {
+            PreconfirmationStatus::Success { tx_pointer, .. } => {
+                assert_eq!(
+                    tx_pointer.tx_index(),
+                    1,
+                    "Second transaction should have index 1"
+                );
+            }
+            status => panic!("Expected Success status for tx2, got: {:?}", status),
+        }
+
+        // Verify tx3 has index 2
+        match &tx3_preconf.status {
+            PreconfirmationStatus::Success { tx_pointer, .. } => {
+                assert_eq!(
+                    tx_pointer.tx_index(),
+                    2,
+                    "Third transaction should have index 2"
+                );
+            }
+            status => panic!("Expected Success status for tx3, got: {:?}", status),
+        }
+    }
+
+    #[tokio::test]
+    async fn produce_without_commit_with_source__includes_a_mint_with_whatever_gas_price_provided()
+     {
+        use fuel_core_executor::executor::{
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        };
+
+        // Given
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.r#gen();
+        let gas_price = 1000;
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                4321,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let config = Config {
+            forbid_fake_coins_default: false,
+            ..Default::default()
+        };
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let mint = res
+            .block
+            .transactions()
+            .first()
+            .expect("all blocks should have at least one tx (the mint)")
+            .as_mint()
+            .expect("the last tx should be a mint");
+        assert_eq!(mint.gas_price(), &gas_price);
+    }
+
+    #[tokio::test]
+    async fn validate__will_fail_if_gas_price_does_not_match_expected_value() {
+        use fuel_core_executor::executor::{
+            TimeoutOnlyTxWaiter,
+            TransparentPreconfirmationSender,
+        };
+
+        // Given
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.r#gen();
+        let gas_price = 1000;
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                4321,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let config = Config {
+            forbid_fake_coins_default: false,
+            ..Default::default()
+        };
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                TransparentPreconfirmationSender,
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let mut block = res.block;
+        let mint = block.transactions_mut().first_mut().unwrap();
+        let price = mint.as_mint_mut().unwrap().gas_price_mut();
+        *price = gas_price * 2;
+
+        let res = exec.validate(&block);
+        assert!(
+            matches!(res, Err(ExecutorError::BlockMismatch)),
+            "Expected BlockMismatch error, got: {res:?}"
+        );
     }
 
     #[test]

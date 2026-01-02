@@ -31,6 +31,8 @@ mod dos;
 #[cfg(not(feature = "only-p2p"))]
 mod fee_collection_contract;
 #[cfg(not(feature = "only-p2p"))]
+mod fuel_client;
+#[cfg(not(feature = "only-p2p"))]
 mod gas_price;
 #[cfg(not(feature = "only-p2p"))]
 mod graphql_extensions;
@@ -79,6 +81,8 @@ mod preconfirmations_gossip;
 mod sync;
 #[cfg(feature = "only-p2p")]
 mod tx_gossip;
+#[cfg(feature = "only-p2p")]
+mod tx_subscription;
 
 #[cfg(feature = "only-p2p")]
 mod peering;

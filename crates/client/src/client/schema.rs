@@ -15,7 +15,6 @@ use std::{
         self,
         Debug,
     },
-    io::ErrorKind,
     num::TryFromIntError,
 };
 use thiserror::Error;
@@ -58,7 +57,7 @@ pub struct StartSession {
     pub start_session: cynic::Id,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(cynic::QueryVariables, Clone)]
 pub struct IdArg {
     pub id: cynic::Id,
 }
@@ -85,7 +84,7 @@ pub struct Reset {
     pub reset: bool,
 }
 
-#[derive(Debug, cynic::QueryVariables)]
+#[derive(Debug, cynic::QueryVariables, Clone)]
 pub struct ExecuteArgs {
     pub id: cynic::Id,
     pub op: String,
@@ -102,7 +101,7 @@ pub struct Execute {
     pub execute: bool,
 }
 
-#[derive(Debug, cynic::QueryVariables)]
+#[derive(Debug, cynic::QueryVariables, Clone)]
 pub struct RegisterArgs {
     pub id: cynic::Id,
     pub register: U32,
@@ -119,7 +118,7 @@ pub struct Register {
     pub register: U64,
 }
 
-#[derive(Debug, cynic::QueryVariables)]
+#[derive(Debug, cynic::QueryVariables, Clone)]
 pub struct MemoryArgs {
     pub id: cynic::Id,
     pub start: U32,
@@ -137,7 +136,7 @@ pub struct Memory {
     pub memory: String,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct SetBreakpointArgs {
     pub id: cynic::Id,
     pub bp: Breakpoint,
@@ -154,14 +153,14 @@ pub struct SetBreakpoint {
     pub set_breakpoint: bool,
 }
 
-#[derive(cynic::InputObject, Debug)]
+#[derive(cynic::InputObject, Debug, Clone)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Breakpoint {
     pub contract: ContractId,
     pub pc: U64,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct SetSingleSteppingArgs {
     pub id: cynic::Id,
     pub enable: bool,
@@ -178,7 +177,7 @@ pub struct SetSingleStepping {
     pub set_single_stepping: bool,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct StartTxArgs {
     pub id: cynic::Id,
     pub tx: String,
@@ -195,7 +194,7 @@ pub struct StartTx {
     pub start_tx: RunResult,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContinueTxArgs {
     pub id: cynic::Id,
 }
@@ -245,7 +244,7 @@ pub struct OutputBreakpoint {
 }
 
 /// Generic graphql pagination query args
-#[derive(cynic::QueryVariables, Debug, Default)]
+#[derive(cynic::QueryVariables, Debug, Default, Clone)]
 pub struct ConnectionArgs {
     /// Skip until cursor (forward pagination)
     pub after: Option<String>,
@@ -319,7 +318,7 @@ impl From<FromHexError> for ConversionError {
 
 impl From<ConversionError> for std::io::Error {
     fn from(e: ConversionError) -> Self {
-        std::io::Error::new(ErrorKind::Other, e)
+        std::io::Error::other(e)
     }
 }
 

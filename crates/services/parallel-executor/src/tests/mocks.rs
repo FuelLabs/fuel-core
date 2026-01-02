@@ -6,10 +6,7 @@ use std::{
     },
 };
 
-use fuel_core_executor::ports::{
-    PreconfirmationSenderPort,
-    RelayerPort,
-};
+use fuel_core_executor::ports::RelayerPort;
 use fuel_core_types::{
     blockchain::primitives::DaBlockHeight,
     fuel_tx::{
@@ -20,7 +17,6 @@ use fuel_core_types::{
         CheckedTransaction,
         IntoChecked,
     },
-    services::preconfirmation::Preconfirmation,
 };
 
 use crate::ports::{
@@ -169,22 +165,4 @@ fn into_checked_txs(txs: &[&Transaction]) -> Vec<CheckedTransaction> {
                 .into()
         })
         .collect()
-}
-
-#[derive(Clone, Debug)]
-pub struct MockPreconfirmationSender;
-
-impl PreconfirmationSenderPort for MockPreconfirmationSender {
-    fn send(
-        &self,
-        _preconfirmations: Vec<
-            fuel_core_types::services::preconfirmation::Preconfirmation,
-        >,
-    ) -> impl Future<Output = ()> + Send {
-        futures::future::ready(())
-    }
-
-    fn try_send(&self, preconfirmations: Vec<Preconfirmation>) -> Vec<Preconfirmation> {
-        preconfirmations
-    }
 }

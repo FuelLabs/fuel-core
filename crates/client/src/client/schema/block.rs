@@ -1,5 +1,6 @@
 use super::{
     Bytes32,
+    HexString,
     U16,
 };
 use crate::client::schema::{
@@ -18,7 +19,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BlockByIdArgs {
     pub id: Option<BlockId>,
 }
@@ -34,7 +35,7 @@ pub struct BlockByIdQuery {
     pub block: Option<Block>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BlockByHeightArgs {
     pub height: Option<U32>,
 }
@@ -106,7 +107,7 @@ pub struct BlockHeightFragment {
     pub height: U32,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ProduceBlockArgs {
     pub start_timestamp: Option<Tai64Timestamp>,
     pub blocks_to_produce: U32,
@@ -192,6 +193,13 @@ impl Block {
             Consensus::Unknown => None,
         }
     }
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Subscription")]
+pub struct NewBlocksSubscription {
+    #[cynic(rename = "alpha__new_blocks")]
+    pub new_blocks: HexString,
 }
 
 impl From<BlockHeightFragment> for BlockHeight {

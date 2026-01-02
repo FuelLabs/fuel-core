@@ -146,7 +146,6 @@ pub mod merkle {
             binary,
             sparse,
         },
-        fuel_tx::ContractId,
         fuel_types::BlockHeight,
     };
 
@@ -306,46 +305,6 @@ pub mod merkle {
         type Key = DenseMetadataKey<BlockHeight>;
         type OwnedKey = Self::Key;
         type Value = DenseMerkleMetadata;
-        type OwnedValue = Self::Value;
-    }
-
-    /// The table of SMT data for Contract assets.
-    pub struct ContractsAssetsMerkleData;
-
-    impl Mappable for ContractsAssetsMerkleData {
-        type Key = [u8; 32];
-        type OwnedKey = Self::Key;
-        type Value = sparse::Primitive;
-        type OwnedValue = Self::Value;
-    }
-
-    /// The metadata table for [`ContractsAssetsMerkleData`] table
-    pub struct ContractsAssetsMerkleMetadata;
-
-    impl Mappable for ContractsAssetsMerkleMetadata {
-        type Key = ContractId;
-        type OwnedKey = Self::Key;
-        type Value = SparseMerkleMetadata;
-        type OwnedValue = Self::Value;
-    }
-
-    /// The table of SMT data for Contract state.
-    pub struct ContractsStateMerkleData;
-
-    impl Mappable for ContractsStateMerkleData {
-        type Key = [u8; 32];
-        type OwnedKey = Self::Key;
-        type Value = sparse::Primitive;
-        type OwnedValue = Self::Value;
-    }
-
-    /// The metadata table for [`ContractsStateMerkleData`] table
-    pub struct ContractsStateMerkleMetadata;
-
-    impl Mappable for ContractsStateMerkleMetadata {
-        type Key = ContractId;
-        type OwnedKey = Self::Key;
-        type Value = SparseMerkleMetadata;
         type OwnedValue = Self::Value;
     }
 }

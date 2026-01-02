@@ -131,10 +131,9 @@ impl TestSetupBuilder {
         balances: Vec<ContractBalanceConfig>,
         tx_pointer: Option<TxPointer>,
     ) -> (Salt, ContractId) {
-        let contract = Contract::from(code.clone());
-        let root = contract.root();
+        let root = Contract::root_from_code(&code);
         let salt: Salt = self.rng.r#gen();
-        let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
+        let contract_id = Contract::id(&salt, &root, &Contract::default_state_root());
 
         let tx_pointer = tx_pointer.unwrap_or_default();
         let utxo_id: UtxoId = self.rng.r#gen();
@@ -190,7 +189,7 @@ impl TestSetupBuilder {
                             output_index: utxo_id.output_index(),
                             tx_pointer_block_height: tx_pointer.block_height(),
                             tx_pointer_tx_idx: tx_pointer.tx_index(),
-                            owner: *owner,
+                            owner: (*owner).into(),
                             amount: *amount,
                             asset_id: *asset_id,
                         })

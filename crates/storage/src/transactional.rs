@@ -604,7 +604,7 @@ where
         _: Option<&[u8]>,
         _: Option<&[u8]>,
         _: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         unimplemented!()
     }
 
@@ -614,7 +614,7 @@ where
         _: Option<&[u8]>,
         _: Option<&[u8]>,
         _: IterDirection,
-    ) -> BoxedIter<KeyItem> {
+    ) -> BoxedIter<'_, KeyItem> {
         unimplemented!()
     }
 }

@@ -14,7 +14,6 @@ use crate::{
         upgrade_transaction,
     },
 };
-use latest_fuel_core_type::fuel_tx::field::ChargeableBody;
 use libp2p::{
     futures::StreamExt,
     identity::secp256k1::Keypair as SecpKeypair,
@@ -24,6 +23,7 @@ use rand::{
     rngs::StdRng,
 };
 use std::time::Duration;
+use version_44_fuel_core_type::fuel_tx::field::ChargeableBody;
 
 #[ignore]
 /// TODO: Solve error: `Occurred untyped error: Error with WASM initialization: Failed to instantiate the module: incompatible import type for `host_v1::peek_next_txs_size``
@@ -111,17 +111,18 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
     drop(imported_blocks);
 
     // When
-    let subsections = latest_fuel_core_type::fuel_tx::UploadSubsection::split_bytecode(
-        latest_fuel_core_upgradable_executor::WASM_BYTECODE,
-        SUBSECTION_SIZE,
-    )
-    .unwrap();
+    let subsections =
+        version_44_fuel_core_type::fuel_tx::UploadSubsection::split_bytecode(
+            latest_fuel_core_upgradable_executor::WASM_BYTECODE,
+            SUBSECTION_SIZE,
+        )
+        .unwrap();
     let mut rng = StdRng::seed_from_u64(12345);
     let amount = 100000;
     let transactions = transactions_from_subsections(&mut rng, subsections, amount);
     let root = transactions[0].body().root;
     for upload in transactions {
-        let tx = latest_fuel_core_type::fuel_tx::Transaction::Upload(upload);
+        let tx = version_44_fuel_core_type::fuel_tx::Transaction::Upload(upload);
         validator_node
             .client
             .submit_and_await_commit(&tx)
@@ -129,11 +130,11 @@ async fn latest_state_transition_function_is_forward_compatible_with_v44_binary(
             .unwrap();
     }
     let upgrade = upgrade_transaction(
-        latest_fuel_core_type::fuel_tx::UpgradePurpose::StateTransition { root },
+        version_44_fuel_core_type::fuel_tx::UpgradePurpose::StateTransition { root },
         &mut rng,
         amount,
     );
-    let upgrade_tx = latest_fuel_core_type::fuel_tx::Transaction::Upgrade(upgrade);
+    let upgrade_tx = version_44_fuel_core_type::fuel_tx::Transaction::Upgrade(upgrade);
     validator_node
         .client
         .submit_and_await_commit(&upgrade_tx)

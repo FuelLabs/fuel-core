@@ -107,7 +107,7 @@ impl crate::Randomize for ContractConfig {
             value: Bytes32::randomize(&mut rng).to_vec(),
         }];
 
-        let contract = Contract::from(code.clone());
+        let contract_root = Contract::root_from_code(&code);
         let state_root = {
             let states = states
                 .iter()
@@ -117,7 +117,7 @@ impl crate::Randomize for ContractConfig {
             Contract::initial_state_root(states.iter())
         };
         let salt = Salt::zeroed();
-        let contract_id = contract.id(&salt, &contract.root(), &state_root);
+        let contract_id = Contract::id(&salt, &contract_root, &state_root);
 
         Self {
             contract_id,
@@ -146,9 +146,8 @@ impl ContractConfig {
             .unwrap();
         let state_root = Contract::initial_state_root(slots.iter());
 
-        let contract = Contract::from(self.code.clone());
-        let root = contract.root();
-        let contract_id = contract.id(&salt, &root, &state_root);
+        let root = Contract::root_from_code(&self.code);
+        let contract_id = Contract::id(&salt, &root, &state_root);
         self.contract_id = contract_id;
     }
 }

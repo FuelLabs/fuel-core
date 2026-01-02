@@ -254,7 +254,7 @@ impl BlockProducerDatabase for MockDb {
         blocks.keys().max().cloned()
     }
 
-    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<CompressedBlock>> {
+    fn get_block(&self, height: &BlockHeight) -> StorageResult<Cow<'_, CompressedBlock>> {
         let blocks = self.blocks.lock().unwrap();
         blocks
             .get(height)

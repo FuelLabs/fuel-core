@@ -2,7 +2,10 @@ use fuel_core::service::Config;
 use fuel_core_bin::FuelService;
 use fuel_core_client::client::{
     FuelClient,
-    types::TransactionStatus,
+    types::{
+        TransactionStatus,
+        primitives::AssetId,
+    },
 };
 use fuel_core_types::{
     fuel_asm::{
@@ -75,7 +78,7 @@ async fn asset_info_mint_burn() {
     let contract = Contract::from(bytecode.as_ref());
     let root = contract.root();
     let state_root = Contract::initial_state_root(std::iter::empty());
-    let contract_id = contract.id(&salt, &root, &state_root);
+    let contract_id = Contract::id(&salt, &root, &state_root);
     let output = Output::contract_created(contract_id, state_root);
 
     // Create the contract deploy transaction.
@@ -130,8 +133,8 @@ async fn asset_info_mint_burn() {
         .asset_info(&contract_id.asset_id(&SubAssetId::zeroed()))
         .await
         .unwrap()
+        .unwrap()
         .total_supply;
-
     // Then
     // We should have the minted amount first
     assert_eq!(initial_supply, mint_amount as u128);
@@ -177,9 +180,27 @@ async fn asset_info_mint_burn() {
         .asset_info(&contract_id.asset_id(&SubAssetId::zeroed()))
         .await
         .unwrap()
+        .unwrap()
         .total_supply;
 
     // Then
     // We should have the minted amount reduced by the burned amount
     assert_eq!(final_supply, (mint_amount - burn_amount) as u128);
+}
+
+#[tokio::test]
+async fn asset_info__returns_null_if_does_not_exist() {
+    // setup server & client
+    let config = Config::local_node();
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // Given
+    let asset_id = AssetId::from([123u8; 32]);
+
+    // When
+    let asset_info = client.asset_info(&asset_id).await.unwrap();
+
+    // Then
+    assert!(asset_info.is_none());
 }

@@ -347,11 +347,11 @@ impl Instance<Source> {
             match storage.size_of_value(key, column) {
                 Ok(value) => {
                     let size = u32::try_from(value.unwrap_or_default()).map_err(|e| {
-                    anyhow::anyhow!(
+                        anyhow::anyhow!(
                         "The size of the value is more than `u32::MAX`. We support only wasm32: {}",
                         e
                     )
-                })?;
+                    })?;
 
                     Ok(pack_exists_size_result(value.is_some(), size, 0))
                 }
@@ -468,12 +468,12 @@ impl Instance<Storage> {
                         let encoded_events = postcard::to_allocvec(&events)
                             .map_err(|e| anyhow::anyhow!(e))?;
                         let encoded_size =
-                        u32::try_from(encoded_events.len()).map_err(|e| {
-                            anyhow::anyhow!(
+                            u32::try_from(encoded_events.len()).map_err(|e| {
+                                anyhow::anyhow!(
                                 "The size of encoded events is more than `u32::MAX`. We support only wasm32: {}",
                                 e
                             )
-                        })?;
+                            })?;
 
                         caller
                             .data_mut()
@@ -614,9 +614,7 @@ impl Instance<InputData> {
         let instance = self
             .linker
             .instantiate(&mut self.store, module)
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to instantiate the module: {}", e.to_string())
-            })?;
+            .map_err(|e| anyhow::anyhow!("Failed to instantiate the module: {}", e))?;
 
         let memory_export =
             instance
@@ -633,7 +631,7 @@ impl Instance<InputData> {
         let run = instance
             .get_typed_func::<u32, u64>(&mut self.store, "execute")
             .map_err(|e| {
-                anyhow::anyhow!("Failed to get the `execute` function: {}", e.to_string())
+                anyhow::anyhow!("Failed to get the `execute` function: {}", e)
             })?;
         let result = run.call(&mut self.store, self.stage.input_component_size)?;
 
@@ -647,10 +645,10 @@ impl Instance<InputData> {
         let slice = &memory.data(&self.store)[ptr..ptr.saturating_add(len)];
 
         postcard::from_bytes(slice).map_err(|e| {
-          match e {
-              postcard::Error::SerdeDeCustom => anyhow::anyhow!(e).context("Error in Deserialization; check feature flags of wasm module during compilation"),
-              _ => anyhow::anyhow!(e).context("Error in Deserialization; fatal"),
-          }
+            match e {
+                postcard::Error::SerdeDeCustom => anyhow::anyhow!(e).context("Error in Deserialization; check feature flags of wasm module during compilation"),
+                _ => anyhow::anyhow!(e).context("Error in Deserialization; fatal"),
+            }
         })
     }
 }

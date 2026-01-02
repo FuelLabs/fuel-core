@@ -2,11 +2,13 @@ use fuel_core_executor::executor::ExecutionOptions;
 use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 #[derive(Clone, Debug, Default)]
-pub struct Config {
-    /// Default mode for `forbid_unauthorized_inputs` in `ExecutionOptions`.
+pub struct Config {/// Default mode for `forbid_unauthorized_inputs` in `ExecutionOptions`.
     pub forbid_unauthorized_inputs_default: bool,
-    /// Default mode for `forbid_fake_utxo` in `ExecutionOptions`
-    pub forbid_fake_utxo_default: bool,
+
+    /// Default mode for `forbid_fake_coins` in `ExecutionOptions`.
+    pub forbid_fake_coins_default: bool,
+    /// Allow usage of syscall during the execution of the transactions.
+    pub allow_syscall: bool,
     /// The version of the native executor to determine usage of native vs WASM executor.
     /// If it is `None`, the `Executor::VERSION` is used.
     ///
@@ -22,8 +24,8 @@ impl From<&Config> for ExecutionOptions {
     fn from(value: &Config) -> Self {
         Self {
             forbid_unauthorized_inputs: value.forbid_unauthorized_inputs_default,
-            forbid_fake_utxo: value.forbid_fake_utxo_default,
-            backtrace: false,
+            forbid_fake_coins: value.forbid_fake_coins_default,
+            allow_syscall: value.allow_syscall,
         }
     }
 }

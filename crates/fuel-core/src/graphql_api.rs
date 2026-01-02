@@ -23,7 +23,9 @@ pub struct Config {
     pub config: ServiceConfig,
     pub utxo_validation: bool,
     pub debug: bool,
+    pub allow_syscall: bool,
     pub historical_execution: bool,
+    pub expensive_subscriptions: bool,
     pub max_tx: usize,
     pub max_gas: u64,
     pub max_size: usize,
@@ -36,6 +38,7 @@ pub struct ServiceConfig {
     pub addr: SocketAddr,
     pub number_of_threads: usize,
     pub database_batch_size: usize,
+    pub block_subscriptions_queue: usize,
     pub max_queries_depth: usize,
     pub max_queries_complexity: usize,
     pub max_queries_recursive_depth: usize,
@@ -105,12 +108,12 @@ pub const DEFAULT_QUERY_COSTS: Costs = Costs {
     submit_and_await: 40001,
     status_change: 40001,
     storage_read: 40,
-    tx_get: 50,
-    tx_status_read: 50,
-    tx_raw_payload: 150,
-    block_header: 150,
-    block_transactions: 1500,
-    block_transactions_ids: 50,
+    tx_get: 200,
+    tx_status_read: 200,
+    tx_raw_payload: 600,
+    block_header: 600,
+    block_transactions: 6000,
+    block_transactions_ids: 200,
     storage_iterator: 100,
     bytecode_read: 8000,
     state_transition_bytecode_read: 76_000,
@@ -180,6 +183,18 @@ pub fn require_historical_execution(ctx: &Context<'_>) -> async_graphql::Result<
     } else {
         Err(async_graphql::Error::new(
             "`--historical-execution` is required for this operation",
+        ))
+    }
+}
+
+pub fn require_expensive_subscriptions(ctx: &Context<'_>) -> async_graphql::Result<()> {
+    let config = ctx.data_unchecked::<Config>();
+
+    if config.expensive_subscriptions {
+        Ok(())
+    } else {
+        Err(async_graphql::Error::new(
+            "`--expensive-subscriptions` is required for this operation",
         ))
     }
 }

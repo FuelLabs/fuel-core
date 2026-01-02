@@ -117,7 +117,7 @@ mod tests {
             .contract_state_range(&contract_id, &Bytes32::new(start_key), range)
             .map_err(|_| ())?
             .into_iter()
-            .map(|v| v.map(Cow::into_owned).map(|v| v.0))
+            .map(|v| v.map(Cow::into_owned).map(|v| v.into()))
             .collect())
     }
 
@@ -214,7 +214,7 @@ mod tests {
                     .get(&state_key)
                     .unwrap()
                     .map(Cow::into_owned)
-                    .map(|b| b.0);
+                    .map(|b| b.0.into_inner());
                 result
             })
             .collect();
@@ -322,6 +322,8 @@ mod tests {
                 result
             })
             .collect();
+
+        let results = results.into_iter().map(Into::into).collect::<Vec<_>>();
 
         (results, remove_status)
     }

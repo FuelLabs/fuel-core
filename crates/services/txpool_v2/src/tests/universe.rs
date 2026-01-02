@@ -6,6 +6,38 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    GasPrice,
+    Service,
+    collision_manager::basic::BasicCollisionManager,
+    config::{
+        BlackList,
+        Config,
+    },
+    error::{
+        Error,
+        InsertionErrorType,
+    },
+    new_service,
+    pool::{
+        Pool,
+        TxPoolStats,
+    },
+    selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
+    service::{
+        Shared,
+        TxPool,
+        verifications::Verification,
+    },
+    storage::graph::{
+        GraphConfig,
+        GraphStorage,
+    },
+    tests::mocks::{
+        MockDBProvider,
+        MockDb,
+    },
+};
 use fuel_core_types::{
     entities::{
         coins::coin::{
@@ -55,6 +87,7 @@ use fuel_core_types::{
         predicate::EmptyStorage,
     },
     services::{
+        executor::memory::MemoryPool,
         transaction_status::TransactionStatus,
         txpool::ArcPoolTx,
     },
@@ -62,40 +95,6 @@ use fuel_core_types::{
 use parking_lot::RwLock;
 use std::time::Duration;
 use tokio::sync::mpsc;
-
-use crate::{
-    GasPrice,
-    Service,
-    collision_manager::basic::BasicCollisionManager,
-    config::{
-        BlackList,
-        Config,
-    },
-    error::{
-        Error,
-        InsertionErrorType,
-    },
-    new_service,
-    pool::{
-        Pool,
-        TxPoolStats,
-    },
-    selection_algorithms::ratio_tip_gas::RatioTipGasSelection,
-    service::{
-        Shared,
-        TxPool,
-        memory::MemoryPool,
-        verifications::Verification,
-    },
-    storage::graph::{
-        GraphConfig,
-        GraphStorage,
-    },
-    tests::mocks::{
-        MockDBProvider,
-        MockDb,
-    },
-};
 
 use super::mocks::{
     MockChainStateInfoProvider,
@@ -266,7 +265,7 @@ impl TestPoolUniverse {
     ) -> (Transaction, ContractId) {
         let (_, gas_coin) = self.setup_coin();
         let contract: Contract = code.clone().into();
-        let id = contract.id(&Default::default(), &contract.root(), &Default::default());
+        let id = Contract::id(&Default::default(), &contract.root(), &Default::default());
         let mut tx_builder = TransactionBuilder::create(
             code.into(),
             Default::default(),
@@ -316,6 +315,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 let tx = Arc::new(tx);
                 pool.write()
@@ -358,6 +358,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 pool.write()
                     .insert(Arc::new(tx), &self.mock_db)
@@ -399,6 +400,7 @@ impl TestPoolUniverse {
                     tx,
                     Default::default(),
                     true,
+                    false,
                 )?;
                 pool.write()
                     .insert(Arc::new(tx), &self.mock_db)
@@ -523,7 +525,7 @@ impl TestPoolUniverse {
         &mut self,
         tx_ids: Vec<TxId>,
     ) {
-        self.await_expected_tx_statuses(tx_ids, |status| {
+        self.await_expected_tx_statuses(tx_ids, |_, status| {
             matches!(status, TransactionStatus::Submitted { .. })
         })
         .await
@@ -534,7 +536,7 @@ impl TestPoolUniverse {
         &mut self,
         tx_ids: Vec<TxId>,
     ) {
-        self.await_expected_tx_statuses(tx_ids, |status| {
+        self.await_expected_tx_statuses(tx_ids, |_, status| {
             matches!(status, TransactionStatus::SqueezedOut { .. })
         })
         .await
@@ -544,7 +546,7 @@ impl TestPoolUniverse {
     pub(crate) async fn await_expected_tx_statuses(
         &mut self,
         tx_ids: Vec<TxId>,
-        predicate: impl Fn(&TransactionStatus) -> bool,
+        predicate: impl Fn(TxId, &TransactionStatus) -> bool,
     ) -> Result<(), TxStatusWaitError> {
         const TIMEOUT: Duration = Duration::from_secs(3);
         const POLL_TIMEOUT: Duration = Duration::from_millis(5);
@@ -563,7 +565,7 @@ impl TestPoolUniverse {
             )
             .await
             {
-                Ok(Some((tx_id, tx_status))) if predicate(&tx_status) => {
+                Ok(Some((tx_id, tx_status))) if predicate(tx_id, &tx_status) => {
                     values.push(tx_id);
                 }
                 Ok(Some(_)) => {

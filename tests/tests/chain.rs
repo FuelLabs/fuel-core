@@ -65,7 +65,7 @@ async fn network_operates_with_non_zero_chain_id() {
         coins: vec![CoinConfig {
             tx_id: *utxo_id.tx_id(),
             output_index: utxo_id.output_index(),
-            owner,
+            owner: owner.into(),
             amount,
             asset_id: AssetId::BASE,
             ..Default::default()
@@ -113,7 +113,7 @@ async fn network_operates_with_non_zero_base_asset_id() {
         coins: vec![CoinConfig {
             tx_id: *utxo_id.tx_id(),
             output_index: utxo_id.output_index(),
-            owner,
+            owner: owner.into(),
             amount,
             asset_id: new_base_asset_id,
             ..Default::default()
