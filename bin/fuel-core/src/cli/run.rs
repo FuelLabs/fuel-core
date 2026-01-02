@@ -107,6 +107,7 @@ use std::num::NonZeroUsize;
 #[cfg(feature = "p2p")]
 mod p2p;
 
+#[cfg(feature = "rpc")]
 mod rpc;
 
 #[cfg(feature = "shared-sequencer")]
@@ -293,7 +294,8 @@ pub struct Command {
     pub p2p_args: p2p::P2PArgs,
 
     #[clap(flatten)]
-    pub rpc_args: rpc::RpcArgs,
+    #[cfg(feature = "rpc")]
+    pub rpc_args: Option<rpc::RpcArgs>,
 
     #[cfg_attr(feature = "p2p", clap(flatten))]
     #[cfg(feature = "p2p")]
@@ -374,6 +376,7 @@ impl Command {
             relayer_args,
             #[cfg(feature = "p2p")]
             p2p_args,
+            #[cfg(feature = "rpc")]
             rpc_args,
             #[cfg(feature = "p2p")]
             sync_args,
@@ -457,7 +460,8 @@ impl Command {
                     .echo_delegation_interval,
             };
 
-        let rpc_config = rpc_args.into_config();
+        #[cfg(feature = "rpc")]
+        let rpc_config = rpc_args.map(|args| args.into_config());
 
         let trigger: Trigger = poa_trigger.into();
 

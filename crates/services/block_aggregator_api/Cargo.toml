@@ -8,7 +8,6 @@ homepage = { workspace = true }
 license = { workspace = true }
 repository = { workspace = true }
 rust-version = { workspace = true }
-build = "build.rs"
 
 [features]
 fault-proving = ["fuel-core-types/fault-proving"]
@@ -16,34 +15,34 @@ fault-proving = ["fuel-core-types/fault-proving"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bytes = { workspace = true, features = ["serde"] }
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
 enum-iterator = { workspace = true }
+flate2 = { workspace = true }
+fuel-core-protobuf = { workspace = true }
 fuel-core-services = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 futures = { workspace = true }
-log = "0.4.27"
+itertools = { workspace = true }
 num_enum = { workspace = true }
-postcard = { workspace = true }
 prost = { workspace = true, features = ["derive"] }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
-tokio-stream = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tokio-stream = { workspace = true, features = ["sync"] }
 tonic = { workspace = true }
-tonic-prost = { workspace = true }
 tracing = { workspace = true }
 
-[build-dependencies]
-tonic-prost-build = { workspace = true }
-
 [dev-dependencies]
+aws-sdk-s3 = { workspace = true, features = ["test-util"] }
+aws-smithy-mocks = { workspace = true }
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
+mockall = { workspace = true }
 proptest = { workspace = true }
 tokio-stream = { workspace = true }
-tracing-subscriber = { workspace = true }

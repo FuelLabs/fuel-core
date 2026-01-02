@@ -27,17 +27,17 @@ fault-proving = [
     "fuel-core-compression-service/fault-proving",
     "fuel-core-benches/fault-proving",
 ]
-rpc = ["fuel-core/rpc", "fuel-core-bin/rpc"]
+rpc = ["fuel-core/rpc", "fuel-core-bin/rpc", "fuel-core-client/rpc"]
+local_rpc = []
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
-aws-config = { version = "1.1.7", features = [
+aws-config = { workspace = true, features = [
     "behavior-version-latest",
 ], optional = true }
-aws-sdk-kms = { version = "1.37.0", optional = true }
+aws-sdk-kms = { workspace = true, optional = true }
+aws-sdk-s3 = { workspace = true }
 clap = { workspace = true }
-cynic = { workspace = true }
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
     "p2p",
     "relayer",
@@ -47,7 +47,7 @@ fuel-core = { path = "../crates/fuel-core", default-features = false, features =
 ] }
 fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
-fuel-core-block-aggregator-api = { workspace = true }
+fuel-core-block-aggregator-api = { path = "../crates/services/block_aggregator_api" }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
 fuel-core-compression-service = { path = "../crates/services/compression", features = [
@@ -72,18 +72,17 @@ fuel-core-txpool = { path = "../crates/services/txpool_v2", features = [
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 fuel-core-upgradable-executor = { path = "../crates/services/upgradable-executor" }
 futures = { workspace = true }
-hex = { workspace = true }
 hyper = { workspace = true, features = ["server"] }
 insta = { workspace = true }
 itertools = { workspace = true }
 k256 = { version = "0.13.3", features = ["ecdsa-core"] }
 postcard = { workspace = true }
 primitive-types = { workspace = true, default-features = false }
+prost = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rstest = "0.15"
 serde_json = { workspace = true }
-spki = "0.7.3"
 tempfile = { workspace = true }
 test-case = { workspace = true }
 test-helpers = { path = "./test-helpers" }
@@ -99,6 +98,8 @@ url = { workspace = true }
 alloy-primitives = { workspace = true }
 alloy-provider = { workspace = true, default-features = false, features = ["reqwest-rustls-tls"] }
 alloy-rpc-types-eth = { workspace = true }
+aws-config = { workspace = true }
+flate2 = { workspace = true }
 fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
 pretty_assertions = "1.4"
 proptest = { workspace = true }

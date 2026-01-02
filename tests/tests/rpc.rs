@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+
 use fuel_core::{
     database::Database,
     service::{
@@ -6,102 +7,89 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_block_aggregator_api::protobuf_types::{
-    BlockHeightRequest as ProtoBlockHeightRequest,
-    BlockRangeRequest as ProtoBlockRangeRequest,
-    NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
-    block::VersionedBlock as ProtoVersionedBlock,
-    block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
-    block_response::Payload as ProtoPayload,
-    header::VersionedHeader as ProtoVersionedHeader,
-};
 use fuel_core_client::client::FuelClient;
-use fuel_core_types::fuel_tx::*;
+use fuel_core_types::{
+    fuel_tx::*,
+    fuel_types::BlockHeight,
+};
 use futures::StreamExt;
-use test_helpers::client_ext::ClientExt;
+use std::iter;
+use tokio::time::sleep;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn get_block_range__can_get_serialized_block_from_rpc() {
-    let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr;
+async fn get_block_range__can_get_serialized_block_from_rpc__literal() {
+    let config = Config::local_node_with_rpc();
 
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
 
-    let graphql_client = FuelClient::from(srv.bound_address);
+    let fuel_client = FuelClient::new_with_rpc(
+        iter::once(srv.bound_address.to_string()),
+        srv.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
 
     let tx = Transaction::default_test_tx();
-    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
-
-    let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
-        .await
-        .expect("could not connect to server");
-
-    let expected_block = graphql_client
-        .full_block_by_height(1)
-        .await
-        .unwrap()
-        .unwrap();
-    let expected_header = expected_block.header;
+    let _ = fuel_client.submit_and_await_commit(&tx).await.unwrap();
 
     // when
-    let request = ProtoBlockRangeRequest { start: 1, end: 1 };
-    let actual_block = if let Some(ProtoPayload::Literal(block)) = rpc_client
-        .get_block_range(request)
+    let stream = fuel_client
+        .get_block_range(BlockHeight::new(1), BlockHeight::new(1))
         .await
-        .unwrap()
-        .into_inner()
-        .next()
-        .await
-        .unwrap()
-        .unwrap()
-        .payload
-    {
-        block
-    } else {
-        panic!("expected literal block payload");
-    };
-    let ProtoVersionedBlock::V1(v1_block) = actual_block.versioned_block.unwrap();
+        .unwrap();
+    futures::pin_mut!(stream);
+    let next = stream.next().await.unwrap();
+    let (actual_block, receipts) = next.unwrap();
+    let actual_height = actual_block.header().height();
 
-    let actual_height = match v1_block.header.unwrap().versioned_header.unwrap() {
-        ProtoVersionedHeader::V1(v1_header) => v1_header.height,
-        ProtoVersionedHeader::V2(v2_header) => v2_header.height,
-    };
     // then
-    assert_eq!(expected_header.height.0, actual_height);
+    let expected_height = BlockHeight::new(1);
+    assert_eq!(&expected_height, actual_height);
+
+    assert!(
+        matches!(
+            receipts[0][1],
+            Receipt::ScriptResult {
+                result: ScriptExecutionResult::Success,
+                ..
+            }
+        ),
+        "should have a script result receipt, received: {:?}",
+        receipts
+    );
+    assert!(
+        matches!(receipts[0][0], Receipt::Return { .. }),
+        "should have a return receipt, received: {:?}",
+        receipts
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn get_block_height__can_get_value_from_rpc() {
-    let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr;
+async fn get_aggregated_height__can_get_value_from_rpc() {
+    let config = Config::local_node_with_rpc();
 
     // given
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
 
-    let graphql_client = FuelClient::from(srv.bound_address);
+    let fuel_client = FuelClient::new_with_rpc(
+        iter::once(srv.bound_address.to_string()),
+        srv.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
 
     let tx = Transaction::default_test_tx();
-    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
+    let _ = fuel_client.submit_and_await_commit(&tx).await.unwrap();
 
-    let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
-        .await
-        .expect("could not connect to server");
+    sleep(std::time::Duration::from_secs(1)).await;
+    let expected_height = BlockHeight::new(1);
 
     // when
-    let request = ProtoBlockHeightRequest {};
-    let expected_height = 1;
-    let actual_height = rpc_client
-        .get_block_height(request)
-        .await
-        .unwrap()
-        .into_inner()
-        .height;
+    let actual_height = fuel_client.get_aggregated_height().await.unwrap();
 
     // then
     assert_eq!(expected_height, actual_height);
@@ -109,48 +97,51 @@ async fn get_block_height__can_get_value_from_rpc() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn new_block_subscription__can_get_expect_block() {
-    let config = Config::local_node();
-    let rpc_url = config.rpc_config.addr;
+    let config = Config::local_node_with_rpc();
 
     let srv = FuelService::from_database(Database::default(), config.clone())
         .await
         .unwrap();
 
-    let graphql_client = FuelClient::from(srv.bound_address);
+    let fuel_client = FuelClient::new_with_rpc(
+        iter::once(srv.bound_address.to_string()),
+        srv.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
 
     let tx = Transaction::default_test_tx();
 
-    let rpc_url = format!("http://{}", rpc_url);
-    let mut rpc_client = ProtoBlockAggregatorClient::connect(rpc_url)
-        .await
-        .expect("could not connect to server");
-
-    let request = ProtoNewBlockSubscriptionRequest {};
-    let mut stream = rpc_client
-        .new_block_subscription(request)
-        .await
-        .unwrap()
-        .into_inner();
-    let _ = graphql_client.submit_and_await_commit(&tx).await.unwrap();
+    let stream = fuel_client.new_block_subscription().await.unwrap();
+    futures::pin_mut!(stream);
+    let _ = fuel_client.submit_and_await_commit(&tx).await.unwrap();
+    let expected_height = BlockHeight::new(1);
 
     // when
-    let next = tokio::time::timeout(std::time::Duration::from_secs(1), stream.next())
-        .await
-        .unwrap();
-    let actual_block =
-        if let Some(ProtoPayload::Literal(block)) = next.unwrap().unwrap().payload {
-            block
-        } else {
-            panic!("expected literal block payload");
-        };
-
-    let ProtoVersionedBlock::V1(v1_block) = actual_block.versioned_block.unwrap();
-    let actual_height = match v1_block.header.unwrap().versioned_header.unwrap() {
-        ProtoVersionedHeader::V1(v1_header) => v1_header.height,
-        ProtoVersionedHeader::V2(v2_header) => v2_header.height,
-    };
+    let (actual_block, receipts) =
+        tokio::time::timeout(std::time::Duration::from_secs(1), &mut stream.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
 
     // then
-    let expected_height = 1;
-    assert_eq!(expected_height, actual_height);
+    let actual_height = actual_block.header().height();
+    assert_eq!(&expected_height, actual_height);
+    assert!(
+        matches!(
+            receipts[0][1],
+            Receipt::ScriptResult {
+                result: ScriptExecutionResult::Success,
+                ..
+            }
+        ),
+        "should have a script result receipt, received: {:?}",
+        receipts
+    );
+    assert!(
+        matches!(receipts[0][0], Receipt::Return { .. }),
+        "should have a return receipt, received: {:?}",
+        receipts
+    );
 }

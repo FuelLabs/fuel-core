@@ -1,12 +1,18 @@
+#[cfg(feature = "fault-proving")]
+use crate::fuel_types::ChainId;
 use crate::{
     blockchain::{
         block::Block,
         header::{
-            GeneratedConsensusFields,
+            ApplicationHeader,
+            BlockHeader,
+            BlockHeaderV1,
+            PartialBlockHeader,
             generate_txns_root,
+            v1::GeneratedApplicationFieldsV1,
         },
-        primitives::DaBlockHeight,
     },
+    fuel_asm::PanicInstruction,
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         BlobBody,
@@ -18,6 +24,8 @@ use crate::{
         Input,
         MessageId,
         Output,
+        Receipt,
+        ScriptExecutionResult,
         StorageSlot,
         Transaction,
         TransactionBuilder,
@@ -38,6 +46,7 @@ use crate::{
         BlobId,
         BlockHeight,
         Nonce,
+        SubAssetId,
     },
     fuel_vm::{
         Contract,
@@ -46,7 +55,6 @@ use crate::{
 };
 use proptest::prelude::*;
 use rand::Rng;
-use tai64::Tai64;
 
 /// Helper function to create a contract creation transaction
 /// from a given contract bytecode.
@@ -72,7 +80,6 @@ pub fn create_contract<R: Rng>(
     (tx, contract_id)
 }
 
-#[allow(unused)]
 fn arb_txs() -> impl Strategy<Value = Vec<Transaction>> {
     prop::collection::vec(arb_transaction(), 0..10)
 }
@@ -427,6 +434,27 @@ prop_compose! {
     }
 }
 
+fn arb_contract_id() -> impl Strategy<Value = ContractId> {
+    any::<[u8; 32]>().prop_map(ContractId::new)
+}
+
+fn arb_sub_asset_id() -> impl Strategy<Value = SubAssetId> {
+    any::<[u8; 32]>().prop_map(SubAssetId::new)
+}
+
+fn arb_panic_instruction() -> impl Strategy<Value = PanicInstruction> {
+    any::<u64>().prop_map(PanicInstruction::from)
+}
+
+fn arb_script_execution_result() -> impl Strategy<Value = ScriptExecutionResult> {
+    prop_oneof![
+        Just(ScriptExecutionResult::Success),
+        Just(ScriptExecutionResult::Revert),
+        Just(ScriptExecutionResult::Panic),
+        any::<u64>().prop_map(ScriptExecutionResult::GenericFailure),
+    ]
+}
+
 fn arb_msg_ids() -> impl Strategy<Value = Vec<MessageId>> {
     prop::collection::vec(arb_msg_id(), 0..10usize)
 }
@@ -485,7 +513,7 @@ fn arb_create_transaction() -> impl Strategy<Value = Transaction> {
     )
         .prop_map(
             |(policies, salt_bytes, storage_slots, inputs, outputs, witnesses)| {
-                let create = crate::fuel_tx::Transaction::create(
+                let create = Transaction::create(
                     0,
                     policies,
                     Salt::from(salt_bytes),
@@ -517,7 +545,7 @@ fn arb_mint_transaction() -> impl Strategy<Value = Transaction> {
                 mint_asset_id,
                 gas_price,
             )| {
-                let mint = crate::fuel_tx::Transaction::mint(
+                let mint = Transaction::mint(
                     tx_pointer,
                     input_contract,
                     output_contract,
@@ -614,40 +642,21 @@ fn arb_blob_transaction() -> impl Strategy<Value = Transaction> {
 }
 
 prop_compose! {
-    fn arb_consensus_header()(
-        prev_root in any::<[u8; 32]>(),
-        time in any::<u64>(),
-    ) -> crate::blockchain::header::ConsensusHeader<GeneratedConsensusFields> {
-        crate::blockchain::header::ConsensusHeader {
-            prev_root:  prev_root.into(),
-            height: BlockHeight::new(0),
-            time: Tai64(time),
-            generated: GeneratedConsensusFields::default(),
-        }
-    }
-}
-
-prop_compose! {
     /// Generate an arbitrary block with a variable number of transactions
     pub fn arb_block()(
         txs in arb_txs(),
         da_height in any::<u64>(),
-        consensus_parameter_version in any::<u32>(),
+        consensus_parameters_version in any::<u32>(),
         state_transition_bytecode_version in any::<u32>(),
         msg_ids in arb_msg_ids(),
         event_root in any::<[u8; 32]>(),
-        mut consensus_header in arb_consensus_header(),
-    ) -> (Block, Vec<MessageId>, Bytes32) {
-        let mut fuel_block = Block::default();
-
-        *fuel_block.transactions_mut() = txs;
-
-        fuel_block.header_mut().set_da_height(DaBlockHeight(da_height));
-        fuel_block.header_mut().set_consensus_parameters_version(consensus_parameter_version);
-        fuel_block.header_mut().set_state_transition_bytecode_version(state_transition_bytecode_version);
-
-        let count = fuel_block.transactions().len().try_into().expect("we shouldn't have more than u16::MAX transactions");
-        let msg_root = msg_ids
+        chain_id in any::<u64>(),
+        receipts in arb_receipts()
+    ) -> (Block, Vec<Receipt>) {
+        let transactions_count = txs.len().try_into().expect("we shouldn't have more than u16::MAX transactions");
+        let message_receipt_count = msg_ids.len().try_into().expect("we shouldn't have more than u32::MAX messages");
+        let transactions_root = generate_txns_root(&txs);
+        let message_outbox_root = msg_ids
             .iter()
             .fold(MerkleRootCalculator::new(), |mut tree, id| {
                 tree.push(id.as_ref());
@@ -655,19 +664,187 @@ prop_compose! {
             })
             .root()
             .into();
-        let tx_root = generate_txns_root(fuel_block.transactions());
-        let event_root = event_root.into();
-        fuel_block.header_mut().set_transactions_count(count);
-        fuel_block.header_mut().set_message_receipt_count(msg_ids.len().try_into().expect("we shouldn't have more than u32::MAX messages"));
-        fuel_block.header_mut().set_transaction_root(tx_root);
-        fuel_block.header_mut().set_message_outbox_root(msg_root);
-        fuel_block.header_mut().set_event_inbox_root(event_root);
 
-        // Consensus
-        // TODO: Include V2 Application with V2 Header
-        let application_hash = fuel_block.header().application_v1().unwrap().hash();
-        consensus_header.generated.application_hash = application_hash;
-        fuel_block.header_mut().set_consensus_header(consensus_header);
-        (fuel_block, msg_ids, event_root)
+        let mut msg_ids = Vec::new();
+        let reverted = receipts
+            .iter()
+            .any(|r| matches!(r, Receipt::Revert { .. } | Receipt::Panic { .. }));
+
+        if !reverted {
+            msg_ids.extend(receipts.iter().filter_map(|r| r.message_id()));
+        }
+
+        let event_root: Bytes32 = event_root.into();
+        let header = {
+            let mut default = BlockHeaderV1::default();
+                            default.set_application_header(ApplicationHeader {
+                                da_height: da_height.into(),
+                                consensus_parameters_version,
+                                state_transition_bytecode_version,
+                                generated: GeneratedApplicationFieldsV1 {
+                                    transactions_count,
+                                    message_receipt_count,
+                                    transactions_root,
+                                    message_outbox_root,
+                                    event_inbox_root: event_root,
+                                },
+                            });
+
+                            BlockHeader::V1(default)
+                        };
+        let partial_block_header = PartialBlockHeader::from(&header);
+        #[cfg(feature = "fault-proving")]
+        let fuel_block = {
+            let chain_id = ChainId::new(chain_id);
+            Block::new(partial_block_header, txs, &msg_ids, event_root, &chain_id).unwrap()
+        };
+        #[cfg(not(feature = "fault-proving"))]
+        let fuel_block = {
+            let _ = chain_id;
+            Block::new(partial_block_header, txs, &msg_ids, event_root).unwrap()
+        };
+        (fuel_block, receipts)
+    }
+}
+
+fn arb_receipt() -> impl Strategy<Value = Receipt> {
+    prop_oneof![
+        (
+            arb_contract_id(),
+            arb_contract_id(),
+            any::<u64>(),
+            arb_asset_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(
+                |(id, to, amount, asset_id, gas, param1, param2, pc, is)| {
+                    Receipt::call(id, to, amount, asset_id, gas, param1, param2, pc, is)
+                },
+            ),
+        (arb_contract_id(), any::<u64>(), any::<u64>(), any::<u64>(),)
+            .prop_map(|(id, val, pc, is)| Receipt::ret(id, val, pc, is)),
+        (
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            prop::collection::vec(any::<u8>(), 0..64),
+        )
+            .prop_map(|(id, ptr, pc, is, data)| Receipt::return_data(
+                id, ptr, pc, is, data,
+            )),
+        (
+            arb_contract_id(),
+            arb_panic_instruction(),
+            any::<u64>(),
+            any::<u64>(),
+            prop::option::of(arb_contract_id()),
+        )
+            .prop_map(|(id, reason, pc, is, panic_contract)| {
+                Receipt::panic(id, reason, pc, is).with_panic_contract_id(panic_contract)
+            }),
+        (arb_contract_id(), any::<u64>(), any::<u64>(), any::<u64>(),)
+            .prop_map(|(id, ra, pc, is)| Receipt::revert(id, ra, pc, is)),
+        (
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(id, ra, rb, rc, rd, pc, is)| {
+                Receipt::log(id, ra, rb, rc, rd, pc, is)
+            }),
+        (
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+            prop::collection::vec(any::<u8>(), 0..64),
+        )
+            .prop_map(|(id, ra, rb, ptr, pc, is, data)| {
+                Receipt::log_data(id, ra, rb, ptr, pc, is, data)
+            }),
+        (
+            arb_contract_id(),
+            arb_contract_id(),
+            any::<u64>(),
+            arb_asset_id(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(id, to, amount, asset_id, pc, is)| {
+                Receipt::transfer(id, to, amount, asset_id, pc, is)
+            }),
+        (
+            arb_contract_id(),
+            arb_address(),
+            any::<u64>(),
+            arb_asset_id(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(id, to, amount, asset_id, pc, is)| {
+                Receipt::transfer_out(id, to, amount, asset_id, pc, is)
+            }),
+        (arb_script_execution_result(), any::<u64>())
+            .prop_map(|(result, gas_used)| Receipt::script_result(result, gas_used),),
+        (
+            arb_address(),
+            arb_address(),
+            any::<u64>(),
+            arb_nonce(),
+            prop::collection::vec(any::<u8>(), 0..64),
+        )
+            .prop_map(|(sender, recipient, amount, nonce, data)| {
+                let len = data.len() as u64;
+                let digest = Output::message_digest(&data);
+                Receipt::message_out_with_len(
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    len,
+                    digest,
+                    Some(data),
+                )
+            }),
+        (
+            arb_sub_asset_id(),
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(sub_id, contract_id, val, pc, is)| {
+                Receipt::mint(sub_id, contract_id, val, pc, is)
+            }),
+        (
+            arb_sub_asset_id(),
+            arb_contract_id(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<u64>(),
+        )
+            .prop_map(|(sub_id, contract_id, val, pc, is)| {
+                Receipt::burn(sub_id, contract_id, val, pc, is)
+            }),
+    ]
+}
+
+prop_compose! {
+    /// generates a list of random receipts
+    pub fn arb_receipts()(
+        receipts in prop::collection::vec(arb_receipt(), 0..10),
+    ) -> Vec<Receipt> {
+        receipts
     }
 }

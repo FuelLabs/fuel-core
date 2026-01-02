@@ -45,6 +45,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
+use self::adapters::BlockImporterAdapter;
 use crate::{
     combined_database::{
         CombinedDatabase,
@@ -60,7 +61,10 @@ use crate::{
     },
 };
 
-use self::adapters::BlockImporterAdapter;
+#[cfg(feature = "rpc")]
+use crate::database::database_description::block_aggregator::BlockAggregatorDatabase;
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::db::storage_or_remote_db::StorageOrRemoteBlocksProvider;
 
 pub mod adapters;
 pub mod config;
@@ -98,6 +102,13 @@ pub struct SharedState {
     pub compression: Option<fuel_core_compression_service::service::SharedData>,
     /// The gas price service shared data.
     pub gas_price_service: fuel_core_gas_price_service::v1::service::SharedData,
+    #[cfg(feature = "rpc")]
+    /// The block aggregator RPC shared data.
+    pub block_aggregator_rpc: Option<
+        fuel_core_block_aggregator_api::service::SharedState<
+            StorageOrRemoteBlocksProvider<Database<BlockAggregatorDatabase>>,
+        >,
+    >,
 }
 
 pub struct FuelService {
@@ -113,6 +124,9 @@ pub struct FuelService {
     pub shared: SharedState,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
+    /// RPC address
+    #[cfg(feature = "rpc")]
+    pub rpc_address: Option<SocketAddr>,
 }
 
 impl Drop for FuelService {
@@ -165,11 +179,20 @@ impl FuelService {
         );
         let bound_address = runner.shared.graph_ql.bound_address;
 
+        #[cfg(feature = "rpc")]
+        let rpc_address = runner
+            .shared
+            .block_aggregator_rpc
+            .clone()
+            .map(|state| state.bound_address);
+
         Ok(FuelService {
             sub_services,
             bound_address,
             shared,
             runner,
+            #[cfg(feature = "rpc")]
+            rpc_address,
         })
     }
 
@@ -193,6 +216,7 @@ impl FuelService {
             Default::default(),
             Default::default(),
             Default::default(),
+            #[cfg(feature = "rpc")]
             Default::default(),
         );
         Self::from_combined_database(combined_database, config).await
@@ -544,9 +568,12 @@ mod tests {
         let mut i = 0;
         loop {
             let mut shutdown = ShutdownListener::spawn();
+            #[cfg(not(feature = "rpc"))]
+            let config = Config::local_node();
+            #[cfg(feature = "rpc")]
+            let config = Config::local_node_with_rpc();
             let service =
-                FuelService::new(Default::default(), Config::local_node(), &mut shutdown)
-                    .unwrap();
+                FuelService::new(Default::default(), config, &mut shutdown).unwrap();
             service.start_and_await().await.unwrap();
             sleep(Duration::from_secs(1));
             for service in service.sub_services() {

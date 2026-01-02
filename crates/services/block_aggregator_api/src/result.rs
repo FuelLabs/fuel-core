@@ -9,6 +9,26 @@ pub enum Error {
     DB(anyhow::Error),
     #[error("Serialization error: {0}")]
     Serialization(anyhow::Error),
+    #[error("Receipt error: {0}")]
+    Receipt(anyhow::Error),
+}
+
+impl Error {
+    pub fn db_error<T: Into<anyhow::Error>>(err: T) -> Self {
+        Error::DB(err.into())
+    }
+
+    pub fn block_source_error<T: Into<anyhow::Error>>(err: T) -> Self {
+        Error::BlockSource(err.into())
+    }
+
+    pub fn receipt_error<T: Into<anyhow::Error>>(err: T) -> Self {
+        Error::Receipt(err.into())
+    }
+
+    pub fn serialization_error<T: Into<anyhow::Error>>(err: T) -> Self {
+        Error::Serialization(err.into())
+    }
 }
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;

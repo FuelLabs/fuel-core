@@ -16,7 +16,7 @@ default = ["rocksdb", "serde"]
 serde = ["dep:serde_with"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
-rpc = ["fuel-core/rpc"]
+rpc = ["fuel-core/rpc", "dep:fuel-core-block-aggregator-api"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer", "dep:cosmrs"]
 rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
 backup = ["rocksdb", "fuel-core-database/backup"]
@@ -42,6 +42,7 @@ fault-proving = [
     "fuel-core-executor/fault-proving",
     "fuel-core-storage/fault-proving",
     "fuel-core-chain-config/fault-proving",
+    "fuel-core-block-aggregator-api?/fault-proving",
     "fuel-core-database/fault-proving",
     "fuel-core-sync?/fault-proving",
     "fuel-core-importer/fault-proving",
@@ -58,9 +59,9 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 cosmrs = { version = "0.21", optional = true }
-derive_more = { version = "0.99" }
+derive_more = { workspace = true }
 enum-iterator = { workspace = true }
-fuel-core-block-aggregator-api = { workspace = true }
+fuel-core-block-aggregator-api = { workspace = true, optional = true }
 fuel-core-chain-config = { workspace = true, features = ["std"] }
 fuel-core-compression-service = { workspace = true }
 fuel-core-consensus-module = { workspace = true }
@@ -126,7 +127,7 @@ fuel-core-executor = { workspace = true, features = [
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
-fuel-core-types = { path = "./../types", features = ["test-helpers"] }
+fuel-core-types = { path = "./../types", features = ["test-helpers", "random"] }
 fuel-core-upgradable-executor = { workspace = true, features = [
     "test-helpers",
 ] }
