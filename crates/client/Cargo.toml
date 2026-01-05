@@ -15,12 +15,13 @@ description = "Tx client and schema specification."
 std = ["fuel-core-types/std"]
 default = ["subscriptions", "std"]
 rpc = [
+    "dep:aws-config",
+    "dep:aws-sdk-s3",
+    "dep:flate2",
     "dep:fuel-core-block-aggregator-api",
     "dep:prost",
     "dep:tonic",
-    "dep:aws-sdk-s3",
-    "dep:aws-config",
-    "dep:flate2",
+    "dep:tokio",
 ]
 test-helpers = []
 subscriptions = [
@@ -59,6 +60,7 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 # We force the version because 4.1.0 update leap seconds that breaks our timestamps
 tai64 = { version = "=4.0.0", features = ["serde"] }
 thiserror = "1.0"
+tokio = { workspace = true, optional = true }
 tonic = { workspace = true, optional = true }
 tracing = "0.1"
 
