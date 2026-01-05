@@ -1790,14 +1790,18 @@ impl FuelClient {
                             endpoint,
                             requester_pays,
                         } = s3;
-                        let zipped_bytes = Self::get_block_from_s3_bucket(
-                            s3_client,
-                            endpoint.as_ref(),
-                            &bucket,
-                            &key,
-                            requester_pays,
-                        )
-                        .await?;
+                        let zipped_bytes = if let Some(inner_s3_client) = s3_client {
+                            Self::get_block_from_s3_bucket(
+                                inner_s3_client,
+                                endpoint.as_ref(),
+                                &bucket,
+                                &key,
+                                requester_pays,
+                            )
+                            .await
+                        } else {
+                            Err(io::Error::other("S3 client not initialized"))
+                        }?;
                         let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
                         let block =
                             ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
@@ -1817,21 +1821,20 @@ impl FuelClient {
         }
     }
     async fn get_block_from_s3_bucket(
-        s3_client: Option<AWSClientManager>,
+        s3_client: AWSClientManager,
         url: Option<&String>,
         bucket: &str,
         key: &str,
         requester_pays: bool,
     ) -> io::Result<prost::bytes::Bytes> {
         use aws_sdk_s3::types::RequestPayer;
-
-        let client = if let Some(s3_client) = s3_client {
-            s3_client.get_client(url).await?
-        } else {
-            Self::new_aws_client(url).await
-        };
         tracing::debug!("getting block from bucket: {} with key {}", bucket, key);
-        let mut req = client.get_object().bucket(bucket).key(key);
+        let mut req = s3_client
+            .get_client(url)
+            .await?
+            .get_object()
+            .bucket(bucket)
+            .key(key);
         if requester_pays {
             req = req.request_payer(RequestPayer::Requester);
         }
