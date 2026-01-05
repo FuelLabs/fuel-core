@@ -8,7 +8,10 @@ use fuel_core_types::{
         UniqueIdentifier,
         UtxoId,
     },
-    fuel_types::ChainId,
+    fuel_types::{
+        BlockHeight,
+        ChainId,
+    },
     services::{
         block_importer::ImportResult,
         transaction_status::TransactionStatus,
@@ -615,6 +618,70 @@ async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_u
         })
         .await
         .unwrap();
+
+    service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn insert__tx_with_expiration_at_next_block_height_is_accepted() {
+    // A transaction with expiration = current_height + 1 should be accepted
+    // because it will be executed in block current_height + 1, before it expires.
+
+    // Given
+    let current_height = BlockHeight::new(100);
+    let next_block_height = current_height.succ().unwrap();
+    let mut universe = TestPoolUniverse::default().with_block_height(current_height);
+    let tx = universe.build_script_transaction_with_expiration(
+        None,
+        None,
+        0,
+        next_block_height,
+    );
+
+    let service = universe.build_service(None, None);
+    service.start_and_await().await.unwrap();
+
+    // When
+    let result = service.shared.insert(tx).await;
+
+    // Then
+    assert!(
+        result.is_ok(),
+        "Transaction with expiration at next block height should be accepted, got: {:?}",
+        result.unwrap_err()
+    );
+
+    service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn insert__tx_with_expiration_at_current_block_height_is_rejected() {
+    // A transaction with expiration = current_height should be rejected
+    // because it will be executed in block current_height + 1, which is after expiration.
+
+    // Given
+    let current_height = BlockHeight::new(100);
+    let mut universe = TestPoolUniverse::default().with_block_height(current_height);
+    let tx =
+        universe.build_script_transaction_with_expiration(None, None, 0, current_height);
+
+    let service = universe.build_service(None, None);
+    service.start_and_await().await.unwrap();
+
+    // When
+    let result = service.shared.insert(tx).await;
+
+    // Then
+    assert!(
+        result.is_err(),
+        "Transaction with expiration at current block height should be rejected"
+    );
+    let err = result.unwrap_err();
+    assert!(
+        err.to_string().contains("TransactionExpiration"),
+        "Expected TransactionExpiration error, got: {:?}",
+        err
+    );
 
     service.stop_and_await().await.unwrap();
 }
