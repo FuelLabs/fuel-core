@@ -194,7 +194,11 @@ mod rpc_deps {
         },
     };
     pub use prost::Message;
-    pub use std::io::Read;
+    pub use std::{
+        collections::HashMap,
+        io::Read,
+    };
+    pub use tokio::sync::RwLock;
     pub use tonic::transport::Channel;
 }
 #[cfg(feature = "rpc")]
@@ -279,7 +283,35 @@ pub struct FuelClient {
     #[cfg(feature = "rpc")]
     rpc_client: Option<ProtoBlockAggregatorClient<Channel>>,
     #[cfg(feature = "rpc")]
-    aws_client: Option<AWSClient>,
+    aws_client: AWSClientManager,
+}
+
+#[cfg(feature = "rpc")]
+#[derive(Debug, Clone)]
+pub struct AWSClientManager {
+    specific: Arc<RwLock<HashMap<Option<String>, AWSClient>>>,
+}
+
+#[cfg(feature = "rpc")]
+impl AWSClientManager {
+    pub fn new() -> Self {
+        Self {
+            specific: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub async fn get_client(&self, url: &Option<String>) -> Result<AWSClient, io::Error> {
+        if let Some(existing) = self.specific.read().await.get(url).cloned() {
+            return Ok(existing);
+        }
+        let client = FuelClient::new_aws_client(url).await;
+        let mut guard = self.specific.write().await;
+        let client = guard
+            .entry(url.clone())
+            .or_insert_with(|| client.clone())
+            .clone();
+        Ok(client)
+    }
 }
 
 impl FromStr for FuelClient {
@@ -347,7 +379,7 @@ impl FuelClient {
         }
         let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
         client.rpc_client = Some(rpc_client);
-        client.aws_client = Some(Self::new_aws_client(None).await);
+        client.aws_client = AWSClientManager::new();
         Ok(client)
     }
 
@@ -361,7 +393,7 @@ impl FuelClient {
             #[cfg(feature = "rpc")]
             rpc_client: None,
             #[cfg(feature = "rpc")]
-            aws_client: None,
+            aws_client: AWSClientManager::new(),
         })
     }
 }
@@ -1721,7 +1753,7 @@ impl FuelClient {
 
     async fn convert_block_response(
         resp: BlockResponse,
-        s3_client: Option<AWSClient>,
+        s3_client: AWSClientManager,
     ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
         let payload = resp
             .payload
@@ -1752,12 +1784,13 @@ impl FuelClient {
                         } = s3;
                         let zipped_bytes = Self::get_block_from_s3_bucket(
                             s3_client,
-                            endpoint.as_ref(),
+                            &endpoint,
                             &bucket,
                             &key,
                             requester_pays,
                         )
                         .await?;
+
                         let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
                         let block =
                             ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
@@ -1777,21 +1810,20 @@ impl FuelClient {
         }
     }
     async fn get_block_from_s3_bucket(
-        s3_client: Option<AWSClient>,
-        url: Option<&String>,
+        s3_client: AWSClientManager,
+        url: &Option<String>,
         bucket: &str,
         key: &str,
         requester_pays: bool,
     ) -> io::Result<prost::bytes::Bytes> {
         use aws_sdk_s3::types::RequestPayer;
-
-        let client = if let Some(inner) = url {
-            Self::new_aws_client(Some(inner)).await
-        } else {
-            s3_client.ok_or(io::Error::other("No AWS client configured"))?
-        };
         tracing::debug!("getting block from bucket: {} with key {}", bucket, key);
-        let mut req = client.get_object().bucket(bucket).key(key);
+        let mut req = s3_client
+            .get_client(url)
+            .await?
+            .get_object()
+            .bucket(bucket)
+            .key(key);
         if requester_pays {
             req = req.request_payer(RequestPayer::Requester);
         }
@@ -1809,7 +1841,7 @@ impl FuelClient {
         Ok(bytes)
     }
 
-    async fn new_aws_client(url: Option<&String>) -> AWSClient {
+    async fn new_aws_client(url: &Option<String>) -> AWSClient {
         let credentials = DefaultCredentialsChain::builder().build().await;
         let mut config_builder = aws_config::defaults(BehaviorVersion::latest())
             .credentials_provider(credentials);

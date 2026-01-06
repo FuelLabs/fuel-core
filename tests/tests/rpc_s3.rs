@@ -230,7 +230,7 @@ async fn get_block_height__no_publish__can_get_value_from_rpc() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn get_block_range__no_publish__does_not_publish_to_s3_bucket() {
+async fn submit_and_await_commit__no_publish__does_not_publish_to_s3_bucket() {
     // setup
     require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
     ensure_bucket_exists().await;
