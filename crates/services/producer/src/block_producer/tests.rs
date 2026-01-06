@@ -696,6 +696,41 @@ mod dry_run {
                 .time()
         }
     }
+
+    #[tokio::test]
+    async fn dry_run__uses_old_block_consensus_parameters() {
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContext::default_from_executor(executor);
+
+        // Given
+        let mut producer = ctx.producer();
+        let block = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
+            .await
+            .unwrap()
+            .into_result()
+            .block;
+        let block_height = block.header().height();
+        let consensus_parameter_version = block.header().consensus_parameters_version();
+        producer.view_provider.consensus_parameters_version =
+            consensus_parameter_version + 1; // change version
+
+        // When
+        let _result = producer
+            .dry_run(vec![], Some(*block_height), None, None, None, false)
+            .await
+            .unwrap();
+
+        // Then
+        let guard = producer.executor.captured.lock().unwrap();
+        let produced_version = guard
+            .as_ref()
+            .unwrap()
+            .header_to_produce
+            .consensus_parameters_version
+            .clone();
+        assert_eq!(produced_version, consensus_parameter_version);
+    }
 }
 
 use fuel_core_types::fuel_tx::field::MintGasPrice;

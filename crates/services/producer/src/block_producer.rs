@@ -25,6 +25,7 @@ use fuel_core_types::{
         header::{
             ApplicationHeader,
             ConsensusHeader,
+            ConsensusParametersVersion,
             PartialBlockHeader,
         },
         primitives::DaBlockHeight,
@@ -527,14 +528,14 @@ where
         view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PartialBlockHeader> {
         let previous_block_info = self.previous_block_info(height, view)?;
-        let consensus_parameters_version = view.latest_consensus_parameters_version()?;
         let state_transition_bytecode_version =
             view.latest_state_transition_bytecode_version()?;
 
         Ok(PartialBlockHeader {
             application: ApplicationHeader {
                 da_height: previous_block_info.da_height,
-                consensus_parameters_version,
+                consensus_parameters_version: previous_block_info
+                    .consensus_parameters_version,
                 state_transition_bytecode_version,
                 generated: Default::default(),
             },
@@ -568,6 +569,9 @@ where
         Ok(PreviousBlockInfo {
             prev_root,
             da_height: previous_block.header().da_height(),
+            consensus_parameters_version: previous_block
+                .header()
+                .consensus_parameters_version(),
         })
     }
 }
@@ -575,4 +579,5 @@ where
 struct PreviousBlockInfo {
     prev_root: Bytes32,
     da_height: DaBlockHeight,
+    consensus_parameters_version: ConsensusParametersVersion,
 }
