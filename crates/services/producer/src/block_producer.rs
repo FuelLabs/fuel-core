@@ -363,7 +363,7 @@ where
                 .unwrap_or(Tai64::UNIX_EPOCH)
         });
 
-        let header = self.new_header(simulated_height, simulated_time, &view)?;
+        let header = self.dry_run_header(simulated_height, simulated_time, &view)?;
 
         let gas_price = if let Some(inner) = gas_price {
             inner
@@ -522,6 +522,33 @@ where
     }
 
     fn new_header(
+        &self,
+        height: BlockHeight,
+        block_time: Tai64,
+        view: &ViewProvider::LatestView,
+    ) -> anyhow::Result<PartialBlockHeader> {
+        let previous_block_info = self.previous_block_info(height, view)?;
+        let consensus_parameters_version = view.latest_consensus_parameters_version()?;
+        let state_transition_bytecode_version =
+            view.latest_state_transition_bytecode_version()?;
+
+        Ok(PartialBlockHeader {
+            application: ApplicationHeader {
+                da_height: previous_block_info.da_height,
+                consensus_parameters_version,
+                state_transition_bytecode_version,
+                generated: Default::default(),
+            },
+            consensus: ConsensusHeader {
+                prev_root: previous_block_info.prev_root,
+                height,
+                time: block_time,
+                generated: Default::default(),
+            },
+        })
+    }
+
+    fn dry_run_header(
         &self,
         height: BlockHeight,
         block_time: Tai64,

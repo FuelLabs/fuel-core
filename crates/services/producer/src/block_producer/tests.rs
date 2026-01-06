@@ -170,7 +170,8 @@ mod produce_and_execute_block_txpool {
     }
 
     #[tokio::test]
-    async fn next_block_contains_expected_consensus_parameters_version() {
+    async fn produce_and_execute_block__next_block_contains_expected_consensus_parameters_version()
+     {
         let mut rng = StdRng::seed_from_u64(0u64);
         // setup dummy previous block
         let prev_height = 1u32.into();
@@ -727,8 +728,7 @@ mod dry_run {
             .as_ref()
             .unwrap()
             .header_to_produce
-            .consensus_parameters_version
-            .clone();
+            .consensus_parameters_version;
         assert_eq!(produced_version, consensus_parameter_version);
     }
 }
