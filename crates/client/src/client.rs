@@ -283,7 +283,7 @@ pub struct FuelClient {
     #[cfg(feature = "rpc")]
     rpc_client: Option<ProtoBlockAggregatorClient<Channel>>,
     #[cfg(feature = "rpc")]
-    aws_client: Option<AWSClientManager>,
+    aws_client: AWSClientManager,
 }
 
 #[cfg(feature = "rpc")]
@@ -379,8 +379,7 @@ impl FuelClient {
         }
         let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
         client.rpc_client = Some(rpc_client);
-        let aws_client_manager = AWSClientManager::new();
-        client.aws_client = Some(aws_client_manager);
+        client.aws_client = AWSClientManager::new();
         Ok(client)
     }
 
@@ -394,7 +393,7 @@ impl FuelClient {
             #[cfg(feature = "rpc")]
             rpc_client: None,
             #[cfg(feature = "rpc")]
-            aws_client: None,
+            aws_client: AWSClientManager::new(),
         })
     }
 }
@@ -1754,7 +1753,7 @@ impl FuelClient {
 
     async fn convert_block_response(
         resp: BlockResponse,
-        s3_client: Option<AWSClientManager>,
+        s3_client: AWSClientManager,
     ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
         let payload = resp
             .payload
@@ -1783,18 +1782,15 @@ impl FuelClient {
                             endpoint,
                             requester_pays,
                         } = s3;
-                        let zipped_bytes = if let Some(inner_s3_client) = s3_client {
-                            Self::get_block_from_s3_bucket(
-                                inner_s3_client,
-                                &endpoint,
-                                &bucket,
-                                &key,
-                                requester_pays,
-                            )
-                            .await
-                        } else {
-                            Err(io::Error::other("S3 client not initialized"))
-                        }?;
+                        let zipped_bytes = Self::get_block_from_s3_bucket(
+                            s3_client,
+                            &endpoint,
+                            &bucket,
+                            &key,
+                            requester_pays,
+                        )
+                        .await?;
+
                         let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
                         let block =
                             ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
