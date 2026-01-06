@@ -722,8 +722,9 @@ mod dry_run {
             consensus_parameter_version + 1; // change version
 
         // When
+        let block_height = Some(*block_height);
         let _result = producer
-            .dry_run(vec![], Some(*block_height), None, None, None, false)
+            .dry_run(vec![], block_height, None, None, None, false)
             .await
             .unwrap();
 
@@ -761,8 +762,9 @@ mod dry_run {
             new_consensus_parameter_version; // change version
 
         // When
+        let block_height = None;
         let _result = producer
-            .dry_run(vec![], None, None, None, None, false)
+            .dry_run(vec![], block_height, None, None, None, false)
             .await
             .unwrap();
 
@@ -798,8 +800,9 @@ mod dry_run {
         producer.view_provider.state_transition_bytecode_version = version + 1; // change version
 
         // When
+        let block_height = Some(*block_height);
         let _result = producer
-            .dry_run(vec![], Some(*block_height), None, None, None, false)
+            .dry_run(vec![], block_height, None, None, None, false)
             .await
             .unwrap();
 
@@ -836,8 +839,9 @@ mod dry_run {
         producer.view_provider.state_transition_bytecode_version = new_version; // change version
 
         // When
+        let block_height = None;
         let _result = producer
-            .dry_run(vec![], None, None, None, None, false)
+            .dry_run(vec![], block_height, None, None, None, false)
             .await
             .unwrap();
 
