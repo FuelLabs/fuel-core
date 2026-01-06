@@ -101,13 +101,9 @@ async fn dry_run__storage_read_replay__returns_counter_state() {
     ] {
         // when
         let tx = counter_contract::increment_tx(&mut rng, contract_id);
+        tracing::warn!("Dry run at height {:?}", height);
         let (statuses, storage_reads) = client
-            .dry_run_opt_record_storage_reads(
-                &[tx],
-                None,
-                None,
-                height.map(|h| h.succ().unwrap()),
-            )
+            .dry_run_opt_record_storage_reads(&[tx], None, None, height)
             .await
             .unwrap();
 

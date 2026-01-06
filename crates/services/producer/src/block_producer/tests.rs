@@ -100,7 +100,7 @@ mod produce_and_execute_block_txpool {
         assert!(
             matches!(
                 err.downcast_ref::<Error>(),
-                Some(Error::BlockHeightShouldBeHigherThanPrevious { .. })
+                Some(Error::CannotProduceGenesisBlock)
             ),
             "unexpected err {err:?}"
         );
@@ -286,20 +286,6 @@ mod produce_and_execute_block_txpool {
             header.state_transition_bytecode_version(),
             state_transition_bytecode_version
         );
-    }
-
-    #[tokio::test]
-    async fn cant_produce_if_no_previous_block() {
-        // fail if there is no block that precedes the current height.
-        let ctx = TestContext::default();
-        let producer = ctx.producer();
-
-        let err = producer
-            .produce_and_execute_block_txpool(100u32.into(), Tai64::now(), ())
-            .await
-            .expect_err("expected failure");
-
-        assert!(err.to_string().contains("Didn't find block for test"));
     }
 
     #[tokio::test]
