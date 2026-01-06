@@ -27,6 +27,7 @@ use fuel_core_types::{
             ConsensusHeader,
             ConsensusParametersVersion,
             PartialBlockHeader,
+            StateTransitionBytecodeVersion,
         },
         primitives::DaBlockHeight,
     },
@@ -351,19 +352,20 @@ where
         let view = self.view_provider.latest_view()?;
         let latest_height = view.latest_height().unwrap_or_default();
 
-        let simulated_height = height.unwrap_or_else(|| {
-            latest_height
-                .succ()
-                .expect("It is impossible to overflow the current block height")
-        });
-
         let simulated_time = time.unwrap_or_else(|| {
             view.get_block(&latest_height)
                 .map(|block| block.header().time())
                 .unwrap_or(Tai64::UNIX_EPOCH)
         });
 
-        let header = self.dry_run_header(simulated_height, simulated_time, &view)?;
+        let header = if let Some(height) = height {
+            self.dry_run_header(height, simulated_time, &view)?
+        } else {
+            let height = latest_height
+                .succ()
+                .expect("It is impossible to overflow the current block height");
+            self.new_header(height, simulated_time, &view)?
+        };
 
         let gas_price = if let Some(inner) = gas_price {
             inner
@@ -540,7 +542,7 @@ where
                 generated: Default::default(),
             },
             consensus: ConsensusHeader {
-                prev_root: previous_block_info.prev_root,
+                prev_root: previous_block_info.root,
                 height,
                 time: block_time,
                 generated: Default::default(),
@@ -554,20 +556,19 @@ where
         block_time: Tai64,
         view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let previous_block_info = self.previous_block_info(height, view)?;
-        let state_transition_bytecode_version =
-            view.latest_state_transition_bytecode_version()?;
+        let previous_block_info = self.block_info(height, view)?;
 
         Ok(PartialBlockHeader {
             application: ApplicationHeader {
                 da_height: previous_block_info.da_height,
                 consensus_parameters_version: previous_block_info
                     .consensus_parameters_version,
-                state_transition_bytecode_version,
+                state_transition_bytecode_version: previous_block_info
+                    .state_transition_bytecode_version,
                 generated: Default::default(),
             },
             consensus: ConsensusHeader {
-                prev_root: previous_block_info.prev_root,
+                prev_root: previous_block_info.root,
                 height,
                 time: block_time,
                 generated: Default::default(),
@@ -579,7 +580,7 @@ where
         &self,
         height: BlockHeight,
         view: &ViewProvider::LatestView,
-    ) -> anyhow::Result<PreviousBlockInfo> {
+    ) -> anyhow::Result<BlockInfo> {
         let latest_height = view.latest_height().ok_or(Error::NoGenesisBlock)?;
 
         // get info from previous block height
@@ -590,21 +591,32 @@ where
                     height: 0u32.into(),
                     previous_block: latest_height,
                 })?;
-        let previous_block = view.get_block(&prev_height)?;
-        let prev_root = view.block_header_merkle_root(&prev_height)?;
 
-        Ok(PreviousBlockInfo {
-            prev_root,
-            da_height: previous_block.header().da_height(),
-            consensus_parameters_version: previous_block
+        self.block_info(prev_height, view)
+    }
+
+    fn block_info(
+        &self,
+        height: BlockHeight,
+        view: &ViewProvider::LatestView,
+    ) -> anyhow::Result<BlockInfo> {
+        let block = view.get_block(&height)?;
+        let root = view.block_header_merkle_root(&height)?;
+
+        Ok(BlockInfo {
+            root,
+            da_height: block.header().da_height(),
+            consensus_parameters_version: block.header().consensus_parameters_version(),
+            state_transition_bytecode_version: block
                 .header()
-                .consensus_parameters_version(),
+                .state_transition_bytecode_version(),
         })
     }
 }
 
-struct PreviousBlockInfo {
-    prev_root: Bytes32,
+struct BlockInfo {
+    root: Bytes32,
     da_height: DaBlockHeight,
     consensus_parameters_version: ConsensusParametersVersion,
+    state_transition_bytecode_version: StateTransitionBytecodeVersion,
 }
