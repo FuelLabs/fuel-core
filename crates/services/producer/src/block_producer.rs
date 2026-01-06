@@ -556,14 +556,14 @@ where
         block_time: Tai64,
         view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let previous_block_info = self.block_info(height, view)?;
+        let block_info = self.block_info(height, view)?;
+        let previous_block_info = self.previous_block_info(height, view)?;
 
         Ok(PartialBlockHeader {
             application: ApplicationHeader {
-                da_height: previous_block_info.da_height,
-                consensus_parameters_version: previous_block_info
-                    .consensus_parameters_version,
-                state_transition_bytecode_version: previous_block_info
+                da_height: block_info.da_height,
+                consensus_parameters_version: block_info.consensus_parameters_version,
+                state_transition_bytecode_version: block_info
                     .state_transition_bytecode_version,
                 generated: Default::default(),
             },
