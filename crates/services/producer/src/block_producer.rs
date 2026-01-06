@@ -373,14 +373,17 @@ where
                 .unwrap_or(Tai64::UNIX_EPOCH)
         });
 
-        let (header, executor_height) = if let Some(height) = height {
-            let header = self.dry_run_header(height, simulated_time, &view)?;
-            let executor_height = *header.height();
-            (header, Some(executor_height))
-        } else {
-            (self.new_header(simulated_time, &view)?, None)
+        let next_height = latest_height
+            .succ()
+            .expect("Should always be able to increment the latest height");
+
+        let header = match height {
+            Some(height) if height == next_height => {
+                self.new_header(simulated_time, &view)?
+            }
+            Some(height) => self.dry_run_header(height, simulated_time, &view)?,
+            None => self.new_header(simulated_time, &view)?,
         };
-        tracing::warn!("Dry run header height: {:?}", header.height());
 
         let gas_price = if let Some(inner) = gas_price {
             inner
@@ -404,12 +407,7 @@ where
 
         // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
         let result = tokio_rayon::spawn_fifo(move || {
-            executor.dry_run(
-                component,
-                utxo_validation,
-                executor_height,
-                record_storage_reads,
-            )
+            executor.dry_run(component, utxo_validation, height, record_storage_reads)
         })
         .await?;
 
@@ -573,12 +571,13 @@ where
 
     fn dry_run_header(
         &self,
-        base_height: BlockHeight,
+        height: BlockHeight,
         block_time: Tai64,
         view: &ViewProvider::LatestView,
     ) -> anyhow::Result<PartialBlockHeader> {
-        let block_info = self.block_info(base_height, view)?;
-        let next_height = base_height.succ().ok_or(Error::NoGenesisBlock)?;
+        let previous_block_height = height.pred().ok_or(Error::NoGenesisBlock)?;
+        let previous_block_info = self.block_info(previous_block_height, view)?;
+        let block_info = self.block_info(height, view)?;
 
         Ok(PartialBlockHeader {
             application: ApplicationHeader {
@@ -589,8 +588,8 @@ where
                 generated: Default::default(),
             },
             consensus: ConsensusHeader {
-                prev_root: block_info.root,
-                height: next_height,
+                prev_root: previous_block_info.root,
+                height,
                 time: block_time,
                 generated: Default::default(),
             },
