@@ -43,6 +43,7 @@ use fuel_core_p2p::config::{
     NotInitialized,
 };
 
+#[cfg(feature = "test-helpers")]
 #[cfg(feature = "rpc")]
 use fuel_core_block_aggregator_api::service::StorageMethod;
 #[cfg(feature = "test-helpers")]
@@ -50,6 +51,7 @@ use fuel_core_chain_config::{
     ChainConfig,
     StateConfig,
 };
+#[cfg(feature = "test-helpers")]
 #[cfg(feature = "rpc")]
 use fuel_core_types::fuel_types::BlockHeight;
 #[cfg(feature = "test-helpers")]
