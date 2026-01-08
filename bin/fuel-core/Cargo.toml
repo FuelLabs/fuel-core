@@ -37,6 +37,7 @@ production = [
     "shared-sequencer",
     "parquet",
     "aws-kms",
+    "rpc",
 ]
 parallel-executor = ["fuel-core/parallel-executor"]
 fault-proving = [
