@@ -317,6 +317,13 @@ impl AWSClientManager {
     }
 }
 
+#[cfg(feature = "rpc")]
+impl Default for AWSClientManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Normalizes a URL string by ensuring it has an http(s) scheme and the `/v1/graphql` path.
 fn normalize_url(url_str: &str) -> anyhow::Result<Url> {
     let mut raw_url = url_str.to_string();
@@ -344,6 +351,10 @@ impl FromStr for FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
+            rpc_client: None,
+            #[cfg(feature = "rpc")]
+            aws_client: AWSClientManager::new(),
         })
     }
 }
@@ -381,10 +392,10 @@ impl FuelClient {
         graph_ql_urls: impl Iterator<Item = G>,
         rpc_url: R,
     ) -> anyhow::Result<Self> {
-        let urls = graph_ql_urls
-            .map(|str| str_to_url(str.as_ref()))
+        let urls: Vec<_> = graph_ql_urls
+            .map(|str| normalize_url(str.as_ref()))
             .try_collect()?;
-        let mut client = Self::with_urls(urls)?;
+        let mut client = Self::with_urls(&urls)?;
         let mut raw_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url).to_string();
         if !raw_rpc_url.starts_with("http") {
             raw_rpc_url = format!("http://{raw_rpc_url}");
