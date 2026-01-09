@@ -196,8 +196,9 @@ where
                 .content_encoding("gzip")
                 .content_type("application/grpc-web");
             let _ = req.send().await.map_err(|e| {
+                let sdk_error = format!("{:?}", e);
                 Error::DB(anyhow!(e).context(format!(
-                    "While writing to S3 Bucket: {}, key: {}",
+                    "While writing to S3 Bucket: {}, key: {}: SdkError {sdk_error}",
                     self.s3_bucket, key
                 )))
             })?;
