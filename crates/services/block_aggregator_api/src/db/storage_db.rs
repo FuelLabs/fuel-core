@@ -90,11 +90,26 @@ where
         let mut tx = self.storage.write_transaction();
         tx.storage_as_mut::<Blocks>()
             .insert(&height, block)
-            .map_err(|e| Error::DB(anyhow!(e)))?;
+            .map_err(|e| {
+                Error::DB(
+                    anyhow!(e)
+                        .context(format!("while storing block at height: {height:?}")),
+                )
+            })?;
         tx.storage_as_mut::<LatestBlock>()
             .insert(&(), &Mode::Local(height))
-            .map_err(|e| Error::DB(anyhow!(e)))?;
-        tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+            .map_err(|e| {
+                Error::DB(
+                    anyhow!(e).context(format!(
+                        "while storing latest block height: {height:?}"
+                    )),
+                )
+            })?;
+        tx.commit().map_err(|e| {
+            Error::DB(
+                anyhow!(e).context(format!("while committing transaction: {height:?}")),
+            )
+        })?;
 
         Ok(())
     }
@@ -115,10 +130,11 @@ where
         first: BlockHeight,
         last: BlockHeight,
     ) -> Result<BlockRangeResponse> {
-        let latest_view = self
-            .storage
-            .latest_view()
-            .map_err(|e| Error::DB(anyhow!(e)))?;
+        let latest_view = self.storage.latest_view().map_err(|e| {
+            Error::DB(
+                anyhow!(e).context("while getting latest view for block range query"),
+            )
+        })?;
         let stream = StorageStream::new(latest_view, first, last);
         Ok(BlockRangeResponse::Bytes(Box::pin(stream)))
     }
@@ -129,7 +145,9 @@ where
             .as_structured_storage()
             .storage_as_ref::<LatestBlock>()
             .get(&())
-            .map_err(|e| Error::DB(anyhow!(e)))?
+            .map_err(|e| {
+                Error::DB(anyhow!(e).context("while getting latest block height"))
+            })?
             .map(|b| b.height());
 
         Ok(height)
@@ -146,7 +164,9 @@ where
             .as_structured_storage()
             .storage_as_ref::<LatestBlock>()
             .get(&())
-            .map_err(|e| Error::DB(anyhow!(e)))?
+            .map_err(|e| {
+                Error::DB(anyhow!(e).context("while getting latest block height"))
+            })?
             .map(|b| b.height());
 
         Ok(height)
@@ -186,10 +206,15 @@ where
         let this = self.get_mut();
         if let Some(height) = this.next {
             let storage = this.inner.as_structured_storage();
-            let next_block = storage
-                .storage_as_ref::<Blocks>()
-                .get(&height)
-                .map_err(|e| Error::DB(anyhow!(e)));
+            let next_block =
+                storage
+                    .storage_as_ref::<Blocks>()
+                    .get(&height)
+                    .map_err(|e| {
+                        Error::DB(anyhow!(e).context(format!(
+                            "while getting block at height {height:?} in storage stream"
+                        )))
+                    });
             match next_block {
                 Ok(Some(block)) => {
                     tracing::debug!("Found block at height: {:?}", height);

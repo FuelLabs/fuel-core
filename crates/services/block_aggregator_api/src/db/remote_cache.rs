@@ -43,7 +43,7 @@ mod tests;
 
 pub struct RemoteCache<S> {
     // aws configuration
-    aws_bucket: String,
+    s3_bucket: String,
     client: Client,
     publishes_blocks: bool,
 
@@ -59,7 +59,7 @@ impl<S> RemoteCache<S> {
         publish: bool,
     ) -> RemoteCache<S> {
         RemoteCache {
-            aws_bucket,
+            s3_bucket: aws_bucket,
             client,
             publishes_blocks: publish,
             local_persisted,
@@ -146,7 +146,9 @@ where
             .as_structured_storage()
             .storage_as_ref::<LatestBlock>()
             .get(&())
-            .map_err(|e| Error::DB(anyhow!(e)))?
+            .map_err(|e| {
+                Error::DB(anyhow!(e).context("while getting latest block height"))
+            })?
             .map(|b| b.height());
 
         Ok(height)
@@ -182,24 +184,35 @@ where
         }
 
         let key = block_height_to_key(&height);
-        let zipped = gzip_bytes(block)?;
-        let body = ByteStream::from(zipped);
         if self.publishes_blocks {
+            let zipped = gzip_bytes(block)?;
+            let body = ByteStream::from(zipped);
             let req = self
                 .client
                 .put_object()
-                .bucket(&self.aws_bucket)
+                .bucket(&self.s3_bucket)
                 .key(&key)
                 .body(body)
                 .content_encoding("gzip")
                 .content_type("application/grpc-web");
-            let _ = req.send().await.map_err(Error::db_error)?;
+            let _ = req.send().await.map_err(|e| {
+                Error::DB(anyhow!(e).context(format!(
+                    "While writing to S3 Bucket: {}, key: {}",
+                    self.s3_bucket, key
+                )))
+            })?;
         }
 
         let mut tx = self.local_persisted.write_transaction();
         tx.storage_as_mut::<LatestBlock>()
             .insert(&(), &Mode::new_s3(height))
-            .map_err(|e| Error::DB(anyhow!(e)))?;
+            .map_err(|e| {
+                Error::DB(
+                    anyhow!(e).context(format!(
+                        "while storing latest block height: {height:?}"
+                    )),
+                )
+            })?;
         tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
 
         Ok(())
@@ -212,13 +225,17 @@ where
     S: KeyValueInspect<Column = Column>,
 {
     pub fn get_current_height(&self) -> crate::result::Result<Option<BlockHeight>> {
-        let height = self
-            .local_persisted
-            .as_structured_storage()
-            .storage_as_ref::<LatestBlock>()
-            .get(&())
-            .map_err(|e| Error::DB(anyhow!(e)))?
-            .map(|b| b.height());
+        let height =
+            self.local_persisted
+                .as_structured_storage()
+                .storage_as_ref::<LatestBlock>()
+                .get(&())
+                .map_err(|e| {
+                    Error::DB(anyhow!(e).context(
+                        "while getting latest block height local persisted storage",
+                    ))
+                })?
+                .map(|b| b.height());
 
         Ok(height)
     }
@@ -234,6 +251,10 @@ pub fn block_height_to_key(height: &BlockHeight) -> String {
 
 pub fn gzip_bytes(data: &[u8]) -> crate::result::Result<Vec<u8>> {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(data).map_err(Error::db_error)?;
-    encoder.finish().map_err(Error::db_error)
+    encoder
+        .write_all(data)
+        .map_err(|e| Error::DB(anyhow!(e).context("while zipping bytes")))?;
+    encoder
+        .finish()
+        .map_err(|e| Error::DB(anyhow!(e).context("while finishing gzip encoder")))
 }

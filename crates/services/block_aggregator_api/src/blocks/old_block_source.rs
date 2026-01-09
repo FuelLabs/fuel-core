@@ -152,9 +152,12 @@ where
         tx_ids
             .iter()
             .map(|tx_id| {
-                self.receipts
-                    .get_receipts(tx_id)
-                    .map_err(|err| Error::DB(anyhow::anyhow!(err)))
+                self.receipts.get_receipts(tx_id).map_err(|err| {
+                    Error::DB(anyhow::anyhow!(err).context(format!(
+                        "while getting receipts for tx_id: {:?}",
+                        tx_id
+                    )))
+                })
             })
             .try_collect()
     }
