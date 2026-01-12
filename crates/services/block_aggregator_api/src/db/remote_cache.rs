@@ -245,7 +245,7 @@ where
 pub fn block_height_to_key(height: &BlockHeight) -> String {
     let raw: [u8; 4] = height.to_bytes();
     format!(
-        "{:02}/{:02}/{:02}/{:02}",
+        "{:02x}/{:02x}/{:02x}/{:02x}",
         &raw[0], &raw[1], &raw[2], &raw[3]
     )
 }
