@@ -624,9 +624,6 @@ async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_u
 
 #[tokio::test]
 async fn insert__tx_with_expiration_at_next_block_height_is_accepted() {
-    // A transaction with expiration = current_height + 1 should be accepted
-    // because it will be executed in block current_height + 1, before it expires.
-
     // Given
     let current_height = BlockHeight::new(100);
     let next_block_height = current_height.succ().unwrap();
@@ -656,9 +653,6 @@ async fn insert__tx_with_expiration_at_next_block_height_is_accepted() {
 
 #[tokio::test]
 async fn insert__tx_with_expiration_at_current_block_height_is_rejected() {
-    // A transaction with expiration = current_height should be rejected
-    // because it will be executed in block current_height + 1, which is after expiration.
-
     // Given
     let current_height = BlockHeight::new(100);
     let mut universe = TestPoolUniverse::default().with_block_height(current_height);
