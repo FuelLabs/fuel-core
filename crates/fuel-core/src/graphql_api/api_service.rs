@@ -1,7 +1,10 @@
 use crate::{
     fuel_core_graphql_api::{
         Config,
-        extensions::unify_response,
+        extensions::{
+            expensive_op_guard::ExpensiveOpGuardFactory,
+            unify_response,
+        },
         ports::{
             BlockProducerPort,
             ChainStateProvider as ChainStateProviderTrait,
@@ -87,6 +90,7 @@ use std::{
         Arc,
         OnceLock,
     },
+    time::Duration,
 };
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
@@ -296,6 +300,11 @@ where
         .extension(ChainStateInfoExtension::new(worker_shared_state.block_height_subscription_handler.subscribe()))
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
+        ))
+        .extension(ExpensiveOpGuardFactory::new(
+            "Block",
+            10,
+            Duration::from_secs(3),
         ))
         .data(config)
         .data(combined_read_database)
