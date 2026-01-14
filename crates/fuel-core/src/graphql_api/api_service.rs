@@ -300,9 +300,8 @@ where
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))
-        // TODO: Do we need to include the `FullBlocksQuery` as well? It would be `FullBlockEdge` probably if so
         .extension(ExpensiveOpGuardFactory::new(
-            "FullBlockByHeightQuery",
+            Arc::new(["FullBlockByHeightQuery".to_string(), "FullBlocksQuery".to_string(), "FullBlockEdge".to_string()]),
             config.config.concurrent_full_block_requests,
             config.config.full_block_request_timeout,
         ))

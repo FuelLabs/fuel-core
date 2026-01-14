@@ -373,8 +373,10 @@ mod full_block {
     use cynic::QueryBuilder;
     use fuel_core_client::client::{
         FuelClient,
+        pagination::PaginatedResult,
         schema::{
             BlockId,
+            ConnectionArgsFields,
             U32,
             block::{
                 BlockByHeightArgs,
@@ -417,6 +419,44 @@ mod full_block {
         pub consensus: Consensus,
         pub transactions: Vec<OpaqueTransaction>,
     }
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "Query",
+        variables = "ConnectionArgs"
+    )]
+    pub struct FullBlocksQuery {
+        #[arguments(after: $after, before: $before, first: $first, last: $last)]
+        pub blocks: FullBlockConnection,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "BlockConnection"
+    )]
+    pub struct FullBlockConnection {
+        pub edges: Vec<FullBlockEdge>,
+        pub page_info: PageInfo,
+    }
+    #[derive(cynic::QueryFragment, Clone, Debug)]
+    #[cynic(schema_path = "../crates/client/assets/schema.sdl")]
+    pub struct PageInfo {
+        pub end_cursor: Option<String>,
+        pub has_next_page: bool,
+        pub has_previous_page: bool,
+        pub start_cursor: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "BlockEdge"
+    )]
+    pub struct FullBlockEdge {
+        pub cursor: String,
+        pub node: FullBlock,
+    }
 
     #[async_trait::async_trait]
     pub trait ClientExt {
@@ -424,6 +464,10 @@ mod full_block {
             &self,
             height: u32,
         ) -> std::io::Result<Option<FullBlock>>;
+        async fn full_blocks(
+            &self,
+            request: PaginationRequest<String>,
+        ) -> std::io::Result<PaginatedResult<FullBlock, String>>;
     }
 
     #[async_trait::async_trait]
@@ -439,6 +483,29 @@ mod full_block {
             let block = self.query(query).await?.block;
 
             Ok(block)
+        }
+
+        async fn full_blocks(
+            &self,
+            request: PaginationRequest<String>,
+        ) -> std::io::Result<PaginatedResult<FullBlock, String>> {
+            use cynic::Operation;
+            use fuel_core_client::client::schema::ConnectionArgs;
+
+            let query: Operation<FullBlocksQuery, ConnectionArgs> =
+                FullBlocksQuery::build(request.into());
+            let blocks = self.query(query).await?.blocks.into();
+            Ok(blocks)
+        }
+    }
+    impl From<FullBlockConnection> for PaginatedResult<FullBlock, String> {
+        fn from(conn: FullBlockConnection) -> Self {
+            PaginatedResult {
+                cursor: conn.page_info.end_cursor,
+                has_next_page: conn.page_info.has_next_page,
+                has_previous_page: conn.page_info.has_previous_page,
+                results: conn.edges.into_iter().map(|e| e.node).collect(),
+            }
         }
     }
 
@@ -458,7 +525,7 @@ mod full_block {
     }
 
     #[tokio::test]
-    async fn get_full_block_with_tx__fails_if_exceeds_timeout() {
+    async fn full_block_by_height__fails_if_exceeds_timeout() {
         let mut config = Config::local_node();
 
         // given
@@ -494,7 +561,10 @@ mod full_block {
     }
 
     #[tokio::test]
-    async fn get_full_block_with_tx__fails_if_too_many_concurrent_requests() {
+    async fn full_block_by_height__fails_if_too_many_concurrent_requests() {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::WARN)
+            .init();
         let mut config = Config::local_node();
 
         // given
@@ -529,6 +599,58 @@ mod full_block {
         let fut3 = client.full_block_by_height(1);
         let fut4 = client.full_block_by_height(1);
         let fut5 = client.full_block_by_height(1);
+
+        let (_, _, _, _, err) = tokio::join!(fut1, fut2, fut3, fut4, fut5);
+
+        // then
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("Rate limit exceeded for this operation")
+        );
+    }
+
+    #[tokio::test]
+    async fn blocks__fails_if_too_many_concurrent_requests() {
+        let mut config = Config::local_node();
+
+        // given
+        config.graphql_config.concurrent_full_block_requests = 1;
+        config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        let srv = FuelService::from_database(Database::default(), config)
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let rng = &mut StdRng::seed_from_u64(4444);
+
+        // stuff the block with transactions
+        for _ in 0..250 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(0)
+                .add_random_fee_input(rng)
+                .add_witness(std::iter::repeat(99u8).take(10).collect::<Vec<_>>().into())
+                .finalize()
+                .into();
+            client.submit(&tx).await.unwrap();
+        }
+        let tx = Transaction::default_test_tx();
+        client.submit_and_await_commit(&tx).await.unwrap();
+        let request = PaginationRequest {
+            cursor: Some("0".to_string()),
+            results: 2,
+            direction: PageDirection::Forward,
+        };
+
+        // when
+        // make multiple concurrent requests to ensure that some overlap
+        let fut1 = client.full_blocks(request.clone());
+        let fut2 = client.full_blocks(request.clone());
+        let fut3 = client.full_blocks(request.clone());
+        let fut4 = client.full_blocks(request.clone());
+        let fut5 = client.full_blocks(request);
 
         let (_, _, _, _, err) = tokio::join!(fut1, fut2, fut3, fut4, fut5);
 

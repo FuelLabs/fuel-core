@@ -15,19 +15,19 @@ use std::{
 use tokio::sync::Semaphore;
 
 pub struct ExpensiveOpGuardFactory {
-    expensive_op_name: &'static str,
+    expensive_op_names: Arc<[String]>,
     semaphore: Arc<Semaphore>,
     timeout: Duration,
 }
 
 impl ExpensiveOpGuardFactory {
     pub fn new(
-        expensive_op_name: &'static str,
+        expensive_op_names: Arc<[String]>,
         max_in_flight: usize,
         timeout: Duration,
     ) -> Self {
         Self {
-            expensive_op_name,
+            expensive_op_names,
             semaphore: Arc::new(Semaphore::new(max_in_flight)),
             timeout,
         }
@@ -37,7 +37,7 @@ impl ExpensiveOpGuardFactory {
 impl ExtensionFactory for ExpensiveOpGuardFactory {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(ExpensiveOpGuard {
-            expensive_op_name: self.expensive_op_name,
+            expensive_op_names: self.expensive_op_names.clone(),
             semaphore: self.semaphore.clone(),
             timeout: self.timeout,
         })
@@ -45,7 +45,7 @@ impl ExtensionFactory for ExpensiveOpGuardFactory {
 }
 
 pub struct ExpensiveOpGuard {
-    expensive_op_name: &'static str,
+    expensive_op_names: Arc<[String]>,
     semaphore: Arc<Semaphore>,
     timeout: Duration,
 }
@@ -59,12 +59,12 @@ impl Extension for ExpensiveOpGuard {
         next: NextExecute<'_>,
     ) -> Response {
         let op = operation_name.clone().unwrap_or_default();
-        let is_expensive = op == self.expensive_op_name;
+        let is_expensive = self.expensive_op_names.iter().any(|name| op == name);
 
         tracing::debug!(
-            "Executing operation: {:?}, and expected {:?}, expensive: {:?}, timeout: {:?}, semaphore_size: {:?}",
+            "Executing operation: {:?}, and expected one of {:?}, expensive: {:?}, timeout: {:?}, semaphore_size: {:?}",
             operation_name,
-            self.expensive_op_name,
+            self.expensive_op_names,
             is_expensive,
             self.timeout,
             self.semaphore.available_permits(),
