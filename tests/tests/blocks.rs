@@ -494,6 +494,53 @@ mod full_block {
     }
 
     #[tokio::test]
+    async fn get_full_block_with_tx__fails_if_too_many_concurrent_requests() {
+        let mut config = Config::local_node();
+
+        // given
+        config.graphql_config.concurrent_full_block_requests = 1;
+        config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        let srv = FuelService::from_database(Database::default(), config)
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let rng = &mut StdRng::seed_from_u64(4444);
+
+        // stuff the block with transactions
+        for _ in 0..250 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(0)
+                .add_random_fee_input(rng)
+                .add_witness(std::iter::repeat(99u8).take(10).collect::<Vec<_>>().into())
+                .finalize()
+                .into();
+            client.submit(&tx).await.unwrap();
+        }
+        let tx = Transaction::default_test_tx();
+        client.submit_and_await_commit(&tx).await.unwrap();
+
+        // when
+        // make multiple concurrent requests to ensure that some overlap
+        let fut1 = client.full_block_by_height(1);
+        let fut2 = client.full_block_by_height(1);
+        let fut3 = client.full_block_by_height(1);
+        let fut4 = client.full_block_by_height(1);
+        let fut5 = client.full_block_by_height(1);
+
+        let (_, _, _, _, err) = tokio::join!(fut1, fut2, fut3, fut4, fut5);
+
+        // then
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("Rate limit exceeded for this operation")
+        );
+    }
+
+    #[tokio::test]
     async fn too_many_transactions_are_split_in_blocks() {
         // Given
         let max_gas_limit = 50_000_000;

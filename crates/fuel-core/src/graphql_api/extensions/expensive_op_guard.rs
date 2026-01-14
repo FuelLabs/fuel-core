@@ -61,12 +61,13 @@ impl Extension for ExpensiveOpGuard {
         let op = operation_name.clone().unwrap_or_default();
         let is_expensive = op == self.expensive_op_name;
 
-        tracing::warn!(
-            "Executing operation: {:?}, and expected {:?}, expensive: {:?}, timeout: {:?}",
+        tracing::debug!(
+            "Executing operation: {:?}, and expected {:?}, expensive: {:?}, timeout: {:?}, semaphore_size: {:?}",
             operation_name,
             self.expensive_op_name,
             is_expensive,
-            self.timeout
+            self.timeout,
+            self.semaphore.available_permits(),
         );
 
         if !is_expensive {
