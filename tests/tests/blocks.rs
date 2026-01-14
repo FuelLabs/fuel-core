@@ -600,18 +600,87 @@ mod full_block {
         let fut4 = client.full_block_by_height(1);
         let fut5 = client.full_block_by_height(1);
 
-        let (_, _, _, _, err) = tokio::join!(fut1, fut2, fut3, fut4, fut5);
+        let results = futures::future::join_all([fut1, fut2, fut3, fut4, fut5]).await;
 
         // then
+        at_least_one_fails_with_error_message(
+            &results,
+            "Rate limit exceeded for this operation",
+        );
+    }
+
+    fn at_least_one_fails_with_error_message<T: std::fmt::Debug>(
+        results: &[std::io::Result<T>],
+        error_message: &str,
+    ) {
         assert!(
-            err.unwrap_err()
-                .to_string()
-                .contains("Rate limit exceeded for this operation")
+            results.iter().any(|r| r.is_err()
+                && r.as_ref().unwrap_err().to_string().contains(error_message)),
+            "Expected at least one result to fail with error message: {}",
+            error_message
         );
     }
 
     #[tokio::test]
-    async fn blocks__fails_if_too_many_concurrent_requests() {
+    async fn full_blocks_and_full_block_by_height__fails_if_too_many_concurrent_requests()
+    {
+        let mut config = Config::local_node();
+
+        // given
+        config.graphql_config.concurrent_full_block_requests = 1;
+        config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        let srv = FuelService::from_database(Database::default(), config)
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let rng = &mut StdRng::seed_from_u64(4444);
+
+        // stuff the block with transactions
+        for _ in 0..250 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(0)
+                .add_random_fee_input(rng)
+                .add_witness(std::iter::repeat(99u8).take(10).collect::<Vec<_>>().into())
+                .finalize()
+                .into();
+            client.submit(&tx).await.unwrap();
+        }
+        let tx = Transaction::default_test_tx();
+        client.submit_and_await_commit(&tx).await.unwrap();
+        let request = PaginationRequest {
+            cursor: Some("0".to_string()),
+            results: 2,
+            direction: PageDirection::Forward,
+        };
+
+        // when
+        // make multiple concurrent requests to ensure that some overlap
+        let fut1 = client.full_blocks(request.clone());
+        let fut2 = client.full_block_by_height(1);
+        let fut3 = client.full_blocks(request.clone());
+        let fut4 = client.full_block_by_height(1);
+        let fut5 = client.full_blocks(request);
+
+        // then
+        // unify types
+        let (res1, res2, res3, res4, res5) = tokio::join!(fut1, fut2, fut3, fut4, fut5);
+        let results = vec![
+            res1.map(|_| ()),
+            res2.map(|_| ()),
+            res3.map(|_| ()),
+            res4.map(|_| ()),
+            res5.map(|_| ()),
+        ];
+        at_least_one_fails_with_error_message(
+            &results,
+            "Rate limit exceeded for this operation",
+        );
+    }
+    #[tokio::test]
+    async fn full_blocks__fails_if_too_many_concurrent_requests() {
         let mut config = Config::local_node();
 
         // given
@@ -652,13 +721,12 @@ mod full_block {
         let fut4 = client.full_blocks(request.clone());
         let fut5 = client.full_blocks(request);
 
-        let (_, _, _, _, err) = tokio::join!(fut1, fut2, fut3, fut4, fut5);
-
         // then
-        assert!(
-            err.unwrap_err()
-                .to_string()
-                .contains("Rate limit exceeded for this operation")
+
+        let results = futures::future::join_all([fut1, fut2, fut3, fut4, fut5]).await;
+        at_least_one_fails_with_error_message(
+            &results,
+            "Rate limit exceeded for this operation",
         );
     }
 
