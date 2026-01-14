@@ -718,6 +718,8 @@ impl Command {
                 required_fuel_block_height_timeout: graphql
                     .required_fuel_block_height_timeout
                     .into(),
+                concurrent_full_block_requests: graphql.concurrent_full_block_requests,
+                full_block_request_timeout: graphql.full_block_request_timeout.into(),
             },
             combined_db_config,
             snapshot_reader,

@@ -59,6 +59,9 @@ pub struct ServiceConfig {
     pub assemble_tx_estimate_predicates_limit: usize,
     /// Configurable cost parameters to limit graphql queries complexity
     pub costs: Costs,
+    /// Configurable parameters to limit number of concurrent requests to the full block API
+    pub concurrent_full_block_requests: usize,
+    pub full_block_request_timeout: Duration,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

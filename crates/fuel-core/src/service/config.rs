@@ -179,6 +179,8 @@ impl Config {
                 costs: Default::default(),
                 required_fuel_block_height_tolerance: 10,
                 required_fuel_block_height_timeout: Duration::from_secs(30),
+                concurrent_full_block_requests: 10,
+                full_block_request_timeout: Duration::from_secs(3),
             },
             combined_db_config,
             continue_on_error: false,

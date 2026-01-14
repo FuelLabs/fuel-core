@@ -90,7 +90,6 @@ use std::{
         Arc,
         OnceLock,
     },
-    time::Duration,
 };
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
@@ -301,10 +300,11 @@ where
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
         ))
+        // TODO: Do we need to include the `FullBlocksQuery` as well? It would be `FullBlockEdge` probably if so
         .extension(ExpensiveOpGuardFactory::new(
-            "Block",
-            10,
-            Duration::from_secs(3),
+            "FullBlockByHeightQuery",
+            config.config.concurrent_full_block_requests,
+            config.config.full_block_request_timeout,
         ))
         .data(config)
         .data(combined_read_database)

@@ -49,10 +49,7 @@ use std::{
 };
 use test_helpers::send_graph_ql_query;
 
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::SeedableRng;
 
 #[tokio::test]
 async fn block() {
@@ -395,6 +392,7 @@ mod full_block {
         PoolLimits,
     };
     use fuel_core_types::fuel_types::BlockHeight;
+    use rand::prelude::StdRng;
 
     #[derive(cynic::QueryFragment, Debug)]
     #[cynic(
@@ -457,6 +455,42 @@ mod full_block {
         let block = client.full_block_by_height(1).await.unwrap().unwrap();
         assert_eq!(block.header.height.0, 1);
         assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
+    }
+
+    #[tokio::test]
+    async fn get_full_block_with_tx__fails_if_exceeds_timeout() {
+        let mut config = Config::local_node();
+
+        // given
+        config.graphql_config.full_block_request_timeout = Duration::from_secs(0);
+        config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        let srv = FuelService::from_database(Database::default(), config)
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let rng = &mut StdRng::seed_from_u64(4444);
+
+        // stuff the block with transactions
+        for _ in 0..250 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(0)
+                .add_random_fee_input(rng)
+                .add_witness(std::iter::repeat(99u8).take(10).collect::<Vec<_>>().into())
+                .finalize()
+                .into();
+            client.submit(&tx).await.unwrap();
+        }
+        let tx = Transaction::default_test_tx();
+        client.submit_and_await_commit(&tx).await.unwrap();
+
+        // when
+        let err = client.full_block_by_height(1).await;
+
+        // then
+        assert!(err.unwrap_err().to_string().contains("Operation timed out"));
     }
 
     #[tokio::test]

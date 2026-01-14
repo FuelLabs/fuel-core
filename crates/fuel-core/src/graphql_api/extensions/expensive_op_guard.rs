@@ -61,6 +61,14 @@ impl Extension for ExpensiveOpGuard {
         let op = operation_name.clone().unwrap_or_default();
         let is_expensive = op == self.expensive_op_name;
 
+        tracing::warn!(
+            "Executing operation: {:?}, and expected {:?}, expensive: {:?}, timeout: {:?}",
+            operation_name,
+            self.expensive_op_name,
+            is_expensive,
+            self.timeout
+        );
+
         if !is_expensive {
             return next.run(ctx, operation_name).await;
         }
@@ -80,7 +88,13 @@ impl Extension for ExpensiveOpGuard {
 
         // Time bound (avoid request pile-ups)
         let fut = next.run(ctx, operation_name);
+        let starting_time = tokio::time::Instant::now();
         let out = tokio::time::timeout(self.timeout, fut).await;
+        tracing::warn!(
+            "finished executing in {:?}ns, success: {:?}",
+            starting_time.elapsed().as_nanos(),
+            out.is_ok(),
+        );
 
         drop(permit);
 
