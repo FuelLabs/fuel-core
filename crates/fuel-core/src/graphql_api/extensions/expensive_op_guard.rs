@@ -58,7 +58,7 @@ impl Extension for ExpensiveOpGuard {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        let op = operation_name.clone().unwrap_or_default();
+        let op = operation_name.unwrap_or_default();
         let is_expensive = self.expensive_op_names.iter().any(|name| op == name);
 
         tracing::debug!(
