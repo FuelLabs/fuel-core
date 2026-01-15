@@ -67,6 +67,22 @@ pub struct ExpensiveOpGuard {
 
 #[async_trait::async_trait]
 impl Extension for ExpensiveOpGuard {
+    async fn parse_query(
+        &self,
+        _ctx: &ExtensionContext<'_>,
+        _query: &str,
+        _variables: &Variables,
+        next: NextParseQuery<'_>,
+    ) -> ServerResult<ExecutableDocument> {
+        let doc = next.run(_ctx, _query, _variables).await?;
+        let expensive_root_field_name =
+            has_expensive_root_field(&doc, &self.expensive_root_field_names);
+        let _ = self
+            .expensive_root_field_name
+            .set(expensive_root_field_name);
+        Ok(doc)
+    }
+
     async fn execute(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -92,22 +108,6 @@ impl Extension for ExpensiveOpGuard {
             Some(_) => self.expensive_execution(ctx, operation_name, next).await,
             None => next.run(ctx, operation_name).await,
         }
-    }
-
-    async fn parse_query(
-        &self,
-        _ctx: &ExtensionContext<'_>,
-        _query: &str,
-        _variables: &Variables,
-        next: NextParseQuery<'_>,
-    ) -> ServerResult<ExecutableDocument> {
-        let doc = next.run(_ctx, _query, _variables).await?;
-        let expensive_root_field_name =
-            has_expensive_root_field(&doc, &self.expensive_root_field_names);
-        let _ = self
-            .expensive_root_field_name
-            .set(expensive_root_field_name);
-        Ok(doc)
     }
 }
 impl ExpensiveOpGuard {
