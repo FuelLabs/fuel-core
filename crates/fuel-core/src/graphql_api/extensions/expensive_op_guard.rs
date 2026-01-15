@@ -131,11 +131,7 @@ impl ExpensiveOpGuard {
         };
 
         // Concurrency gate (bulkhead)
-        let permit = match self
-            .semaphore
-            .clone()
-            .try_acquire_many_owned(permit_count)
-        {
+        let permit = match self.semaphore.clone().try_acquire_many_owned(permit_count) {
             Ok(p) => p,
             Err(_) => {
                 let mut resp = Response::new(async_graphql::Value::Null);
