@@ -301,7 +301,7 @@ where
             config.config.query_log_threshold_time,
         ))
         .extension(ExpensiveOpGuardFactory::new(
-            Arc::new(["FullBlockByHeightQuery".to_string(), "FullBlocksQuery".to_string()]),
+            Arc::new(["block".to_string(), "blocks".to_string()]),
             config.config.concurrent_full_block_requests,
             config.config.full_block_request_timeout,
         ))

@@ -1,33 +1,46 @@
 use async_graphql::{
+    Positioned,
     Response,
     ServerError,
+    ServerResult,
+    Variables,
     extensions::{
         Extension,
         ExtensionContext,
         ExtensionFactory,
         NextExecute,
+        NextParseQuery,
+    },
+    parser::types::{
+        ExecutableDocument,
+        FragmentDefinition,
+        Selection,
+        SelectionSet,
     },
 };
 use std::{
-    sync::Arc,
+    sync::{
+        Arc,
+        OnceLock,
+    },
     time::Duration,
 };
 use tokio::sync::Semaphore;
 
 pub struct ExpensiveOpGuardFactory {
-    expensive_op_names: Arc<[String]>,
+    expensive_root_field_names: Arc<[String]>,
     semaphore: Arc<Semaphore>,
     timeout: Duration,
 }
 
 impl ExpensiveOpGuardFactory {
     pub fn new(
-        expensive_op_names: Arc<[String]>,
+        expensive_root_field_names: Arc<[String]>,
         max_in_flight: usize,
         timeout: Duration,
     ) -> Self {
         Self {
-            expensive_op_names,
+            expensive_root_field_names,
             semaphore: Arc::new(Semaphore::new(max_in_flight)),
             timeout,
         }
@@ -37,17 +50,19 @@ impl ExpensiveOpGuardFactory {
 impl ExtensionFactory for ExpensiveOpGuardFactory {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(ExpensiveOpGuard {
-            expensive_op_names: self.expensive_op_names.clone(),
+            expensive_root_field_names: self.expensive_root_field_names.clone(),
             semaphore: self.semaphore.clone(),
             timeout: self.timeout,
+            expensive_root_field_name: OnceLock::new(),
         })
     }
 }
 
 pub struct ExpensiveOpGuard {
-    expensive_op_names: Arc<[String]>,
+    expensive_root_field_names: Arc<[String]>,
     semaphore: Arc<Semaphore>,
     timeout: Duration,
+    expensive_root_field_name: OnceLock<Option<String>>,
 }
 
 #[async_trait::async_trait]
@@ -58,13 +73,17 @@ impl Extension for ExpensiveOpGuard {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        let op = operation_name.unwrap_or_default();
-        let is_expensive = self.expensive_op_names.iter().any(|name| op == name);
+        let expensive_root_field_name = self
+            .expensive_root_field_name
+            .get()
+            .and_then(|name| name.as_ref());
+        let is_expensive = expensive_root_field_name.is_some();
 
-        tracing::debug!(
-            "Executing operation: {:?}, and expected one of {:?}, expensive: {:?}, timeout: {:?}, semaphore_size: {:?}",
+        tracing::warn!(
+            "Executing operation: {:?}, expensive root field: {:?}, expected root fields: {:?}, expensive: {:?}, timeout: {:?}, semaphore_size: {:?}",
             operation_name,
-            self.expensive_op_names,
+            expensive_root_field_name,
+            self.expensive_root_field_names,
             is_expensive,
             self.timeout,
             self.semaphore.available_permits(),
@@ -109,4 +128,71 @@ impl Extension for ExpensiveOpGuard {
             }
         }
     }
+
+    async fn parse_query(
+        &self,
+        _ctx: &ExtensionContext<'_>,
+        _query: &str,
+        _variables: &Variables,
+        next: NextParseQuery<'_>,
+    ) -> ServerResult<ExecutableDocument> {
+        let doc = next.run(_ctx, _query, _variables).await?;
+        let expensive_root_field_name =
+            has_expensive_root_field(&doc, &self.expensive_root_field_names);
+        let _ = self
+            .expensive_root_field_name
+            .set(expensive_root_field_name);
+        Ok(doc)
+    }
+}
+
+fn has_expensive_root_field(
+    doc: &ExecutableDocument,
+    expensive_field_names: &[String],
+) -> Option<String> {
+    doc.operations.iter().find_map(|(_, op)| {
+        selection_set_has_expensive_field(
+            &op.node.selection_set,
+            &doc.fragments,
+            expensive_field_names,
+        )
+    })
+}
+
+fn selection_set_has_expensive_field(
+    selection_set: &Positioned<SelectionSet>,
+    fragments: &std::collections::HashMap<
+        async_graphql::Name,
+        Positioned<FragmentDefinition>,
+    >,
+    expensive_field_names: &[String],
+) -> Option<String> {
+    selection_set
+        .node
+        .items
+        .iter()
+        .find_map(|selection| match &selection.node {
+            Selection::Field(field) => {
+                let field_name = field.node.name.node.as_str();
+                if expensive_field_names.iter().any(|name| name == field_name) {
+                    Some(field_name.to_string())
+                } else {
+                    None
+                }
+            }
+            Selection::FragmentSpread(spread) => fragments
+                .get(&spread.node.fragment_name.node)
+                .and_then(|fragment| {
+                    selection_set_has_expensive_field(
+                        &fragment.node.selection_set,
+                        fragments,
+                        expensive_field_names,
+                    )
+                }),
+            Selection::InlineFragment(inline) => selection_set_has_expensive_field(
+                &inline.node.selection_set,
+                fragments,
+                expensive_field_names,
+            ),
+        })
 }

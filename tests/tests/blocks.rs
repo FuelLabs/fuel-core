@@ -525,7 +525,7 @@ mod full_block {
     }
 
     #[tokio::test]
-    async fn full_block_by_height__fails_if_exceeds_timeout() {
+    async fn block__fails_if_exceeds_timeout() {
         let mut config = Config::local_node();
 
         // given
@@ -561,10 +561,7 @@ mod full_block {
     }
 
     #[tokio::test]
-    async fn full_block_by_height__fails_if_too_many_concurrent_requests() {
-        let _ = tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::WARN)
-            .init();
+    async fn block__fails_if_too_many_concurrent_requests() {
         let mut config = Config::local_node();
 
         // given
@@ -622,8 +619,7 @@ mod full_block {
     }
 
     #[tokio::test]
-    async fn full_blocks_and_full_block_by_height__fails_if_too_many_concurrent_requests()
-    {
+    async fn blocks_and_block__fails_if_too_many_concurrent_requests() {
         let mut config = Config::local_node();
 
         // given
@@ -680,7 +676,7 @@ mod full_block {
         );
     }
     #[tokio::test]
-    async fn full_blocks__fails_if_too_many_concurrent_requests() {
+    async fn blocks__fails_if_too_many_concurrent_requests() {
         let mut config = Config::local_node();
 
         // given
