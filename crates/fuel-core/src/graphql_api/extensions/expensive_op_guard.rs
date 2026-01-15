@@ -77,22 +77,46 @@ impl Extension for ExpensiveOpGuard {
             .expensive_root_field_name
             .get()
             .and_then(|name| name.as_ref());
-        let is_expensive = expensive_root_field_name.is_some();
 
-        tracing::warn!(
+        tracing::debug!(
             "Executing operation: {:?}, expensive root field: {:?}, expected root fields: {:?}, expensive: {:?}, timeout: {:?}, semaphore_size: {:?}",
             operation_name,
             expensive_root_field_name,
             self.expensive_root_field_names,
-            is_expensive,
+            expensive_root_field_name.is_some(),
             self.timeout,
             self.semaphore.available_permits(),
         );
 
-        if !is_expensive {
-            return next.run(ctx, operation_name).await;
+        match expensive_root_field_name {
+            Some(_) => self.expensive_execution(ctx, operation_name, next).await,
+            None => next.run(ctx, operation_name).await,
         }
+    }
 
+    async fn parse_query(
+        &self,
+        _ctx: &ExtensionContext<'_>,
+        _query: &str,
+        _variables: &Variables,
+        next: NextParseQuery<'_>,
+    ) -> ServerResult<ExecutableDocument> {
+        let doc = next.run(_ctx, _query, _variables).await?;
+        let expensive_root_field_name =
+            has_expensive_root_field(&doc, &self.expensive_root_field_names);
+        let _ = self
+            .expensive_root_field_name
+            .set(expensive_root_field_name);
+        Ok(doc)
+    }
+}
+impl ExpensiveOpGuard {
+    async fn expensive_execution(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        operation_name: Option<&str>,
+        next: NextExecute<'_>,
+    ) -> Response {
         // Concurrency gate (bulkhead)
         let permit = match self.semaphore.clone().try_acquire_owned() {
             Ok(p) => p,
@@ -127,22 +151,6 @@ impl Extension for ExpensiveOpGuard {
                 resp
             }
         }
-    }
-
-    async fn parse_query(
-        &self,
-        _ctx: &ExtensionContext<'_>,
-        _query: &str,
-        _variables: &Variables,
-        next: NextParseQuery<'_>,
-    ) -> ServerResult<ExecutableDocument> {
-        let doc = next.run(_ctx, _query, _variables).await?;
-        let expensive_root_field_name =
-            has_expensive_root_field(&doc, &self.expensive_root_field_names);
-        let _ = self
-            .expensive_root_field_name
-            .set(expensive_root_field_name);
-        Ok(doc)
     }
 }
 
