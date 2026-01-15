@@ -1,7 +1,10 @@
 use crate::{
     fuel_core_graphql_api::{
         Config,
-        extensions::unify_response,
+        extensions::{
+            expensive_op_guard::ExpensiveOpGuardFactory,
+            unify_response,
+        },
         ports::{
             BlockProducerPort,
             ChainStateProvider as ChainStateProviderTrait,
@@ -296,6 +299,11 @@ where
         .extension(ChainStateInfoExtension::new(worker_shared_state.block_height_subscription_handler.subscribe()))
         .extension(MetricsExtension::new(
             config.config.query_log_threshold_time,
+        ))
+        .extension(ExpensiveOpGuardFactory::new(
+            Arc::new(["block".to_string(), "blocks".to_string()]),
+            config.config.concurrent_full_block_requests,
+            config.config.full_block_request_timeout,
         ))
         .data(config)
         .data(combined_read_database)

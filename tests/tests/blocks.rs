@@ -49,10 +49,7 @@ use std::{
 };
 use test_helpers::send_graph_ql_query;
 
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
+use rand::SeedableRng;
 
 #[tokio::test]
 async fn block() {
@@ -376,8 +373,10 @@ mod full_block {
     use cynic::QueryBuilder;
     use fuel_core_client::client::{
         FuelClient,
+        pagination::PaginatedResult,
         schema::{
             BlockId,
+            ConnectionArgsFields,
             U32,
             block::{
                 BlockByHeightArgs,
@@ -395,6 +394,7 @@ mod full_block {
         PoolLimits,
     };
     use fuel_core_types::fuel_types::BlockHeight;
+    use rand::prelude::StdRng;
 
     #[derive(cynic::QueryFragment, Debug)]
     #[cynic(
@@ -419,6 +419,44 @@ mod full_block {
         pub consensus: Consensus,
         pub transactions: Vec<OpaqueTransaction>,
     }
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "Query",
+        variables = "ConnectionArgs"
+    )]
+    pub struct FullBlocksQuery {
+        #[arguments(after: $after, before: $before, first: $first, last: $last)]
+        pub blocks: FullBlockConnection,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "BlockConnection"
+    )]
+    pub struct FullBlockConnection {
+        pub edges: Vec<FullBlockEdge>,
+        pub page_info: PageInfo,
+    }
+    #[derive(cynic::QueryFragment, Clone, Debug)]
+    #[cynic(schema_path = "../crates/client/assets/schema.sdl")]
+    pub struct PageInfo {
+        pub end_cursor: Option<String>,
+        pub has_next_page: bool,
+        pub has_previous_page: bool,
+        pub start_cursor: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment, Debug)]
+    #[cynic(
+        schema_path = "../crates/client/assets/schema.sdl",
+        graphql_type = "BlockEdge"
+    )]
+    pub struct FullBlockEdge {
+        pub cursor: String,
+        pub node: FullBlock,
+    }
 
     #[async_trait::async_trait]
     pub trait ClientExt {
@@ -426,6 +464,10 @@ mod full_block {
             &self,
             height: u32,
         ) -> std::io::Result<Option<FullBlock>>;
+        async fn full_blocks(
+            &self,
+            request: PaginationRequest<String>,
+        ) -> std::io::Result<PaginatedResult<FullBlock, String>>;
     }
 
     #[async_trait::async_trait]
@@ -442,6 +484,29 @@ mod full_block {
 
             Ok(block)
         }
+
+        async fn full_blocks(
+            &self,
+            request: PaginationRequest<String>,
+        ) -> std::io::Result<PaginatedResult<FullBlock, String>> {
+            use cynic::Operation;
+            use fuel_core_client::client::schema::ConnectionArgs;
+
+            let query: Operation<FullBlocksQuery, ConnectionArgs> =
+                FullBlocksQuery::build(request.into());
+            let blocks = self.query(query).await?.blocks.into();
+            Ok(blocks)
+        }
+    }
+    impl From<FullBlockConnection> for PaginatedResult<FullBlock, String> {
+        fn from(conn: FullBlockConnection) -> Self {
+            PaginatedResult {
+                cursor: conn.page_info.end_cursor,
+                has_next_page: conn.page_info.has_next_page,
+                has_previous_page: conn.page_info.has_previous_page,
+                results: conn.edges.into_iter().map(|e| e.node).collect(),
+            }
+        }
     }
 
     #[tokio::test]
@@ -457,6 +522,208 @@ mod full_block {
         let block = client.full_block_by_height(1).await.unwrap().unwrap();
         assert_eq!(block.header.height.0, 1);
         assert_eq!(block.transactions.len(), 2 /* mint + our tx */);
+    }
+
+    #[tokio::test]
+    async fn block__fails_if_exceeds_timeout() {
+        let mut config = Config::local_node();
+
+        // given
+        config.graphql_config.full_block_request_timeout = Duration::from_secs(0);
+        config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        let srv = FuelService::from_database(Database::default(), config)
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let rng = &mut StdRng::seed_from_u64(4444);
+
+        // stuff the block with transactions
+        for _ in 0..250 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(0)
+                .add_random_fee_input(rng)
+                .add_witness(std::iter::repeat(99u8).take(10).collect::<Vec<_>>().into())
+                .finalize()
+                .into();
+            client.submit(&tx).await.unwrap();
+        }
+        let tx = Transaction::default_test_tx();
+        client.submit_and_await_commit(&tx).await.unwrap();
+
+        // when
+        let err = client.full_block_by_height(1).await;
+
+        // then
+        assert!(err.unwrap_err().to_string().contains("Operation timed out"));
+    }
+
+    #[tokio::test]
+    async fn block__fails_if_too_many_concurrent_requests() {
+        let mut config = Config::local_node();
+
+        // given
+        config.graphql_config.concurrent_full_block_requests = 1;
+        config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        let srv = FuelService::from_database(Database::default(), config)
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let rng = &mut StdRng::seed_from_u64(4444);
+
+        // stuff the block with transactions
+        for _ in 0..250 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(0)
+                .add_random_fee_input(rng)
+                .add_witness(std::iter::repeat(99u8).take(10).collect::<Vec<_>>().into())
+                .finalize()
+                .into();
+            client.submit(&tx).await.unwrap();
+        }
+        let tx = Transaction::default_test_tx();
+        client.submit_and_await_commit(&tx).await.unwrap();
+
+        // when
+        // make multiple concurrent requests to ensure that some overlap
+        let fut1 = client.full_block_by_height(1);
+        let fut2 = client.full_block_by_height(1);
+        let fut3 = client.full_block_by_height(1);
+        let fut4 = client.full_block_by_height(1);
+        let fut5 = client.full_block_by_height(1);
+
+        let results = futures::future::join_all([fut1, fut2, fut3, fut4, fut5]).await;
+
+        // then
+        at_least_one_fails_with_error_message(
+            &results,
+            "Rate limit exceeded for this operation",
+        );
+    }
+
+    fn at_least_one_fails_with_error_message<T: std::fmt::Debug>(
+        results: &[std::io::Result<T>],
+        error_message: &str,
+    ) {
+        assert!(
+            results.iter().any(|r| r.is_err()
+                && r.as_ref().unwrap_err().to_string().contains(error_message)),
+            "Expected at least one result to fail with error message: {}",
+            error_message
+        );
+    }
+
+    #[tokio::test]
+    async fn blocks_and_block__fails_if_too_many_concurrent_requests() {
+        let mut config = Config::local_node();
+
+        // given
+        config.graphql_config.concurrent_full_block_requests = 1;
+        config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        let srv = FuelService::from_database(Database::default(), config)
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let rng = &mut StdRng::seed_from_u64(4444);
+
+        // stuff the block with transactions
+        for _ in 0..250 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(0)
+                .add_random_fee_input(rng)
+                .add_witness(std::iter::repeat(99u8).take(10).collect::<Vec<_>>().into())
+                .finalize()
+                .into();
+            client.submit(&tx).await.unwrap();
+        }
+        let tx = Transaction::default_test_tx();
+        client.submit_and_await_commit(&tx).await.unwrap();
+        let request = PaginationRequest {
+            cursor: Some("0".to_string()),
+            results: 2,
+            direction: PageDirection::Forward,
+        };
+
+        // when
+        // make multiple concurrent requests to ensure that some overlap
+        let fut1 = client.full_blocks(request.clone());
+        let fut2 = client.full_block_by_height(1);
+        let fut3 = client.full_blocks(request.clone());
+        let fut4 = client.full_block_by_height(1);
+        let fut5 = client.full_blocks(request);
+
+        // then
+        // unify types
+        let (res1, res2, res3, res4, res5) = tokio::join!(fut1, fut2, fut3, fut4, fut5);
+        let results = vec![
+            res1.map(|_| ()),
+            res2.map(|_| ()),
+            res3.map(|_| ()),
+            res4.map(|_| ()),
+            res5.map(|_| ()),
+        ];
+        at_least_one_fails_with_error_message(
+            &results,
+            "Rate limit exceeded for this operation",
+        );
+    }
+    #[tokio::test]
+    async fn blocks__fails_if_too_many_concurrent_requests() {
+        let mut config = Config::local_node();
+
+        // given
+        config.graphql_config.concurrent_full_block_requests = 1;
+        config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        let srv = FuelService::from_database(Database::default(), config)
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+        let rng = &mut StdRng::seed_from_u64(4444);
+
+        // stuff the block with transactions
+        for _ in 0..250 {
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .max_fee_limit(0)
+                .add_random_fee_input(rng)
+                .add_witness(std::iter::repeat(99u8).take(10).collect::<Vec<_>>().into())
+                .finalize()
+                .into();
+            client.submit(&tx).await.unwrap();
+        }
+        let tx = Transaction::default_test_tx();
+        client.submit_and_await_commit(&tx).await.unwrap();
+        let request = PaginationRequest {
+            cursor: Some("0".to_string()),
+            results: 2,
+            direction: PageDirection::Forward,
+        };
+
+        // when
+        // make multiple concurrent requests to ensure that some overlap
+        let fut1 = client.full_blocks(request.clone());
+        let fut2 = client.full_blocks(request.clone());
+        let fut3 = client.full_blocks(request.clone());
+        let fut4 = client.full_blocks(request.clone());
+        let fut5 = client.full_blocks(request);
+
+        // then
+
+        let results = futures::future::join_all([fut1, fut2, fut3, fut4, fut5]).await;
+        at_least_one_fails_with_error_message(
+            &results,
+            "Rate limit exceeded for this operation",
+        );
     }
 
     #[tokio::test]

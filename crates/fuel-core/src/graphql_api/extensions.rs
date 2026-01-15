@@ -13,6 +13,8 @@ pub(crate) mod metrics;
 pub(crate) mod required_fuel_block_height;
 pub(crate) mod validation;
 
+pub(crate) mod expensive_op_guard;
+
 // In the case of a successful query, we return the information below on
 // the `response.extensions` level.
 // But in the case of the error, `async_graphql` returns information from extensions
