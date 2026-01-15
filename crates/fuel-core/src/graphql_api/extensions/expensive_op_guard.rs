@@ -53,7 +53,7 @@ impl ExtensionFactory for ExpensiveOpGuardFactory {
             expensive_root_field_names: self.expensive_root_field_names.clone(),
             semaphore: self.semaphore.clone(),
             timeout: self.timeout,
-            expensive_root_field_name: OnceLock::new(),
+            expensive_root_field_count: OnceLock::new(),
         })
     }
 }
@@ -62,7 +62,7 @@ pub struct ExpensiveOpGuard {
     expensive_root_field_names: Arc<[String]>,
     semaphore: Arc<Semaphore>,
     timeout: Duration,
-    expensive_root_field_name: OnceLock<Option<String>>,
+    expensive_root_field_count: OnceLock<usize>,
 }
 
 #[async_trait::async_trait]
@@ -75,11 +75,11 @@ impl Extension for ExpensiveOpGuard {
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
         let doc = next.run(_ctx, _query, _variables).await?;
-        let expensive_root_field_name =
-            has_expensive_root_field(&doc, &self.expensive_root_field_names);
+        let expensive_root_field_count =
+            expensive_root_field_count(&doc, &self.expensive_root_field_names);
         let _ = self
-            .expensive_root_field_name
-            .set(expensive_root_field_name);
+            .expensive_root_field_count
+            .set(expensive_root_field_count);
         Ok(doc)
     }
 
@@ -89,24 +89,31 @@ impl Extension for ExpensiveOpGuard {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        let expensive_root_field_name = self
-            .expensive_root_field_name
-            .get()
-            .and_then(|name| name.as_ref());
+        let expensive_root_field_count =
+            self.expensive_root_field_count.get().copied().unwrap_or(0);
+        let is_expensive = expensive_root_field_count > 0;
 
         tracing::debug!(
-            "Executing operation: {:?}, expensive root field: {:?}, expected root fields: {:?}, expensive: {:?}, timeout: {:?}, semaphore_size: {:?}",
+            "Executing operation: {:?}, expensive root field count: {:?}, expected root fields: {:?}, expensive: {:?}, timeout: {:?}, semaphore_size: {:?}",
             operation_name,
-            expensive_root_field_name,
+            expensive_root_field_count,
             self.expensive_root_field_names,
-            expensive_root_field_name.is_some(),
+            is_expensive,
             self.timeout,
             self.semaphore.available_permits(),
         );
 
-        match expensive_root_field_name {
-            Some(_) => self.expensive_execution(ctx, operation_name, next).await,
-            None => next.run(ctx, operation_name).await,
+        match is_expensive {
+            true => {
+                self.expensive_execution(
+                    ctx,
+                    operation_name,
+                    next,
+                    expensive_root_field_count,
+                )
+                .await
+            }
+            false => next.run(ctx, operation_name).await,
         }
     }
 }
@@ -116,9 +123,19 @@ impl ExpensiveOpGuard {
         ctx: &ExtensionContext<'_>,
         operation_name: Option<&str>,
         next: NextExecute<'_>,
+        expensive_root_field_count: usize,
     ) -> Response {
+        let permit_count = match u32::try_from(expensive_root_field_count) {
+            Ok(count) => count,
+            Err(_) => u32::MAX,
+        };
+
         // Concurrency gate (bulkhead)
-        let permit = match self.semaphore.clone().try_acquire_owned() {
+        let permit = match self
+            .semaphore
+            .clone()
+            .try_acquire_many_owned(permit_count)
+        {
             Ok(p) => p,
             Err(_) => {
                 let mut resp = Response::new(async_graphql::Value::Null);
@@ -154,53 +171,58 @@ impl ExpensiveOpGuard {
     }
 }
 
-fn has_expensive_root_field(
+fn expensive_root_field_count(
     doc: &ExecutableDocument,
     expensive_field_names: &[String],
-) -> Option<String> {
-    doc.operations.iter().find_map(|(_, op)| {
-        selection_set_has_expensive_field(
-            &op.node.selection_set,
-            &doc.fragments,
-            expensive_field_names,
-        )
-    })
+) -> usize {
+    doc.operations
+        .iter()
+        .map(|(_, op)| {
+            count_expensive_root_fields(
+                &op.node.selection_set,
+                &doc.fragments,
+                expensive_field_names,
+            )
+        })
+        .sum()
 }
 
-fn selection_set_has_expensive_field(
+fn count_expensive_root_fields(
     selection_set: &Positioned<SelectionSet>,
     fragments: &std::collections::HashMap<
         async_graphql::Name,
         Positioned<FragmentDefinition>,
     >,
     expensive_field_names: &[String],
-) -> Option<String> {
+) -> usize {
     selection_set
         .node
         .items
         .iter()
-        .find_map(|selection| match &selection.node {
+        .map(|selection| match &selection.node {
             Selection::Field(field) => {
                 let field_name = field.node.name.node.as_str();
                 if expensive_field_names.iter().any(|name| name == field_name) {
-                    Some(field_name.to_string())
+                    1
                 } else {
-                    None
+                    0
                 }
             }
             Selection::FragmentSpread(spread) => fragments
                 .get(&spread.node.fragment_name.node)
-                .and_then(|fragment| {
-                    selection_set_has_expensive_field(
+                .map(|fragment| {
+                    count_expensive_root_fields(
                         &fragment.node.selection_set,
                         fragments,
                         expensive_field_names,
                     )
-                }),
-            Selection::InlineFragment(inline) => selection_set_has_expensive_field(
+                })
+                .unwrap_or(0),
+            Selection::InlineFragment(inline) => count_expensive_root_fields(
                 &inline.node.selection_set,
                 fragments,
                 expensive_field_names,
             ),
         })
+        .sum()
 }
