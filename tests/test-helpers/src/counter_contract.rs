@@ -47,7 +47,7 @@ pub async fn deploy(
         op::movi(0x12, 32),
         op::aloc(0x12),
         // Read value
-        op::srw(0x10, 0x11, RegId::HP),
+        op::srw(0x10, 0x11, RegId::HP, 0),
         // Increment value
         op::addi(0x10, 0x10, 1),
         // Write value

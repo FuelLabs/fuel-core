@@ -182,3 +182,6 @@ lto = "fat"
 # To speedup iterations between compilation.
 #lto = "thin"
 panic = "unwind"
+
+[patch.crates-io]
+fuel-vm = { path = "../fuel-vm/fuel-vm" }

@@ -426,6 +426,30 @@ where
 
         if found_unset { Ok(None) } else { Ok(Some(())) }
     }
+
+    fn contract_state_remove_range_nostatus(
+        &mut self,
+        contract_id: &ContractId,
+        start_key: &Bytes32,
+        range: usize,
+    ) -> Result<(), Self::DataError> {
+        let mut current_key = U256::from_big_endian(start_key.as_ref());
+
+        let mut key_bytes = Bytes32::zeroed();
+        for i in 0..range {
+            if i != 0 {
+                current_key.increase()?;
+            }
+            current_key.to_big_endian(key_bytes.as_mut());
+
+            self
+                .database
+                .storage::<ContractsState>()
+                .remove(&(contract_id, &key_bytes).into())?;
+        }
+
+        Ok(())
+    }
 }
 
 /// The requirements for the storage for optimal work of the [`VmStorage`].
