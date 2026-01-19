@@ -442,8 +442,7 @@ where
             }
             current_key.to_big_endian(key_bytes.as_mut());
 
-            self
-                .database
+            self.database
                 .storage::<ContractsState>()
                 .remove(&(contract_id, &key_bytes).into())?;
         }

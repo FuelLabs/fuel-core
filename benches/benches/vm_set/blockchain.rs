@@ -61,7 +61,10 @@ use fuel_core_types::{
         Word,
     },
     fuel_types::*,
-    fuel_vm::{constraints::reg_key::Reg, consts::*},
+    fuel_vm::{
+        constraints::reg_key::Reg,
+        consts::*,
+    },
     tai64::Tai64,
 };
 use rand::{
@@ -119,7 +122,6 @@ impl BenchDb {
                 }),
             )?;
         }
-
 
         let mut storage_key = primitive_types::U256::zero();
         let mut sub_id = SubAssetId::zeroed();
@@ -825,13 +827,10 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
             op::movi(0x12, i as u32),
         ];
-        let mut bench = VmBench::contract_using_db(
-            rng,
-            db.to_vm_database(),
-            op::sclr(0x11, 0x12),
-        )
-        .expect("failed to prepare contract")
-        .with_post_call(post_call);
+        let mut bench =
+            VmBench::contract_using_db(rng, db.to_vm_database(), op::sclr(0x11, 0x12))
+                .expect("failed to prepare contract")
+                .with_post_call(post_call);
         bench.data.extend(data);
 
         sclr.throughput(Throughput::Bytes(i));
@@ -948,13 +947,10 @@ pub fn run(c: &mut Criterion) {
             op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
             op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
         ];
-        let mut bench = VmBench::contract_using_db(
-            rng,
-            db.to_vm_database(),
-            op::spld(0x10, 0x11),
-        )
-        .expect("failed to prepare contract")
-        .with_post_call(post_call);
+        let mut bench =
+            VmBench::contract_using_db(rng, db.to_vm_database(), op::spld(0x10, 0x11))
+                .expect("failed to prepare contract")
+                .with_post_call(post_call);
         bench.data.extend(data);
 
         spld.throughput(Throughput::Bytes(i));

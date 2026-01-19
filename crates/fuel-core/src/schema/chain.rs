@@ -753,7 +753,6 @@ impl GasCosts {
         self.0.epar().ok().map(Into::into)
     }
 
-
     async fn sclr(&self) -> Option<DependentCost> {
         self.0.sclr().ok().map(Into::into)
     }
