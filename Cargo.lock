@@ -4612,6 +4612,7 @@ dependencies = [
  "num-rational",
  "parking_lot",
  "petgraph",
+ "proptest",
  "rand 0.8.5",
  "tokio",
  "tokio-stream",

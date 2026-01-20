@@ -622,60 +622,98 @@ async fn pending_pool__returns_error_after_timeout_for_transaction_that_spends_u
     service.stop_and_await().await.unwrap();
 }
 
-#[tokio::test]
-async fn insert__tx_with_expiration_at_next_block_height_is_accepted() {
-    // Given
-    let current_height = BlockHeight::new(100);
-    let next_block_height = current_height.succ().unwrap();
-    let mut universe = TestPoolUniverse::default().with_block_height(current_height);
-    let tx = universe.build_script_transaction_with_expiration(
-        None,
-        None,
-        0,
-        next_block_height,
-    );
+mod expiration_tests {
+    use super::*;
+    use proptest::prelude::*;
 
-    let service = universe.build_service(None, None);
-    service.start_and_await().await.unwrap();
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10))]
 
-    // When
-    let result = service.shared.insert(tx).await;
+        #[test]
+        fn insert__tx_with_expiration_after_current_height_is_accepted(
+            current_height_val in 0u32..1_000_000,
+            offset in 1u32..1000,
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                // Given
+                let current_height = BlockHeight::new(current_height_val);
+                let expiration_val = current_height_val.saturating_add(offset);
+                let expiration = BlockHeight::new(expiration_val);
+                let mut universe = TestPoolUniverse::default().with_block_height(current_height);
+                let tx = universe.build_script_transaction_with_expiration(
+                    None,
+                    None,
+                    0,
+                    expiration,
+                );
 
-    // Then
-    assert!(
-        result.is_ok(),
-        "Transaction with expiration at next block height should be accepted, got: {:?}",
-        result.unwrap_err()
-    );
+                let service = universe.build_service(None, None);
+                service.start_and_await().await.unwrap();
 
-    service.stop_and_await().await.unwrap();
-}
+                // When
+                let result = service.shared.insert(tx).await;
 
-#[tokio::test]
-async fn insert__tx_with_expiration_at_current_block_height_is_rejected() {
-    // Given
-    let current_height = BlockHeight::new(100);
-    let mut universe = TestPoolUniverse::default().with_block_height(current_height);
-    let tx =
-        universe.build_script_transaction_with_expiration(None, None, 0, current_height);
+                // Then
+                assert!(
+                    result.is_ok(),
+                    "Transaction with expiration {} (> current height {}) should be accepted, got: {:?}",
+                    expiration_val,
+                    current_height_val,
+                    result.unwrap_err()
+                );
 
-    let service = universe.build_service(None, None);
-    service.start_and_await().await.unwrap();
+                service.stop_and_await().await.unwrap();
+            });
+        }
+    }
 
-    // When
-    let result = service.shared.insert(tx).await;
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(10))]
 
-    // Then
-    assert!(
-        result.is_err(),
-        "Transaction with expiration at current block height should be rejected"
-    );
-    let err = result.unwrap_err();
-    assert!(
-        err.to_string().contains("TransactionExpiration"),
-        "Expected TransactionExpiration error, got: {:?}",
-        err
-    );
+        #[test]
+        fn insert__tx_with_expiration_at_or_before_current_height_is_rejected(
+            current_height_val in 1u32..1_000_000,
+            offset in 0u32..1000,
+        ) {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                // Given
+                let current_height = BlockHeight::new(current_height_val);
+                let expiration_val = current_height_val.saturating_sub(offset);
+                let expiration = BlockHeight::new(expiration_val);
+                let mut universe = TestPoolUniverse::default().with_block_height(current_height);
+                let tx = universe.build_script_transaction_with_expiration(
+                    None,
+                    None,
+                    0,
+                    expiration,
+                );
 
-    service.stop_and_await().await.unwrap();
+                let service = universe.build_service(None, None);
+                service.start_and_await().await.unwrap();
+
+                // When
+                let result = service.shared.insert(tx).await;
+
+                // Then
+                assert!(
+                    result.is_err(),
+                    "Transaction with expiration {} (<= current height {}) should be rejected",
+                    expiration_val,
+                    current_height_val,
+                );
+                let err = result.unwrap_err();
+                assert!(
+                    err.to_string().contains("TransactionExpiration"),
+                    "Expected TransactionExpiration error for expiration {} <= current height {}, got: {:?}",
+                    expiration_val,
+                    current_height_val,
+                    err
+                );
+
+                service.stop_and_await().await.unwrap();
+            });
+        }
+    }
 }
