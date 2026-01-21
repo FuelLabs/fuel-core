@@ -387,6 +387,24 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
+    pub fn new_unchecked(url: impl AsRef<str>) -> anyhow::Result<Self> {
+        let url = Url::parse(&url.as_ref())
+            .map_err(anyhow::Error::msg)
+            .with_context(|| format!("Invalid fuel-core URL: {:?}", url.as_ref()))?;
+
+        Ok(Self {
+            transport: FailoverTransport::new(vec![url])?,
+            require_height: ConsistencyPolicy::Auto {
+                height: Arc::new(Mutex::new(None)),
+            },
+            chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
+            rpc_client: None,
+            #[cfg(feature = "rpc")]
+            aws_client: AWSClientManager::new(),
+        })
+    }
+
     #[cfg(feature = "rpc")]
     pub async fn new_with_rpc<G: AsRef<str>, R: AsRef<str>>(
         graph_ql_urls: impl Iterator<Item = G>,
@@ -406,6 +424,22 @@ impl FuelClient {
         Ok(client)
     }
 
+    #[cfg(feature = "rpc")]
+    pub async fn new_unchecked_with_rpc<G: AsRef<str>, R: AsRef<str>>(
+        graph_ql_urls: impl Iterator<Item = G>,
+        rpc_url: R,
+    ) -> anyhow::Result<Self> {
+        let urls: Vec<_> = graph_ql_urls
+            .map(|str| Url::parse((str.as_ref())))
+            .try_collect()?;
+        let mut client = Self::with_urls(&urls)?;
+        let raw_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url).to_string();
+        let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
+        client.rpc_client = Some(rpc_client);
+        client.aws_client = AWSClientManager::new();
+        Ok(client)
+    }
+
     pub fn with_urls(urls: &[impl AsRef<str>]) -> anyhow::Result<Self> {
         if urls.is_empty() {
             return Err(anyhow!("Failed to create FuelClient. No URL is provided."));
@@ -413,6 +447,27 @@ impl FuelClient {
         let urls = urls
             .iter()
             .map(|url| normalize_url(url.as_ref()))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self {
+            transport: FailoverTransport::new(urls)?,
+            require_height: ConsistencyPolicy::Auto {
+                height: Arc::new(Mutex::new(None)),
+            },
+            chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
+            rpc_client: None,
+            #[cfg(feature = "rpc")]
+            aws_client: AWSClientManager::new(),
+        })
+    }
+
+    pub fn with_urls_unchecked(urls: &[impl AsRef<str>]) -> anyhow::Result<Self> {
+        if urls.is_empty() {
+            return Err(anyhow!("Failed to create FuelClient. No URL is provided."));
+        }
+        let urls = urls
+            .iter()
+            .map(|url| Url::parse(url.as_ref()).map_err(|e| anyhow!(e)))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             transport: FailoverTransport::new(urls)?,
@@ -1992,7 +2047,7 @@ mod tests {
     #[test]
     fn new_and_with_urls_produce_same_url() {
         // Given
-        let url = "http://localhost:8080";
+        let url = "http://localhost:8080/v1/graphql";
 
         // When
         let client_new = FuelClient::new(url).expect("should create client via new");
