@@ -6,4 +6,5 @@
 pub mod cli;
 pub use fuel_core::service::FuelService;
 
+use fuel_core_block_aggregator_api as _;
 use tikv_jemallocator as _; // Used only by the binary
