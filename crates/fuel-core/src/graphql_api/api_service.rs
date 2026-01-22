@@ -44,6 +44,7 @@ use axum::{
     extract::{
         DefaultBodyLimit,
         Extension,
+        RawQuery,
     },
     http::{
         HeaderValue,
@@ -83,10 +84,7 @@ use std::{
         TcpListener,
     },
     pin::Pin,
-    sync::{
-        Arc,
-        OnceLock,
-    },
+    sync::Arc,
 };
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
@@ -323,8 +321,9 @@ where
     let graphql_endpoint = "/v1/graphql";
     let graphql_subscription_endpoint = "/v1/graphql-sub";
 
-    let graphql_playground =
-        || render_graphql_playground(graphql_endpoint, graphql_subscription_endpoint);
+    let graphql_playground = |query: RawQuery| {
+        render_graphql_playground(graphql_endpoint, graphql_subscription_endpoint, query)
+    };
 
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
@@ -375,41 +374,60 @@ where
 
 /// Single initialization of the GraphQL playground HTML.
 /// This is because the rendering and replacing is expensive
-static GRAPHQL_PLAYGROUND_HTML: OnceLock<Arc<String>> = OnceLock::new();
+// static GRAPHQL_PLAYGROUND_HTML: OnceLock<Arc<String>> = OnceLock::new();
 
 fn _render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
+    query: RawQuery,
 ) -> impl IntoResponse + Send + Sync {
-    let html = GRAPHQL_PLAYGROUND_HTML.get_or_init(|| {
-        let raw_html = GraphiQLSource::build()
-            .endpoint(endpoint)
-            .subscription_endpoint(subscription_endpoint)
-            .title("Fuel Graphql Playground")
-            .finish();
+    let qs = query
+        .0
+        .as_deref()
+        .filter(|q| !q.is_empty())
+        .map(|q| format!("?{q}"))
+        .unwrap_or_default();
 
-        // this may not be necessary in the future,
-        // but we need it to patch: https://github.com/async-graphql/async-graphql/issues/1703
-        let raw_html = raw_html.replace(
-            "https://unpkg.com/graphiql/graphiql.min.js",
-            "https://unpkg.com/graphiql@3/graphiql.min.js",
-        );
-        let raw_html = raw_html.replace(
-            "https://unpkg.com/graphiql/graphiql.min.css",
-            "https://unpkg.com/graphiql@3/graphiql.min.css",
-        );
+    let endpoint = format!("{}{}", endpoint, qs);
+    let subscription_endpoint = format!("{}{}", subscription_endpoint, qs);
 
-        Arc::new(raw_html)
-    });
+    // let html = GRAPHQL_PLAYGROUND_HTML.get_or_init(|| {
+    let raw_html = GraphiQLSource::build()
+        .endpoint(&endpoint)
+        .subscription_endpoint(&subscription_endpoint)
+        .title("Fuel Graphql Playground")
+        .finish();
 
-    Html(html.as_str())
+    // this may not be necessary in the future,
+    // but we need it to patch: https://github.com/async-graphql/async-graphql/issues/1703
+    let raw_html = raw_html.replace(
+        "https://unpkg.com/graphiql/graphiql.min.js",
+        "https://unpkg.com/graphiql@3/graphiql.min.js",
+    );
+    let raw_html = raw_html.replace(
+        "https://unpkg.com/graphiql/graphiql.min.css",
+        "https://unpkg.com/graphiql@3/graphiql.min.css",
+    );
+
+    let raw_html = raw_html.replace(
+        "const url = new URL(endpoint, window.location.origin);",
+        r#"const url = new URL(endpoint, window.location.origin);
+url.search = window.location.search;"#,
+    );
+
+    // let html = Arc::new(raw_html);
+    // });
+
+    // Html(html.as_str())
+    Html(raw_html.clone())
 }
 
 async fn render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
+    raw_query: RawQuery,
 ) -> impl IntoResponse + Send + Sync {
-    _render_graphql_playground(endpoint, subscription_endpoint)
+    _render_graphql_playground(endpoint, subscription_endpoint, raw_query)
 }
 
 async fn health() -> Json<serde_json::Value> {
@@ -440,4 +458,21 @@ async fn graphql_subscription_handler(
 
 async fn ok() -> anyhow::Result<(), ()> {
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_playground_html() {
+        let endpoint = "/v1/graphql";
+        let subscription_endpoint = "/v1/graphql-sub";
+        let raw_html = GraphiQLSource::build()
+            .endpoint(endpoint)
+            .subscription_endpoint(subscription_endpoint)
+            .title("Fuel Graphql Playground")
+            .finish();
+        panic!("{:?}", raw_html);
+    }
 }
