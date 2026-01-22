@@ -38,7 +38,7 @@ impl SuiteConfig {
 impl Default for SuiteConfig {
     fn default() -> Self {
         Self {
-            endpoint: "http://localhost:4000".to_string(),
+            endpoint: "http://localhost:4000/v1/graphql".to_string(),
             wallet_sync_timeout: SYNC_TIMEOUT,
             full_test: false,
             coinbase_contract_id: ContractId::from_str(

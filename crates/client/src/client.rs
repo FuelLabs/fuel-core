@@ -325,7 +325,7 @@ impl Default for AWSClientManager {
 }
 
 /// Normalizes a URL string by ensuring it has an http(s) scheme and the `/v1/graphql` path.
-fn normalize_url(url_str: &str) -> anyhow::Result<Url> {
+pub fn normalize_url(url_str: &str) -> anyhow::Result<Url> {
     let mut raw_url = url_str.to_string();
     if !raw_url.starts_with("http") {
         raw_url = format!("http://{raw_url}");
