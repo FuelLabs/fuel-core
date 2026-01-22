@@ -16,6 +16,7 @@ fault-proving = [
     "fuel-core-database/fault-proving",
     "fuel-core-sync/fault-proving",
 ]
+rpc = ["fuel-core/rpc"]
 
 [dependencies]
 anyhow = { workspace = true }

@@ -637,10 +637,10 @@ where
                 if *amount == 0 {
                     self.tx.outputs_mut().pop();
                 } else {
-                    break;
+                    break
                 }
             } else {
-                break;
+                break
             }
         }
     }
@@ -852,7 +852,7 @@ where
             }
 
             if contracts_not_in_inputs.is_empty() {
-                break;
+                break
             }
 
             for contract_id in contracts_not_in_inputs {
@@ -913,13 +913,13 @@ where
         for input in self.tx.inputs() {
             if input_is_spendable_as_fee(input) {
                 let Some(amount) = input.amount() else {
-                    continue;
+                    continue
                 };
                 let Some(asset_id) = input.asset_id(&base_asset_id) else {
-                    continue;
+                    continue
                 };
                 let Some(owner) = input.input_owner() else {
-                    continue;
+                    continue
                 };
 
                 if asset_id == &base_asset_id && &fee_payer_account.owner() == owner {
@@ -949,7 +949,7 @@ where
             let need_to_cover = final_fee.saturating_add(self.base_asset_reserved);
 
             if need_to_cover <= total_base_asset {
-                break;
+                break
             }
 
             let remaining_input_slots = self.remaining_input_slots()?;
@@ -1021,7 +1021,7 @@ where
     for item in items {
         let key = extractor(item);
         if !duplicates.insert(key) {
-            return true
+            return true;
         }
     }
 
