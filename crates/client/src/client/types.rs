@@ -119,13 +119,16 @@ pub enum TransactionStatus {
         time: Tai64,
         total_gas: u64,
         total_fee: u64,
+        transaction_id: TxId,
         program_state: Option<ProgramState>,
         receipts: Vec<Receipt>,
+        resolved_outputs: Option<Vec<ResolvedOutput>>,
     },
     PreconfirmationSuccess {
         tx_pointer: TxPointer,
-        total_fee: u64,
+        time: Tai64,
         total_gas: u64,
+        total_fee: u64,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
         resolved_outputs: Option<Vec<ResolvedOutput>>,
@@ -138,14 +141,17 @@ pub enum TransactionStatus {
         time: Tai64,
         total_gas: u64,
         total_fee: u64,
-        reason: String,
-        program_state: Option<ProgramState>,
+        transaction_id: TxId,
         receipts: Vec<Receipt>,
+        program_state: Option<ProgramState>,
+        resolved_outputs: Option<Vec<ResolvedOutput>>,
+        reason: String,
     },
     PreconfirmationFailure {
         tx_pointer: TxPointer,
-        total_fee: u64,
+        time: Tai64,
         total_gas: u64,
+        total_fee: u64,
         transaction_id: TxId,
         receipts: Option<Vec<Receipt>>,
         resolved_outputs: Option<Vec<ResolvedOutput>>,
@@ -185,6 +191,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .collect::<Result<Vec<_>, _>>()?,
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
+                transaction_id: Default::default(),
+                resolved_outputs: None,
             },
             SchemaTxStatus::PreconfirmationSuccessStatus(s) => {
                 TransactionStatus::PreconfirmationSuccess {
@@ -212,6 +220,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     } else {
                         None
                     },
+                    time: s.time.0,
                 }
             }
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
@@ -226,6 +235,8 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .collect::<Result<Vec<_>, _>>()?,
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
+                transaction_id: Default::default(),
+                resolved_outputs: None,
             },
             SchemaTxStatus::PreconfirmationFailureStatus(s) => {
                 TransactionStatus::PreconfirmationFailure {
@@ -254,6 +265,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     } else {
                         None
                     },
+                    time: Tai64(),
                 }
             }
             SchemaTxStatus::SqueezedOutStatus(s) => {
