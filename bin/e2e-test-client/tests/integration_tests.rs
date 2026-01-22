@@ -9,7 +9,6 @@ use fuel_core_chain_config::{
     SnapshotMetadata,
     SnapshotReader,
 };
-use fuel_core_client::client::normalize_url;
 use fuel_core_e2e_client::config::SuiteConfig;
 use fuel_core_types::{
     blockchain::header::LATEST_STATE_TRANSITION_VERSION,
