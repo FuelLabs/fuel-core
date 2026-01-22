@@ -389,7 +389,7 @@ impl FuelClient {
     }
 
     pub fn new_unchecked(url: impl AsRef<str>) -> anyhow::Result<Self> {
-        let url = Url::parse(&url.as_ref())
+        let url = Url::parse(url.as_ref())
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("Invalid fuel-core URL: {:?}", url.as_ref()))?;
 
