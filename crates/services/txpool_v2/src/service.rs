@@ -471,10 +471,7 @@ where
             let current_height = current_height_reader.read();
             // Transactions will be executed in the next block, so we validate
             // against the next block height.
-            let next_block_height = current_height.succ().expect(
-                "The block height should be less than `BlockHeight::MAX` \
-                during transaction validation",
-            );
+            let next_block_height = current_height.succ().unwrap_or(current_height);
 
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
