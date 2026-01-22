@@ -462,27 +462,6 @@ impl FuelClient {
         })
     }
 
-    pub fn with_urls_unchecked(urls: &[impl AsRef<str>]) -> anyhow::Result<Self> {
-        if urls.is_empty() {
-            return Err(anyhow!("Failed to create FuelClient. No URL is provided."));
-        }
-        let urls = urls
-            .iter()
-            .map(|url| Url::parse(url.as_ref()).map_err(|e| anyhow!(e)))
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(Self {
-            transport: FailoverTransport::new(urls)?,
-            require_height: ConsistencyPolicy::Auto {
-                height: Arc::new(Mutex::new(None)),
-            },
-            chain_state_info: Default::default(),
-            #[cfg(feature = "rpc")]
-            rpc_client: None,
-            #[cfg(feature = "rpc")]
-            aws_client: AWSClientManager::new(),
-        })
-    }
-
     pub fn get_default_url(&self) -> &Url {
         self.transport.get_default_url()
     }
