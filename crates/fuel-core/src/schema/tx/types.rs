@@ -168,14 +168,6 @@ pub struct SuccessStatus {
     status: Arc<transaction_status::statuses::Success>,
 }
 
-// block_height: BlockHeight,
-// time: Tai64,
-// total_gas: u64,
-// total_fee: u64,
-// transaction_id: TxId,
-// program_state: Option<ProgramState>,
-// receipts: Vec<Receipt>,
-// resolved_outputs: Option<Vec<ResolvedOutput>>,
 #[Object]
 impl SuccessStatus {
     async fn transaction_id(&self) -> TransactionId {
@@ -238,13 +230,6 @@ pub struct PreconfirmationSuccessStatus {
     time: Tai64,
 }
 
-// tx_pointer: TxPointer,
-// time: Tai64,
-// total_gas: u64,
-// total_fee: u64,
-// transaction_id: TxId,
-// receipts: Option<Vec<Receipt>>,
-// resolved_outputs: Option<Vec<ResolvedOutput>>,
 #[Object]
 impl PreconfirmationSuccessStatus {
     async fn tx_pointer(&self) -> TxPointer {
@@ -305,15 +290,6 @@ pub struct FailureStatus {
     status: Arc<transaction_status::statuses::Failure>,
 }
 
-// block_height: BlockHeight,
-// time: Tai64,
-// total_gas: u64,
-// total_fee: u64,
-// transaction_id: TxId,
-// receipts: Vec<Receipt>,
-// program_state: Option<ProgramState>,
-// resolved_outputs: Option<Vec<ResolvedOutput>>,
-// reason: String,
 #[Object]
 impl FailureStatus {
     async fn transaction_id(&self) -> TransactionId {
@@ -383,14 +359,6 @@ pub struct PreconfirmationFailureStatus {
     time: Tai64,
 }
 
-// tx_pointer: TxPointer,
-// time: Tai64,
-// total_gas: u64,
-// total_fee: u64,
-// transaction_id: TxId,
-// receipts: Option<Vec<Receipt>>,
-// resolved_outputs: Option<Vec<ResolvedOutput>>,
-// reason: String,
 #[Object]
 impl PreconfirmationFailureStatus {
     async fn reason(&self) -> String {
