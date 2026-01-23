@@ -130,6 +130,7 @@ pub struct TestPoolUniverse {
     mock_tx_status_manager: MockTxStatusManager,
     tx_status_manager_receiver: mpsc::Receiver<(TxId, TransactionStatus)>,
     stats_receiver: Option<tokio::sync::watch::Receiver<TxPoolStats>>,
+    initial_block_height: BlockHeight,
 }
 
 impl Default for TestPoolUniverse {
@@ -145,11 +146,20 @@ impl Default for TestPoolUniverse {
             stats_receiver: None,
             mock_tx_status_manager: MockTxStatusManager::new(tx_all_status_sender, tx),
             tx_status_manager_receiver: rx,
+            initial_block_height: Default::default(),
         }
     }
 }
 
 impl TestPoolUniverse {
+    pub fn with_block_height(mut self, height: BlockHeight) -> Self {
+        if self.pool.is_some() {
+            panic!("Pool already built");
+        }
+        self.initial_block_height = height;
+        self
+    }
+
     pub fn database_mut(&mut self) -> &mut MockDb {
         &mut self.mock_db
     }
@@ -227,7 +237,7 @@ impl TestPoolUniverse {
             importer,
             MockDBProvider(self.mock_db.clone()),
             chain_state_info_provider,
-            Default::default(),
+            self.initial_block_height,
             gas_price_provider,
             MockWasmChecker { result: Ok(()) },
             tx,
@@ -256,6 +266,31 @@ impl TestPoolUniverse {
         tx_builder.tip(tip);
         tx_builder.max_fee_limit(10000);
         tx_builder.expiration(DEFAULT_EXPIRATION_HEIGHT);
+        tx_builder.finalize().into()
+    }
+
+    pub fn build_script_transaction_with_expiration(
+        &mut self,
+        inputs: Option<Vec<Input>>,
+        outputs: Option<Vec<Output>>,
+        tip: u64,
+        expiration: BlockHeight,
+    ) -> Transaction {
+        let mut inputs = inputs.unwrap_or_default();
+        let (_, gas_coin) = self.setup_coin();
+        inputs.push(gas_coin);
+        let outputs = outputs.unwrap_or_default();
+        let mut tx_builder = TransactionBuilder::script(vec![], vec![]);
+        tx_builder.script_gas_limit(GAS_LIMIT);
+        for input in inputs {
+            tx_builder.add_input(input);
+        }
+        for output in outputs {
+            tx_builder.add_output(output);
+        }
+        tx_builder.tip(tip);
+        tx_builder.max_fee_limit(10000);
+        tx_builder.expiration(expiration);
         tx_builder.finalize().into()
     }
 
