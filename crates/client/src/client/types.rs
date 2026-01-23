@@ -191,8 +191,17 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .collect::<Result<Vec<_>, _>>()?,
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
-                transaction_id: Default::default(),
-                resolved_outputs: None,
+                transaction_id: s.transaction_id.into(),
+                resolved_outputs: if let Some(outputs) = s.resolved_outputs {
+                    Some(
+                        outputs
+                            .into_iter()
+                            .map(TryInto::try_into)
+                            .collect::<Result<Vec<_>, _>>()?,
+                    )
+                } else {
+                    None
+                },
             },
             SchemaTxStatus::PreconfirmationSuccessStatus(s) => {
                 TransactionStatus::PreconfirmationSuccess {
@@ -235,8 +244,17 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     .collect::<Result<Vec<_>, _>>()?,
                 total_gas: s.total_gas.0,
                 total_fee: s.total_fee.0,
-                transaction_id: Default::default(),
-                resolved_outputs: None,
+                transaction_id: s.transaction_id.into(),
+                resolved_outputs: if let Some(outputs) = s.resolved_outputs {
+                    Some(
+                        outputs
+                            .into_iter()
+                            .map(TryInto::try_into)
+                            .collect::<Result<Vec<_>, _>>()?,
+                    )
+                } else {
+                    None
+                },
             },
             SchemaTxStatus::PreconfirmationFailureStatus(s) => {
                 TransactionStatus::PreconfirmationFailure {
@@ -265,7 +283,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                     } else {
                         None
                     },
-                    time: Tai64(),
+                    time: s.time.0,
                 }
             }
             SchemaTxStatus::SqueezedOutStatus(s) => {

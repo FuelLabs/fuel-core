@@ -378,6 +378,7 @@ type FailureStatus {
 	receipts: [Receipt!]!
 	totalGas: U64!
 	totalFee: U64!
+	resolvedOutputs: [ResolvedOutput!]
 }
 
 type FeeParameters {
@@ -900,6 +901,7 @@ type Policies {
 
 type PreconfirmationFailureStatus {
 	reason: String!
+	time: Tai64Timestamp!
 	txPointer: TxPointer!
 	totalGas: U64!
 	totalFee: U64!
@@ -911,6 +913,7 @@ type PreconfirmationFailureStatus {
 
 type PreconfirmationSuccessStatus {
 	txPointer: TxPointer!
+	time: Tai64Timestamp!
 	totalGas: U64!
 	totalFee: U64!
 	transactionId: TransactionId!
@@ -1381,6 +1384,7 @@ type SuccessStatus {
 	receipts: [Receipt!]!
 	totalGas: U64!
 	totalFee: U64!
+	resolvedOutputs: [ResolvedOutput!]
 }
 
 scalar Tai64Timestamp

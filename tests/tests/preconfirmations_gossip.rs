@@ -184,6 +184,7 @@ async fn preconfirmation__propagate_p2p_after_successful_execution() {
         transaction_id,
         receipts,
         resolved_outputs,
+        time: _,
     } = status.clone()
     {
         // Then
@@ -331,6 +332,7 @@ async fn preconfirmation__propagate_p2p_after_failed_execution() {
         receipts,
         resolved_outputs,
         reason: _,
+        time: _,
     } = status
     {
         // Then
