@@ -411,10 +411,6 @@ fn _render_graphql_playground(
 url.search = window.location.search;"#,
     );
 
-    // let html = Arc::new(raw_html);
-    // });
-
-    // Html(html.as_str())
     Html(raw_html.clone())
 }
 
