@@ -455,20 +455,3 @@ async fn graphql_subscription_handler(
 async fn ok() -> anyhow::Result<(), ()> {
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_playground_html() {
-        let endpoint = "/v1/graphql";
-        let subscription_endpoint = "/v1/graphql-sub";
-        let raw_html = GraphiQLSource::build()
-            .endpoint(endpoint)
-            .subscription_endpoint(subscription_endpoint)
-            .title("Fuel Graphql Playground")
-            .finish();
-        panic!("{:?}", raw_html);
-    }
-}
