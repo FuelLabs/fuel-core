@@ -16,7 +16,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
   AWS_ECR_ORG: fuellabs
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.86.0
+  RUST_VERSION: 1.90.0
   RUST_VERSION_FMT: nightly-2023-10-29
   RUST_VERSION_COV: nightly-2024-06-05
   RUSTFLAGS: -D warnings
@@ -290,12 +290,6 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest
           cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest,mode=max,image-manifest=true,oci-mediatypes=true
 
-      - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-  
   publish-e2e-client-docker-image:
     runs-on: buildjet-4vcpu-ubuntu-2204
     permissions:
@@ -390,11 +384,6 @@ jobs:
           cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest
           cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest,mode=max,image-manifest=true,oci-mediatypes=true
 
-      - uses: FuelLabs/.github/.github/actions/slack-notify-template@master
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          slack_webhook: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
     if: startsWith(github.head_ref, 'preview/')

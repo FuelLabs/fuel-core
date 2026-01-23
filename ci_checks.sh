@@ -6,7 +6,7 @@
 # The script runs almost all CI checks locally.
 #
 # Requires installed:
-# - Rust `1.86.0`
+# - Rust `1.90.0`
 # - Nightly rust formatter
 # - `cargo install cargo-sort`
 # - `cargo install cargo-make`
@@ -27,6 +27,7 @@ cargo check -p fuel-core-client --target wasm32-unknown-unknown --no-default-fea
 cargo check -p fuel-core-chain-config --target wasm32-unknown-unknown --no-default-features &&
 cargo check -p fuel-core-executor --target wasm32-unknown-unknown --no-default-features --features alloc &&
 cargo check -p fuel-core --no-default-features &&
+cargo check --features rpc --no-default-features --tests &&
 cargo make check --all-features --locked &&
 cargo make check --locked &&
 OVERRIDE_CHAIN_CONFIGS=true cargo test --test integration_tests local_node &&

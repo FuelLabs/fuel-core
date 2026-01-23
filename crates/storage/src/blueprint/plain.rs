@@ -8,6 +8,7 @@ use crate::{
     Mappable,
     Result as StorageResult,
     blueprint::{
+        BlueprintCodec,
         BlueprintInspect,
         BlueprintMutate,
         SupportsBatching,
@@ -33,6 +34,16 @@ pub struct Plain<KeyCodec, ValueCodec> {
     _marker: core::marker::PhantomData<(KeyCodec, ValueCodec)>,
 }
 
+impl<M, KeyCodec, ValueCodec> BlueprintCodec<M> for Plain<KeyCodec, ValueCodec>
+where
+    M: Mappable,
+    KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
+    ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
+{
+    type KeyCodec = KeyCodec;
+    type ValueCodec = ValueCodec;
+}
+
 impl<M, S, KeyCodec, ValueCodec> BlueprintInspect<M, S> for Plain<KeyCodec, ValueCodec>
 where
     M: Mappable,
@@ -40,8 +51,6 @@ where
     KeyCodec: Encode<M::Key> + Decode<M::OwnedKey>,
     ValueCodec: Encode<M::Value> + Decode<M::OwnedValue>,
 {
-    type KeyCodec = KeyCodec;
-    type ValueCodec = ValueCodec;
 }
 
 impl<M, S, KeyCodec, ValueCodec> BlueprintMutate<M, S> for Plain<KeyCodec, ValueCodec>
@@ -133,10 +142,10 @@ where
             column,
             set.map(|(key, value)| {
                 let key_encoder =
-                    <M::Blueprint as BlueprintInspect<M, S>>::KeyCodec::encode(key);
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(key);
                 let key_bytes = key_encoder.as_bytes().to_vec();
                 let value =
-                    <M::Blueprint as BlueprintInspect<M, S>>::ValueCodec::encode_as_value(
+                    <M::Blueprint as BlueprintCodec<M>>::ValueCodec::encode_as_value(
                         value,
                     );
                 (key_bytes, WriteOperation::Insert(value))
@@ -157,7 +166,7 @@ where
             column,
             set.map(|key| {
                 let key_encoder =
-                    <M::Blueprint as BlueprintInspect<M, S>>::KeyCodec::encode(key);
+                    <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(key);
                 let key_bytes = key_encoder.as_bytes().to_vec();
                 (key_bytes, WriteOperation::Remove)
             }),

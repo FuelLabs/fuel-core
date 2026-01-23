@@ -14,7 +14,9 @@ members = [
     "crates/fuel-gas-price-algorithm",
     "crates/keygen",
     "crates/metrics",
+    "crates/provider",
     "crates/services",
+    "crates/services/block_aggregator_api",
     "crates/services/compression",
     "crates/services/consensus_module",
     "crates/services/consensus_module/bft",
@@ -33,6 +35,7 @@ members = [
     "crates/services/upgradable-executor",
     "crates/services/upgradable-executor/wasm-executor",
     "crates/storage",
+    "crates/syscall",
     "crates/trace",
     "crates/types",
     "tests",
@@ -50,20 +53,34 @@ homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
-rust-version = "1.86.0"
-version = "0.46.0"
+rust-version = "1.90.0"
+version = "0.47.1"
 
 [workspace.dependencies]
 
 # Common dependencies
+alloy-consensus = { version = "1.0.37", default-features = false }
+alloy-json-rpc = { version = "1.0.37", default-features = false }
+alloy-primitives = { version = "1.4.0", default-features = false }
+alloy-provider = { version = "1.0.37", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
+alloy-rpc-client = { version = "1.0.37", default-features = false, features = ["reqwest"] }
+alloy-rpc-types-eth = "1.0.37"
+alloy-sol-types = "1.4.0"
+alloy-transport = { version = "1.0.37", default-features = false }
+alloy-transport-http = { version = "1.0.37", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
 anyhow = "1.0"
 async-graphql = { version = "=7.0.15", features = [
-  "graphiql",
-  "tracing",
+    "graphiql",
+    "tracing",
 ], default-features = false }
 async-graphql-value = { version = "=7.0.15" }
 async-trait = "0.1"
-aws-sdk-kms = "1.37"
+
+# Fuel dependencies
+aws-config = { version = "1.8.11", features = ["behavior-version-latest"] }
+aws-sdk-kms = "1.96"
+aws-sdk-s3 = "1"
+aws-smithy-mocks = "0.2.0"
 axum = "0.5"
 bytes = "1.5.0"
 clap = "4.4"
@@ -72,46 +89,49 @@ derive_more = { version = "0.99" }
 ed25519 = { version = "2.2.3", default-features = false }
 ed25519-dalek = { version = "2.1.1", default-features = false }
 educe = { version = "0.6", default-features = false, features = [
-  "Eq",
-  "PartialEq",
-  "Hash",
-  "Debug",
+    "Eq",
+    "PartialEq",
+    "Hash",
+    "Debug",
 ] }
 enum-iterator = "1.2"
 enum_dispatch = "0.3.13"
+flate2 = "1.1.5"
+fuel-core = { version = "0.47.1", path = "./crates/fuel-core", default-features = false }
+fuel-core-bin = { version = "0.47.1", path = "./bin/fuel-core" }
 # Workspace members
-fuel-core = { version = "0.46.0", path = "./crates/fuel-core", default-features = false }
-fuel-core-bin = { version = "0.46.0", path = "./bin/fuel-core" }
-fuel-core-chain-config = { version = "0.46.0", path = "./crates/chain-config", default-features = false }
-fuel-core-client = { version = "0.46.0", path = "./crates/client" }
-fuel-core-compression = { version = "0.46.0", path = "./crates/compression" }
-fuel-core-compression-service = { version = "0.46.0", path = "./crates/services/compression" }
-fuel-core-consensus-module = { version = "0.46.0", path = "./crates/services/consensus_module" }
-fuel-core-database = { version = "0.46.0", path = "./crates/database" }
-fuel-core-executor = { version = "0.46.0", path = "./crates/services/executor", default-features = false }
-fuel-core-gas-price-service = { version = "0.46.0", path = "crates/services/gas_price_service" }
-fuel-core-importer = { version = "0.46.0", path = "./crates/services/importer" }
-fuel-core-keygen = { version = "0.46.0", path = "./crates/keygen" }
-fuel-core-metrics = { version = "0.46.0", path = "./crates/metrics" }
-fuel-core-p2p = { version = "0.46.0", path = "./crates/services/p2p" }
-fuel-core-parallel-executor = { version = "0.46.0", path = "./crates/services/parallel-executor" }
-fuel-core-poa = { version = "0.46.0", path = "./crates/services/consensus_module/poa" }
-fuel-core-producer = { version = "0.46.0", path = "./crates/services/producer" }
-fuel-core-relayer = { version = "0.46.0", path = "./crates/services/relayer" }
-fuel-core-services = { version = "0.46.0", path = "./crates/services" }
-fuel-core-shared-sequencer = { version = "0.46.0", path = "crates/services/shared-sequencer" }
-fuel-core-storage = { version = "0.46.0", path = "./crates/storage", default-features = false }
-fuel-core-sync = { version = "0.46.0", path = "./crates/services/sync" }
-fuel-core-trace = { version = "0.46.0", path = "./crates/trace" }
-fuel-core-tx-status-manager = { version = "0.46.0", path = "./crates/services/tx_status_manager" }
-fuel-core-txpool = { version = "0.46.0", path = "./crates/services/txpool_v2" }
-fuel-core-types = { version = "0.46.0", path = "./crates/types", default-features = false }
-fuel-core-upgradable-executor = { version = "0.46.0", path = "./crates/services/upgradable-executor" }
-fuel-core-wasm-executor = { version = "0.46.0", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
-fuel-gas-price-algorithm = { version = "0.46.0", path = "crates/fuel-gas-price-algorithm" }
-
-# Fuel dependencies
-fuel-vm-private = { version = "0.62.0", package = "fuel-vm", default-features = false }
+fuel-core-block-aggregator-api = { version = "0.47.1", path = "./crates/services/block_aggregator_api" }
+fuel-core-chain-config = { version = "0.47.1", path = "./crates/chain-config", default-features = false }
+fuel-core-client = { version = "0.47.1", path = "./crates/client" }
+fuel-core-compression = { version = "0.47.1", path = "./crates/compression" }
+fuel-core-compression-service = { version = "0.47.1", path = "./crates/services/compression" }
+fuel-core-consensus-module = { version = "0.47.1", path = "./crates/services/consensus_module" }
+fuel-core-database = { version = "0.47.1", path = "./crates/database" }
+fuel-core-executor = { version = "0.47.1", path = "./crates/services/executor", default-features = false }
+fuel-core-gas-price-service = { version = "0.47.1", path = "crates/services/gas_price_service" }
+fuel-core-importer = { version = "0.47.1", path = "./crates/services/importer" }
+fuel-core-keygen = { version = "0.47.1", path = "./crates/keygen" }
+fuel-core-metrics = { version = "0.47.1", path = "./crates/metrics" }
+fuel-core-p2p = { version = "0.47.1", path = "./crates/services/p2p" }
+fuel-core-parallel-executor = { version = "0.47.1", path = "./crates/services/parallel-executor" }
+fuel-core-poa = { version = "0.47.1", path = "./crates/services/consensus_module/poa" }
+fuel-core-producer = { version = "0.47.1", path = "./crates/services/producer" }
+fuel-core-protobuf = { version = "0.5.0" }
+fuel-core-provider = { version = "0.47.1", path = "./crates/provider" }
+fuel-core-relayer = { version = "0.47.1", path = "./crates/services/relayer" }
+fuel-core-services = { version = "0.47.1", path = "./crates/services" }
+fuel-core-shared-sequencer = { version = "0.47.1", path = "crates/services/shared-sequencer" }
+fuel-core-storage = { version = "0.47.1", path = "./crates/storage", default-features = false }
+fuel-core-sync = { version = "0.47.1", path = "./crates/services/sync" }
+fuel-core-syscall = { version = "0.47.1", path = "./crates/syscall", default-features = false }
+fuel-core-trace = { version = "0.47.1", path = "./crates/trace" }
+fuel-core-tx-status-manager = { version = "0.47.1", path = "./crates/services/tx_status_manager" }
+fuel-core-txpool = { version = "0.47.1", path = "./crates/services/txpool_v2" }
+fuel-core-types = { version = "0.47.1", path = "./crates/types", default-features = false }
+fuel-core-upgradable-executor = { version = "0.47.1", path = "./crates/services/upgradable-executor" }
+fuel-core-wasm-executor = { version = "0.47.1", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
+fuel-gas-price-algorithm = { version = "0.47.1", path = "crates/fuel-gas-price-algorithm" }
+fuel-vm-private = { version = "0.65.0", package = "fuel-vm", default-features = false }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14.26" }
@@ -132,16 +152,18 @@ pretty_assertions = "1.4.0"
 primitive-types = { version = "0.12", default-features = false }
 prometheus-client = "0.22.0"
 proptest = "1.1"
+prost = "0.14.1"
 rand = "0.8"
 rayon = "1.10.0"
 # enable cookie store to support L7 sticky sessions
 reqwest = { version = "0.12.0", default-features = false, features = [
-  "rustls-tls",
-  "cookies",
+    "rustls-tls",
+    "cookies",
 ] }
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
+sha2 = { version = "0.10", default-features = false }
 strum = { version = "0.25" }
 strum_macros = "0.25"
 tempfile = "3.4"
@@ -153,6 +175,9 @@ tokio = { version = "1.27", default-features = false }
 tokio-rayon = "2.1.0"
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", default-features = false }
+tonic = "0.14.2"
+tonic-prost = "0.14.2"
+tonic-prost-build = "0.14.2"
 tracing = "0.1"
 tracing-attributes = "0.1"
 tracing-subscriber = "0.3"

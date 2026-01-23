@@ -1,40 +1,27 @@
+use alloy_rpc_types_eth::SyncInfo;
+use fuel_core_provider::test_helpers::provider::{
+    MockProvider,
+    TriggerType,
+};
 use fuel_core_relayer as _;
 use std::ops::RangeInclusive;
 
-use crate::test_helpers::middleware::{
-    MockMiddleware,
-    TriggerType,
-};
-
 use super::*;
-
-use ethers_core::types::SyncProgress;
 use test_case::test_case;
 
 #[tokio::test(start_paused = true)]
 async fn handles_syncing() {
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     eth_node.update_data(|data| {
-        let status = SyncProgress {
-            starting_block: 100.into(),
-            current_block: 0.into(),
-            highest_block: 130.into(),
-            pulled_states: None,
-            known_states: None,
-            healed_bytecode_bytes: None,
-            healed_bytecodes: None,
-            healed_trienode_bytes: None,
-            healed_trienodes: None,
-            healing_bytecode: None,
-            healing_trienodes: None,
-            synced_account_bytes: None,
-            synced_accounts: None,
-            synced_bytecode_bytes: None,
-            synced_bytecodes: None,
-            synced_storage: None,
-            synced_storage_bytes: None,
+        let status = SyncInfo {
+            starting_block: U256::from(100),
+            current_block: U256::from(0),
+            highest_block: U256::from(130),
+            warp_chunks_amount: None,
+            warp_chunks_processed: None,
+            stages: None,
         };
-        data.is_syncing = SyncingStatus::IsSyncing(Box::new(status));
+        data.is_syncing = SyncStatus::Info(Box::new(status));
     });
 
     let mut count = 0;
@@ -42,28 +29,17 @@ async fn handles_syncing() {
         if let TriggerType::Syncing = evt {
             count += 1;
             if count == 30 {
-                data.is_syncing = SyncingStatus::IsFalse;
+                data.is_syncing = SyncStatus::None;
             } else {
-                let status = SyncProgress {
-                    starting_block: 100.into(),
-                    current_block: (100 + count).into(),
-                    highest_block: 130.into(),
-                    pulled_states: None,
-                    known_states: None,
-                    healed_bytecode_bytes: None,
-                    healed_bytecodes: None,
-                    healed_trienode_bytes: None,
-                    healed_trienodes: None,
-                    healing_bytecode: None,
-                    healing_trienodes: None,
-                    synced_account_bytes: None,
-                    synced_accounts: None,
-                    synced_bytecode_bytes: None,
-                    synced_bytecodes: None,
-                    synced_storage: None,
-                    synced_storage_bytes: None,
+                let status = SyncInfo {
+                    starting_block: U256::from(100),
+                    current_block: U256::from(100 + count),
+                    highest_block: U256::from(130),
+                    warp_chunks_amount: None,
+                    warp_chunks_processed: None,
+                    stages: None,
                 };
-                data.is_syncing = SyncingStatus::IsSyncing(Box::new(status));
+                data.is_syncing = SyncStatus::Info(Box::new(status));
             }
         }
     });
@@ -93,8 +69,8 @@ fn test_status(s: Status) -> String {
 
 fn status(r: RangeInclusive<u64>, c: u64) -> Status {
     Status {
-        starting_block: (*r.start()).into(),
-        highest_block: (*r.end()).into(),
-        current_block: c.into(),
+        starting_block: U256::from(*r.start()),
+        highest_block: U256::from(*r.end()),
+        current_block: U256::from(c),
     }
 }

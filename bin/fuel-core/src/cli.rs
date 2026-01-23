@@ -29,6 +29,7 @@ pub fn default_db_path() -> PathBuf {
     dirs::home_dir().unwrap().join(".fuel").join("db")
 }
 
+pub mod archive;
 pub mod fee_contract;
 #[cfg(feature = "rocksdb")]
 pub mod rollback;
@@ -60,6 +61,9 @@ pub enum Fuel {
     #[cfg(feature = "rocksdb")]
     Rollback(rollback::Command),
     GenerateFeeContract(fee_contract::Command),
+    #[cfg(feature = "rocksdb")]
+    #[clap(subcommand)]
+    Archive(archive::Command),
 }
 
 pub const LOG_FILTER: &str = "RUST_LOG";
@@ -143,6 +147,7 @@ pub async fn run_cli() -> anyhow::Result<()> {
             Fuel::Snapshot(command) => snapshot::exec(command).await,
             Fuel::GenerateFeeContract(command) => fee_contract::exec(command).await,
             Fuel::Rollback(command) => rollback::exec(command).await,
+            Fuel::Archive(command) => archive::exec(command),
         },
         Err(e) => {
             // Prints the error and exits.

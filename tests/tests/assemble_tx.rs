@@ -259,16 +259,16 @@ async fn assemble_transaction__finds_another_input_if_inputs_not_spendable() {
     let amount = Word::MAX / 2;
     let sender = Address::default();
     let message = MessageConfig {
-        sender: sender.clone(),
-        recipient: recipient.clone(),
-        nonce: nonce.clone(),
+        sender,
+        recipient,
+        nonce,
         amount,
         data: data.clone(),
         ..Default::default()
     };
     let second_message = MessageConfig {
-        sender: sender.clone(),
-        recipient: recipient.clone(),
+        sender,
+        recipient,
         nonce: [2; 32].into(),
         amount: Word::MAX / 2,
         data: vec![],

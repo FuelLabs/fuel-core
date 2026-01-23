@@ -1,0 +1,40 @@
+[package]
+name = "fuel-core-provider"
+authors = { workspace = true }
+categories = { workspace = true }
+edition = { workspace = true }
+homepage = { workspace = true }
+keywords = ["blockchain", "fuel", "quorum", "provider"]
+license = { workspace = true }
+repository = { workspace = true }
+rust-version = { workspace = true }
+version = { workspace = true }
+description = "Fuel L1 Provider"
+
+[features]
+test-helpers = [
+    "alloy-consensus",
+    "alloy-rpc-client/reqwest",
+    "alloy-primitives",
+    "alloy-rpc-types-eth",
+]
+
+[dependencies]
+alloy-consensus = { workspace = true, optional = true }
+alloy-json-rpc = { workspace = true }
+alloy-primitives = { workspace = true, optional = true }
+alloy-provider = { workspace = true }
+alloy-rpc-client = { workspace = true }
+alloy-rpc-types-eth = { workspace = true, optional = true }
+alloy-transport = { workspace = true }
+alloy-transport-http = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+parking_lot = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower = "0.5.2"
+url = { workspace = true }
+
+[dev-dependencies]
+fuel-core-provider = { path = "", features = ["test-helpers"] }

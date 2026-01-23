@@ -626,7 +626,7 @@ mod tests {
                     tx_pointer: Default::default(),
                     total_gas: Default::default(),
                     total_fee: Default::default(),
-                    receipts: vec![],
+                    receipts: Default::default(),
                     outputs: vec![],
                 }
             }
@@ -665,14 +665,17 @@ mod tests {
                     tx_pointer: Default::default(),
                     total_gas: Default::default(),
                     total_fee: Default::default(),
-                    receipts: Some(vec![]),
+                    receipts: Some(Default::default()),
                     resolved_outputs: Some(vec![]),
                 };
                 TransactionStatus::PreConfirmationSuccess(Arc::new(inner))
             }
 
             pub fn squeezed_out() -> TransactionStatus {
-                TransactionStatus::squeezed_out("fishy tx".to_string())
+                TransactionStatus::squeezed_out(
+                    "fishy tx".to_string(),
+                    Default::default(),
+                )
             }
 
             pub fn preconfirmation_squeezed_out() -> TransactionStatus {
@@ -690,7 +693,7 @@ mod tests {
                     tx_pointer: Default::default(),
                     total_gas: Default::default(),
                     total_fee: Default::default(),
-                    receipts: Some(vec![]),
+                    receipts: Some(Default::default()),
                     resolved_outputs: Some(vec![]),
                     reason: "None".to_string(),
                 };

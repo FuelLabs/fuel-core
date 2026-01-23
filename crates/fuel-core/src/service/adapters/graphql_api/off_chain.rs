@@ -126,7 +126,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         owner: Address,
         start: Option<TxPointer>,
         direction: IterDirection,
-    ) -> BoxedIter<StorageResult<(TxPointer, TxId)>> {
+    ) -> BoxedIter<'_, StorageResult<(TxPointer, TxId)>> {
         let start = start.map(|tx_pointer| OwnedTransactionIndexCursor {
             block_height: tx_pointer.block_height(),
             tx_idx: tx_pointer.tx_index(),
@@ -273,7 +273,7 @@ impl OffChainDatabase for OffChainIterableKeyValueView {
         &self,
         owner: &Address,
         asset_id: &AssetId,
-    ) -> CoinsToSpendIndexIter {
+    ) -> CoinsToSpendIndexIter<'_> {
         let prefix: Vec<_> = NON_RETRYABLE_BYTE
             .as_ref()
             .iter()

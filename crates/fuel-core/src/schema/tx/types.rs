@@ -399,7 +399,7 @@ impl SqueezedOutStatus {
     }
 
     async fn reason(&self) -> String {
-        self.status.reason.clone()
+        self.status.reason().to_string()
     }
 }
 
@@ -1002,7 +1002,7 @@ where
 #[derive(Debug)]
 pub struct DryRunSuccessStatus {
     result: Option<VmProgramState>,
-    receipts: Vec<fuel_tx::Receipt>,
+    receipts: Arc<Vec<fuel_tx::Receipt>>,
     total_gas: u64,
     total_fee: u64,
 }
@@ -1029,7 +1029,7 @@ impl DryRunSuccessStatus {
 #[derive(Debug)]
 pub struct DryRunFailureStatus {
     result: Option<VmProgramState>,
-    receipts: Vec<fuel_tx::Receipt>,
+    receipts: Arc<Vec<fuel_tx::Receipt>>,
     total_gas: u64,
     total_fee: u64,
 }

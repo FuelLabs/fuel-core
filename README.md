@@ -13,9 +13,9 @@ Fuel client implementation.
 
 | Network  | Version |
 |----------|---------|
-| Fuel Ignition | 0.44.0 |
-| Testnet | 0.45.1 |
-| Devnet | 0.45.1 |
+| Fuel Ignition | 0.47.1 |
+| Testnet | 0.47.1 |
+| Devnet | 0.47.1 |
 
 ## Contributing
 
@@ -238,55 +238,3 @@ The transaction executor currently performs instant block production. Changes ar
 -   Schema (available after building): `crates/client/assets/schema.sdl`
 
 The service expects a mutation defined as `submit` that receives a [Transaction](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-tx) in hex encoded binary format, as [specified here](https://github.com/FuelLabs/fuel-specs/blob/master/src/tx-format/transaction.md).
-
-### cURL example
-
-This example will execute a script that represents the following sequence of [ASM](https://github.com/FuelLabs/fuel-vm/tree/master/fuel-asm):
-
-```rs
-ADDI(0x10, RegId::ZERO, 0xca),
-ADDI(0x11, RegId::ZERO, 0xba),
-LOG(0x10, 0x11, RegId::ZERO, RegId::ZERO),
-RET(RegId::ONE),
-```
-
-```console
-$ cargo run --bin fuel-core-client -- transaction submit \
-"{\"Script\":{
-    \"body\":{
-      \"script_gas_limit\":1000000,
-      \"receipts_root\":\"0000000000000000000000000000000000000000000000000000000000000000\",
-      \"script\":[80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],
-      \"script_data\":[]
-    },
-  \"policies\":{
-      \"bits\":\"Maturity | MaxFee\",
-      \"values\":[0,0,0,0]},
-  \"inputs\":[{
-    \"CoinSigned\":{
-      \"utxo_id\":{
-        \"tx_id\":\"c49d65de61cf04588a764b557d25cc6c6b4bc0d7429227e2a21e61c213b3a3e2\",
-        \"output_index\":33298
-      },
-      \"owner\":\"f1e92c42b90934aa6372e30bc568a326f6e66a1a0288595e6e3fbd392a4f3e6e\",
-      \"amount\":4294967295,
-      \"asset_id\":\"0000000000000000000000000000000000000000000000000000000000000000\",
-      \"tx_pointer\":{
-        \"block_height\":0,
-        \"tx_index\":0
-        },
-      \"witness_index\":0,
-      \"predicate_gas_used\":null,
-      \"predicate\":null,
-      \"predicate_data\":null}}],
-  \"outputs\":[],
-  \"witnesses\":[{
-    \"data\":[167,184,58,243,113,131,73,255,233,187,213,245,147,97,92,200,55,162,35,88,241,0,222,151,44,66,30,244,186,138,146,161,73,250,79,15,67,105,225,4,79,142,222,72,74,1,221,173,88,143,201,96,229,4,170,19,75,126,67,159,133,151,149,51]}
-  ]}}"
-```
-
-You may meet the error `Transaction is not inserted. UTXO does not exist` due to the UTXO validation. The UTXO validation can be turned off by adding the `--debug` flag.
-
-```console
-$ ./target/debug/fuel-core run --db-type in-memory --debug
-```

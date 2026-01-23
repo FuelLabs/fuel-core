@@ -187,6 +187,12 @@ impl From<HexString> for Vec<u8> {
     }
 }
 
+impl From<HexString> for fuel_core_types::fuel_types::bytes::Bytes {
+    fn from(s: HexString) -> Self {
+        s.0.0.into()
+    }
+}
+
 impl From<Vec<u8>> for HexString {
     fn from(s: Vec<u8>) -> Self {
         HexString(Bytes(s))

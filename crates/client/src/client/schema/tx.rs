@@ -37,15 +37,18 @@ use fuel_core_types::{
         TransactionExecutionStatus,
     },
 };
-use std::convert::{
-    TryFrom,
-    TryInto,
+use std::{
+    convert::{
+        TryFrom,
+        TryInto,
+    },
+    sync::Arc,
 };
 
 pub mod transparent_receipt;
 pub mod transparent_tx;
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct TxIdArgs {
     pub id: TransactionId,
 }
@@ -364,7 +367,7 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                     .collect::<Result<Vec<fuel_tx::Receipt>, _>>()?;
                 TransactionExecutionResult::Success {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
-                    receipts,
+                    receipts: Arc::new(receipts),
                     total_gas: s.total_gas.0,
                     total_fee: s.total_fee.0,
                 }
@@ -377,7 +380,7 @@ impl TryFrom<DryRunTransactionStatus> for TransactionExecutionResult {
                     .collect::<Result<Vec<fuel_tx::Receipt>, _>>()?;
                 TransactionExecutionResult::Failed {
                     result: s.program_state.map(TryInto::try_into).transpose()?,
-                    receipts,
+                    receipts: Arc::new(receipts),
                     total_gas: s.total_gas.0,
                     total_fee: s.total_fee.0,
                 }
@@ -425,7 +428,7 @@ impl TryFrom<DryRunTransactionExecutionStatus> for TransactionExecutionStatus {
     }
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct TransactionsByOwnerConnectionArgs {
     /// Select transactions based on related `owner`s
     pub owner: Address,
@@ -472,7 +475,7 @@ pub struct TransactionsByOwnerQuery {
     pub transactions_by_owner: TransactionConnection,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct StatusChangeSubscriptionArgs {
     pub id: TransactionId,
     #[cynic(skip_serializing_if = "Option::is_none")]
@@ -492,19 +495,19 @@ pub struct StatusChangeSubscription {
 
 // mutations
 
-#[derive(cynic::QueryVariables)]
+#[derive(cynic::QueryVariables, Clone)]
 pub struct TxArg {
     pub tx: HexString,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(cynic::QueryVariables, Clone)]
 pub struct TxWithEstimatedPredicatesArg {
     pub tx: HexString,
     #[cynic(skip_serializing_if = "Option::is_none")]
     pub estimate_predicates: Option<bool>,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(cynic::QueryVariables, Clone)]
 pub struct SubmitAndAwaitStatusArg {
     pub tx: HexString,
     #[cynic(skip_serializing_if = "Option::is_none")]
@@ -565,7 +568,7 @@ pub struct RequiredBalance {
     pub change_policy: ChangePolicy,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(cynic::QueryVariables, Clone)]
 pub struct AssembleTxArg {
     pub tx: HexString,
     pub block_horizon: U32,
@@ -603,7 +606,7 @@ pub struct AssembleTransactionResult {
     pub gas_price: U64,
 }
 
-#[derive(cynic::QueryVariables)]
+#[derive(cynic::QueryVariables, Clone)]
 pub struct DryRunArg {
     pub txs: Vec<HexString>,
     pub utxo_validation: Option<bool>,
@@ -618,7 +621,8 @@ pub struct DryRunArg {
     variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price, blockHeight: $block_height)]
+    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price, blockHeight: $block_height
+    )]
     pub dry_run: Vec<DryRunTransactionExecutionStatus>,
 }
 
@@ -636,7 +640,8 @@ pub struct DryRunStorageReads {
     variables = "DryRunArg"
 )]
 pub struct DryRunRecordStorageReads {
-    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price, blockHeight: $block_height)]
+    #[arguments(txs: $txs, utxoValidation: $utxo_validation, gasPrice: $gas_price, blockHeight: $block_height
+    )]
     pub dry_run_record_storage_reads: DryRunStorageReads,
 }
 
@@ -680,7 +685,8 @@ pub struct SubmitAndAwaitSubscriptionWithTransaction {
     variables = "SubmitAndAwaitStatusArg"
 )]
 pub struct SubmitAndAwaitStatusSubscription {
-    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates, includePreconfirmation: $include_preconfirmation)]
+    #[arguments(tx: $tx, estimatePredicates: $estimate_predicates, includePreconfirmation: $include_preconfirmation
+    )]
     pub submit_and_await_status: TransactionStatus,
 }
 

@@ -10,7 +10,7 @@ use crate::client::{
 
 use fuel_core_types::fuel_vm::UploadedBytecode as VmUploadedBytecode;
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ConsensusParametersByVersionArgs {
     pub version: i32,
 }
@@ -26,7 +26,7 @@ pub struct ConsensusParametersByVersionQuery {
     pub consensus_parameters: Option<ConsensusParameters>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct StateTransitionBytecodeByVersionArgs {
     pub version: i32,
 }
@@ -42,7 +42,7 @@ pub struct StateTransitionBytecodeByVersionQuery {
     pub state_transition_bytecode_by_version: Option<StateTransitionBytecode>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct StateTransitionBytecodeByRootArgs {
     pub root: HexString,
 }

@@ -68,6 +68,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     iter::IterDirection,
 };
+use fuel_core_syscall::handlers::log_collector::EcalLogCollector;
 use fuel_core_tx_status_manager::TxStatusMessage;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
@@ -302,8 +303,8 @@ impl TxQuery {
 
     #[graphql(complexity = "{\
         query_costs().storage_iterator\
-        + (query_costs().storage_read + first.unwrap_or_default() as usize) * child_complexity \
-        + (query_costs().storage_read + last.unwrap_or_default() as usize) * child_complexity\
+        + first.unwrap_or_default() as usize * (child_complexity + query_costs().storage_read) \
+        + last.unwrap_or_default() as usize * (child_complexity + query_costs().storage_read) \
     }")]
     async fn transactions_by_owner(
         &self,
@@ -1025,9 +1026,24 @@ impl ContextExt for Context<'_> {
         let memory_pool = self.data_unchecked::<SharedMemoryPool>();
         let memory = memory_pool.get_memory().await;
 
+        let config = self.data_unchecked::<GraphQLConfig>();
+        let allow_syscall = config.allow_syscall;
+
         let parameters = CheckPredicateParams::from(params.as_ref());
         let tx = tokio_rayon::spawn_fifo(move || {
-            let result = tx.estimate_predicates(&parameters, memory, &query);
+            let ecal = EcalLogCollector {
+                enabled: allow_syscall,
+                ..Default::default()
+            };
+
+            let chain_id = params.chain_id();
+
+            let result =
+                tx.estimate_predicates_ecal(&parameters, memory, &query, ecal.clone());
+
+            ecal.maybe_print_logs(
+                tracing::info_span!("estimation", tx_id = % &tx.id(&chain_id)),
+            );
             result.map(|_| tx)
         })
         .await

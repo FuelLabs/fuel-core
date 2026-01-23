@@ -206,19 +206,15 @@ impl PendingPool {
                         }
                     }
                 }
-                if let Some(missing_input) = missing_inputs.first() {
-                    if let Err(e) =
+                if let Some(missing_input) = missing_inputs.first()
+                    && let Err(e) =
                         notification_sender.try_send(PoolNotification::ErrorInsertion {
                             tx_id: tx.id(),
                             source: insertion_source,
                             error: missing_input.into(),
                         })
-                    {
-                        tracing::error!(
-                            "Failed to send error insertion notification: {}",
-                            e
-                        );
-                    }
+                {
+                    tracing::error!("Failed to send error insertion notification: {}", e);
                 }
             }
             self.ttl_check.pop_back();
@@ -449,7 +445,7 @@ mod tests {
         let contract = Contract::from(bytecode.clone());
         let contract_root = contract.root();
         let state_root = Contract::default_state_root();
-        let contract_id = contract.id(&Default::default(), &contract_root, &state_root);
+        let contract_id = Contract::id(&Default::default(), &contract_root, &state_root);
         let mut dependency_tx = TransactionBuilder::create(
             bytecode.into(),
             Default::default(),

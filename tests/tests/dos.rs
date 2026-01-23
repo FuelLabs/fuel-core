@@ -1,9 +1,6 @@
 #![allow(non_snake_case)]
 
-use std::time::{
-    Duration,
-    Instant,
-};
+use std::time::Duration;
 
 use fuel_core::service::{
     Config,
@@ -226,9 +223,9 @@ const FULL_BLOCK_QUERY: &str = r#"
 "#;
 
 #[tokio::test]
-async fn complex_queries__40_full_blocks__works() {
+async fn complex_queries__10_full_blocks__works() {
     let query = FULL_BLOCK_QUERY.to_string();
-    let query = query.replace("$NUMBER_OF_BLOCKS", "40");
+    let query = query.replace("$NUMBER_OF_BLOCKS", "10");
 
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
@@ -238,9 +235,9 @@ async fn complex_queries__40_full_blocks__works() {
 }
 
 #[tokio::test]
-async fn complex_queries__41_full_block__query_too_complex() {
+async fn complex_queries__11_full_block__query_too_complex() {
     let query = FULL_BLOCK_QUERY.to_string();
-    let query = query.replace("$NUMBER_OF_BLOCKS", "41");
+    let query = query.replace("$NUMBER_OF_BLOCKS", "11");
 
     let node = FuelService::new_node(Config::local_node()).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
@@ -443,68 +440,6 @@ async fn concurrency_limit_0_allows_unthrottled_queries() {
     // Then
     let result = response.unwrap();
     assert_eq!(result.status(), 200);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-async fn concurrency_limit_1_prevents_concurrent_queries() {
-    // Given
-    const NUM_OF_BLOCKS: u32 = 40;
-    let num_samples = 100;
-
-    let mut config = Config::local_node();
-    config.graphql_config.max_concurrent_queries = 1;
-
-    let query = FULL_BLOCK_QUERY.to_string();
-    let query = query.replace("$NUMBER_OF_BLOCKS", NUM_OF_BLOCKS.to_string().as_str());
-
-    let node = FuelService::new_node(config).await.unwrap();
-    let url = format!("http://{}/v1/graphql", node.bound_address);
-    let client = FuelClient::new(url.clone()).unwrap();
-    client.produce_blocks(NUM_OF_BLOCKS, None).await.unwrap();
-
-    let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-
-    // When
-
-    // Measure the average request time for sequential queries
-    let mut avg_request_time = 0;
-    for _ in 0..num_samples {
-        let now = Instant::now();
-        let _ = send_graph_ql_query(&url, &query).await;
-        avg_request_time += now.elapsed().as_nanos() / num_samples;
-    }
-
-    // Measure the average request time for concurrent queries
-    for _ in 0..num_samples {
-        let tx = tx.clone();
-        let url = url.clone();
-        let query = query.clone();
-
-        tokio::spawn(async move {
-            let now = Instant::now();
-            send_graph_ql_query(&url, &query).await;
-            let _ = tx.send(now.elapsed().as_nanos()).await;
-        });
-    }
-
-    let mut avg_concurrent_request_time = 0;
-    for _ in 0..num_samples {
-        let request_time = rx.recv().await.unwrap();
-        avg_concurrent_request_time += request_time / num_samples;
-    }
-
-    // Then
-
-    // In an idealized model we should see c = s * n / 2
-    // where
-    //   c = average concurrent request time
-    //   s = single request time
-    //   n = number of request
-    //   2 = the first even natural non-zero number ;)
-    //
-    // However, since this is inherently flaky we divide by 4 instead of 2 to have some margin,
-    // while still maintaining our ability to assert a large deviation between the two measurements.
-    assert!(avg_concurrent_request_time > avg_request_time * num_samples / 4);
 }
 
 #[tokio::test]

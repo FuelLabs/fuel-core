@@ -47,6 +47,7 @@ pub mod fuel_vm {
         consts,
         crypto,
         double_key,
+        error,
         error::PredicateVerificationFailed,
         interpreter,
         pool::VmMemoryPool,

@@ -21,8 +21,10 @@ use std::sync::Arc;
 #[cfg(not(feature = "std"))]
 use alloc::sync::Arc;
 
+use crate::fuel_tx::TxId;
 #[cfg(feature = "alloc")]
 use alloc::{
+    format,
     string::{
         String,
         ToString,
@@ -49,7 +51,7 @@ pub enum TransactionExecutionStatus {
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
         /// The receipts generated during execution of the transaction.
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction.
         total_gas: u64,
         /// The total fee paid by the transaction.
@@ -69,7 +71,7 @@ pub enum TransactionExecutionStatus {
         /// Result of executing the transaction for scripts
         result: Option<ProgramState>,
         /// The receipts generated during execution of the transaction.
-        receipts: Vec<Receipt>,
+        receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction.
         total_gas: u64,
         /// The total fee paid by the transaction.
@@ -106,7 +108,9 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
             // TODO: Removed this variant as part of the
             //  https://github.com/FuelLabs/fuel-core/issues/2794
             TransactionExecutionStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut(statuses::SqueezedOut { reason }.into())
+                TransactionStatus::SqueezedOut(
+                    statuses::SqueezedOut::new(reason, TxId::zeroed()).into(),
+                )
             }
             TransactionExecutionStatus::Failed {
                 block_height,
@@ -195,8 +199,8 @@ impl TransactionStatus {
     }
 
     /// Creates a new `TransactionStatus::SqueezedOut` variant.
-    pub fn squeezed_out(reason: String) -> Self {
-        Self::SqueezedOut(statuses::SqueezedOut { reason }.into())
+    pub fn squeezed_out(reason: String, tx_id: TxId) -> Self {
+        Self::SqueezedOut(statuses::SqueezedOut::new(reason, tx_id).into())
     }
 
     /// Creates a new `TransactionStatus::PreConfirmationSqueezedOut` variant.
@@ -210,9 +214,12 @@ impl TransactionStatus {
 impl From<PreconfirmationStatus> for TransactionStatus {
     fn from(value: PreconfirmationStatus) -> Self {
         match value {
-            PreconfirmationStatus::SqueezedOut { reason } => {
+            PreconfirmationStatus::SqueezedOut(reason) => {
                 TransactionStatus::PreConfirmationSqueezedOut(
-                    statuses::PreConfirmationSqueezedOut { reason }.into(),
+                    statuses::PreConfirmationSqueezedOut {
+                        reason: reason.reason().to_string(),
+                    }
+                    .into(),
                 )
             }
             PreconfirmationStatus::Success {
@@ -270,7 +277,10 @@ pub enum PreConfirmationStatus {
 /// The status of the transaction during its lifecycle.
 pub mod statuses {
     use super::*;
-    use crate::fuel_tx::UtxoId;
+    use crate::fuel_tx::{
+        TxId,
+        UtxoId,
+    };
 
     /// Transaction was submitted into the TxPool
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -299,7 +309,7 @@ pub mod statuses {
         /// Result of executing the transaction for scripts
         pub program_state: Option<ProgramState>,
         /// The receipts generated during execution of the transaction
-        pub receipts: Vec<Receipt>,
+        pub receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction
         pub total_gas: u64,
         /// The total fee paid by the transaction
@@ -312,7 +322,7 @@ pub mod statuses {
                 block_height: Default::default(),
                 block_timestamp: Tai64::UNIX_EPOCH,
                 program_state: None,
-                receipts: Vec::new(),
+                receipts: Default::default(),
                 total_gas: 0,
                 total_fee: 0,
             }
@@ -330,7 +340,7 @@ pub mod statuses {
         /// The total fee paid by the transaction.
         pub total_fee: u64,
         /// Receipts produced by the transaction during execution.
-        pub receipts: Option<Vec<Receipt>>,
+        pub receipts: Option<Arc<Vec<Receipt>>>,
         /// Dynamic outputs produced by the transaction during execution.
         pub resolved_outputs: Option<Vec<(UtxoId, Output)>>,
     }
@@ -340,7 +350,21 @@ pub mod statuses {
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct SqueezedOut {
         /// The reason why the transaction was squeezed out
-        pub reason: String,
+        reason: String,
+    }
+
+    impl SqueezedOut {
+        /// Creates a new SqueezedOut
+        pub fn new(reason: String, tx_id: TxId) -> Self {
+            Self {
+                reason: format!("{reason} TxId: {tx_id}"),
+            }
+        }
+
+        /// Returns why the transaction was squeezed out.
+        pub fn reason(&self) -> &str {
+            &self.reason
+        }
     }
 
     impl Default for SqueezedOut {
@@ -394,7 +418,7 @@ pub mod statuses {
         /// Result of executing the transaction for scripts
         pub program_state: Option<ProgramState>,
         /// The receipts generated during execution of the transaction
-        pub receipts: Vec<Receipt>,
+        pub receipts: Arc<Vec<Receipt>>,
         /// The total gas used by the transaction
         pub total_gas: u64,
         /// The total fee paid by the transaction
@@ -408,7 +432,7 @@ pub mod statuses {
                 block_timestamp: Tai64::UNIX_EPOCH,
                 reason: "Dummy reason".to_string(),
                 program_state: None,
-                receipts: Vec::new(),
+                receipts: Default::default(),
                 total_gas: 0,
                 total_fee: 0,
             }
@@ -426,7 +450,7 @@ pub mod statuses {
         /// The total fee paid by the transaction.
         pub total_fee: u64,
         /// Receipts produced by the transaction during execution.
-        pub receipts: Option<Vec<Receipt>>,
+        pub receipts: Option<Arc<Vec<Receipt>>>,
         /// Dynamic outputs produced by the transaction during execution.
         pub resolved_outputs: Option<Vec<(UtxoId, Output)>>,
         /// The reason why the transaction has failed

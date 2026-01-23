@@ -218,7 +218,7 @@ impl StorageRead<BlobData> for MockDb {
     ) -> Result<Option<Vec<u8>>, Self::Error> {
         let table = self.data.lock().unwrap();
         let bytes = table.blobs.get(key);
-        let bytes = bytes.map(|bytes| bytes.clone().0);
+        let bytes = bytes.map(|bytes| bytes.clone().into());
         Ok(bytes)
     }
 }
@@ -229,7 +229,7 @@ impl StorageInspect<BlobData> for MockDb {
     fn get(
         &self,
         key: &<BlobData as Mappable>::Key,
-    ) -> Result<Option<Cow<<BlobData as Mappable>::OwnedValue>>, Self::Error> {
+    ) -> Result<Option<Cow<'_, <BlobData as Mappable>::OwnedValue>>, Self::Error> {
         let table = self.data.lock().unwrap();
         let bytes = table.blobs.get(key);
         Ok(bytes.map(|b| Cow::Owned(b.clone())))

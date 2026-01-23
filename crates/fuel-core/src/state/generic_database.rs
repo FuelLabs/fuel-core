@@ -64,7 +64,7 @@ where
 {
     type Error = StorageError;
 
-    fn get(&self, key: &M::Key) -> Result<Option<Cow<M::OwnedValue>>, Self::Error> {
+    fn get(&self, key: &M::Key) -> Result<Option<Cow<'_, M::OwnedValue>>, Self::Error> {
         self.storage.storage::<M>().get(key)
     }
 
@@ -156,7 +156,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         self.storage.iter_store(column, prefix, start, direction)
     }
 
@@ -166,7 +166,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+    ) -> BoxedIter<'_, fuel_core_storage::kv_store::KeyItem> {
         self.storage
             .iter_store_keys(column, prefix, start, direction)
     }

@@ -58,6 +58,7 @@ use test_helpers::{
     default_signing_wallet,
 };
 
+mod log_syscall;
 mod predicates;
 mod tx_pointer;
 mod txn_status_subscription;
@@ -144,7 +145,7 @@ async fn dry_run_create() {
     let contract = Contract::from(contract_code.clone());
     let root = contract.root();
     let state_root = Contract::default_state_root();
-    let contract_id = contract.id(&salt, &root, &state_root);
+    let contract_id = Contract::id(&salt, &root, &state_root);
 
     let tx = TransactionBuilder::create(contract_code.into(), salt, vec![])
         .add_fee_input()
@@ -211,7 +212,7 @@ fn arb_large_script_tx<R: Rng + rand::CryptoRng>(
     size: usize,
     rng: &mut R,
 ) -> Transaction {
-    let mut script: Vec<_> = std::iter::repeat(op::noop()).take(size).collect();
+    let mut script: Vec<_> = std::iter::repeat_n(op::noop(), size).collect();
     script.push(op::ret(RegId::ONE));
     let script_bytes = script.iter().flat_map(|op| op.to_bytes()).collect();
     let mut builder = TransactionBuilder::script(script_bytes, vec![]);

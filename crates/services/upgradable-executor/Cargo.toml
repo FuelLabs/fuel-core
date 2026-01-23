@@ -14,11 +14,6 @@ build = "build.rs"
 [features]
 default = ["std"]
 std = ["fuel-core-executor/std", "fuel-core-storage/std", "fuel-core-types/std"]
-smt = [
-    "fuel-core-storage/smt",
-    "fuel-core-executor/smt",
-    "fuel-core-wasm-executor?/smt",
-]
 wasm-executor = [
     "dep:anyhow",
     "dep:derive_more",
@@ -43,18 +38,18 @@ fuel-core-executor = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 fuel-core-wasm-executor = { workspace = true, features = [
-  "std",
+    "std",
 ], optional = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-wasmtime = { version = "34.0.2", default-features = false, features = [
-  "cache",
-  "cranelift",
-  "parallel-compilation",
-  "pooling-allocator",
-  "runtime",
+wasmtime = { version = "38.0.4", default-features = false, features = [
+    "cache",
+    "cranelift",
+    "parallel-compilation",
+    "pooling-allocator",
+    "runtime",
 ], optional = true }
 
 [build-dependencies]

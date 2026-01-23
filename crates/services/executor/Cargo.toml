@@ -14,7 +14,6 @@ description = "Fuel Block Executor"
 default = ["std"]
 std = ["fuel-core-types/std", "fuel-core-storage/std"]
 alloc = ["fuel-core-types/alloc", "fuel-core-storage/alloc"]
-smt = ["fuel-core-storage/smt"]
 test-helpers = ["fuel-core-types/test-helpers", "fuel-core-storage/test-helpers"]
 limited-tx-count = []
 fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-proving"]
@@ -24,11 +23,15 @@ anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
+fuel-core-syscall = { workspace = true, default-features = false, features = [
+  "alloc",
+] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "alloc",
 ] }
 parking_lot = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true, default-features = false }
 tracing = { workspace = true }
 
 [dev-dependencies]

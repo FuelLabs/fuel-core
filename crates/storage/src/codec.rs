@@ -18,7 +18,7 @@ pub mod raw;
 /// The trait is usually implemented by the encoder that stores serialized objects.
 pub trait Encoder {
     /// Returns the serialized object as a slice.
-    fn as_bytes(&self) -> Cow<[u8]>;
+    fn as_bytes(&self) -> Cow<'_, [u8]>;
 }
 
 /// The trait encodes the type to the bytes and passes it to the `Encoder`,
@@ -53,7 +53,7 @@ pub trait Decode<T> {
 }
 
 impl Encoder for Cow<'_, [u8]> {
-    fn as_bytes(&self) -> Cow<[u8]> {
+    fn as_bytes(&self) -> Cow<'_, [u8]> {
         match self {
             Cow::Borrowed(borrowed) => Cow::Borrowed(borrowed),
             Cow::Owned(owned) => Cow::Borrowed(owned.as_ref()),
@@ -62,7 +62,7 @@ impl Encoder for Cow<'_, [u8]> {
 }
 
 impl<const SIZE: usize> Encoder for [u8; SIZE] {
-    fn as_bytes(&self) -> Cow<[u8]> {
+    fn as_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(self.as_slice())
     }
 }

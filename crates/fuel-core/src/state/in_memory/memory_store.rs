@@ -189,7 +189,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<KVItem> {
+    ) -> BoxedIter<'_, KVItem> {
         self.iter_all(column, prefix, start, direction).into_boxed()
     }
 
@@ -199,7 +199,7 @@ where
         prefix: Option<&[u8]>,
         start: Option<&[u8]>,
         direction: IterDirection,
-    ) -> BoxedIter<fuel_core_storage::kv_store::KeyItem> {
+    ) -> BoxedIter<'_, fuel_core_storage::kv_store::KeyItem> {
         self.iter_all_keys(column, prefix, start, direction)
             .into_boxed()
     }
