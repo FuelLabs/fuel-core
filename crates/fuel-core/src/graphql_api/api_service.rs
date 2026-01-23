@@ -372,10 +372,6 @@ where
     ))
 }
 
-/// Single initialization of the GraphQL playground HTML.
-/// This is because the rendering and replacing is expensive
-// static GRAPHQL_PLAYGROUND_HTML: OnceLock<Arc<String>> = OnceLock::new();
-
 fn _render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
