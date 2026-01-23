@@ -23,7 +23,7 @@ jobs:
       benchmark_results: ${{ steps.benchmarks.outputs.benchmark_results }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Rust Toolchain
         uses: dtolnay/rust-toolchain@master
@@ -44,7 +44,7 @@ jobs:
           cargo run -p fuel-core-benches --bin collect --release -- --input nightly_benchmarks.json --format consensus-parameters --output nightly_benchmarks.json
 
       - name: Archive benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nightly_benchmarks.json
           path: nightly_benchmarks.json
@@ -63,7 +63,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Parse benchmark results and create/update PR
         run: |

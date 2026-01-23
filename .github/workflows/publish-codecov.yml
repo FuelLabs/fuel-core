@@ -25,7 +25,7 @@ jobs:
     permissions: # Write access to push changes to pages
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install latest Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -39,7 +39,7 @@ jobs:
         run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
 
       - name: Checkout the repo again for pushing pages revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: 'codecov-pages'
           path: 'pages-branch'
