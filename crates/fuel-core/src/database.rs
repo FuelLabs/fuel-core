@@ -69,6 +69,8 @@ use std::{
 pub type Result<T> = core::result::Result<T, Error>;
 
 // TODO: Extract `Database` and all belongs into `fuel-core-database`.
+#[cfg(feature = "rpc")]
+use crate::database::database_description::block_aggregator::BlockAggregatorDatabase;
 #[cfg(feature = "rocksdb")]
 use crate::state::{
     historical_rocksdb::{
@@ -89,6 +91,7 @@ use crate::{
     },
     state::HeightType,
 };
+
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 
@@ -437,6 +440,21 @@ impl Modifiable for Database<GasPriceDatabase> {
         commit_changes_with_height_update(self, changes, |iter| {
             iter.iter_all_keys::<GasPriceMetadata>(Some(IterDirection::Reverse))
                 .try_collect()
+        })
+    }
+}
+
+#[cfg(feature = "rpc")]
+impl Modifiable for Database<BlockAggregatorDatabase> {
+    fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {
+        // Does not need to be monotonically increasing because
+        // storage values are modified in parallel from different heights
+        commit_changes_with_height_update(self, changes, |iter| {
+            iter.iter_all::<fuel_core_block_aggregator_api::db::table::LatestBlock>(Some(
+                IterDirection::Reverse,
+            ))
+            .map(|result| result.map(|(_, mode)| mode.height()))
+            .try_collect()
         })
     }
 }

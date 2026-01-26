@@ -469,6 +469,9 @@ where
 
         let insert_transaction_thread_pool_op = move || {
             let current_height = current_height_reader.read();
+            // Transactions will be executed in the next block, so we validate
+            // against the next block height.
+            let next_block_height = current_height.succ().unwrap_or(current_height);
 
             // TODO: This should be removed if the checked transactions
             //  can work with Arc in it
@@ -477,7 +480,7 @@ where
 
             let result = verification.perform_all_verifications(
                 transaction,
-                current_height,
+                next_block_height,
                 utxo_validation,
                 allow_syscall,
             );
