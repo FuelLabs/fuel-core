@@ -10,6 +10,13 @@ use fuel_core_types::{
     },
     fuel_types::BlockHeight,
 };
+use serde::{
+    Deserialize,
+    de::{
+        self,
+        Deserializer,
+    },
+};
 use std::{
     future::Future,
     marker::PhantomData,
@@ -24,6 +31,7 @@ pub struct ExtensionsRequest {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ExtensionsResponse {
     pub required_fuel_block_height: Option<BlockHeight>,
+    #[serde(deserialize_with = "deserialize_block_height_option")]
     pub current_fuel_block_height: Option<BlockHeight>,
     pub fuel_block_height_precondition_failed: Option<bool>,
     pub current_stf_version: Option<StateTransitionBytecodeVersion>,
@@ -56,6 +64,40 @@ impl<Operation> FuelOperation<Operation> {
             },
         }
     }
+}
+
+fn deserialize_block_height_option<'de, D>(
+    deserializer: D,
+) -> Result<Option<BlockHeight>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(value) => {
+            let parsed = value.parse::<u64>().map_err(|_| {
+                de::Error::invalid_value(
+                    de::Unexpected::Str(&value),
+                    &"a numeric block height string",
+                )
+            })?;
+            block_height_from_u64(parsed).map(Some)
+        }
+    }
+}
+
+fn block_height_from_u64<E>(value: u64) -> Result<BlockHeight, E>
+where
+    E: de::Error,
+{
+    let height: u32 = value.try_into().map_err(|_| {
+        E::invalid_value(
+            de::Unexpected::Unsigned(value),
+            &"Block height must be no bigger than u32::MAX",
+        )
+    })?;
+    Ok(height.into())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
