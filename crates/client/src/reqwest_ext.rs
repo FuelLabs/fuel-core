@@ -76,28 +76,15 @@ where
     match value {
         None => Ok(None),
         Some(value) => {
-            let parsed = value.parse::<u64>().map_err(|_| {
+            let parsed = value.parse::<u32>().map_err(|_| {
                 de::Error::invalid_value(
                     de::Unexpected::Str(&value),
                     &"a numeric block height string",
                 )
             })?;
-            block_height_from_u64(parsed).map(Some)
+            Ok(Some(BlockHeight::new(parsed)))
         }
     }
-}
-
-fn block_height_from_u64<E>(value: u64) -> Result<BlockHeight, E>
-where
-    E: de::Error,
-{
-    let height: u32 = value.try_into().map_err(|_| {
-        E::invalid_value(
-            de::Unexpected::Unsigned(value),
-            &"Block height must be no bigger than u32::MAX",
-        )
-    })?;
-    Ok(height.into())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
