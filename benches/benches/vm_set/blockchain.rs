@@ -565,7 +565,7 @@ pub fn run(c: &mut Criterion) {
     );
 
     let mut db =
-        BenchDb::new(&VmBench::CONTRACT).expect("Unable to fill contract storage");
+        BenchDb::new(&VmBench::CONTRACT, true).expect("Unable to fill contract storage");
     db.add_blocks(10000);
 
     run_group_ref(
