@@ -430,7 +430,14 @@ prop_compose! {
         tx_index in 0..1_000u16,
     ) -> TxPointer {
         let block_height = block_height.into();
-        TxPointer::new(block_height, tx_index)
+        #[cfg(feature = "u32-tx-pointer")]
+        {
+            TxPointer::new(block_height, tx_index as u32)
+        }
+        #[cfg(not(feature = "u32-tx-pointer"))]
+        {
+            TxPointer::new(block_height, tx_index)
+        }
     }
 }
 

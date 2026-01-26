@@ -38,7 +38,7 @@ fuel-core-storage = { path = "../../crates/storage", features = [
 ] }
 fuel-core-trace = { path = "../../crates/trace" }
 
-fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
+fuel-core-executor = { workspace = true }
 fuel-core-txpool = { path = "../../crates/services/txpool_v2", features = [
   "test-helpers",
 ] }

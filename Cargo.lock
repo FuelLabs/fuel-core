@@ -4208,6 +4208,7 @@ dependencies = [
  "tikv-jemallocator",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -4587,13 +4588,17 @@ name = "fuel-core-parallel-executor"
 version = "0.47.1"
 dependencies = [
  "anyhow",
+ "derive_more 0.99.20",
  "fuel-core-executor",
  "fuel-core-storage",
+ "fuel-core-trace",
  "fuel-core-types 0.47.1",
- "fuel-core-upgradable-executor",
  "futures",
+ "fxhash",
+ "parking_lot",
  "rand 0.8.5",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5403,6 +5408,15 @@ name = "futures-utils-wasm"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42012b0f064e01aa58b545fe3727f90f7dd4020f4a3ea735b50344965f5a57e9"
+
+[[package]]
+name = "fxhash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
+dependencies = [
+ "byteorder",
+]
 
 [[package]]
 name = "generic-array"

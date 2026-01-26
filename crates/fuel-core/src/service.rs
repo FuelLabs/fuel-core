@@ -11,7 +11,10 @@ use crate::{
     },
     database::Database,
     service::{
-        adapters::PoAAdapter,
+        adapters::{
+            ExecutorAdapter,
+            PoAAdapter,
+        },
         sub_services::TxPoolSharedState,
     },
 };
@@ -56,21 +59,6 @@ use fuel_core_types::{
     blockchain::consensus::Consensus,
     fuel_types::BlockHeight,
     services::block_importer::UncommittedResult,
-};
-use self::adapters::BlockImporterAdapter;
-use crate::{
-    combined_database::{
-        CombinedDatabase,
-        ShutdownListener,
-    },
-    database::Database,
-    service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
-        sub_services::TxPoolSharedState,
-    },
 };
 
 #[cfg(feature = "rpc")]
