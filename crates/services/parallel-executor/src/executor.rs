@@ -42,6 +42,7 @@ use fuel_core_types::{
         Block,
         PartialFuelBlock,
     },
+    fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
         Bytes32,
         ConsensusParameters,
@@ -61,6 +62,7 @@ use fuel_core_types::{
     },
 };
 use std::time::Duration;
+use tokio::runtime::Runtime;
 
 pub struct Executor<S, R, P> {
     config: Config,
@@ -68,6 +70,17 @@ pub struct Executor<S, R, P> {
     storage: S,
     preconfirmation_sender: P,
     memory_pool: MemoryPool,
+    runtime: Option<Runtime>,
+}
+
+impl<S, R, P> Drop for Executor<S, R, P> {
+    fn drop(&mut self) {
+        // Shutdown the tokio runtime to avoid panic if executor is already
+        // used from another tokio runtime
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_background();
+        }
+    }
 }
 
 impl<S, R, P> Executor<S, R, P> {
@@ -76,14 +89,20 @@ impl<S, R, P> Executor<S, R, P> {
         relayer: R,
         preconfirmation_sender: P,
         config: Config,
-    ) -> Self {
-        Self {
+    ) -> anyhow::Result<Self> {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(config.number_of_cores.get())
+            .enable_all()
+            .build()?;
+
+        Ok(Self {
             memory_pool: MemoryPool::new(),
+            runtime: Some(runtime),
             config,
             relayer,
             storage: storage_view_provider,
             preconfirmation_sender,
-        }
+        })
     }
 }
 
@@ -127,7 +146,7 @@ where
             ExecutionOptions {
                 forbid_unauthorized_inputs: true,
                 forbid_fake_utxo: false,
-                backtrace: false,
+                allow_syscall: false,
             },
             consensus_parameters.clone(),
             NoWaitTxs,
@@ -151,14 +170,12 @@ where
             .await?;
 
         // Run parallel scheduler for L2 transactions
-        let memory_pool = self.memory_pool.clone();
         let scheduler_result = self
             .run_scheduler(
-                &mut components,
+                &components,
                 da_changes,
                 execution_data,
                 executor.clone(),
-                memory_pool,
                 consensus_parameters,
                 maximum_execution_time,
             )
@@ -190,7 +207,11 @@ where
         structured_storage: StructuredStorage<View>,
     ) -> Result<(Changes, Bytes32), SchedulerError> {
         let Some(prev_height) = components.header_to_produce.height().pred() else {
-            return Ok(Default::default());
+            // In the case of genesis block, there are no DA changes to process
+            return Ok((
+                Default::default(),
+                MerkleRootCalculator::new().root().into(),
+            ));
         };
 
         let prev_block = structured_storage
@@ -211,7 +232,11 @@ where
             )?;
             Ok((storage_tx.into_changes(), event_inbox_root))
         } else {
-            Ok(Default::default())
+            // No DA changes to process
+            Ok((
+                Default::default(),
+                MerkleRootCalculator::new().root().into(),
+            ))
         }
     }
 
@@ -246,28 +271,37 @@ where
     #[allow(clippy::too_many_arguments)]
     async fn run_scheduler<TxSource>(
         &mut self,
-        components: &mut Components<TxSource>,
+        components: &Components<TxSource>,
         da_changes: Changes,
         execution_data: ExecutionData,
         executor: BlockExecutor<R, NoWaitTxs, P>,
-        memory_pool: MemoryPool,
         consensus_parameters: ConsensusParameters,
         maximum_execution_time: Duration,
     ) -> Result<SchedulerExecutionResult, SchedulerError>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
+        let runtime = self.runtime.as_ref().expect(
+            "Scheduler runtime \
+                is only removed on `drop`",
+        );
         let scheduler = Scheduler::new(
+            components,
             self.config.clone(),
             self.storage.clone(),
             executor,
-            memory_pool,
+            runtime,
+            self.memory_pool.clone(),
             consensus_parameters,
             maximum_execution_time,
         )?;
 
         let res = scheduler
-            .run(components, da_changes, execution_data.into())
+            .run(
+                &components.transactions_source,
+                da_changes,
+                execution_data.into(),
+            )
             .await?;
 
         Ok(res)

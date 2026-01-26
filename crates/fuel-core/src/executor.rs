@@ -220,7 +220,7 @@ mod tests {
     ) -> Executor<Database, DisabledRelayer> {
         let executor_config = fuel_core_upgradable_executor::config::Config {
             forbid_unauthorized_inputs_default: config.forbid_unauthorized_inputs_default,
-            forbid_fake_coins_default: config.forbid_fake_coins_default,
+            forbid_fake_utxo_default: config.forbid_fake_utxo_default,
             allow_syscall: true,
             native_executor_version: None,
             allow_historical_execution: true,
@@ -2000,7 +2000,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -2129,7 +2129,7 @@ mod tests {
             db.clone(),
             Config {
                 forbid_unauthorized_inputs_default: false,
-                forbid_fake_coins_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -2294,7 +2294,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -2490,7 +2490,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -3885,7 +3885,7 @@ mod tests {
         let tx_id = tx.id(&ChainId::default());
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
@@ -3995,7 +3995,7 @@ mod tests {
         let tx3_id = tx3.id(&ChainId::default());
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
@@ -4099,7 +4099,7 @@ mod tests {
             .finalize();
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let exec = create_executor(Database::default(), config.clone());
@@ -4154,7 +4154,7 @@ mod tests {
             .finalize();
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let exec = create_executor(Database::default(), config.clone());

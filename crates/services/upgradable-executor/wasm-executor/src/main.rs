@@ -93,12 +93,16 @@ pub fn execute_without_commit(input_len: u32) -> ReturnType {
     };
 
     let new_options = ExecutionOptions {
-            forbid_unauthorized_inputs: options.forbid_fake_coins,
-            forbid_fake_utxo: options.forbid_fake_coins,
-            backtrace: options.backtrace,
-        };
-    let instance =
-        ExecutionInstance::new(WasmRelayer, WasmStorage, new_options, MemoryInstance::new());
+        forbid_unauthorized_inputs: options.forbid_fake_coins,
+        forbid_fake_utxo: options.forbid_fake_coins,
+        allow_syscall: false,
+    };
+    let instance = ExecutionInstance::new(
+        WasmRelayer,
+        WasmStorage,
+        new_options,
+        MemoryInstance::new(),
+    );
 
     match block {
         WasmDeserializationBlockTypes::DryRun(c) => execute_dry_run(instance, c),

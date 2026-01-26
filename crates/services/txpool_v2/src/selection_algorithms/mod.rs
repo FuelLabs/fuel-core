@@ -36,7 +36,7 @@ pub trait SelectionAlgorithm {
     /// Given the constraints, the selection algorithm has to return the best list of transactions to include in a block.
     fn gather_best_txs(
         &mut self,
-        constraints: Constraints,
+        constraints: &Constraints,
         storage: &mut Self::Storage,
     ) -> RemovedTransactions;
 

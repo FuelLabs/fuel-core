@@ -38,6 +38,8 @@ use alloc::{
 use std::borrow::Cow;
 
 use core::future::Future;
+#[cfg(feature = "std")]
+use fuel_core_types::services::txpool::PoolTransaction;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
@@ -122,6 +124,14 @@ impl MaybeCheckedTransaction {
             }
         }
     }
+
+    pub fn is_blob(&self) -> bool {
+        matches!(
+            self,
+            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Blob(_), _)
+                | MaybeCheckedTransaction::Transaction(Transaction::Blob(_))
+        )
+    }
 }
 
 impl TransactionExt for MaybeCheckedTransaction {
@@ -197,4 +207,40 @@ pub trait PreconfirmationSenderPort {
         &self,
         preconfirmations: Vec<Preconfirmation>,
     ) -> impl Future<Output = ()> + Send;
+}
+
+#[cfg(feature = "std")]
+impl From<PoolTransaction> for MaybeCheckedTransaction {
+    fn from(value: PoolTransaction) -> Self {
+        match value {
+            PoolTransaction::Script(tx, m) => {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    CheckedTransaction::Script(tx),
+                    m.version,
+                )
+            }
+            PoolTransaction::Create(tx, m) => {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    CheckedTransaction::Create(tx),
+                    m.version,
+                )
+            }
+            PoolTransaction::Upgrade(tx, m) => {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    CheckedTransaction::Upgrade(tx),
+                    m.version,
+                )
+            }
+            PoolTransaction::Upload(tx, m) => {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    CheckedTransaction::Upload(tx),
+                    m.version,
+                )
+            }
+            PoolTransaction::Blob(tx, m) => MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Blob(tx),
+                m.version,
+            ),
+        }
+    }
 }

@@ -270,7 +270,7 @@ pub fn init_sub_services(
                 parallel_executor_config,
                 new_txs_watcher,
                 preconfirmation_sender.clone(),
-            )
+            )?
         }
     };
 

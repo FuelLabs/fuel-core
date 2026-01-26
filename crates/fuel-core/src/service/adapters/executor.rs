@@ -40,8 +40,6 @@ use std::{
     collections::HashSet,
     sync::Arc,
 };
-#[cfg(feature = "parallel-executor")]
-use tokio::sync::Notify;
 use tokio::sync::mpsc::error::TrySendError;
 
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
@@ -73,39 +71,42 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
 
 #[cfg(feature = "parallel-executor")]
 impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSource {
-    fn get_executable_transactions(
-        &mut self,
+    async fn get_executable_transactions(
+        &self,
         gas_limit: u64,
         tx_count_limit: u32,
         block_transaction_size_limit: u64,
         filter: Filter,
-    ) -> TransactionSourceExecutableTransactions {
-        let transactions = self
+    ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
+        let (transactions, excluded_contract_ids) = self
             .tx_pool
-            .extract_transactions_for_block(Constraints {
+            .extract_transactions_for_block_async(Constraints {
                 minimal_gas_price: self.minimum_gas_price,
                 max_gas: gas_limit,
                 maximum_txs: tx_count_limit,
                 maximum_block_size: block_transaction_size_limit,
-                excluded_contracts: HashSet::default(),
+                excluded_contracts: filter.excluded_contract_ids,
             })
-            .unwrap_or_default()
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let transactions = transactions
             .into_iter()
             .map(|tx| {
                 let transaction = Arc::unwrap_or_clone(tx);
                 transaction.into()
             })
             .collect();
-        TransactionSourceExecutableTransactions {
+        Ok(TransactionSourceExecutableTransactions {
             transactions,
             filtered: TransactionFiltered::Filtered,
-            filter,
-        }
+            filter: Filter {
+                excluded_contract_ids,
+            },
+        })
     }
 
-    fn get_new_transactions_notifier(&mut self) -> Notify {
-        // TODO: implement a proper notifier for new transactions
-        Notify::default()
+    fn get_new_transactions_notifier(&self) -> tokio::sync::watch::Receiver<()> {
+        self.tx_pool.get_new_executable_txs_notifier()
     }
 }
 

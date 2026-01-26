@@ -2,6 +2,20 @@
 
 use std::time::Duration;
 
+use crate::{
+    config::Config,
+    executor::Executor,
+    ports::{
+        Filter,
+        TransactionFiltered,
+    },
+    tests::mocks::{
+        MockPreconfirmationSender,
+        MockRelayer,
+        MockTransactionsSource,
+        MockTxPoolResponse,
+    },
+};
 use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
@@ -49,27 +63,10 @@ use fuel_core_types::{
     fuel_vm::{
         Salt,
         SecretKey,
-        checked_transaction::IntoChecked,
     },
     services::block_producer::Components,
 };
 use rand::SeedableRng;
-
-use crate::{
-    config::Config,
-    executor::Executor,
-    once_transaction_source::OnceTransactionsSource,
-    ports::{
-        Filter,
-        TransactionFiltered,
-    },
-    tests::mocks::{
-        MockPreconfirmationSender,
-        MockRelayer,
-        MockTransactionsSource,
-        MockTxPoolResponse,
-    },
-};
 
 #[derive(Clone, Debug, Default)]
 struct Storage(pub InMemoryStorage<Column>);
@@ -204,23 +201,21 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
             number_of_cores: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
         },
+    )
+    .unwrap();
+
+    let (source, mock_tx_pool) = MockTransactionsSource::new();
+
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&tx_creation], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
     );
+
     let res = executor
         .produce_without_commit_with_source(
             Components {
                 header_to_produce: Default::default(),
-                transactions_source: OnceTransactionsSource::new(
-                    vec![
-                        tx_creation
-                            .into_checked_basic(
-                                0u32.into(),
-                                &ConsensusParameters::default(),
-                            )
-                            .unwrap()
-                            .into(),
-                    ],
-                    0,
-                ),
+                transactions_source: source,
                 coinbase_recipient: Default::default(),
                 gas_price: 0,
             },
@@ -253,7 +248,8 @@ async fn execute__simple_independent_transactions_sorted() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        );
+        )
+        .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -332,7 +328,8 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        );
+        )
+        .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -448,7 +445,8 @@ async fn execute__gas_left_updated_when_state_merges() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        );
+        )
+        .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -539,7 +537,8 @@ async fn execute__utxo_ordering_kept() {
                 number_of_cores: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
             },
-        );
+        )
+        .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -586,6 +585,8 @@ async fn execute__utxo_ordering_kept() {
     );
 }
 
+fuel_core_trace::enable_tracing!();
+
 #[tokio::test]
 async fn execute__utxo_resolved() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
@@ -610,7 +611,8 @@ async fn execute__utxo_resolved() {
             number_of_cores: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
         },
-    );
+    )
+    .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When
@@ -702,7 +704,8 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
                 number_of_cores: std::num::NonZeroUsize::new(3)
                     .expect("The value is not zero; qed"),
             },
-        );
+        )
+        .unwrap();
     let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
 
     // When

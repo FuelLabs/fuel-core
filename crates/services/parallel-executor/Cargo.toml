@@ -14,6 +14,7 @@ description = "Fuel Block Parallel Executor"
 fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]
+anyhow = { workspace = true }
 derive_more = { workspace = true, features = ["display"] }
 fuel-core-executor = { workspace = true, features = ["std", "u32-tx-count"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
@@ -32,5 +33,6 @@ tracing = { workspace = true }
 [dev-dependencies]
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
+fuel-core-trace = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers", "serde"] }
 rand = { workspace = true }

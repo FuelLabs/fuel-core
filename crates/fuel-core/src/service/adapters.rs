@@ -427,18 +427,18 @@ impl ParallelExecutorAdapter {
         config: fuel_core_parallel_executor::config::Config,
         new_txs_watcher: watch::Receiver<()>,
         preconfirmation_sender: PreconfirmationSender,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let executor = ParallelExecutor::new(
             database,
             relayer_database,
             preconfirmation_sender.clone(),
             config,
-        );
-        Self {
+        )?;
+        Ok(Self {
             executor: Arc::new(Mutex::new(executor)),
             new_txs_watcher,
             preconfirmation_sender,
-        }
+        })
     }
 }
 

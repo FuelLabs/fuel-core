@@ -640,7 +640,7 @@ fn get_sorted_out_tx1_2_3() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints {
+        .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u32::MAX,
@@ -698,7 +698,7 @@ fn get_sorted_out_tx_same_tips() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints {
+        .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u32::MAX,
@@ -756,7 +756,7 @@ fn get_sorted_out_zero_tip() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints {
+        .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u32::MAX,
@@ -814,7 +814,7 @@ fn get_sorted_out_tx_profitable_ratios() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints {
+        .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u32::MAX,
@@ -854,7 +854,7 @@ fn get_sorted_out_tx_by_creation_instant() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints {
+        .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u32::MAX,
@@ -1294,7 +1294,7 @@ fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
             universe
                 .get_pool()
                 .write()
-                .extract_transactions_for_block(Constraints {
+                .extract_transactions_for_block(&Constraints {
                     minimal_gas_price: 0,
                     max_gas: u64::MAX,
                     maximum_txs: u32::MAX,
@@ -1504,7 +1504,7 @@ fn extract__tx_with_excluded_contract() {
     let txs = universe
         .get_pool()
         .write()
-        .extract_transactions_for_block(Constraints {
+        .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
             maximum_txs: u32::MAX,

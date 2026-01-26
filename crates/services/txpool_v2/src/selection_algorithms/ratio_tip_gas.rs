@@ -148,7 +148,7 @@ where
 
     fn gather_best_txs(
         &mut self,
-        constraints: Constraints,
+        constraints: &Constraints,
         storage: &mut S,
     ) -> RemovedTransactions {
         let mut gas_left = constraints.max_gas;

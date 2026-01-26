@@ -1,9 +1,7 @@
+use fuel_core_executor::ports::MaybeCheckedTransaction;
+use fuel_core_types::fuel_tx::ContractId;
 use std::collections::HashSet;
-
-use fuel_core_types::{
-    fuel_tx::ContractId,
-    fuel_vm::checked_transaction::CheckedTransaction,
-};
+use tokio::sync::watch;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionFiltered {
@@ -29,7 +27,7 @@ impl Filter {
 
 pub struct TransactionSourceExecutableTransactions {
     /// The transactions that can be executed
-    pub transactions: Vec<CheckedTransaction>,
+    pub transactions: Vec<MaybeCheckedTransaction>,
     /// Indicates whether some transactions were filtered out based on the filter
     pub filtered: TransactionFiltered,
     /// The filter used to fetch these transactions
@@ -39,13 +37,13 @@ pub struct TransactionSourceExecutableTransactions {
 pub trait TransactionsSource {
     /// Returns the a batch of transactions to satisfy the given parameters
     fn get_executable_transactions(
-        &mut self,
+        &self,
         gas_limit: u64,
         tx_count_limit: u32,
         block_transaction_size_limit: u64,
         filter: Filter,
-    ) -> TransactionSourceExecutableTransactions;
+    ) -> impl Future<Output = anyhow::Result<TransactionSourceExecutableTransactions>>;
 
     /// Returns a notification receiver for new transactions
-    fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify;
+    fn get_new_transactions_notifier(&self) -> watch::Receiver<()>;
 }

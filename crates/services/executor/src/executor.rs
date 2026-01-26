@@ -186,6 +186,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use fuel_core_storage::structured_storage::StructuredStorage;
 use fuel_core_types::{
     fuel_vm::interpreter::Memory,
     services::preconfirmation::SqueezedOut,
@@ -361,13 +362,12 @@ impl ExecutionData {
 /// These are passed to the executor.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
-    // TODO: Fix backward compatibility
     /// The flag allows the usage of fake signatures in the transaction.
     /// When `false` the executor skips signature and predicate checks.
     pub forbid_unauthorized_inputs: bool,
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips UTXO existence checks.
-    pub forbid_fake_coins: bool,
+    pub forbid_fake_utxo: bool,
     /// The flag allows the usage of syscall in the transaction.
     pub allow_syscall: bool,
 }
@@ -376,6 +376,7 @@ pub struct ExecutionOptions {
 /// Execution options to maintain for backward compatibility.
 pub struct ExecutionOptionsDeserialized {
     pub forbid_fake_coins: bool,
+    #[deprecated]
     pub backtrace: bool,
 }
 
@@ -387,7 +388,7 @@ struct ExecutionOptionsInner {
     pub forbid_unauthorized_inputs: bool,
     /// The flag allows the usage of fake coins in the inputs of the transaction.
     /// When `false` the executor skips UTXO existence checks.
-    pub forbid_fake_coins: bool,
+    pub forbid_fake_utxo: bool,
     pub allow_syscall: bool,
     pub dry_run: bool,
 }
@@ -549,7 +550,7 @@ where
 }
 
 type BlockStorageTransaction<T> = StorageTransaction<T>;
-type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
+type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut StructuredStorage<T>>;
 
 #[derive(Clone, Debug)]
 pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
@@ -576,7 +577,7 @@ impl<R, TxWaiter, PreconfirmationSender>
             consensus_params,
             options: ExecutionOptionsInner {
                 forbid_unauthorized_inputs: options.forbid_unauthorized_inputs,
-                forbid_fake_coins: options.forbid_fake_coins,
+                forbid_fake_utxo: options.forbid_fake_utxo,
                 allow_syscall: options.allow_syscall,
                 dry_run,
             },
@@ -753,14 +754,14 @@ where
     pub async fn execute_l2_transactions<TxSource, D>(
         mut self,
         transactions: Components<TxSource>,
-        mut block_storage_tx: BlockStorageTransaction<D>,
+        block_storage_tx: &mut StructuredStorage<D>,
         #[cfg(feature = "u32-tx-count")] start_idx: u32,
         #[cfg(not(feature = "u32-tx-count"))] start_idx: u16,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<(Vec<Transaction>, ExecutionData)>
     where
         TxSource: TransactionsSource,
-        D: KeyValueInspect<Column = Column>,
+        D: KeyValueInspect<Column = Column> + Modifiable,
     {
         let mut partial_block =
             PartialFuelBlock::new(transactions.header_to_produce, vec![]);
@@ -773,13 +774,12 @@ where
         self.process_l2_txs(
             &mut partial_block,
             &transactions,
-            &mut block_storage_tx,
+            block_storage_tx,
             &mut execution_data,
             memory,
         )
         .await?;
 
-        execution_data.changes = block_storage_tx.into_changes();
         Ok((partial_block.transactions, execution_data))
     }
 
@@ -821,12 +821,12 @@ where
         &mut self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut StructuredStorage<T>,
         data: &mut ExecutionData,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
-        T: KeyValueInspect<Column = Column>,
+        T: KeyValueInspect<Column = Column> + Modifiable,
         TxSource: TransactionsSource,
     {
         let Components {
@@ -941,7 +941,7 @@ where
     fn execute_transaction_and_commit<'a, W>(
         &'a self,
         block: &'a mut PartialFuelBlock,
-        storage_tx: &mut BlockStorageTransaction<W>,
+        storage_tx: &mut StructuredStorage<W>,
         execution_data: &mut ExecutionData,
         tx: MaybeCheckedTransaction,
         gas_price: Word,
@@ -949,7 +949,7 @@ where
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
-        W: KeyValueInspect<Column = Column>,
+        W: KeyValueInspect<Column = Column> + Modifiable,
     {
         let tx_count = execution_data.tx_count;
         let tx = {

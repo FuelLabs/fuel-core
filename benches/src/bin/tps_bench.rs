@@ -224,7 +224,8 @@ fn main() {
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             client.produce_blocks(1, None).await.unwrap();
-            srv.shared
+            let block = srv
+                .shared
                 .database
                 .on_chain()
                 .latest_view()
