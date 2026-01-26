@@ -11,10 +11,7 @@ use crate::{
     },
     database::Database,
     service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
+        adapters::PoAAdapter,
         sub_services::TxPoolSharedState,
     },
 };
