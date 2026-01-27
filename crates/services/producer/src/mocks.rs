@@ -1,46 +1,23 @@
 use crate::ports::{
-    BlockProducer,
-    BlockProducerDatabase,
-    DryRunner,
-    Relayer,
-    RelayerBlockInfo,
-    TxPool,
+    BlockProducer, BlockProducerDatabase, DryRunner, Relayer, RelayerBlockInfo, TxPool,
 };
 use fuel_core_storage::{
-    Result as StorageResult,
-    not_found,
-    transactional::{
-        AtomicView,
-        Changes,
-    },
+    Result as StorageResult, not_found,
+    transactional::{AtomicView, Changes},
 };
 use fuel_core_types::{
     blockchain::{
-        block::{
-            Block,
-            CompressedBlock,
-        },
-        header::{
-            ConsensusParametersVersion,
-            StateTransitionBytecodeVersion,
-        },
+        block::{Block, CompressedBlock},
+        header::{ConsensusParametersVersion, StateTransitionBytecodeVersion},
         primitives::DaBlockHeight,
     },
     fuel_tx::Transaction,
-    fuel_types::{
-        Address,
-        BlockHeight,
-        Bytes32,
-        ChainId,
-    },
+    fuel_types::{BlockHeight, Bytes32, ChainId},
     services::{
         block_producer::Components,
         executor::{
-            DryRunResult,
-            Error as ExecutorError,
-            ExecutionResult,
-            Result as ExecutorResult,
-            UncommittedResult,
+            DryRunResult, Error as ExecutorError, ExecutionResult,
+            Result as ExecutorResult, UncommittedResult,
         },
     },
 };
@@ -48,70 +25,142 @@ use std::{
     borrow::Cow,
     collections::HashMap,
     ops::Deref,
-    sync::{
-        Arc,
-        Mutex,
-    },
+    sync::{Arc, Mutex},
 };
-// TODO: Replace mocks with `mockall`.
+// Mockall-generated mocks for testing
+#[cfg(feature = "test-helpers")]
+use mockall::mock;
 
-#[derive(Default, Clone)]
-pub struct MockRelayer {
-    pub block_production_key: Address,
-    pub latest_block_height: DaBlockHeight,
-    pub latest_da_blocks_with_costs_and_transactions_number:
-        HashMap<DaBlockHeight, (u64, u64)>,
-}
+#[cfg(feature = "test-helpers")]
+mock! {
+    pub Relayer {}
 
-#[async_trait::async_trait]
-impl Relayer for MockRelayer {
-    async fn wait_for_at_least_height(
-        &self,
-        _height: &DaBlockHeight,
-    ) -> anyhow::Result<DaBlockHeight> {
-        let highest = self.latest_block_height;
-        Ok(highest)
-    }
+    #[async_trait::async_trait]
+    impl Relayer for Relayer {
+        async fn wait_for_at_least_height(
+            &self,
+            height: &DaBlockHeight,
+        ) -> anyhow::Result<DaBlockHeight>;
 
-    async fn get_cost_and_transactions_number_for_block(
-        &self,
-        height: &DaBlockHeight,
-    ) -> anyhow::Result<RelayerBlockInfo> {
-        let (gas_cost, tx_count) = self
-            .latest_da_blocks_with_costs_and_transactions_number
-            .get(height)
-            .cloned()
-            .unwrap_or_default();
-        Ok(RelayerBlockInfo { gas_cost, tx_count })
+        async fn get_cost_and_transactions_number_for_block(
+            &self,
+            height: &DaBlockHeight,
+        ) -> anyhow::Result<RelayerBlockInfo>;
     }
 }
 
-#[derive(Default)]
-pub struct MockTxPool(pub Vec<Transaction>);
+// Re-export for backward compatibility during migration
+#[cfg(feature = "test-helpers")]
+pub use MockRelayer as MockRelayerLegacy;
 
-impl TxPool for MockTxPool {
-    type TxSource = Vec<Transaction>;
+// Helper function to create a MockRelayer with default behavior
+#[cfg(feature = "test-helpers")]
+pub fn create_mock_relayer(
+    latest_height: DaBlockHeight,
+    blocks_with_costs: HashMap<DaBlockHeight, (u64, u64)>,
+) -> MockRelayer {
+    let mut mock = MockRelayer::new();
 
-    async fn get_source(&self, _: u64, _: BlockHeight) -> anyhow::Result<Self::TxSource> {
-        Ok(self.0.clone())
+    // Default behavior: return the latest height
+    mock.expect_wait_for_at_least_height()
+        .returning(move |_| Ok(latest_height));
+
+    // Default behavior: return gas cost and tx count from the map
+    mock.expect_get_cost_and_transactions_number_for_block()
+        .returning(move |height| {
+            let (gas_cost, tx_count) =
+                blocks_with_costs.get(height).cloned().unwrap_or_default();
+            Ok(RelayerBlockInfo { gas_cost, tx_count })
+        });
+
+    mock
+}
+
+// MockTxPool with associated type
+#[cfg(feature = "test-helpers")]
+mock! {
+    pub TxPool {}
+
+    impl TxPool for TxPool {
+        type TxSource = Vec<Transaction>;
+
+        async fn get_source(&self, gas_price: u64, block_height: BlockHeight) -> anyhow::Result<Vec<Transaction>>;
     }
 }
 
-#[derive(Default)]
-pub struct MockExecutor(pub MockDb);
+// Helper function to create a MockTxPool with default behavior
+#[cfg(feature = "test-helpers")]
+pub fn create_mock_txpool(transactions: Vec<Transaction>) -> MockTxPool {
+    let mut mock = MockTxPool::new();
 
-impl AsMut<MockDb> for MockDb {
-    fn as_mut(&mut self) -> &mut MockDb {
-        self
+    // Default behavior: return the transactions
+    mock.expect_get_source()
+        .returning(move |_, _| Ok(transactions.clone()));
+
+    mock
+}
+
+// MockExecutor - BlockProducer implementation
+#[cfg(feature = "test-helpers")]
+mock! {
+    pub Executor {}
+
+    impl BlockProducer<Vec<Transaction>> for Executor {
+        type Deadline = ();
+
+        async fn produce_without_commit(
+            &self,
+            component: Components<Vec<Transaction>>,
+            deadline: (),
+        ) -> ExecutorResult<UncommittedResult<Changes>>;
     }
 }
 
-impl AsRef<MockDb> for MockDb {
-    fn as_ref(&self) -> &MockDb {
-        self
-    }
+// Helper function to create a MockExecutor with default successful behavior
+#[cfg(feature = "test-helpers")]
+pub fn create_mock_executor(db: MockDb) -> MockExecutor {
+    let mut mock = MockExecutor::new();
+
+    // Default behavior: create a block and insert it into the database
+    mock.expect_produce_without_commit()
+        .returning(move |component, _| {
+            let block = arc_pool_tx_comp_to_block(&component);
+            // simulate executor inserting a block
+            let mut block_db = db.blocks.lock().unwrap();
+            block_db.insert(
+                *block.header().height(),
+                block.compress(&ChainId::default()),
+            );
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block,
+                    skipped_transactions: vec![],
+                    tx_status: vec![],
+                    events: vec![],
+                },
+                Default::default(),
+            ))
+        });
+
+    mock
 }
 
+// Helper function to create a failing MockExecutor
+// This replaces the old FailingMockExecutor struct
+#[cfg(feature = "test-helpers")]
+pub fn create_failing_mock_executor(error: ExecutorError) -> MockExecutor {
+    let mut mock = MockExecutor::new();
+
+    // Set expectation to fail once, then succeed
+    mock.expect_produce_without_commit()
+        .times(1)
+        .return_once(move |_, _| Err(error));
+
+    mock
+}
+
+// Helper functions for block creation (used by mocks)
+#[cfg(feature = "test-helpers")]
 fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block {
     let transactions = component.transactions_source.clone();
     Block::new(
@@ -125,59 +174,15 @@ fn arc_pool_tx_comp_to_block(component: &Components<Vec<Transaction>>) -> Block 
     .unwrap()
 }
 
-impl BlockProducer<Vec<Transaction>> for MockExecutor {
-    type Deadline = ();
-
-    async fn produce_without_commit(
-        &self,
-        component: Components<Vec<Transaction>>,
-        _: (),
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
-        let block = arc_pool_tx_comp_to_block(&component);
-        // simulate executor inserting a block
-        let mut block_db = self.0.blocks.lock().unwrap();
-        block_db.insert(
-            *block.header().height(),
-            block.compress(&ChainId::default()),
-        );
-        Ok(UncommittedResult::new(
-            ExecutionResult {
-                block,
-                skipped_transactions: vec![],
-                tx_status: vec![],
-                events: vec![],
-            },
-            Default::default(),
-        ))
+impl AsMut<MockDb> for MockDb {
+    fn as_mut(&mut self) -> &mut MockDb {
+        self
     }
 }
 
-pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
-
-impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
-    type Deadline = ();
-    async fn produce_without_commit(
-        &self,
-        component: Components<Vec<Transaction>>,
-        _: (),
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
-        // simulate an execution failure
-        let mut err = self.0.lock().unwrap();
-        match err.take() {
-            Some(err) => Err(err),
-            _ => {
-                let block = arc_pool_tx_comp_to_block(&component);
-                Ok(UncommittedResult::new(
-                    ExecutionResult {
-                        block,
-                        skipped_transactions: vec![],
-                        tx_status: vec![],
-                        events: vec![],
-                    },
-                    Default::default(),
-                ))
-            }
-        }
+impl AsRef<MockDb> for MockDb {
+    fn as_ref(&self) -> &MockDb {
+        self
     }
 }
 

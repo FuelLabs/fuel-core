@@ -1,61 +1,33 @@
 use crate::{
     Config,
     block_producer::gas_price::{
-        ChainStateInfoProvider,
-        GasPriceProvider as GasPriceProviderConstraint,
+        ChainStateInfoProvider, GasPriceProvider as GasPriceProviderConstraint,
     },
-    ports::{
-        self,
-        BlockProducerDatabase,
-        RelayerBlockInfo,
-    },
+    ports::{self, BlockProducerDatabase, RelayerBlockInfo},
 };
-use anyhow::{
-    Context,
-    anyhow,
-};
-use fuel_core_storage::transactional::{
-    AtomicView,
-    Changes,
-    HistoricalView,
-};
+use anyhow::{Context, anyhow};
+use fuel_core_storage::transactional::{AtomicView, Changes, HistoricalView};
 use fuel_core_types::{
     blockchain::{
         block::Block,
         header::{
-            ApplicationHeader,
-            ConsensusHeader,
-            ConsensusParametersVersion,
-            PartialBlockHeader,
-            StateTransitionBytecodeVersion,
+            ApplicationHeader, ConsensusHeader, ConsensusParametersVersion,
+            PartialBlockHeader, StateTransitionBytecodeVersion,
         },
         primitives::DaBlockHeight,
     },
     fuel_tx::{
         Transaction,
-        field::{
-            InputContract,
-            MintGasPrice,
-        },
+        field::{InputContract, MintGasPrice},
     },
-    fuel_types::{
-        BlockHeight,
-        Bytes32,
-    },
+    fuel_types::{BlockHeight, Bytes32},
     services::{
         block_producer::Components,
-        executor::{
-            DryRunResult,
-            StorageReadReplayEvent,
-            UncommittedResult,
-        },
+        executor::{DryRunResult, StorageReadReplayEvent, UncommittedResult},
     },
     tai64::Tai64,
 };
-use std::{
-    future::Future,
-    sync::Arc,
-};
+use std::{future::Future, sync::Arc};
 use tokio::sync::Mutex;
 use tracing::debug;
 
@@ -157,7 +129,7 @@ where
                 height,
                 previous_block: latest_height,
             }
-            .into())
+            .into());
         }
 
         let maybe_mint_tx = transactions_source.pop();
