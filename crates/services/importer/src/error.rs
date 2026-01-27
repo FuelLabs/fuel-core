@@ -1,7 +1,4 @@
-use fuel_core_storage::{
-    Error as StorageError,
-    MerkleRoot,
-};
+use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     blockchain::primitives::BlockId,
     fuel_types::BlockHeight,
@@ -19,9 +16,9 @@ pub enum Error {
     Semaphore(TryAcquireError),
     #[display(fmt = "The wrong state of database during insertion of the genesis block.")]
     InvalidUnderlyingDatabaseGenesisState,
-    #[display(fmt = "The wrong state of storage after execution of the block.\
-        The actual root is {_1:?}, when the expected root is {_0:?}.")]
-    InvalidDatabaseStateAfterExecution(Option<MerkleRoot>, Option<MerkleRoot>),
+    #[display(fmt = "The wrong state of storage after execution of the block. \
+        The changes contains modification to the Merkle tree of blocks.")]
+    InvalidDatabaseStateAfterExecution,
     #[display(fmt = "Got overflow during increasing the height.")]
     Overflow,
     #[display(fmt = "The non-generic block can't have zero height.")]

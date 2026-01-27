@@ -337,7 +337,7 @@ where
                         self.next_height(),
                         block_time,
                         TransactionsSource::TxPool,
-                        Instant::now(),
+                        Instant::now() + Duration::from_secs(1),
                     )
                     .await?;
                     block_time = self.next_time(RequestType::Manual)?;

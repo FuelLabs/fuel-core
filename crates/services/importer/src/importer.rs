@@ -13,11 +13,17 @@ use crate::{
 };
 use fuel_core_metrics::importer::importer_metrics;
 use fuel_core_storage::{
-    not_found,
-    transactional::{
-        Changes,
-        StorageChanges,
+    column::Column,
+    iter::{
+        IteratorOverTable,
+        changes_iterator::ChangesIterator,
     },
+    not_found,
+    tables::merkle::{
+        DenseMetadataKey,
+        FuelBlockMerkleMetadata,
+    },
+    transactional::StorageChanges,
 };
 use fuel_core_types::{
     blockchain::{
@@ -357,30 +363,20 @@ where
     ) -> Result<(), Error> {
         let PrepareImportResult {
             result,
-            mut block_changes,
+            block_changes,
         } = prepare;
 
         let (result, changes) = result.into();
         let block = &result.sealed_block.entity;
         let actual_next_height = *block.header().height();
 
-        // Importer expects that `UncommittedResult` contains the result of block
-        // execution without block itself.
-        let expected_block_root = self.database.latest_block_root()?;
-
-        let db_after_execution = self.database.storage_transaction(changes.clone());
-        let actual_block_root = db_after_execution.latest_block_root()?;
-
-        if actual_block_root != expected_block_root {
-            return Err(Error::InvalidDatabaseStateAfterExecution(
-                expected_block_root,
-                actual_block_root,
-            ))
+        let iterator = ChangesIterator::<Column>::new(&changes);
+        for item in iterator.iter_all::<FuelBlockMerkleMetadata>(None) {
+            let (key, _) = item?;
+            if let DenseMetadataKey::Latest = key {
+                return Err(Error::InvalidDatabaseStateAfterExecution)
+            }
         }
-        drop(db_after_execution);
-
-        // TODO: Ensure this is the same value as the above `changes`, right?
-        // let changes = db_after_execution.into_changes();
 
         #[cfg(feature = "test-helpers")]
         let changes_clone = changes.clone();
@@ -777,8 +773,7 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
         ))
     }
 
-    let mut transaction =
-        database.storage_transaction(StorageChanges::Changes(Changes::new()));
+    let mut transaction = database.storage_transaction();
 
     if !transaction.store_new_block(chain_id, sealed_block)? {
         return Err(Error::NotUnique(actual_next_height))

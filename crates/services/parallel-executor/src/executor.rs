@@ -61,8 +61,10 @@ use fuel_core_types::{
         },
     },
 };
-use std::time::Duration;
-use tokio::runtime::Runtime;
+use tokio::{
+    runtime::Runtime,
+    time::Instant,
+};
 
 pub struct Executor<S, R, P> {
     config: Config,
@@ -117,7 +119,7 @@ where
     pub async fn produce_without_commit_with_source<TxSource>(
         &mut self,
         mut components: Components<TxSource>,
-        maximum_execution_time: Duration,
+        deadline: Instant,
     ) -> Result<Uncommitted<ExecutionResult, StorageChanges>, SchedulerError>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -177,7 +179,7 @@ where
                 execution_data,
                 executor.clone(),
                 consensus_parameters,
-                maximum_execution_time,
+                deadline,
             )
             .await?;
         tracing::warn!(
@@ -276,7 +278,7 @@ where
         execution_data: ExecutionData,
         executor: BlockExecutor<R, NoWaitTxs, P>,
         consensus_parameters: ConsensusParameters,
-        maximum_execution_time: Duration,
+        deadline: Instant,
     ) -> Result<SchedulerExecutionResult, SchedulerError>
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
@@ -293,7 +295,7 @@ where
             runtime,
             self.memory_pool.clone(),
             consensus_parameters,
-            maximum_execution_time,
+            deadline,
         )?;
 
         let res = scheduler

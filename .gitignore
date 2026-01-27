@@ -3,7 +3,6 @@
 .terraform
 *.tfstate*
 *.terraform.lock.hcl*
-.vscode
 .zed
 .envrc
 .direnv

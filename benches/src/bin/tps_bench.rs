@@ -53,12 +53,16 @@ use test_helpers::builder::{
     TestContext,
     TestSetupBuilder,
 };
+
+const PATH_SNAPSHOT: &str = "/Users/green/fuel/fuel-core-2/benches/local-testnet";
+
 fn checked_parameters() -> CheckPredicateParams {
-    let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
+    let metadata = SnapshotMetadata::read(PATH_SNAPSHOT).unwrap();
     let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
     chain_conf.consensus_parameters.into()
 }
 use clap::Parser;
+use fuel_core::producer::ports::BlockProducer;
 
 #[derive(Parser)]
 struct Args {
@@ -132,11 +136,11 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 
 fn main() {
     let args = Args::parse();
-    let mut rng = rand::rngs::StdRng::seed_from_u64(2322u64);
+    let mut rng = StdRng::seed_from_u64(2322u64);
 
     let start_transaction_generation = std::time::Instant::now();
     let transactions = generate_transactions(args.number_of_transactions, &mut rng);
-    let metadata = SnapshotMetadata::read("./local-testnet").unwrap();
+    let metadata = SnapshotMetadata::read(PATH_SNAPSHOT).unwrap();
     let chain_conf = ChainConfig::from_snapshot_metadata(&metadata).unwrap();
     tracing::debug!(
         "Generated {} transactions in {:?} ms.",
@@ -187,17 +191,16 @@ fn main() {
     // disable automated block production
     test_builder.trigger = Trigger::Never;
     test_builder.utxo_validation = true;
-    test_builder.gas_limit = Some(
-        transactions
-            .iter()
-            .filter_map(|tx| {
-                if tx.is_mint() {
-                    return None;
-                }
-                Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
-            })
-            .sum(),
-    );
+    let gas_limit: u64 = transactions
+        .iter()
+        .filter_map(|tx| {
+            if tx.is_mint() {
+                return None;
+            }
+            Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
+        })
+        .sum();
+    test_builder.gas_limit = Some(gas_limit * 4);
     test_builder.block_size_limit = Some(u64::MAX);
     test_builder.number_threads_pool_verif = args.number_of_cores;
     test_builder.max_txs = transactions.len();
@@ -223,7 +226,11 @@ fn main() {
                 .try_insert(transactions.clone())
                 .unwrap();
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+            let start = std::time::Instant::now();
             client.produce_blocks(1, None).await.unwrap();
+            println!("Block produced in {:?}ms", start.elapsed().as_millis());
+
             let block = srv
                 .shared
                 .database
@@ -238,19 +245,19 @@ fn main() {
         }
     });
 
-    rt.block_on(async move {
-        test_builder.set_chain_config(chain_conf.clone());
-        let TestContext { srv, .. } = test_builder.finalize().await;
-
-        let start = std::time::Instant::now();
-
-        srv.shared
-            .block_importer
-            .execute_and_commit(block)
-            .await
-            .expect("Should validate the block");
-        println!("Block imported in {:?}ms", start.elapsed().as_millis());
-    });
+    // rt.block_on(async move {
+    //     test_builder.set_chain_config(chain_conf.clone());
+    //     let TestContext { srv, .. } = test_builder.finalize().await;
+    //
+    //     let start = std::time::Instant::now();
+    //
+    //     srv.shared
+    //         .block_importer
+    //         .execute_and_commit(block)
+    //         .await
+    //         .expect("Should validate the block");
+    //     println!("Block imported in {:?}ms", start.elapsed().as_millis());
+    // });
 }
 
 fuel_core_trace::enable_tracing!();

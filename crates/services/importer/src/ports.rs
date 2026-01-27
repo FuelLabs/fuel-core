@@ -1,23 +1,16 @@
 use fuel_core_storage::{
-    MerkleRoot,
     Result as StorageResult,
     StorageAsMut,
-    StorageAsRef,
     column::Column,
     kv_store::KeyValueInspect,
     tables::{
         FuelBlocks,
         SealedBlockConsensus,
         Transactions,
-        merkle::{
-            DenseMetadataKey,
-            FuelBlockMerkleMetadata,
-        },
     },
     transactional::{
         Changes,
         ConflictPolicy,
-        Modifiable,
         ReadTransaction,
         StorageChanges,
         StorageTransaction,
@@ -60,16 +53,13 @@ pub trait Transactional {
         Self: 'a;
 
     /// Returns the storage transaction based on the `Changes`.
-    fn storage_transaction(&self, changes: StorageChanges) -> Self::Transaction<'_>;
+    fn storage_transaction(&self) -> Self::Transaction<'_>;
 }
 
 /// The alias port used by the block importer.
 pub trait ImporterDatabase: Send + Sync {
     /// Returns the latest block height.
     fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
-
-    /// Returns the latest block root.
-    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
 
     /// Commit changes
     fn commit_changes(&mut self, changes: StorageChanges) -> StorageResult<()>;
@@ -78,9 +68,6 @@ pub trait ImporterDatabase: Send + Sync {
 /// The port of the storage transaction required by the importer.
 #[cfg_attr(test, mockall::automock)]
 pub trait DatabaseTransaction {
-    /// Returns the latest block root.
-    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
-
     /// Inserts the `SealedBlock`.
     ///
     /// The method returns `true` if the block is a new, otherwise `false`.
@@ -120,21 +107,8 @@ where
     where
         Self: 'a;
 
-    fn storage_transaction(&self, changes: StorageChanges) -> Self::Transaction<'_> {
-        match changes {
-            StorageChanges::Changes(inner) => self
-                .read_transaction()
-                .with_changes(inner)
-                .with_policy(ConflictPolicy::Fail),
-            StorageChanges::ChangesList(list) => {
-                // TODO: I don't know if this is right :////
-                let mut tx = self.read_transaction();
-                for item in list {
-                    tx.commit_changes(item).unwrap();
-                }
-                tx.with_policy(ConflictPolicy::Fail)
-            }
-        }
+    fn storage_transaction(&self) -> Self::Transaction<'_> {
+        self.read_transaction().with_policy(ConflictPolicy::Fail)
     }
 }
 
@@ -142,13 +116,6 @@ impl<S> DatabaseTransaction for StorageTransaction<S>
 where
     S: KeyValueInspect<Column = Column>,
 {
-    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
-        Ok(self
-            .storage_as_ref::<FuelBlockMerkleMetadata>()
-            .get(&DenseMetadataKey::Latest)?
-            .map(|cow| *cow.root()))
-    }
-
     fn store_new_block(
         &mut self,
         chain_id: &ChainId,

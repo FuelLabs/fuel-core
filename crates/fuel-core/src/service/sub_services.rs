@@ -43,7 +43,6 @@ use crate::{
             BlockImporterAdapter,
             BlockProducerAdapter,
             ChainStateInfoProvider,
-            ExecutorAdapter,
             MaybeRelayerAdapter,
             PoAAdapter,
             PreconfirmationSender,
@@ -121,7 +120,7 @@ mod block_producer_type {
     pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
         Database,
         TxPoolAdapter,
-        ParallelExecutorAdapter,
+        crate::service::adapters::ParallelExecutorAdapter,
         FuelGasPriceProvider<AlgorithmV1, u32, u64>,
         ChainStateInfoProvider,
     >;
@@ -133,7 +132,7 @@ mod block_producer_type {
     pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
         Database,
         TxPoolAdapter,
-        ExecutorAdapter,
+        crate::service::adapters::ExecutorAdapter,
         FuelGasPriceProvider<AlgorithmV1, u32, u64>,
         ChainStateInfoProvider,
     >;
@@ -145,7 +144,7 @@ mod block_producer_type {
     pub type BlockProducerService = fuel_core_producer::block_producer::Producer<
         Database,
         TxPoolAdapter,
-        ExecutorAdapter,
+        crate::service::adapters::ExecutorAdapter,
         FuelGasPriceProvider<AlgorithmV1, u32, u64>,
         ChainStateInfoProvider,
     >;
@@ -243,7 +242,7 @@ pub fn init_sub_services(
             native_executor_version: config.native_executor_version,
             allow_historical_execution: config.historical_execution,
         };
-        ExecutorAdapter::new(
+        crate::service::adapters::ExecutorAdapter::new(
             database.on_chain().clone(),
             database.relayer().clone(),
             upgradable_executor_config,
@@ -256,7 +255,6 @@ pub fn init_sub_services(
     let executor = {
         #[cfg(feature = "no-parallel-executor")]
         {
-            use crate::service::adapters::ExecutorAdapter;
             let upgradable_executor_config =
                 fuel_core_upgradable_executor::config::Config {
                     forbid_unauthorized_inputs_default: config.utxo_validation,
@@ -265,7 +263,7 @@ pub fn init_sub_services(
                     native_executor_version: config.native_executor_version,
                     allow_historical_execution: config.historical_execution,
                 };
-            ExecutorAdapter::new(
+            crate::service::adapters::ExecutorAdapter::new(
                 database.on_chain().clone(),
                 database.relayer().clone(),
                 upgradable_executor_config,
@@ -278,7 +276,7 @@ pub fn init_sub_services(
             let parallel_executor_config = fuel_core_parallel_executor::config::Config {
                 number_of_cores: config.executor_number_of_cores,
             };
-            ParallelExecutorAdapter::new(
+            crate::service::adapters::ParallelExecutorAdapter::new(
                 database.on_chain().clone(),
                 database.relayer().clone(),
                 parallel_executor_config,

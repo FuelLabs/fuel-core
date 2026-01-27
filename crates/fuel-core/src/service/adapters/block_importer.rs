@@ -21,20 +21,12 @@ use fuel_core_importer::{
     },
 };
 use fuel_core_storage::{
-    MerkleRoot,
     Result as StorageResult,
-    StorageAsRef,
     iter::{
         IterDirection,
         IteratorOverTable,
     },
-    tables::{
-        FuelBlocks,
-        merkle::{
-            DenseMetadataKey,
-            FuelBlockMerkleMetadata,
-        },
-    },
+    tables::FuelBlocks,
     transactional::{
         Changes,
         StorageChanges,
@@ -44,8 +36,6 @@ use fuel_core_txpool::ports::{
     WasmChecker,
     WasmValidityError,
 };
-#[cfg(feature = "parallel-executor")]
-use fuel_core_types::services::executor::ValidationResult;
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
@@ -121,13 +111,6 @@ impl ImporterDatabase for Database {
             .transpose()
     }
 
-    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
-        Ok(self
-            .storage_as_ref::<FuelBlockMerkleMetadata>()
-            .get(&DenseMetadataKey::Latest)?
-            .map(|cow| *cow.root()))
-    }
-
     fn commit_changes(&mut self, changes: StorageChanges) -> StorageResult<()> {
         commit_changes_with_height_update(self, changes, |iter| {
             iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
@@ -151,12 +134,7 @@ impl Validator for ParallelExecutorAdapter {
         &self,
         _block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
-        // TODO
-        let result = ValidationResult {
-            tx_status: vec![],
-            events: vec![],
-        };
-        Ok(UncommittedValidationResult::new(result, Changes::default()))
+        todo!("Implement me please")
     }
 }
 

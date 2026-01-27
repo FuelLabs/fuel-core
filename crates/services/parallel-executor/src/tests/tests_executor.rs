@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use std::time::Duration;
 
@@ -67,6 +68,7 @@ use fuel_core_types::{
     services::block_producer::Components,
 };
 use rand::SeedableRng;
+use tokio::time::Instant;
 
 #[derive(Clone, Debug, Default)]
 struct Storage(pub InMemoryStorage<Column>);
@@ -219,7 +221,7 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
                 coinbase_recipient: Default::default(),
                 gas_price: 0,
             },
-            Duration::from_millis(300),
+            Instant::now() + Duration::from_millis(300),
         )
         .await
         .unwrap()
@@ -260,7 +262,7 @@ async fn execute__simple_independent_transactions_sorted() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         },
-        Duration::from_millis(300),
+        Instant::now() + Duration::from_millis(300),
     );
 
     // Request for a thread
@@ -340,7 +342,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         },
-        Duration::from_millis(300),
+        Instant::now() + Duration::from_millis(300),
     );
 
     // Request for a thread
@@ -457,7 +459,7 @@ async fn execute__gas_left_updated_when_state_merges() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         },
-        Duration::from_millis(300),
+        Instant::now() + Duration::from_millis(300),
     );
 
     // Request for one of the threads
@@ -549,7 +551,7 @@ async fn execute__utxo_ordering_kept() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         },
-        Duration::from_millis(300),
+        Instant::now() + Duration::from_millis(300),
     );
 
     // Request for one of the threads
@@ -623,7 +625,7 @@ async fn execute__utxo_resolved() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         },
-        Duration::from_millis(300),
+        Instant::now() + Duration::from_millis(300),
     );
 
     // Request for one of the threads
@@ -716,7 +718,7 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
             coinbase_recipient: Default::default(),
             gas_price: 0,
         },
-        Duration::from_millis(300),
+        Instant::now() + Duration::from_millis(300),
     );
 
     // Request for a thread

@@ -246,12 +246,10 @@ impl Default for StorageChanges {
 
 impl StorageChanges {
     /// Returns the changes as a list leaving the original instance empty
-    pub fn extract_list_of_changes(&mut self) -> Vec<Changes> {
-        match self {
+    pub fn extract_list_of_changes(mut self) -> Vec<Changes> {
+        match &mut self {
             StorageChanges::Changes(changes) => {
-                let changes_list = vec![core::mem::take(changes)];
-                *self = StorageChanges::ChangesList(Vec::new());
-                changes_list
+                vec![core::mem::take(changes)]
             }
             StorageChanges::ChangesList(changes_list) => core::mem::take(changes_list),
         }

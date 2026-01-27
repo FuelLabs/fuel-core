@@ -82,7 +82,10 @@ use fuel_core_types::{
 };
 use futures::future::Either;
 use fxhash::FxHashMap;
-use tokio::runtime::Runtime;
+use tokio::{
+    runtime::Runtime,
+    time::Instant,
+};
 
 mod coin;
 mod workers;
@@ -128,8 +131,8 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     tx_size_left: u64,
     /// Total remaining gas
     gas_left: u64,
-    /// Total time allowed for the block execution
-    maximum_time_per_block: Duration,
+    /// Deadline for the block production
+    deadline: Instant,
     /// Gas used by blob transactions
     blob_gas: u64,
 }
@@ -308,7 +311,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
         runtime: &'a Runtime,
         memory_pool: MemoryPool,
         consensus_parameters: ConsensusParameters,
-        maximum_time_per_block: Duration,
+        deadline: Instant,
     ) -> Result<Self, SchedulerError> {
         Ok(Self {
             header_to_produce: components.header_to_produce,
@@ -332,7 +335,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             current_executing_contracts: HashSet::new(),
             consensus_parameters,
             blob_gas: 0,
-            maximum_time_per_block,
+            deadline,
         })
     }
 }
@@ -362,12 +365,10 @@ where
         )?;
 
         let mut new_tx_notifier = tx_source.get_new_transactions_notifier();
-        let now = tokio::time::Instant::now();
-        let deadline = now.checked_add(self.maximum_time_per_block).ok_or(
-            SchedulerError::InternalError("Maximum time per block overflow".to_string()),
-        )?;
+        let now = Instant::now();
+        let deadline = self.deadline;
         let mut nb_batch_created = 0;
-        let mut nb_transactions: u32 = 0;
+        let mut nb_transactions: u32 = l1_execution_data.tx_count;
         let initial_gas_per_worker = self
             .consensus_parameters
             .block_gas_limit()
@@ -392,12 +393,7 @@ where
                 // If we requested transactions, we shouldn't drop them,
                 // so we await them here.
                 let mut batch = self
-                    .ask_new_transactions_batch(
-                        tx_source,
-                        now,
-                        initial_gas_per_worker,
-                        self.maximum_time_per_block,
-                    )
+                    .ask_new_transactions_batch(tx_source, now, initial_gas_per_worker)
                     .await?;
 
                 let blob_transactions = core::mem::take(&mut batch.blob_transactions);
@@ -467,8 +463,7 @@ where
             }
         }
 
-        self.wait_all_execution_tasks(self.maximum_time_per_block)
-            .await?;
+        self.wait_all_execution_tasks().await?;
 
         let mut res = self.verify_coherency_and_merge_results(
             nb_batch_created,
@@ -483,15 +478,29 @@ where
                 Default::default(),
             );
 
+            // TODO: Rework this part to avoid `commit_changes` and decreasing performance
             for changes in res.changes.extract_list_of_changes() {
                 if let Err(e) = tx.commit_changes(changes) {
                     return Err(SchedulerError::StorageError(e));
                 }
             }
+            res.changes = StorageChanges::Changes(Default::default());
 
             let (blob_execution_data, blob_txs) =
                 self.execute_blob_transactions(tx, nb_transactions).await?;
             res.add_blob_execution_data(blob_execution_data, blob_txs);
+        }
+
+        // TODO: Avoid cloning the DA changes
+        let da_changes = storage_with_da.changes().clone();
+        match &mut res.changes {
+            StorageChanges::Changes(changes) => {
+                let changes = core::mem::take(changes);
+                res.changes = StorageChanges::ChangesList(vec![changes, da_changes]);
+            }
+            StorageChanges::ChangesList(list) => {
+                list.push(da_changes);
+            }
         }
 
         Ok(res)
@@ -529,13 +538,16 @@ where
     async fn ask_new_transactions_batch<TxSource>(
         &mut self,
         tx_source: &TxSource,
-        start_execution_time: tokio::time::Instant,
+        start_execution_time: Instant,
         initial_gas_per_core: u64,
-        total_execution_time: Duration,
     ) -> Result<PreparedBatch, SchedulerError>
     where
         TxSource: TransactionsSource,
     {
+        let total_execution_time = self
+            .deadline
+            .checked_duration_since(start_execution_time)
+            .unwrap_or(Duration::from_millis(1));
         let spent_time = start_execution_time.elapsed();
         let scaled_gas_per_core = (initial_gas_per_core as u128)
             .saturating_mul(
@@ -726,14 +738,7 @@ where
         );
     }
 
-    async fn wait_all_execution_tasks(
-        &mut self,
-        total_execution_time: Duration,
-    ) -> Result<(), SchedulerError> {
-        let tolerance_execution_time_overflow =
-            total_execution_time.checked_div(10).unwrap_or_default();
-        let now = tokio::time::Instant::now();
-
+    async fn wait_all_execution_tasks(&mut self) -> Result<(), SchedulerError> {
         // We have reached the deadline
         // We need to merge the states of all the workers
         while !self.current_execution_tasks.is_empty() {
@@ -780,10 +785,13 @@ where
             }
         }
 
-        if now.elapsed() > tolerance_execution_time_overflow {
+        let now = Instant::now();
+        if now > self.deadline {
             tracing::warn!(
                 "Execution time exceeded the limit by: {}ms",
-                now.elapsed().as_millis()
+                now.checked_duration_since(self.deadline)
+                    .expect("Checked above; qed")
+                    .as_millis()
             );
         }
         Ok(())
