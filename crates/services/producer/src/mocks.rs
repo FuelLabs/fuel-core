@@ -147,14 +147,35 @@ pub fn create_mock_executor(db: MockDb) -> MockExecutor {
 
 // Helper function to create a failing MockExecutor
 // This replaces the old FailingMockExecutor struct
+// Fails once with the provided error, then succeeds on subsequent calls
 #[cfg(feature = "test-helpers")]
-pub fn create_failing_mock_executor(error: ExecutorError) -> MockExecutor {
+pub fn create_failing_mock_executor(error: ExecutorError, db: MockDb) -> MockExecutor {
     let mut mock = MockExecutor::new();
 
-    // Set expectation to fail once, then succeed
+    // First call: fail with the provided error
     mock.expect_produce_without_commit()
         .times(1)
         .return_once(move |_, _| Err(error));
+
+    // Subsequent calls: succeed with standard executor logic
+    mock.expect_produce_without_commit()
+        .returning(move |component, _| {
+            let block = arc_pool_tx_comp_to_block(&component);
+            let mut block_db = db.blocks.lock().unwrap();
+            block_db.insert(
+                *block.header().height(),
+                block.compress(&ChainId::default()),
+            );
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block,
+                    skipped_transactions: vec![],
+                    tx_status: vec![],
+                    events: vec![],
+                },
+                Default::default(),
+            ))
+        });
 
     mock
 }
