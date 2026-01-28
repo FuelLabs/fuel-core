@@ -518,12 +518,11 @@ mod produce_and_execute_block_txpool {
     #[tokio::test]
     async fn production_fails_on_execution_error() {
         let db = TestContext::<MockExecutor>::default_db();
-        let ctx = TestContext::default_from_executor(
-            crate::mocks::create_failing_mock_executor(
-                ExecutorError::TransactionIdCollision(Default::default()),
-                db,
-            ),
+        let executor = crate::mocks::create_failing_mock_executor(
+            ExecutorError::TransactionIdCollision(Default::default()),
+            db.clone(),
         );
+        let ctx = TestContext::default_from_db_and_executor(db, executor);
 
         let producer = ctx.producer();
 
