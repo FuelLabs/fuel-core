@@ -84,7 +84,7 @@ pub enum Error {
         best: DaBlockHeight,
         previous_block: DaBlockHeight,
     },
-    #[display(fmt = "Attempting to produce genesis block")]
+    #[display(fmt = "Couldn't produce genesis block")]
     CannotProduceGenesisBlock,
 
     #[display(
@@ -94,6 +94,8 @@ pub enum Error {
         requested_height: BlockHeight,
         expected_height: BlockHeight,
     },
+    #[display(fmt = "Reached maximum block height")]
+    MaximumBlockHeightReached,
 }
 
 impl From<Error> for anyhow::Error {
@@ -231,7 +233,7 @@ where
         let latest_height = view.latest_height().ok_or(Error::NoGenesisBlock)?;
         let next_height = latest_height
             .succ()
-            .expect("Should always be able to increment the latest height");
+            .ok_or(Error::MaximumBlockHeightReached)?;
 
         if height == BlockHeight::new(0) {
             return Err(Error::CannotProduceGenesisBlock.into());
@@ -375,7 +377,7 @@ where
 
         let next_height = latest_height
             .succ()
-            .expect("Should always be able to increment the latest height");
+            .ok_or(Error::MaximumBlockHeightReached)?;
 
         let header = match height {
             Some(height) if height == next_height => {
@@ -548,7 +550,7 @@ where
         let height = previous_block_info
             .height
             .succ()
-            .ok_or(Error::NoGenesisBlock)?;
+            .ok_or(Error::MaximumBlockHeightReached)?;
         let consensus_parameters_version = view.latest_consensus_parameters_version()?;
         let state_transition_bytecode_version =
             view.latest_state_transition_bytecode_version()?;
