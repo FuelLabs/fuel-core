@@ -118,11 +118,8 @@ fn set_current_state<E>(
         Value::Number(current_stf_version.into()),
     );
 
-    let current_block_height: u32 = *current_block_height;
-    extensions.set(
-        CURRENT_FUEL_BLOCK_HEIGHT,
-        Value::Number(current_block_height.into()),
-    );
+    let block_height_str = block_to_trimmed_string(current_block_height);
+    extensions.set(CURRENT_FUEL_BLOCK_HEIGHT, Value::String(block_height_str));
 }
 
 trait SetExtensionsResponse {
@@ -139,6 +136,21 @@ impl SetExtensionsResponse for BTreeMap<String, Value> {
     fn set(&mut self, name: impl AsRef<str>, value: impl Into<Value>) {
         self.insert(name.as_ref().to_string(), value.into());
     }
+}
+
+fn block_to_trimmed_string(block_height: BlockHeight) -> String {
+    let mut block_height_str = u32::from(block_height).to_string();
+
+    // trim leading zeros
+    let cut = block_height_str
+        .as_bytes()
+        .iter()
+        .position(|&b| b != b'0')
+        // if it's all zeros, keep a single "0"
+        .unwrap_or(block_height_str.len().saturating_sub(1));
+
+    block_height_str.drain(..cut);
+    block_height_str
 }
 
 #[cfg(test)]
