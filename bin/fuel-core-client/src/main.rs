@@ -42,8 +42,8 @@ struct CliArgs {
 
 impl CliArgs {
     async fn exec(&self) {
-        let client =
-            FuelClient::new(self.endpoint.as_str()).expect("expected valid endpoint");
+        let client = FuelClient::new_unchecked(self.endpoint.as_str())
+            .expect("expected valid endpoint");
 
         match &self.command {
             Command::Transaction(sub_cmd) => match sub_cmd {
