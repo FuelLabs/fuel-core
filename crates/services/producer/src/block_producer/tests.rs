@@ -1,30 +1,62 @@
 #![allow(non_snake_case)]
 
 use crate::{
-    Config, Producer,
+    Config,
+    Producer,
     block_producer::{
-        Bytes32, Error,
-        gas_price::{GasPriceProvider, MockChainStateInfoProvider},
+        Bytes32,
+        Error,
+        gas_price::{
+            GasPriceProvider,
+            MockChainStateInfoProvider,
+        },
     },
-    mocks::{MockDb, MockExecutor, MockExecutorWithCapture, MockRelayer, MockTxPool},
+    mocks::{
+        MockDb,
+        MockExecutor,
+        MockExecutorWithCapture,
+        MockRelayer,
+        MockTxPool,
+    },
 };
 use fuel_core_producer as _;
 use fuel_core_types::{
     blockchain::{
-        block::{Block, CompressedBlock, PartialFuelBlock},
-        header::{ApplicationHeader, ConsensusHeader, PartialBlockHeader},
+        block::{
+            Block,
+            CompressedBlock,
+            PartialFuelBlock,
+        },
+        header::{
+            ApplicationHeader,
+            ConsensusHeader,
+            PartialBlockHeader,
+        },
         primitives::DaBlockHeight,
     },
     fuel_tx,
-    fuel_tx::{ConsensusParameters, Mint, Script, Transaction, field::InputContract},
+    fuel_tx::{
+        ConsensusParameters,
+        Mint,
+        Script,
+        Transaction,
+        field::InputContract,
+    },
     fuel_types::BlockHeight,
     services::executor::Error as ExecutorError,
     tai64::Tai64,
 };
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{
+    Rng,
+    SeedableRng,
+    rngs::StdRng,
+};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 pub struct MockProducerGasPrice {
@@ -814,7 +846,10 @@ mod dry_run {
 }
 
 use fuel_core_types::fuel_tx::field::MintGasPrice;
-use proptest::{prop_compose, proptest};
+use proptest::{
+    prop_compose,
+    proptest,
+};
 
 prop_compose! {
     fn arb_block()(height in 1..255u8, da_height in 1..255u64, gas_price: u64, coinbase_recipient: [u8; 32], num_txs in 0..100u32) -> Block {
