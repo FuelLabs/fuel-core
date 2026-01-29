@@ -48,7 +48,10 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use fuel_vm_private::{
-    fuel_storage::StorageWrite,
+    fuel_storage::{
+        StorageReadError,
+        StorageWrite,
+    },
     storage::{
         BlobData,
         ContractsStateData,
@@ -189,13 +192,22 @@ impl<D, M: Mappable> StorageRead<M> for VmStorage<D>
 where
     D: StorageRead<M, Error = StorageError>,
 {
-    fn read(
+    fn read_exact(
         &self,
         key: &M::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<bool, Self::Error> {
-        StorageRead::<M>::read(&self.database, key, offset, buf)
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        StorageRead::<M>::read_exact(&self.database, key, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &M::Key,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        StorageRead::<M>::read_zerofill(&self.database, key, offset, buf)
     }
 
     fn read_alloc(

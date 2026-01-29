@@ -15,8 +15,8 @@ use super::rocks_db_key_iterator::{
 use core::ops::Deref;
 use fuel_core_metrics::core_metrics::DatabaseMetrics;
 use fuel_core_storage::{
-    Error as StorageError,
     Result as StorageResult,
+    StorageReadError,
     iter::{
         BoxedIter,
         IntoBoxedIter,
@@ -960,13 +960,13 @@ where
         Ok(value.map(Arc::from))
     }
 
-    fn read(
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
+    ) -> StorageResult<Result<usize, StorageReadError>> {
         self.metrics.read_meter.inc();
         let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
         column_metrics.map(|metric| metric.inc());
@@ -976,7 +976,7 @@ where
             .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
             .map_err(|e| DatabaseError::Other(e.into()))?
         else {
-            return Ok(false);
+            return Ok(Err(StorageReadError::KeyNotFound));
         };
 
         let bytes_len = value.len();
@@ -985,10 +985,7 @@ where
         let end = offset.saturating_add(buf_len);
 
         if end > bytes_len {
-            return Err(StorageError::Other(anyhow::anyhow!(
-                "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}` and column `{column:?}`",
-                key
-            )));
+            return Ok(Err(StorageReadError::OutOfBounds));
         }
 
         let starting_from_offset = &value[start..end];
@@ -998,7 +995,7 @@ where
             .bytes_read
             .inc_by(starting_from_offset.len() as u64);
 
-        Ok(true)
+        Ok(Ok(value.len()))
     }
 }
 

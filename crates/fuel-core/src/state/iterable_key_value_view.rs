@@ -1,5 +1,6 @@
 use fuel_core_storage::{
     Result as StorageResult,
+    StorageReadError,
     iter::{
         BoxedIter,
         IterDirection,
@@ -63,14 +64,24 @@ where
         self.0.get(key, column)
     }
 
-    fn read(
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
-        self.0.read(key, column, offset, buf)
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        self.0.read_exact(key, column, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        self.0.read_zerofill(key, column, offset, buf)
     }
 }
 

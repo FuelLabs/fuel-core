@@ -21,6 +21,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageInspect,
     StorageRead,
+    StorageReadError,
     StorageSize,
 };
 use fuel_core_types::{
@@ -188,28 +189,54 @@ impl TxPoolPersistentStorage for MockDb {
 }
 
 impl StorageRead<BlobData> for MockDb {
-    fn read(
+    fn read_exact(
         &self,
         key: &<BlobData as Mappable>::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<core::result::Result<usize, StorageReadError>, ()> {
         let table = self.data.lock().unwrap();
-        let Some(bytes) = table.blobs.get(key) else {
-            return Ok(false);
+        let Some(value) = table.blobs.get(key) else {
+            return Ok(Err(StorageReadError::KeyNotFound));
         };
 
-        let bytes_len = bytes.as_ref().len();
-        let start = offset;
-        let end = offset.saturating_add(buf.len());
+        let bytes_len = value.as_ref().len();
 
-        if end > bytes_len {
-            return Err(());
-        }
+        let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+            return Ok(Err(StorageReadError::OutOfBounds));
+        };
 
-        let starting_from_offset = &bytes.as_ref()[start..end];
-        buf[..].copy_from_slice(starting_from_offset);
-        Ok(true)
+        let Some((dst, _)) = buf.split_at_mut_checked(after.len()) else {
+            return Ok(Err(StorageReadError::OutOfBounds));
+        };
+        dst.copy_from_slice(&after);
+
+        Ok(Ok(bytes_len))
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &<BlobData as Mappable>::Key,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<core::result::Result<usize, StorageReadError>, ()> {
+        let table = self.data.lock().unwrap();
+        let Some(value) = table.blobs.get(key) else {
+            return Ok(Err(StorageReadError::KeyNotFound));
+        };
+
+        let bytes_len = value.as_ref().len();
+
+        let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+            return Ok(Err(StorageReadError::OutOfBounds));
+        };
+
+        let Some((dst, _)) = buf.split_at_mut_checked(after.len()) else {
+            return Ok(Err(StorageReadError::OutOfBounds));
+        };
+        dst.copy_from_slice(&after);
+
+        Ok(Ok(bytes_len))
     }
 
     fn read_alloc(
