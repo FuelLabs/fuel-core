@@ -160,7 +160,7 @@ impl StorageSlot {
         self.key.into()
     }
 
-    async fn value(&self) -> HexString {
-        HexString(self.value.clone())
+    async fn value(&self) -> HexString<'_> {
+        HexString::from(self.value.as_ref())
     }
 }
