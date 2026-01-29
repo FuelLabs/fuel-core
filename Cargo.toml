@@ -185,7 +185,7 @@ url = "2.2"
 
 [profile.release]
 codegen-units = 1
-lto = "fat"
+lto = "thin"
 # The difference in performance for "fat" and "thin" is small,
 # but "thin" LTO is much faster to compile.
 # If you play with benchmarks or flamegraphs, it is better to use "thin"

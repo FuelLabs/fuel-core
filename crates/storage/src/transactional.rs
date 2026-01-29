@@ -21,6 +21,7 @@ use alloc::{
         BTreeMap,
         btree_map,
     },
+    vec,
     vec::Vec,
 };
 
@@ -223,11 +224,18 @@ impl<Storage> From<StorageTransaction<Storage>> for Changes {
 }
 
 /// The type describing the list of changes to the storage.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StorageChanges {
     /// A single batch of changes.
     Changes(Changes),
     /// A list of changes.
     ChangesList(Vec<Changes>),
+}
+
+impl From<Changes> for StorageChanges {
+    fn from(value: Changes) -> Self {
+        StorageChanges::Changes(value)
+    }
 }
 
 impl Default for StorageChanges {
@@ -236,9 +244,36 @@ impl Default for StorageChanges {
     }
 }
 
-impl From<Changes> for StorageChanges {
-    fn from(value: Changes) -> Self {
-        StorageChanges::Changes(value)
+impl StorageChanges {
+    /// Returns the changes as a list leaving the original instance empty
+    pub fn extract_list_of_changes(mut self) -> Vec<Changes> {
+        match &mut self {
+            StorageChanges::Changes(changes) => {
+                vec![core::mem::take(changes)]
+            }
+            StorageChanges::ChangesList(changes_list) => core::mem::take(changes_list),
+        }
+    }
+
+    /// Checks if the changes are empty.
+    pub fn is_empty(&self) -> bool {
+        match self {
+            StorageChanges::Changes(changes) => changes.is_empty(),
+            StorageChanges::ChangesList(changes_list) => changes_list.is_empty(),
+        }
+    }
+}
+
+impl TryFrom<StorageChanges> for Changes {
+    type Error = crate::Error;
+
+    fn try_from(value: StorageChanges) -> Result<Self, Self::Error> {
+        match value {
+            StorageChanges::Changes(changes) => Ok(changes),
+            StorageChanges::ChangesList(_) => Err(crate::Error::Other(anyhow::anyhow!(
+                "Cannot convert changes list into a single change"
+            ))),
+        }
     }
 }
 

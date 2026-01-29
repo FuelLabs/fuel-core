@@ -1,6 +1,6 @@
 use fuel_core_storage::{
     Result as StorageResult,
-    transactional::Changes,
+    transactional::StorageChanges,
 };
 use fuel_core_types::{
     blockchain::{
@@ -100,7 +100,7 @@ pub trait BlockProducer<TxSource>: Send + Sync {
         &self,
         component: Components<TxSource>,
         deadline: Self::Deadline,
-    ) -> impl Future<Output = ExecutorResult<UncommittedResult<Changes>>>;
+    ) -> impl Future<Output = ExecutorResult<UncommittedResult<StorageChanges>>>;
 }
 
 pub trait DryRunner: Send + Sync {

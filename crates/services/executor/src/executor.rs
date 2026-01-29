@@ -186,6 +186,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use fuel_core_storage::structured_storage::StructuredStorage;
 use fuel_core_types::{
     fuel_vm::interpreter::Memory,
     services::preconfirmation::SqueezedOut,
@@ -193,11 +194,11 @@ use fuel_core_types::{
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
-#[cfg(not(feature = "limited-tx-count"))]
-pub const fn max_tx_count() -> u16 {
-    u16::MAX.saturating_sub(1)
+#[cfg(feature = "u32-tx-count")]
+pub const fn max_tx_count() -> u32 {
+    u32::MAX.saturating_sub(1)
 }
-#[cfg(feature = "limited-tx-count")]
+#[cfg(not(feature = "u32-tx-count"))]
 pub const fn max_tx_count() -> u16 {
     1024
 }
@@ -229,8 +230,9 @@ impl TransactionsSource for OnceTransactionsSource {
     fn next(
         &self,
         _: u64,
-        transactions_limit: u16,
-        _: u32,
+        #[cfg(feature = "u32-tx-count")] transactions_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] transactions_limit: u16,
+        _: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         let mut lock = self.transactions.lock();
         let transactions: &mut Vec<MaybeCheckedTransaction> = lock.as_mut();
@@ -271,7 +273,8 @@ pub fn convert_tx_execution_result_to_preconfirmation(
     tx_id: TxId,
     tx_exec_result: &TransactionExecutionResult,
     block_height: BlockHeight,
-    tx_index: u16,
+    #[cfg(feature = "u32-tx-count")] tx_index: u32,
+    #[cfg(not(feature = "u32-tx-count"))] tx_index: u16,
 ) -> Preconfirmation {
     let tx_pointer = TxPointer::new(block_height, tx_index);
     let dynamic_outputs = tx
@@ -319,19 +322,22 @@ pub fn convert_tx_execution_result_to_preconfirmation(
 }
 
 /// Data that is generated after executing all transactions.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct ExecutionData {
-    coinbase: u64,
-    used_gas: u64,
-    used_size: u32,
-    tx_count: u16,
-    found_mint: bool,
-    message_ids: Vec<MessageId>,
-    tx_status: Vec<TransactionExecutionStatus>,
-    events: Vec<ExecutorEvent>,
-    changes: Changes,
+    pub coinbase: u64,
+    pub used_gas: u64,
+    pub used_size: u32,
+    #[cfg(feature = "u32-tx-count")]
+    pub tx_count: u32,
+    #[cfg(not(feature = "u32-tx-count"))]
+    pub tx_count: u16,
+    pub found_mint: bool,
+    pub message_ids: Vec<MessageId>,
+    pub tx_status: Vec<TransactionExecutionStatus>,
+    pub events: Vec<ExecutorEvent>,
+    pub changes: Changes,
     pub skipped_transactions: Vec<(TxId, ExecutorError)>,
-    event_inbox_root: Bytes32,
+    pub event_inbox_root: Bytes32,
 }
 
 impl ExecutionData {
@@ -356,19 +362,33 @@ impl ExecutionData {
 /// These are passed to the executor.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug)]
 pub struct ExecutionOptions {
+    /// The flag allows the usage of fake signatures in the transaction.
+    /// When `false` the executor skips signature and predicate checks.
+    pub forbid_unauthorized_inputs: bool,
     /// The flag allows the usage of fake coins in the inputs of the transaction.
-    /// When `false` the executor skips signature and UTXO existence checks.
-    pub forbid_fake_coins: bool,
+    /// When `false` the executor skips UTXO existence checks.
+    pub forbid_fake_utxo: bool,
     /// The flag allows the usage of syscall in the transaction.
     pub allow_syscall: bool,
+}
+
+#[derive(serde::Deserialize, Debug)]
+/// Execution options to maintain for backward compatibility.
+pub struct ExecutionOptionsDeserialized {
+    pub forbid_fake_coins: bool,
+    #[deprecated]
+    pub backtrace: bool,
 }
 
 /// Per-block execution options
 #[derive(Clone, Default, Debug)]
 struct ExecutionOptionsInner {
+    /// The flag allows the usage of fake signatures in the transaction.
+    /// When `false` the executor skips signature and predicate checks.
+    pub forbid_unauthorized_inputs: bool,
     /// The flag allows the usage of fake coins in the inputs of the transaction.
-    /// When `false` the executor skips signature and UTXO existence checks.
-    pub forbid_fake_coins: bool,
+    /// When `false` the executor skips UTXO existence checks.
+    pub forbid_fake_utxo: bool,
     pub allow_syscall: bool,
     pub dry_run: bool,
 }
@@ -530,7 +550,7 @@ where
 }
 
 type BlockStorageTransaction<T> = StorageTransaction<T>;
-type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut BlockStorageTransaction<T>>;
+type TxStorageTransaction<'a, T> = StorageTransaction<&'a mut StructuredStorage<T>>;
 
 #[derive(Clone, Debug)]
 pub struct BlockExecutor<R, TxWaiter, PreconfirmationSender> {
@@ -556,7 +576,8 @@ impl<R, TxWaiter, PreconfirmationSender>
             relayer,
             consensus_params,
             options: ExecutionOptionsInner {
-                forbid_fake_coins: options.forbid_fake_coins,
+                forbid_unauthorized_inputs: options.forbid_unauthorized_inputs,
+                forbid_fake_utxo: options.forbid_fake_utxo,
                 allow_syscall: options.allow_syscall,
                 dry_run,
             },
@@ -572,7 +593,7 @@ where
     N: NewTxWaiterPort,
     P: PreconfirmationSenderPort,
 {
-    async fn execute<TxSource, D>(
+    pub async fn execute<TxSource, D>(
         self,
         components: Components<TxSource>,
         block_storage_tx: BlockStorageTransaction<D>,
@@ -645,7 +666,8 @@ where
         Ok((partial_block, data))
     }
 
-    fn produce_mint_tx<TxSource, T>(
+    /// Produce the mint transaction
+    pub fn produce_mint_tx<TxSource, T>(
         &self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
@@ -729,7 +751,40 @@ where
         Ok((partial_block, data))
     }
 
-    fn process_l1_txs<T>(
+    pub async fn execute_l2_transactions<TxSource, D>(
+        mut self,
+        transactions: Components<TxSource>,
+        block_storage_tx: &mut StructuredStorage<D>,
+        #[cfg(feature = "u32-tx-count")] start_idx: u32,
+        #[cfg(not(feature = "u32-tx-count"))] start_idx: u16,
+        memory: &mut MemoryInstance,
+    ) -> ExecutorResult<(Vec<Transaction>, ExecutionData)>
+    where
+        TxSource: TransactionsSource,
+        D: KeyValueInspect<Column = Column> + Modifiable,
+    {
+        let mut partial_block =
+            PartialFuelBlock::new(transactions.header_to_produce, vec![]);
+
+        let mut execution_data = ExecutionData {
+            tx_count: start_idx,
+            ..Default::default()
+        };
+
+        self.process_l2_txs(
+            &mut partial_block,
+            &transactions,
+            block_storage_tx,
+            &mut execution_data,
+            memory,
+        )
+        .await?;
+
+        Ok((partial_block.transactions, execution_data))
+    }
+
+    /// Process transactions coming from the underlying L1
+    pub fn process_l1_txs<T>(
         &mut self,
         block: &mut PartialFuelBlock,
         coinbase_contract_id: ContractId,
@@ -766,12 +821,12 @@ where
         &mut self,
         block: &mut PartialFuelBlock,
         components: &Components<TxSource>,
-        storage_tx: &mut StorageTransaction<T>,
+        storage_tx: &mut StructuredStorage<T>,
         data: &mut ExecutionData,
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
-        T: KeyValueInspect<Column = Column>,
+        T: KeyValueInspect<Column = Column> + Modifiable,
         TxSource: TransactionsSource,
     {
         let Components {
@@ -781,15 +836,12 @@ where
             ..
         } = components;
         let block_gas_limit = self.consensus_params.block_gas_limit();
-        let block_transaction_size_limit = self
-            .consensus_params
-            .block_transaction_size_limit()
-            .try_into()
-            .unwrap_or(u32::MAX);
+        let block_transaction_size_limit =
+            self.consensus_params.block_transaction_size_limit();
 
         let mut remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
         let mut remaining_block_transaction_size_limit =
-            block_transaction_size_limit.saturating_sub(data.used_size);
+            block_transaction_size_limit.saturating_sub(data.used_size as u64);
 
         // We allow at most u16::MAX transactions in a block, including the mint transaction.
         // When processing l2 transactions, we must take into account transactions from the l1
@@ -864,7 +916,7 @@ where
                 statuses = self.preconfirmation_sender.try_send(statuses);
                 remaining_gas_limit = block_gas_limit.saturating_sub(data.used_gas);
                 remaining_block_transaction_size_limit =
-                    block_transaction_size_limit.saturating_sub(data.used_size);
+                    block_transaction_size_limit.saturating_sub(data.used_size as u64);
                 remaining_tx_count = max_tx_count().saturating_sub(data.tx_count);
             }
 
@@ -889,7 +941,7 @@ where
     fn execute_transaction_and_commit<'a, W>(
         &'a self,
         block: &'a mut PartialFuelBlock,
-        storage_tx: &mut BlockStorageTransaction<W>,
+        storage_tx: &mut StructuredStorage<W>,
         execution_data: &mut ExecutionData,
         tx: MaybeCheckedTransaction,
         gas_price: Word,
@@ -897,7 +949,7 @@ where
         memory: &mut MemoryInstance,
     ) -> ExecutorResult<()>
     where
-        W: KeyValueInspect<Column = Column>,
+        W: KeyValueInspect<Column = Column> + Modifiable,
     {
         let tx_count = execution_data.tx_count;
         let tx = {
@@ -1442,7 +1494,7 @@ where
 
             let mut input = Input::Contract(mint.input_contract().clone());
 
-            if self.options.forbid_fake_coins {
+            if self.options.forbid_fake_utxo {
                 self.verify_inputs_exist_and_values_match(
                     storage_tx,
                     core::slice::from_ref(&input),
@@ -1485,7 +1537,7 @@ where
     {
         let tx_id = checked_tx.id();
 
-        if self.options.forbid_fake_coins {
+        if self.options.forbid_unauthorized_inputs || self.options.forbid_fake_utxo {
             checked_tx = self.extra_tx_checks(checked_tx, header, storage_tx, memory)?;
         }
 
@@ -1813,39 +1865,47 @@ where
         <Tx as IntoChecked>::Metadata: CheckedMetadataTrait + Send + Sync,
         T: KeyValueInspect<Column = Column>,
     {
-        let ecal_handler = EcalLogCollector {
-            enabled: self.options.allow_syscall,
-            ..Default::default()
-        };
+        if self.options.forbid_unauthorized_inputs {
+            let ecal_handler = EcalLogCollector {
+                enabled: self.options.allow_syscall,
+                ..Default::default()
+            };
 
-        checked_tx = checked_tx
-            .check_predicates(
-                &CheckPredicateParams::from(&self.consensus_params),
-                memory,
+            checked_tx = checked_tx
+                .check_predicates(
+                    &CheckPredicateParams::from(&self.consensus_params),
+                    memory,
+                    storage_tx,
+                    ecal_handler.clone(),
+                )
+                .map_err(|e| {
+                    ExecutorError::TransactionValidity(
+                        TransactionValidityError::Validation(e),
+                    )
+                })?;
+            debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+
+            // Note that the code above only executes predicates if the txpool didn't do so already.
+            ecal_handler.maybe_print_logs(
+                tracing::info_span!("verification", tx_id = % &checked_tx.id()),
+            );
+        }
+
+        if self.options.forbid_fake_utxo {
+            self.verify_inputs_exist_and_values_match(
                 storage_tx,
-                ecal_handler.clone(),
-            )
-            .map_err(|e| {
-                ExecutorError::TransactionValidity(TransactionValidityError::Validation(
-                    e,
-                ))
-            })?;
-        debug_assert!(checked_tx.checks().contains(Checks::Predicates));
+                checked_tx.transaction().inputs(),
+                header.da_height,
+            )?;
+        }
 
-        // Note that the code above only executes predicates if the txpool didn't do so already.
-        ecal_handler.maybe_print_logs(
-            tracing::info_span!("verification", tx_id = % &checked_tx.id()),
-        );
+        if self.options.forbid_unauthorized_inputs {
+            checked_tx = checked_tx
+                .check_signatures(&self.consensus_params.chain_id())
+                .map_err(TransactionValidityError::from)?;
+            debug_assert!(checked_tx.checks().contains(Checks::Signatures));
+        }
 
-        self.verify_inputs_exist_and_values_match(
-            storage_tx,
-            checked_tx.transaction().inputs(),
-            header.da_height,
-        )?;
-        checked_tx = checked_tx
-            .check_signatures(&self.consensus_params.chain_id())
-            .map_err(TransactionValidityError::from)?;
-        debug_assert!(checked_tx.checks().contains(Checks::Signatures));
         Ok(checked_tx)
     }
 
@@ -2238,7 +2298,7 @@ where
                 }) => {
                     let contract = ContractRef::new(db, *contract_id);
                     let utxo_info =
-                        contract.validated_utxo(self.options.forbid_fake_coins)?;
+                        contract.validated_utxo(self.options.forbid_fake_utxo)?;
                     *utxo_id = *utxo_info.utxo_id();
                     *tx_pointer = utxo_info.tx_pointer();
 
@@ -2304,7 +2364,7 @@ where
     where
         T: KeyValueInspect<Column = Column>,
     {
-        if self.options.forbid_fake_coins {
+        if self.options.forbid_fake_utxo {
             db.storage::<Coins>()
                 .get(&utxo_id)?
                 .ok_or(ExecutorError::TransactionValidity(

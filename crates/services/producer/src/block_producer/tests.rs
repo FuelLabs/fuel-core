@@ -400,13 +400,13 @@ mod produce_and_execute_block_txpool {
         // given
         let prev_da_height = 100;
         let prev_height = 1u32.into();
-        // 0 + 15_000 + 15_000 + 15_000 + 21_000 = 66_000 > 65_535
         let latest_blocks_with_transaction_numbers = vec![
             (prev_da_height, 0u64),
             (prev_da_height + 1, 15_000),
             (prev_da_height + 2, 15_000),
             (prev_da_height + 3, 15_000),
-            (prev_da_height + 4, 21_000),
+            // This block would exceed the max tx, so it is not included until it has its own block
+            (prev_da_height + 4, u32::MAX as u64),
         ]
         .into_iter()
         .map(|(height, gas_cost)| (DaBlockHeight(height), gas_cost));
@@ -1003,7 +1003,7 @@ struct TestContext<Executor> {
     config: Config,
     db: MockDb,
     relayer: MockRelayer,
-    executor: Arc<Executor>,
+    executor: Arc<tokio::sync::Mutex<Executor>>,
     txpool: MockTxPool,
     gas_price: Option<u64>,
     block_gas_limit: u64,
@@ -1047,7 +1047,7 @@ impl<Executor> TestContext<Executor> {
             config,
             db,
             relayer,
-            executor: Arc::new(executor),
+            executor: Arc::new(tokio::sync::Mutex::new(executor)),
             txpool,
             gas_price,
             block_gas_limit: 0,

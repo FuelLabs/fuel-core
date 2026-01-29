@@ -1,8 +1,17 @@
+use super::PreconfirmationSender;
 use crate::{
-    database::RelayerIterableKeyValueView,
+    database::{
+        RegularStage,
+        RelayerIterableKeyValueView,
+        database_description::relayer::Relayer,
+    },
     service::adapters::{
         NewTxWaiter,
         TransactionsSource,
+    },
+    state::{
+        data_source::DataSource,
+        generic_database::GenericDatabase,
     },
 };
 use fuel_core_executor::{
@@ -12,6 +21,12 @@ use fuel_core_executor::{
         NewTxWaiterPort,
         PreconfirmationSenderPort,
     },
+};
+#[cfg(feature = "parallel-executor")]
+use fuel_core_parallel_executor::ports::{
+    Filter,
+    TransactionFiltered,
+    TransactionSourceExecutableTransactions,
 };
 use fuel_core_txpool::Constraints;
 use fuel_core_types::{
@@ -27,14 +42,13 @@ use std::{
 };
 use tokio::sync::mpsc::error::TrySendError;
 
-use super::PreconfirmationSender;
-
 impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
     fn next(
         &self,
         gas_limit: u64,
-        transactions_limit: u16,
-        block_transaction_size_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] transactions_limit: u16,
+        #[cfg(feature = "u32-tx-count")] transactions_limit: u32,
+        block_transaction_size_limit: u64,
     ) -> Vec<MaybeCheckedTransaction> {
         self.tx_pool
             .extract_transactions_for_block(Constraints {
@@ -52,6 +66,47 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
                 MaybeCheckedTransaction::CheckedTransaction(transaction.into(), version)
             })
             .collect()
+    }
+}
+
+#[cfg(feature = "parallel-executor")]
+impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSource {
+    async fn get_executable_transactions(
+        &self,
+        gas_limit: u64,
+        tx_count_limit: u32,
+        block_transaction_size_limit: u64,
+        filter: Filter,
+    ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
+        let (transactions, excluded_contract_ids) = self
+            .tx_pool
+            .extract_transactions_for_block_async(Constraints {
+                minimal_gas_price: self.minimum_gas_price,
+                max_gas: gas_limit,
+                maximum_txs: tx_count_limit,
+                maximum_block_size: block_transaction_size_limit,
+                excluded_contracts: filter.excluded_contract_ids,
+            })
+            .await
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        let transactions = transactions
+            .into_iter()
+            .map(|tx| {
+                let transaction = Arc::unwrap_or_clone(tx);
+                transaction.into()
+            })
+            .collect();
+        Ok(TransactionSourceExecutableTransactions {
+            transactions,
+            filtered: TransactionFiltered::Filtered,
+            filter: Filter {
+                excluded_contract_ids,
+            },
+        })
+    }
+
+    fn get_new_transactions_notifier(&self) -> tokio::sync::watch::Receiver<()> {
+        self.tx_pool.get_new_executable_txs_notifier()
     }
 }
 
@@ -83,6 +138,18 @@ impl fuel_core_executor::ports::RelayerPort for RelayerIterableKeyValueView {
             let _ = da_height;
             Ok(vec![])
         }
+    }
+}
+
+impl fuel_core_executor::ports::RelayerPort
+    for GenericDatabase<DataSource<Relayer, RegularStage<Relayer>>, std::io::Empty>
+{
+    fn enabled(&self) -> bool {
+        todo!()
+    }
+
+    fn get_events(&self, _da_height: &DaBlockHeight) -> anyhow::Result<Vec<Event>> {
+        todo!()
     }
 }
 

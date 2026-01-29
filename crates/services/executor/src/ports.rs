@@ -38,6 +38,8 @@ use alloc::{
 use std::borrow::Cow;
 
 use core::future::Future;
+#[cfg(feature = "std")]
+use fuel_core_types::services::txpool::PoolTransaction;
 
 /// The wrapper around either `Transaction` or `CheckedTransaction`.
 #[allow(clippy::large_enum_variant)]
@@ -122,6 +124,14 @@ impl MaybeCheckedTransaction {
             }
         }
     }
+
+    pub fn is_blob(&self) -> bool {
+        matches!(
+            self,
+            MaybeCheckedTransaction::CheckedTransaction(CheckedTransaction::Blob(_), _)
+                | MaybeCheckedTransaction::Transaction(Transaction::Blob(_))
+        )
+    }
 }
 
 impl TransactionExt for MaybeCheckedTransaction {
@@ -147,6 +157,13 @@ impl TransactionExt for MaybeCheckedTransaction {
             MaybeCheckedTransaction::Transaction(tx) => tx.max_gas(consensus_params),
         }
     }
+
+    fn size(&self) -> usize {
+        match self {
+            MaybeCheckedTransaction::CheckedTransaction(tx, _) => tx.size(),
+            MaybeCheckedTransaction::Transaction(tx) => tx.size(),
+        }
+    }
 }
 
 pub trait TransactionsSource {
@@ -156,8 +173,9 @@ pub trait TransactionsSource {
     fn next(
         &self,
         gas_limit: u64,
-        tx_count_limit: u16,
-        block_transaction_size_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] tx_count_limit: u16,
+        #[cfg(feature = "u32-tx-count")] tx_count_limit: u32,
+        block_transaction_size_limit: u64,
     ) -> Vec<MaybeCheckedTransaction>;
 }
 
@@ -189,4 +207,40 @@ pub trait PreconfirmationSenderPort {
         &self,
         preconfirmations: Vec<Preconfirmation>,
     ) -> impl Future<Output = ()> + Send;
+}
+
+#[cfg(feature = "std")]
+impl From<PoolTransaction> for MaybeCheckedTransaction {
+    fn from(value: PoolTransaction) -> Self {
+        match value {
+            PoolTransaction::Script(tx, m) => {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    CheckedTransaction::Script(tx),
+                    m.version,
+                )
+            }
+            PoolTransaction::Create(tx, m) => {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    CheckedTransaction::Create(tx),
+                    m.version,
+                )
+            }
+            PoolTransaction::Upgrade(tx, m) => {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    CheckedTransaction::Upgrade(tx),
+                    m.version,
+                )
+            }
+            PoolTransaction::Upload(tx, m) => {
+                MaybeCheckedTransaction::CheckedTransaction(
+                    CheckedTransaction::Upload(tx),
+                    m.version,
+                )
+            }
+            PoolTransaction::Blob(tx, m) => MaybeCheckedTransaction::CheckedTransaction(
+                CheckedTransaction::Blob(tx),
+                m.version,
+            ),
+        }
+    }
 }

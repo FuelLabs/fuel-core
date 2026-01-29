@@ -1,7 +1,25 @@
+use crate::{
+    Constraints,
+    config::ServiceChannelLimits,
+    error::{
+        Error,
+        InsertionErrorType,
+    },
+    pending_pool::PendingPool,
+    ports::{
+        TxPoolPersistentStorage,
+        TxStatusManager as TxStatusManagerTrait,
+    },
+    service::{
+        TxInfo,
+        TxPool,
+    },
+};
 use fuel_core_services::TaskNextAction;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     fuel_tx::{
+        ContractId,
         Transaction,
         TxId,
     },
@@ -14,6 +32,7 @@ use fuel_core_types::{
     },
 };
 use std::{
+    collections::HashSet,
     iter,
     ops::Deref,
     sync::Arc,
@@ -34,24 +53,6 @@ use tokio::{
     time::{
         Interval,
         MissedTickBehavior,
-    },
-};
-
-use crate::{
-    Constraints,
-    config::ServiceChannelLimits,
-    error::{
-        Error,
-        InsertionErrorType,
-    },
-    pending_pool::PendingPool,
-    ports::{
-        TxPoolPersistentStorage,
-        TxStatusManager as TxStatusManagerTrait,
-    },
-    service::{
-        TxInfo,
-        TxPool,
     },
 };
 
@@ -208,7 +209,7 @@ pub(super) enum PoolInsertRequest {
 pub(super) enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
-        transactions: oneshot::Sender<Vec<ArcPoolTx>>,
+        transactions: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>)>,
     },
 }
 
@@ -297,13 +298,16 @@ where
                     Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, transactions }) => {
                         self.extract_block_transactions(constraints, transactions);
                     }
-                    None => return TaskNextAction::Stop,
+                    None => {
+                        return TaskNextAction::Stop
+                    },
                 }
             }
+            // TODO: Should we hide this behind a `p2p` feature?
             res = self.preconfirmations_update_listener.recv() => {
                 let (tx_id, status) = match res {
                     Ok(res) => res,
-                    Err(_) => return TaskNextAction::Stop,
+                    Err(e) => return TaskNextAction::ErrorContinue(e.into()),
                 };
                 self.process_preconfirmed_transaction(tx_id, status);
             }
@@ -476,10 +480,10 @@ where
     fn extract_block_transactions(
         &mut self,
         constraints: Constraints,
-        blocks: oneshot::Sender<Vec<ArcPoolTx>>,
+        blocks: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>)>,
     ) {
-        let txs = self.pool.extract_transactions_for_block(constraints);
-        if blocks.send(txs).is_err() {
+        let txs = self.pool.extract_transactions_for_block(&constraints);
+        if blocks.send((txs, constraints.excluded_contracts)).is_err() {
             tracing::error!("Failed to send block transactions");
         }
     }

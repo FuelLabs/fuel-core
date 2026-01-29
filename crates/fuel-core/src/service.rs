@@ -3,6 +3,18 @@ use std::{
     sync::Arc,
 };
 
+use self::adapters::BlockImporterAdapter;
+use crate::{
+    combined_database::{
+        CombinedDatabase,
+        ShutdownListener,
+    },
+    database::Database,
+    service::{
+        adapters::PoAAdapter,
+        sub_services::TxPoolSharedState,
+    },
+};
 use adapters::{
     TxStatusManagerAdapter,
     ready_signal::ReadySignal,
@@ -43,22 +55,7 @@ use fuel_core_storage::{
 use fuel_core_types::{
     blockchain::consensus::Consensus,
     fuel_types::BlockHeight,
-};
-
-use self::adapters::BlockImporterAdapter;
-use crate::{
-    combined_database::{
-        CombinedDatabase,
-        ShutdownListener,
-    },
-    database::Database,
-    service::{
-        adapters::{
-            ExecutorAdapter,
-            PoAAdapter,
-        },
-        sub_services::TxPoolSharedState,
-    },
+    services::block_importer::UncommittedResult,
 };
 
 #[cfg(feature = "rpc")]
@@ -94,8 +91,12 @@ pub struct SharedState {
     pub database: CombinedDatabase,
     /// Subscribe to new block production.
     pub block_importer: BlockImporterAdapter,
+    #[cfg(all(not(feature = "no-parallel-executor"), feature = "parallel-executor"))]
     /// The executor to validate blocks.
-    pub executor: ExecutorAdapter,
+    pub executor: crate::service::adapters::ParallelExecutorAdapter,
+    #[cfg(any(feature = "no-parallel-executor", not(feature = "parallel-executor")))]
+    /// The executor to validate blocks.
+    pub executor: crate::service::adapters::ExecutorAdapter,
     /// The config of the service.
     pub config: Config,
     /// The compression service shared data.
@@ -397,7 +398,10 @@ impl FuelService {
             )
             .await?;
 
-            self.shared.block_importer.commit_result(result).await?;
+            let (result, changes) = result.into();
+            let res = UncommittedResult::new(result, StorageChanges::Changes(changes));
+
+            self.shared.block_importer.commit_result(res).await?;
         }
 
         // repopulate missing tables

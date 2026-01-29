@@ -1,3 +1,5 @@
+#[cfg(feature = "parallel-executor")]
+use crate::service::adapters::ParallelExecutorAdapter;
 use crate::{
     database::{
         Database,
@@ -19,20 +21,12 @@ use fuel_core_importer::{
     },
 };
 use fuel_core_storage::{
-    MerkleRoot,
     Result as StorageResult,
-    StorageAsRef,
     iter::{
         IterDirection,
         IteratorOverTable,
     },
-    tables::{
-        FuelBlocks,
-        merkle::{
-            DenseMetadataKey,
-            FuelBlockMerkleMetadata,
-        },
-    },
+    tables::FuelBlocks,
     transactional::{
         Changes,
         StorageChanges,
@@ -62,11 +56,27 @@ use itertools::Itertools;
 use std::sync::Arc;
 
 impl BlockImporterAdapter {
+    #[cfg(not(feature = "parallel-executor"))]
     pub fn new(
         chain_id: ChainId,
         config: Config,
         database: Database,
         executor: ExecutorAdapter,
+        verifier: VerifierAdapter,
+    ) -> Self {
+        let importer = Importer::new(chain_id, config, database, executor, verifier);
+        Self {
+            block_importer: Arc::new(importer),
+        }
+    }
+
+    #[cfg(feature = "parallel-executor")]
+    pub fn new(
+        chain_id: ChainId,
+        config: Config,
+        database: Database,
+        #[cfg(not(feature = "no-parallel-executor"))] executor: ParallelExecutorAdapter,
+        #[cfg(feature = "no-parallel-executor")] executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
         let importer = Importer::new(chain_id, config, database, executor, verifier);
@@ -101,13 +111,6 @@ impl ImporterDatabase for Database {
             .transpose()
     }
 
-    fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>> {
-        Ok(self
-            .storage_as_ref::<FuelBlockMerkleMetadata>()
-            .get(&DenseMetadataKey::Latest)?
-            .map(|cow| *cow.root()))
-    }
-
     fn commit_changes(&mut self, changes: StorageChanges) -> StorageResult<()> {
         commit_changes_with_height_update(self, changes, |iter| {
             iter.iter_all_keys::<FuelBlocks>(Some(IterDirection::Reverse))
@@ -122,6 +125,16 @@ impl Validator for ExecutorAdapter {
         block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
         self.executor.validate(block)
+    }
+}
+
+#[cfg(feature = "parallel-executor")]
+impl Validator for ParallelExecutorAdapter {
+    fn validate(
+        &self,
+        _block: &Block,
+    ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
+        todo!("Implement me please")
     }
 }
 
@@ -142,8 +155,30 @@ impl WasmChecker for ExecutorAdapter {
     }
 }
 
+#[cfg(feature = "wasm-executor")]
+#[cfg(feature = "parallel-executor")]
+impl WasmChecker for ParallelExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        unimplemented!("no validation yet")
+    }
+}
+
 #[cfg(not(feature = "wasm-executor"))]
 impl WasmChecker for ExecutorAdapter {
+    fn validate_uploaded_wasm(
+        &self,
+        _wasm_root: &Bytes32,
+    ) -> Result<(), WasmValidityError> {
+        Err(WasmValidityError::NotEnabled)
+    }
+}
+
+#[cfg(not(feature = "wasm-executor"))]
+#[cfg(feature = "parallel-executor")]
+impl WasmChecker for ParallelExecutorAdapter {
     fn validate_uploaded_wasm(
         &self,
         _wasm_root: &Bytes32,

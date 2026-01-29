@@ -1,19 +1,6 @@
-use std::sync::Arc;
-
-use fuel_core_types::{
-    fuel_tx::{
-        Transaction,
-        TxId,
-    },
-    services::txpool::ArcPoolTx,
-};
-use tokio::sync::{
-    mpsc,
-    oneshot::{
-        self,
-        error::TryRecvError,
-    },
-    watch,
+use std::{
+    collections::HashSet,
+    sync::Arc,
 };
 
 use crate::{
@@ -28,6 +15,22 @@ use crate::{
         TxInfo,
         WritePoolRequest,
     },
+};
+use fuel_core_types::{
+    fuel_tx::{
+        Transaction,
+        TxId,
+    },
+    fuel_types::ContractId,
+    services::txpool::ArcPoolTx,
+};
+use tokio::sync::{
+    mpsc,
+    oneshot::{
+        self,
+        error::TryRecvError,
+    },
+    watch,
 };
 
 #[derive(Clone)]
@@ -90,7 +93,7 @@ impl SharedState {
         loop {
             let result = select_transactions_receiver.try_recv();
             match result {
-                Ok(txs) => {
+                Ok((txs, _)) => {
                     return Ok(txs);
                 }
                 Err(TryRecvError::Empty) => continue,
@@ -99,6 +102,26 @@ impl SharedState {
                 }
             }
         }
+    }
+
+    pub async fn extract_transactions_for_block_async(
+        &self,
+        constraints: Constraints,
+    ) -> Result<(Vec<ArcPoolTx>, HashSet<ContractId>), Error> {
+        let (select_transactions_sender, select_transactions_receiver) =
+            oneshot::channel();
+        self.select_transactions_requests_sender
+            .try_send(
+                pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
+                    constraints,
+                    transactions: select_transactions_sender,
+                },
+            )
+            .map_err(|_| Error::ServiceCommunicationFailed)?;
+
+        select_transactions_receiver
+            .await
+            .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {

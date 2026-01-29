@@ -38,6 +38,7 @@ random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers", "dep:proptest"]
 aws-kms = ["dep:aws-sdk-kms"]
 fault-proving = []
+u32-tx-pointer = ["fuel-vm-private/u32-tx-pointer"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -49,7 +50,7 @@ ed25519 = { workspace = true, default-features = false }
 ed25519-dalek = { workspace = true, default-features = false }
 educe = { workspace = true, optional = true }
 fuel-vm-private = { workspace = true, default-features = false, features = [
-  "alloc",
+  "alloc"
 ] }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 parking_lot = { workspace = true }

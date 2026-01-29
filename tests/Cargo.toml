@@ -13,7 +13,7 @@ autobenches = false
 autotests = false
 
 [features]
-default = ["fuel-core/default"]
+default = ["fuel-core/default", "fuel-core/no-parallel-executor"]
 only-p2p = ["fuel-core-p2p"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-bin/aws-kms"]
 fault-proving = [
@@ -29,6 +29,7 @@ fault-proving = [
 ]
 rpc = ["fuel-core/rpc", "fuel-core-bin/rpc", "fuel-core-client/rpc"]
 local_rpc = []
+parallel-executor = ["fuel-core/parallel-executor"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -100,7 +101,7 @@ alloy-provider = { workspace = true, default-features = false, features = ["reqw
 alloy-rpc-types-eth = { workspace = true }
 aws-config = { workspace = true }
 flate2 = { workspace = true }
-fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
+fuel-core-executor = { workspace = true }
 pretty_assertions = "1.4"
 proptest = { workspace = true }
 regex = "1"

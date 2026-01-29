@@ -1,6 +1,7 @@
 use super::{
     Bytes32,
     HexString,
+    U16,
 };
 use crate::client::schema::{
     BlockId,
@@ -9,7 +10,6 @@ use crate::client::schema::{
     Signature,
     Tai64Timestamp,
     TransactionId,
-    U16,
     U32,
     U64,
     schema,

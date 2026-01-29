@@ -174,8 +174,10 @@ mod tests {
         /// The executor already has these parameters, and this field allows us
         /// to override the existing value.
         pub consensus_parameters: ConsensusParameters,
-        /// Default mode for `forbid_fake_coins` in the executor.
-        pub forbid_fake_coins_default: bool,
+        /// Default mode for `forbid_unauthorized_inputs` in the executor.
+        pub forbid_unauthorized_inputs_default: bool,
+        /// Default mode for `forbid_fake_utxo` in the executor.
+        pub forbid_fake_utxo_default: bool,
     }
 
     #[derive(Clone, Debug)]
@@ -217,7 +219,8 @@ mod tests {
         config: Config,
     ) -> Executor<Database, DisabledRelayer> {
         let executor_config = fuel_core_upgradable_executor::config::Config {
-            forbid_fake_coins_default: config.forbid_fake_coins_default,
+            forbid_unauthorized_inputs_default: config.forbid_unauthorized_inputs_default,
+            forbid_fake_utxo_default: config.forbid_fake_utxo_default,
             allow_syscall: true,
             native_executor_version: None,
             allow_historical_execution: true,
@@ -823,7 +826,8 @@ mod tests {
             let mut validator = create_executor(
                 Default::default(),
                 Config {
-                    forbid_fake_coins_default: false,
+                    forbid_unauthorized_inputs_default: false,
+                    forbid_fake_utxo_default: false,
                     ..Default::default()
                 },
             );
@@ -1156,7 +1160,8 @@ mod tests {
 
         // setup executors with utxo-validation enabled
         let config = Config {
-            forbid_fake_coins_default: true,
+            forbid_unauthorized_inputs_default: true,
+            forbid_fake_utxo_default: true,
             ..Default::default()
         };
         let producer = create_executor(Database::default(), config.clone());
@@ -1284,7 +1289,8 @@ mod tests {
         let mut executor = create_executor(
             Database::default(),
             Config {
-                forbid_fake_coins_default: true,
+                forbid_unauthorized_inputs_default: true,
+                forbid_fake_utxo_default: true,
                 ..Default::default()
             },
         );
@@ -1352,7 +1358,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: true,
+                forbid_unauthorized_inputs_default: true,
+                forbid_fake_utxo_default: true,
                 ..Default::default()
             },
         );
@@ -1421,7 +1428,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: true,
+                forbid_unauthorized_inputs_default: true,
+                forbid_fake_utxo_default: true,
                 ..Default::default()
             },
         );
@@ -1470,7 +1478,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: true,
+                forbid_unauthorized_inputs_default: true,
+                forbid_fake_utxo_default: true,
                 ..Default::default()
             },
         );
@@ -1667,7 +1676,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_unauthorized_inputs_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -1736,7 +1746,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_unauthorized_inputs_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -1845,7 +1856,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_unauthorized_inputs_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -1988,7 +2000,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -2116,7 +2128,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_unauthorized_inputs_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -2281,7 +2294,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -2477,7 +2490,7 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: false,
+                forbid_fake_utxo_default: false,
                 ..Default::default()
             },
         );
@@ -2728,7 +2741,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                forbid_fake_coins_default: true,
+                forbid_unauthorized_inputs_default: true,
+                forbid_fake_utxo_default: true,
                 ..Default::default()
             },
         );
@@ -3016,7 +3030,8 @@ mod tests {
         create_executor(
             database,
             Config {
-                forbid_fake_coins_default: true,
+                forbid_unauthorized_inputs_default: true,
+                forbid_fake_utxo_default: true,
                 ..Default::default()
             },
         )
@@ -3443,7 +3458,8 @@ mod tests {
         let mut executor = create_executor(
             database.clone(),
             Config {
-                forbid_fake_coins_default: true,
+                forbid_unauthorized_inputs_default: true,
+                forbid_fake_utxo_default: true,
                 ..Default::default()
             },
         );
@@ -3507,7 +3523,8 @@ mod tests {
         let mut executor = create_executor(
             database.clone(),
             Config {
-                forbid_fake_coins_default: true,
+                forbid_unauthorized_inputs_default: true,
+                forbid_fake_utxo_default: true,
                 ..Default::default()
             },
         );
@@ -3529,7 +3546,8 @@ mod tests {
 
         let consensus_parameters = ConsensusParameters::default();
         let config = Config {
-            forbid_fake_coins_default: true,
+            forbid_unauthorized_inputs_default: true,
+            forbid_fake_utxo_default: true,
             consensus_parameters: consensus_parameters.clone(),
         };
 
@@ -3723,7 +3741,8 @@ mod tests {
             .finalize();
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_unauthorized_inputs_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
@@ -3787,7 +3806,8 @@ mod tests {
             .finalize();
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_unauthorized_inputs_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
@@ -3865,7 +3885,7 @@ mod tests {
         let tx_id = tx.id(&ChainId::default());
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
@@ -3975,7 +3995,7 @@ mod tests {
         let tx3_id = tx3.id(&ChainId::default());
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
@@ -4079,7 +4099,7 @@ mod tests {
             .finalize();
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let exec = create_executor(Database::default(), config.clone());
@@ -4134,7 +4154,7 @@ mod tests {
             .finalize();
 
         let config = Config {
-            forbid_fake_coins_default: false,
+            forbid_fake_utxo_default: false,
             ..Default::default()
         };
         let exec = create_executor(Database::default(), config.clone());
@@ -4235,7 +4255,7 @@ mod tests {
         }
 
         impl fuel_core_executor::ports::TransactionsSource for BadTransactionsSource {
-            fn next(&self, _: u64, _: u16, _: u32) -> Vec<MaybeCheckedTransaction> {
+            fn next(&self, _: u64, _: u16, _: u64) -> Vec<MaybeCheckedTransaction> {
                 std::mem::take(&mut *self.transactions.lock().unwrap())
             }
         }
@@ -4924,7 +4944,7 @@ mod tests {
         fn relayer_db_with_mint_relayed_tx(
             da_height: u64,
             block_height: u32,
-            tx_count: u16,
+            tx_count: u32,
         ) -> Database<Relayer> {
             let mut relayed_tx = RelayedTransaction::default();
             let base_asset_id = AssetId::BASE;

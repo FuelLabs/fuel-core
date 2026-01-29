@@ -12,7 +12,6 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_storage::{
     Error as StorageError,
-    MerkleRoot,
     Result as StorageResult,
     transactional::{
         Changes,
@@ -54,25 +53,17 @@ mockall::mock! {
         where
             Self: 'a;
 
-        fn storage_transaction(&self, changes: Changes) -> MockDatabaseTransaction;
+        fn storage_transaction(&self) -> MockDatabaseTransaction;
     }
 
     impl ImporterDatabase for Database {
         fn latest_block_height(&self) -> StorageResult<Option<BlockHeight>>;
-
-        fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
 
         fn commit_changes(
             &mut self,
             changes: StorageChanges,
         ) -> StorageResult<()>;
     }
-}
-
-fn u32_to_merkle_root(number: u32) -> MerkleRoot {
-    let mut root = [0; 32];
-    root[0..4].copy_from_slice(&number.to_be_bytes());
-    MerkleRoot::from(root)
 }
 
 fn genesis(height: u32) -> SealedBlock {
@@ -103,12 +94,9 @@ where
 {
     move || {
         let result_height = result.clone();
-        let result_root = result.clone();
         let mut db = MockDatabase::default();
         db.expect_latest_block_height()
             .returning(move || result_height().map(|v| v.map(Into::into)));
-        db.expect_latest_block_root()
-            .returning(move || result_root().map(|v| v.map(u32_to_merkle_root)));
         db.expect_commit_changes()
             .times(commits)
             .returning(|_| Ok(()));
@@ -116,20 +104,15 @@ where
     }
 }
 
-fn db_transaction<H, B>(
-    height: H,
+fn db_transaction<B>(
     store_block: B,
 ) -> impl Fn() -> MockDatabaseTransaction + Sync + Send + 'static + Clone
 where
-    H: Fn() -> StorageResult<Option<u32>> + Sync + Send + 'static + Clone,
     B: Fn() -> StorageResult<bool> + Sync + Send + 'static + Clone,
 {
     move || {
-        let height = height.clone();
         let store_block = store_block.clone();
         let mut db = MockDatabaseTransaction::default();
-        db.expect_latest_block_root()
-            .returning(move || height().map(|v| v.map(u32_to_merkle_root)));
         db.expect_store_new_block()
             .returning(move |_, _| store_block());
         db.expect_into_changes().returning(Changes::default);
@@ -202,42 +185,35 @@ where
 #[test_case(
     genesis(0),
     underlying_db(ok(None), 1),
-    db_transaction(ok(None), ok(true))
+    db_transaction(ok(true))
     => Ok(());
     "successfully imports genesis block when latest block not found"
 )]
 #[test_case(
     genesis(113),
     underlying_db(ok(None), 1),
-    db_transaction(ok(None), ok(true))
+    db_transaction(ok(true))
     => Ok(());
     "successfully imports block at arbitrary height when executor db expects it and last block not found"
 )]
 #[test_case(
     genesis(0),
     underlying_db(storage_failure, 0),
-    db_transaction(ok(Some(0)), ok(true))
+    db_transaction(ok(true))
     => Err(storage_failure_error());
     "fails to import genesis when underlying database fails"
 )]
 #[test_case(
     genesis(0),
     underlying_db(ok(Some(0)), 0),
-    db_transaction(ok(Some(0)), ok(true))
+    db_transaction(ok(true))
     => Err(Error::InvalidUnderlyingDatabaseGenesisState);
     "fails to import genesis block when already exists"
 )]
 #[test_case(
-    genesis(1),
-    underlying_db(ok(None), 0),
-    db_transaction(ok(Some(0)), ok(true))
-    => Err(Error::InvalidDatabaseStateAfterExecution(None, Some(u32_to_merkle_root(0))));
-    "fails to import genesis block when next height is not 0"
-)]
-#[test_case(
     genesis(0),
     underlying_db(ok(None), 0),
-    db_transaction(ok(None), ok(false))
+    db_transaction(ok(false))
     => Err(Error::NotUnique(0u32.into()));
     "fails to import genesis block when block exists for height 0"
 )]
@@ -254,63 +230,49 @@ async fn commit_result_genesis(
 #[test_case(
     poa_block(1),
     underlying_db(ok(Some(0)), 1),
-    db_transaction(ok(Some(0)), ok(true))
+    db_transaction(ok(true))
     => Ok(());
     "successfully imports block at height 1 when latest block is genesis"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(112)), 1),
-    db_transaction(ok(Some(112)), ok(true))
+    db_transaction(ok(true))
     => Ok(());
     "successfully imports block at arbitrary height when latest block height is one fewer and executor db expects it"
 )]
 #[test_case(
     poa_block(0),
     underlying_db(ok(Some(0)), 0),
-    db_transaction(ok(Some(1)), ok(true))
+    db_transaction(ok(true))
     => Err(Error::ZeroNonGenericHeight);
     "fails to import PoA block with height 0"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(111)), 0),
-    db_transaction(ok(Some(113)), ok(true))
+    db_transaction(ok(true))
     => Err(Error::IncorrectBlockHeight(112u32.into(), 113u32.into()));
     "fails to import block at height 113 when latest block height is 111"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(114)), 0),
-    db_transaction(ok(Some(113)), ok(true))
+    db_transaction(ok(true))
     => Err(Error::IncorrectBlockHeight(115u32.into(), 113u32.into()));
     "fails to import block at height 113 when latest block height is 114"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(112)), 0),
-    db_transaction(ok(Some(114)), ok(true))
-    => Err(Error::InvalidDatabaseStateAfterExecution(Some(u32_to_merkle_root(112u32)), Some(u32_to_merkle_root(114u32))));
-    "fails to import block 113 when executor db expects height 114"
-)]
-#[test_case(
-    poa_block(113),
-    underlying_db(ok(Some(112)), 0),
-    db_transaction(storage_failure, ok(true))
-    => Err(storage_failure_error());
-    "fails to import block when executor db fails to find latest block"
-)]
-#[test_case(
-    poa_block(113),
-    underlying_db(ok(Some(112)), 0),
-    db_transaction(ok(Some(112)), ok(false))
+    db_transaction(ok(false))
     => Err(Error::NotUnique(113u32.into()));
     "fails to import block when block exists"
 )]
 #[test_case(
     poa_block(113),
     underlying_db(ok(Some(112)), 0),
-    db_transaction(ok(Some(112)), storage_failure)
+    db_transaction(storage_failure)
     => Err(storage_failure_error());
     "fails to import block when executor db fails to find block"
 )]
@@ -332,8 +294,7 @@ where
         commit_result_assert(sealed_block.clone(), underlying_db(), db_transaction_1)
             .await;
     let mut db = underlying_db();
-    db.expect_storage_transaction()
-        .returning(move |_| db_transaction());
+    db.expect_storage_transaction().returning(db_transaction);
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         db,
@@ -352,7 +313,7 @@ async fn commit_result_assert(
 ) -> Result<(), Error> {
     underlying_db
         .expect_storage_transaction()
-        .returning(move |_| db_transaction());
+        .returning(db_transaction);
     let expected_to_broadcast = sealed_block.clone();
     let importer =
         Importer::default_config(underlying_db, executor(ex_result), verifier(ok(())));
@@ -511,7 +472,7 @@ where
     let previous_height = expected_height.checked_sub(1).unwrap_or_default();
     let mut db = underlying_db(ok(Some(previous_height)), commits)();
     db.expect_storage_transaction()
-        .returning(move |_| db_transaction(ok(Some(previous_height)), ok(true))());
+        .returning(move || db_transaction(ok(true))());
     let execute_and_commit_result = execute_and_commit_assert(
         sealed_block,
         db,

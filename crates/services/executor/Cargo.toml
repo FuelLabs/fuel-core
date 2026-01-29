@@ -15,7 +15,7 @@ default = ["std"]
 std = ["fuel-core-types/std", "fuel-core-storage/std"]
 alloc = ["fuel-core-types/alloc", "fuel-core-storage/alloc"]
 test-helpers = ["fuel-core-types/test-helpers", "fuel-core-storage/test-helpers"]
-limited-tx-count = []
+u32-tx-count = ["fuel-core-types/u32-tx-pointer"]
 fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-proving"]
 
 [dependencies]

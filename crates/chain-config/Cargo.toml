@@ -31,6 +31,7 @@ test-helpers = [
     "fuel-core-types/test-helpers",
 ]
 fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-proving"]
+u32-tx-count = ["fuel-core-types/u32-tx-pointer"]
 
 [dependencies]
 anyhow = { workspace = true }

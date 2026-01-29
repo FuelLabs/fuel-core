@@ -1,3 +1,5 @@
+#[cfg(feature = "parallel-executor")]
+use crate::service::adapters::ParallelExecutorAdapter;
 use crate::{
     database::OnChainIterableKeyValueView,
     service::{
@@ -38,7 +40,7 @@ use fuel_core_storage::{
         StateTransitionBytecodeVersions,
         Transactions,
     },
-    transactional::Changes,
+    transactional::StorageChanges,
 };
 use fuel_core_types::{
     blockchain::{
@@ -61,6 +63,7 @@ use fuel_core_types::{
         Bytes32,
     },
     services::{
+        Uncommitted,
         block_producer::Components,
         executor::{
             DryRunResult,
@@ -70,6 +73,9 @@ use fuel_core_types::{
         },
     },
 };
+
+#[cfg(feature = "parallel-executor")]
+use fuel_core_types::services::executor::Error as ExecutorError;
 use std::{
     borrow::Cow,
     sync::Arc,
@@ -102,7 +108,7 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
         &self,
         component: Components<TransactionsSource>,
         deadline: Instant,
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let new_tx_waiter = NewTxWaiter::new(self.new_txs_watcher.clone(), deadline);
         self.executor
             .produce_without_commit_with_source(
@@ -111,6 +117,29 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource> for ExecutorAd
                 self.preconfirmation_sender.clone(),
             )
             .await
+            .map(|u| {
+                let (result, changes) = u.into();
+                Uncommitted::new(result, StorageChanges::Changes(changes))
+            })
+    }
+}
+
+#[cfg(feature = "parallel-executor")]
+impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
+    for ParallelExecutorAdapter
+{
+    type Deadline = Instant;
+    async fn produce_without_commit(
+        &self,
+        component: Components<TransactionsSource>,
+        deadline: Instant,
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
+        self.executor
+            .lock()
+            .await
+            .produce_without_commit_with_source(component, deadline)
+            .await
+            .map_err(|e| ExecutorError::Other(format!("{:?}", e)))
     }
 }
 
@@ -120,8 +149,25 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>> for ExecutorAdap
         &self,
         component: Components<Vec<Transaction>>,
         _: (),
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
-        self.produce_without_commit_from_vector(component)
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
+        self.produce_without_commit_from_vector(component).map(|u| {
+            let (result, changes) = u.into();
+            Uncommitted::new(result, StorageChanges::Changes(changes))
+        })
+    }
+}
+
+#[cfg(feature = "parallel-executor")]
+impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>>
+    for ParallelExecutorAdapter
+{
+    type Deadline = ();
+    async fn produce_without_commit(
+        &self,
+        _component: Components<Vec<Transaction>>,
+        _: (),
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
+        unimplemented!("ParallelExecutorAdapter does not support produce_without_commit");
     }
 }
 
@@ -136,9 +182,22 @@ impl fuel_core_producer::ports::DryRunner for ExecutorAdapter {
         self.executor.dry_run(
             block,
             forbid_fake_coins,
+            forbid_fake_coins,
             at_height,
             record_storage_read_replay,
         )
+    }
+}
+#[cfg(feature = "parallel-executor")]
+impl fuel_core_producer::ports::DryRunner for ParallelExecutorAdapter {
+    fn dry_run(
+        &self,
+        _block: Components<Vec<Transaction>>,
+        _forbid_fake_coins: Option<bool>,
+        _at_height: Option<BlockHeight>,
+        _record_storage_read_replay: bool,
+    ) -> ExecutorResult<DryRunResult> {
+        unimplemented!("ParallelExecutorAdapter does not support dry run");
     }
 }
 
@@ -148,6 +207,16 @@ impl fuel_core_producer::ports::StorageReadReplayRecorder for ExecutorAdapter {
         block: &Block,
     ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
         self.executor.storage_read_replay(block)
+    }
+}
+
+#[cfg(feature = "parallel-executor")]
+impl fuel_core_producer::ports::StorageReadReplayRecorder for ParallelExecutorAdapter {
+    fn storage_read_replay(
+        &self,
+        _block: &Block,
+    ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
+        unimplemented!("ParallelExecutorAdapter does not support storage read replay");
     }
 }
 

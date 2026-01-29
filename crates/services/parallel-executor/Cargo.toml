@@ -11,18 +11,28 @@ rust-version = { workspace = true }
 description = "Fuel Block Parallel Executor"
 
 [features]
-wasm-executor = ["fuel-core-upgradable-executor/wasm-executor"]
+fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]
-fuel-core-executor = { workspace = true, features = ["std"] }
+anyhow = { workspace = true }
+derive_more = { workspace = true, features = ["display"] }
+fuel-core-executor = { workspace = true, features = ["std", "u32-tx-count"] }
 fuel-core-storage = { workspace = true, features = ["std"] }
-fuel-core-types = { workspace = true, features = ["std"] }
-fuel-core-upgradable-executor = { workspace = true, features = ["std"] }
+fuel-core-types = { workspace = true, features = ["std", "test-helpers"] }
 futures = { workspace = true, features = ["std"] }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync", "macros"] }
+fxhash = { version = "0.2.1", default-features = false }
+parking_lot = { workspace = true }
+tokio = { workspace = true, features = [
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "time",
+] }
+tracing = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["test-helpers"] }
+fuel-core-trace = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers", "serde"] }
 rand = { workspace = true }

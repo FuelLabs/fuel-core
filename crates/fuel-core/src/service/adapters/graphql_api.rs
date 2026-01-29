@@ -38,6 +38,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use fuel_core_compression_service::storage::CompressedBlocks;
+use fuel_core_importer::ports::Validator;
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::{
     Result as StorageResult,
@@ -245,15 +246,15 @@ impl ChainStateProvider for ChainStateInfoProvider {
 }
 
 #[derive(Clone)]
-pub struct GraphQLBlockImporter {
+pub struct GraphQLBlockImporter<V> {
     block_importer_adapter: BlockImporterAdapter,
-    import_result_provider_adapter: ImportResultProvider,
+    import_result_provider_adapter: ImportResultProvider<V>,
 }
 
-impl GraphQLBlockImporter {
+impl<V> GraphQLBlockImporter<V> {
     pub fn new(
         block_importer_adapter: BlockImporterAdapter,
-        import_result_provider_adapter: ImportResultProvider,
+        import_result_provider_adapter: ImportResultProvider<V>,
     ) -> Self {
         Self {
             block_importer_adapter,
@@ -271,7 +272,7 @@ impl From<BlockAt> for import_result_provider::BlockAt {
     }
 }
 
-impl worker::BlockImporter for GraphQLBlockImporter {
+impl<V: Validator + Send + Sync> worker::BlockImporter for GraphQLBlockImporter<V> {
     fn block_events(&self) -> BoxStream<SharedImportResult> {
         self.block_importer_adapter.events_shared_result()
     }
