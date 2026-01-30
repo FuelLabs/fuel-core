@@ -93,7 +93,7 @@ impl<S, R, P> Executor<S, R, P> {
         config: Config,
     ) -> anyhow::Result<Self> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(config.number_of_cores.get())
+            .worker_threads(config.worker_count.get())
             .enable_all()
             .build()?;
 

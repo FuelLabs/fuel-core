@@ -14,6 +14,8 @@ use super::{
     config::DaCompressionMode,
     genesis::create_genesis_block,
 };
+#[cfg(all(feature = "parallel-executor", not(feature = "no-parallel-executor")))]
+use super::config::ExecutorMode;
 #[cfg(feature = "rpc")]
 use crate::database::database_description::on_chain::OnChain;
 #[cfg(feature = "relayer")]
@@ -240,7 +242,7 @@ pub fn init_sub_services(
             forbid_unauthorized_inputs_default: config.utxo_validation,
             forbid_fake_utxo_default: config.utxo_validation,
             allow_syscall: config.allow_syscall,
-            native_executor_version: config.native_executor_version,
+            native_executor_version: config.executor.native_executor_version,
             allow_historical_execution: config.historical_execution,
         };
         crate::service::adapters::ExecutorAdapter::new(
@@ -261,7 +263,7 @@ pub fn init_sub_services(
                     forbid_unauthorized_inputs_default: config.utxo_validation,
                     forbid_fake_utxo_default: config.utxo_validation,
                     allow_syscall: config.allow_syscall,
-                    native_executor_version: config.native_executor_version,
+                    native_executor_version: config.executor.native_executor_version,
                     allow_historical_execution: config.historical_execution,
                 };
             crate::service::adapters::ExecutorAdapter::new(
@@ -274,16 +276,41 @@ pub fn init_sub_services(
         }
         #[cfg(not(feature = "no-parallel-executor"))]
         {
-            let parallel_executor_config = fuel_core_parallel_executor::config::Config {
-                number_of_cores: config.executor_number_of_cores,
-            };
-            crate::service::adapters::ParallelExecutorAdapter::new(
-                database.on_chain().clone(),
-                database.relayer().clone(),
-                parallel_executor_config,
-                new_txs_watcher,
-                preconfirmation_sender.clone(),
-            )?
+            match config.executor.mode {
+                ExecutorMode::Normal => {
+                    let upgradable_executor_config =
+                        fuel_core_upgradable_executor::config::Config {
+                            forbid_unauthorized_inputs_default: config.utxo_validation,
+                            forbid_fake_utxo_default: config.utxo_validation,
+                            allow_syscall: config.allow_syscall,
+                            native_executor_version: config.executor.native_executor_version,
+                            allow_historical_execution: config.historical_execution,
+                        };
+                    let executor = crate::service::adapters::ExecutorAdapter::new(
+                        database.on_chain().clone(),
+                        database.relayer().clone(),
+                        upgradable_executor_config,
+                        new_txs_watcher,
+                        preconfirmation_sender.clone(),
+                    );
+                    crate::service::adapters::ParallelExecutorAdapter::from_native(
+                        executor,
+                    )
+                }
+                ExecutorMode::Parallel => {
+                    let parallel_executor_config =
+                        fuel_core_parallel_executor::config::Config {
+                            worker_count: config.executor.parallel.worker_count,
+                            metrics: config.executor.parallel.metrics,
+                        };
+                    crate::service::adapters::ParallelExecutorAdapter::new(
+                        database.on_chain().clone(),
+                        database.relayer().clone(),
+                        parallel_executor_config,
+                        preconfirmation_sender.clone(),
+                    )?
+                }
+            }
         }
     };
 

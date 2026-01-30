@@ -79,9 +79,7 @@ pub struct Config {
     pub expensive_subscriptions: bool,
     pub utxo_validation: bool,
     pub allow_syscall: bool,
-    pub native_executor_version: Option<StateTransitionBytecodeVersion>,
-    #[cfg(feature = "parallel-executor")]
-    pub executor_number_of_cores: NonZeroUsize,
+    pub executor: ExecutorConfig,
     pub block_production: Trigger,
     pub predefined_blocks_path: Option<PathBuf>,
     pub txpool: TxPoolConfig,
@@ -238,9 +236,15 @@ impl Config {
             allow_syscall: true,
             expensive_subscriptions: true,
             utxo_validation,
-            native_executor_version: Some(native_executor_version),
-            #[cfg(feature = "parallel-executor")]
-            executor_number_of_cores: NonZeroUsize::new(1).expect("1 is not zero"),
+            executor: ExecutorConfig {
+                native_executor_version: Some(native_executor_version),
+                mode: ExecutorMode::Normal,
+                #[cfg(feature = "parallel-executor")]
+                parallel: ParallelExecutorConfig {
+                    worker_count: NonZeroUsize::new(1).expect("1 is not zero"),
+                    metrics: false,
+                },
+            },
             snapshot_reader,
             block_production: Trigger::Instant,
             predefined_blocks_path: None,
@@ -351,6 +355,37 @@ impl From<&Config> for fuel_core_poa::pre_confirmation_signature_service::config
                 .key_rotation_interval,
         }
     }
+}
+
+#[derive(
+    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+)]
+#[strum(serialize_all = "kebab_case")]
+pub enum ExecutorMode {
+    Normal,
+    #[cfg(feature = "parallel-executor")]
+    Parallel,
+}
+
+impl Default for ExecutorMode {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutorConfig {
+    pub mode: ExecutorMode,
+    pub native_executor_version: Option<StateTransitionBytecodeVersion>,
+    #[cfg(feature = "parallel-executor")]
+    pub parallel: ParallelExecutorConfig,
+}
+
+#[cfg(feature = "parallel-executor")]
+#[derive(Clone, Debug)]
+pub struct ParallelExecutorConfig {
+    pub worker_count: NonZeroUsize,
+    pub metrics: bool,
 }
 
 #[derive(

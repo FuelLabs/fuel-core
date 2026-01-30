@@ -12,7 +12,10 @@ use fuel_core::{
         Config,
         DbType,
         FuelService,
-        config::GasPriceConfig,
+        config::{
+            ExecutorMode,
+            GasPriceConfig,
+        },
     },
     state::rocks_db::DatabaseConfig,
 };
@@ -108,6 +111,7 @@ pub struct TestSetupBuilder {
     pub database_config: DatabaseConfig,
     pub chain_config: Option<ChainConfig>,
     pub number_threads_pool_verif: usize,
+    pub executor_mode: ExecutorMode,
 }
 
 impl TestSetupBuilder {
@@ -261,18 +265,18 @@ impl TestSetupBuilder {
             ..GasPriceConfig::local_node()
         };
 
-        let mut config = Config {
-            utxo_validation: self.utxo_validation,
-            txpool,
-            block_production: self.trigger,
-            gas_price_config,
-            #[cfg(feature = "parallel-executor")]
-            executor_number_of_cores: NonZeroUsize::try_from(
-                self.number_threads_pool_verif,
-            )
-            .unwrap_or(NonZeroUsize::try_from(1).expect("1 is not 0")),
-            ..Config::local_node_with_configs(chain_conf, state)
-        };
+        let mut config = Config::local_node_with_configs(chain_conf, state);
+        config.utxo_validation = self.utxo_validation;
+        config.txpool = txpool;
+        config.block_production = self.trigger;
+        config.gas_price_config = gas_price_config;
+        config.executor.mode = self.executor_mode;
+        #[cfg(feature = "parallel-executor")]
+        {
+            config.executor.parallel.worker_count =
+                NonZeroUsize::try_from(self.number_threads_pool_verif)
+                    .unwrap_or(NonZeroUsize::try_from(1).expect("1 is not 0"));
+        }
         config.combined_db_config.database_config = self.database_config;
 
         let srv = FuelService::new_node(config).await.unwrap();
@@ -305,6 +309,7 @@ impl Default for TestSetupBuilder {
             database_config: DatabaseConfig::config_for_tests(),
             chain_config: None,
             number_threads_pool_verif: 0,
+            executor_mode: ExecutorMode::Normal,
         }
     }
 }

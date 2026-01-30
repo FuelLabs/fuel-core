@@ -1,6 +1,9 @@
 // Define arguments
 
-use fuel_core::service::config::Trigger;
+use fuel_core::service::config::{
+    ExecutorMode,
+    Trigger,
+};
 use fuel_core_chain_config::{
     ChainConfig,
     CoinConfig,
@@ -206,6 +209,7 @@ fn main() {
     test_builder.gas_limit = Some(gas_limit);
     test_builder.block_size_limit = Some(u64::MAX);
     test_builder.number_threads_pool_verif = args.number_of_cores;
+    test_builder.executor_mode = ExecutorMode::Parallel;
     test_builder.max_txs = transactions.len();
     // spin up node
     let rt = tokio::runtime::Builder::new_multi_thread()

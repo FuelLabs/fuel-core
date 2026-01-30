@@ -324,7 +324,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             tx_left: u32::MAX,
             tx_size_left: consensus_parameters.block_transaction_size_limit(),
             gas_left: consensus_parameters.block_gas_limit(),
-            worker_pool: WorkerPool::new(config.number_of_cores.get()),
+            worker_pool: WorkerPool::new(config.worker_count.get()),
             memory_pool,
             config,
             current_execution_tasks: FuturesUnordered::new(),
@@ -373,7 +373,7 @@ where
         let initial_gas_per_worker = self
             .consensus_parameters
             .block_gas_limit()
-            .checked_div(self.config.number_of_cores.get() as u64)
+            .checked_div(self.config.worker_count.get() as u64)
             .ok_or(SchedulerError::InternalError(
                 "Invalid block gas limit".to_string(),
             ))?
