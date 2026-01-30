@@ -54,7 +54,7 @@ use test_helpers::builder::{
     TestSetupBuilder,
 };
 
-const PATH_SNAPSHOT: &str = "/Users/green/fuel/fuel-core-2/benches/local-testnet";
+const PATH_SNAPSHOT: &str = "./local-testnet";
 
 fn checked_parameters() -> CheckPredicateParams {
     let metadata = SnapshotMetadata::read(PATH_SNAPSHOT).unwrap();
@@ -135,6 +135,9 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 }
 
 fn main() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::WARN)
+        .try_init();
     let args = Args::parse();
     let mut rng = StdRng::seed_from_u64(2322u64);
 
@@ -200,7 +203,7 @@ fn main() {
             Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
         })
         .sum();
-    test_builder.gas_limit = Some(gas_limit * 4);
+    test_builder.gas_limit = Some(gas_limit);
     test_builder.block_size_limit = Some(u64::MAX);
     test_builder.number_threads_pool_verif = args.number_of_cores;
     test_builder.max_txs = transactions.len();
@@ -241,6 +244,7 @@ fn main() {
                 .unwrap()
                 .unwrap();
             assert_eq!(block.entity.transactions().len(), transactions.len() + 1);
+            println!("transaction count: {}", block.entity.transactions().len());
             block
         }
     });

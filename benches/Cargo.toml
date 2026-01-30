@@ -13,6 +13,7 @@ default = [
     "fuel-core/u32-tx-count",
     "fuel-core-chain-config/u32-tx-count",
     "fuel-core-types/u32-tx-pointer",
+    "parallel-executor"
 ]
 fault-proving = [
     "fuel-core-types/fault-proving",

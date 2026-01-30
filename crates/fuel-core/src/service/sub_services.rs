@@ -61,6 +61,7 @@ use crate::{
         },
     },
 };
+
 use fuel_core_compression_service::service::new_service as new_compression_service;
 use fuel_core_gas_price_service::v1::{
     algorithm::AlgorithmV1,

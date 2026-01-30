@@ -124,6 +124,7 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
+        let instant = Instant::now();
         // Initialize execution state
         let mut partial_block =
             PartialFuelBlock::new(components.header_to_produce, vec![]);
@@ -171,6 +172,11 @@ where
             )
             .await?;
 
+        tracing::warn!(
+            "produce_without_commit_with_source elapsed (before scheduler): {:?}",
+            instant.elapsed()
+        );
+
         // Run parallel scheduler for L2 transactions
         let scheduler_result = self
             .run_scheduler(
@@ -188,14 +194,23 @@ where
             scheduler_result.events.len(),
             scheduler_result.skipped_txs.len()
         );
+        tracing::warn!(
+            "produce_without_commit_with_source elapsed (before finalize): {:?}",
+            instant.elapsed()
+        );
 
         // Finalize block with mint transaction
-        self.finalize_block(
+        let res = self.finalize_block(
             &mut components,
             scheduler_result,
             event_inbox_root,
             &mut executor,
-        )
+        );
+        tracing::warn!(
+            "produce_without_commit_with_source elapsed (after finalize): {:?}",
+            instant.elapsed()
+        );
+        res
     }
 
     /// Process DA changes if the DA height has changed
@@ -283,6 +298,7 @@ where
     where
         TxSource: TransactionsSource + Send + Sync + 'static,
     {
+        let instant = Instant::now();
         let runtime = self.runtime.as_ref().expect(
             "Scheduler runtime \
                 is only removed on `drop`",
@@ -306,6 +322,8 @@ where
             )
             .await?;
 
+        let elapsed = instant.elapsed();
+        tracing::warn!("run scheduler elapsed: {:?}", elapsed);
         Ok(res)
     }
 
