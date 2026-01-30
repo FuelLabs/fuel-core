@@ -80,6 +80,7 @@ use fuel_core_types::{
         },
     },
 };
+use fuel_core_metrics::parallel_executor_metrics;
 use futures::future::Either;
 use fxhash::FxHashMap;
 use tokio::{
@@ -479,6 +480,13 @@ where
         tracing::warn!("waiting for execution tasks: {:?}", instant.elapsed());
         self.wait_all_execution_tasks().await?;
         tracing::warn!("execution tasks done: {:?}", instant.elapsed());
+        if self.config.metrics {
+            let execution_time = instant.elapsed();
+            parallel_executor_metrics::record_execution_time(execution_time);
+            parallel_executor_metrics::set_number_of_transactions(nb_transactions);
+            let block_height = u32::from(*self.header_to_produce.height());
+            parallel_executor_metrics::set_block_height(block_height);
+        }
 
         let mut res = self.verify_coherency_and_merge_results(
             nb_batch_created,

@@ -5,7 +5,6 @@ pub struct Config {
     /// The number of cores to use for the block execution.
     pub worker_count: NonZeroUsize,
     /// Enable metrics for the parallel executor.
-    #[allow(dead_code)]
     pub metrics: bool,
 }
 

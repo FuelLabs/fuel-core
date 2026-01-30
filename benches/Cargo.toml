@@ -48,6 +48,7 @@ fuel-core = { path = "../crates/fuel-core", optional = true, default-features = 
 ] }
 fuel-core-chain-config = { workspace = true }
 fuel-core-database = { path = "./../crates/database" }
+fuel-core-metrics = { workspace = true }
 fuel-core-services = { path = "./../crates/services" }
 fuel-core-storage = { path = "./../crates/storage" }
 fuel-core-sync = { path = "./../crates/services/sync", features = [

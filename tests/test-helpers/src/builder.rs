@@ -112,6 +112,7 @@ pub struct TestSetupBuilder {
     pub chain_config: Option<ChainConfig>,
     pub number_threads_pool_verif: usize,
     pub executor_mode: ExecutorMode,
+    pub executor_metrics: bool,
 }
 
 impl TestSetupBuilder {
@@ -276,6 +277,7 @@ impl TestSetupBuilder {
             config.executor.parallel.worker_count =
                 NonZeroUsize::try_from(self.number_threads_pool_verif)
                     .unwrap_or(NonZeroUsize::try_from(1).expect("1 is not 0"));
+            config.executor.parallel.metrics = self.executor_metrics;
         }
         config.combined_db_config.database_config = self.database_config;
 
@@ -310,6 +312,7 @@ impl Default for TestSetupBuilder {
             chain_config: None,
             number_threads_pool_verif: 0,
             executor_mode: ExecutorMode::Normal,
+            executor_metrics: false,
         }
     }
 }

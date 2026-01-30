@@ -4,6 +4,7 @@ use fuel_core::service::config::{
     ExecutorMode,
     Trigger,
 };
+use fuel_core_metrics::encode_metrics;
 use fuel_core_chain_config::{
     ChainConfig,
     CoinConfig,
@@ -210,6 +211,7 @@ fn main() {
     test_builder.block_size_limit = Some(u64::MAX);
     test_builder.number_threads_pool_verif = args.number_of_cores;
     test_builder.executor_mode = ExecutorMode::Parallel;
+    test_builder.executor_metrics = true;
     test_builder.max_txs = transactions.len();
     // spin up node
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -252,6 +254,14 @@ fn main() {
             block
         }
     });
+
+    if let Ok(metrics) = encode_metrics() {
+        for line in metrics.lines().filter(|line| {
+            line.starts_with("parallel_executor_") && !line.starts_with('#')
+        }) {
+            println!("metrics: {line}");
+        }
+    }
 
     // rt.block_on(async move {
     //     test_builder.set_chain_config(chain_conf.clone());
