@@ -96,6 +96,18 @@ enum Commands {
     },
 }
 
+impl std::fmt::Debug for Commands {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Commands::Stop => write!(f, "Stop"),
+            Commands::CommitResult { .. } => write!(f, "CommitResult"),
+            #[cfg(test)]
+            Commands::VerifyAndExecuteBlock { .. } => write!(f, "VerifyAndExecuteBlock"),
+            Commands::PrepareImportResult { .. } => write!(f, "PrepareImportResult"),
+        }
+    }
+}
+
 struct ImporterInner<D, E, V> {
     database: D,
     executor: E,
@@ -503,6 +515,8 @@ where
     async fn run(&mut self) {
         let local_runner = LocalRunner::new().expect("Failed to create the local runner");
         while let Some(command) = self.commands.recv().await {
+            let instant = Instant::now();
+            warn!("Importer command received: {:?}", &command);
             match command {
                 Commands::Stop => break,
                 Commands::CommitResult {
@@ -530,6 +544,7 @@ where
                     let _ = callback.send(result);
                 }
             }
+            warn!("Importer command execution took {:?}", instant.elapsed());
         }
     }
 

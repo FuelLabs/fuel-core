@@ -200,8 +200,9 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
         MockRelayer,
         MockPreconfirmationSender,
         Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
+            worker_count: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
+            metrics: false,
         },
     )
     .unwrap();
@@ -247,8 +248,9 @@ async fn execute__simple_independent_transactions_sorted() {
             MockRelayer,
             MockPreconfirmationSender,
             Config {
-                number_of_cores: std::num::NonZeroUsize::new(2)
+                worker_count: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
+                metrics: false,
             },
         )
         .unwrap();
@@ -327,8 +329,9 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             MockRelayer,
             MockPreconfirmationSender,
             Config {
-                number_of_cores: std::num::NonZeroUsize::new(2)
+                worker_count: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
+                metrics: false,
             },
         )
         .unwrap();
@@ -444,8 +447,9 @@ async fn execute__gas_left_updated_when_state_merges() {
             MockRelayer,
             MockPreconfirmationSender,
             Config {
-                number_of_cores: std::num::NonZeroUsize::new(2)
+                worker_count: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
+                metrics: false,
             },
         )
         .unwrap();
@@ -536,8 +540,9 @@ async fn execute__utxo_ordering_kept() {
             MockRelayer,
             MockPreconfirmationSender,
             Config {
-                number_of_cores: std::num::NonZeroUsize::new(2)
+                worker_count: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
+                metrics: false,
             },
         )
         .unwrap();
@@ -610,8 +615,9 @@ async fn execute__utxo_resolved() {
         MockRelayer,
         MockPreconfirmationSender,
         Config {
-            number_of_cores: std::num::NonZeroUsize::new(2)
+            worker_count: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
+            metrics: false,
         },
     )
     .unwrap();
@@ -703,8 +709,9 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
             MockRelayer,
             MockPreconfirmationSender,
             Config {
-                number_of_cores: std::num::NonZeroUsize::new(3)
+                worker_count: std::num::NonZeroUsize::new(3)
                     .expect("The value is not zero; qed"),
+                metrics: false,
             },
         )
         .unwrap();

@@ -400,6 +400,7 @@ impl BlockMutation {
         start_timestamp: Option<Tai64Timestamp>,
         blocks_to_produce: U32,
     ) -> async_graphql::Result<U32> {
+        let instant = tokio::time::Instant::now();
         let config = ctx.data_unchecked::<GraphQLConfig>().clone();
 
         if !config.debug {
@@ -417,11 +418,20 @@ impl BlockMutation {
         let on_chain_height = ctx.read_view()?.latest_block_height()?;
         let shared_state =
             ctx.data_unchecked::<graphql_api::worker_service::SharedState>();
+        tracing::warn!(
+            "elapsed before wait_for_block_height: {:?}",
+            instant.elapsed()
+        );
         shared_state
             .block_height_subscription_handler
             .subscribe()
             .wait_for_block_height(on_chain_height)
             .await?;
+        tracing::warn!(
+            "Produced {} blocks in {:?}",
+            blocks_to_produce,
+            instant.elapsed()
+        );
         Ok(on_chain_height.into())
     }
 }

@@ -80,6 +80,7 @@ use fuel_core_types::{
         },
     },
 };
+use fuel_core_metrics::parallel_executor_metrics;
 use futures::future::Either;
 use fxhash::FxHashMap;
 use tokio::{
@@ -324,7 +325,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             tx_left: u32::MAX,
             tx_size_left: consensus_parameters.block_transaction_size_limit(),
             gas_left: consensus_parameters.block_gas_limit(),
-            worker_pool: WorkerPool::new(config.number_of_cores.get()),
+            worker_pool: WorkerPool::new(config.worker_count.get()),
             memory_pool,
             config,
             current_execution_tasks: FuturesUnordered::new(),
@@ -356,6 +357,7 @@ where
     where
         TxSource: TransactionsSource,
     {
+        let instant = Instant::now();
         let view = self.storage.latest_view()?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
@@ -372,7 +374,7 @@ where
         let initial_gas_per_worker = self
             .consensus_parameters
             .block_gas_limit()
-            .checked_div(self.config.number_of_cores.get() as u64)
+            .checked_div(self.config.worker_count.get() as u64)
             .ok_or(SchedulerError::InternalError(
                 "Invalid block gas limit".to_string(),
             ))?
@@ -381,6 +383,7 @@ where
                 "L1 transactions consumed all the gas".to_string(),
             ))?;
 
+        tracing::warn!("scheduler starting run loop at {:?}", instant.elapsed());
         'outer: loop {
             let tx_notifier = if new_tx_notifier.has_changed().is_ok() {
                 Either::Left(new_tx_notifier.changed())
@@ -395,6 +398,11 @@ where
                 let mut batch = self
                     .ask_new_transactions_batch(tx_source, now, initial_gas_per_worker)
                     .await?;
+                tracing::warn!(
+                    "new batch id {:?} prepared at: {:?}",
+                    nb_batch_created,
+                    instant.elapsed()
+                );
 
                 let blob_transactions = core::mem::take(&mut batch.blob_transactions);
                 self.blob_transactions.extend(blob_transactions.into_iter());
@@ -424,20 +432,25 @@ where
                     ),
                 )?;
             } else if self.current_execution_tasks.is_empty() {
+                let waiting = Instant::now();
                 tokio::select! {
                     _ = tx_notifier => {
                         self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     _ = tokio::time::sleep_until(deadline) => {
+                        tracing::warn!("******");
+                        tracing::warn!("waited until deadline for {:?}, total elapsed: {:?}", waiting.elapsed(), instant.elapsed());
                         break 'outer;
                     }
                 }
             } else {
+                tracing::warn!("Waiting for workers to finish");
                 tokio::select! {
                     _ = tx_notifier => {
                         self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     result = self.current_execution_tasks.select_next_some() => {
+                        tracing::warn!("Worker finished at {:?}", instant.elapsed());
                         match result {
                             Ok(res) => {
                                 let res = res?;
@@ -463,7 +476,17 @@ where
             }
         }
 
+        tracing::warn!("******");
+        tracing::warn!("waiting for execution tasks: {:?}", instant.elapsed());
         self.wait_all_execution_tasks().await?;
+        tracing::warn!("execution tasks done: {:?}", instant.elapsed());
+        if self.config.metrics {
+            let execution_time = instant.elapsed();
+            parallel_executor_metrics::record_execution_time(execution_time);
+            parallel_executor_metrics::set_number_of_transactions(nb_transactions);
+            let block_height = u32::from(*self.header_to_produce.height());
+            parallel_executor_metrics::set_block_height(block_height);
+        }
 
         let mut res = self.verify_coherency_and_merge_results(
             nb_batch_created,
@@ -471,6 +494,7 @@ where
             storage_with_da.clone(),
         )?;
 
+        tracing::warn!("scheduler done: {:?}", instant.elapsed());
         if !self.blob_transactions.is_empty() {
             let mut tx = StorageTransaction::transaction(
                 storage_with_da.clone(),
@@ -484,11 +508,14 @@ where
                     return Err(SchedulerError::StorageError(e));
                 }
             }
+            tracing::warn!("committed changes: {:?}", instant.elapsed());
             res.changes = StorageChanges::Changes(Default::default());
 
             let (blob_execution_data, blob_txs) =
                 self.execute_blob_transactions(tx, nb_transactions).await?;
+            tracing::warn!("blob execution done: {:?}", instant.elapsed());
             res.add_blob_execution_data(blob_execution_data, blob_txs);
+            tracing::warn!("blob execution data added: {:?}", instant.elapsed());
         }
 
         // TODO: Avoid cloning the DA changes
@@ -503,6 +530,8 @@ where
             }
         }
 
+        let execution_time = instant.elapsed();
+        tracing::warn!("Scheduler `run` execution time: {:?}", execution_time);
         Ok(res)
     }
 
@@ -544,6 +573,7 @@ where
     where
         TxSource: TransactionsSource,
     {
+        let instant = Instant::now();
         let total_execution_time = self
             .deadline
             .checked_duration_since(start_execution_time)
@@ -596,6 +626,11 @@ where
             prepared_batch.total_size,
             prepared_batch.gas,
         )?;
+        tracing::warn!(
+            "new batch prepared in: {:?}, for {:?} txs",
+            instant.elapsed(),
+            prepared_batch.number_of_transactions
+        );
         Ok(prepared_batch)
     }
 
@@ -629,6 +664,7 @@ where
         let mut memory = self.memory_pool.take_raw();
 
         let future = {
+            let instant = Instant::now();
             let storage_with_da = storage_with_da.clone();
             async move {
                 let changes_per_contract: FxHashMap<ContractId, Changes> =
@@ -678,6 +714,13 @@ where
                 let (changes, changes_per_contract) =
                     storage_tx.into_storage().into_changes();
 
+                let batch_duration = instant.elapsed();
+                tracing::warn!(
+                    "batch {:?} duration: {:?} with {:?} txs",
+                    batch_id,
+                    batch_duration,
+                    transactions.len()
+                );
                 Ok(WorkSessionExecutionResult {
                     worker_id,
                     batch_id,
