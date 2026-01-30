@@ -8,6 +8,7 @@ use fuel_core_storage::{
     StorageAsRef,
     StorageInspect,
     StorageRead,
+    StorageReadError,
     StorageSize,
     iter::{
         BoxedIter,
@@ -88,13 +89,22 @@ where
     M: Mappable,
     StructuredStorage<Storage>: StorageRead<M, Error = StorageError>,
 {
-    fn read(
+    fn read_exact(
         &self,
         key: &M::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<bool, Self::Error> {
-        self.storage.storage::<M>().read(key, offset, buf)
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        self.storage.storage::<M>().read_exact(key, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &M::Key,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        self.storage.storage::<M>().read_zerofill(key, offset, buf)
     }
 
     fn read_alloc(&self, key: &M::Key) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -135,14 +145,24 @@ where
         KeyValueInspect::get(&self.storage, key, column)
     }
 
-    fn read(
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
-        KeyValueInspect::read(&self.storage, key, column, offset, buf)
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        KeyValueInspect::read_exact(&self.storage, key, column, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        KeyValueInspect::read_zerofill(&self.storage, key, column, offset, buf)
     }
 }
 
