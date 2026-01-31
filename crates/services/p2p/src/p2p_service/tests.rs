@@ -1408,3 +1408,72 @@ async fn request_response_peer_limit_works() {
     let result = handle.await.expect("Should have completed");
     assert!(result.is_err());
 }
+
+// Verifies PeerManager respects max_functional_peers_connected limit (issue #3011)
+#[tokio::test]
+#[instrument]
+async fn peer_manager_respects_functional_peer_limit_not_discovery_limit() {
+    let p2p_config = Config::default_initialized("functional_vs_discovery_limit_test");
+
+    let max_discovery_peers: u32 = 10;
+    let max_functional_peers: u32 = 3;
+    let bootstrap_nodes_count = 8;
+
+    let (mut nodes, nodes_multiaddrs) =
+        setup_bootstrap_nodes(&p2p_config, bootstrap_nodes_count).await;
+
+    let mut test_node = {
+        let mut config = p2p_config.clone();
+        config.max_discovery_peers_connected = max_discovery_peers;
+        config.max_functional_peers_connected = max_functional_peers;
+        config.bootstrap_nodes.clone_from(&nodes_multiaddrs);
+        build_service_from_config(config).await
+    };
+
+    let (tx, mut rx) = tokio::sync::oneshot::channel::<()>();
+    let jh = tokio::spawn(async move {
+        while rx.try_recv().is_err() {
+            futures::stream::iter(nodes.iter_mut())
+                .for_each_concurrent(4, |node| async move {
+                    node.next_event().await;
+                })
+                .await;
+        }
+    });
+
+    let mut functional_limit_reached = false;
+    let mut instance = tokio::time::Instant::now();
+
+    while instance.elapsed().as_secs() < 5 {
+        tokio::select! {
+            event = test_node.next_event() => {
+                if let Some(FuelP2PEvent::PeerConnected(_)) = event {
+                    let peer_count = test_node.peer_manager.total_peers_connected();
+
+                    assert!(
+                        peer_count <= max_functional_peers as usize,
+                        "PeerManager exceeded functional peer limit: {} > {}",
+                        peer_count,
+                        max_functional_peers
+                    );
+
+                    if peer_count == max_functional_peers as usize {
+                        functional_limit_reached = true;
+                    }
+                }
+            }
+        }
+
+        if !functional_limit_reached {
+            instance = tokio::time::Instant::now();
+        }
+    }
+
+    assert!(functional_limit_reached);
+
+    let final_peer_count = test_node.peer_manager.total_peers_connected();
+    assert_eq!(final_peer_count, max_functional_peers as usize);
+
+    tx.send(()).unwrap();
+    jh.await.unwrap();
+}
