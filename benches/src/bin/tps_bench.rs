@@ -4,12 +4,12 @@ use fuel_core::service::config::{
     ExecutorMode,
     Trigger,
 };
-use fuel_core_metrics::encode_metrics;
 use fuel_core_chain_config::{
     ChainConfig,
     CoinConfig,
     SnapshotMetadata,
 };
+use fuel_core_metrics::encode_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
@@ -74,6 +74,16 @@ struct Args {
     pub number_of_cores: usize,
     #[clap(short = 't', long, default_value = "150000")]
     pub number_of_transactions: u64,
+    #[clap(long, default_value = "0")]
+    pub txpool_verification_threads: usize,
+    #[clap(long, default_value = "0")]
+    pub txpool_verification_queue_size: usize,
+    #[clap(long, default_value = "0")]
+    pub txpool_p2p_sync_threads: usize,
+    #[clap(long, default_value = "0")]
+    pub txpool_p2p_sync_queue_size: usize,
+    #[clap(long, default_value = "0")]
+    pub executor_parallel_worker_count: usize,
 }
 
 fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
@@ -210,8 +220,26 @@ fn main() {
     test_builder.gas_limit = Some(gas_limit);
     test_builder.block_size_limit = Some(u64::MAX);
     test_builder.number_threads_pool_verif = args.number_of_cores;
-    test_builder.executor_mode = ExecutorMode::Parallel;
-    test_builder.executor_metrics = true;
+    if args.txpool_verification_threads != 0 {
+        test_builder.txpool_verification_threads = args.txpool_verification_threads;
+    }
+    if args.txpool_verification_queue_size != 0 {
+        test_builder.txpool_verification_queue_size = args.txpool_verification_queue_size;
+    }
+    if args.txpool_p2p_sync_threads != 0 {
+        test_builder.txpool_p2p_sync_threads = args.txpool_p2p_sync_threads;
+    }
+    if args.txpool_p2p_sync_queue_size != 0 {
+        test_builder.txpool_p2p_sync_queue_size = args.txpool_p2p_sync_queue_size;
+    }
+    if args.executor_parallel_worker_count != 0 {
+        test_builder.executor_parallel_worker_count = args.executor_parallel_worker_count;
+    }
+    #[cfg(feature = "parallel-executor")]
+    {
+        test_builder.executor_mode = ExecutorMode::Parallel;
+        test_builder.executor_metrics = true;
+    }
     test_builder.max_txs = transactions.len();
     // spin up node
     let rt = tokio::runtime::Builder::new_multi_thread()

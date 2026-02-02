@@ -111,6 +111,11 @@ pub struct TestSetupBuilder {
     pub database_config: DatabaseConfig,
     pub chain_config: Option<ChainConfig>,
     pub number_threads_pool_verif: usize,
+    pub txpool_verification_threads: usize,
+    pub txpool_verification_queue_size: usize,
+    pub txpool_p2p_sync_threads: usize,
+    pub txpool_p2p_sync_queue_size: usize,
+    pub executor_parallel_worker_count: usize,
     pub executor_mode: ExecutorMode,
     pub executor_metrics: bool,
 }
@@ -120,6 +125,11 @@ impl TestSetupBuilder {
         Self {
             rng: StdRng::seed_from_u64(seed),
             number_threads_pool_verif: 0,
+            txpool_verification_threads: 0,
+            txpool_verification_queue_size: 0,
+            txpool_p2p_sync_threads: 0,
+            txpool_p2p_sync_queue_size: 100,
+            executor_parallel_worker_count: 0,
             ..Default::default()
         }
     }
@@ -256,9 +266,27 @@ impl TestSetupBuilder {
             max_pending_write_pool_requests: self.max_txs,
             max_pending_read_pool_requests: self.max_txs,
         };
-        txpool.heavy_work.size_of_verification_queue = self.max_txs;
+        let txpool_verification_queue_size = if self.txpool_verification_queue_size == 0 {
+            self.max_txs
+        } else {
+            self.txpool_verification_queue_size
+        };
+        txpool.heavy_work.size_of_verification_queue = txpool_verification_queue_size;
+        let txpool_verification_threads = if self.txpool_verification_threads == 0 {
+            self.number_threads_pool_verif
+        } else {
+            self.txpool_verification_threads
+        };
+        let executor_parallel_worker_count = if self.executor_parallel_worker_count == 0 {
+            self.number_threads_pool_verif
+        } else {
+            self.executor_parallel_worker_count
+        };
+
         txpool.heavy_work.number_threads_to_verify_transactions =
-            self.number_threads_pool_verif;
+            txpool_verification_threads;
+        txpool.heavy_work.number_threads_p2p_sync = self.txpool_p2p_sync_threads;
+        txpool.heavy_work.size_of_p2p_sync_queue = self.txpool_p2p_sync_queue_size;
         txpool.utxo_validation = self.utxo_validation;
 
         let gas_price_config = GasPriceConfig {
@@ -275,7 +303,7 @@ impl TestSetupBuilder {
         #[cfg(feature = "parallel-executor")]
         {
             config.executor.parallel.worker_count =
-                NonZeroUsize::try_from(self.number_threads_pool_verif)
+                NonZeroUsize::try_from(executor_parallel_worker_count)
                     .unwrap_or(NonZeroUsize::try_from(1).expect("1 is not 0"));
             config.executor.parallel.metrics = self.executor_metrics;
         }
@@ -311,6 +339,11 @@ impl Default for TestSetupBuilder {
             database_config: DatabaseConfig::config_for_tests(),
             chain_config: None,
             number_threads_pool_verif: 0,
+            txpool_verification_threads: 0,
+            txpool_verification_queue_size: 0,
+            txpool_p2p_sync_threads: 0,
+            txpool_p2p_sync_queue_size: 100,
+            executor_parallel_worker_count: 0,
             executor_mode: ExecutorMode::Normal,
             executor_metrics: false,
         }

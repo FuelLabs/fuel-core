@@ -1,6 +1,13 @@
-use crate::global_registry;
+use crate::{
+    buckets::{
+        Buckets,
+        buckets,
+    },
+    global_registry,
+};
 use prometheus_client::metrics::{
     gauge::Gauge,
+    histogram::Histogram,
 };
 use std::{
     sync::OnceLock,
@@ -12,6 +19,15 @@ pub struct ParallelExecutorMetrics {
     pub execution_time_seconds: Gauge<f64, AtomicU64>,
     pub number_of_transactions: Gauge,
     pub block_height: Gauge,
+    pub batch_prepare_ms: Histogram,
+    pub batch_prepare_us_per_tx: Histogram,
+    pub batch_prepare_ns_per_kgas: Histogram,
+    pub batch_execute_ms: Histogram,
+    pub batch_execute_us_per_tx: Histogram,
+    pub batch_execute_ns_per_kgas: Histogram,
+    pub batch_total_ms: Histogram,
+    pub batch_total_us_per_tx: Histogram,
+    pub batch_total_ns_per_kgas: Histogram,
 }
 
 impl Default for ParallelExecutorMetrics {
@@ -19,11 +35,44 @@ impl Default for ParallelExecutorMetrics {
         let execution_time_seconds = Gauge::default();
         let number_of_transactions = Gauge::default();
         let block_height = Gauge::default();
+        let batch_prepare_ms =
+            Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
+        let batch_prepare_us_per_tx = Histogram::new(
+            buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx),
+        );
+        let batch_prepare_ns_per_kgas = Histogram::new(
+            buckets(Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas),
+        );
+        let batch_execute_ms =
+            Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
+        let batch_execute_us_per_tx = Histogram::new(
+            buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx),
+        );
+        let batch_execute_ns_per_kgas = Histogram::new(
+            buckets(Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas),
+        );
+        let batch_total_ms =
+            Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
+        let batch_total_us_per_tx = Histogram::new(
+            buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx),
+        );
+        let batch_total_ns_per_kgas = Histogram::new(
+            buckets(Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas),
+        );
 
         let metrics = ParallelExecutorMetrics {
             execution_time_seconds,
             number_of_transactions,
             block_height,
+            batch_prepare_ms,
+            batch_prepare_us_per_tx,
+            batch_prepare_ns_per_kgas,
+            batch_execute_ms,
+            batch_execute_us_per_tx,
+            batch_execute_ns_per_kgas,
+            batch_total_ms,
+            batch_total_us_per_tx,
+            batch_total_ns_per_kgas,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -41,6 +90,51 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_block_height",
             "Block height for the parallel executor metrics sample",
             metrics.block_height.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_prepare_ms",
+            "Time spent preparing a batch in milliseconds",
+            metrics.batch_prepare_ms.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_prepare_us_per_tx",
+            "Time spent preparing a batch in microseconds normalized by transactions",
+            metrics.batch_prepare_us_per_tx.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_prepare_ns_per_kgas",
+            "Time spent preparing a batch in nanoseconds normalized by 1000 gas",
+            metrics.batch_prepare_ns_per_kgas.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_execute_ms",
+            "Time spent executing a batch in milliseconds",
+            metrics.batch_execute_ms.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_execute_us_per_tx",
+            "Time spent executing a batch in microseconds normalized by transactions",
+            metrics.batch_execute_us_per_tx.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_execute_ns_per_kgas",
+            "Time spent executing a batch in nanoseconds normalized by 1000 gas",
+            metrics.batch_execute_ns_per_kgas.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_total_ms",
+            "Total time spent preparing and executing a batch in milliseconds",
+            metrics.batch_total_ms.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_total_us_per_tx",
+            "Total time spent preparing and executing a batch in microseconds normalized by transactions",
+            metrics.batch_total_us_per_tx.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_total_ns_per_kgas",
+            "Total time spent preparing and executing a batch in nanoseconds normalized by 1000 gas",
+            metrics.batch_total_ns_per_kgas.clone(),
         );
 
         metrics
@@ -70,4 +164,72 @@ pub fn set_block_height(height: u32) {
     parallel_executor_metrics()
         .block_height
         .set(height as i64);
+}
+
+fn duration_ms(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1000.0
+}
+
+fn duration_us(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1_000_000.0
+}
+
+fn duration_ns(duration: Duration) -> f64 {
+    duration.as_secs_f64() * 1_000_000_000.0
+}
+
+fn record_batch_time(
+    duration: Duration,
+    tx_count: u32,
+    gas: u64,
+    raw: &Histogram,
+    per_tx: &Histogram,
+    per_gas: &Histogram,
+) {
+    let duration_ms = duration_ms(duration);
+    raw.observe(duration_ms);
+    let duration_us = duration_us(duration);
+    if tx_count > 0 {
+        per_tx.observe(duration_us / f64::from(tx_count));
+    }
+    let gas_in_kgas = gas as f64 / 1000.0;
+    if gas_in_kgas > 0.0 {
+        per_gas.observe(duration_ns(duration) / gas_in_kgas);
+    }
+}
+
+pub fn record_batch_prepare(duration: Duration, tx_count: u32, gas: u64) {
+    let metrics = parallel_executor_metrics();
+    record_batch_time(
+        duration,
+        tx_count,
+        gas,
+        &metrics.batch_prepare_ms,
+        &metrics.batch_prepare_us_per_tx,
+        &metrics.batch_prepare_ns_per_kgas,
+    );
+}
+
+pub fn record_batch_execute(duration: Duration, tx_count: u32, gas: u64) {
+    let metrics = parallel_executor_metrics();
+    record_batch_time(
+        duration,
+        tx_count,
+        gas,
+        &metrics.batch_execute_ms,
+        &metrics.batch_execute_us_per_tx,
+        &metrics.batch_execute_ns_per_kgas,
+    );
+}
+
+pub fn record_batch_total(duration: Duration, tx_count: u32, gas: u64) {
+    let metrics = parallel_executor_metrics();
+    record_batch_time(
+        duration,
+        tx_count,
+        gas,
+        &metrics.batch_total_ms,
+        &metrics.batch_total_us_per_tx,
+        &metrics.batch_total_ns_per_kgas,
+    );
 }

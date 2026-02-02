@@ -1,9 +1,3 @@
-use std::{
-    collections::HashSet,
-    sync::Arc,
-    time::Duration,
-};
-
 use crate::{
     config::Config,
     in_memory_transaction_with_contracts::InMemoryTransactionWithContracts,
@@ -39,6 +33,7 @@ use fuel_core_executor::{
         RelayerPort,
     },
 };
+use fuel_core_metrics::parallel_executor_metrics;
 use fuel_core_storage::{
     Error as StorageError,
     column::Column,
@@ -80,9 +75,16 @@ use fuel_core_types::{
         },
     },
 };
-use fuel_core_metrics::parallel_executor_metrics;
 use futures::future::Either;
 use fxhash::FxHashMap;
+use std::{
+    collections::{
+        HashMap,
+        HashSet,
+    },
+    sync::Arc,
+    time::Duration,
+};
 use tokio::{
     runtime::Runtime,
     time::Instant,
@@ -126,6 +128,8 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     blob_transactions: Vec<MaybeCheckedTransaction>,
     /// Current scheduler state
     state: SchedulerState,
+    /// Batch preparation stats keyed by batch id
+    batch_preparations: Option<HashMap<usize, BatchPreparationStats>>,
     /// Total maximum of transactions left
     tx_left: u32,
     /// Total maximum of byte size left
@@ -177,6 +181,15 @@ struct WorkSessionExecutionResult {
     used_size: u32,
     /// coinbase
     coinbase: u64,
+    /// Execution time for this batch
+    execution_duration: Duration,
+}
+
+#[derive(Clone, Copy)]
+struct BatchPreparationStats {
+    duration: Duration,
+    tx_count: u32,
+    gas: u64,
 }
 
 #[derive(Default)]
@@ -314,6 +327,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
         consensus_parameters: ConsensusParameters,
         deadline: Instant,
     ) -> Result<Self, SchedulerError> {
+        let batch_preparations = config.metrics.then(HashMap::new);
         Ok(Self {
             header_to_produce: components.header_to_produce,
             coinbase_recipient: components.coinbase_recipient,
@@ -337,6 +351,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             consensus_parameters,
             blob_gas: 0,
             deadline,
+            batch_preparations,
         })
     }
 }
@@ -395,9 +410,11 @@ where
             if self.is_worker_idling() {
                 // If we requested transactions, we shouldn't drop them,
                 // so we await them here.
+                let batch_prepare_start = Instant::now();
                 let mut batch = self
                     .ask_new_transactions_batch(tx_source, now, initial_gas_per_worker)
                     .await?;
+                let batch_prepare_duration = batch_prepare_start.elapsed();
                 tracing::warn!(
                     "new batch id {:?} prepared at: {:?}",
                     nb_batch_created,
@@ -417,6 +434,23 @@ where
                 }
 
                 let batch_len = batch.number_of_transactions;
+                if self.config.metrics {
+                    parallel_executor_metrics::record_batch_prepare(
+                        batch_prepare_duration,
+                        batch_len,
+                        batch.gas,
+                    );
+                    if let Some(batch_preparations) = self.batch_preparations.as_mut() {
+                        batch_preparations.insert(
+                            nb_batch_created,
+                            BatchPreparationStats {
+                                duration: batch_prepare_duration,
+                                tx_count: batch_len,
+                                gas: batch.gas,
+                            },
+                        );
+                    }
+                }
 
                 self.execute_batch(
                     batch,
@@ -455,11 +489,46 @@ where
                             Ok(res) => {
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
+                                    if self.config.metrics {
+                                        if let Some(batch_preparations) =
+                                            self.batch_preparations.as_mut()
+                                        {
+                                            batch_preparations.remove(&res.batch_id);
+                                        }
+                                    }
                                     drop(res.worker_id);
                                     self.sequential_fallback(res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used).await?;
                                     continue;
                                 }
 
+                                if self.config.metrics {
+                                    if let Some(batch_preparations) =
+                                        self.batch_preparations.as_mut()
+                                    {
+                                        if let Some(prep) =
+                                            batch_preparations.remove(&res.batch_id)
+                                        {
+                                            let gas_for_norm =
+                                                if res.used_gas > 0 {
+                                                    res.used_gas
+                                                } else {
+                                                    prep.gas
+                                                };
+                                            parallel_executor_metrics::record_batch_execute(
+                                                res.execution_duration,
+                                                prep.tx_count,
+                                                gas_for_norm,
+                                            );
+                                            parallel_executor_metrics::record_batch_total(
+                                                prep.duration.saturating_add(
+                                                    res.execution_duration,
+                                                ),
+                                                prep.tx_count,
+                                                gas_for_norm,
+                                            );
+                                        }
+                                    }
+                                }
                                 self.register_execution_result(res);
                             }
                             _ => {
@@ -739,6 +808,7 @@ where
                     gas_diff: batch.gas.saturating_sub(execution_data.used_gas),
                     used_size: execution_data.used_size,
                     coinbase: execution_data.coinbase,
+                    execution_duration: batch_duration,
                 })
             }
         };
