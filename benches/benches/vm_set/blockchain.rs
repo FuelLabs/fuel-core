@@ -61,10 +61,7 @@ use fuel_core_types::{
         Word,
     },
     fuel_types::*,
-    fuel_vm::{
-        constraints::reg_key::Reg,
-        consts::*,
-    },
+    fuel_vm::consts::*,
     tai64::Tai64,
 };
 use rand::{
