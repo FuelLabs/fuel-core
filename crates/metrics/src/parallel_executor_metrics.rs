@@ -94,6 +94,11 @@ impl Default for ParallelExecutorMetrics {
             metrics.number_of_transactions.clone(),
         );
         registry.register(
+            "parallel_executor_total_gas_used",
+            "Total gas used by transactions executed by the parallel executor",
+            metrics.total_gas_used.clone(),
+        );
+        registry.register(
             "parallel_executor_block_height",
             "Block height for the parallel executor metrics sample",
             metrics.block_height.clone(),
