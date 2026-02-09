@@ -82,7 +82,13 @@ use std::{
         HashMap,
         HashSet,
     },
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{
+            AtomicU32,
+            Ordering,
+        },
+    },
     time::Duration,
 };
 use tokio::{
@@ -140,6 +146,8 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     deadline: Instant,
     /// Gas used by blob transactions
     blob_gas: u64,
+    /// Counters for tracking worker concurrency when metrics are enabled
+    worker_counters: Option<WorkerCounters>,
 }
 
 struct WorkSessionExecutionResult {
@@ -308,6 +316,41 @@ pub(crate) struct PreparedBatch {
     pub number_of_transactions: u32,
 }
 
+#[derive(Clone)]
+struct WorkerCounters {
+    current: Arc<AtomicU32>,
+    max: Arc<AtomicU32>,
+}
+
+impl WorkerCounters {
+    fn new() -> Self {
+        Self {
+            current: Arc::new(AtomicU32::new(0)),
+            max: Arc::new(AtomicU32::new(0)),
+        }
+    }
+
+    fn record_started(&self) {
+        let current = self.current.fetch_add(1, Ordering::Relaxed) + 1;
+        self.max.fetch_max(current, Ordering::Relaxed);
+    }
+
+    fn reset(&self) {
+        self.current.store(0, Ordering::Relaxed);
+        self.max.store(0, Ordering::Relaxed);
+    }
+}
+
+struct WorkerCountGuard {
+    current: Arc<AtomicU32>,
+}
+
+impl Drop for WorkerCountGuard {
+    fn drop(&mut self) {
+        self.current.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 pub struct BlockConstraints {
     pub block_gas_limit: u64,
     pub total_execution_time: Duration,
@@ -328,6 +371,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
         deadline: Instant,
     ) -> Result<Self, SchedulerError> {
         let batch_preparations = config.metrics.then(HashMap::new);
+        let worker_counters = config.metrics.then(WorkerCounters::new);
         Ok(Self {
             header_to_produce: components.header_to_produce,
             coinbase_recipient: components.coinbase_recipient,
@@ -352,6 +396,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             blob_gas: 0,
             deadline,
             batch_preparations,
+            worker_counters,
         })
     }
 }
@@ -397,6 +442,7 @@ where
             .ok_or(SchedulerError::InternalError(
                 "L1 transactions consumed all the gas".to_string(),
             ))?;
+        let mut total_gas: u64 = 0;
 
         tracing::warn!("scheduler starting run loop at {:?}", instant.elapsed());
         'outer: loop {
@@ -450,6 +496,7 @@ where
                             },
                         );
                     }
+                    total_gas = total_gas.saturating_add(batch.gas);
                 }
 
                 self.execute_batch(
@@ -467,6 +514,8 @@ where
                 )?;
             } else if self.current_execution_tasks.is_empty() {
                 let waiting = Instant::now();
+                let execution_time = instant.elapsed();
+                parallel_executor_metrics::record_execution_time(execution_time);
                 tokio::select! {
                     _ = tx_notifier => {
                         self.state = SchedulerState::TransactionsReadyForPickup;
@@ -550,18 +599,38 @@ where
         self.wait_all_execution_tasks().await?;
         tracing::warn!("execution tasks done: {:?}", instant.elapsed());
         if self.config.metrics {
-            let execution_time = instant.elapsed();
-            parallel_executor_metrics::record_execution_time(execution_time);
             parallel_executor_metrics::set_number_of_transactions(nb_transactions);
+            parallel_executor_metrics::set_total_gas_used(total_gas);
             let block_height = u32::from(*self.header_to_produce.height());
             parallel_executor_metrics::set_block_height(block_height);
+            parallel_executor_metrics::set_max_workers_used(
+                self.worker_counters
+                    .as_ref()
+                    .map(|counters| counters.max.load(Ordering::Relaxed))
+                    .unwrap_or(0),
+            );
+            if let Some(counters) = self.worker_counters.as_ref() {
+                counters.reset();
+            }
         }
 
-        let mut res = self.verify_coherency_and_merge_results(
+        // let mut res = self.verify_coherency_and_merge_results(
+        //     nb_batch_created,
+        //     l1_execution_data,
+        //     storage_with_da.clone(),
+        // )?;
+
+        let result = self.verify_coherency_and_merge_results(
             nb_batch_created,
             l1_execution_data,
             storage_with_da.clone(),
-        )?;
+        );
+
+        if result.is_err() {
+            tracing::warn!("coherency result: {:?}", result);
+        }
+
+        let mut res = result?;
 
         tracing::warn!("scheduler done: {:?}", instant.elapsed());
         if !self.blob_transactions.is_empty() {
@@ -716,6 +785,7 @@ where
                 .ok_or(SchedulerError::InternalError(
                     "No available workers".to_string(),
                 ))?;
+        let worker_counters = self.worker_counters.clone();
 
         let mut changes_per_contract = Vec::with_capacity(batch.contracts_used.len());
 
@@ -736,6 +806,12 @@ where
             let instant = Instant::now();
             let storage_with_da = storage_with_da.clone();
             async move {
+                let _worker_guard = worker_counters.as_ref().map(|counters| {
+                    counters.record_started();
+                    WorkerCountGuard {
+                        current: counters.current.clone(),
+                    }
+                });
                 let changes_per_contract: FxHashMap<ContractId, Changes> =
                     changes_per_contract.into_iter().collect();
                 let memory_tx = InMemoryTransactionWithContracts::new(

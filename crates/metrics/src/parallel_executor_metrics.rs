@@ -10,15 +10,21 @@ use prometheus_client::metrics::{
     histogram::Histogram,
 };
 use std::{
-    sync::OnceLock,
-    sync::atomic::AtomicU64,
+    sync::{
+        OnceLock,
+        atomic::AtomicU64,
+    },
     time::Duration,
 };
 
+// TODO: We don't need all of these maybe. And some should be histograms, but I'm just using it for
+// benchmarks
 pub struct ParallelExecutorMetrics {
     pub execution_time_seconds: Gauge<f64, AtomicU64>,
     pub number_of_transactions: Gauge,
+    pub total_gas_used: Gauge,
     pub block_height: Gauge,
+    pub max_workers_used: Gauge,
     pub batch_prepare_ms: Histogram,
     pub batch_prepare_us_per_tx: Histogram,
     pub batch_prepare_ns_per_kgas: Histogram,
@@ -34,36 +40,37 @@ impl Default for ParallelExecutorMetrics {
     fn default() -> Self {
         let execution_time_seconds = Gauge::default();
         let number_of_transactions = Gauge::default();
+        let total_gas_used = Gauge::default();
         let block_height = Gauge::default();
+        let max_workers_used = Gauge::default();
         let batch_prepare_ms =
             Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
-        let batch_prepare_us_per_tx = Histogram::new(
-            buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx),
-        );
-        let batch_prepare_ns_per_kgas = Histogram::new(
-            buckets(Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas),
-        );
+        let batch_prepare_us_per_tx =
+            Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx));
+        let batch_prepare_ns_per_kgas = Histogram::new(buckets(
+            Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas,
+        ));
         let batch_execute_ms =
             Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
-        let batch_execute_us_per_tx = Histogram::new(
-            buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx),
-        );
-        let batch_execute_ns_per_kgas = Histogram::new(
-            buckets(Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas),
-        );
+        let batch_execute_us_per_tx =
+            Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx));
+        let batch_execute_ns_per_kgas = Histogram::new(buckets(
+            Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas,
+        ));
         let batch_total_ms =
             Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
-        let batch_total_us_per_tx = Histogram::new(
-            buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx),
-        );
-        let batch_total_ns_per_kgas = Histogram::new(
-            buckets(Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas),
-        );
+        let batch_total_us_per_tx =
+            Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx));
+        let batch_total_ns_per_kgas = Histogram::new(buckets(
+            Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas,
+        ));
 
         let metrics = ParallelExecutorMetrics {
             execution_time_seconds,
             number_of_transactions,
+            total_gas_used,
             block_height,
+            max_workers_used,
             batch_prepare_ms,
             batch_prepare_us_per_tx,
             batch_prepare_ns_per_kgas,
@@ -90,6 +97,11 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_block_height",
             "Block height for the parallel executor metrics sample",
             metrics.block_height.clone(),
+        );
+        registry.register(
+            "parallel_executor_max_workers_used",
+            "Maximum number of workers used concurrently by the parallel executor per block",
+            metrics.max_workers_used.clone(),
         );
         registry.register(
             "parallel_executor_batch_prepare_ms",
@@ -141,8 +153,7 @@ impl Default for ParallelExecutorMetrics {
     }
 }
 
-static PARALLEL_EXECUTOR_METRICS: OnceLock<ParallelExecutorMetrics> =
-    OnceLock::new();
+static PARALLEL_EXECUTOR_METRICS: OnceLock<ParallelExecutorMetrics> = OnceLock::new();
 
 pub fn parallel_executor_metrics() -> &'static ParallelExecutorMetrics {
     PARALLEL_EXECUTOR_METRICS.get_or_init(ParallelExecutorMetrics::default)
@@ -160,10 +171,18 @@ pub fn set_number_of_transactions(count: u32) {
         .set(count as i64);
 }
 
+pub fn set_total_gas_used(gas: u64) {
+    parallel_executor_metrics().total_gas_used.set(gas as i64);
+}
+
 pub fn set_block_height(height: u32) {
+    parallel_executor_metrics().block_height.set(height as i64);
+}
+
+pub fn set_max_workers_used(max_workers_used: u32) {
     parallel_executor_metrics()
-        .block_height
-        .set(height as i64);
+        .max_workers_used
+        .set(max_workers_used as i64);
 }
 
 fn duration_ms(duration: Duration) -> f64 {

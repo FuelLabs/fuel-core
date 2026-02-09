@@ -205,7 +205,7 @@ impl Default for Config {
                 max_pending_write_pool_requests: 1000,
                 max_pending_read_pool_requests: 1000,
             },
-            pending_pool_tx_ttl: Duration::from_secs(3),
+            pending_pool_tx_ttl: Duration::from_secs(100),
             max_pending_pool_size_percentage: 50,
             metrics: false,
         }

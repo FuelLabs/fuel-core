@@ -46,6 +46,7 @@ use std::num::NonZeroUsize;
 use std::{
     collections::HashMap,
     io,
+    path::PathBuf,
 };
 
 /// Helper for wrapping a currently running node environment
@@ -109,6 +110,7 @@ pub struct TestSetupBuilder {
     pub max_txs: usize,
     pub database_type: DbType,
     pub database_config: DatabaseConfig,
+    pub database_path: Option<PathBuf>,
     pub chain_config: Option<ChainConfig>,
     pub number_threads_pool_verif: usize,
     pub txpool_verification_threads: usize,
@@ -136,6 +138,11 @@ impl TestSetupBuilder {
 
     pub fn set_chain_config(&mut self, chain_config: ChainConfig) -> &mut Self {
         self.chain_config = Some(chain_config);
+        self
+    }
+
+    pub fn set_database_path(&mut self, database_path: impl Into<PathBuf>) -> &mut Self {
+        self.database_path = Some(database_path.into());
         self
     }
 
@@ -295,6 +302,9 @@ impl TestSetupBuilder {
         };
 
         let mut config = Config::local_node_with_configs(chain_conf, state);
+        if let Some(database_path) = self.database_path.clone() {
+            config.combined_db_config.database_path = database_path;
+        }
         config.utxo_validation = self.utxo_validation;
         config.txpool = txpool;
         config.block_production = self.trigger;
@@ -337,6 +347,7 @@ impl Default for TestSetupBuilder {
             max_txs: 100000,
             database_type: DbType::RocksDb,
             database_config: DatabaseConfig::config_for_tests(),
+            database_path: None,
             chain_config: None,
             number_threads_pool_verif: 0,
             txpool_verification_threads: 0,

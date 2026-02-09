@@ -157,10 +157,7 @@ impl fuel_core_producer::ports::BlockProducer<TransactionsSource>
                     .await
                     .map(|u| {
                         let (result, changes) = u.into();
-                        Uncommitted::new(
-                            result,
-                            StorageChanges::Changes(changes),
-                        )
+                        Uncommitted::new(result, StorageChanges::Changes(changes))
                     })
             }
         }
@@ -197,12 +194,12 @@ impl fuel_core_producer::ports::BlockProducer<Vec<Transaction>>
                     "ParallelExecutorAdapter does not support produce_without_commit"
                 );
             }
-            ParallelExecutorAdapterInner::Native(native) => {
-                native.produce_without_commit_from_vector(component).map(|u| {
+            ParallelExecutorAdapterInner::Native(native) => native
+                .produce_without_commit_from_vector(component)
+                .map(|u| {
                     let (result, changes) = u.into();
                     Uncommitted::new(result, StorageChanges::Changes(changes))
-                })
-            }
+                }),
         }
     }
 }

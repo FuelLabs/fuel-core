@@ -1,5 +1,7 @@
 #![allow(clippy::let_unit_value)]
 
+#[cfg(all(feature = "parallel-executor", not(feature = "no-parallel-executor")))]
+use super::config::ExecutorMode;
 use super::{
     DbType,
     adapters::{
@@ -14,8 +16,6 @@ use super::{
     config::DaCompressionMode,
     genesis::create_genesis_block,
 };
-#[cfg(all(feature = "parallel-executor", not(feature = "no-parallel-executor")))]
-use super::config::ExecutorMode;
 #[cfg(feature = "rpc")]
 use crate::database::database_description::on_chain::OnChain;
 #[cfg(feature = "relayer")]
@@ -283,7 +283,9 @@ pub fn init_sub_services(
                             forbid_unauthorized_inputs_default: config.utxo_validation,
                             forbid_fake_utxo_default: config.utxo_validation,
                             allow_syscall: config.allow_syscall,
-                            native_executor_version: config.executor.native_executor_version,
+                            native_executor_version: config
+                                .executor
+                                .native_executor_version,
                             allow_historical_execution: config.historical_execution,
                         };
                     let executor = crate::service::adapters::ExecutorAdapter::new(
