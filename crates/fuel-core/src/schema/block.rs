@@ -40,6 +40,7 @@ use async_graphql::{
         EmptyFields,
     },
 };
+use fuel_core_metrics::parallel_executor_metrics::record_block_production_time;
 use fuel_core_storage::{
     Result as StorageResult,
     iter::IterDirection,
@@ -432,6 +433,7 @@ impl BlockMutation {
             blocks_to_produce,
             instant.elapsed()
         );
+        record_block_production_time(instant.elapsed());
         Ok(on_chain_height.into())
     }
 }

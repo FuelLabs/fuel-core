@@ -530,6 +530,7 @@ where
                 tracing::warn!("Waiting for workers to finish");
                 tokio::select! {
                     _ = tx_notifier => {
+                        tracing::warn!("New transactions received");
                         self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     result = self.current_execution_tasks.select_next_some() => {
@@ -588,6 +589,7 @@ where
                         }
                     }
                     _ = tokio::time::sleep_until(deadline) => {
+                        tracing::warn!("timeout waiting on workers");
                         break 'outer;
                     }
                 }
@@ -596,9 +598,12 @@ where
 
         tracing::warn!("******");
         tracing::warn!("waiting for execution tasks: {:?}", instant.elapsed());
-        self.wait_all_execution_tasks().await?;
+        let exceeded_deadline = self.wait_all_execution_tasks().await?;
         tracing::warn!("execution tasks done: {:?}", instant.elapsed());
         if self.config.metrics {
+            if exceeded_deadline {
+                parallel_executor_metrics::record_execution_time(instant.elapsed());
+            }
             parallel_executor_metrics::set_number_of_transactions(nb_transactions);
             parallel_executor_metrics::set_total_gas_used(total_gas);
             let block_height = u32::from(*self.header_to_produce.height());
@@ -927,7 +932,8 @@ where
         );
     }
 
-    async fn wait_all_execution_tasks(&mut self) -> Result<(), SchedulerError> {
+    // returns `true` if exceeded deadline
+    async fn wait_all_execution_tasks(&mut self) -> Result<bool, SchedulerError> {
         // We have reached the deadline
         // We need to merge the states of all the workers
         while !self.current_execution_tasks.is_empty() {
@@ -975,6 +981,7 @@ where
         }
 
         let now = Instant::now();
+        let mut exceeded_deadline = false;
         if now > self.deadline {
             tracing::warn!(
                 "Execution time exceeded the limit by: {}ms",
@@ -982,8 +989,9 @@ where
                     .expect("Checked above; qed")
                     .as_millis()
             );
+            exceeded_deadline = true;
         }
-        Ok(())
+        Ok(exceeded_deadline)
     }
 
     fn verify_coherency_and_merge_results(

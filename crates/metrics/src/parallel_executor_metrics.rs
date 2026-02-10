@@ -25,6 +25,7 @@ pub struct ParallelExecutorMetrics {
     pub total_gas_used: Gauge,
     pub block_height: Gauge,
     pub max_workers_used: Gauge,
+    pub block_production_time_seconds: Gauge<f64, AtomicU64>,
     pub batch_prepare_ms: Histogram,
     pub batch_prepare_us_per_tx: Histogram,
     pub batch_prepare_ns_per_kgas: Histogram,
@@ -43,6 +44,7 @@ impl Default for ParallelExecutorMetrics {
         let total_gas_used = Gauge::default();
         let block_height = Gauge::default();
         let max_workers_used = Gauge::default();
+        let block_production_time_seconds = Gauge::default();
         let batch_prepare_ms =
             Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
         let batch_prepare_us_per_tx =
@@ -71,6 +73,7 @@ impl Default for ParallelExecutorMetrics {
             total_gas_used,
             block_height,
             max_workers_used,
+            block_production_time_seconds,
             batch_prepare_ms,
             batch_prepare_us_per_tx,
             batch_prepare_ns_per_kgas,
@@ -107,6 +110,11 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_max_workers_used",
             "Maximum number of workers used concurrently by the parallel executor per block",
             metrics.max_workers_used.clone(),
+        );
+        registry.register(
+            "parallel_executor_block_production_time_seconds",
+            "Time spent producing blocks after transactions are added to the block",
+            metrics.block_production_time_seconds.clone(),
         );
         registry.register(
             "parallel_executor_batch_prepare_ms",
@@ -188,6 +196,12 @@ pub fn set_max_workers_used(max_workers_used: u32) {
     parallel_executor_metrics()
         .max_workers_used
         .set(max_workers_used as i64);
+}
+
+pub fn record_block_production_time(duration: Duration) {
+    parallel_executor_metrics()
+        .block_production_time_seconds
+        .set(duration.as_secs_f64());
 }
 
 fn duration_ms(duration: Duration) -> f64 {
