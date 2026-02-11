@@ -765,6 +765,7 @@ impl Command {
                 pending_pool_tx_ttl: tx_pending_pool_ttl.into(),
                 max_pending_pool_size_percentage: tx_pending_pool_size_percentage,
                 metrics: metrics.is_enabled(Module::TxPool),
+                eagerly_include_tx_dependency_graphs: false,
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,

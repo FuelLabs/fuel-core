@@ -381,9 +381,14 @@ where
     ) -> Vec<ArcPoolTx> {
         let metrics = self.config.metrics;
         let maybe_start = metrics.then(std::time::Instant::now);
+        let select_start = Instant::now();
+        let tx_count_before = self.tx_count();
+        let executable_before =
+            self.selection_algorithm.number_of_executable_transactions();
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
+        let select_elapsed = select_start.elapsed();
 
         if let Some(start) = maybe_start {
             Self::record_select_transaction_time(start)
@@ -410,6 +415,20 @@ where
             .collect::<Vec<_>>();
 
         self.update_stats();
+
+        let tx_count_after = self.tx_count();
+        let executable_after =
+            self.selection_algorithm.number_of_executable_transactions();
+
+        tracing::warn!(
+            tx_count_before,
+            executable_before,
+            tx_count_after,
+            executable_after,
+            selected_count = txs.len(),
+            select_time_us = select_elapsed.as_micros(),
+            "txpool_v2 selection summary"
+        );
 
         txs
     }

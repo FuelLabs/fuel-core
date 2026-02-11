@@ -26,6 +26,7 @@ pub struct ParallelExecutorMetrics {
     pub block_height: Gauge,
     pub max_workers_used: Gauge,
     pub block_production_time_seconds: Gauge<f64, AtomicU64>,
+    pub scheduler_run_time_seconds: Gauge<f64, AtomicU64>,
     pub batch_prepare_ms: Histogram,
     pub batch_prepare_us_per_tx: Histogram,
     pub batch_prepare_ns_per_kgas: Histogram,
@@ -45,6 +46,7 @@ impl Default for ParallelExecutorMetrics {
         let block_height = Gauge::default();
         let max_workers_used = Gauge::default();
         let block_production_time_seconds = Gauge::default();
+        let scheduler_run_time_seconds = Gauge::default();
         let batch_prepare_ms =
             Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
         let batch_prepare_us_per_tx =
@@ -74,6 +76,7 @@ impl Default for ParallelExecutorMetrics {
             block_height,
             max_workers_used,
             block_production_time_seconds,
+            scheduler_run_time_seconds,
             batch_prepare_ms,
             batch_prepare_us_per_tx,
             batch_prepare_ns_per_kgas,
@@ -115,6 +118,11 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_block_production_time_seconds",
             "Time spent producing blocks after transactions are added to the block",
             metrics.block_production_time_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_scheduler_run_time_seconds",
+            "Total time spent running the parallel executor scheduler",
+            metrics.scheduler_run_time_seconds.clone(),
         );
         registry.register(
             "parallel_executor_batch_prepare_ms",
@@ -201,6 +209,12 @@ pub fn set_max_workers_used(max_workers_used: u32) {
 pub fn record_block_production_time(duration: Duration) {
     parallel_executor_metrics()
         .block_production_time_seconds
+        .set(duration.as_secs_f64());
+}
+
+pub fn record_scheduler_run_time(duration: Duration) {
+    parallel_executor_metrics()
+        .scheduler_run_time_seconds
         .set(duration.as_secs_f64());
 }
 

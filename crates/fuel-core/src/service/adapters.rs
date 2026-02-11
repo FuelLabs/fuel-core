@@ -321,24 +321,34 @@ pub struct PoAAdapter {
 #[derive(Clone)]
 pub struct TxPoolAdapter {
     service: TxPoolSharedState,
+    execution_worker_count: usize,
 }
 
 impl TxPoolAdapter {
-    pub fn new(service: TxPoolSharedState) -> Self {
-        Self { service }
+    pub fn new(service: TxPoolSharedState, execution_worker_count: usize) -> Self {
+        Self {
+            service,
+            execution_worker_count,
+        }
     }
 }
 
 pub struct TransactionsSource {
     tx_pool: TxPoolSharedState,
     minimum_gas_price: u64,
+    execution_worker_count: usize,
 }
 
 impl TransactionsSource {
-    pub fn new(minimum_gas_price: u64, tx_pool: TxPoolSharedState) -> Self {
+    pub fn new(
+        minimum_gas_price: u64,
+        tx_pool: TxPoolSharedState,
+        execution_worker_count: usize,
+    ) -> Self {
         Self {
             tx_pool,
             minimum_gas_price,
+            execution_worker_count,
         }
     }
 }

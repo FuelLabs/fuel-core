@@ -429,6 +429,7 @@ where
         let mut new_tx_notifier = tx_source.get_new_transactions_notifier();
         let now = Instant::now();
         let deadline = self.deadline;
+        let mut execution_time_recorded = false;
         let mut nb_batch_created = 0;
         let mut nb_transactions: u32 = l1_execution_data.tx_count;
         let initial_gas_per_worker = self
@@ -514,13 +515,18 @@ where
                 )?;
             } else if self.current_execution_tasks.is_empty() {
                 let waiting = Instant::now();
-                let execution_time = instant.elapsed();
-                parallel_executor_metrics::record_execution_time(execution_time);
                 tokio::select! {
                     _ = tx_notifier => {
                         self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     _ = tokio::time::sleep_until(deadline) => {
+                        if !execution_time_recorded {
+                            let execution_time = instant
+                                .elapsed()
+                                .saturating_sub(waiting.elapsed());
+                            parallel_executor_metrics::record_execution_time(execution_time);
+                            execution_time_recorded = true;
+                        }
                         tracing::warn!("******");
                         tracing::warn!("waited until deadline for {:?}, total elapsed: {:?}", waiting.elapsed(), instant.elapsed());
                         break 'outer;
@@ -601,7 +607,7 @@ where
         let exceeded_deadline = self.wait_all_execution_tasks().await?;
         tracing::warn!("execution tasks done: {:?}", instant.elapsed());
         if self.config.metrics {
-            if exceeded_deadline {
+            if exceeded_deadline && !execution_time_recorded {
                 parallel_executor_metrics::record_execution_time(instant.elapsed());
             }
             parallel_executor_metrics::set_number_of_transactions(nb_transactions);
@@ -675,6 +681,9 @@ where
 
         let execution_time = instant.elapsed();
         tracing::warn!("Scheduler `run` execution time: {:?}", execution_time);
+        if self.config.metrics {
+            parallel_executor_metrics::record_scheduler_run_time(execution_time);
+        }
         Ok(res)
     }
 

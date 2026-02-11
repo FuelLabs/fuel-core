@@ -3,7 +3,10 @@ use std::{
         Ordering,
         Reverse,
     },
-    collections::BTreeMap,
+    collections::{
+        BTreeMap,
+        VecDeque,
+    },
     fmt::Debug,
     time::SystemTime,
 };
@@ -28,7 +31,7 @@ use fuel_core_types::services::txpool::ArcPoolTx;
 use std::collections::HashMap;
 
 pub trait RatioTipGasSelectionAlgorithmStorage {
-    type StorageIndex: Debug;
+    type StorageIndex: Copy + Debug;
 
     fn get(&self, index: &Self::StorageIndex) -> Option<&StorageData>;
 
@@ -43,6 +46,11 @@ pub trait RatioTipGasSelectionAlgorithmStorage {
 }
 
 pub type RatioTipGas = Ratio<u64>;
+
+#[cfg(feature = "u32-tx-count")]
+type TxCount = u32;
+#[cfg(not(feature = "u32-tx-count"))]
+type TxCount = u16;
 
 /// Key used to sort transactions by tip/gas ratio.
 /// It first compares the tip/gas ratio, then the creation instant and finally the transaction id.
@@ -75,6 +83,34 @@ impl PartialOrd for Key {
     }
 }
 
+#[derive(Default)]
+struct SkipCounters {
+    not_enough_gas: usize,
+    too_big_tx: usize,
+    less_price: usize,
+    excluded_contracts: usize,
+}
+
+struct SelectionBudget {
+    gas_left: u64,
+    space_left: u64,
+    nb_left: TxCount,
+}
+
+impl SelectionBudget {
+    fn new(constraints: &Constraints) -> Self {
+        Self {
+            gas_left: constraints.max_gas,
+            space_left: constraints.maximum_block_size,
+            nb_left: constraints.maximum_txs,
+        }
+    }
+
+    fn has_capacity(&self) -> bool {
+        self.gas_left > 0 && self.space_left > 0 && self.nb_left > 0
+    }
+}
+
 /// The selection algorithm that selects transactions based on the tip/gas ratio.
 pub struct RatioTipGasSelection<S>
 where
@@ -82,16 +118,21 @@ where
 {
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
     new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
+    eagerly_include_tx_dependency_graphs: bool,
 }
 
 impl<S> RatioTipGasSelection<S>
 where
     S: RatioTipGasSelectionAlgorithmStorage,
 {
-    pub fn new(new_executable_txs_notifier: tokio::sync::watch::Sender<()>) -> Self {
+    pub fn new(
+        new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
+        eagerly_include_tx_dependency_graphs: bool,
+    ) -> Self {
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
             new_executable_txs_notifier,
+            eagerly_include_tx_dependency_graphs,
         }
     }
 
@@ -115,6 +156,165 @@ where
     fn on_removed_transaction_inner(&mut self, key: Key) {
         self.executable_transactions_sorted_tip_gas_ratio
             .remove(&Reverse(key));
+    }
+
+    fn batch_graphs_count(
+        executable_count: usize,
+        execution_worker_count: usize,
+    ) -> usize {
+        if execution_worker_count == 0 {
+            return 0;
+        }
+        (executable_count.saturating_add(execution_worker_count).saturating_sub(1))
+            / execution_worker_count
+    }
+
+    fn try_enqueue_stored_transaction(
+        &self,
+        constraints: &Constraints,
+        stored_transaction: &StorageData,
+        storage_id: S::StorageIndex,
+        prioritized_queue: &mut VecDeque<S::StorageIndex>,
+        budget: &mut SelectionBudget,
+        skipped: &mut SkipCounters,
+    ) -> bool {
+        if !budget.has_capacity() {
+            return false;
+        }
+
+        let has_excluded_contract =
+            stored_transaction.transaction.inputs().iter().any(|input| {
+                if let fuel_core_types::fuel_tx::Input::Contract(contract) = input {
+                    constraints
+                        .excluded_contracts
+                        .contains(&contract.contract_id)
+                } else {
+                    false
+                }
+            });
+        if has_excluded_contract {
+            skipped.excluded_contracts = skipped.excluded_contracts.saturating_add(1);
+            return false;
+        }
+
+        if stored_transaction.transaction.max_gas_price() < constraints.minimal_gas_price
+        {
+            skipped.less_price = skipped.less_price.saturating_add(1);
+            return false;
+        }
+
+        if stored_transaction.transaction.max_gas() > budget.gas_left {
+            skipped.not_enough_gas = skipped.not_enough_gas.saturating_add(1);
+            return false;
+        }
+
+        if stored_transaction.transaction.metered_bytes_size() as u64 > budget.space_left
+        {
+            skipped.too_big_tx = skipped.too_big_tx.saturating_add(1);
+            return false;
+        }
+
+        budget.gas_left = budget
+            .gas_left
+            .saturating_sub(stored_transaction.transaction.max_gas());
+        budget.space_left = budget.space_left.saturating_sub(
+            stored_transaction.transaction.metered_bytes_size() as u64,
+        );
+        budget.nb_left = budget.nb_left.saturating_sub(1);
+        prioritized_queue.push_back(storage_id);
+        true
+    }
+
+    fn fill_from_executable_set(
+        &mut self,
+        constraints: &Constraints,
+        storage: &S,
+        batch_graphs_count: usize,
+        prioritized_queue: &mut VecDeque<S::StorageIndex>,
+        budget: &mut SelectionBudget,
+        skipped: &mut SkipCounters,
+    ) -> bool {
+        let mut selected_keys = Vec::new();
+        for (key, storage_id) in &self.executable_transactions_sorted_tip_gas_ratio {
+            if prioritized_queue.len() >= batch_graphs_count || !budget.has_capacity() {
+                break;
+            }
+
+            let Some(stored_transaction) = storage.get(storage_id) else {
+                debug_assert!(
+                    false,
+                    "Transaction not found in the storage during `gather_best_txs`."
+                );
+                tracing::warn!(
+                    "Transaction not found in the storage during `gather_best_txs`."
+                );
+                selected_keys.push(key.0);
+                continue;
+            };
+
+            if self.try_enqueue_stored_transaction(
+                constraints,
+                stored_transaction,
+                *storage_id,
+                prioritized_queue,
+                budget,
+                skipped,
+            ) {
+                selected_keys.push(key.0);
+            }
+        }
+
+        if selected_keys.is_empty() {
+            return false;
+        }
+
+        for key in selected_keys {
+            self.on_removed_transaction_inner(key);
+        }
+        true
+    }
+
+    fn fill_from_promoted_queue(
+        &mut self,
+        constraints: &Constraints,
+        storage: &S,
+        batch_graphs_count: usize,
+        prioritized_queue: &mut VecDeque<S::StorageIndex>,
+        promoted_queue: &mut VecDeque<S::StorageIndex>,
+        budget: &mut SelectionBudget,
+        skipped: &mut SkipCounters,
+    ) -> bool {
+        let mut filled = false;
+        while budget.has_capacity() && prioritized_queue.len() < batch_graphs_count {
+            let Some(storage_id) = promoted_queue.pop_front() else {
+                break;
+            };
+
+            let Some(stored_transaction) = storage.get(&storage_id) else {
+                debug_assert!(
+                    false,
+                    "Transaction not found in the storage during `gather_best_txs`."
+                );
+                tracing::warn!(
+                    "Transaction not found in the storage during `gather_best_txs`."
+                );
+                continue;
+            };
+
+            if self.try_enqueue_stored_transaction(
+                constraints,
+                stored_transaction,
+                storage_id,
+                prioritized_queue,
+                budget,
+                skipped,
+            ) {
+                let key = Self::key(stored_transaction);
+                self.on_removed_transaction_inner(key);
+                filled = true;
+            }
+        }
+        filled
     }
 
     #[cfg(test)]
@@ -151,126 +351,120 @@ where
         constraints: &Constraints,
         storage: &mut S,
     ) -> RemovedTransactions {
-        let mut gas_left = constraints.max_gas;
-        let mut space_left = constraints.maximum_block_size;
-        let mut nb_left = constraints.maximum_txs;
         let mut result = Vec::new();
+        let execution_worker_count = constraints.execution_worker_count.max(1);
+        let batch_graphs_count = Self::batch_graphs_count(
+            self.number_of_executable_transactions(),
+            execution_worker_count,
+        );
 
-        // Take iterate over all transactions with the highest tip/gas ratio. If transaction
-        // fits in the gas limit select it and mark all its dependents to be promoted.
-        // Do that until end of the list or gas limit is reached. If gas limit is not
-        // reached, but we have promoted transactions we can start again from the beginning.
-        // Otherwise, we can break the loop.
-        // It is done in this way to minimize number of iteration of the list of executable
-        // transactions.
+        let mut budget = SelectionBudget::new(constraints);
+        let mut skipped = SkipCounters::default();
         let mut add_new_executable = false;
-        while gas_left > 0
-            && nb_left > 0
-            && space_left > 0
-            && !self.executable_transactions_sorted_tip_gas_ratio.is_empty()
-        {
-            let mut clean_up_list = Vec::new();
-            let mut transactions_to_remove = Vec::new();
-            let mut transactions_to_promote = Vec::new();
+        let mut prioritized_queue = VecDeque::with_capacity(batch_graphs_count);
+        let mut promoted_queue = VecDeque::new();
 
-            'outer: for (key, storage_id) in
-                &self.executable_transactions_sorted_tip_gas_ratio
-            {
-                if nb_left == 0 || gas_left == 0 || space_left == 0 {
+        self.fill_from_executable_set(
+            constraints,
+            storage,
+            batch_graphs_count,
+            &mut prioritized_queue,
+            &mut budget,
+            &mut skipped,
+        );
+
+        loop {
+            if budget.has_capacity() {
+                let filled_from_promoted = self.fill_from_promoted_queue(
+                    constraints,
+                    storage,
+                    batch_graphs_count,
+                    &mut prioritized_queue,
+                    &mut promoted_queue,
+                    &mut budget,
+                    &mut skipped,
+                );
+                let filled_from_executable = self.eagerly_include_tx_dependency_graphs
+                    && prioritized_queue.len() < batch_graphs_count
+                    && self.fill_from_executable_set(
+                        constraints,
+                        storage,
+                        batch_graphs_count,
+                        &mut prioritized_queue,
+                        &mut budget,
+                        &mut skipped,
+                    );
+
+                if prioritized_queue.is_empty()
+                    && !filled_from_promoted
+                    && !filled_from_executable
+                {
                     break;
                 }
-
-                let Some(stored_transaction) = storage.get(storage_id) else {
-                    debug_assert!(
-                        false,
-                        "Transaction not found in the storage during `gather_best_txs`."
-                    );
-                    tracing::warn!(
-                        "Transaction not found in the storage during `gather_best_txs`."
-                    );
-                    transactions_to_remove.push(*key);
-                    continue
-                };
-
-                for input in stored_transaction.transaction.inputs() {
-                    if let fuel_core_types::fuel_tx::Input::Contract(contract) = input
-                        && constraints
-                            .excluded_contracts
-                            .contains(&contract.contract_id)
-                    {
-                        continue 'outer;
-                    }
-                }
-
-                let less_price = stored_transaction.transaction.max_gas_price()
-                    < constraints.minimal_gas_price;
-
-                if less_price {
-                    continue
-                }
-
-                let not_enough_gas = stored_transaction.transaction.max_gas() > gas_left;
-                let too_big_tx = stored_transaction.transaction.metered_bytes_size()
-                    as u64
-                    > space_left;
-
-                if not_enough_gas || too_big_tx {
-                    continue
-                }
-
-                gas_left =
-                    gas_left.saturating_sub(stored_transaction.transaction.max_gas());
-                space_left = space_left.saturating_sub(
-                    stored_transaction.transaction.metered_bytes_size() as u64,
-                );
-                nb_left = nb_left.saturating_sub(1);
-
-                let dependents = storage.get_dependents(storage_id).collect::<Vec<_>>();
-                debug_assert!(!storage.has_dependencies(storage_id));
-                let removed = storage.remove(storage_id).expect(
-                    "We just get the transaction from the storage above, it should exist.",
-                );
-                clean_up_list.push(*key);
-                result.push(removed);
-
-                for dependent in dependents {
-                    if !storage.has_dependencies(&dependent) {
-                        transactions_to_promote.push(dependent);
-                    }
-                }
             }
 
-            for remove in transactions_to_remove {
-                let key = remove.0;
-                self.on_removed_transaction_inner(key);
-            }
-
-            // If no transaction fits in the gas limit and no one to promote, we can break the loop
-            if clean_up_list.is_empty() && transactions_to_promote.is_empty() {
+            if prioritized_queue.is_empty() {
                 break;
             }
 
-            for key in clean_up_list {
-                let key = key.0;
-                // Remove selected transactions from the sorted list
-                self.on_removed_transaction_inner(key);
-            }
+            let storage_id = prioritized_queue
+                .pop_front()
+                .expect("Checked for emptiness above.");
 
-            if transactions_to_promote.is_empty() {
-                continue;
-            }
-            for promote in transactions_to_promote {
-                let storage = storage.get(&promote).expect(
-                    "We just get the dependent from the storage, it should exist.",
+            let Some(_stored_transaction) = storage.get(&storage_id) else {
+                debug_assert!(
+                    false,
+                    "Transaction not found in the storage during `gather_best_txs`."
                 );
-                self.new_executable_transaction(promote, storage);
+                tracing::warn!(
+                    "Transaction not found in the storage during `gather_best_txs`."
+                );
+                continue;
+            };
+
+            let dependents = storage.get_dependents(&storage_id).collect::<Vec<_>>();
+            debug_assert!(!storage.has_dependencies(&storage_id));
+            let removed = storage.remove(&storage_id).expect(
+                "We just get the transaction from the storage above, it should exist.",
+            );
+            result.push(removed);
+
+            for dependent in dependents {
+                if storage.has_dependencies(&dependent) {
+                    continue;
+                }
+                let Some(store_entry) = storage.get(&dependent) else {
+                    debug_assert!(
+                        false,
+                        "Dependent transaction not found in the storage during `gather_best_txs`."
+                    );
+                    tracing::warn!(
+                        "Dependent transaction not found in the storage during `gather_best_txs`."
+                    );
+                    continue;
+                };
+                self.new_executable_transaction(dependent, store_entry);
+                promoted_queue.push_back(dependent);
+                add_new_executable = true;
             }
-            add_new_executable = true;
         }
 
         if add_new_executable {
             self.new_executable_txs_notifier.send_replace(());
         }
+
+        tracing::warn!(
+            batch_graphs_count,
+            execution_worker_count,
+            prioritized_queue_len = prioritized_queue.len(),
+            promoted_queue_len = promoted_queue.len(),
+            selected_count = result.len(),
+            skipped_not_enough_gas = skipped.not_enough_gas,
+            skipped_too_big_tx = skipped.too_big_tx,
+            skipped_less_price = skipped.less_price,
+            skipped_excluded_contracts = skipped.excluded_contracts,
+            "txpool_v2 gather_best_txs summary"
+        );
 
         result
     }
@@ -283,6 +477,12 @@ where
         let key = Self::key(store_entry);
         self.executable_transactions_sorted_tip_gas_ratio
             .insert(Reverse(key), storage_id);
+        // tracing::warn!(
+        //     executable_set_size = self
+        //         .executable_transactions_sorted_tip_gas_ratio
+        //         .len(),
+        //     "txpool_v2 executable added"
+        // );
     }
 
     fn get_less_worth_txs(&self) -> impl Iterator<Item = &Self::StorageIndex> {
@@ -293,7 +493,13 @@ where
 
     fn on_removed_transaction(&mut self, storage_entry: &StorageData) {
         let key = Self::key(storage_entry);
-        self.on_removed_transaction_inner(key)
+        self.on_removed_transaction_inner(key);
+        // tracing::warn!(
+        //     executable_set_size = self
+        //         .executable_transactions_sorted_tip_gas_ratio
+        //         .len(),
+        //     "txpool_v2 executable removed"
+        // );
     }
 
     fn number_of_executable_transactions(&self) -> usize {

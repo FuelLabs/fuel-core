@@ -797,7 +797,10 @@ where
             max_txs_chain_count: config.max_txs_chain_count,
         }),
         BasicCollisionManager::new(),
-        RatioTipGasSelection::new(new_txs_notifier.clone()),
+        RatioTipGasSelection::new(
+            new_txs_notifier.clone(),
+            config.eagerly_include_tx_dependency_graphs,
+        ),
         config,
         pool_stats_sender,
         new_txs_notifier.clone(),

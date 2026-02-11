@@ -25,6 +25,8 @@ pub struct Constraints {
     pub maximum_block_size: u64,
     /// List of excluded contracts.
     pub excluded_contracts: HashSet<ContractId>,
+    /// Number of execution workers available for the block.
+    pub execution_worker_count: usize,
 }
 
 /// The selection algorithm is responsible for selecting the best transactions to include in a block.

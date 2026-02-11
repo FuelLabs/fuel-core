@@ -395,6 +395,21 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
+    let execution_worker_count = {
+        #[cfg(feature = "parallel-executor")]
+        {
+            if matches!(config.executor.mode, ExecutorMode::Parallel) {
+                config.executor.parallel.worker_count.get()
+            } else {
+                1
+            }
+        }
+        #[cfg(not(feature = "parallel-executor"))]
+        {
+            1
+        }
+    };
+
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),
@@ -408,7 +423,8 @@ pub fn init_sub_services(
         new_txs_updater,
         preconfirmation_sender,
     );
-    let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
+    let tx_pool_adapter =
+        TxPoolAdapter::new(txpool.shared.clone(), execution_worker_count);
 
     #[cfg(feature = "p2p")]
     let mut network = config.p2p.clone().zip(p2p_externals).map(

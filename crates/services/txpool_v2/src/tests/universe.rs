@@ -192,7 +192,10 @@ impl TestPoolUniverse {
                 max_txs_chain_count: self.config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
-            RatioTipGasSelection::new(tx_new_executable_txs.clone()),
+            RatioTipGasSelection::new(
+                tx_new_executable_txs.clone(),
+                self.config.eagerly_include_tx_dependency_graphs,
+            ),
             self.config.clone(),
             tx,
             tx_new_executable_txs,
