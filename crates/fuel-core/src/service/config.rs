@@ -83,6 +83,7 @@ pub struct Config {
     #[cfg(feature = "parallel-executor")]
     pub executor_number_of_cores: NonZeroUsize,
     pub block_production: Trigger,
+    pub enable_producer_failover: bool,
     pub predefined_blocks_path: Option<PathBuf>,
     pub txpool: TxPoolConfig,
     pub tx_status_manager: TxStatusManagerConfig,
@@ -243,6 +244,7 @@ impl Config {
             executor_number_of_cores: NonZeroUsize::new(1).expect("1 is not zero"),
             snapshot_reader,
             block_production: Trigger::Instant,
+            enable_producer_failover: false,
             predefined_blocks_path: None,
             txpool: TxPoolConfig {
                 utxo_validation,
@@ -322,6 +324,7 @@ impl From<&Config> for fuel_core_poa::Config {
     fn from(config: &Config) -> Self {
         fuel_core_poa::Config {
             trigger: config.block_production,
+            enable_producer_failover: config.enable_producer_failover,
             signer: config.consensus_signer.clone(),
             metrics: false,
             min_connected_reserved_peers: config.min_connected_reserved_peers,

@@ -172,18 +172,21 @@ mod p2p {
         p2p_test_helpers::{
             Bootstrap,
             CustomizeConfig,
+            Node,
             make_config,
             make_node,
         },
     };
     use fuel_core_poa::{
         Trigger,
+        ports::BlockImporter,
         service::Mode,
     };
     use fuel_core_types::{
         fuel_tx::Input,
         fuel_types::Address,
     };
+    use futures::StreamExt;
     use std::time::Duration;
 
     // Starts first_producer which creates some blocks
@@ -295,6 +298,138 @@ mod p2p {
         )
         .await
         .expect("The first should reborn and sync with the second");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn failover_active__four_producers__only_first_leader_produces_blocks() {
+        const BLOCK_TIME: Duration = Duration::from_millis(200);
+        const FIRST_PRODUCTION_TIMEOUT: Duration = Duration::from_millis(500);
+        const NON_LOCAL_BLOCKS_TO_CHECK: usize = 30;
+        const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_millis(250);
+
+        // given
+        let mut rng = StdRng::seed_from_u64(3333);
+
+        let secret = SecretKey::random(&mut rng);
+        let pub_key = Input::owner(&secret.public_key());
+
+        let mut config = Config::local_node();
+        update_signing_key(&mut config, pub_key);
+
+        let bootstrap_config = make_config(
+            "Bootstrap".to_string(),
+            config.clone(),
+            CustomizeConfig::no_overrides(),
+        );
+        let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
+
+        let make_node_config = |name: &str| {
+            let mut config = make_config(
+                name.to_string(),
+                config.clone(),
+                CustomizeConfig::no_overrides(),
+            );
+            config.debug = true;
+            config.block_production = Trigger::Interval {
+                block_time: BLOCK_TIME,
+            };
+            config.enable_producer_failover = true;
+            config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
+            config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
+            config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
+            config.p2p.as_mut().unwrap().info_interval = Some(Duration::from_millis(100));
+            config.min_connected_reserved_peers = 1;
+            config.time_until_synced = BLOCK_TIME;
+            config
+        };
+
+        let first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+        let second_producer =
+            make_node(make_node_config("Second Producer"), vec![]).await;
+        let third_producer = make_node(make_node_config("Third Producer"), vec![]).await;
+        let fourth_producer =
+            make_node(make_node_config("Fourth Producer"), vec![]).await;
+
+        // when
+        let leader_index = tokio::time::timeout(FIRST_PRODUCTION_TIMEOUT, async {
+            tokio::select! {
+                _ = wait_for_local_block(&first_producer) => 0usize,
+                _ = wait_for_local_block(&second_producer) => 1usize,
+                _ = wait_for_local_block(&third_producer) => 2usize,
+                _ = wait_for_local_block(&fourth_producer) => 3usize,
+            }
+        })
+        .await
+        .expect("One of the producers should claim leadership and produce");
+
+        let all_nodes = [
+            &first_producer,
+            &second_producer,
+            &third_producer,
+            &fourth_producer,
+        ];
+        let leader = all_nodes[leader_index];
+        let non_leaders: Vec<&Node> = all_nodes
+            .into_iter()
+            .enumerate()
+            .filter(|(index, _)| *index != leader_index)
+            .map(|(_, node)| node)
+            .collect();
+
+        // then
+        only_first_leader_produces_blocks(
+            leader,
+            &non_leaders,
+            NON_LOCAL_BLOCKS_TO_CHECK,
+            BLOCK_IMPORT_TIMEOUT,
+        )
+        .await;
+    }
+
+    async fn wait_for_local_block(node: &Node) {
+        let mut stream = node.node.shared.block_importer.block_stream();
+        while let Some(block) = stream.next().await {
+            if block.is_locally_produced() {
+                return;
+            }
+        }
+        panic!("block stream ended unexpectedly");
+    }
+
+    async fn wait_for_non_local_block_and_fail_on_local(node: &Node) {
+        let mut stream = node.node.shared.block_importer.block_stream();
+        while let Some(block) = stream.next().await {
+            if block.is_locally_produced() {
+                let height = *block.block_header.height();
+                panic!(
+                    "Expected only non-local blocks while leader is alive; got local block at height {height}"
+                );
+            } else {
+                return;
+            }
+        }
+        panic!("block stream ended unexpectedly");
+    }
+
+    async fn only_first_leader_produces_blocks(
+        leader: &Node,
+        non_leaders: &[&Node],
+        non_local_blocks_to_check: usize,
+        block_import_timeout: Duration,
+    ) {
+        for _ in 0..non_local_blocks_to_check {
+            tokio::time::timeout(block_import_timeout, wait_for_local_block(leader))
+                .await
+                .expect("Leader should import a local block");
+            for node in non_leaders {
+                tokio::time::timeout(
+                    block_import_timeout,
+                    wait_for_non_local_block_and_fail_on_local(node),
+                )
+                .await
+                .expect("Non-leader should import a non-local block");
+            }
+        }
     }
 
     fn update_signing_key(config: &mut Config, key: Address) {

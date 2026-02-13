@@ -743,6 +743,7 @@ impl Command {
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores,
             block_production: trigger,
+            enable_producer_failover: false,
             predefined_blocks_path,
             txpool: TxPoolConfig {
                 max_txs_chain_count: tx_max_chain_count,
