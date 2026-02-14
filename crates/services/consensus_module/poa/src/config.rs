@@ -7,7 +7,6 @@ use tokio::time::Duration;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub trigger: Trigger,
-    pub enable_producer_failover: bool,
     pub signer: SignMode,
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
@@ -21,7 +20,6 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             trigger: Trigger::default(),
-            enable_producer_failover: false,
             signer: SignMode::Unavailable,
             metrics: false,
             min_connected_reserved_peers: 0,

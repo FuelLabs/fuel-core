@@ -15,6 +15,7 @@ use crate::{
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
+        LeaderLeasePort,
         TransactionsSource,
         WaitForReadySignal,
     },
@@ -188,6 +189,7 @@ impl TestContextBuilder {
             predefined_blocks,
             watch,
             block_production_ready_signal.clone(),
+            None,
         );
 
         service.start_and_await().await.unwrap();
@@ -233,6 +235,7 @@ pub type TestPoAService = Service<
     InMemoryPredefinedBlocks,
     test_time::Watch,
     FakeBlockProductionReadySignal,
+    NoopLeaderLeasePort,
 >;
 
 struct TestContext {
@@ -250,6 +253,16 @@ pub struct TxPoolContext {
     pub txpool: MockTransactionPool,
     pub txs: Arc<Mutex<Vec<Script>>>,
     pub new_txs_notifier: watch::Sender<()>,
+}
+
+#[derive(Clone)]
+struct NoopLeaderLeasePort;
+
+#[async_trait::async_trait]
+impl LeaderLeasePort for NoopLeaderLeasePort {
+    async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
+        Ok(true)
+    }
 }
 
 impl MockTransactionPool {
@@ -414,6 +427,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
         block_production_ready_signal.clone(),
+        None,
     );
 
     // when
@@ -481,6 +495,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
         block_production_ready_signal.clone(),
+        None,
     );
 
     // when
@@ -561,6 +576,7 @@ async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() 
         InMemoryPredefinedBlocks::new(HashMap::new()),
         time.watch(),
         block_production_ready_signal.clone(),
+        None,
     );
 
     // when
@@ -608,6 +624,7 @@ async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
         InMemoryPredefinedBlocks::new(HashMap::new()),
         time.watch(),
         block_production_ready_signal.clone(),
+        None,
     );
 
     // when

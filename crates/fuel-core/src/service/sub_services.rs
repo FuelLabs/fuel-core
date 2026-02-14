@@ -54,6 +54,7 @@ use crate::{
             VerifierAdapter,
             chain_state_info_provider,
             consensus_module::poa::InDirectoryPredefinedBlocks,
+            consensus_module::poa::RedisLeaderLeaseAdapter,
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,
@@ -110,6 +111,7 @@ pub type PoAService = fuel_core_poa::Service<
     InDirectoryPredefinedBlocks,
     SystemTime,
     ReadySignal,
+    RedisLeaderLeaseAdapter,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -387,20 +389,35 @@ pub fn init_sub_services(
         })
         .transpose()?;
 
-    let poa = production_enabled.then(|| {
-        fuel_core_poa::new_service(
-            &last_block_header,
-            poa_config,
-            tx_pool_adapter.clone(),
-            producer_adapter.clone(),
-            importer_adapter.clone(),
-            p2p_adapter.clone(),
-            Arc::new(signer),
-            predefined_blocks,
-            SystemTime,
-            block_production_ready_signal,
-        )
-    });
+    let poa = production_enabled
+        .then(|| -> anyhow::Result<_> {
+            let leader_lease_port = config
+                .leader_lock
+                .as_ref()
+                .map(|leader_lock| {
+                    RedisLeaderLeaseAdapter::new(
+                        leader_lock.redis_url.clone(),
+                        leader_lock.lease_key.clone(),
+                        leader_lock.lease_ttl,
+                    )
+                })
+                .transpose()?;
+
+            Ok(fuel_core_poa::new_service(
+                &last_block_header,
+                poa_config,
+                tx_pool_adapter.clone(),
+                producer_adapter.clone(),
+                importer_adapter.clone(),
+                p2p_adapter.clone(),
+                Arc::new(signer),
+                predefined_blocks,
+                SystemTime,
+                block_production_ready_signal,
+                leader_lease_port,
+            ))
+        })
+        .transpose()?;
     let poa_adapter = PoAAdapter::new(poa.as_ref().map(|service| service.shared.clone()));
 
     #[cfg(feature = "p2p")]

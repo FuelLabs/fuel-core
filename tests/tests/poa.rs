@@ -176,6 +176,7 @@ mod p2p {
             make_config,
             make_node,
         },
+        service::config::RedisLeaderLockConfig,
     };
     use fuel_core_poa::{
         Trigger,
@@ -187,7 +188,23 @@ mod p2p {
         fuel_types::Address,
     };
     use futures::StreamExt;
-    use std::time::Duration;
+    use std::{
+        net::{
+            SocketAddrV4,
+            TcpListener,
+            TcpStream,
+        },
+        process::{
+            Child,
+            Command,
+            Stdio,
+        },
+        thread,
+        time::{
+            Duration,
+            Instant,
+        },
+    };
 
     // Starts first_producer which creates some blocks
     // Then starts second_producer that uses the first one as a reserved peer.
@@ -315,6 +332,12 @@ mod p2p {
 
         let mut config = Config::local_node();
         update_signing_key(&mut config, pub_key);
+        let redis = RedisTestServer::spawn();
+        let failover_config = RedisLeaderLockConfig {
+            redis_url: redis.redis_url(),
+            lease_key: "poa:failover:integration".to_string(),
+            lease_ttl: Duration::from_secs(2),
+        };
 
         let bootstrap_config = make_config(
             "Bootstrap".to_string(),
@@ -333,7 +356,7 @@ mod p2p {
             config.block_production = Trigger::Interval {
                 block_time: BLOCK_TIME,
             };
-            config.enable_producer_failover = true;
+            config.leader_lock = Some(failover_config.clone());
             config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
             config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
@@ -430,6 +453,62 @@ mod p2p {
                 .expect("Non-leader should import a non-local block");
             }
         }
+    }
+
+    struct RedisTestServer {
+        child: Child,
+        redis_url: String,
+    }
+
+    impl RedisTestServer {
+        fn spawn() -> Self {
+            let socket =
+                TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
+                    .expect("Should bind an ephemeral port");
+            let port = socket.local_addr().expect("Should get local addr").port();
+            drop(socket);
+
+            let child = Command::new("redis-server")
+                .arg("--port")
+                .arg(port.to_string())
+                .arg("--save")
+                .arg("")
+                .arg("--appendonly")
+                .arg("no")
+                .arg("--bind")
+                .arg("127.0.0.1")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("redis-server must be installed for this test");
+            wait_for_redis_ready(port);
+            Self {
+                child,
+                redis_url: format!("redis://127.0.0.1:{port}/"),
+            }
+        }
+
+        fn redis_url(&self) -> String {
+            self.redis_url.clone()
+        }
+    }
+
+    impl Drop for RedisTestServer {
+        fn drop(&mut self) {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+        }
+    }
+
+    fn wait_for_redis_ready(port: u16) {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline {
+            if TcpStream::connect(("127.0.0.1", port)).is_ok() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+        panic!("redis-server did not become ready in time");
     }
 
     fn update_signing_key(config: &mut Config, key: Address) {

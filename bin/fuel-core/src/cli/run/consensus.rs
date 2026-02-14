@@ -4,7 +4,10 @@ use clap::{
     ArgGroup,
     ValueEnum,
 };
-use fuel_core::service::config::Trigger as PoATrigger;
+use fuel_core::service::config::{
+    RedisLeaderLockConfig,
+    Trigger as PoATrigger,
+};
 use humantime::Duration;
 
 #[derive(Debug, Clone, clap::Args)]
@@ -15,6 +18,14 @@ pub struct PoATriggerArgs {
     interval: Interval,
     #[clap(flatten)]
     open: Open,
+    #[clap(flatten)]
+    leader_lock: LeaderLock,
+}
+
+impl PoATriggerArgs {
+    pub fn leader_lock(self) -> Option<RedisLeaderLockConfig> {
+        self.leader_lock.into()
+    }
 }
 
 // Convert from arg struct to PoATrigger enum
@@ -84,6 +95,39 @@ struct Open {
     pub period: Option<Duration>,
 }
 
+#[derive(Debug, Clone, clap::Args)]
+struct LeaderLock {
+    /// Redis URL used for distributed leader locking across producers.
+    #[clap(long = "poa-leader-lock-redis-url", env)]
+    redis_url: Option<String>,
+    /// Redis key used to store the active leader lease.
+    #[clap(long = "poa-leader-lock-key", env)]
+    lease_key: Option<String>,
+    /// Redis lease TTL for the leader lock.
+    #[clap(long = "poa-leader-lock-ttl", env)]
+    lease_ttl: Option<Duration>,
+}
+
+impl From<LeaderLock> for Option<RedisLeaderLockConfig> {
+    fn from(value: LeaderLock) -> Self {
+        let LeaderLock {
+            redis_url,
+            lease_key,
+            lease_ttl,
+        } = value;
+        match (redis_url, lease_key, lease_ttl) {
+            (Some(redis_url), Some(lease_key), Some(lease_ttl)) => {
+                Some(RedisLeaderLockConfig {
+                    redis_url,
+                    lease_key,
+                    lease_ttl: lease_ttl.into(),
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,5 +152,29 @@ mod tests {
         Command::try_parse_from(args)
             .map_err(|_| ())
             .map(|c| c.trigger.into())
+    }
+
+    #[test]
+    fn leader_lock__defaults_to_none() {
+        let command = Command::try_parse_from([""]).unwrap();
+        assert!(command.trigger.clone().leader_lock().is_none());
+    }
+
+    #[test]
+    fn leader_lock__when_all_args_set_then_some() {
+        let command = Command::try_parse_from([
+            "",
+            "--poa-leader-lock-redis-url",
+            "redis://127.0.0.1:6379/",
+            "--poa-leader-lock-key",
+            "poa:leader:lock",
+            "--poa-leader-lock-ttl",
+            "2s",
+        ])
+        .unwrap();
+        let leader_lock = command.trigger.clone().leader_lock().unwrap();
+        assert_eq!(leader_lock.redis_url, "redis://127.0.0.1:6379/");
+        assert_eq!(leader_lock.lease_key, "poa:leader:lock");
+        assert_eq!(leader_lock.lease_ttl, StdDuration::from_secs(2));
     }
 }

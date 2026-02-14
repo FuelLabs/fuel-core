@@ -20,6 +20,7 @@ use crate::{
         BlockProductionReadySignal,
         BlockSigner,
         GetTime,
+        LeaderLeasePort,
         P2pPort,
         PredefinedBlocks,
         TransactionPool,
@@ -66,7 +67,8 @@ use fuel_core_types::{
 use serde::Serialize;
 use tokio::time::sleep_until;
 
-pub type Service<B, I, S, PB, C, RS> = ServiceRunner<MainTask<B, I, S, PB, C, RS>>;
+pub type Service<B, I, S, PB, C, RS, LP> =
+    ServiceRunner<MainTask<B, I, S, PB, C, RS, LP>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -121,7 +123,7 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<B, I, S, PB, C, RS> {
+pub struct MainTask<B, I, S, PB, C, RS, LP> {
     signer: Arc<S>,
     block_producer: B,
     block_importer: I,
@@ -137,16 +139,18 @@ pub struct MainTask<B, I, S, PB, C, RS> {
     /// Deadline clock, used by the triggers
     sync_task_handle: ServiceRunner<SyncTask>,
     production_timeout: Duration,
+    leader_lease_port: Option<LP>,
     /// externally controlled start of block production
     block_production_ready_signal: BlockProductionReadySignal<RS>,
 }
 
-impl<B, I, S, PB, C, RS> MainTask<B, I, S, PB, C, RS>
+impl<B, I, S, PB, C, RS, LP> MainTask<B, I, S, PB, C, RS, LP>
 where
     I: BlockImporter,
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
+    LP: LeaderLeasePort,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort, T: TransactionPool>(
@@ -160,6 +164,7 @@ where
         predefined_blocks: PB,
         clock: C,
         block_production_ready_signal: RS,
+        leader_lease_port: Option<LP>,
     ) -> Self {
         let new_txs_watcher = txpool.new_txs_watcher();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -205,6 +210,7 @@ where
             sync_task_handle,
             clock,
             production_timeout,
+            leader_lease_port,
             block_production_ready_signal,
         }
     }
@@ -266,7 +272,7 @@ where
     }
 }
 
-impl<B, I, S, PB, C, RS> MainTask<B, I, S, PB, C, RS>
+impl<B, I, S, PB, C, RS, LP> MainTask<B, I, S, PB, C, RS, LP>
 where
     B: BlockProducer,
     I: BlockImporter,
@@ -274,6 +280,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
+    LP: LeaderLeasePort,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -562,6 +569,24 @@ where
             }
         }
     }
+
+    async fn handle_triggered_block_production(
+        &mut self,
+        deadline: Instant,
+    ) -> TaskNextAction {
+        match self.can_produce_next_block().await {
+            Ok(true) => self.handle_normal_block_production(deadline).await,
+            Ok(false) => TaskNextAction::Continue,
+            Err(err) => TaskNextAction::ErrorContinue(err),
+        }
+    }
+
+    async fn can_produce_next_block(&self) -> anyhow::Result<bool> {
+        let Some(leader_lease_port) = &self.leader_lease_port else {
+            return Ok(true);
+        };
+        leader_lease_port.can_produce_block(self.next_height()).await
+    }
 }
 
 #[derive(Serialize)]
@@ -571,7 +596,7 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<B, I, S, PB, C, RS> RunnableService for MainTask<B, I, S, PB, C, RS>
+impl<B, I, S, PB, C, RS, LP> RunnableService for MainTask<B, I, S, PB, C, RS, LP>
 where
     Self: RunnableTask,
     RS: WaitForReadySignal,
@@ -579,7 +604,7 @@ where
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<B, I, S, PB, C, RS>;
+    type Task = MainTask<B, I, S, PB, C, RS, LP>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -607,7 +632,7 @@ where
     }
 }
 
-impl<B, I, S, PB, C, RS> RunnableTask for MainTask<B, I, S, PB, C, RS>
+impl<B, I, S, PB, C, RS, LP> RunnableTask for MainTask<B, I, S, PB, C, RS, LP>
 where
     B: BlockProducer,
     I: BlockImporter,
@@ -615,6 +640,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
+    LP: LeaderLeasePort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -675,7 +701,7 @@ where
                 self.handle_requested_production(request).await
             }
             deadline = next_block_production => {
-                self.handle_normal_block_production(deadline).await
+                self.handle_triggered_block_production(deadline).await
             }
         }
     }
@@ -688,7 +714,7 @@ where
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB, C, RS>(
+pub fn new_service<T, B, I, P, S, PB, C, RS, LP>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
@@ -699,7 +725,8 @@ pub fn new_service<T, B, I, P, S, PB, C, RS>(
     predefined_blocks: PB,
     clock: C,
     block_production_ready_signal: RS,
-) -> Service<B, I, S, PB, C, RS>
+    leader_lease_port: Option<LP>,
+) -> Service<B, I, S, PB, C, RS, LP>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
@@ -709,6 +736,7 @@ where
     P: P2pPort,
     C: GetTime,
     RS: WaitForReadySignal,
+    LP: LeaderLeasePort + 'static,
 {
     Service::new(MainTask::new(
         last_block,
@@ -721,6 +749,7 @@ where
         predefined_blocks,
         clock,
         block_production_ready_signal,
+        leader_lease_port,
     ))
 }
 

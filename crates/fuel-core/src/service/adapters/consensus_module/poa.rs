@@ -12,6 +12,7 @@ use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
+        LeaderLeasePort,
         P2pPort,
         PredefinedBlocks,
         TransactionPool,
@@ -40,6 +41,7 @@ use std::path::{
     Path,
     PathBuf,
 };
+use std::time::Duration;
 use tokio::{
     sync::watch,
     time::Instant,
@@ -50,6 +52,74 @@ use tokio_stream::{
 };
 
 pub mod pre_confirmation_signature;
+
+#[derive(Clone)]
+pub struct RedisLeaderLeaseAdapter {
+    redis_client: redis::Client,
+    lease_key: String,
+    lease_owner_token: String,
+    lease_ttl_millis: u64,
+}
+
+impl RedisLeaderLeaseAdapter {
+    pub fn new(
+        redis_url: String,
+        lease_key: String,
+        lease_ttl: Duration,
+    ) -> anyhow::Result<Self> {
+        anyhow::ensure!(
+            !redis_url.is_empty(),
+            "Redis producer failover url must not be empty"
+        );
+        anyhow::ensure!(
+            !lease_key.is_empty(),
+            "Redis producer failover lease_key must not be empty"
+        );
+        anyhow::ensure!(
+            lease_ttl > Duration::ZERO,
+            "Redis producer failover lease_ttl must be greater than zero"
+        );
+        let redis_client = redis::Client::open(redis_url)?;
+        let lease_ttl_millis = lease_ttl.as_millis() as u64;
+        let lease_owner_token = uuid::Uuid::new_v4().to_string();
+        Ok(Self {
+            redis_client,
+            lease_key,
+            lease_owner_token,
+            lease_ttl_millis,
+        })
+    }
+
+    async fn renew_lease_if_owner(&self) -> anyhow::Result<bool> {
+        let mut connection = self.redis_client.get_multiplexed_async_connection().await?;
+        let renewed: i32 = redis::Script::new(
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+                return redis.call('PEXPIRE', KEYS[1], ARGV[2]) \
+            else \
+                return 0 \
+            end",
+        )
+        .key(&self.lease_key)
+        .arg(&self.lease_owner_token)
+        .arg(self.lease_ttl_millis)
+        .invoke_async(&mut connection)
+        .await?;
+        Ok(renewed == 1)
+    }
+
+    async fn acquire_lease_if_free(&self) -> anyhow::Result<bool> {
+        let mut connection = self.redis_client.get_multiplexed_async_connection().await?;
+        let result: Option<String> = redis::cmd("SET")
+            .arg(&self.lease_key)
+            .arg(&self.lease_owner_token)
+            .arg("PX")
+            .arg(self.lease_ttl_millis)
+            .arg("NX")
+            .query_async(&mut connection)
+            .await?;
+        Ok(result.is_some())
+    }
+}
 
 impl PoAAdapter {
     pub fn new(shared_state: Option<SharedState>) -> Self {
@@ -66,6 +136,16 @@ impl PoAAdapter {
             .ok_or(anyhow!("The block production is disabled"))?
             .manually_produce_block(start_time, mode)
             .await
+    }
+}
+
+#[async_trait::async_trait]
+impl LeaderLeasePort for RedisLeaderLeaseAdapter {
+    async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
+        if self.renew_lease_if_owner().await? {
+            return Ok(true);
+        }
+        self.acquire_lease_if_free().await
     }
 }
 

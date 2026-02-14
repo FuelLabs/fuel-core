@@ -111,6 +111,12 @@ pub trait SyncPort: Send + Sync {
     async fn sync_with_peers(&mut self) -> anyhow::Result<()>;
 }
 
+#[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
+pub trait LeaderLeasePort: Send + Sync {
+    async fn can_produce_block(&self, height: BlockHeight) -> anyhow::Result<bool>;
+}
+
 pub trait PredefinedBlocks: Send + Sync {
     fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>>;
 }
