@@ -109,15 +109,19 @@ impl RedisLeaderLeaseAdapter {
 
     async fn acquire_lease_if_free(&self) -> anyhow::Result<bool> {
         let mut connection = self.redis_client.get_multiplexed_async_connection().await?;
-        let result: Option<String> = redis::cmd("SET")
-            .arg(&self.lease_key)
-            .arg(&self.lease_owner_token)
-            .arg("PX")
-            .arg(self.lease_ttl_millis)
-            .arg("NX")
-            .query_async(&mut connection)
-            .await?;
-        Ok(result.is_some())
+        let acquired: i32 = redis::Script::new(
+            "if redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') then \
+                return 1 \
+            else \
+                return 0 \
+            end",
+        )
+        .key(&self.lease_key)
+        .arg(&self.lease_owner_token)
+        .arg(self.lease_ttl_millis)
+        .invoke_async(&mut connection)
+        .await?;
+        Ok(acquired == 1)
     }
 }
 

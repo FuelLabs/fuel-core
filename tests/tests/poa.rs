@@ -169,6 +169,7 @@ mod p2p {
     use super::*;
     use fuel_core::{
         chain_config::ConsensusConfig,
+        p2p::Multiaddr,
         p2p_test_helpers::{
             Bootstrap,
             CustomizeConfig,
@@ -187,7 +188,10 @@ mod p2p {
         fuel_tx::Input,
         fuel_types::Address,
     };
-    use futures::StreamExt;
+    use futures::{
+        StreamExt,
+        stream::FuturesUnordered,
+    };
     use std::{
         net::{
             SocketAddrV4,
@@ -318,53 +322,19 @@ mod p2p {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn failover_active__four_producers__only_first_leader_produces_blocks() {
+    async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
         const BLOCK_TIME: Duration = Duration::from_millis(200);
-        const FIRST_PRODUCTION_TIMEOUT: Duration = Duration::from_millis(500);
-        const NON_LOCAL_BLOCKS_TO_CHECK: usize = 30;
+        const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
+        const BLOCKS_TO_CHECK: usize = 30;
         const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_millis(250);
 
         // given
-        let mut rng = StdRng::seed_from_u64(3333);
-
-        let secret = SecretKey::random(&mut rng);
-        let pub_key = Input::owner(&secret.public_key());
-
-        let mut config = Config::local_node();
-        update_signing_key(&mut config, pub_key);
-        let redis = RedisTestServer::spawn();
-        let failover_config = RedisLeaderLockConfig {
-            redis_url: redis.redis_url(),
-            lease_key: "poa:failover:integration".to_string(),
-            lease_ttl: Duration::from_secs(2),
-        };
-
-        let bootstrap_config = make_config(
-            "Bootstrap".to_string(),
-            config.clone(),
-            CustomizeConfig::no_overrides(),
-        );
-        let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
-
-        let make_node_config = |name: &str| {
-            let mut config = make_config(
-                name.to_string(),
-                config.clone(),
-                CustomizeConfig::no_overrides(),
-            );
-            config.debug = true;
-            config.block_production = Trigger::Interval {
-                block_time: BLOCK_TIME,
-            };
-            config.leader_lock = Some(failover_config.clone());
-            config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
-            config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
-            config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
-            config.p2p.as_mut().unwrap().info_interval = Some(Duration::from_millis(100));
-            config.min_connected_reserved_peers = 1;
-            config.time_until_synced = BLOCK_TIME;
-            config
-        };
+        let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
+            3333,
+            BLOCK_TIME,
+            "poa:failover:integration",
+        )
+        .await;
 
         let first_producer = make_node(make_node_config("First Producer"), vec![]).await;
         let second_producer =
@@ -372,41 +342,184 @@ mod p2p {
         let third_producer = make_node(make_node_config("Third Producer"), vec![]).await;
         let fourth_producer =
             make_node(make_node_config("Fourth Producer"), vec![]).await;
+        let all_nodes = vec![
+            first_producer,
+            second_producer,
+            third_producer,
+            fourth_producer,
+        ];
 
         // when
-        let leader_index = tokio::time::timeout(FIRST_PRODUCTION_TIMEOUT, async {
-            tokio::select! {
-                _ = wait_for_local_block(&first_producer) => 0usize,
-                _ = wait_for_local_block(&second_producer) => 1usize,
-                _ = wait_for_local_block(&third_producer) => 2usize,
-                _ = wait_for_local_block(&fourth_producer) => 3usize,
-            }
-        })
-        .await
-        .expect("One of the producers should claim leadership and produce");
-
-        let all_nodes = [
-            &first_producer,
-            &second_producer,
-            &third_producer,
-            &fourth_producer,
-        ];
-        let leader = all_nodes[leader_index];
-        let non_leaders: Vec<&Node> = all_nodes
-            .into_iter()
-            .enumerate()
-            .filter(|(index, _)| *index != leader_index)
-            .map(|(_, node)| node)
-            .collect();
+        let (leader, non_leaders) =
+            find_leader_and_followers(all_nodes, LEADER_ELECTION_TIMEOUT).await;
 
         // then
         only_first_leader_produces_blocks(
-            leader,
+            &leader,
             &non_leaders,
-            NON_LOCAL_BLOCKS_TO_CHECK,
+            BLOCKS_TO_CHECK,
             BLOCK_IMPORT_TIMEOUT,
         )
         .await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
+        const BLOCK_TIME: Duration = Duration::from_millis(200);
+        const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(2);
+        const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_millis(300);
+        const PHASE_BLOCKS: usize = 5;
+        const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+
+        // given
+        let (_redis, _bootstrap, make_node_config) =
+            make_leader_lock_test_config_builder(5555, BLOCK_TIME, "poa:leader:handoff")
+                .await;
+
+        let first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+        let second_producer =
+            make_node(make_node_config("Second Producer"), vec![]).await;
+        let third_producer = make_node(make_node_config("Third Producer"), vec![]).await;
+
+        let mut active_producers = vec![first_producer, second_producer, third_producer];
+
+        // when
+        // let all producers become leader
+        for _ in 0..2 {
+            let (leader, followers) =
+                find_leader_and_followers(active_producers, LEADER_ELECTION_TIMEOUT)
+                    .await;
+
+            // then
+            only_first_leader_produces_blocks(
+                &leader,
+                &followers,
+                PHASE_BLOCKS,
+                BLOCK_IMPORT_TIMEOUT,
+            )
+            .await;
+
+            tokio::time::timeout(
+                STOP_TIMEOUT,
+                leader.node.send_stop_signal_and_await_shutdown(),
+            )
+            .await
+            .expect("Should stop leader before timeout")
+            .expect("Should stop leader without any error");
+
+            active_producers = followers;
+        }
+
+        // when
+        tokio::time::timeout(
+            LEADER_ELECTION_TIMEOUT,
+            wait_for_local_block(&active_producers[0]),
+        )
+        .await
+        .expect("Final producer should become leader");
+    }
+
+    async fn find_leader_and_followers(
+        nodes: Vec<Node>,
+        timeout: Duration,
+    ) -> (Node, Vec<Node>) {
+        let mut waiters = nodes
+            .iter()
+            .enumerate()
+            .map(|(index, node)| async move {
+                wait_for_local_block(node).await;
+                index
+            })
+            .collect::<FuturesUnordered<_>>();
+
+        let leader_index = tokio::time::timeout(timeout, async { waiters.next().await })
+            .await
+            .unwrap_or_else(|_| {
+                panic!("No producer emitted a local block within {timeout:?}")
+            })
+            .expect("Block stream ended unexpectedly before leader election");
+        drop(waiters);
+
+        let mut leader = None;
+        let mut follower_nodes = Vec::with_capacity(nodes.len().saturating_sub(1));
+        for (index, node) in nodes.into_iter().enumerate() {
+            if index == leader_index {
+                leader = Some(node);
+            } else {
+                follower_nodes.push(node);
+            }
+        }
+
+        (leader.expect("Leader index should exist"), follower_nodes)
+    }
+
+    async fn make_leader_lock_node_config_builder(
+        secret: SecretKey,
+        pub_key: Address,
+        block_time: Duration,
+        leader_lock_config: RedisLeaderLockConfig,
+        bootstrap_listeners: Vec<Multiaddr>,
+    ) -> impl Fn(&str) -> Config {
+        let mut base_config = Config::local_node();
+        update_signing_key(&mut base_config, pub_key);
+
+        move |name: &str| {
+            let mut node_config = make_config(
+                name.to_string(),
+                base_config.clone(),
+                CustomizeConfig::no_overrides(),
+            );
+            node_config.debug = true;
+            node_config.block_production = Trigger::Interval { block_time };
+            node_config.leader_lock = Some(leader_lock_config.clone());
+            node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
+            node_config.p2p.as_mut().unwrap().bootstrap_nodes =
+                bootstrap_listeners.clone();
+            node_config.p2p.as_mut().unwrap().reserved_nodes =
+                bootstrap_listeners.clone();
+            node_config.p2p.as_mut().unwrap().info_interval =
+                Some(Duration::from_millis(100));
+            node_config.min_connected_reserved_peers = 1;
+            node_config.time_until_synced = block_time;
+            node_config
+        }
+    }
+
+    async fn make_leader_lock_test_config_builder(
+        seed: u64,
+        block_time: Duration,
+        lease_key: &str,
+    ) -> (RedisTestServer, Bootstrap, impl Fn(&str) -> Config) {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let secret = SecretKey::random(&mut rng);
+        let pub_key = Input::owner(&secret.public_key());
+        let mut base_config = Config::local_node();
+        update_signing_key(&mut base_config, pub_key);
+
+        let bootstrap_config = make_config(
+            "Bootstrap".to_string(),
+            base_config.clone(),
+            CustomizeConfig::no_overrides(),
+        );
+        let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
+        let bootstrap_listeners = bootstrap.listeners();
+
+        let redis = RedisTestServer::spawn();
+        let leader_lock_config = RedisLeaderLockConfig {
+            redis_url: redis.redis_url(),
+            lease_key: lease_key.to_string(),
+            lease_ttl: Duration::from_secs(2),
+        };
+        let make_node_config = make_leader_lock_node_config_builder(
+            secret,
+            pub_key,
+            block_time,
+            leader_lock_config,
+            bootstrap_listeners,
+        )
+        .await;
+
+        (redis, bootstrap, make_node_config)
     }
 
     async fn wait_for_local_block(node: &Node) {
@@ -436,7 +549,7 @@ mod p2p {
 
     async fn only_first_leader_produces_blocks(
         leader: &Node,
-        non_leaders: &[&Node],
+        non_leaders: &[Node],
         non_local_blocks_to_check: usize,
         block_import_timeout: Duration,
     ) {
