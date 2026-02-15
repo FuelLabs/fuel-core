@@ -11,11 +11,11 @@ use crate::{
         BlockSigner,
         GetTime,
         InMemoryPredefinedBlocks,
+        LeaderLeasePort,
         MockBlockImporter,
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
-        LeaderLeasePort,
         TransactionsSource,
         WaitForReadySignal,
     },
@@ -67,6 +67,10 @@ use std::{
         Arc,
         Mutex as StdMutex,
         Mutex,
+        atomic::{
+            AtomicBool,
+            Ordering,
+        },
     },
     time::Duration,
 };
@@ -170,7 +174,7 @@ impl TestContextBuilder {
 
         let p2p_port = generate_p2p_port();
 
-        let predefined_blocks = HashMap::new().into();
+        let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
 
         let time = self.start_time.map(TestTime::new).unwrap_or_default();
 
@@ -256,7 +260,7 @@ pub struct TxPoolContext {
 }
 
 #[derive(Clone)]
-struct NoopLeaderLeasePort;
+pub(crate) struct NoopLeaderLeasePort;
 
 #[async_trait::async_trait]
 impl LeaderLeasePort for NoopLeaderLeasePort {
@@ -267,6 +271,133 @@ impl LeaderLeasePort for NoopLeaderLeasePort {
     async fn release_lease(&self) -> anyhow::Result<()> {
         Ok(())
     }
+}
+
+#[derive(Clone)]
+struct TestLeaderLeasePort {
+    can_produce_block: bool,
+    release_called: Arc<AtomicBool>,
+}
+
+impl TestLeaderLeasePort {
+    fn new(can_produce_block: bool) -> (Self, Arc<AtomicBool>) {
+        let release_called = Arc::new(AtomicBool::new(false));
+        (
+            Self {
+                can_produce_block,
+                release_called: release_called.clone(),
+            },
+            release_called,
+        )
+    }
+}
+
+#[async_trait::async_trait]
+impl LeaderLeasePort for TestLeaderLeasePort {
+    async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
+        Ok(self.can_produce_block)
+    }
+
+    async fn release_lease(&self) -> anyhow::Result<()> {
+        self.release_called.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn main_task__releases_leader_lease_on_shutdown() {
+    // given
+    let config = Config {
+        trigger: Trigger::Never,
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::default();
+    let watch = time.watch();
+    let (leader_lease_port, release_called) = TestLeaderLeasePort::new(true);
+
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        MockBlockProducer::default(),
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        Some(leader_lease_port),
+    );
+
+    // when
+    service.start_and_await().await.unwrap();
+    let _ = service.stop_and_await().await.unwrap();
+
+    // then
+    assert!(release_called.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn main_task__when_leader_lease_denies_then_does_not_produce_blocks() {
+    // given
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::default();
+    let watch = time.watch();
+    let (leader_lease_port, _) = TestLeaderLeasePort::new(false);
+
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        Some(leader_lease_port),
+    );
+
+    // when
+    service.start_and_await().await.unwrap();
+    let receive_timeout = tokio::spawn(async move {
+        time::timeout(Duration::from_millis(100), block_receiver.recv()).await
+    });
+    tokio::task::yield_now().await;
+    time::advance(Duration::from_millis(101)).await;
+    let receive_result = receive_timeout.await.unwrap();
+    let stop_result = service.stop_and_await().await;
+
+    // then
+    assert!(receive_result.is_err(), "Expected block receive to time out");
+    let _ = stop_result.unwrap();
 }
 
 impl MockTransactionPool {
@@ -431,7 +562,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
         block_production_ready_signal.clone(),
-        None,
+        None::<NoopLeaderLeasePort>,
     );
 
     // when
@@ -499,7 +630,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
         block_production_ready_signal.clone(),
-        None,
+        None::<NoopLeaderLeasePort>,
     );
 
     // when
@@ -580,7 +711,7 @@ async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() 
         InMemoryPredefinedBlocks::new(HashMap::new()),
         time.watch(),
         block_production_ready_signal.clone(),
-        None,
+        None::<NoopLeaderLeasePort>,
     );
 
     // when
@@ -628,7 +759,7 @@ async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
         InMemoryPredefinedBlocks::new(HashMap::new()),
         time.watch(),
         block_production_ready_signal.clone(),
-        None,
+        None::<NoopLeaderLeasePort>,
     );
 
     // when
