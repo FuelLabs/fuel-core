@@ -65,7 +65,7 @@ RUN \
     && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d /root/fuel-core.d
 
 # Stage 2: Run
-FROM debian:bookworm-slim AS run
+FROM debian:trixie AS run
 
 ARG IP=0.0.0.0
 ARG PORT=4000
