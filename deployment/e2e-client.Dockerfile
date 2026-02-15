@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.90.0-bookworm AS chef
+FROM rust:1.93.1-trixie AS chef
 RUN cargo install cargo-chef && rustup target add wasm32-unknown-unknown
 WORKDIR /build/
 # hadolint ignore=DL3008
