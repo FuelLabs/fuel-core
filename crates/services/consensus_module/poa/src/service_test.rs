@@ -396,7 +396,10 @@ async fn main_task__when_leader_lease_denies_then_does_not_produce_blocks() {
     let stop_result = service.stop_and_await().await;
 
     // then
-    assert!(receive_result.is_err(), "Expected block receive to time out");
+    assert!(
+        receive_result.is_err(),
+        "Expected block receive to time out"
+    );
     let _ = stop_result.unwrap();
 }
 

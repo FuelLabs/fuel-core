@@ -331,12 +331,13 @@ mod p2p {
         const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_millis(250);
 
         // given
-        let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
-            3333,
-            BLOCK_TIME,
-            "poa:failover:integration",
-        )
-        .await;
+        let (_redis, _bootstrap, make_node_config) =
+            make_leader_lock_test_config_builder(
+                3333,
+                BLOCK_TIME,
+                "poa:failover:integration",
+            )
+            .await;
 
         let first_producer = make_node(make_node_config("First Producer"), vec![]).await;
         let second_producer =
@@ -590,8 +591,8 @@ mod p2p {
                 block_import_timeout,
                 wait_for_local_block(leader, None),
             )
-                .await
-                .expect("Leader should import a local block");
+            .await
+            .expect("Leader should import a local block");
             for node in non_leaders {
                 tokio::time::timeout(
                     block_import_timeout,

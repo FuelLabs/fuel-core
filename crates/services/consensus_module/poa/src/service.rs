@@ -585,7 +585,9 @@ where
         let Some(leader_lease_port) = &self.leader_lease_port else {
             return Ok(true);
         };
-        leader_lease_port.can_produce_block(self.next_height()).await
+        leader_lease_port
+            .can_produce_block(self.next_height())
+            .await
     }
 }
 
@@ -710,9 +712,7 @@ where
         tracing::info!("PoA MainTask shutting down");
         if let Some(leader_lease_port) = &self.leader_lease_port {
             if let Err(err) = leader_lease_port.release_lease().await {
-                tracing::warn!(
-                    "Failed to release leader lease during shutdown: {err}"
-                );
+                tracing::warn!("Failed to release leader lease during shutdown: {err}");
             }
         }
         self.sync_task_handle.stop_and_await().await?;

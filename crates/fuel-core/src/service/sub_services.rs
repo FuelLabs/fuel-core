@@ -53,8 +53,10 @@ use crate::{
             UniversalGasPriceProvider,
             VerifierAdapter,
             chain_state_info_provider,
-            consensus_module::poa::InDirectoryPredefinedBlocks,
-            consensus_module::poa::RedisLeaderLeaseAdapter,
+            consensus_module::poa::{
+                InDirectoryPredefinedBlocks,
+                RedisLeaderLeaseAdapter,
+            },
             fuel_gas_price_provider::FuelGasPriceProvider,
             graphql_api::GraphQLBlockImporter,
             import_result_provider::ImportResultProvider,

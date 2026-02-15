@@ -37,11 +37,13 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
-use std::path::{
-    Path,
-    PathBuf,
+use std::{
+    path::{
+        Path,
+        PathBuf,
+    },
+    time::Duration,
 };
-use std::time::Duration;
 use tokio::{
     sync::watch,
     time::Instant,
