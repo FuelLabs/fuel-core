@@ -38,7 +38,7 @@ RUN \
     && cp ./target/release/fuel-core-e2e-client.d /root/fuel-core-e2e-client.d
 
 # Stage 2: Run
-FROM debian:trixie as run
+FROM debian:trixiet as run
 
 WORKDIR /root/
 
