@@ -576,7 +576,10 @@ where
     ) -> TaskNextAction {
         match self.can_produce_next_block().await {
             Ok(true) => self.handle_normal_block_production(deadline).await,
-            Ok(false) => TaskNextAction::Continue,
+            Ok(false) => {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                TaskNextAction::Continue
+            }
             Err(err) => TaskNextAction::ErrorContinue(err),
         }
     }
