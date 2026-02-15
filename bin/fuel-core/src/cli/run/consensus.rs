@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 //! Clap configuration related to consensus parameters
 
 use clap::{
