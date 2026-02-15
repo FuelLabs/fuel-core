@@ -239,7 +239,7 @@ pub type TestPoAService = Service<
     InMemoryPredefinedBlocks,
     test_time::Watch,
     FakeBlockProductionReadySignal,
-    NoopLeaderLeasePort,
+    TestLeaderLeasePort,
 >;
 
 struct TestContext {
@@ -260,21 +260,7 @@ pub struct TxPoolContext {
 }
 
 #[derive(Clone)]
-pub(crate) struct NoopLeaderLeasePort;
-
-#[async_trait::async_trait]
-impl LeaderLeasePort for NoopLeaderLeasePort {
-    async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
-        Ok(true)
-    }
-
-    async fn release_lease(&self) -> anyhow::Result<()> {
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct TestLeaderLeasePort {
+pub(crate) struct TestLeaderLeasePort {
     can_produce_block: bool,
     release_called: Arc<AtomicBool>,
 }
@@ -565,7 +551,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
         block_production_ready_signal.clone(),
-        None::<NoopLeaderLeasePort>,
+        None::<TestLeaderLeasePort>,
     );
 
     // when
@@ -633,7 +619,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
         block_production_ready_signal.clone(),
-        None::<NoopLeaderLeasePort>,
+        None::<TestLeaderLeasePort>,
     );
 
     // when
@@ -714,7 +700,7 @@ async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() 
         InMemoryPredefinedBlocks::new(HashMap::new()),
         time.watch(),
         block_production_ready_signal.clone(),
-        None::<NoopLeaderLeasePort>,
+        None::<TestLeaderLeasePort>,
     );
 
     // when
@@ -762,7 +748,7 @@ async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
         InMemoryPredefinedBlocks::new(HashMap::new()),
         time.watch(),
         block_production_ready_signal.clone(),
-        None::<NoopLeaderLeasePort>,
+        None::<TestLeaderLeasePort>,
     );
 
     // when
