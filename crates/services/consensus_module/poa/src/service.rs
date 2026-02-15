@@ -580,7 +580,10 @@ where
                 tokio::time::sleep(Duration::from_millis(10)).await;
                 TaskNextAction::Continue
             }
-            Err(err) => TaskNextAction::ErrorContinue(err),
+            Err(err) => {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+                TaskNextAction::ErrorContinue(err)
+            }
         }
     }
 
@@ -713,10 +716,10 @@ where
 
     async fn shutdown(self) -> anyhow::Result<()> {
         tracing::info!("PoA MainTask shutting down");
-        if let Some(leader_lease_port) = &self.leader_lease_port {
-            if let Err(err) = leader_lease_port.release_lease().await {
-                tracing::warn!("Failed to release leader lease during shutdown: {err}");
-            }
+        if let Some(leader_lease_port) = &self.leader_lease_port
+            && let Err(err) = leader_lease_port.release_lease().await
+        {
+            tracing::warn!("Failed to release leader lease during shutdown: {err}");
         }
         self.sync_task_handle.stop_and_await().await?;
         Ok(())

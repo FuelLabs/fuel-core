@@ -98,6 +98,14 @@ struct Open {
 
 #[derive(Debug, Clone, clap::Args)]
 struct LeaderLock {
+    /// Enable distributed leader lock for PoA producers.
+    #[clap(
+        long = "poa-leader-lock",
+        env,
+        default_value_t = false,
+        requires_all = ["redis_url", "lease_key", "lease_ttl"]
+    )]
+    enabled: bool,
     /// Redis URL used for distributed leader locking across producers.
     #[clap(long = "poa-leader-lock-redis-url", env)]
     redis_url: Option<String>,
@@ -112,19 +120,23 @@ struct LeaderLock {
 impl From<LeaderLock> for Option<RedisLeaderLockConfig> {
     fn from(value: LeaderLock) -> Self {
         let LeaderLock {
+            enabled,
             redis_url,
             lease_key,
             lease_ttl,
         } = value;
-        match (redis_url, lease_key, lease_ttl) {
-            (Some(redis_url), Some(lease_key), Some(lease_ttl)) => {
-                Some(RedisLeaderLockConfig {
-                    redis_url,
-                    lease_key,
-                    lease_ttl: lease_ttl.into(),
-                })
-            }
-            _ => None,
+        if enabled {
+            Some(RedisLeaderLockConfig {
+                redis_url: redis_url
+                    .expect("`redis_url` is required when `enabled` is true"),
+                lease_key: lease_key
+                    .expect("`lease_key` is required when `enabled` is true"),
+                lease_ttl: lease_ttl
+                    .expect("`lease_ttl` is required when `enabled` is true")
+                    .into(),
+            })
+        } else {
+            None
         }
     }
 }
@@ -165,6 +177,7 @@ mod tests {
     fn leader_lock__when_all_args_set_then_some() {
         let command = Command::try_parse_from([
             "",
+            "--poa-leader-lock",
             "--poa-leader-lock-redis-url",
             "redis://127.0.0.1:6379/",
             "--poa-leader-lock-key",
@@ -177,5 +190,11 @@ mod tests {
         assert_eq!(leader_lock.redis_url, "redis://127.0.0.1:6379/");
         assert_eq!(leader_lock.lease_key, "poa:leader:lock");
         assert_eq!(leader_lock.lease_ttl, StdDuration::from_secs(2));
+    }
+
+    #[test]
+    fn leader_lock__when_enabled_without_required_fields_then_parse_error() {
+        let result = Command::try_parse_from(["", "--poa-leader-lock"]);
+        assert!(result.is_err());
     }
 }
