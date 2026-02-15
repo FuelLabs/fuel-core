@@ -112,7 +112,6 @@ pub trait SyncPort: Send + Sync {
 }
 
 #[async_trait::async_trait]
-#[cfg_attr(test, mockall::automock)]
 pub trait LeaderLeasePort: Send + Sync {
     async fn can_produce_block(&self, height: BlockHeight) -> anyhow::Result<bool>;
     async fn release_lease(&self) -> anyhow::Result<()>;
