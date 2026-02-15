@@ -263,6 +263,10 @@ impl LeaderLeasePort for NoopLeaderLeasePort {
     async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
         Ok(true)
     }
+
+    async fn release_lease(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 impl MockTransactionPool {

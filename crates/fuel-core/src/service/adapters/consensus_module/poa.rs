@@ -123,6 +123,22 @@ impl RedisLeaderLeaseAdapter {
         .await?;
         Ok(acquired == 1)
     }
+
+    async fn release_lease_if_owner(&self) -> anyhow::Result<bool> {
+        let mut connection = self.redis_client.get_multiplexed_async_connection().await?;
+        let released: i32 = redis::Script::new(
+            "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+                return redis.call('DEL', KEYS[1]) \
+            else \
+                return 0 \
+            end",
+        )
+        .key(&self.lease_key)
+        .arg(&self.lease_owner_token)
+        .invoke_async(&mut connection)
+        .await?;
+        Ok(released == 1)
+    }
 }
 
 impl PoAAdapter {
@@ -150,6 +166,11 @@ impl LeaderLeasePort for RedisLeaderLeaseAdapter {
             return Ok(true);
         }
         self.acquire_lease_if_free().await
+    }
+
+    async fn release_lease(&self) -> anyhow::Result<()> {
+        let _ = self.release_lease_if_owner().await?;
+        Ok(())
     }
 }
 

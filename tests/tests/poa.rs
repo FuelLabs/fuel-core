@@ -207,6 +207,8 @@ mod p2p {
         time::{
             Duration,
             Instant,
+            SystemTime,
+            UNIX_EPOCH,
         },
     };
 
@@ -384,8 +386,14 @@ mod p2p {
         let mut active_producers = vec![first_producer, second_producer, third_producer];
 
         // when
-        // let all producers become leader
-        for _ in 0..2 {
+        // let all producers become leader, including the final single producer
+        let mut iteration = 0usize;
+        while !active_producers.is_empty() {
+            eprintln!(
+                "ts_ms={}, leader_handoff_iteration={iteration}, node_count={}",
+                unix_time_ms(),
+                active_producers.len()
+            );
             let (leader, followers) =
                 find_leader_and_followers(active_producers, LEADER_ELECTION_TIMEOUT)
                     .await;
@@ -399,6 +407,14 @@ mod p2p {
             )
             .await;
 
+            if followers.is_empty() {
+                break;
+            }
+
+            eprintln!(
+                "ts_ms={}, leader_handoff_iteration={iteration}, action=shutdown_leader_start",
+                unix_time_ms()
+            );
             tokio::time::timeout(
                 STOP_TIMEOUT,
                 leader.node.send_stop_signal_and_await_shutdown(),
@@ -406,17 +422,14 @@ mod p2p {
             .await
             .expect("Should stop leader before timeout")
             .expect("Should stop leader without any error");
+            eprintln!(
+                "ts_ms={}, leader_handoff_iteration={iteration}, action=shutdown_leader_end",
+                unix_time_ms()
+            );
 
             active_producers = followers;
+            iteration += 1;
         }
-
-        // when
-        tokio::time::timeout(
-            LEADER_ELECTION_TIMEOUT,
-            wait_for_local_block(&active_producers[0]),
-        )
-        .await
-        .expect("Final producer should become leader");
     }
 
     async fn find_leader_and_followers(
@@ -427,15 +440,18 @@ mod p2p {
             .iter()
             .enumerate()
             .map(|(index, node)| async move {
-                wait_for_local_block(node).await;
+                wait_for_local_block(node, Some(index)).await;
                 index
             })
             .collect::<FuturesUnordered<_>>();
 
+        let node_count = nodes.len();
         let leader_index = tokio::time::timeout(timeout, async { waiters.next().await })
             .await
             .unwrap_or_else(|_| {
-                panic!("No producer emitted a local block within {timeout:?}")
+                panic!(
+                    "No producer emitted a local block within {timeout:?} (nodes: {node_count})"
+                )
             })
             .expect("Block stream ended unexpectedly before leader election");
         drop(waiters);
@@ -522,10 +538,26 @@ mod p2p {
         (redis, bootstrap, make_node_config)
     }
 
-    async fn wait_for_local_block(node: &Node) {
+    async fn wait_for_local_block(node: &Node, waiter_index: Option<usize>) {
         let mut stream = node.node.shared.block_importer.block_stream();
+        let mut saw_first_block = false;
         while let Some(block) = stream.next().await {
-            if block.is_locally_produced() {
+            let height = *block.block_header.height();
+            let is_local = block.is_locally_produced();
+            if !saw_first_block {
+                eprintln!(
+                    "ts_ms={}, wait_for_local_block(waiter={:?}), first_block_seen=true",
+                    unix_time_ms(),
+                    waiter_index
+                );
+                saw_first_block = true;
+            }
+            eprintln!(
+                "ts_ms={}, wait_for_local_block(waiter={:?}): height={height}, is_local={is_local}",
+                unix_time_ms(),
+                waiter_index
+            );
+            if is_local {
                 return;
             }
         }
@@ -554,7 +586,10 @@ mod p2p {
         block_import_timeout: Duration,
     ) {
         for _ in 0..non_local_blocks_to_check {
-            tokio::time::timeout(block_import_timeout, wait_for_local_block(leader))
+            tokio::time::timeout(
+                block_import_timeout,
+                wait_for_local_block(leader, None),
+            )
                 .await
                 .expect("Leader should import a local block");
             for node in non_leaders {
@@ -622,6 +657,13 @@ mod p2p {
             thread::sleep(Duration::from_millis(25));
         }
         panic!("redis-server did not become ready in time");
+    }
+
+    fn unix_time_ms() -> u128 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System time should be after UNIX_EPOCH")
+            .as_millis()
     }
 
     fn update_signing_key(config: &mut Config, key: Address) {
