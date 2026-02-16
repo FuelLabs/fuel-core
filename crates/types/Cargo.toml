@@ -63,6 +63,5 @@ zeroize = "1.5"
 
 [dev-dependencies]
 aws-config = { workspace = true, features = ["behavior-version-latest"] }
-fuel-core-types = { path = ".", features = ["test-helpers", "serde"] }
 postcard = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

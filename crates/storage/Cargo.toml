@@ -21,7 +21,7 @@ version = { workspace = true }
 default = ["std"]
 alloc = ["fuel-vm-private/alloc", "fuel-core-types/alloc"]
 std = ["alloc", "fuel-vm-private/std", "fuel-core-types/std"]
-test-helpers = ["dep:mockall", "dep:rand"]
+test-helpers = ["std", "dep:mockall", "dep:rand"]
 fault-proving = ["fuel-core-types/fault-proving"]
 
 [dependencies]
@@ -45,7 +45,6 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 
 [dev-dependencies]
-fuel-core-storage = { path = ".", features = ["test-helpers"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "serde",
   "random",
