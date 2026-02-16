@@ -169,18 +169,15 @@ mod p2p {
     use super::*;
     use fuel_core::{
         chain_config::ConsensusConfig,
-        p2p::Multiaddr,
         p2p_test_helpers::{
             Bootstrap,
             CustomizeConfig,
-            Node,
             make_config,
             make_node,
         },
     };
     use fuel_core_poa::{
         Trigger,
-        ports::BlockImporter,
         service::Mode,
     };
     use fuel_core_types::{
