@@ -52,6 +52,7 @@ tracing = { version = "0.1", default-features = false, optional = true }
 
 [dev-dependencies]
 bytes = { workspace = true }
+fuel-core-chain-config = { path = ".", features = ["parquet", "test-helpers"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
   "alloc",
   "random",
