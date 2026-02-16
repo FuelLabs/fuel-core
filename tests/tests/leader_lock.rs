@@ -1,6 +1,3 @@
-#![allow(unexpected_cfgs)] // for cfg(coverage)
-#![cfg(not(coverage))] // too slow for coverage
-
 use fuel_core::{
     chain_config::ConsensusConfig,
     p2p::Multiaddr,
