@@ -4109,6 +4109,7 @@ dependencies = [
  "cosmrs",
  "derive_more 0.99.20",
  "enum-iterator",
+ "fuel-core",
  "fuel-core-block-aggregator-api",
  "fuel-core-chain-config",
  "fuel-core-compression-service",
