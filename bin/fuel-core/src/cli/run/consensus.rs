@@ -31,7 +31,7 @@ impl PoATriggerArgs {
             redis_url,
             lease_key,
             lease_ttl,
-        } = self.clone();
+        } = self.leader_lock.clone();
         if enabled {
             Ok(Some(RedisLeaderLockConfig {
                 redis_url: redis_url
