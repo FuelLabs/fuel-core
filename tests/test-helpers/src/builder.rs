@@ -108,6 +108,7 @@ pub struct TestSetupBuilder {
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
     pub max_txs: usize,
+    pub txpool_max_gas: Option<u64>,
     pub database_type: DbType,
     pub database_config: DatabaseConfig,
     pub database_path: Option<PathBuf>,
@@ -269,6 +270,9 @@ impl TestSetupBuilder {
 
         let mut txpool = fuel_core_txpool::config::Config::default();
         txpool.pool_limits.max_txs = self.max_txs;
+        if let Some(max_gas) = self.txpool_max_gas {
+            txpool.pool_limits.max_gas = max_gas;
+        }
         txpool.service_channel_limits = fuel_core_txpool::config::ServiceChannelLimits {
             max_pending_write_pool_requests: self.max_txs,
             max_pending_read_pool_requests: self.max_txs,
@@ -345,6 +349,7 @@ impl Default for TestSetupBuilder {
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
             max_txs: 100000,
+            txpool_max_gas: None,
             database_type: DbType::RocksDb,
             database_config: DatabaseConfig::config_for_tests(),
             database_path: None,
