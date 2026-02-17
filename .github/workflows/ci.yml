@@ -261,7 +261,7 @@ jobs:
           redis-server --daemonize yes
           redis-cli ping
       - name: Run leader lock integration tests
-        run: cargo test --package fuel-core-tests --test integration_tests --features leader_lock -- --test-threads=1
+        run: cargo test --package fuel-core-tests --test integration_tests leader_lock --features leader_lock -- --test-threads=1
 
   verifications-complete:
     needs:
