@@ -463,7 +463,7 @@ impl Command {
         #[cfg(feature = "rpc")]
         let rpc_config = rpc_args.map(|args| args.into_config());
 
-        let leader_lock = poa_trigger.clone().leader_lock();
+        let leader_lock = poa_trigger.clone().leader_lock()?;
         let trigger: Trigger = poa_trigger.into();
 
         if trigger != Trigger::Never {

@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 //! Clap configuration related to consensus parameters
 
+use anyhow::anyhow;
 use clap::{
     ArgGroup,
     ValueEnum,
@@ -24,8 +25,26 @@ pub struct PoATriggerArgs {
 }
 
 impl PoATriggerArgs {
-    pub fn leader_lock(self) -> Option<RedisLeaderLockConfig> {
-        self.leader_lock.into()
+    pub fn leader_lock(&self) -> anyhow::Result<Option<RedisLeaderLockConfig>> {
+        let LeaderLock {
+            enabled,
+            redis_url,
+            lease_key,
+            lease_ttl,
+        } = self.clone();
+        if enabled {
+            Ok(Some(RedisLeaderLockConfig {
+                redis_url: redis_url
+                    .ok_or(anyhow!("`redis_url` is required when `enabled` is true"))?,
+                lease_key: lease_key
+                    .ok_or(anyhow!("`lease_key` is required when `enabled` is true"))?,
+                lease_ttl: lease_ttl
+                    .ok_or(anyhow!("`lease_ttl` is required when `enabled` is true"))?
+                    .into(),
+            }))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -117,30 +136,6 @@ struct LeaderLock {
     lease_ttl: Option<Duration>,
 }
 
-impl From<LeaderLock> for Option<RedisLeaderLockConfig> {
-    fn from(value: LeaderLock) -> Self {
-        let LeaderLock {
-            enabled,
-            redis_url,
-            lease_key,
-            lease_ttl,
-        } = value;
-        if enabled {
-            Some(RedisLeaderLockConfig {
-                redis_url: redis_url
-                    .expect("`redis_url` is required when `enabled` is true"),
-                lease_key: lease_key
-                    .expect("`lease_key` is required when `enabled` is true"),
-                lease_ttl: lease_ttl
-                    .expect("`lease_ttl` is required when `enabled` is true")
-                    .into(),
-            })
-        } else {
-            None
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,7 +165,7 @@ mod tests {
     #[test]
     fn leader_lock__defaults_to_none() {
         let command = Command::try_parse_from([""]).unwrap();
-        assert!(command.trigger.clone().leader_lock().is_none());
+        assert!(command.trigger.clone().leader_lock().unwrap().is_none());
     }
 
     #[test]
@@ -186,7 +181,7 @@ mod tests {
             "2s",
         ])
         .unwrap();
-        let leader_lock = command.trigger.clone().leader_lock().unwrap();
+        let leader_lock = command.trigger.clone().leader_lock().unwrap().unwrap();
         assert_eq!(leader_lock.redis_url, "redis://127.0.0.1:6379/");
         assert_eq!(leader_lock.lease_key, "poa:leader:lock");
         assert_eq!(leader_lock.lease_ttl, StdDuration::from_secs(2));
