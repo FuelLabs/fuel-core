@@ -577,13 +577,10 @@ where
         match self.can_produce_next_block().await {
             Ok(true) => self.handle_normal_block_production(deadline).await,
             Ok(false) => {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                sleep_until(deadline).await;
                 TaskNextAction::Continue
             }
-            Err(err) => {
-                tokio::time::sleep(Duration::from_millis(10)).await;
-                TaskNextAction::ErrorContinue(err)
-            }
+            Err(err) => TaskNextAction::ErrorContinue(err),
         }
     }
 
