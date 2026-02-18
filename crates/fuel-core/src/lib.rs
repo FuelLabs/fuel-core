@@ -1,6 +1,6 @@
 #![deny(clippy::arithmetic_side_effects)]
 #![deny(clippy::cast_possible_truncation)]
-#![cfg_attr(not(test), deny(unused_crate_dependencies))]
+#![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
 use futures::{
