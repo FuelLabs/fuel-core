@@ -398,9 +398,13 @@ pub fn init_sub_services(
                 .as_ref()
                 .map(|leader_lock| {
                     RedisLeaderLeaseAdapter::new(
-                        leader_lock.redis_url.clone(),
+                        leader_lock.redis_urls.clone(),
                         leader_lock.lease_key.clone(),
                         leader_lock.lease_ttl,
+                        leader_lock.node_timeout,
+                        leader_lock.retry_delay,
+                        leader_lock.max_retry_delay_offset,
+                        leader_lock.max_attempts,
                     )
                 })
                 .transpose()?;

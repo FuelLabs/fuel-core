@@ -51,6 +51,7 @@ use tokio::{
     },
     time::{
         Instant,
+        sleep,
         timeout,
     },
 };
@@ -62,41 +63,94 @@ use tracing::error;
 
 pub mod pre_confirmation_signature;
 
-pub struct RedisLeaderLeaseAdapter {
+struct RedisNode {
     redis_client: redis::Client,
     cached_connection: Mutex<Option<redis::aio::MultiplexedConnection>>,
+}
+
+pub struct RedisLeaderLeaseAdapter {
+    redis_nodes: Vec<RedisNode>,
+    quorum: usize,
     lease_key: String,
     lease_owner_token: String,
     lease_ttl_millis: u64,
+    lease_drift_millis: u64,
+    node_timeout: Duration,
+    retry_delay_millis: u64,
+    max_retry_delay_offset_millis: u64,
+    max_attempts: usize,
 }
 
 impl RedisLeaderLeaseAdapter {
     pub fn new(
-        redis_url: String,
+        redis_urls: Vec<String>,
         lease_key: String,
         lease_ttl: Duration,
+        node_timeout: Duration,
+        retry_delay: Duration,
+        max_retry_delay_offset: Duration,
+        max_attempts: u32,
     ) -> anyhow::Result<Self> {
-        let redis_client = redis::Client::open(redis_url)?;
+        let redis_nodes = redis_urls
+            .into_iter()
+            .map(|redis_url| {
+                redis::Client::open(redis_url).map(|redis_client| RedisNode {
+                    redis_client,
+                    cached_connection: Mutex::new(None),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if redis_nodes.is_empty() {
+            return Err(anyhow!(
+                "At least one redis url is required for leader lock"
+            ));
+        }
+        let quorum = redis_nodes
+            .len()
+            .checked_div(2)
+            .unwrap_or(0)
+            .saturating_add(1);
         let lease_ttl_millis = u64::try_from(lease_ttl.as_millis())?;
+        let retry_delay_millis = u64::try_from(retry_delay.as_millis())?;
+        let max_retry_delay_offset_millis =
+            u64::try_from(max_retry_delay_offset.as_millis())?;
+        let max_attempts = usize::try_from(max_attempts)?.max(1);
         let lease_owner_token = uuid::Uuid::new_v4().to_string();
+        let lease_drift_millis = lease_ttl_millis
+            .checked_div(100)
+            .unwrap_or(0)
+            .saturating_add(2);
         Ok(Self {
-            redis_client,
-            cached_connection: Mutex::new(None),
+            redis_nodes,
+            quorum,
             lease_key,
             lease_owner_token,
             lease_ttl_millis,
+            lease_drift_millis,
+            node_timeout,
+            retry_delay_millis,
+            max_retry_delay_offset_millis,
+            max_attempts,
         })
     }
 
     async fn multiplexed_connection(
         &self,
+        redis_node: &RedisNode,
     ) -> anyhow::Result<redis::aio::MultiplexedConnection> {
-        if let Some(connection) = self.cached_connection.lock().await.as_ref().cloned() {
+        if let Some(connection) =
+            redis_node.cached_connection.lock().await.as_ref().cloned()
+        {
             return Ok(connection);
         }
 
-        let new_connection = self.redis_client.get_multiplexed_async_connection().await?;
-        let mut cached_connection = self.cached_connection.lock().await;
+        let new_connection = timeout(
+            self.node_timeout,
+            redis_node.redis_client.get_multiplexed_async_connection(),
+        )
+        .await
+        .map_err(|_| anyhow!("Timed out while connecting to redis leader-lock node"))??;
+        let mut cached_connection = redis_node.cached_connection.lock().await;
         if let Some(connection) = cached_connection.as_ref().cloned() {
             return Ok(connection);
         }
@@ -104,80 +158,239 @@ impl RedisLeaderLeaseAdapter {
         Ok(new_connection)
     }
 
-    async fn clear_cached_connection(&self) {
-        let mut cached_connection = self.cached_connection.lock().await;
+    async fn clear_cached_connection(&self, redis_node: &RedisNode) {
+        let mut cached_connection = redis_node.cached_connection.lock().await;
         *cached_connection = None;
     }
 
-    async fn renew_lease_if_owner(&self) -> anyhow::Result<bool> {
-        let mut connection = self.multiplexed_connection().await?;
-        let renewed: Result<i32, redis::RedisError> = redis::Script::new(
-            "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-                return redis.call('PEXPIRE', KEYS[1], ARGV[2]) \
-            else \
-                return 0 \
-            end",
-        )
-        .key(&self.lease_key)
-        .arg(&self.lease_owner_token)
-        .arg(self.lease_ttl_millis)
-        .invoke_async(&mut connection)
-        .await;
-        let renewed = match renewed {
-            Ok(renewed) => renewed,
-            Err(err) => {
-                self.clear_cached_connection().await;
-                return Err(err.into());
-            }
+    async fn renew_lease_on_node(&self, redis_node: &RedisNode) -> bool {
+        let mut connection = match self.multiplexed_connection(redis_node).await {
+            Ok(connection) => connection,
+            Err(_) => return false,
         };
-        Ok(renewed == 1)
+        let renewed = timeout(
+            self.node_timeout,
+            redis::Script::new(
+                "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+                    return redis.call('PEXPIRE', KEYS[1], ARGV[2]) \
+                else \
+                    return 0 \
+                end",
+            )
+            .key(&self.lease_key)
+            .arg(&self.lease_owner_token)
+            .arg(self.lease_ttl_millis)
+            .invoke_async::<i32>(&mut connection),
+        )
+        .await;
+        match renewed {
+            Ok(Ok(renewed)) => renewed == 1,
+            Err(_) => {
+                self.clear_cached_connection(redis_node).await;
+                false
+            }
+            Ok(Err(_)) => {
+                self.clear_cached_connection(redis_node).await;
+                false
+            }
+        }
+    }
+
+    async fn acquire_lease_on_node(&self, redis_node: &RedisNode) -> bool {
+        let mut connection = match self.multiplexed_connection(redis_node).await {
+            Ok(connection) => connection,
+            Err(_) => return false,
+        };
+        let acquired = timeout(
+            self.node_timeout,
+            redis::Script::new(
+                "if redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') then \
+                    return 1 \
+                else \
+                    return 0 \
+                end",
+            )
+            .key(&self.lease_key)
+            .arg(&self.lease_owner_token)
+            .arg(self.lease_ttl_millis)
+            .invoke_async::<i32>(&mut connection),
+        )
+        .await;
+        match acquired {
+            Ok(Ok(acquired)) => acquired == 1,
+            Err(_) => {
+                self.clear_cached_connection(redis_node).await;
+                false
+            }
+            Ok(Err(_)) => {
+                self.clear_cached_connection(redis_node).await;
+                false
+            }
+        }
+    }
+
+    async fn release_lease_on_node(&self, redis_node: &RedisNode) -> bool {
+        let mut connection = match self.multiplexed_connection(redis_node).await {
+            Ok(connection) => connection,
+            Err(_) => return false,
+        };
+        let released = timeout(
+            self.node_timeout,
+            redis::Script::new(
+                "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+                    return redis.call('DEL', KEYS[1]) \
+                else \
+                    return 0 \
+                end",
+            )
+            .key(&self.lease_key)
+            .arg(&self.lease_owner_token)
+            .invoke_async::<i32>(&mut connection),
+        )
+        .await;
+        match released {
+            Ok(Ok(released)) => released == 1,
+            Err(_) => {
+                self.clear_cached_connection(redis_node).await;
+                false
+            }
+            Ok(Err(_)) => {
+                self.clear_cached_connection(redis_node).await;
+                false
+            }
+        }
+    }
+
+    fn quorum_reached(&self, success_count: usize) -> bool {
+        success_count >= self.quorum
+    }
+
+    fn calculate_remaining_validity_millis(&self, elapsed_millis: u64) -> u64 {
+        self.lease_ttl_millis
+            .saturating_sub(elapsed_millis.saturating_add(self.lease_drift_millis))
+    }
+
+    fn random_retry_delay_offset_millis(&self) -> u64 {
+        if self.max_retry_delay_offset_millis == 0 {
+            return 0;
+        }
+        rand::random::<u64>()
+            .checked_rem(self.max_retry_delay_offset_millis.saturating_add(1))
+            .unwrap_or(0)
+    }
+
+    async fn release_lease_on_all_nodes(&self) {
+        let _ = futures::future::join_all(
+            self.redis_nodes
+                .iter()
+                .map(|redis_node| self.release_lease_on_node(redis_node)),
+        )
+        .await;
+    }
+
+    async fn delay_next_retry(&self) {
+        let retry_delay_millis = self
+            .retry_delay_millis
+            .saturating_add(self.random_retry_delay_offset_millis());
+        sleep(Duration::from_millis(retry_delay_millis)).await;
+    }
+
+    async fn renew_lease_if_owner(&self) -> anyhow::Result<bool> {
+        let renewals = futures::future::join_all(
+            self.redis_nodes
+                .iter()
+                .map(|redis_node| self.renew_lease_on_node(redis_node)),
+        )
+        .await;
+        let renewed_count = renewals.into_iter().filter(|renewed| *renewed).count();
+        Ok(self.quorum_reached(renewed_count))
     }
 
     async fn acquire_lease_if_free(&self) -> anyhow::Result<bool> {
-        let mut connection = self.multiplexed_connection().await?;
-        let acquired: Result<i32, redis::RedisError> = redis::Script::new(
-            "if redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') then \
-                return 1 \
-            else \
-                return 0 \
-            end",
-        )
-        .key(&self.lease_key)
-        .arg(&self.lease_owner_token)
-        .arg(self.lease_ttl_millis)
-        .invoke_async(&mut connection)
-        .await;
-        let acquired = match acquired {
-            Ok(acquired) => acquired,
-            Err(err) => {
-                self.clear_cached_connection().await;
-                return Err(err.into());
+        for attempt_index in 0..self.max_attempts {
+            let start = std::time::Instant::now();
+            let acquired_nodes = futures::future::join_all(
+                self.redis_nodes
+                    .iter()
+                    .map(|redis_node| self.acquire_lease_on_node(redis_node)),
+            )
+            .await;
+            let acquired_count = acquired_nodes
+                .into_iter()
+                .filter(|acquired| *acquired)
+                .count();
+            let elapsed_millis =
+                u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+            let validity_millis =
+                self.calculate_remaining_validity_millis(elapsed_millis);
+            if self.quorum_reached(acquired_count) && validity_millis > 0 {
+                return Ok(true);
             }
-        };
-        Ok(acquired == 1)
+            self.release_lease_on_all_nodes().await;
+            let is_last_attempt = attempt_index.saturating_add(1) == self.max_attempts;
+            if !is_last_attempt {
+                self.delay_next_retry().await;
+            }
+        }
+        Ok(false)
     }
 
     async fn release_lease_if_owner(&self) -> anyhow::Result<bool> {
-        let mut connection = self.multiplexed_connection().await?;
-        let released: Result<i32, redis::RedisError> = redis::Script::new(
-            "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-                return redis.call('DEL', KEYS[1]) \
-            else \
-                return 0 \
-            end",
+        let releases = futures::future::join_all(
+            self.redis_nodes
+                .iter()
+                .map(|redis_node| self.release_lease_on_node(redis_node)),
         )
-        .key(&self.lease_key)
-        .arg(&self.lease_owner_token)
-        .invoke_async(&mut connection)
         .await;
-        let released = match released {
-            Ok(released) => released,
-            Err(err) => {
-                self.clear_cached_connection().await;
-                return Err(err.into());
-            }
+        let released_count = releases.into_iter().filter(|released| *released).count();
+        Ok(self.quorum_reached(released_count))
+    }
+
+    async fn release_lease_on_client(
+        redis_client: redis::Client,
+        lease_key: String,
+        lease_owner_token: String,
+        node_timeout: Duration,
+    ) {
+        let connection = timeout(node_timeout, redis_client.get_multiplexed_async_connection())
+            .await;
+        let mut connection = match connection {
+            Ok(Ok(connection)) => connection,
+            Err(_) => return,
+            Ok(Err(_)) => return,
         };
-        Ok(released == 1)
+        let _ = timeout(
+            node_timeout,
+            redis::Script::new(
+                "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+                    return redis.call('DEL', KEYS[1]) \
+                else \
+                    return 0 \
+                end",
+            )
+            .key(lease_key)
+            .arg(lease_owner_token)
+            .invoke_async::<i32>(&mut connection),
+        )
+        .await;
+    }
+
+    async fn release_lease_on_clients(
+        redis_clients: Vec<redis::Client>,
+        lease_key: String,
+        lease_owner_token: String,
+        node_timeout: Duration,
+    ) {
+        let _ =
+            futures::future::join_all(redis_clients.into_iter().map(|redis_client| {
+                Self::release_lease_on_client(
+                    redis_client,
+                    lease_key.clone(),
+                    lease_owner_token.clone(),
+                    node_timeout,
+                )
+            }))
+            .await;
     }
 }
 
@@ -216,14 +429,45 @@ impl LeaderLeasePort for RedisLeaderLeaseAdapter {
 
 impl Drop for RedisLeaderLeaseAdapter {
     fn drop(&mut self) {
-        let rt = tokio::runtime::Handle::current();
-        let fut = self.release_lease();
-        let result =
-            rt.block_on(async move { timeout(Duration::from_millis(100), fut).await });
-        match result {
-            Ok(Ok(_)) => (),
-            Ok(Err(err)) => error!("Failed to release leader lease: {:?}", err),
-            Err(_) => error!("Failed to release leader lease: timeout"),
+        let redis_clients = self
+            .redis_nodes
+            .iter()
+            .map(|redis_node| redis_node.redis_client.clone())
+            .collect::<Vec<_>>();
+        let release_future = timeout(
+            Duration::from_millis(100),
+            Self::release_lease_on_clients(
+                redis_clients,
+                self.lease_key.clone(),
+                self.lease_owner_token.clone(),
+                self.node_timeout,
+            ),
+        );
+
+        if let Ok(runtime_handle) = tokio::runtime::Handle::try_current() {
+            drop(runtime_handle.spawn(async move {
+                if release_future.await.is_err() {
+                    error!("Failed to release leader lease: timeout");
+                }
+            }));
+            return;
+        }
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build();
+        match runtime {
+            Ok(runtime) => {
+                if runtime.block_on(release_future).is_err() {
+                    error!("Failed to release leader lease: timeout");
+                }
+            }
+            Err(err) => {
+                error!(
+                    "Failed to create runtime for leader lease release: {:?}",
+                    err
+                );
+            }
         }
     }
 }

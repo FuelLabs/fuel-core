@@ -62,9 +62,13 @@ use std::net::{
 
 #[derive(Clone, Debug)]
 pub struct RedisLeaderLockConfig {
-    pub redis_url: String,
+    pub redis_urls: Vec<String>,
     pub lease_key: String,
     pub lease_ttl: Duration,
+    pub node_timeout: Duration,
+    pub retry_delay: Duration,
+    pub max_retry_delay_offset: Duration,
+    pub max_attempts: u32,
 }
 
 #[derive(Clone, Debug)]

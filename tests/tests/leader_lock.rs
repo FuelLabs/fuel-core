@@ -157,6 +157,53 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     }
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn leader_lock__single_producer__when_quorum_is_restored_then_production_starts() {
+    const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const NO_QUORUM_TIMEOUT: Duration = Duration::from_secs(2);
+    const QUORUM_RECOVERY_TIMEOUT: Duration = Duration::from_secs(5);
+
+    // given
+    let first_redis = RedisTestServer::spawn();
+    let mut second_redis = RedisTestServer::new_stopped();
+    let third_redis = RedisTestServer::new_stopped();
+    let (_bootstrap, make_node_config) =
+        make_leader_lock_test_config_builder_with_redis_urls(
+            6666,
+            BLOCK_TIME,
+            "poa:leader:quorum-recovery",
+            vec![
+                first_redis.redis_url(),
+                second_redis.redis_url(),
+                third_redis.redis_url(),
+            ],
+        )
+        .await;
+    let producer = make_node(make_node_config("Producer"), vec![]).await;
+
+    // when
+    let no_quorum_result =
+        tokio::time::timeout(NO_QUORUM_TIMEOUT, wait_for_local_block(&producer, None))
+            .await;
+    second_redis.start();
+    // third_redis.start();
+    let quorum_result = tokio::time::timeout(
+        QUORUM_RECOVERY_TIMEOUT,
+        wait_for_local_block(&producer, None),
+    )
+    .await;
+
+    // then
+    assert!(
+        no_quorum_result.is_err(),
+        "Producer should not produce while quorum is unavailable"
+    );
+    assert!(
+        quorum_result.is_ok(),
+        "Producer should produce once quorum servers are available"
+    );
+}
+
 async fn find_leader_and_followers(
     nodes: Vec<Node>,
     timeout: Duration,
@@ -229,6 +276,25 @@ async fn make_leader_lock_test_config_builder(
     block_time: Duration,
     lease_key: &str,
 ) -> (RedisTestServer, Bootstrap, impl Fn(&str) -> Config) {
+    let redis = RedisTestServer::spawn();
+    let (bootstrap, make_node_config) =
+        make_leader_lock_test_config_builder_with_redis_urls(
+            seed,
+            block_time,
+            lease_key,
+            vec![redis.redis_url()],
+        )
+        .await;
+
+    (redis, bootstrap, make_node_config)
+}
+
+async fn make_leader_lock_test_config_builder_with_redis_urls(
+    seed: u64,
+    block_time: Duration,
+    lease_key: &str,
+    redis_urls: Vec<String>,
+) -> (Bootstrap, impl Fn(&str) -> Config) {
     let mut rng = StdRng::seed_from_u64(seed);
     let secret = SecretKey::random(&mut rng);
     let pub_key = Input::owner(&secret.public_key());
@@ -243,11 +309,14 @@ async fn make_leader_lock_test_config_builder(
     let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
     let bootstrap_listeners = bootstrap.listeners();
 
-    let redis = RedisTestServer::spawn();
     let leader_lock_config = RedisLeaderLockConfig {
-        redis_url: redis.redis_url(),
+        redis_urls,
         lease_key: lease_key.to_string(),
         lease_ttl: Duration::from_secs(2),
+        node_timeout: Duration::from_millis(50),
+        retry_delay: Duration::from_millis(100),
+        max_retry_delay_offset: Duration::from_millis(25),
+        max_attempts: 2,
     };
     let make_node_config = make_leader_lock_node_config_builder(
         secret,
@@ -258,7 +327,7 @@ async fn make_leader_lock_test_config_builder(
     )
     .await;
 
-    (redis, bootstrap, make_node_config)
+    (bootstrap, make_node_config)
 }
 
 async fn wait_for_local_block(node: &Node, waiter_index: Option<usize>) {
@@ -324,36 +393,34 @@ async fn only_first_leader_produces_blocks(
 }
 
 struct RedisTestServer {
-    child: Child,
+    child: Option<Child>,
+    port: u16,
     redis_url: String,
 }
 
 impl RedisTestServer {
     fn spawn() -> Self {
-        let socket =
-            TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
-                .expect("Should bind an ephemeral port");
-        let port = socket.local_addr().expect("Should get local addr").port();
-        drop(socket);
+        let mut server = Self::new_stopped();
+        server.start();
+        server
+    }
 
-        let child = Command::new("redis-server")
-            .arg("--port")
-            .arg(port.to_string())
-            .arg("--save")
-            .arg("")
-            .arg("--appendonly")
-            .arg("no")
-            .arg("--bind")
-            .arg("127.0.0.1")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("redis-server must be installed for this test");
-        wait_for_redis_ready(port);
+    fn new_stopped() -> Self {
+        let port = bind_unused_port();
         Self {
-            child,
+            child: None,
+            port,
             redis_url: format!("redis://127.0.0.1:{port}/"),
         }
+    }
+
+    fn start(&mut self) {
+        if self.child.is_some() {
+            return;
+        }
+        let child = spawn_redis_server(self.port);
+        wait_for_redis_ready(self.port);
+        self.child = Some(child);
     }
 
     fn redis_url(&self) -> String {
@@ -363,9 +430,35 @@ impl RedisTestServer {
 
 impl Drop for RedisTestServer {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Some(child) = self.child.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
+}
+
+fn bind_unused_port() -> u16 {
+    let socket = TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
+        .expect("Should bind an ephemeral port");
+    let port = socket.local_addr().expect("Should get local addr").port();
+    drop(socket);
+    port
+}
+
+fn spawn_redis_server(port: u16) -> Child {
+    Command::new("redis-server")
+        .arg("--port")
+        .arg(port.to_string())
+        .arg("--save")
+        .arg("")
+        .arg("--appendonly")
+        .arg("no")
+        .arg("--bind")
+        .arg("127.0.0.1")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("redis-server must be installed for this test")
 }
 
 fn wait_for_redis_ready(port: u16) {
