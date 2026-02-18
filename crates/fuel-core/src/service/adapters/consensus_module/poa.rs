@@ -9,7 +9,6 @@ use crate::{
     },
 };
 use anyhow::anyhow;
-use async_graphql::futures_util::FutureExt;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
@@ -59,7 +58,7 @@ use tokio_stream::{
     StreamExt,
     wrappers::BroadcastStream,
 };
-use tracing::log;
+use tracing::error;
 
 pub mod pre_confirmation_signature;
 
@@ -217,11 +216,13 @@ impl LeaderLeasePort for RedisLeaderLeaseAdapter {
 
 impl Drop for RedisLeaderLeaseAdapter {
     fn drop(&mut self) {
+        let rt = tokio::runtime::Handle::current();
         let fut = self.release_lease();
-        let handle =
-            tokio::spawn(async move { timeout(Duration::from_millis(100), fut).await });
-        if let Err(err) = handle {
-            log::error!("Failed to release leader lease: {:?}", err);
+        let result = rt.block_on(async move { timeout(Duration::from_millis(100), fut).await });
+        match result {
+            Ok(Ok(_)) => (),
+            Ok(Err(err)) => error!("Failed to release leader lease: {:?}", err),
+            Err(_) => error!("Failed to release leader lease: timeout"),
         }
     }
 }
