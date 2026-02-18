@@ -218,7 +218,8 @@ impl Drop for RedisLeaderLeaseAdapter {
     fn drop(&mut self) {
         let rt = tokio::runtime::Handle::current();
         let fut = self.release_lease();
-        let result = rt.block_on(async move { timeout(Duration::from_millis(100), fut).await });
+        let result =
+            rt.block_on(async move { timeout(Duration::from_millis(100), fut).await });
         match result {
             Ok(Ok(_)) => (),
             Ok(Err(err)) => error!("Failed to release leader lease: {:?}", err),
