@@ -352,8 +352,11 @@ impl RedisLeaderLeaseAdapter {
         lease_owner_token: String,
         node_timeout: Duration,
     ) {
-        let connection = timeout(node_timeout, redis_client.get_multiplexed_async_connection())
-            .await;
+        let connection = timeout(
+            node_timeout,
+            redis_client.get_multiplexed_async_connection(),
+        )
+        .await;
         let mut connection = match connection {
             Ok(Ok(connection)) => connection,
             Err(_) => return,
