@@ -1,3 +1,5 @@
+#[cfg(feature = "parallel-executor")]
+use fuel_core::service::config::ParallelExecutorWorkerCountPolicy;
 use fuel_core::{
     chain_config::{
         ChainConfig,
@@ -119,6 +121,8 @@ pub struct TestSetupBuilder {
     pub txpool_p2p_sync_threads: usize,
     pub txpool_p2p_sync_queue_size: usize,
     pub executor_parallel_worker_count: usize,
+    #[cfg(feature = "parallel-executor")]
+    pub executor_parallel_worker_count_policy: ParallelExecutorWorkerCountPolicy,
     pub executor_mode: ExecutorMode,
     pub executor_metrics: bool,
 }
@@ -319,6 +323,8 @@ impl TestSetupBuilder {
             config.executor.parallel.worker_count =
                 NonZeroUsize::try_from(executor_parallel_worker_count)
                     .unwrap_or(NonZeroUsize::try_from(1).expect("1 is not 0"));
+            config.executor.parallel.worker_count_policy =
+                self.executor_parallel_worker_count_policy;
             config.executor.parallel.metrics = self.executor_metrics;
         }
         config.combined_db_config.database_config = self.database_config;
@@ -360,6 +366,9 @@ impl Default for TestSetupBuilder {
             txpool_p2p_sync_threads: 0,
             txpool_p2p_sync_queue_size: 100,
             executor_parallel_worker_count: 0,
+            #[cfg(feature = "parallel-executor")]
+            executor_parallel_worker_count_policy:
+                ParallelExecutorWorkerCountPolicy::StaticMax,
             executor_mode: ExecutorMode::Normal,
             executor_metrics: false,
         }

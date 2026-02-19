@@ -242,6 +242,7 @@ impl Config {
                 #[cfg(feature = "parallel-executor")]
                 parallel: ParallelExecutorConfig {
                     worker_count: NonZeroUsize::new(1).expect("1 is not zero"),
+                    worker_count_policy: ParallelExecutorWorkerCountPolicy::StaticMax,
                     metrics: false,
                 },
             },
@@ -385,7 +386,25 @@ pub struct ExecutorConfig {
 #[derive(Clone, Debug)]
 pub struct ParallelExecutorConfig {
     pub worker_count: NonZeroUsize,
+    pub worker_count_policy: ParallelExecutorWorkerCountPolicy,
     pub metrics: bool,
+}
+
+#[cfg(feature = "parallel-executor")]
+#[derive(
+    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+)]
+#[strum(serialize_all = "kebab_case")]
+pub enum ParallelExecutorWorkerCountPolicy {
+    StaticMax,
+    DynamicIdle,
+}
+
+#[cfg(feature = "parallel-executor")]
+impl Default for ParallelExecutorWorkerCountPolicy {
+    fn default() -> Self {
+        Self::StaticMax
+    }
 }
 
 #[derive(

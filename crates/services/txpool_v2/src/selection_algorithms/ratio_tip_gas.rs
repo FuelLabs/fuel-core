@@ -165,7 +165,9 @@ where
         if execution_worker_count == 0 {
             return 0;
         }
-        (executable_count.saturating_add(execution_worker_count).saturating_sub(1))
+        (executable_count
+            .saturating_add(execution_worker_count)
+            .saturating_sub(1))
             / execution_worker_count
     }
 
@@ -217,9 +219,9 @@ where
         budget.gas_left = budget
             .gas_left
             .saturating_sub(stored_transaction.transaction.max_gas());
-        budget.space_left = budget.space_left.saturating_sub(
-            stored_transaction.transaction.metered_bytes_size() as u64,
-        );
+        budget.space_left = budget
+            .space_left
+            .saturating_sub(stored_transaction.transaction.metered_bytes_size() as u64);
         budget.nb_left = budget.nb_left.saturating_sub(1);
         prioritized_queue.push_back(storage_id);
         true

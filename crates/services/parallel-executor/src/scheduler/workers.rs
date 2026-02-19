@@ -42,6 +42,10 @@ impl WorkerPool {
         *self.workers.lock() == 0
     }
 
+    pub fn available_workers(&self) -> usize {
+        *self.workers.lock()
+    }
+
     pub fn return_worker(&self) {
         let mut workers = self.workers.lock();
         *workers = workers.saturating_add(1);

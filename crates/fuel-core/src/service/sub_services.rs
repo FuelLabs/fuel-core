@@ -1,7 +1,10 @@
 #![allow(clippy::let_unit_value)]
 
 #[cfg(all(feature = "parallel-executor", not(feature = "no-parallel-executor")))]
-use super::config::ExecutorMode;
+use super::config::{
+    ExecutorMode,
+    ParallelExecutorWorkerCountPolicy,
+};
 use super::{
     DbType,
     adapters::{
@@ -303,6 +306,18 @@ pub fn init_sub_services(
                     let parallel_executor_config =
                         fuel_core_parallel_executor::config::Config {
                             worker_count: config.executor.parallel.worker_count,
+                            worker_count_policy: match config
+                                .executor
+                                .parallel
+                                .worker_count_policy
+                            {
+                                ParallelExecutorWorkerCountPolicy::StaticMax => {
+                                    fuel_core_parallel_executor::config::WorkerCountPolicy::StaticMax
+                                }
+                                ParallelExecutorWorkerCountPolicy::DynamicIdle => {
+                                    fuel_core_parallel_executor::config::WorkerCountPolicy::DynamicIdle
+                                }
+                            },
                             metrics: config.executor.parallel.metrics,
                         };
                     crate::service::adapters::ParallelExecutorAdapter::new(
@@ -395,21 +410,6 @@ pub fn init_sub_services(
         universal_gas_price_provider.clone(),
     );
 
-    let execution_worker_count = {
-        #[cfg(feature = "parallel-executor")]
-        {
-            if matches!(config.executor.mode, ExecutorMode::Parallel) {
-                config.executor.parallel.worker_count.get()
-            } else {
-                1
-            }
-        }
-        #[cfg(not(feature = "parallel-executor"))]
-        {
-            1
-        }
-    };
-
     let txpool = fuel_core_txpool::new_service(
         chain_id,
         config.txpool.clone(),
@@ -423,8 +423,7 @@ pub fn init_sub_services(
         new_txs_updater,
         preconfirmation_sender,
     );
-    let tx_pool_adapter =
-        TxPoolAdapter::new(txpool.shared.clone(), execution_worker_count);
+    let tx_pool_adapter = TxPoolAdapter::new(txpool.shared.clone());
 
     #[cfg(feature = "p2p")]
     let mut network = config.p2p.clone().zip(p2p_externals).map(

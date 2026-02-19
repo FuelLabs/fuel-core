@@ -1,5 +1,7 @@
 use clap::Args;
 use fuel_core::service::config::ExecutorMode;
+#[cfg(feature = "parallel-executor")]
+use fuel_core::service::config::ParallelExecutorWorkerCountPolicy;
 use fuel_core_types::blockchain::header::StateTransitionBytecodeVersion;
 
 #[cfg(feature = "parallel-executor")]
@@ -29,4 +31,14 @@ pub struct ExecutorArgs {
     #[cfg(feature = "parallel-executor")]
     #[arg(long = "executor-metrics", env)]
     pub executor_metrics: bool,
+
+    /// Worker count policy for tx selection in parallel scheduler.
+    #[cfg(feature = "parallel-executor")]
+    #[arg(
+        long = "executor-worker-count-policy",
+        value_enum,
+        default_value = "static-max",
+        env
+    )]
+    pub executor_worker_count_policy: ParallelExecutorWorkerCountPolicy,
 }

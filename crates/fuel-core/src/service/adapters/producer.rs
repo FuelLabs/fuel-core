@@ -101,11 +101,7 @@ impl TxPool for TxPoolAdapter {
         gas_price: u64,
         _: BlockHeight,
     ) -> anyhow::Result<Self::TxSource> {
-        Ok(TransactionsSource::new(
-            gas_price,
-            self.service.clone(),
-            self.execution_worker_count,
-        ))
+        Ok(TransactionsSource::new(gas_price, self.service.clone()))
     }
 }
 

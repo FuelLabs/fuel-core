@@ -41,6 +41,7 @@ pub trait TransactionsSource {
         gas_limit: u64,
         tx_count_limit: u32,
         block_transaction_size_limit: u64,
+        selection_worker_count: usize,
         filter: Filter,
     ) -> impl Future<Output = anyhow::Result<TransactionSourceExecutableTransactions>>;
 

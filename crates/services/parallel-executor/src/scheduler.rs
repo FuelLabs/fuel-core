@@ -1,5 +1,8 @@
 use crate::{
-    config::Config,
+    config::{
+        Config,
+        WorkerCountPolicy,
+    },
     in_memory_transaction_with_contracts::InMemoryTransactionWithContracts,
     l1_execution_data::L1ExecutionData,
     memory::MemoryPool,
@@ -458,8 +461,14 @@ where
                 // If we requested transactions, we shouldn't drop them,
                 // so we await them here.
                 let batch_prepare_start = Instant::now();
+                let selection_worker_count = self.selection_worker_count();
                 let mut batch = self
-                    .ask_new_transactions_batch(tx_source, now, initial_gas_per_worker)
+                    .ask_new_transactions_batch(
+                        tx_source,
+                        now,
+                        initial_gas_per_worker,
+                        selection_worker_count,
+                    )
                     .await?;
                 let batch_prepare_duration = batch_prepare_start.elapsed();
                 tracing::warn!(
@@ -721,6 +730,7 @@ where
         tx_source: &TxSource,
         start_execution_time: Instant,
         initial_gas_per_core: u64,
+        selection_worker_count: usize,
     ) -> Result<PreparedBatch, SchedulerError>
     where
         TxSource: TransactionsSource,
@@ -753,6 +763,7 @@ where
                 current_gas,
                 self.tx_left,
                 self.tx_size_left,
+                selection_worker_count,
                 Filter {
                     excluded_contract_ids: std::mem::take(
                         &mut self.current_executing_contracts,
@@ -784,6 +795,13 @@ where
             prepared_batch.number_of_transactions
         );
         Ok(prepared_batch)
+    }
+
+    fn selection_worker_count(&self) -> usize {
+        match self.config.worker_count_policy {
+            WorkerCountPolicy::StaticMax => self.config.worker_count.get(),
+            WorkerCountPolicy::DynamicIdle => self.worker_pool.available_workers(),
+        }
     }
 
     fn execute_batch(

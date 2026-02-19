@@ -4,7 +4,10 @@
 use std::time::Duration;
 
 use crate::{
-    config::Config,
+    config::{
+        Config,
+        WorkerCountPolicy,
+    },
     executor::Executor,
     ports::{
         Filter,
@@ -202,6 +205,7 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
         Config {
             worker_count: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
+            worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
             metrics: false,
         },
     )
@@ -250,6 +254,7 @@ async fn execute__simple_independent_transactions_sorted() {
             Config {
                 worker_count: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
             },
         )
@@ -298,6 +303,67 @@ async fn execute__simple_independent_transactions_sorted() {
 }
 
 #[tokio::test]
+async fn execute__when_dynamic_idle_policy_then_selection_uses_idle_worker_count() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    // given
+    let script = [
+        op::movi(0x11, 32),
+        op::aloc(0x11),
+        op::movi(0x10, 0x00),
+        op::cfe(0x10),
+        op::k256(RegId::HP, RegId::ZERO, 0x10),
+    ];
+    let script_bytes: Vec<u8> = script.iter().flat_map(|op| op.to_bytes()).collect();
+    let long_tx = TransactionBuilder::script(script_bytes, vec![])
+        .script_gas_limit(100_000)
+        .add_stored_coin_input(&mut rng, &mut storage, 1000)
+        .finalize_as_transaction();
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(2)
+                    .expect("The value is not zero; qed"),
+                worker_count_policy: WorkerCountPolicy::DynamicIdle,
+                metrics: false,
+            },
+        )
+        .unwrap();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
+
+    // when
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Instant::now() + Duration::from_millis(300),
+    );
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&long_tx], TransactionFiltered::NotFiltered)
+            .assert_selection_worker_count(2),
+    );
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[], TransactionFiltered::NotFiltered)
+            .assert_selection_worker_count(1),
+    );
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[],
+        TransactionFiltered::NotFiltered,
+    ));
+
+    // then
+    let _ = future.await.unwrap();
+}
+
+#[tokio::test]
 async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
     let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
     let (contract_id, changes) = contract_creation_changes(&mut rng).await;
@@ -331,6 +397,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
             Config {
                 worker_count: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
             },
         )
@@ -449,6 +516,7 @@ async fn execute__gas_left_updated_when_state_merges() {
             Config {
                 worker_count: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
             },
         )
@@ -542,6 +610,7 @@ async fn execute__utxo_ordering_kept() {
             Config {
                 worker_count: std::num::NonZeroUsize::new(2)
                     .expect("The value is not zero; qed"),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
             },
         )
@@ -617,6 +686,7 @@ async fn execute__utxo_resolved() {
         Config {
             worker_count: std::num::NonZeroUsize::new(2)
                 .expect("The value is not zero; qed"),
+            worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
             metrics: false,
         },
     )
@@ -711,6 +781,7 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
             Config {
                 worker_count: std::num::NonZeroUsize::new(3)
                     .expect("The value is not zero; qed"),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
             },
         )

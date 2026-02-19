@@ -415,6 +415,8 @@ impl Command {
             executor_number_of_cores,
             #[cfg(feature = "parallel-executor")]
             executor_metrics,
+            #[cfg(feature = "parallel-executor")]
+            executor_worker_count_policy,
         } = executor;
 
         let enabled_metrics = metrics.list_of_enabled();
@@ -744,6 +746,7 @@ impl Command {
                 #[cfg(feature = "parallel-executor")]
                 parallel: ParallelExecutorConfig {
                     worker_count: executor_number_of_cores,
+                    worker_count_policy: executor_worker_count_policy,
                     metrics: executor_metrics,
                 },
             },
