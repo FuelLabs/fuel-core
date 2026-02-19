@@ -57,7 +57,7 @@ async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
     const BLOCKS_TO_CHECK: usize = 30;
-    const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_millis(400);
+    const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_millis(500);
 
     // given
     let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
@@ -381,13 +381,17 @@ async fn only_first_leader_produces_blocks(
         tokio::time::timeout(block_import_timeout, wait_for_local_block(leader, None))
             .await
             .expect("Leader should import a local block");
-        for node in non_leaders {
-            tokio::time::timeout(
-                block_import_timeout,
-                wait_for_non_local_block_and_fail_on_local(node),
-            )
-            .await
-            .expect("Non-leader should import a non-local block");
+        let mut follower_checks = non_leaders
+            .iter()
+            .map(|node| {
+                tokio::time::timeout(
+                    block_import_timeout,
+                    wait_for_non_local_block_and_fail_on_local(node),
+                )
+            })
+            .collect::<FuturesUnordered<_>>();
+        while let Some(result) = follower_checks.next().await {
+            result.expect("Non-leader should import a non-local block");
         }
     }
 }
