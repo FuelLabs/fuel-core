@@ -4768,6 +4768,7 @@ dependencies = [
  "anyhow",
  "derive_more 0.99.20",
  "enum-iterator",
+ "fuel-core-storage",
  "fuel-core-types 0.47.1",
  "fuel-vm 0.65.0",
  "impl-tools",

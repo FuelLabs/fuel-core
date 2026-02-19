@@ -456,21 +456,10 @@ impl Drop for RedisLeaderLeaseAdapter {
             return;
         }
 
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build();
-        match runtime {
-            Ok(runtime) => {
-                if runtime.block_on(release_future).is_err() {
-                    error!("Failed to release leader lease: timeout");
-                }
-            }
-            Err(err) => {
-                error!(
-                    "Failed to create runtime for leader lease release: {:?}",
-                    err
-                );
-            }
+        let result = futures::executor::block_on(release_future);
+
+        if let Err(err) = result {
+            tracing::error!("Failed to release leader lease: {err}");
         }
     }
 }
