@@ -29,6 +29,8 @@ fault-proving = [
 ]
 rpc = ["fuel-core/rpc", "fuel-core-bin/rpc", "fuel-core-client/rpc"]
 local_rpc = []
+leader_lock = []
+not_leader_lock = []
 
 [dependencies]
 anyhow = { workspace = true }

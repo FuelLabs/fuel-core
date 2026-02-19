@@ -53,6 +53,10 @@ use crate::{
         Salt,
     },
 };
+use alloc::{
+    vec,
+    vec::Vec,
+};
 use proptest::prelude::*;
 use rand::Rng;
 
