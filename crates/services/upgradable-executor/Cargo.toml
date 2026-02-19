@@ -44,12 +44,12 @@ futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, optional = true }
 tracing = { workspace = true, optional = true }
-wasmtime = { version = "41.0.1", default-features = false, features = [
-    "cache",
-    "cranelift",
-    "parallel-compilation",
-    "pooling-allocator",
-    "runtime",
+wasmtime = { version = "34.0.2", default-features = false, features = [
+  "cache",
+  "cranelift",
+  "parallel-compilation",
+  "pooling-allocator",
+  "runtime",
 ], optional = true }
 
 [build-dependencies]
