@@ -451,6 +451,7 @@ impl Command {
                     .echo_delegation_interval,
             };
 
+        let leader_lock = poa_trigger.leader_lock()?;
         let trigger: Trigger = poa_trigger.into();
 
         if trigger != Trigger::Never {
@@ -731,6 +732,7 @@ impl Command {
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores,
             block_production: trigger,
+            leader_lock,
             predefined_blocks_path,
             txpool: TxPoolConfig {
                 max_txs_chain_count: tx_max_chain_count,
