@@ -38,6 +38,10 @@ mod graphql_extensions;
 mod health;
 #[cfg(not(feature = "only-p2p"))]
 mod helpers;
+#[cfg(feature = "leader_lock")]
+#[cfg(not(feature = "not_leader_lock"))]
+#[cfg(not(feature = "only-p2p"))]
+mod leader_lock;
 #[cfg(not(feature = "only-p2p"))]
 mod local_node;
 #[cfg(not(feature = "only-p2p"))]

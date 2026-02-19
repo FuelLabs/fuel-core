@@ -27,13 +27,16 @@ fault-proving = [
     "fuel-core-benches/fault-proving",
 ]
 
+leader_lock = []
+not_leader_lock = []
+
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-aws-config = { version = "1.1.7", features = [
+aws-config = { workspace = true, features = [
   "behavior-version-latest",
 ], optional = true }
-aws-sdk-kms = { version = "1.37.0", optional = true }
+aws-sdk-kms = { workspace = true, optional = true }
 clap = { workspace = true }
 cynic = { workspace = true }
 ethers = "2"

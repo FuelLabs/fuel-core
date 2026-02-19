@@ -65,7 +65,12 @@ async-graphql = { version = "=7.0.15", features = [
 ], default-features = false }
 async-graphql-value = { version = "=7.0.15" }
 async-trait = "0.1"
-aws-sdk-kms = "1.37"
+
+# Fuel dependencies
+aws-config = { version = "=1.8.8", features = ["behavior-version-latest"] }
+aws-sdk-kms = "=1.90.0"
+aws-sdk-s3 = "=1.119.0"
+aws-smithy-mocks = "0.2.0"
 axum = "0.5"
 bytes = "1.5.0"
 clap = "4.4"

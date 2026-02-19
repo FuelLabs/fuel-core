@@ -235,11 +235,44 @@ jobs:
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
+  leader-lock-integration-tests:
+    name: Leader Lock Integration Tests (w/Redis)
+    needs:
+      - lint-toml-files
+      - prevent-openssl
+      - rustfmt
+      - check-changelog
+    runs-on: buildjet-4vcpu-ubuntu-2204
+    timeout-minutes: 45
+    env:
+      RUSTFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - name: Install Redis
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-server
+      - name: Start Redis
+        run: |
+          redis-server --daemonize yes
+          redis-cli ping
+      - name: Run leader lock integration tests
+        run: |
+          echo "REDIS_URL=${REDIS_URL:-redis://127.0.0.1:6379} REDIS_DB=${REDIS_DB:-0} LEADER_LOCK_KEY_PREFIX=${LEADER_LOCK_KEY_PREFIX:-<unset>}"
+          env | sort | grep -Ei 'REDIS|LEADER|LOCK|FUEL' || true
+          (timeout 90s redis-cli MONITOR | stdbuf -oL grep -E 'SELECT|SET|PEXPIRE|DEL|leader|lock' || true) &
+          cargo test --package fuel-core-tests --test integration_tests leader_lock --features leader_lock -- --test-threads=1 --nocapture
+
   verifications-complete:
     needs:
       - cargo-verifications
       - publish-crates-check
       - cargo-test-kms
+      - leader-lock-integration-tests
     runs-on: ubuntu-latest
     steps:
       - run: echo "pass"
