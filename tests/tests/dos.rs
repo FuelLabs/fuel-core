@@ -634,7 +634,7 @@ async fn heavy_tasks_doesnt_block_graphql() {
 
     let node = FuelService::new_node(config).await.unwrap();
     let url = format!("http://{}/v1/graphql", node.bound_address);
-    let client = FuelClient::new(url.clone()).unwrap();
+    let client = FuelClient::new_unchecked(url.clone()).unwrap();
     client.produce_blocks(NUM_OF_BLOCKS, None).await.unwrap();
 
     // Given
