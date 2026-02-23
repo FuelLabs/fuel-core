@@ -658,14 +658,18 @@ where
             _ = watcher.while_started() => {
                 return TaskNextAction::Stop
             }
-            _ = self.block_production_ready_signal.wait_for_ready_signal() => {}
+            _ = self.block_production_ready_signal.wait_for_ready_signal() => {
+                tracing::debug!("Block production is ready");
+            }
         }
 
         if let Some(action) = self.ensure_synced(watcher).await {
+            tracing::debug!("Synced, stopping PoA task");
             return action;
         }
 
         if let Some(action) = self.maybe_produce_predefined_block().await {
+            tracing::debug!("Predefined block produced, stopping PoA task");
             return action;
         }
 
