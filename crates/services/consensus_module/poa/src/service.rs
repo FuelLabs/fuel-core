@@ -577,6 +577,7 @@ where
         match self.can_produce_next_block().await {
             Ok(true) => self.handle_normal_block_production(deadline).await,
             Ok(false) => {
+                tracing::debug!("Cannot produce block at height {}", self.next_height());
                 sleep_until(deadline).await;
                 TaskNextAction::Continue
             }
@@ -585,6 +586,10 @@ where
     }
 
     async fn can_produce_next_block(&self) -> anyhow::Result<bool> {
+        tracing::debug!(
+            "Checking if we can produce block at height {}",
+            self.next_height()
+        );
         let Some(leader_lease_port) = &self.leader_lease_port else {
             return Ok(true);
         };
@@ -706,6 +711,7 @@ where
                 self.handle_requested_production(request).await
             }
             deadline = next_block_production => {
+                tracing::debug!("Next block production deadline: {:?}", deadline);
                 self.handle_triggered_block_production(deadline).await
             }
         }

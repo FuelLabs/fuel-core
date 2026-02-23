@@ -164,6 +164,10 @@ impl RedisLeaderLeaseAdapter {
     }
 
     async fn renew_lease_on_node(&self, redis_node: &RedisNode) -> bool {
+        tracing::debug!(
+            "Renewing Redis leader lock at: {:?}",
+            redis_node.redis_client.get_connection_info().addr
+        );
         let mut connection = match self.multiplexed_connection(redis_node).await {
             Ok(connection) => connection,
             Err(_) => return false,
@@ -183,6 +187,7 @@ impl RedisLeaderLeaseAdapter {
             .invoke_async::<i32>(&mut connection),
         )
         .await;
+        tracing::debug!("Redis leader lock renewed: {:?}", renewed);
         match renewed {
             Ok(Ok(renewed)) => renewed == 1,
             Err(_) => {
@@ -197,6 +202,10 @@ impl RedisLeaderLeaseAdapter {
     }
 
     async fn acquire_lease_on_node(&self, redis_node: &RedisNode) -> bool {
+        tracing::debug!(
+            "Acquiring Redis leader lock at: {:?}",
+            redis_node.redis_client.get_connection_info().addr
+        );
         let mut connection = match self.multiplexed_connection(redis_node).await {
             Ok(connection) => connection,
             Err(_) => return false,
@@ -216,6 +225,7 @@ impl RedisLeaderLeaseAdapter {
             .invoke_async::<i32>(&mut connection),
         )
         .await;
+        tracing::debug!("Redis leader lock acquired: {:?}", acquired);
         match acquired {
             Ok(Ok(acquired)) => acquired == 1,
             Err(_) => {
@@ -418,6 +428,7 @@ impl PoAAdapter {
 #[async_trait::async_trait]
 impl LeaderLeasePort for RedisLeaderLeaseAdapter {
     async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
+        tracing::debug!("Checking Redis leader lock");
         if self.renew_lease_if_owner().await? {
             return Ok(true);
         }
@@ -425,6 +436,7 @@ impl LeaderLeasePort for RedisLeaderLeaseAdapter {
     }
 
     async fn release_lease(&self) -> anyhow::Result<()> {
+        tracing::debug!("Releasing Redis leader lock");
         let _ = self.release_lease_if_owner().await?;
         Ok(())
     }
