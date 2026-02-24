@@ -15,7 +15,7 @@ use fuel_core_poa::{
         LeaderState,
         P2pPort,
         PredefinedBlocks,
-        ReconciliationPort,
+        BlockReconciliationReadPort,
         TransactionPool,
         TransactionsSource,
     },
@@ -451,7 +451,7 @@ impl PoAAdapter {
 }
 
 #[async_trait::async_trait]
-impl ReconciliationPort for NoopReconciliationAdapter {
+impl BlockReconciliationReadPort for NoopReconciliationAdapter {
     async fn leader_state(
         &self,
         _local_height: BlockHeight,
@@ -466,7 +466,7 @@ impl ReconciliationPort for NoopReconciliationAdapter {
 }
 
 #[async_trait::async_trait]
-impl ReconciliationPort for RedisLeaderLeaseAdapter {
+impl BlockReconciliationReadPort for RedisLeaderLeaseAdapter {
     async fn leader_state(
         &self,
         _local_height: BlockHeight,
@@ -485,7 +485,7 @@ impl ReconciliationPort for RedisLeaderLeaseAdapter {
 }
 
 #[async_trait::async_trait]
-impl ReconciliationPort for ReconciliationAdapter {
+impl BlockReconciliationReadPort for ReconciliationAdapter {
     async fn leader_state(
         &self,
         local_height: BlockHeight,

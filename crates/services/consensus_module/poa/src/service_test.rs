@@ -16,7 +16,7 @@ use crate::{
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
-        ReconciliationPort,
+        BlockReconciliationReadPort,
         TransactionsSource,
         WaitForReadySignal,
     },
@@ -300,7 +300,7 @@ impl FakeReconciliationPort {
 }
 
 #[async_trait::async_trait]
-impl ReconciliationPort for FakeReconciliationPort {
+impl BlockReconciliationReadPort for FakeReconciliationPort {
     async fn leader_state(
         &self,
         _local_height: BlockHeight,

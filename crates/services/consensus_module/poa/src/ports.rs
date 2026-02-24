@@ -122,7 +122,7 @@ pub enum LeaderState {
 
 #[async_trait::async_trait]
 #[cfg_attr(test, mockall::automock)]
-pub trait ReconciliationPort: Send + Sync {
+pub trait BlockReconciliationReadPort: Send + Sync {
     async fn leader_state(
         &self,
         local_height: BlockHeight,

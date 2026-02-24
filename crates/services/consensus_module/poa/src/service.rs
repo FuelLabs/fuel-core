@@ -23,7 +23,7 @@ use crate::{
         LeaderState,
         P2pPort,
         PredefinedBlocks,
-        ReconciliationPort,
+        BlockReconciliationReadPort,
         TransactionPool,
         TransactionsSource,
         WaitForReadySignal,
@@ -151,7 +151,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
-    RP: ReconciliationPort,
+    RP: BlockReconciliationReadPort,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort, T: TransactionPool>(
@@ -281,7 +281,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
-    RP: ReconciliationPort,
+    RP: BlockReconciliationReadPort,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -665,7 +665,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
-    RP: ReconciliationPort,
+    RP: BlockReconciliationReadPort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -772,7 +772,7 @@ where
     P: P2pPort,
     C: GetTime,
     RS: WaitForReadySignal,
-    RP: ReconciliationPort + 'static,
+    RP: BlockReconciliationReadPort + 'static,
 {
     Service::new(MainTask::new(
         last_block,
