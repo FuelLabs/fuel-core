@@ -142,12 +142,21 @@ role Sequencer:
             # Quorum reached — become leader with max(returned epochs)
             self.state = State.LEADER
             self.my_epoch = max_epoch
-            # Sync next_height from committed stream state
-            max_h = 0
+            # Sync next_height from committed stream state (quorum-read)
+            # Only count a height as committed if present on >= QUORUM_SIZE nodes
+            height_counts = {}
             for n in redis_nodes:
                 for entry in n.stream:
-                    if entry["height"] >= max_h:
-                        max_h = entry["height"] + 1
+                    h = entry["height"]
+                    if h in height_counts:
+                        height_counts[h] = height_counts[h] + 1
+                    else:
+                        height_counts[h] = 1
+            max_h = 0
+            for h in height_counts:
+                if height_counts[h] >= QUORUM_SIZE:
+                    if h >= max_h:
+                        max_h = h + 1
             self.next_height = max_h
             set_election_count(election_count + 1)
         else:
@@ -180,8 +189,7 @@ role Sequencer:
                 successes += 1
 
         if successes >= QUORUM_SIZE:
-            # Quorum — block committed
-            committed_blocks[height] = {"data": data, "epoch": self.my_epoch}
+            # Quorum — block committed (verified via NoFork assertion on node streams)
             self.next_height = height + 1
         else:
             # Write quorum failed — step down
@@ -214,9 +222,6 @@ action Init:
     sequencers = []
     for i in range(NUM_SEQUENCERS):
         sequencers.append(Sequencer())
-
-    # Global committed block log: height -> {data, epoch}
-    committed_blocks = {}
 
     # Election counter (for bounding state space)
     election_count = 0
