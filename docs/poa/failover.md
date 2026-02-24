@@ -53,6 +53,8 @@ To solve this, we use a Fencing Token:
 
 This provides a logical ordering guarantee that is independent of wall-clock time, making the system safe even under clock skew.
 
+This directly addresses Martin Kleppmann's critique of Redlock ([*How to do distributed locking*](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)). Kleppmann's central argument is that Redlock's safety depends on timing assumptions — a process can acquire the lock, pause (GC, page fault, network delay), and resume after the lock has expired and been granted to another process, leading to concurrent access with no mutual exclusion. His prescribed solution is exactly fencing tokens: a monotonically increasing token issued at lock acquisition, checked by the storage system on every write, so that a delayed process's stale token is rejected regardless of timing. The `seq:epoch:token` counter and the fencing check in `write_block.lua` implement this pattern. Combined with the lock-owner identity check (which Redlock already provides), the system has two independent defenses against zombie writes — neither of which depends on clock accuracy for safety.
+
 ### 3.3 Redlock Algorithm (Implemented)
 
 The codebase implements a Redlock-inspired distributed mutex for leader election. The algorithm works as follows:
