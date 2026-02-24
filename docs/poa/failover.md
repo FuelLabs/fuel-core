@@ -1,11 +1,5 @@
 # Technical Design: High Availability Sequencer with Redis Fencing
 
-| Field         | Value                              |
-|---------------|------------------------------------|
-| **Status**    | Proposed                           |
-| **Author**    | Fuel Network Engineering           |
-| **Stakeholders** | Infrastructure, Protocol, DevOps |
-
 ## 1. Executive Summary
 
 Currently, the Fuel Network sequencer operates as a single point of failure (SPOF). This document outlines a "Strong Leader" architecture using Redis as a coordination and fencing layer.
