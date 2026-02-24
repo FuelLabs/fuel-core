@@ -158,6 +158,63 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock() {
+    const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
+    const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_millis(500);
+    const BLOCKS_BEFORE_FAILOVER: usize = 3;
+    const BLOCKS_AFTER_RESTART: usize = 5;
+    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+
+    // given
+    let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
+        7777,
+        BLOCK_TIME,
+        "poa:leader:restart-lock-retention",
+    )
+    .await;
+
+    let mut first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+    tokio::time::timeout(
+        LEADER_ELECTION_TIMEOUT,
+        wait_for_local_block(&first_producer, Some(0)),
+    )
+    .await
+    .expect("First producer should acquire leadership initially");
+    let second_producer = make_node(make_node_config("Second Producer"), vec![]).await;
+
+    only_first_leader_produces_blocks(
+        &first_producer,
+        std::slice::from_ref(&second_producer),
+        BLOCKS_BEFORE_FAILOVER,
+        BLOCK_IMPORT_TIMEOUT,
+    )
+    .await;
+
+    // when
+    tokio::time::timeout(STOP_TIMEOUT, first_producer.shutdown())
+        .await
+        .expect("Should stop first producer before timeout");
+    tokio::time::timeout(
+        LEADER_ELECTION_TIMEOUT,
+        wait_for_local_block(&second_producer, Some(1)),
+    )
+    .await
+    .expect("Second producer should acquire leadership after first shutdown");
+
+    first_producer.start().await;
+
+    // then
+    only_first_leader_produces_blocks(
+        &second_producer,
+        std::slice::from_ref(&first_producer),
+        BLOCKS_AFTER_RESTART,
+        BLOCK_IMPORT_TIMEOUT,
+    )
+    .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__single_producer__when_quorum_is_restored_then_production_starts() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const NO_QUORUM_TIMEOUT: Duration = Duration::from_secs(2);

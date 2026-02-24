@@ -81,6 +81,8 @@ use crate::{
             chain_state_info_provider,
             consensus_module::poa::{
                 InDirectoryPredefinedBlocks,
+                NoopReconciliationAdapter,
+                ReconciliationAdapter,
                 RedisLeaderLeaseAdapter,
             },
             fuel_gas_price_provider::FuelGasPriceProvider,
@@ -99,7 +101,7 @@ pub type PoAService = fuel_core_poa::Service<
     InDirectoryPredefinedBlocks,
     SystemTime,
     ReadySignal,
-    RedisLeaderLeaseAdapter,
+    ReconciliationAdapter,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -379,7 +381,7 @@ pub fn init_sub_services(
 
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
-            let leader_lease_port = config
+            let reconciliation_port = config
                 .leader_lock
                 .as_ref()
                 .map(|leader_lock| {
@@ -392,8 +394,12 @@ pub fn init_sub_services(
                         leader_lock.max_retry_delay_offset,
                         leader_lock.max_attempts,
                     )
+                    .map(ReconciliationAdapter::Redis)
                 })
-                .transpose()?;
+                .transpose()?
+                .unwrap_or_else(|| {
+                    ReconciliationAdapter::Noop(NoopReconciliationAdapter)
+                });
 
             Ok(fuel_core_poa::new_service(
                 &last_block_header,
@@ -406,7 +412,7 @@ pub fn init_sub_services(
                 predefined_blocks,
                 SystemTime,
                 block_production_ready_signal,
-                leader_lease_port,
+                reconciliation_port,
             ))
         })
         .transpose()?;

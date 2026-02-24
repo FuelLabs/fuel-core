@@ -12,9 +12,10 @@ use anyhow::anyhow;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
-        LeaderLeasePort,
+        LeaderState,
         P2pPort,
         PredefinedBlocks,
+        ReconciliationPort,
         TransactionPool,
         TransactionsSource,
     },
@@ -26,7 +27,10 @@ use fuel_core_poa::{
 use fuel_core_services::stream::BoxStream;
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
-    blockchain::block::Block,
+    blockchain::{
+        SealedBlock,
+        block::Block,
+    },
     fuel_types::BlockHeight,
     services::{
         block_importer::{
@@ -79,6 +83,14 @@ pub struct RedisLeaderLeaseAdapter {
     retry_delay_millis: u64,
     max_retry_delay_offset_millis: u64,
     max_attempts: usize,
+}
+
+#[derive(Default, Clone)]
+pub struct NoopReconciliationAdapter;
+
+pub enum ReconciliationAdapter {
+    Redis(RedisLeaderLeaseAdapter),
+    Noop(NoopReconciliationAdapter),
 }
 
 impl RedisLeaderLeaseAdapter {
@@ -345,17 +357,6 @@ impl RedisLeaderLeaseAdapter {
         Ok(false)
     }
 
-    async fn release_lease_if_owner(&self) -> anyhow::Result<bool> {
-        let releases = futures::future::join_all(
-            self.redis_nodes
-                .iter()
-                .map(|redis_node| self.release_lease_on_node(redis_node)),
-        )
-        .await;
-        let released_count = releases.into_iter().filter(|released| *released).count();
-        Ok(self.quorum_reached(released_count))
-    }
-
     async fn release_lease_on_client(
         redis_client: redis::Client,
         lease_key: String,
@@ -405,6 +406,30 @@ impl RedisLeaderLeaseAdapter {
             }))
             .await;
     }
+
+    async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
+        tracing::debug!("Checking Redis leader lock");
+        if self.renew_lease_if_owner().await? {
+            return Ok(true);
+        }
+        self.acquire_lease_if_free().await
+    }
+
+    async fn release_if_owner(&self) -> anyhow::Result<()> {
+        tracing::debug!("Releasing Redis leader lock");
+        let releases = futures::future::join_all(
+            self.redis_nodes
+                .iter()
+                .map(|redis_node| self.release_lease_on_node(redis_node)),
+        )
+        .await;
+        let released_count = releases.into_iter().filter(|released| *released).count();
+        if self.quorum_reached(released_count) {
+            Ok(())
+        } else {
+            Err(anyhow!("Failed to release lease on quorum"))
+        }
+    }
 }
 
 impl PoAAdapter {
@@ -426,19 +451,57 @@ impl PoAAdapter {
 }
 
 #[async_trait::async_trait]
-impl LeaderLeasePort for RedisLeaderLeaseAdapter {
-    async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
-        tracing::debug!("Checking Redis leader lock");
-        if self.renew_lease_if_owner().await? {
-            return Ok(true);
-        }
-        self.acquire_lease_if_free().await
+impl ReconciliationPort for NoopReconciliationAdapter {
+    async fn leader_state(
+        &self,
+        _local_height: BlockHeight,
+        _next_height: BlockHeight,
+    ) -> anyhow::Result<LeaderState> {
+        Ok(LeaderState::ReconciledLeader)
     }
 
-    async fn release_lease(&self) -> anyhow::Result<()> {
-        tracing::debug!("Releasing Redis leader lock");
-        let _ = self.release_lease_if_owner().await?;
+    async fn release(&self) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl ReconciliationPort for RedisLeaderLeaseAdapter {
+    async fn leader_state(
+        &self,
+        _local_height: BlockHeight,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<LeaderState> {
+        if self.can_produce_block(next_height).await? {
+            Ok(LeaderState::ReconciledLeader)
+        } else {
+            Ok(LeaderState::ReconciledFollower)
+        }
+    }
+
+    async fn release(&self) -> anyhow::Result<()> {
+        self.release_if_owner().await
+    }
+}
+
+#[async_trait::async_trait]
+impl ReconciliationPort for ReconciliationAdapter {
+    async fn leader_state(
+        &self,
+        local_height: BlockHeight,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<LeaderState> {
+        match self {
+            Self::Redis(adapter) => adapter.leader_state(local_height, next_height).await,
+            Self::Noop(adapter) => adapter.leader_state(local_height, next_height).await,
+        }
+    }
+
+    async fn release(&self) -> anyhow::Result<()> {
+        match self {
+            Self::Redis(adapter) => adapter.release().await,
+            Self::Noop(adapter) => adapter.release().await,
+        }
     }
 }
 
@@ -535,6 +598,13 @@ impl BlockImporter for BlockImporterAdapter {
     ) -> anyhow::Result<()> {
         self.block_importer
             .commit_result(result)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()> {
+        self.block_importer
+            .execute_and_commit(block)
             .await
             .map_err(Into::into)
     }
