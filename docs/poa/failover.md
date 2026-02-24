@@ -62,7 +62,7 @@ Each Redis node independently stores its own copy of the lock, epoch token, and 
 - **Lock-owner check** (`current_leader ~= ARGV[2]`) is the **primary** safety mechanism. It independently prevents zombie writes regardless of epoch state. On any node where the lock exists with a different owner's ID, or has expired (GET returns nil), the check rejects the write. Combined with the quorum requirement and pigeonhole overlap, this alone prevents split-brain.
 - **Fencing token** (epoch) is **defense-in-depth**. It provides an additional independent check at write time and — more importantly — enables stream conflict resolution during follower sync. If two leaders write at the same block height due to a timing race during promotion, the `epoch` field in the stream entry disambiguates which block is canonical (higher epoch wins; see Section 3.4). The system would be safe with only the lock-owner check + quorum, but the fencing token adds an extra layer for edge cases.
 
-**Epoch divergence:** Since `INCR` is not idempotent, if `promote_leader.lua` succeeds on quorum but not all nodes, epoch values diverge on the nodes that incremented but weren't part of the winning quorum. Additionally, `promote_leader.lua` gates `INCR` behind `SET NX` — the epoch can only be incremented on a node when the lock is FREE there. Once a leader holds the lock, that node's epoch is frozen until the lock expires or is released. This means drift only accumulates during the "election storm" — the window between lock expiry and a successful promotion. The divergence is bounded by the number of failed promotion attempts during this window (typically 1-3 given retry jitter, but theoretically unbounded in a sustained quorum-failure scenario). This does not affect safety — the lock-owner check prevents stale writes independently of epoch state, and the leader selects `max(returned_values)` from its promotion quorum as its token, ensuring writes pass the epoch check on all nodes where it holds the lock.
+**Epoch divergence and self-healing:** Since `INCR` is not idempotent, if `promote_leader.lua` succeeds on quorum but not all nodes, epoch values diverge on the nodes that incremented but weren't part of the winning quorum. Additionally, `promote_leader.lua` gates `INCR` behind `SET NX` — the epoch can only be incremented on a node when the lock is FREE there. Once a leader holds the lock, that node's epoch is frozen until the lock expires or is released. This means drift only accumulates during the "election storm" — the window between lock expiry and a successful promotion. The divergence is bounded by the number of failed promotion attempts during this window (typically 1-3 given retry jitter, but theoretically unbounded in a sustained quorum-failure scenario). This does not affect safety — the lock-owner check prevents stale writes independently of epoch state, and the leader selects `max(returned_values)` from its promotion quorum as its token, ensuring writes pass the epoch check on all nodes where it holds the lock. **Crucially, `write_block.lua` includes a healing step**: on any node where the leader's epoch (`max(returned_values)`) is greater than the node's local epoch, the script sets the node's epoch to the leader's value. This means epoch divergence from election storms is resolved on the leader's very first successful block write — all nodes in the write quorum converge to the same epoch value, and repeated successful writes keep them aligned.
 
 **Stream divergence is handled by quorum reads:** If `write_block.lua` succeeds on quorum but not all nodes, different nodes have different stream contents. Followers handle this by reading from all reachable nodes, merging entries by block height, and requiring quorum presence to consider a block committed (see Section 3.4).
 
@@ -75,7 +75,7 @@ All keys exist independently on each of the N Redlock nodes. There is no cross-n
 | Key                  | Type            | Scope     | Description                                                  |
 |----------------------|-----------------|-----------|--------------------------------------------------------------|
 | `seq:leader:lock`    | String (TTL)    | Per-node  | Holds the Node ID of the current leader.                     |
-| `seq:epoch:token`    | Integer         | Per-node  | Fencing token. May diverge by ±1 across nodes after partial promotions. |
+| `seq:epoch:token`    | Integer         | Per-node  | Fencing token. May diverge across nodes after partial promotions; healed by `write_block.lua` on first successful write. |
 | `seq:block:stream`   | Stream (XADD)   | Per-node  | Block history. A block is committed when present on quorum nodes. |
 
 ### 3.2 Sequencer States
@@ -145,9 +145,9 @@ sequenceDiagram
 
     Note over L: Generate Block B at Height H
     par Execute on all nodes
-        L->>R1: CALL write_block.lua(token, nodeId, H, data)
-        L->>R2: CALL write_block.lua(token, nodeId, H, data)
-        L->>R3: CALL write_block.lua(token, nodeId, H, data)
+        L->>R1: CALL write_block.lua(epoch, nodeId, H, data)
+        L->>R2: CALL write_block.lua(epoch, nodeId, H, data)
+        L->>R3: CALL write_block.lua(epoch, nodeId, H, data)
     end
     R1-->>L: OK (stream_id)
     R2-->>L: OK (stream_id)
@@ -293,42 +293,50 @@ This script also serves as the **graceful stepdown** mechanism (see Section 4.3)
 
 ### 5.2 Atomic Fencing & Lease Renewal Script (Proposed)
 
-This script combines fencing, block publication, and lock maintenance. It ensures that a leader only keeps its lock if it is successfully persisting blocks.
+This script combines fencing, block publication, lock maintenance, and **epoch self-healing**. It ensures that a leader only keeps its lock if it is successfully persisting blocks. The identity check is performed first (primary safety), followed by the fencing check (defense-in-depth). If the leader's epoch (the `max()` from its promotion quorum) is greater than a node's local epoch — which can happen after election storms leave some nodes with lower epoch values — the script heals the divergence by setting the node's epoch to the leader's value. This means all nodes in the write quorum converge on the first successful block write.
 
 ```lua
 -- File: write_block.lua
 -- KEYS[1]: seq:block:stream
 -- KEYS[2]: seq:epoch:token
 -- KEYS[3]: seq:leader:lock
--- ARGV[1]: my_token
--- ARGV[2]: my_node_id
+-- ARGV[1]: my_epoch (the max() found during promotion)
+-- ARGV[2]: my_node_id (UUID/String)
 -- ARGV[3]: block_height
 -- ARGV[4]: block_data
--- ARGV[5]: lease_ttl_ms (e.g., 3000)
+-- ARGV[5]: lease_ttl_ms
 
-local current_token = tonumber(redis.call('GET', KEYS[2]))
+local current_token = tonumber(redis.call('GET', KEYS[2]) or "0")
 local current_leader = redis.call('GET', KEYS[3])
 
--- 1. Fencing Check: Ensure the token hasn't been superseded
-if tonumber(ARGV[1]) < current_token then
-    return redis.error_reply("FENCING_ERROR: Token is stale")
-end
-
--- 2. Identity Check: Ensure we still hold the lock
--- This prevents a leader whose lock expired from overwriting a new leader's stream
+-- 1. Identity Check: Do I still own this lock on this node?
+-- If the lock expired or was taken by a new leader, current_leader will not match.
 if current_leader ~= ARGV[2] then
     return redis.error_reply("FENCING_ERROR: Lock lost or held by another node")
 end
 
--- 3. Atomic Write to Stream (include epoch for conflict resolution during sync)
+-- 2. Fencing Check: Is this node's epoch higher than mine?
+-- This handles the case where a NEWER leader has already incremented the epoch.
+if tonumber(ARGV[1]) < current_token then
+    return redis.error_reply("FENCING_ERROR: Token is stale")
+end
+
+-- 3. Healing Logic:
+-- If my epoch is valid and >= current_token, I "pull" this node forward.
+-- This resolves divergence from "Election Storms" during the very first write.
+if tonumber(ARGV[1]) > current_token then
+    redis.call('SET', KEYS[2], ARGV[1])
+end
+
+-- 4. Atomic Write to Stream
 local stream_id = redis.call('XADD', KEYS[1], '*',
     'height', ARGV[3],
     'data', ARGV[4],
-    'epoch', current_token,
+    'epoch', ARGV[1],
     'timestamp', redis.call('TIME')[1]
 )
 
--- 4. Lease Renewal: Refresh the lock TTL on successful write
+-- 5. Lease Renewal: Heartbeat through work
 redis.call('PEXPIRE', KEYS[3], ARGV[5])
 
 return stream_id
@@ -365,7 +373,7 @@ return new_token
 
 When a Lua script fails to achieve quorum, the caller must clean up partial state:
 
-- **`promote_leader.lua` fails quorum**: The follower acquired the lock and incremented the epoch on some nodes but not enough. The follower releases the lock on nodes where it succeeded (using the existing `release_lock` script). The `INCR` on those nodes cannot be rolled back, leaving their epoch ahead of other nodes. Repeated failed promotions across different node subsets can compound this drift — the divergence is bounded by the number of failed attempts during the election storm window, not a fixed ±1. In practice this is 1-3 attempts given retry jitter, but could be larger under sustained quorum failures. This does not affect safety: the lock-owner check is the primary safety mechanism (see Section 2.4), and the winning leader always uses `max(returned_values)` as its token, ensuring writes pass the epoch check on all nodes where it holds the lock.
+- **`promote_leader.lua` fails quorum**: The follower acquired the lock and incremented the epoch on some nodes but not enough. The follower releases the lock on nodes where it succeeded (using the existing `release_lock` script). The `INCR` on those nodes cannot be rolled back, leaving their epoch ahead of other nodes. Repeated failed promotions across different node subsets can compound this drift — the divergence is bounded by the number of failed attempts during the election storm window, not a fixed ±1. In practice this is 1-3 attempts given retry jitter, but could be larger under sustained quorum failures. This does not affect safety: the lock-owner check is the primary safety mechanism (see Section 2.4), and the winning leader always uses `max(returned_values)` as its token. **Crucially, this divergence is automatically healed**: the winning leader's first `write_block.lua` call sets the epoch on any lagging node to the leader's `max()` value (see Section 5.2, step 3), converging all quorum nodes on the very first block write.
 
 - **`write_block.lua` fails quorum**: The block was written to the stream on some nodes but not enough to be considered committed. The leader should **not** gossip or commit this block locally. On those nodes, the stream contains an "orphaned" entry that will be ignored by followers during sync (the quorum-read algorithm in Section 3.4 requires quorum presence to consider a block committed). The new leader may produce a different block at the same height — the `epoch` field in the stream entry resolves this conflict (higher epoch wins).
 
@@ -491,12 +499,12 @@ The existing implementation uses multiplexed connections with the following stra
 | **Keyspace notification missed** | Follower doesn't receive expiry event (e.g., reconnecting). | Fallback jittered polling detects the free lock within 500-700ms. | +500ms worst case |
 | **Redis quorum loss** | Fewer than `ceil(N/2)+1` nodes reachable. | Leader stops producing (cannot renew). When quorum restores, production resumes. No split-brain possible. | Quorum restoration time |
 | **Partial block write (< quorum)** | Block written to some nodes but not committed. | New leader ignores orphaned entries (quorum-read in Section 3.4). May produce different block at same height with higher epoch. `epoch` field in stream entries resolves conflicts. | None (uncommitted block is invisible) |
-| **Epoch divergence across nodes** | Node epochs drift apart after repeated failed promotions. Drift bounded by failed attempts during election storm, not a fixed ±1. | Lock-owner check is the primary safety mechanism and prevents stale writes independently of epoch state (Section 2.4). Leader uses `max(returned_values)` as its token. Epochs tend to reconverge on successful unanimous promotions. | None (safety unaffected) |
-| **Node rejoins after partition** | Node has stale epoch and incomplete stream. | Leader's writes may fail lock-owner check on this node (leader doesn't hold the lock there). Not a safety issue — quorum holds on other nodes. Follower sync reads from all nodes and merges. | None — quorum still holds on other nodes |
+| **Epoch divergence across nodes** | Node epochs drift apart after repeated failed promotions. Drift bounded by failed attempts during election storm, not a fixed ±1. | Lock-owner check is the primary safety mechanism and prevents stale writes independently of epoch state (Section 2.4). Leader uses `max(returned_values)` as its token. **Self-healing in `write_block.lua`** pulls lagging nodes forward to the leader's epoch on the very first block write, actively converging divergent epochs. | None (safety unaffected; divergence is transient) |
+| **Node rejoins after partition** | Node has stale epoch and incomplete stream. | If the leader holds the lock on this node (lock was acquired during promotion but node was partitioned after), `write_block.lua` will heal its epoch forward and resume writing to its stream. If the leader does not hold the lock there, writes fail the lock-owner check on this node — not a safety issue, quorum holds on other nodes. Follower sync reads from all nodes and merges. | None — quorum still holds on other nodes; epoch healed on first successful write |
 
 ## 9. Performance Tradeoffs
 
-- **Sync Latency**: Each block production requires a synchronous round-trip to all N Redis nodes (~1ms on local network, executed in parallel). Total latency is the maximum of individual node latencies, not the sum. The more complex `write_block.lua` Lua script (4 commands vs 1 for simple acquire) adds microseconds of server-side execution — negligible compared to network RTT.
+- **Sync Latency**: Each block production requires a synchronous round-trip to all N Redis nodes (~1ms on local network, executed in parallel). Total latency is the maximum of individual node latencies, not the sum. The `write_block.lua` Lua script (up to 5 commands including conditional epoch healing vs 1 for simple acquire) adds microseconds of server-side execution — negligible compared to network RTT. The epoch healing `SET` only fires on the first write after promotion; subsequent writes skip it since the epoch already matches.
 - **Block Data Payload**: `write_block.lua` sends block data to all N nodes. If blocks are large (e.g., 10KB+), consider storing a block hash/reference in the stream and the full block data via a separate mechanism (local DB, P2P) to reduce Redis network load.
 - **Redis Reliability**: The system is dependent on Redis uptime. Mitigation: deploy at least 3 independent Redis nodes for a quorum of 2. Each node can itself be backed by Redis Sentinel for individual node HA.
 - **Stream Cleanup**: Use `XTRIM` with `MAXLEN` to bound memory usage on each node. Only recent blocks need to remain in the stream — older blocks are committed to the sequencer's local DB and gossiped to the network. Trimming can be included in `write_block.lua` for atomicity: `redis.call('XTRIM', KEYS[1], 'MAXLEN', '~', 1000)`.
@@ -512,6 +520,6 @@ Two levels of safety reinforce each other:
 
 2. **Safety (proposed)**: Fencing tokens and the Redis stream provide a logical ordering guarantee. The combined epoch + lock-owner check in `write_block.lua`, enforced per-node with quorum across nodes, ensures that even during network partitions, GC pauses, or partial failures, no stale leader can corrupt the block stream. The pigeonhole property of quorums guarantees that any zombie write attempt will be rejected on at least one node in common with the new leader's quorum.
 
-Epoch divergence across nodes (±1 from partial promotions) and stream divergence (from partial writes) are bounded, cosmetic, and do not affect safety. The quorum-read sync algorithm enables followers to reconstruct a consistent view from potentially divergent per-node streams.
+Epoch divergence across nodes (from partial promotions) and stream divergence (from partial writes) do not affect safety. Epoch divergence is actively healed: `write_block.lua` pulls lagging nodes forward to the leader's epoch on its first block write, making divergence transient rather than accumulating. The quorum-read sync algorithm enables followers to reconstruct a consistent view from potentially divergent per-node streams.
 
 Integrating lease renewal into the block publication logic creates a "heartbeat through work" pattern. This ensures that the sequencer's authority is strictly tied to its ability to advance the state of the network, providing the highest level of safety against split-brain scenarios.
