@@ -68,6 +68,81 @@ use tracing::error;
 
 pub mod pre_confirmation_signature;
 
+const CHECK_LEASE_OWNER_SCRIPT: &str =
+    "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+        return 1 \
+    else \
+        return 0 \
+    end";
+
+const RELEASE_LOCK_SCRIPT: &str =
+    "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+        return redis.call('DEL', KEYS[1]) \
+    else \
+        return 0 \
+    end";
+
+const PROMOTE_LEADER_SCRIPT: &str =
+    "local acquired = redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') \
+    if not acquired then \
+        return redis.error_reply('LOCK_HELD: Another leader holds the lock') \
+    end \
+    local new_token = redis.call('INCR', KEYS[2]) \
+    return new_token";
+
+const WRITE_BLOCK_SCRIPT: &str =
+    "local current_token = tonumber(redis.call('GET', KEYS[2]) or '0') \
+    local current_leader = redis.call('GET', KEYS[3]) \
+    if current_leader ~= ARGV[2] then \
+        return redis.error_reply('FENCING_ERROR: Lock lost or held by another node') \
+    end \
+    if tonumber(ARGV[1]) < current_token then \
+        return redis.error_reply('FENCING_ERROR: Token is stale') \
+    end \
+    if tonumber(ARGV[1]) > current_token then \
+        redis.call('SET', KEYS[2], ARGV[1]) \
+    end \
+    local stream_id = redis.call('XADD', KEYS[1], '*', \
+        'height', ARGV[3], \
+        'data', ARGV[4], \
+        'epoch', ARGV[1], \
+        'timestamp', redis.call('TIME')[1]) \
+    redis.call('XTRIM', KEYS[1], 'MAXLEN', '~', ARGV[6]) \
+    redis.call('PEXPIRE', KEYS[3], ARGV[5]) \
+    return stream_id";
+
+const READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT: &str =
+    "local entries = redis.call('XRANGE', KEYS[1], '-', '+') \
+    local target_height = tonumber(ARGV[1]) \
+    local best_epoch = nil \
+    local best_data = nil \
+    for _, entry in ipairs(entries) do \
+        local fields = entry[2] \
+        local entry_height = nil \
+        local entry_data = nil \
+        local entry_epoch = nil \
+        for i = 1, #fields, 2 do \
+            if fields[i] == 'height' then \
+                entry_height = tonumber(fields[i + 1]) \
+            elseif fields[i] == 'data' then \
+                entry_data = fields[i + 1] \
+            elseif fields[i] == 'epoch' then \
+                entry_epoch = tonumber(fields[i + 1]) \
+            end \
+        end \
+        if entry_height == target_height then \
+            local epoch = entry_epoch or 0 \
+            if (best_epoch == nil) or (epoch > best_epoch) then \
+                best_epoch = epoch \
+                best_data = entry_data \
+            end \
+        end \
+    end \
+    if best_data ~= nil then \
+        return {tostring(best_epoch), best_data} \
+    end \
+    return false";
+
 struct RedisNode {
     redis_client: redis::Client,
     cached_connection: Mutex<Option<redis::aio::MultiplexedConnection>>,
@@ -96,6 +171,7 @@ pub struct RedisLeaderLeaseAdapter {
     retry_delay_millis: u64,
     max_retry_delay_offset_millis: u64,
     max_attempts: usize,
+    stream_max_len: u32,
 }
 
 impl Clone for RedisLeaderLeaseAdapter {
@@ -114,6 +190,7 @@ impl Clone for RedisLeaderLeaseAdapter {
             retry_delay_millis: self.retry_delay_millis,
             max_retry_delay_offset_millis: self.max_retry_delay_offset_millis,
             max_attempts: self.max_attempts,
+            stream_max_len: self.stream_max_len,
         }
     }
 }
@@ -135,6 +212,7 @@ impl RedisLeaderLeaseAdapter {
         retry_delay: Duration,
         max_retry_delay_offset: Duration,
         max_attempts: u32,
+        stream_max_len: u32,
     ) -> anyhow::Result<Self> {
         let redis_nodes = redis_urls
             .into_iter()
@@ -181,6 +259,7 @@ impl RedisLeaderLeaseAdapter {
             retry_delay_millis,
             max_retry_delay_offset_millis,
             max_attempts,
+            stream_max_len,
         })
     }
 
@@ -220,13 +299,7 @@ impl RedisLeaderLeaseAdapter {
         };
         let is_owner = timeout(
             self.node_timeout,
-            redis::Script::new(
-                "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-                    return 1 \
-                else \
-                    return 0 \
-                end",
-            )
+            redis::Script::new(CHECK_LEASE_OWNER_SCRIPT)
             .key(&self.lease_key)
             .arg(&self.lease_owner_token)
             .invoke_async::<i32>(&mut connection),
@@ -255,14 +328,7 @@ impl RedisLeaderLeaseAdapter {
         };
         let promoted = timeout(
             self.node_timeout,
-            redis::Script::new(
-                "local acquired = redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') \
-                if not acquired then \
-                    return redis.error_reply('LOCK_HELD: Another leader holds the lock') \
-                end \
-                local new_token = redis.call('INCR', KEYS[2]) \
-                return new_token",
-            )
+            redis::Script::new(PROMOTE_LEADER_SCRIPT)
             .key(&self.lease_key)
             .key(&self.epoch_key)
             .arg(&self.lease_owner_token)
@@ -293,13 +359,7 @@ impl RedisLeaderLeaseAdapter {
         };
         let released = timeout(
             self.node_timeout,
-            redis::Script::new(
-                "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-                    return redis.call('DEL', KEYS[1]) \
-                else \
-                    return 0 \
-                end",
-            )
+            redis::Script::new(RELEASE_LOCK_SCRIPT)
             .key(&self.lease_key)
             .arg(&self.lease_owner_token)
             .invoke_async::<i32>(&mut connection),
@@ -416,13 +476,7 @@ impl RedisLeaderLeaseAdapter {
         };
         let _ = timeout(
             node_timeout,
-            redis::Script::new(
-                "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-                    return redis.call('DEL', KEYS[1]) \
-                else \
-                    return 0 \
-                end",
-            )
+            redis::Script::new(RELEASE_LOCK_SCRIPT)
             .key(lease_key)
             .arg(lease_owner_token)
             .invoke_async::<i32>(&mut connection),
@@ -458,11 +512,7 @@ impl RedisLeaderLeaseAdapter {
                 return;
             };
             let _ = redis::Script::new(
-                "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-                    return redis.call('DEL', KEYS[1]) \
-                else \
-                    return 0 \
-                end",
+                RELEASE_LOCK_SCRIPT,
             )
             .key(&lease_key)
             .arg(&lease_owner_token)
@@ -474,59 +524,30 @@ impl RedisLeaderLeaseAdapter {
         &self,
         redis_node: &RedisNode,
         next_height: BlockHeight,
-    ) -> anyhow::Result<Option<SealedBlock>> {
+    ) -> anyhow::Result<Option<(u64, SealedBlock)>> {
         let mut connection = match self.multiplexed_connection(redis_node).await {
             Ok(connection) => connection,
             Err(_) => return Ok(None),
         };
-        let block_data = timeout(
+        let block_data_with_epoch = timeout(
             self.node_timeout,
-            redis::Script::new(
-                "local entries = redis.call('XRANGE', KEYS[1], '-', '+') \
-                local target_height = tonumber(ARGV[1]) \
-                local best_epoch = nil \
-                local best_data = nil \
-                for _, entry in ipairs(entries) do \
-                    local fields = entry[2] \
-                    local entry_height = nil \
-                    local entry_data = nil \
-                    local entry_epoch = nil \
-                    for i = 1, #fields, 2 do \
-                        if fields[i] == 'height' then \
-                            entry_height = tonumber(fields[i + 1]) \
-                        elseif fields[i] == 'data' then \
-                            entry_data = fields[i + 1] \
-                        elseif fields[i] == 'epoch' then \
-                            entry_epoch = tonumber(fields[i + 1]) \
-                        end \
-                    end \
-                    if entry_height == target_height then \
-                        local epoch = entry_epoch or 0 \
-                        if (best_epoch == nil) or (epoch > best_epoch) then \
-                            best_epoch = epoch \
-                            best_data = entry_data \
-                        end \
-                    end \
-                end \
-                if best_data ~= nil then \
-                    return best_data \
-                end \
-                return false",
-            )
+            redis::Script::new(READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT)
             .key(&self.block_stream_key)
             .arg(u32::from(next_height))
-            .invoke_async::<Option<Vec<u8>>>(&mut connection),
+            .invoke_async::<Option<(u64, Vec<u8>)>>(&mut connection),
         )
         .await;
-        let block_data = match block_data {
-            Ok(Ok(block_data)) => block_data,
+        let block_data_with_epoch = match block_data_with_epoch {
+            Ok(Ok(block_data_with_epoch)) => block_data_with_epoch,
             Ok(Err(_)) | Err(_) => {
                 self.clear_cached_connection(redis_node).await;
                 None
             }
         };
-        match block_data {
-            Some(bytes) => Ok(Some(postcard::from_bytes::<SealedBlock>(&bytes)?)),
+        match block_data_with_epoch {
+            Some((epoch, bytes)) => {
+                Ok(Some((epoch, postcard::from_bytes::<SealedBlock>(&bytes)?)))
+            }
             None => Ok(None),
         }
     }
@@ -535,22 +556,40 @@ impl RedisLeaderLeaseAdapter {
         &self,
         next_height: BlockHeight,
     ) -> anyhow::Result<Vec<SealedBlock>> {
-        let maybe_blocks =
-            futures::future::join_all(self.redis_nodes.iter().map(|redis_node| {
-                self.read_block_for_height_on_node(redis_node, next_height)
-            }))
-            .await;
-        let present_count = maybe_blocks
-            .iter()
-            .filter(|result| matches!(result, Ok(Some(_))))
-            .count();
-        if !self.quorum_reached(present_count) {
-            return Ok(vec![]);
-        }
-        let block = maybe_blocks
+        const MAX_RECONCILE_BLOCKS_PER_ROUND: usize = 128;
+        let mut reconciled = Vec::new();
+        let mut current_height = next_height;
+
+        for _ in 0..MAX_RECONCILE_BLOCKS_PER_ROUND {
+            let candidates = futures::future::join_all(self.redis_nodes.iter().map(
+                |redis_node| self.read_block_for_height_on_node(redis_node, current_height),
+            ))
+            .await
             .into_iter()
-            .find_map(|result| result.ok().flatten());
-        Ok(block.into_iter().collect())
+            .filter_map(|result| result.ok().flatten())
+            .collect::<Vec<_>>();
+
+            if !self.quorum_reached(candidates.len()) {
+                break;
+            }
+
+            let winner = candidates
+                .into_iter()
+                .max_by_key(|(epoch, _)| *epoch)
+                .map(|(_, block)| block);
+            if let Some(block) = winner {
+                reconciled.push(block);
+            } else {
+                break;
+            }
+
+            let Some(next) = current_height.succ() else {
+                break;
+            };
+            current_height = next;
+        }
+
+        Ok(reconciled)
     }
 
     async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
@@ -589,26 +628,7 @@ impl RedisLeaderLeaseAdapter {
     ) -> anyhow::Result<bool> {
         let mut connection = redis_node.redis_client.get_connection()?;
         let block_height = u32::from(*block.entity.header().height());
-        let write_result = redis::Script::new(
-            "local current_token = tonumber(redis.call('GET', KEYS[2]) or '0') \
-            local current_leader = redis.call('GET', KEYS[3]) \
-            if current_leader ~= ARGV[2] then \
-                return redis.error_reply('FENCING_ERROR: Lock lost or held by another node') \
-            end \
-            if tonumber(ARGV[1]) < current_token then \
-                return redis.error_reply('FENCING_ERROR: Token is stale') \
-            end \
-            if tonumber(ARGV[1]) > current_token then \
-                redis.call('SET', KEYS[2], ARGV[1]) \
-            end \
-            local stream_id = redis.call('XADD', KEYS[1], '*', \
-                'height', ARGV[3], \
-                'data', ARGV[4], \
-                'epoch', ARGV[1], \
-                'timestamp', redis.call('TIME')[1]) \
-            redis.call('PEXPIRE', KEYS[3], ARGV[5]) \
-            return stream_id",
-        )
+        let write_result = redis::Script::new(WRITE_BLOCK_SCRIPT)
         .key(&self.block_stream_key)
         .key(&self.epoch_key)
         .key(&self.lease_key)
@@ -617,6 +637,7 @@ impl RedisLeaderLeaseAdapter {
         .arg(block_height)
         .arg(block_data)
         .arg(self.lease_ttl_millis)
+        .arg(self.stream_max_len)
         .invoke::<String>(&mut connection);
         match write_result {
             Ok(_) => Ok(true),
@@ -889,6 +910,7 @@ mod tests {
             Duration::from_millis(50),
             Duration::from_millis(0),
             1,
+            1000,
         )
         .expect("adapter should be created");
 
@@ -944,6 +966,7 @@ mod tests {
             Duration::from_millis(50),
             Duration::from_millis(0),
             1,
+            1000,
         )
         .expect("adapter should be created");
 
@@ -968,6 +991,81 @@ mod tests {
         assert!(
             matches!(leader_state, LeaderState::ReconciledLeader),
             "Expected below-quorum entry to be ignored"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_contiguous_heights_have_quorum_then_returns_blocks_until_first_non_quorum_height(
+    ) {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:contiguous-quorum".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+
+        let h1 = poa_block_at_time(1, 10);
+        let h2 = poa_block_at_time(2, 20);
+        let h3 = poa_block_at_time(3, 30);
+        let h1_data = postcard::to_allocvec(&h1).expect("h1 should serialize");
+        let h2_data = postcard::to_allocvec(&h2).expect("h2 should serialize");
+        let h3_data = postcard::to_allocvec(&h3).expect("h3 should serialize");
+
+        let redis_a_client =
+            redis::Client::open(redis_a.redis_url()).expect("redis a client should open");
+        let redis_b_client =
+            redis::Client::open(redis_b.redis_url()).expect("redis b client should open");
+        let redis_c_client =
+            redis::Client::open(redis_c.redis_url()).expect("redis c client should open");
+        let mut conn_a = redis_a_client
+            .get_connection()
+            .expect("redis a connection should open");
+        let mut conn_b = redis_b_client
+            .get_connection()
+            .expect("redis b connection should open");
+        let mut conn_c = redis_c_client
+            .get_connection()
+            .expect("redis c connection should open");
+
+        // h1 on quorum (a,b)
+        append_stream_block(&mut conn_a, &stream_key, 1, &h1_data, 1);
+        append_stream_block(&mut conn_b, &stream_key, 1, &h1_data, 1);
+        // h2 on quorum (a,b)
+        append_stream_block(&mut conn_a, &stream_key, 2, &h2_data, 1);
+        append_stream_block(&mut conn_b, &stream_key, 2, &h2_data, 1);
+        // h3 below quorum (a only)
+        append_stream_block(&mut conn_a, &stream_key, 3, &h3_data, 1);
+        let _ = &mut conn_c;
+
+        // when
+        let leader_state = adapter
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("leader_state should succeed");
+
+        // then
+        let unreconciled_blocks = match leader_state {
+            LeaderState::UnreconciledBlocks(blocks) => blocks,
+            other => panic!("Expected unreconciled blocks, got: {other:?}"),
+        };
+        assert_eq!(
+            unreconciled_blocks
+                .iter()
+                .map(|b| u32::from(*b.entity.header().height()))
+                .collect::<Vec<_>>(),
+            vec![1, 2],
+            "Expected only contiguous quorum-backed heights to be reconciled",
         );
     }
 

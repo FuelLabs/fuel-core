@@ -230,6 +230,7 @@ pub fn init_sub_services(
                 leader_lock.retry_delay,
                 leader_lock.max_retry_delay_offset,
                 leader_lock.max_attempts,
+                leader_lock.stream_max_len,
             )
         })
         .transpose()?;
