@@ -8,6 +8,7 @@ use crate::{
     new_service,
     ports::{
         BlockProducer,
+        BlockReconciliationReadPort,
         BlockSigner,
         GetTime,
         InMemoryPredefinedBlocks,
@@ -16,7 +17,6 @@ use crate::{
         MockBlockProducer,
         MockP2pPort,
         MockTransactionPool,
-        BlockReconciliationReadPort,
         TransactionsSource,
         WaitForReadySignal,
     },
@@ -477,7 +477,7 @@ async fn run__when_leader_state_fails_then_does_not_produce_or_commit_result() {
 
 #[tokio::test]
 async fn run__when_execute_and_commit_fails_during_reconcile_then_does_not_produce_or_commit_result()
-{
+ {
     // given
     let config = Config {
         trigger: Trigger::Interval {
@@ -507,9 +507,9 @@ async fn run__when_execute_and_commit_fails_during_reconcile_then_does_not_produ
         .await
         .unwrap();
     let unreconciled_state = LeaderState::UnreconciledBlocks(vec![SealedBlock {
-            entity: block,
-            consensus,
-        }]);
+        entity: block,
+        consensus,
+    }]);
 
     let service = new_service(
         &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),

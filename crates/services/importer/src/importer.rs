@@ -4,8 +4,8 @@ use crate::{
     error::Error,
     local_runner::LocalRunner,
     ports::{
-        BlockVerifier,
         BlockReconciliationWritePort,
+        BlockVerifier,
         DatabaseTransaction,
         ImporterDatabase,
         Transactional,

@@ -245,9 +245,7 @@ pub fn init_sub_services(
             .as_ref()
             .cloned()
             .map(BlockReconciliationWriteAdapter::Redis)
-            .unwrap_or_else(|| {
-                BlockReconciliationWriteAdapter::Noop(Default::default())
-            }),
+            .unwrap_or_else(|| BlockReconciliationWriteAdapter::Noop(Default::default())),
     );
 
     let chain_state_info_provider_service = chain_state_info_provider::new_service(

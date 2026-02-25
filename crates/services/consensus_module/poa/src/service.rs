@@ -18,12 +18,12 @@ use crate::{
         BlockImporter,
         BlockProducer,
         BlockProductionReadySignal,
+        BlockReconciliationReadPort,
         BlockSigner,
         GetTime,
         LeaderState,
         P2pPort,
         PredefinedBlocks,
-        BlockReconciliationReadPort,
         TransactionPool,
         TransactionsSource,
         WaitForReadySignal,
@@ -742,7 +742,9 @@ where
     async fn shutdown(self) -> anyhow::Result<()> {
         tracing::info!("PoA MainTask shutting down");
         if let Err(err) = self.reconciliation_port.release().await {
-            tracing::warn!("Failed to release reconciliation state during shutdown: {err}");
+            tracing::warn!(
+                "Failed to release reconciliation state during shutdown: {err}"
+            );
         }
         self.sync_task_handle.stop_and_await().await?;
         Ok(())

@@ -68,30 +68,26 @@ use tracing::error;
 
 pub mod pre_confirmation_signature;
 
-const CHECK_LEASE_OWNER_SCRIPT: &str =
-    "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+const CHECK_LEASE_OWNER_SCRIPT: &str = "if redis.call('GET', KEYS[1]) == ARGV[1] then \
         return 1 \
     else \
         return 0 \
     end";
 
-const RELEASE_LOCK_SCRIPT: &str =
-    "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+const RELEASE_LOCK_SCRIPT: &str = "if redis.call('GET', KEYS[1]) == ARGV[1] then \
         return redis.call('DEL', KEYS[1]) \
     else \
         return 0 \
     end";
 
-const PROMOTE_LEADER_SCRIPT: &str =
-    "local acquired = redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') \
+const PROMOTE_LEADER_SCRIPT: &str = "local acquired = redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') \
     if not acquired then \
         return redis.error_reply('LOCK_HELD: Another leader holds the lock') \
     end \
     local new_token = redis.call('INCR', KEYS[2]) \
     return new_token";
 
-const WRITE_BLOCK_SCRIPT: &str =
-    "local current_token = tonumber(redis.call('GET', KEYS[2]) or '0') \
+const WRITE_BLOCK_SCRIPT: &str = "local current_token = tonumber(redis.call('GET', KEYS[2]) or '0') \
     local current_leader = redis.call('GET', KEYS[3]) \
     if current_leader ~= ARGV[2] then \
         return redis.error_reply('FENCING_ERROR: Lock lost or held by another node') \
@@ -111,8 +107,7 @@ const WRITE_BLOCK_SCRIPT: &str =
     redis.call('PEXPIRE', KEYS[3], ARGV[5]) \
     return stream_id";
 
-const READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT: &str =
-    "local entries = redis.call('XRANGE', KEYS[1], '-', '+') \
+const READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT: &str = "local entries = redis.call('XRANGE', KEYS[1], '-', '+') \
     local target_height = tonumber(ARGV[1]) \
     local best_epoch = nil \
     local best_data = nil \
@@ -300,9 +295,9 @@ impl RedisLeaderLeaseAdapter {
         let is_owner = timeout(
             self.node_timeout,
             redis::Script::new(CHECK_LEASE_OWNER_SCRIPT)
-            .key(&self.lease_key)
-            .arg(&self.lease_owner_token)
-            .invoke_async::<i32>(&mut connection),
+                .key(&self.lease_key)
+                .arg(&self.lease_owner_token)
+                .invoke_async::<i32>(&mut connection),
         )
         .await;
         match is_owner {
@@ -329,11 +324,11 @@ impl RedisLeaderLeaseAdapter {
         let promoted = timeout(
             self.node_timeout,
             redis::Script::new(PROMOTE_LEADER_SCRIPT)
-            .key(&self.lease_key)
-            .key(&self.epoch_key)
-            .arg(&self.lease_owner_token)
-            .arg(self.lease_ttl_millis)
-            .invoke_async::<u64>(&mut connection),
+                .key(&self.lease_key)
+                .key(&self.epoch_key)
+                .arg(&self.lease_owner_token)
+                .arg(self.lease_ttl_millis)
+                .invoke_async::<u64>(&mut connection),
         )
         .await;
         match promoted {
@@ -360,9 +355,9 @@ impl RedisLeaderLeaseAdapter {
         let released = timeout(
             self.node_timeout,
             redis::Script::new(RELEASE_LOCK_SCRIPT)
-            .key(&self.lease_key)
-            .arg(&self.lease_owner_token)
-            .invoke_async::<i32>(&mut connection),
+                .key(&self.lease_key)
+                .arg(&self.lease_owner_token)
+                .invoke_async::<i32>(&mut connection),
         )
         .await;
         match released {
@@ -477,9 +472,9 @@ impl RedisLeaderLeaseAdapter {
         let _ = timeout(
             node_timeout,
             redis::Script::new(RELEASE_LOCK_SCRIPT)
-            .key(lease_key)
-            .arg(lease_owner_token)
-            .invoke_async::<i32>(&mut connection),
+                .key(lease_key)
+                .arg(lease_owner_token)
+                .invoke_async::<i32>(&mut connection),
         )
         .await;
     }
@@ -511,12 +506,10 @@ impl RedisLeaderLeaseAdapter {
             let Ok(mut connection) = redis_client.get_connection() else {
                 return;
             };
-            let _ = redis::Script::new(
-                RELEASE_LOCK_SCRIPT,
-            )
-            .key(&lease_key)
-            .arg(&lease_owner_token)
-            .invoke::<i32>(&mut connection);
+            let _ = redis::Script::new(RELEASE_LOCK_SCRIPT)
+                .key(&lease_key)
+                .arg(&lease_owner_token)
+                .invoke::<i32>(&mut connection);
         });
     }
 
@@ -532,9 +525,9 @@ impl RedisLeaderLeaseAdapter {
         let block_data_with_epoch = timeout(
             self.node_timeout,
             redis::Script::new(READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT)
-            .key(&self.block_stream_key)
-            .arg(u32::from(next_height))
-            .invoke_async::<Option<(u64, Vec<u8>)>>(&mut connection),
+                .key(&self.block_stream_key)
+                .arg(u32::from(next_height))
+                .invoke_async::<Option<(u64, Vec<u8>)>>(&mut connection),
         )
         .await;
         let block_data_with_epoch = match block_data_with_epoch {
@@ -561,13 +554,14 @@ impl RedisLeaderLeaseAdapter {
         let mut current_height = next_height;
 
         for _ in 0..MAX_RECONCILE_BLOCKS_PER_ROUND {
-            let candidates = futures::future::join_all(self.redis_nodes.iter().map(
-                |redis_node| self.read_block_for_height_on_node(redis_node, current_height),
-            ))
-            .await
-            .into_iter()
-            .filter_map(|result| result.ok().flatten())
-            .collect::<Vec<_>>();
+            let candidates =
+                futures::future::join_all(self.redis_nodes.iter().map(|redis_node| {
+                    self.read_block_for_height_on_node(redis_node, current_height)
+                }))
+                .await
+                .into_iter()
+                .filter_map(|result| result.ok().flatten())
+                .collect::<Vec<_>>();
 
             if !self.quorum_reached(candidates.len()) {
                 break;
@@ -629,16 +623,16 @@ impl RedisLeaderLeaseAdapter {
         let mut connection = redis_node.redis_client.get_connection()?;
         let block_height = u32::from(*block.entity.header().height());
         let write_result = redis::Script::new(WRITE_BLOCK_SCRIPT)
-        .key(&self.block_stream_key)
-        .key(&self.epoch_key)
-        .key(&self.lease_key)
-        .arg(epoch)
-        .arg(&self.lease_owner_token)
-        .arg(block_height)
-        .arg(block_data)
-        .arg(self.lease_ttl_millis)
-        .arg(self.stream_max_len)
-        .invoke::<String>(&mut connection);
+            .key(&self.block_stream_key)
+            .key(&self.epoch_key)
+            .key(&self.lease_key)
+            .arg(epoch)
+            .arg(&self.lease_owner_token)
+            .arg(block_height)
+            .arg(block_data)
+            .arg(self.lease_ttl_millis)
+            .arg(self.stream_max_len)
+            .invoke::<String>(&mut connection);
         match write_result {
             Ok(_) => Ok(true),
             Err(err) if err.to_string().contains("FENCING_ERROR:") => Ok(false),
@@ -897,8 +891,8 @@ mod tests {
     };
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn leader_state__when_same_height_has_multiple_stream_entries_then_returns_highest_epoch_block(
-    ) {
+    async fn leader_state__when_same_height_has_multiple_stream_entries_then_returns_highest_epoch_block()
+     {
         // given
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:stream-conflict".to_string();
@@ -960,7 +954,11 @@ mod tests {
         let lease_key = "poa:test:below-quorum".to_string();
         let stream_key = format!("{lease_key}:block:stream");
         let adapter = RedisLeaderLeaseAdapter::new(
-            vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()],
+            vec![
+                redis_a.redis_url(),
+                redis_b.redis_url(),
+                redis_c.redis_url(),
+            ],
             lease_key,
             Duration::from_secs(2),
             Duration::from_millis(100),
@@ -972,8 +970,8 @@ mod tests {
         .expect("adapter should be created");
 
         let orphan_block = poa_block_at_time(1, 10);
-        let orphan_block_data = postcard::to_allocvec(&orphan_block)
-            .expect("orphan block should serialize");
+        let orphan_block_data =
+            postcard::to_allocvec(&orphan_block).expect("orphan block should serialize");
 
         let redis_client =
             redis::Client::open(redis_a.redis_url()).expect("redis client should open");
@@ -996,8 +994,8 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn leader_state__when_contiguous_heights_have_quorum_then_returns_blocks_until_first_non_quorum_height(
-    ) {
+    async fn leader_state__when_contiguous_heights_have_quorum_then_returns_blocks_until_first_non_quorum_height()
+     {
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -1005,7 +1003,11 @@ mod tests {
         let lease_key = "poa:test:contiguous-quorum".to_string();
         let stream_key = format!("{lease_key}:block:stream");
         let adapter = RedisLeaderLeaseAdapter::new(
-            vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()],
+            vec![
+                redis_a.redis_url(),
+                redis_b.redis_url(),
+                redis_c.redis_url(),
+            ],
             lease_key,
             Duration::from_secs(2),
             Duration::from_millis(100),
@@ -1071,14 +1073,18 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn publish_produced_block__when_previous_leader_writes_after_handoff_then_rejects_zombie_write(
-    ) {
+    async fn publish_produced_block__when_previous_leader_writes_after_handoff_then_rejects_zombie_write()
+     {
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
         let lease_key = "poa:test:zombie-leader".to_string();
-        let redis_urls = vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()];
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
         let old_leader = new_test_adapter(redis_urls.clone(), lease_key.clone());
         let current_leader = new_test_adapter(redis_urls, lease_key.clone());
         let block = poa_block_at_time(1, 111);
@@ -1090,7 +1096,14 @@ mod tests {
                 .expect("acquire should succeed"),
             "Old leader should acquire initial lease"
         );
-        clear_lease_on_nodes(&[redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()], &lease_key);
+        clear_lease_on_nodes(
+            &[
+                redis_a.redis_url(),
+                redis_b.redis_url(),
+                redis_c.redis_url(),
+            ],
+            &lease_key,
+        );
         assert!(
             current_leader
                 .acquire_lease_if_free()
@@ -1118,14 +1131,18 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn publish_produced_block__when_epoch_is_behind_on_one_node_then_first_write_heals_epoch(
-    ) {
+    async fn publish_produced_block__when_epoch_is_behind_on_one_node_then_first_write_heals_epoch()
+     {
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
         let lease_key = "poa:test:epoch-healing".to_string();
-        let redis_urls = vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()];
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
         let adapter = new_test_adapter(redis_urls, lease_key.clone());
         let epoch_key = format!("{lease_key}:epoch:token");
         let block = poa_block_at_time(1, 222);
@@ -1136,11 +1153,8 @@ mod tests {
                 .expect("acquire should succeed"),
             "Adapter should acquire lease"
         );
-        let leader_epoch = (*adapter
-            .current_epoch_token
-            .lock()
-            .expect("poisoned lock"))
-        .expect("epoch should be initialized");
+        let leader_epoch = (*adapter.current_epoch_token.lock().expect("poisoned lock"))
+            .expect("epoch should be initialized");
         let stale_epoch = leader_epoch.saturating_sub(1);
         set_epoch(&redis_a.redis_url(), &epoch_key, stale_epoch);
 
@@ -1148,7 +1162,10 @@ mod tests {
         let publish_result = adapter.publish_produced_block(&block);
 
         // then
-        assert!(publish_result.is_ok(), "Publish should still succeed on quorum");
+        assert!(
+            publish_result.is_ok(),
+            "Publish should still succeed on quorum"
+        );
         let healed_epoch = read_epoch(&redis_a.redis_url(), &epoch_key);
         assert_eq!(
             healed_epoch, leader_epoch,
@@ -1157,15 +1174,19 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn publish_produced_block__when_write_succeeds_on_less_than_quorum_then_entry_is_not_reconciled(
-    ) {
+    async fn publish_produced_block__when_write_succeeds_on_less_than_quorum_then_entry_is_not_reconciled()
+     {
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
         let lease_key = "poa:test:partial-write".to_string();
         let stream_key = format!("{lease_key}:block:stream");
-        let redis_urls = vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()];
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
         let adapter = new_test_adapter(redis_urls, lease_key.clone());
         let block = poa_block_at_time(1, 333);
         assert!(
@@ -1347,7 +1368,8 @@ mod tests {
     }
 
     fn set_epoch(redis_url: &str, epoch_key: &str, epoch: u64) {
-        let redis_client = redis::Client::open(redis_url).expect("redis client should open");
+        let redis_client =
+            redis::Client::open(redis_url).expect("redis client should open");
         let mut conn = redis_client
             .get_connection()
             .expect("redis connection should open");
@@ -1359,7 +1381,8 @@ mod tests {
     }
 
     fn read_epoch(redis_url: &str, epoch_key: &str) -> u64 {
-        let redis_client = redis::Client::open(redis_url).expect("redis client should open");
+        let redis_client =
+            redis::Client::open(redis_url).expect("redis client should open");
         let mut conn = redis_client
             .get_connection()
             .expect("redis connection should open");
@@ -1370,8 +1393,14 @@ mod tests {
         epoch.expect("epoch should exist")
     }
 
-    fn set_lease_owner(redis_url: &str, lease_key: &str, owner: &str, lease_ttl_millis: u64) {
-        let redis_client = redis::Client::open(redis_url).expect("redis client should open");
+    fn set_lease_owner(
+        redis_url: &str,
+        lease_key: &str,
+        owner: &str,
+        lease_ttl_millis: u64,
+    ) {
+        let redis_client =
+            redis::Client::open(redis_url).expect("redis client should open");
         let mut conn = redis_client
             .get_connection()
             .expect("redis connection should open");
@@ -1386,8 +1415,8 @@ mod tests {
 
     fn clear_lease_on_nodes(redis_urls: &[String], lease_key: &str) {
         redis_urls.iter().for_each(|redis_url| {
-            let redis_client =
-                redis::Client::open(redis_url.as_str()).expect("redis client should open");
+            let redis_client = redis::Client::open(redis_url.as_str())
+                .expect("redis client should open");
             let mut conn = redis_client
                 .get_connection()
                 .expect("redis connection should open");
@@ -1399,7 +1428,8 @@ mod tests {
     }
 
     fn stream_len(redis_url: &str, stream_key: &str) -> usize {
-        let redis_client = redis::Client::open(redis_url).expect("redis client should open");
+        let redis_client =
+            redis::Client::open(redis_url).expect("redis client should open");
         let mut conn = redis_client
             .get_connection()
             .expect("redis connection should open");
