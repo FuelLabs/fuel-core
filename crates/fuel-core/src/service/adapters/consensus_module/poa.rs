@@ -13,10 +13,10 @@ use fuel_core_importer::ports::BlockReconciliationWritePort;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
+        BlockReconciliationReadPort,
         LeaderState,
         P2pPort,
         PredefinedBlocks,
-        BlockReconciliationReadPort,
         TransactionPool,
         TransactionsSource,
     },
@@ -470,6 +470,89 @@ impl RedisLeaderLeaseAdapter {
         });
     }
 
+    async fn read_block_for_height_on_node(
+        &self,
+        redis_node: &RedisNode,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<Option<SealedBlock>> {
+        let mut connection = match self.multiplexed_connection(redis_node).await {
+            Ok(connection) => connection,
+            Err(_) => return Ok(None),
+        };
+        let block_data = timeout(
+            self.node_timeout,
+            redis::Script::new(
+                "local entries = redis.call('XRANGE', KEYS[1], '-', '+') \
+                local target_height = tonumber(ARGV[1]) \
+                local best_epoch = nil \
+                local best_data = nil \
+                for _, entry in ipairs(entries) do \
+                    local fields = entry[2] \
+                    local entry_height = nil \
+                    local entry_data = nil \
+                    local entry_epoch = nil \
+                    for i = 1, #fields, 2 do \
+                        if fields[i] == 'height' then \
+                            entry_height = tonumber(fields[i + 1]) \
+                        elseif fields[i] == 'data' then \
+                            entry_data = fields[i + 1] \
+                        elseif fields[i] == 'epoch' then \
+                            entry_epoch = tonumber(fields[i + 1]) \
+                        end \
+                    end \
+                    if entry_height == target_height then \
+                        local epoch = entry_epoch or 0 \
+                        if (best_epoch == nil) or (epoch > best_epoch) then \
+                            best_epoch = epoch \
+                            best_data = entry_data \
+                        end \
+                    end \
+                end \
+                if best_data ~= nil then \
+                    return best_data \
+                end \
+                return false",
+            )
+            .key(&self.block_stream_key)
+            .arg(u32::from(next_height))
+            .invoke_async::<Option<Vec<u8>>>(&mut connection),
+        )
+        .await;
+        let block_data = match block_data {
+            Ok(Ok(block_data)) => block_data,
+            Ok(Err(_)) | Err(_) => {
+                self.clear_cached_connection(redis_node).await;
+                None
+            }
+        };
+        match block_data {
+            Some(bytes) => Ok(Some(postcard::from_bytes::<SealedBlock>(&bytes)?)),
+            None => Ok(None),
+        }
+    }
+
+    async fn unreconciled_blocks(
+        &self,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<Vec<SealedBlock>> {
+        let maybe_blocks =
+            futures::future::join_all(self.redis_nodes.iter().map(|redis_node| {
+                self.read_block_for_height_on_node(redis_node, next_height)
+            }))
+            .await;
+        let present_count = maybe_blocks
+            .iter()
+            .filter(|result| matches!(result, Ok(Some(_))))
+            .count();
+        if !self.quorum_reached(present_count) {
+            return Ok(vec![]);
+        }
+        let block = maybe_blocks
+            .into_iter()
+            .find_map(|result| result.ok().flatten());
+        Ok(block.into_iter().collect())
+    }
+
     async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
         tracing::debug!("Checking Redis leader lock");
         if self.renew_lease_if_owner().await? {
@@ -584,7 +667,12 @@ impl BlockReconciliationReadPort for RedisLeaderLeaseAdapter {
         next_height: BlockHeight,
     ) -> anyhow::Result<LeaderState> {
         if self.can_produce_block(next_height).await? {
-            Ok(LeaderState::ReconciledLeader)
+            let unreconciled_blocks = self.unreconciled_blocks(next_height).await?;
+            if unreconciled_blocks.is_empty() {
+                Ok(LeaderState::ReconciledLeader)
+            } else {
+                Ok(LeaderState::UnreconciledBlocks(unreconciled_blocks))
+            }
         } else {
             Ok(LeaderState::ReconciledFollower)
         }
@@ -664,16 +752,13 @@ impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
         let successes = self
             .redis_nodes
             .iter()
-            .map(|redis_node| match self.publish_block_on_node(
-                redis_node,
-                epoch,
-                block,
-                &block_data,
-            ) {
-                Ok(success) => success,
-                Err(err) => {
-                    tracing::debug!("Redis publish on node failed: {err}");
-                    false
+            .map(|redis_node| {
+                match self.publish_block_on_node(redis_node, epoch, block, &block_data) {
+                    Ok(success) => success,
+                    Err(err) => {
+                        tracing::debug!("Redis publish on node failed: {err}");
+                        false
+                    }
                 }
             })
             .into_iter()
@@ -765,6 +850,243 @@ impl BlockImporter for BlockImporterAdapter {
                 .filter_map(|result| result.ok())
                 .map(|result| BlockImportInfo::from(result.shared_result)),
         )
+    }
+}
+
+#[cfg(test)]
+#[allow(non_snake_case)]
+mod tests {
+    use super::*;
+    use fuel_core_poa::ports::BlockReconciliationReadPort;
+    use fuel_core_types::blockchain::consensus::Consensus;
+    use std::{
+        net::{
+            SocketAddrV4,
+            TcpListener,
+            TcpStream,
+        },
+        process::{
+            Child,
+            Command,
+            Stdio,
+        },
+        thread,
+        time::Duration,
+    };
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_same_height_has_multiple_stream_entries_then_returns_highest_epoch_block(
+    ) {
+        // given
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:stream-conflict".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![redis.redis_url()],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+        )
+        .expect("adapter should be created");
+
+        let low_epoch_block = poa_block_at_time(1, 10);
+        let high_epoch_block = poa_block_at_time(1, 20);
+
+        let low_epoch_data =
+            postcard::to_allocvec(&low_epoch_block).expect("serialize block");
+        let high_epoch_data =
+            postcard::to_allocvec(&high_epoch_block).expect("serialize block");
+
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        append_stream_block(&mut conn, &stream_key, 1, &low_epoch_data, 1);
+        append_stream_block(&mut conn, &stream_key, 1, &high_epoch_data, 2);
+
+        // when
+        let leader_state = adapter
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("leader_state should succeed");
+
+        // then
+        let unreconciled_blocks = match leader_state {
+            LeaderState::UnreconciledBlocks(blocks) => blocks,
+            other => panic!("Expected unreconciled blocks, got: {other:?}"),
+        };
+        assert_eq!(unreconciled_blocks.len(), 1);
+        assert_eq!(
+            unreconciled_blocks[0].entity.header().time(),
+            high_epoch_block.entity.header().time(),
+            "Expected reconciliation to pick the highest epoch block for the same height",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_same_height_entry_exists_on_less_than_quorum_nodes_then_ignores_it()
+     {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:below-quorum".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+        )
+        .expect("adapter should be created");
+
+        let orphan_block = poa_block_at_time(1, 10);
+        let orphan_block_data = postcard::to_allocvec(&orphan_block)
+            .expect("orphan block should serialize");
+
+        let redis_client =
+            redis::Client::open(redis_a.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        append_stream_block(&mut conn, &stream_key, 1, &orphan_block_data, 1);
+
+        // when
+        let leader_state = adapter
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("leader_state should succeed");
+
+        // then
+        assert!(
+            matches!(leader_state, LeaderState::ReconciledLeader),
+            "Expected below-quorum entry to be ignored"
+        );
+    }
+
+    struct RedisTestServer {
+        child: Option<Child>,
+        port: u16,
+        redis_url: String,
+    }
+
+    impl RedisTestServer {
+        fn spawn() -> Self {
+            let mut server = Self::new_stopped();
+            server.start();
+            server
+        }
+
+        fn new_stopped() -> Self {
+            let port = bind_unused_port();
+            Self {
+                child: None,
+                port,
+                redis_url: format!("redis://127.0.0.1:{port}/"),
+            }
+        }
+
+        fn start(&mut self) {
+            if self.child.is_some() {
+                return;
+            }
+            let child = spawn_redis_server(self.port);
+            wait_for_redis_ready(self.port);
+            self.child = Some(child);
+        }
+
+        fn redis_url(&self) -> String {
+            self.redis_url.clone()
+        }
+    }
+
+    impl Drop for RedisTestServer {
+        fn drop(&mut self) {
+            if let Some(child) = self.child.as_mut() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+
+    fn bind_unused_port() -> u16 {
+        let socket =
+            TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
+                .expect("Should bind an ephemeral port");
+        let port = socket.local_addr().expect("Should get local addr").port();
+        drop(socket);
+        port
+    }
+
+    fn spawn_redis_server(port: u16) -> Child {
+        Command::new("redis-server")
+            .arg("--port")
+            .arg(port.to_string())
+            .arg("--save")
+            .arg("")
+            .arg("--appendonly")
+            .arg("no")
+            .arg("--bind")
+            .arg("127.0.0.1")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("Failed to spawn redis-server")
+    }
+
+    fn wait_for_redis_ready(port: u16) {
+        let addr = SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, port);
+        let start = std::time::Instant::now();
+        let timeout = Duration::from_secs(5);
+        while start.elapsed() < timeout {
+            if TcpStream::connect(addr).is_ok() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        panic!("Redis server did not become ready on port {port}");
+    }
+
+    fn poa_block_at_time(height: u32, timestamp: u64) -> SealedBlock {
+        let mut block = Block::default();
+        block.header_mut().set_block_height(height.into());
+        block
+            .header_mut()
+            .set_time(fuel_core_types::tai64::Tai64(timestamp));
+        block.header_mut().recalculate_metadata();
+        SealedBlock {
+            entity: block,
+            consensus: Consensus::PoA(Default::default()),
+        }
+    }
+
+    fn append_stream_block(
+        conn: &mut redis::Connection,
+        stream_key: &str,
+        height: u32,
+        data: &[u8],
+        epoch: u32,
+    ) {
+        let _: String = redis::cmd("XADD")
+            .arg(stream_key)
+            .arg("*")
+            .arg("height")
+            .arg(height)
+            .arg("data")
+            .arg(data)
+            .arg("epoch")
+            .arg(epoch)
+            .arg("timestamp")
+            .arg(epoch)
+            .query(conn)
+            .expect("stream write should succeed");
     }
 }
 

@@ -261,6 +261,54 @@ async fn leader_lock__single_producer__when_quorum_is_restored_then_production_s
     );
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn leader_lock__two_producers__when_second_starts_after_first_shutdown_then_second_builds_on_redis_height()
+ {
+    const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
+    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+
+    // given
+    let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
+        8888,
+        BLOCK_TIME,
+        "poa:leader:redis-reconciliation",
+    )
+    .await;
+
+    let mut first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+
+    // when
+    let first_height = tokio::time::timeout(
+        LOCAL_BLOCK_TIMEOUT,
+        wait_for_local_block_height(&first_producer, Some(0)),
+    )
+    .await
+    .expect("First producer should produce a local block");
+
+    tokio::time::timeout(STOP_TIMEOUT, first_producer.shutdown())
+        .await
+        .expect("Should stop first producer before timeout");
+
+    let second_producer = make_node(make_node_config("Second Producer"), vec![]).await;
+    let second_height = tokio::time::timeout(
+        LOCAL_BLOCK_TIMEOUT,
+        wait_for_local_block_height(&second_producer, Some(1)),
+    )
+    .await
+    .expect("Second producer should produce a local block");
+
+    // then
+    assert_eq!(
+        first_height, 1,
+        "First producer should first produce block at height 1"
+    );
+    assert_eq!(
+        second_height, 2,
+        "Second producer should first produce block at height 2 by reconciling Redis stream"
+    );
+}
+
 async fn find_leader_and_followers(
     nodes: Vec<Node>,
     timeout: Duration,
@@ -408,6 +456,32 @@ async fn wait_for_local_block(node: &Node, waiter_index: Option<usize>) {
         );
         if is_local {
             return;
+        }
+    }
+    panic!("block stream ended unexpectedly");
+}
+
+async fn wait_for_local_block_height(node: &Node, waiter_index: Option<usize>) -> u32 {
+    let mut stream = node.node.shared.block_importer.block_stream();
+    let mut saw_first_block = false;
+    while let Some(block) = stream.next().await {
+        let height = *block.block_header.height();
+        let is_local = block.is_locally_produced();
+        if !saw_first_block {
+            eprintln!(
+                "ts_ms={}, wait_for_local_block_height(waiter={:?}), first_block_seen=true",
+                unix_time_ms(),
+                waiter_index
+            );
+            saw_first_block = true;
+        }
+        eprintln!(
+            "ts_ms={}, wait_for_local_block_height(waiter={:?}): height={height}, is_local={is_local}",
+            unix_time_ms(),
+            waiter_index
+        );
+        if is_local {
+            return u32::from(height);
         }
     }
     panic!("block stream ended unexpectedly");
