@@ -878,6 +878,7 @@ impl BlockImporter for BlockImporterAdapter {
 #[allow(non_snake_case)]
 mod tests {
     use super::*;
+    use fuel_core_importer::ports::BlockReconciliationWritePort;
     use fuel_core_poa::ports::BlockReconciliationReadPort;
     use fuel_core_types::blockchain::consensus::Consensus;
     use std::{
@@ -1069,6 +1070,147 @@ mod tests {
         );
     }
 
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_produced_block__when_previous_leader_writes_after_handoff_then_rejects_zombie_write(
+    ) {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:zombie-leader".to_string();
+        let redis_urls = vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()];
+        let old_leader = new_test_adapter(redis_urls.clone(), lease_key.clone());
+        let current_leader = new_test_adapter(redis_urls, lease_key.clone());
+        let block = poa_block_at_time(1, 111);
+
+        assert!(
+            old_leader
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Old leader should acquire initial lease"
+        );
+        clear_lease_on_nodes(&[redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()], &lease_key);
+        assert!(
+            current_leader
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Current leader should acquire lease after handoff"
+        );
+
+        // when
+        let zombie_write = old_leader.publish_produced_block(&block);
+
+        // then
+        assert!(
+            zombie_write.is_err(),
+            "Old leader write should be fenced after handoff"
+        );
+        let current_state = current_leader
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("leader_state should succeed");
+        assert!(
+            matches!(current_state, LeaderState::ReconciledLeader),
+            "Zombie partial writes must not be considered committed"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_produced_block__when_epoch_is_behind_on_one_node_then_first_write_heals_epoch(
+    ) {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:epoch-healing".to_string();
+        let redis_urls = vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()];
+        let adapter = new_test_adapter(redis_urls, lease_key.clone());
+        let epoch_key = format!("{lease_key}:epoch:token");
+        let block = poa_block_at_time(1, 222);
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Adapter should acquire lease"
+        );
+        let leader_epoch = (*adapter
+            .current_epoch_token
+            .lock()
+            .expect("poisoned lock"))
+        .expect("epoch should be initialized");
+        let stale_epoch = leader_epoch.saturating_sub(1);
+        set_epoch(&redis_a.redis_url(), &epoch_key, stale_epoch);
+
+        // when
+        let publish_result = adapter.publish_produced_block(&block);
+
+        // then
+        assert!(publish_result.is_ok(), "Publish should still succeed on quorum");
+        let healed_epoch = read_epoch(&redis_a.redis_url(), &epoch_key);
+        assert_eq!(
+            healed_epoch, leader_epoch,
+            "First successful write should heal lagging epoch"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_produced_block__when_write_succeeds_on_less_than_quorum_then_entry_is_not_reconciled(
+    ) {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:partial-write".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let redis_urls = vec![redis_a.redis_url(), redis_b.redis_url(), redis_c.redis_url()];
+        let adapter = new_test_adapter(redis_urls, lease_key.clone());
+        let block = poa_block_at_time(1, 333);
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Adapter should acquire lease"
+        );
+        set_lease_owner(
+            &redis_b.redis_url(),
+            &lease_key,
+            "other-owner",
+            adapter.lease_ttl_millis,
+        );
+        set_lease_owner(
+            &redis_c.redis_url(),
+            &lease_key,
+            "other-owner",
+            adapter.lease_ttl_millis,
+        );
+
+        // when
+        let publish_result = adapter.publish_produced_block(&block);
+        let unreconciled = adapter
+            .unreconciled_blocks(1.into())
+            .await
+            .expect("reconciliation read should succeed");
+
+        // then
+        assert!(
+            publish_result.is_err(),
+            "Publish must fail when fewer than quorum nodes accept write"
+        );
+        assert!(
+            unreconciled.is_empty(),
+            "Below-quorum stream entry must not be reconciled as committed"
+        );
+        assert_eq!(
+            stream_len(&redis_a.redis_url(), &stream_key),
+            1,
+            "One orphan entry should exist on the single successful node"
+        );
+    }
+
     struct RedisTestServer {
         child: Option<Child>,
         port: u16,
@@ -1185,6 +1327,86 @@ mod tests {
             .arg(epoch)
             .query(conn)
             .expect("stream write should succeed");
+    }
+
+    fn new_test_adapter(
+        redis_urls: Vec<String>,
+        lease_key: String,
+    ) -> RedisLeaderLeaseAdapter {
+        RedisLeaderLeaseAdapter::new(
+            redis_urls,
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created")
+    }
+
+    fn set_epoch(redis_url: &str, epoch_key: &str, epoch: u64) {
+        let redis_client = redis::Client::open(redis_url).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        let _: () = redis::cmd("SET")
+            .arg(epoch_key)
+            .arg(epoch)
+            .query(&mut conn)
+            .expect("epoch set should succeed");
+    }
+
+    fn read_epoch(redis_url: &str, epoch_key: &str) -> u64 {
+        let redis_client = redis::Client::open(redis_url).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        let epoch: Option<u64> = redis::cmd("GET")
+            .arg(epoch_key)
+            .query(&mut conn)
+            .expect("epoch get should succeed");
+        epoch.expect("epoch should exist")
+    }
+
+    fn set_lease_owner(redis_url: &str, lease_key: &str, owner: &str, lease_ttl_millis: u64) {
+        let redis_client = redis::Client::open(redis_url).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        let _: () = redis::cmd("SET")
+            .arg(lease_key)
+            .arg(owner)
+            .arg("PX")
+            .arg(lease_ttl_millis)
+            .query(&mut conn)
+            .expect("lease owner set should succeed");
+    }
+
+    fn clear_lease_on_nodes(redis_urls: &[String], lease_key: &str) {
+        redis_urls.iter().for_each(|redis_url| {
+            let redis_client =
+                redis::Client::open(redis_url.as_str()).expect("redis client should open");
+            let mut conn = redis_client
+                .get_connection()
+                .expect("redis connection should open");
+            let _: () = redis::cmd("DEL")
+                .arg(lease_key)
+                .query(&mut conn)
+                .expect("lease delete should succeed");
+        });
+    }
+
+    fn stream_len(redis_url: &str, stream_key: &str) -> usize {
+        let redis_client = redis::Client::open(redis_url).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        redis::cmd("XLEN")
+            .arg(stream_key)
+            .query(&mut conn)
+            .expect("stream length query should succeed")
     }
 }
 
