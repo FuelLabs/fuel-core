@@ -78,6 +78,7 @@ use crate::{
             TxPoolAdapter,
             UniversalGasPriceProvider,
             VerifierAdapter,
+            block_importer::BlockReconciliationWriteAdapter,
             chain_state_info_provider,
             consensus_module::poa::{
                 InDirectoryPredefinedBlocks,
@@ -217,12 +218,35 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     );
 
+    let redis_reconciliation_adapter = config
+        .leader_lock
+        .as_ref()
+        .map(|leader_lock| {
+            RedisLeaderLeaseAdapter::new(
+                leader_lock.redis_urls.clone(),
+                leader_lock.lease_key.clone(),
+                leader_lock.lease_ttl,
+                leader_lock.node_timeout,
+                leader_lock.retry_delay,
+                leader_lock.max_retry_delay_offset,
+                leader_lock.max_attempts,
+            )
+        })
+        .transpose()?;
+
     let importer_adapter = BlockImporterAdapter::new(
         chain_id,
         config.block_importer.clone(),
         database.on_chain().clone(),
         executor.clone(),
         verifier.clone(),
+        redis_reconciliation_adapter
+            .as_ref()
+            .cloned()
+            .map(BlockReconciliationWriteAdapter::Redis)
+            .unwrap_or_else(|| {
+                BlockReconciliationWriteAdapter::Noop(Default::default())
+            }),
     );
 
     let chain_state_info_provider_service = chain_state_info_provider::new_service(
@@ -381,22 +405,10 @@ pub fn init_sub_services(
 
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
-            let reconciliation_port = config
-                .leader_lock
+            let reconciliation_port = redis_reconciliation_adapter
                 .as_ref()
-                .map(|leader_lock| {
-                    RedisLeaderLeaseAdapter::new(
-                        leader_lock.redis_urls.clone(),
-                        leader_lock.lease_key.clone(),
-                        leader_lock.lease_ttl,
-                        leader_lock.node_timeout,
-                        leader_lock.retry_delay,
-                        leader_lock.max_retry_delay_offset,
-                        leader_lock.max_attempts,
-                    )
-                    .map(ReconciliationAdapter::Redis)
-                })
-                .transpose()?
+                .cloned()
+                .map(ReconciliationAdapter::Redis)
                 .unwrap_or_else(|| {
                     ReconciliationAdapter::Noop(NoopReconciliationAdapter)
                 });

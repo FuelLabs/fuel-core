@@ -9,6 +9,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_core_importer::ports::BlockReconciliationWritePort;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
@@ -72,17 +73,49 @@ struct RedisNode {
     cached_connection: Mutex<Option<redis::aio::MultiplexedConnection>>,
 }
 
+impl Clone for RedisNode {
+    fn clone(&self) -> Self {
+        Self {
+            redis_client: self.redis_client.clone(),
+            cached_connection: Mutex::new(None),
+        }
+    }
+}
+
 pub struct RedisLeaderLeaseAdapter {
     redis_nodes: Vec<RedisNode>,
     quorum: usize,
     lease_key: String,
+    epoch_key: String,
+    block_stream_key: String,
     lease_owner_token: String,
+    current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
     lease_ttl_millis: u64,
     lease_drift_millis: u64,
     node_timeout: Duration,
     retry_delay_millis: u64,
     max_retry_delay_offset_millis: u64,
     max_attempts: usize,
+}
+
+impl Clone for RedisLeaderLeaseAdapter {
+    fn clone(&self) -> Self {
+        Self {
+            redis_nodes: self.redis_nodes.clone(),
+            quorum: self.quorum,
+            lease_key: self.lease_key.clone(),
+            epoch_key: self.epoch_key.clone(),
+            block_stream_key: self.block_stream_key.clone(),
+            lease_owner_token: self.lease_owner_token.clone(),
+            current_epoch_token: self.current_epoch_token.clone(),
+            lease_ttl_millis: self.lease_ttl_millis,
+            lease_drift_millis: self.lease_drift_millis,
+            node_timeout: self.node_timeout,
+            retry_delay_millis: self.retry_delay_millis,
+            max_retry_delay_offset_millis: self.max_retry_delay_offset_millis,
+            max_attempts: self.max_attempts,
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -128,6 +161,8 @@ impl RedisLeaderLeaseAdapter {
             u64::try_from(max_retry_delay_offset.as_millis())?;
         let max_attempts = usize::try_from(max_attempts)?.max(1);
         let lease_owner_token = uuid::Uuid::new_v4().to_string();
+        let epoch_key = format!("{lease_key}:epoch:token");
+        let block_stream_key = format!("{lease_key}:block:stream");
         let lease_drift_millis = lease_ttl_millis
             .checked_div(100)
             .unwrap_or(0)
@@ -136,7 +171,10 @@ impl RedisLeaderLeaseAdapter {
             redis_nodes,
             quorum,
             lease_key,
+            epoch_key,
+            block_stream_key,
             lease_owner_token,
+            current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
             lease_ttl_millis,
             lease_drift_millis,
             node_timeout,
@@ -175,33 +213,27 @@ impl RedisLeaderLeaseAdapter {
         *cached_connection = None;
     }
 
-    async fn renew_lease_on_node(&self, redis_node: &RedisNode) -> bool {
-        tracing::debug!(
-            "Renewing Redis leader lock at: {:?}",
-            redis_node.redis_client.get_connection_info().addr
-        );
+    async fn check_lease_owner_on_node(&self, redis_node: &RedisNode) -> bool {
         let mut connection = match self.multiplexed_connection(redis_node).await {
             Ok(connection) => connection,
             Err(_) => return false,
         };
-        let renewed = timeout(
+        let is_owner = timeout(
             self.node_timeout,
             redis::Script::new(
                 "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-                    return redis.call('PEXPIRE', KEYS[1], ARGV[2]) \
+                    return 1 \
                 else \
                     return 0 \
                 end",
             )
             .key(&self.lease_key)
             .arg(&self.lease_owner_token)
-            .arg(self.lease_ttl_millis)
             .invoke_async::<i32>(&mut connection),
         )
         .await;
-        tracing::debug!("Redis leader lock renewed: {:?}", renewed);
-        match renewed {
-            Ok(Ok(renewed)) => renewed == 1,
+        match is_owner {
+            Ok(Ok(is_owner)) => is_owner == 1,
             Err(_) => {
                 self.clear_cached_connection(redis_node).await;
                 false
@@ -213,40 +245,43 @@ impl RedisLeaderLeaseAdapter {
         }
     }
 
-    async fn acquire_lease_on_node(&self, redis_node: &RedisNode) -> bool {
-        tracing::debug!(
-            "Acquiring Redis leader lock at: {:?}",
-            redis_node.redis_client.get_connection_info().addr
-        );
+    async fn promote_leader_on_node(
+        &self,
+        redis_node: &RedisNode,
+    ) -> anyhow::Result<Option<u64>> {
         let mut connection = match self.multiplexed_connection(redis_node).await {
             Ok(connection) => connection,
-            Err(_) => return false,
+            Err(_) => return Ok(None),
         };
-        let acquired = timeout(
+        let promoted = timeout(
             self.node_timeout,
             redis::Script::new(
-                "if redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') then \
-                    return 1 \
-                else \
-                    return 0 \
-                end",
+                "local acquired = redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') \
+                if not acquired then \
+                    return redis.error_reply('LOCK_HELD: Another leader holds the lock') \
+                end \
+                local new_token = redis.call('INCR', KEYS[2]) \
+                return new_token",
             )
             .key(&self.lease_key)
+            .key(&self.epoch_key)
             .arg(&self.lease_owner_token)
             .arg(self.lease_ttl_millis)
-            .invoke_async::<i32>(&mut connection),
+            .invoke_async::<u64>(&mut connection),
         )
         .await;
-        tracing::debug!("Redis leader lock acquired: {:?}", acquired);
-        match acquired {
-            Ok(Ok(acquired)) => acquired == 1,
+        match promoted {
+            Ok(Ok(token)) => Ok(Some(token)),
+            Ok(Err(err)) => {
+                if err.to_string().contains("LOCK_HELD:") {
+                    return Ok(None);
+                }
+                self.clear_cached_connection(redis_node).await;
+                Ok(None)
+            }
             Err(_) => {
                 self.clear_cached_connection(redis_node).await;
-                false
-            }
-            Ok(Err(_)) => {
-                self.clear_cached_connection(redis_node).await;
-                false
+                Ok(None)
             }
         }
     }
@@ -318,34 +353,40 @@ impl RedisLeaderLeaseAdapter {
     }
 
     async fn renew_lease_if_owner(&self) -> anyhow::Result<bool> {
-        let renewals = futures::future::join_all(
+        let ownership = futures::future::join_all(
             self.redis_nodes
                 .iter()
-                .map(|redis_node| self.renew_lease_on_node(redis_node)),
+                .map(|redis_node| self.check_lease_owner_on_node(redis_node)),
         )
         .await;
-        let renewed_count = renewals.into_iter().filter(|renewed| *renewed).count();
-        Ok(self.quorum_reached(renewed_count))
+        let owner_count = ownership.into_iter().filter(|is_owner| *is_owner).count();
+        Ok(self.quorum_reached(owner_count))
     }
 
     async fn acquire_lease_if_free(&self) -> anyhow::Result<bool> {
         for attempt_index in 0..self.max_attempts {
             let start = std::time::Instant::now();
-            let acquired_nodes = futures::future::join_all(
+            let promoted_nodes = futures::future::join_all(
                 self.redis_nodes
                     .iter()
-                    .map(|redis_node| self.acquire_lease_on_node(redis_node)),
+                    .map(|redis_node| self.promote_leader_on_node(redis_node)),
             )
             .await;
-            let acquired_count = acquired_nodes
+            let promoted_tokens = promoted_nodes
                 .into_iter()
-                .filter(|acquired| *acquired)
-                .count();
+                .filter_map(|token| token.ok().flatten())
+                .collect::<Vec<_>>();
+            let acquired_count = promoted_tokens.len();
             let elapsed_millis =
                 u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
             let validity_millis =
                 self.calculate_remaining_validity_millis(elapsed_millis);
             if self.quorum_reached(acquired_count) && validity_millis > 0 {
+                if let Some(max_token) = promoted_tokens.into_iter().max() {
+                    let mut current_epoch_token =
+                        self.current_epoch_token.lock().expect("poisoned lock");
+                    *current_epoch_token = Some(max_token);
+                }
                 return Ok(true);
             }
             self.release_lease_on_all_nodes().await;
@@ -407,6 +448,28 @@ impl RedisLeaderLeaseAdapter {
             .await;
     }
 
+    fn release_lease_on_clients_sync(
+        redis_clients: Vec<redis::Client>,
+        lease_key: String,
+        lease_owner_token: String,
+    ) {
+        redis_clients.into_iter().for_each(|redis_client| {
+            let Ok(mut connection) = redis_client.get_connection() else {
+                return;
+            };
+            let _ = redis::Script::new(
+                "if redis.call('GET', KEYS[1]) == ARGV[1] then \
+                    return redis.call('DEL', KEYS[1]) \
+                else \
+                    return 0 \
+                end",
+            )
+            .key(&lease_key)
+            .arg(&lease_owner_token)
+            .invoke::<i32>(&mut connection);
+        });
+    }
+
     async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
         tracing::debug!("Checking Redis leader lock");
         if self.renew_lease_if_owner().await? {
@@ -425,9 +488,57 @@ impl RedisLeaderLeaseAdapter {
         .await;
         let released_count = releases.into_iter().filter(|released| *released).count();
         if self.quorum_reached(released_count) {
+            let mut current_epoch_token =
+                self.current_epoch_token.lock().expect("poisoned lock");
+            *current_epoch_token = None;
             Ok(())
         } else {
             Err(anyhow!("Failed to release lease on quorum"))
+        }
+    }
+
+    fn publish_block_on_node(
+        &self,
+        redis_node: &RedisNode,
+        epoch: u64,
+        block: &SealedBlock,
+        block_data: &[u8],
+    ) -> anyhow::Result<bool> {
+        let mut connection = redis_node.redis_client.get_connection()?;
+        let block_height = u32::from(*block.entity.header().height());
+        let write_result = redis::Script::new(
+            "local current_token = tonumber(redis.call('GET', KEYS[2]) or '0') \
+            local current_leader = redis.call('GET', KEYS[3]) \
+            if current_leader ~= ARGV[2] then \
+                return redis.error_reply('FENCING_ERROR: Lock lost or held by another node') \
+            end \
+            if tonumber(ARGV[1]) < current_token then \
+                return redis.error_reply('FENCING_ERROR: Token is stale') \
+            end \
+            if tonumber(ARGV[1]) > current_token then \
+                redis.call('SET', KEYS[2], ARGV[1]) \
+            end \
+            local stream_id = redis.call('XADD', KEYS[1], '*', \
+                'height', ARGV[3], \
+                'data', ARGV[4], \
+                'epoch', ARGV[1], \
+                'timestamp', redis.call('TIME')[1]) \
+            redis.call('PEXPIRE', KEYS[3], ARGV[5]) \
+            return stream_id",
+        )
+        .key(&self.block_stream_key)
+        .key(&self.epoch_key)
+        .key(&self.lease_key)
+        .arg(epoch)
+        .arg(&self.lease_owner_token)
+        .arg(block_height)
+        .arg(block_data)
+        .arg(self.lease_ttl_millis)
+        .invoke::<String>(&mut connection);
+        match write_result {
+            Ok(_) => Ok(true),
+            Err(err) if err.to_string().contains("FENCING_ERROR:") => Ok(false),
+            Err(err) => Err(err.into()),
         }
     }
 }
@@ -512,17 +623,16 @@ impl Drop for RedisLeaderLeaseAdapter {
             .iter()
             .map(|redis_node| redis_node.redis_client.clone())
             .collect::<Vec<_>>();
-        let release_future = timeout(
-            Duration::from_millis(100),
-            Self::release_lease_on_clients(
-                redis_clients,
-                self.lease_key.clone(),
-                self.lease_owner_token.clone(),
-                self.node_timeout,
-            ),
-        );
-
         if let Ok(runtime_handle) = tokio::runtime::Handle::try_current() {
+            let release_future = timeout(
+                Duration::from_millis(100),
+                Self::release_lease_on_clients(
+                    redis_clients,
+                    self.lease_key.clone(),
+                    self.lease_owner_token.clone(),
+                    self.node_timeout,
+                ),
+            );
             drop(runtime_handle.spawn(async move {
                 if release_future.await.is_err() {
                     error!("Failed to release leader lease: timeout");
@@ -531,10 +641,50 @@ impl Drop for RedisLeaderLeaseAdapter {
             return;
         }
 
-        let result = futures::executor::block_on(release_future);
+        Self::release_lease_on_clients_sync(
+            redis_clients,
+            self.lease_key.clone(),
+            self.lease_owner_token.clone(),
+        );
+    }
+}
 
-        if let Err(err) = result {
-            tracing::error!("Failed to release leader lease: {err}");
+impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
+    fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
+        let epoch = match *self.current_epoch_token.lock().expect("poisoned lock") {
+            Some(epoch) => epoch,
+            None => {
+                tracing::debug!(
+                    "Skipping redis block publish because fencing token is not initialized"
+                );
+                return Ok(());
+            }
+        };
+        let block_data = postcard::to_allocvec(block)?;
+        let successes = self
+            .redis_nodes
+            .iter()
+            .map(|redis_node| match self.publish_block_on_node(
+                redis_node,
+                epoch,
+                block,
+                &block_data,
+            ) {
+                Ok(success) => success,
+                Err(err) => {
+                    tracing::debug!("Redis publish on node failed: {err}");
+                    false
+                }
+            })
+            .into_iter()
+            .filter(|success| *success)
+            .count();
+        if self.quorum_reached(successes) {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "Failed to publish block to redis quorum with fencing checks"
+            ))
         }
     }
 }

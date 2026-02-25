@@ -7,6 +7,7 @@ use crate::{
         BlockImporterAdapter,
         ExecutorAdapter,
         VerifierAdapter,
+        consensus_module::poa::RedisLeaderLeaseAdapter,
     },
 };
 use fuel_core_importer::{
@@ -61,6 +62,11 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::sync::Arc;
 
+pub enum BlockReconciliationWriteAdapter {
+    Redis(RedisLeaderLeaseAdapter),
+    Noop(NoopBlockReconciliationWriteAdapter),
+}
+
 impl BlockImporterAdapter {
     pub fn new(
         chain_id: ChainId,
@@ -68,6 +74,7 @@ impl BlockImporterAdapter {
         database: Database,
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
+        block_reconciliation_write_adapter: BlockReconciliationWriteAdapter,
     ) -> Self {
         let importer = Importer::new(
             chain_id,
@@ -75,7 +82,7 @@ impl BlockImporterAdapter {
             database,
             executor,
             verifier,
-            NoopBlockReconciliationWriteAdapter,
+            block_reconciliation_write_adapter,
         );
         Self {
             block_importer: Arc::new(importer),
@@ -102,7 +109,22 @@ impl BlockVerifier for VerifierAdapter {
 }
 
 #[derive(Default)]
-struct NoopBlockReconciliationWriteAdapter;
+pub struct NoopBlockReconciliationWriteAdapter;
+
+impl fuel_core_importer::ports::BlockReconciliationWritePort
+    for BlockReconciliationWriteAdapter
+{
+    fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
+        match self {
+            Self::Redis(adapter) => {
+                fuel_core_importer::ports::BlockReconciliationWritePort::publish_produced_block(adapter, block)
+            }
+            Self::Noop(adapter) => {
+                fuel_core_importer::ports::BlockReconciliationWritePort::publish_produced_block(adapter, block)
+            }
+        }
+    }
+}
 
 impl fuel_core_importer::ports::BlockReconciliationWritePort
     for NoopBlockReconciliationWriteAdapter
