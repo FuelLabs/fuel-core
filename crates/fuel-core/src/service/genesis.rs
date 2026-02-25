@@ -207,9 +207,20 @@ pub async fn execute_and_commit_genesis_block(
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
     use fuel_core_importer::ports::{
+        BlockReconciliationWritePort,
         MockBlockVerifier,
         MockValidator,
     };
+    use fuel_core_types::blockchain::SealedBlock;
+
+    #[derive(Default)]
+    struct NoopBlockReconciliationWriteAdapter;
+
+    impl BlockReconciliationWritePort for NoopBlockReconciliationWriteAdapter {
+        fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
+            Ok(())
+        }
+    }
 
     let result = execute_genesis_block(StateWatcher::default(), config, db).await?;
     let importer = fuel_core_importer::Importer::new(
@@ -222,6 +233,7 @@ pub async fn execute_and_commit_genesis_block(
         db.on_chain().clone(),
         MockValidator::default(),
         MockBlockVerifier::default(),
+        NoopBlockReconciliationWriteAdapter,
     );
     importer.commit_result(result).await?;
     Ok(())

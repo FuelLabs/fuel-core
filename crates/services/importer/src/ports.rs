@@ -40,8 +40,8 @@ use fuel_core_types::{
     },
 };
 
-#[cfg_attr(any(test, feature = "test-helpers"), mockall::automock(type Database = crate::importer::test::MockDatabase;))]
 /// The executors port.
+#[cfg_attr(any(test, feature = "test-helpers"), mockall::automock)]
 pub trait Validator: Send + Sync {
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
@@ -75,7 +75,7 @@ pub trait ImporterDatabase: Send + Sync {
 }
 
 /// The port of the storage transaction required by the importer.
-#[cfg_attr(test, mockall::automock)]
+#[cfg_attr(any(test, feature = "test-helpers"), mockall::automock)]
 pub trait DatabaseTransaction {
     /// Returns the latest block root.
     fn latest_block_root(&self) -> StorageResult<Option<MerkleRoot>>;
@@ -95,8 +95,8 @@ pub trait DatabaseTransaction {
     fn into_changes(self) -> Changes;
 }
 
-#[cfg_attr(any(test, feature = "test-helpers"), mockall::automock)]
 /// The verifier of the block.
+#[cfg_attr(any(test, feature = "test-helpers"), mockall::automock)]
 pub trait BlockVerifier: Send + Sync {
     /// Verifies the consistency of the block fields for the block's height.
     /// It includes the verification of **all** fields, it includes the consensus rules for
@@ -110,7 +110,6 @@ pub trait BlockVerifier: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
-#[cfg_attr(any(test, feature = "test-helpers"), mockall::automock)]
 pub trait BlockReconciliationWritePort: Send + Sync {
     fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()>;
 }

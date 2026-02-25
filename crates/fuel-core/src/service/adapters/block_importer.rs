@@ -69,7 +69,14 @@ impl BlockImporterAdapter {
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
     ) -> Self {
-        let importer = Importer::new(chain_id, config, database, executor, verifier);
+        let importer = Importer::new(
+            chain_id,
+            config,
+            database,
+            executor,
+            verifier,
+            NoopBlockReconciliationWriteAdapter,
+        );
         Self {
             block_importer: Arc::new(importer),
         }
@@ -91,6 +98,17 @@ impl BlockVerifier for VerifierAdapter {
         block: &Block,
     ) -> anyhow::Result<()> {
         self.block_verifier.verify_block_fields(consensus, block)
+    }
+}
+
+#[derive(Default)]
+struct NoopBlockReconciliationWriteAdapter;
+
+impl fuel_core_importer::ports::BlockReconciliationWritePort
+    for NoopBlockReconciliationWriteAdapter
+{
+    fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
+        Ok(())
     }
 }
 
