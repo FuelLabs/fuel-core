@@ -143,7 +143,11 @@ impl BenchDb {
         })
     }
 
-    fn override_slots(&mut self, contract_id: &ContractId, slot_size: usize) -> anyhow::Result<()> {
+    fn override_slots(
+        &mut self,
+        contract_id: &ContractId,
+        slot_size: usize,
+    ) -> anyhow::Result<()> {
         let state_size = crate::utils::get_state_size();
 
         let mut storage_key = primitive_types::U256::zero();
@@ -565,7 +569,8 @@ pub fn run(c: &mut Criterion) {
         VmBench::new(op::bhei(0x10)),
     );
 
-    let mut db = BenchDb::new(&VmBench::CONTRACT).expect("Unable to fill contract storage");
+    let mut db =
+        BenchDb::new(&VmBench::CONTRACT).expect("Unable to fill contract storage");
     db.add_blocks(10000);
 
     run_group_ref(
@@ -816,7 +821,8 @@ pub fn run(c: &mut Criterion) {
     let mut sclr = c.benchmark_group("sclr");
 
     for i in linear_short.clone() {
-        db.override_slots(&contract, i as usize).expect("Unable to override contract storage");
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
 
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
@@ -845,7 +851,8 @@ pub fn run(c: &mut Criterion) {
     let mut srdd = c.benchmark_group("srdd");
 
     for i in linear_short.clone() {
-        db.override_slots(&contract, i as usize).expect("Unable to override contract storage");
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
 
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
@@ -878,7 +885,8 @@ pub fn run(c: &mut Criterion) {
     let mut swrd = c.benchmark_group("swrd");
 
     for i in linear_short.clone() {
-        db.override_slots(&contract, i as usize).expect("Unable to override contract storage");
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
 
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
@@ -911,7 +919,8 @@ pub fn run(c: &mut Criterion) {
     let mut supd = c.benchmark_group("supd");
 
     for i in linear_short.clone() {
-        db.override_slots(&contract, i as usize).expect("Unable to override contract storage");
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
 
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
@@ -945,7 +954,8 @@ pub fn run(c: &mut Criterion) {
     let mut spld = c.benchmark_group("spld");
 
     for i in linear_short.clone() {
-        db.override_slots(&contract, i as usize).expect("Unable to override contract storage");
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
 
         let start_key = Bytes32::zeroed();
         let data = start_key.iter().copied().collect::<Vec<_>>();
