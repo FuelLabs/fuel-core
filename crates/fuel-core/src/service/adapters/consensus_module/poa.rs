@@ -880,7 +880,11 @@ impl BlockImporter for BlockImporterAdapter {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(
+    test,
+    feature = "leader_lock",
+    not(feature = "not_leader_lock")
+))]
 #[allow(non_snake_case)]
 mod tests {
     use super::*;

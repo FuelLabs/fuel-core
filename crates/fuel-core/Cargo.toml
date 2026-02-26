@@ -14,6 +14,8 @@ version = { workspace = true }
 [features]
 default = ["rocksdb", "serde"]
 serde = ["dep:serde_with"]
+leader_lock = []
+not_leader_lock = []
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer", "dep:cosmrs"]
