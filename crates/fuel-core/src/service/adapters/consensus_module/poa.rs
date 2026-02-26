@@ -850,11 +850,11 @@ impl PredefinedBlocks for InDirectoryPredefinedBlocks {
     }
 }
 
-fn block_path(path_to_directory: &Path, block_height: u32) -> PathBuf {
+pub fn block_path(path_to_directory: &Path, block_height: u32) -> PathBuf {
     path_to_directory.join(format!("{block_height}.json"))
 }
 
-fn block_exists(path_to_directory: &Path, block_height: u32) -> bool {
+pub fn block_exists(path_to_directory: &Path, block_height: u32) -> bool {
     block_path(path_to_directory, block_height).exists()
 }
 
