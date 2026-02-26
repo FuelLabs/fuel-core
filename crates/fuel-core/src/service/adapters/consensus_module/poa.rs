@@ -710,13 +710,16 @@ impl Drop for RedisLeaderLeaseAdapter {
 
 impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
     fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
-        let epoch = match *self.current_epoch_token.lock().expect("poisoned lock") {
+        let epoch = match *self
+            .current_epoch_token
+            .lock()
+            .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?
+        {
             Some(epoch) => epoch,
             None => {
-                tracing::debug!(
-                    "Skipping redis block publish because fencing token is not initialized"
-                );
-                return Ok(());
+                return Err(anyhow!(
+                    "Cannot publish block because fencing token is not initialized"
+                ));
             }
         };
         let block_data = postcard::to_allocvec(block)?;
@@ -1081,6 +1084,32 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![1, 2],
             "Expected only contiguous quorum-backed heights to be reconciled",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_produced_block__when_fencing_token_is_uninitialized_then_returns_error()
+    {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:missing-epoch".to_string();
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let adapter = new_test_adapter(redis_urls, lease_key);
+        let block = poa_block_at_time(1, 100);
+
+        // when
+        let publish_result = adapter.publish_produced_block(&block);
+
+        // then
+        assert!(
+            publish_result.is_err(),
+            "Publish should fail when fencing token is not initialized"
         );
     }
 
