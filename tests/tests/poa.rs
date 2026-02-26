@@ -226,7 +226,7 @@ mod p2p {
             config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().info_interval = Some(Duration::from_millis(100));
             config.min_connected_reserved_peers = 1;
-            config.time_until_synced = Duration::from_secs(TIME_UNTIL_SYNCED);
+            config.time_until_synced_sufficient_peers = Some(Duration::from_secs(TIME_UNTIL_SYNCED));
             config
         };
 
@@ -295,6 +295,194 @@ mod p2p {
         )
         .await
         .expect("The first should reborn and sync with the second");
+    }
+
+    // A single producer with insufficient peers should start producing blocks
+    // after `time_until_synced_insufficient_peers` timeout expires,
+    // even without any connected reserved peers.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_poa_single_producer_insufficient_peers_timeout() {
+        const INSUFFICIENT_PEERS_TIMEOUT: u64 = 3;
+
+        let mut rng = StdRng::seed_from_u64(3333);
+        let secret = SecretKey::random(&mut rng);
+        let pub_key = Input::owner(&secret.public_key());
+
+        let mut config = Config::local_node();
+        update_signing_key(&mut config, pub_key);
+
+        // Configure a producer that requires peers but has an insufficient peers timeout
+        let mut producer_config = make_config(
+            "Producer".to_string(),
+            config.clone(),
+            CustomizeConfig::no_overrides(),
+        );
+        producer_config.debug = true;
+        producer_config.block_production = Trigger::Interval {
+            block_time: Duration::from_secs(1),
+        };
+        producer_config.consensus_signer =
+            SignMode::Key(Secret::new(secret.into()));
+        // No reserved nodes - the node will never have sufficient peers
+        producer_config
+            .p2p
+            .as_mut()
+            .unwrap()
+            .reserved_nodes
+            .clear();
+        // Require 1 reserved peer, but none will ever connect
+        producer_config.min_connected_reserved_peers = 1;
+        // No sufficient peers timeout
+        producer_config.time_until_synced_sufficient_peers = None;
+        // Set the insufficient peers timeout - this is the only way to become synced
+        producer_config.time_until_synced_insufficient_peers =
+            Some(Duration::from_secs(INSUFFICIENT_PEERS_TIMEOUT));
+
+        let start_time = tokio::time::Instant::now();
+        let producer = make_node(producer_config, vec![]).await;
+
+        // The producer should be able to produce a block after the insufficient peers
+        // timeout, even without any reserved peers connected
+        producer
+            .node
+            .shared
+            .poa_adapter
+            .manually_produce_blocks(
+                None,
+                Mode::Blocks {
+                    number_of_blocks: 1,
+                },
+            )
+            .await
+            .expect("Should produce block after insufficient peers timeout");
+
+        // Verify that it took at least INSUFFICIENT_PEERS_TIMEOUT seconds
+        assert!(
+            start_time.elapsed() >= Duration::from_secs(INSUFFICIENT_PEERS_TIMEOUT),
+            "Block production should have waited for the insufficient peers timeout"
+        );
+    }
+
+    // Two producers sharing the same key. The first produces blocks and the
+    // second syncs from it. Both use the bootstrap as a reserved peer.
+    // The second producer has both timeouts set. After the first producer
+    // stops producing, the second should become synced via the sufficient
+    // peers timer (since the bootstrap is still connected as a reserved peer)
+    // and then start producing blocks itself.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_poa_producer_failover_with_both_timeouts() {
+        const SYNC_TIMEOUT: u64 = 5;
+        const SUFFICIENT_PEERS_TIMEOUT: u64 = SYNC_TIMEOUT + 10;
+        const INSUFFICIENT_PEERS_TIMEOUT: u64 = SYNC_TIMEOUT + 20;
+
+        let mut rng = StdRng::seed_from_u64(4444);
+        let secret = SecretKey::random(&mut rng);
+        let pub_key = Input::owner(&secret.public_key());
+
+        let mut config = Config::local_node();
+        update_signing_key(&mut config, pub_key);
+
+        let bootstrap_config = make_config(
+            "Bootstrap".to_string(),
+            config.clone(),
+            CustomizeConfig::no_overrides(),
+        );
+        let bootstrap = Bootstrap::new(&bootstrap_config).await.unwrap();
+
+        let make_node_config = |name: &str| {
+            let mut config = make_config(
+                name.to_string(),
+                config.clone(),
+                CustomizeConfig::no_overrides(),
+            );
+            config.debug = true;
+            config.block_production = Trigger::Interval {
+                block_time: Duration::from_secs(1),
+            };
+            config.consensus_signer =
+                SignMode::Key(Secret::new(secret.into()));
+            config.p2p.as_mut().unwrap().bootstrap_nodes =
+                bootstrap.listeners();
+            config.p2p.as_mut().unwrap().reserved_nodes =
+                bootstrap.listeners();
+            config.p2p.as_mut().unwrap().info_interval =
+                Some(Duration::from_millis(100));
+            config.min_connected_reserved_peers = 1;
+            config.time_until_synced_sufficient_peers =
+                Some(Duration::from_secs(SUFFICIENT_PEERS_TIMEOUT));
+            config.time_until_synced_insufficient_peers =
+                Some(Duration::from_secs(INSUFFICIENT_PEERS_TIMEOUT));
+            config
+        };
+
+        let first_producer_config = make_node_config("First Producer");
+        let second_producer_config = make_node_config("Second Producer");
+
+        let first_producer = make_node(first_producer_config, vec![]).await;
+
+        // First producer produces 1 block manually
+        first_producer
+            .node
+            .shared
+            .poa_adapter
+            .manually_produce_blocks(
+                None,
+                Mode::Blocks {
+                    number_of_blocks: 1,
+                },
+            )
+            .await
+            .expect("First producer should produce 1 block");
+
+        // Start second producer, it should sync blocks from first
+        let second_producer = make_node(second_producer_config, vec![]).await;
+        tokio::time::timeout(
+            Duration::from_secs(SYNC_TIMEOUT),
+            second_producer.wait_for_blocks(3, false),
+        )
+        .await
+        .expect("Second producer should sync blocks from first");
+
+        // Stop the first producer
+        let start_time = tokio::time::Instant::now();
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            first_producer.node.send_stop_signal_and_await_shutdown(),
+        )
+        .await
+        .expect("Should stop before timeout")
+        .expect("Should stop without error");
+
+        // The second producer should be able to produce blocks after the
+        // sufficient peers timeout (bootstrap is still connected as reserved peer).
+        second_producer
+            .node
+            .shared
+            .poa_adapter
+            .manually_produce_blocks(
+                None,
+                Mode::Blocks {
+                    number_of_blocks: 1,
+                },
+            )
+            .await
+            .expect("Second should produce block after timeout");
+
+        let elapsed = start_time.elapsed();
+        // Should have waited at least the sufficient peers timeout
+        assert!(
+            elapsed >= Duration::from_secs(SUFFICIENT_PEERS_TIMEOUT),
+            "Should have waited at least {} seconds, but only waited {:?}",
+            SUFFICIENT_PEERS_TIMEOUT,
+            elapsed
+        );
+        // But should NOT have waited the full insufficient peers timeout
+        assert!(
+            elapsed < Duration::from_secs(INSUFFICIENT_PEERS_TIMEOUT),
+            "Should not have waited the full {} seconds, waited {:?}",
+            INSUFFICIENT_PEERS_TIMEOUT,
+            elapsed
+        );
     }
 
     fn update_signing_key(config: &mut Config, key: Address) {

@@ -19,7 +19,10 @@ use fuel_core_types::{
 };
 use tokio::{
     sync::watch,
-    time::MissedTickBehavior,
+    time::{
+        Instant,
+        MissedTickBehavior,
+    },
 };
 use tokio_stream::StreamExt;
 
@@ -71,13 +74,19 @@ impl SyncTask {
         );
         let sufficient_peer_timer =
             time_until_synced_sufficient_peer.map(|time_until_synced| {
-                let mut timer = tokio::time::interval(time_until_synced);
+                let mut timer = tokio::time::interval_at(
+                    Instant::now() + time_until_synced,
+                    time_until_synced,
+                );
                 timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
                 timer
             });
         let insufficient_peer_timer =
             time_until_synced_insufficient_peer.map(|time_until_synced| {
-                let mut timer = tokio::time::interval(time_until_synced);
+                let mut timer = tokio::time::interval_at(
+                    Instant::now() + time_until_synced,
+                    time_until_synced,
+                );
                 timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
                 timer
             });
@@ -410,7 +419,8 @@ mod tests {
         let (mut sync_task, mut watcher, _tx) = configure_sync_task(
             min_connected_reserved_peers,
             vec![connected_peers_report; amount_of_updates_from_stream],
-            time_until_synced,
+            Some(time_until_synced),
+            None,
             biggest_block,
         );
 
@@ -477,7 +487,8 @@ mod tests {
         let (mut sync_task, mut watcher, _tx) = configure_sync_task(
             min_connected_reserved_peers,
             connections_stream,
-            time_until_synced,
+            Some(time_until_synced),
+            None,
             biggest_block,
         );
 
@@ -519,7 +530,8 @@ mod tests {
         let (mut sync_task, mut watcher, _tx) = configure_sync_task(
             min_connected_reserved_peers,
             connections_stream.clone(),
-            time_until_synced,
+            Some(time_until_synced),
+            None,
             biggest_block,
         );
 
@@ -630,5 +642,262 @@ mod tests {
             }
         ));
         matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_));
+    }
+
+    // When only insufficient_peer_timer is set and there are no sufficient peers,
+    // the node should still transition to Synced after the insufficient peer timeout.
+    #[tokio::test]
+    async fn sync_task_insufficient_peers_timeout_triggers_synced() {
+        // given: require 5 peers but only 2 are connected, with insufficient peer timeout
+        let min_connected_reserved_peers = 5;
+        let biggest_block = 0;
+        let insufficient_peer_timeout = Duration::from_secs(2);
+
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            min_connected_reserved_peers,
+            vec![2], // only 2 peers, below the 5 required
+            None,    // no sufficient peer timeout
+            Some(insufficient_peer_timeout),
+            biggest_block,
+        );
+
+        // initial state should be InsufficientPeers
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+
+        // process the peer connection update (2 peers < 5 required)
+        let _ = sync_task.run(&mut watcher).await;
+
+        // should still be InsufficientPeers since 2 < 5
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        // run again: streams are exhausted, so the insufficient_peer_timer fires
+        let _ = sync_task.run(&mut watcher).await;
+
+        // should now be Synced via the insufficient peer timeout
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+    }
+
+    // When both timeouts are set, sufficient peers should use the sufficient peer timer.
+    #[tokio::test]
+    async fn sync_task_both_timeouts_sufficient_peers_uses_sufficient_timer() {
+        let min_connected_reserved_peers = 3;
+        let biggest_block = 0;
+        let sufficient_timeout = Duration::from_secs(2);
+        let insufficient_timeout = Duration::from_secs(10);
+
+        // provide enough peers (5 >= 3)
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            min_connected_reserved_peers,
+            vec![5],
+            Some(sufficient_timeout),
+            Some(insufficient_timeout),
+            biggest_block,
+        );
+
+        // initial state should be InsufficientPeers
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+
+        // process peer update: 5 >= 3, should transition to SufficientPeers
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::SufficientPeers(_)
+        ));
+
+        // run again: sufficient_peer_timer fires (shorter timeout)
+        let _ = sync_task.run(&mut watcher).await;
+
+        // should be Synced with sufficient peers
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+    }
+
+    // When no timeouts are set and no peers required, should start synced immediately.
+    #[tokio::test]
+    async fn sync_task_no_timeouts_no_peers_starts_synced() {
+        let (sync_task, _watcher, _tx) = configure_sync_task(
+            0,     // no peers required
+            vec![], // no peer updates
+            None,  // no sufficient peer timeout
+            None,  // no insufficient peer timeout
+            0,     // no blocks
+        );
+
+        // should be immediately synced
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: true,
+                ..
+            }
+        ));
+    }
+
+    // When insufficient peers timer fires and then a network block arrives,
+    // the node should transition back to InsufficientPeers.
+    #[tokio::test]
+    async fn sync_task_insufficient_peers_synced_then_network_block_resets() {
+        let min_connected_reserved_peers = 5;
+        let biggest_block = 0;
+        let insufficient_timeout = Duration::from_secs(2);
+
+        // only 1 peer connected
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            min_connected_reserved_peers,
+            vec![1],
+            None,
+            Some(insufficient_timeout),
+            biggest_block,
+        );
+
+        // process peer update (1 < 5)
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+
+        // insufficient_peer_timer fires -> Synced
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: true,
+                ..
+            }
+        ));
+
+        // now inject a network block with higher height
+        let new_block_stream = MockStream::new(vec![BlockHeader::new_block(
+            1u32.into(),
+            Tai64::now(),
+        )])
+        .map(BlockImportInfo::new_from_network)
+        .into_boxed();
+        sync_task.block_stream = new_block_stream;
+
+        // also inject peer update showing still insufficient peers
+        let new_peer_stream = MockStream::new(vec![1]).into_boxed();
+        sync_task.peer_connections_stream = new_peer_stream;
+
+        // process the peer update first (updates has_sufficient_peers in Synced state)
+        let _ = sync_task.run(&mut watcher).await;
+
+        // process the network block: should drop back to InsufficientPeers
+        // since has_sufficient_peers is false and we got a network block
+        let _ = sync_task.run(&mut watcher).await;
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+    }
+
+    // When the node has zero peers and receives no peer updates at all,
+    // the insufficient peers timer should still fire and transition to Synced.
+    // This is the "completely isolated node" scenario.
+    #[tokio::test]
+    async fn sync_task_zero_peers_no_updates_becomes_synced_via_insufficient_timeout() {
+        let min_connected_reserved_peers = 3;
+        let biggest_block = 0;
+        let insufficient_timeout = Duration::from_secs(2);
+
+        // No peer updates at all, no blocks
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            min_connected_reserved_peers,
+            vec![], // completely empty - no peer updates ever
+            None,   // no sufficient peer timeout
+            Some(insufficient_timeout),
+            biggest_block,
+        );
+
+        // initial state should be InsufficientPeers
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+
+        // run: no stream data at all, so the insufficient_peer_timer fires
+        let _ = sync_task.run(&mut watcher).await;
+
+        // should be Synced - the timer fired even without any peer events
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::Synced {
+                has_sufficient_peers: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+    }
+
+    // When only sufficient peer timeout is set but peers are insufficient,
+    // the node should NOT become synced (no insufficient peer timer to fall back to).
+    #[tokio::test]
+    async fn sync_task_only_sufficient_timeout_stays_not_synced_without_peers() {
+        let min_connected_reserved_peers = 5;
+        let biggest_block = 0;
+        let sufficient_timeout = Duration::from_secs(2);
+
+        // only 1 peer, below the 5 required
+        let (mut sync_task, mut watcher, _tx) = configure_sync_task(
+            min_connected_reserved_peers,
+            vec![1],
+            Some(sufficient_timeout),
+            None, // no insufficient peer timeout
+            biggest_block,
+        );
+
+        // process peer update (1 < 5 required)
+        let _ = sync_task.run(&mut watcher).await;
+
+        // should be InsufficientPeers and remain NotSynced
+        assert!(matches!(
+            sync_task.inner_state,
+            InnerSyncState::InsufficientPeers(_)
+        ));
+        assert_eq!(SyncState::NotSynced, *sync_task.state_receiver.borrow());
+
+        // There's no insufficient peer timer, and we're below peer threshold.
+        // The sufficient_peer_timer tick won't transition from InsufficientPeers.
+        // The node stays NotSynced - this is the key distinction.
     }
 }
