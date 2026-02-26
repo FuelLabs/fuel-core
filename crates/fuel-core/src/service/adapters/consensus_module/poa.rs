@@ -199,6 +199,7 @@ pub enum ReconciliationAdapter {
 }
 
 impl RedisLeaderLeaseAdapter {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         redis_urls: Vec<String>,
         lease_key: String,
@@ -776,7 +777,6 @@ impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
                     }
                 }
             })
-            .into_iter()
             .filter(|success| *success)
             .count();
         if self.quorum_reached(successes) {
@@ -799,6 +799,63 @@ impl ConsensusModulePort for PoAAdapter {
         self.manually_produce_blocks(start_time, Mode::Blocks { number_of_blocks })
             .await
     }
+}
+
+#[cfg(feature = "p2p")]
+impl P2pPort for P2PAdapter {
+    fn reserved_peers_count(&self) -> BoxStream<usize> {
+        if let Some(service) = &self.service {
+            Box::pin(
+                BroadcastStream::new(service.subscribe_reserved_peers_count())
+                    .filter_map(|result| result.ok()),
+            )
+        } else {
+            Box::pin(tokio_stream::pending())
+        }
+    }
+}
+
+#[cfg(not(feature = "p2p"))]
+impl P2pPort for P2PAdapter {
+    fn reserved_peers_count(&self) -> BoxStream<usize> {
+        Box::pin(tokio_stream::pending())
+    }
+}
+
+pub struct InDirectoryPredefinedBlocks {
+    path_to_directory: Option<PathBuf>,
+}
+
+impl InDirectoryPredefinedBlocks {
+    pub fn new(path_to_directory: Option<PathBuf>) -> Self {
+        Self { path_to_directory }
+    }
+}
+
+impl PredefinedBlocks for InDirectoryPredefinedBlocks {
+    fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>> {
+        let Some(path) = &self.path_to_directory else {
+            return Ok(None);
+        };
+
+        let block_height: u32 = (*height).into();
+        if block_exists(path.as_path(), block_height) {
+            let block_path = block_path(path.as_path(), block_height);
+            let block_bytes = std::fs::read(block_path)?;
+            let block: Block = serde_json::from_slice(block_bytes.as_slice())?;
+            Ok(Some(block))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+fn block_path(path_to_directory: &Path, block_height: u32) -> PathBuf {
+    path_to_directory.join(format!("{block_height}.json"))
+}
+
+fn block_exists(path_to_directory: &Path, block_height: u32) -> bool {
+    block_path(path_to_directory, block_height).exists()
 }
 
 impl TransactionPool for TxPoolAdapter {
@@ -1438,60 +1495,4 @@ mod tests {
             .query(&mut conn)
             .expect("stream length query should succeed")
     }
-}
-
-#[cfg(feature = "p2p")]
-impl P2pPort for P2PAdapter {
-    fn reserved_peers_count(&self) -> BoxStream<usize> {
-        match &self.service {
-            Some(service) => Box::pin(
-                BroadcastStream::new(service.subscribe_reserved_peers_count())
-                    .filter_map(|result| result.ok()),
-            ),
-            _ => Box::pin(tokio_stream::pending()),
-        }
-    }
-}
-
-#[cfg(not(feature = "p2p"))]
-impl P2pPort for P2PAdapter {
-    fn reserved_peers_count(&self) -> BoxStream<usize> {
-        Box::pin(tokio_stream::pending())
-    }
-}
-
-pub struct InDirectoryPredefinedBlocks {
-    path_to_directory: Option<PathBuf>,
-}
-
-impl InDirectoryPredefinedBlocks {
-    pub fn new(path_to_directory: Option<PathBuf>) -> Self {
-        Self { path_to_directory }
-    }
-}
-
-impl PredefinedBlocks for InDirectoryPredefinedBlocks {
-    fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>> {
-        let Some(path) = &self.path_to_directory else {
-            return Ok(None);
-        };
-
-        let block_height: u32 = (*height).into();
-        if block_exists(path.as_path(), block_height) {
-            let block_path = block_path(path.as_path(), block_height);
-            let block_bytes = std::fs::read(block_path)?;
-            let block: Block = serde_json::from_slice(block_bytes.as_slice())?;
-            Ok(Some(block))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
-pub fn block_path(path_to_directory: &Path, block_height: u32) -> PathBuf {
-    path_to_directory.join(format!("{}.json", block_height))
-}
-
-pub fn block_exists(path_to_directory: &Path, block_height: u32) -> bool {
-    block_path(path_to_directory, block_height).exists()
 }
