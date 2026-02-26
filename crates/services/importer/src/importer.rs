@@ -395,6 +395,12 @@ where
             ))
         }
 
+        if result.source == Source::Local {
+            self.block_reconciliation_write_port
+                .publish_produced_block(&result.sealed_block)
+                .map_err(Error::FailedBlockReconciliationWrite)?;
+        }
+
         let changes = db_after_execution.into_changes();
 
         #[cfg(feature = "test-helpers")]
@@ -407,12 +413,6 @@ where
             Self::update_metrics(&result, &actual_next_height);
         }
         tracing::info!("Committed block {:#x}", result.sealed_block.entity.id());
-
-        if result.source == Source::Local {
-            self.block_reconciliation_write_port
-                .publish_produced_block(&result.sealed_block)
-                .map_err(Error::FailedBlockReconciliationWrite)?;
-        }
 
         let result = ImporterResult {
             shared_result: Arc::new(Awaiter::new(result, permit)),
