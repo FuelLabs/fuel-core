@@ -746,11 +746,11 @@ mod tests {
     #[tokio::test]
     async fn sync_task_no_timeouts_no_peers_starts_synced() {
         let (sync_task, _watcher, _tx) = configure_sync_task(
-            0,     // no peers required
+            0,      // no peers required
             vec![], // no peer updates
-            None,  // no sufficient peer timeout
-            None,  // no insufficient peer timeout
-            0,     // no blocks
+            None,   // no sufficient peer timeout
+            None,   // no insufficient peer timeout
+            0,      // no blocks
         );
 
         // should be immediately synced
@@ -802,12 +802,10 @@ mod tests {
         ));
 
         // now inject a network block with higher height
-        let new_block_stream = MockStream::new(vec![BlockHeader::new_block(
-            1u32.into(),
-            Tai64::now(),
-        )])
-        .map(BlockImportInfo::new_from_network)
-        .into_boxed();
+        let new_block_stream =
+            MockStream::new(vec![BlockHeader::new_block(1u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
         sync_task.block_stream = new_block_stream;
 
         // also inject peer update showing still insufficient peers

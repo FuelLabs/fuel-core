@@ -344,8 +344,7 @@ impl From<&Config> for fuel_core_poa::Config {
             signer: config.consensus_signer.clone(),
             metrics: false,
             min_connected_reserved_peers: config.min_connected_reserved_peers,
-            time_until_synced_sufficient_peers: config
-                .time_until_synced_sufficient_peers,
+            time_until_synced_sufficient_peers: config.time_until_synced_sufficient_peers,
             time_until_synced_insufficient_peers: config
                 .time_until_synced_insufficient_peers,
             production_timeout: config.production_timeout,

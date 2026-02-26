@@ -226,7 +226,8 @@ mod p2p {
             config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
             config.p2p.as_mut().unwrap().info_interval = Some(Duration::from_millis(100));
             config.min_connected_reserved_peers = 1;
-            config.time_until_synced_sufficient_peers = Some(Duration::from_secs(TIME_UNTIL_SYNCED));
+            config.time_until_synced_sufficient_peers =
+                Some(Duration::from_secs(TIME_UNTIL_SYNCED));
             config
         };
 
@@ -321,15 +322,9 @@ mod p2p {
         producer_config.block_production = Trigger::Interval {
             block_time: Duration::from_secs(1),
         };
-        producer_config.consensus_signer =
-            SignMode::Key(Secret::new(secret.into()));
+        producer_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
         // No reserved nodes - the node will never have sufficient peers
-        producer_config
-            .p2p
-            .as_mut()
-            .unwrap()
-            .reserved_nodes
-            .clear();
+        producer_config.p2p.as_mut().unwrap().reserved_nodes.clear();
         // Require 1 reserved peer, but none will ever connect
         producer_config.min_connected_reserved_peers = 1;
         // No sufficient peers timeout
@@ -399,14 +394,10 @@ mod p2p {
             config.block_production = Trigger::Interval {
                 block_time: Duration::from_secs(1),
             };
-            config.consensus_signer =
-                SignMode::Key(Secret::new(secret.into()));
-            config.p2p.as_mut().unwrap().bootstrap_nodes =
-                bootstrap.listeners();
-            config.p2p.as_mut().unwrap().reserved_nodes =
-                bootstrap.listeners();
-            config.p2p.as_mut().unwrap().info_interval =
-                Some(Duration::from_millis(100));
+            config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
+            config.p2p.as_mut().unwrap().bootstrap_nodes = bootstrap.listeners();
+            config.p2p.as_mut().unwrap().reserved_nodes = bootstrap.listeners();
+            config.p2p.as_mut().unwrap().info_interval = Some(Duration::from_millis(100));
             config.min_connected_reserved_peers = 1;
             config.time_until_synced_sufficient_peers =
                 Some(Duration::from_secs(SUFFICIENT_PEERS_TIMEOUT));
