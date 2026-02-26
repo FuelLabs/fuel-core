@@ -68,75 +68,30 @@ use tracing::error;
 
 pub mod pre_confirmation_signature;
 
-const CHECK_LEASE_OWNER_SCRIPT: &str = "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-        return 1 \
-    else \
-        return 0 \
-    end";
+const CHECK_LEASE_OWNER_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/redis_leader_lease_adapter_scripts/check_lease_owner.lua"
+));
 
-const RELEASE_LOCK_SCRIPT: &str = "if redis.call('GET', KEYS[1]) == ARGV[1] then \
-        return redis.call('DEL', KEYS[1]) \
-    else \
-        return 0 \
-    end";
+const RELEASE_LOCK_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/redis_leader_lease_adapter_scripts/release_lock.lua"
+));
 
-const PROMOTE_LEADER_SCRIPT: &str = "local acquired = redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX') \
-    if not acquired then \
-        return redis.error_reply('LOCK_HELD: Another leader holds the lock') \
-    end \
-    local new_token = redis.call('INCR', KEYS[2]) \
-    return new_token";
+const PROMOTE_LEADER_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/redis_leader_lease_adapter_scripts/promote_leader.lua"
+));
 
-const WRITE_BLOCK_SCRIPT: &str = "local current_token = tonumber(redis.call('GET', KEYS[2]) or '0') \
-    local current_leader = redis.call('GET', KEYS[3]) \
-    if current_leader ~= ARGV[2] then \
-        return redis.error_reply('FENCING_ERROR: Lock lost or held by another node') \
-    end \
-    if tonumber(ARGV[1]) < current_token then \
-        return redis.error_reply('FENCING_ERROR: Token is stale') \
-    end \
-    if tonumber(ARGV[1]) > current_token then \
-        redis.call('SET', KEYS[2], ARGV[1]) \
-    end \
-    local stream_id = redis.call('XADD', KEYS[1], '*', \
-        'height', ARGV[3], \
-        'data', ARGV[4], \
-        'epoch', ARGV[1], \
-        'timestamp', redis.call('TIME')[1]) \
-    redis.call('XTRIM', KEYS[1], 'MAXLEN', '~', ARGV[6]) \
-    redis.call('PEXPIRE', KEYS[3], ARGV[5]) \
-    return stream_id";
+const WRITE_BLOCK_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/redis_leader_lease_adapter_scripts/write_block.lua"
+));
 
-const READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT: &str = "local entries = redis.call('XRANGE', KEYS[1], '-', '+') \
-    local target_height = tonumber(ARGV[1]) \
-    local best_epoch = nil \
-    local best_data = nil \
-    for _, entry in ipairs(entries) do \
-        local fields = entry[2] \
-        local entry_height = nil \
-        local entry_data = nil \
-        local entry_epoch = nil \
-        for i = 1, #fields, 2 do \
-            if fields[i] == 'height' then \
-                entry_height = tonumber(fields[i + 1]) \
-            elseif fields[i] == 'data' then \
-                entry_data = fields[i + 1] \
-            elseif fields[i] == 'epoch' then \
-                entry_epoch = tonumber(fields[i + 1]) \
-            end \
-        end \
-        if entry_height == target_height then \
-            local epoch = entry_epoch or 0 \
-            if (best_epoch == nil) or (epoch > best_epoch) then \
-                best_epoch = epoch \
-                best_data = entry_data \
-            end \
-        end \
-    end \
-    if best_data ~= nil then \
-        return {tostring(best_epoch), best_data} \
-    end \
-    return false";
+const READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/redis_leader_lease_adapter_scripts/read_best_block_for_height.lua"
+));
 
 struct RedisNode {
     redis_client: redis::Client,
