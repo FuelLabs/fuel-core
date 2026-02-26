@@ -1792,7 +1792,7 @@ mod tests {
         let (create, contract_id) = create_contract(
             // Increment the slot matching the tx id by one
             vec![
-                op::srw(0x10, 0x29, RegId::ZERO),
+                op::srw(0x10, 0x29, RegId::ZERO, 0),
                 op::addi(0x10, 0x10, 1),
                 op::sww(RegId::ZERO, 0x29, 0x10),
                 op::ret(1),
@@ -1934,7 +1934,7 @@ mod tests {
         let (create, contract_id) = create_contract(
             // Increment the slot matching the tx id by one
             vec![
-                op::srw(0x10, 0x29, RegId::ZERO),
+                op::srw(0x10, 0x29, RegId::ZERO, 0),
                 op::addi(0x10, 0x10, 1),
                 op::sww(RegId::ZERO, 0x29, 0x10),
                 op::ret(1),
@@ -2061,7 +2061,7 @@ mod tests {
         let (create, contract_id) = create_contract(
             // Increment the slot matching the tx id by one
             vec![
-                op::srw(0x10, 0x29, RegId::ZERO),
+                op::srw(0x10, 0x29, RegId::ZERO, 0),
                 op::addi(0x10, 0x10, 1),
                 op::sww(RegId::ZERO, 0x29, 0x10),
                 op::ret(1),
@@ -2378,7 +2378,7 @@ mod tests {
 
         // Increment the slot matching the tx id by one
         let contract_code = vec![
-            op::srw(0x10, 0x29, RegId::ZERO),
+            op::srw(0x10, 0x29, RegId::ZERO, 0),
             op::addi(0x10, 0x10, 1),
             op::sww(RegId::ZERO, 0x29, 0x10),
             op::ret(1),

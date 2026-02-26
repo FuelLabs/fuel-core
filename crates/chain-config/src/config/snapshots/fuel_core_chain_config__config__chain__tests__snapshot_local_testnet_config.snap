@@ -25,9 +25,10 @@ expression: json
         }
       },
       "script_params": {
-        "V1": {
+        "V2": {
           "max_script_length": 1048576,
-          "max_script_data_length": 1048576
+          "max_script_data_length": 1048576,
+          "max_storage_slot_length": 1048576
         }
       },
       "contract_params": {
@@ -44,7 +45,7 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V6": {
+        "V7": {
           "add": 1,
           "addi": 1,
           "and": 1,
@@ -280,6 +281,42 @@ expression: json
             "HeavyOperation": {
               "base": 69000,
               "gas_per_unit": 52000
+            }
+          },
+          "sclr": {
+            "LightOperation": {
+              "base": 50,
+              "units_per_gas": 5
+            }
+          },
+          "srdd": {
+            "LightOperation": {
+              "base": 50,
+              "units_per_gas": 5
+            }
+          },
+          "swrd": {
+            "LightOperation": {
+              "base": 50,
+              "units_per_gas": 5
+            }
+          },
+          "supd": {
+            "LightOperation": {
+              "base": 50,
+              "units_per_gas": 5
+            }
+          },
+          "spld": {
+            "LightOperation": {
+              "base": 50,
+              "units_per_gas": 5
+            }
+          },
+          "spcp": {
+            "LightOperation": {
+              "base": 50,
+              "units_per_gas": 5
             }
           },
           "contract_root": {

@@ -98,6 +98,7 @@ impl BenchDb {
         let state_size = crate::utils::get_state_size();
 
         let mut database = GenesisDatabase::new(db);
+
         database.init_contract_state(
             contract_id,
             (0..state_size).map(|_| {
@@ -140,6 +141,26 @@ impl BenchDb {
             db: database,
             latest_block: 0,
         })
+    }
+
+    fn override_slots(
+        &mut self,
+        contract_id: &ContractId,
+        slot_size: usize,
+    ) -> anyhow::Result<()> {
+        let state_size = crate::utils::get_state_size();
+
+        let mut storage_key = primitive_types::U256::zero();
+        let mut key_bytes = Bytes32::zeroed();
+        self.db.init_contract_state(
+            contract_id,
+            (0..(state_size / (slot_size as u64) + 1)).map(|_| {
+                storage_key.to_big_endian(key_bytes.as_mut());
+                storage_key.increase().unwrap();
+                (key_bytes, key_bytes.to_vec().repeat(slot_size / 32 + 1))
+            }),
+        )?;
+        Ok(())
     }
 
     fn add_blocks(&mut self, nb_blocks: u32) {
@@ -241,7 +262,7 @@ pub fn run(c: &mut Criterion) {
         let input = VmBench::contract_using_db(
             rng,
             db.to_vm_database(),
-            op::srw(0x13, 0x14, 0x10),
+            op::srw(0x13, 0x14, 0x10, 0),
         )
         .expect("failed to prepare contract");
         run_group_ref(&mut c.benchmark_group("srw"), "srw", input);
@@ -793,6 +814,171 @@ pub fn run(c: &mut Criterion) {
 
         srwq.finish();
     }
+
+    // dynamic storage
+    let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
+
+    let mut sclr = c.benchmark_group("sclr");
+
+    for i in linear_short.clone() {
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
+
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
+            op::movi(0x12, i as u32),
+        ];
+        let mut bench =
+            VmBench::contract_using_db(rng, db.to_vm_database(), op::sclr(0x11, 0x12))
+                .expect("failed to prepare contract")
+                .with_post_call(post_call);
+        bench.data.extend(data);
+
+        sclr.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut sclr, format!("{i}"), bench);
+    }
+
+    sclr.finish();
+
+    let mut srdd = c.benchmark_group("srdd");
+
+    for i in linear_short.clone() {
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
+
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
+            op::movi(0x12, i as u32),
+            op::aloc(0x12),
+        ];
+        let mut bench = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::srdd(RegId::HP, 0x11, RegId::ZERO, 0x12),
+        )
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
+        bench.data.extend(data);
+
+        srdd.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut srdd, format!("{i}"), bench);
+    }
+
+    srdd.finish();
+
+    let mut swrd = c.benchmark_group("swrd");
+
+    for i in linear_short.clone() {
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
+
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
+            op::movi(0x12, i as u32),
+            op::aloc(0x12),
+        ];
+        let mut bench = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::swrd(0x11, RegId::HP, 0x12),
+        )
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
+        bench.data.extend(data);
+
+        swrd.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut swrd, format!("{i}"), bench);
+    }
+
+    swrd.finish();
+
+    let mut supd = c.benchmark_group("supd");
+
+    for i in linear_short.clone() {
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
+
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
+            op::movi(0x12, i as u32),
+            op::aloc(0x12),
+            op::not(0x13, RegId::ZERO),
+        ];
+        let mut bench = VmBench::contract_using_db(
+            rng,
+            db.to_vm_database(),
+            op::supd(0x11, RegId::HP, 0x13, 0x12),
+        )
+        .expect("failed to prepare contract")
+        .with_post_call(post_call);
+        bench.data.extend(data);
+
+        supd.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut supd, format!("{i}"), bench);
+    }
+
+    supd.finish();
+
+    let mut spld = c.benchmark_group("spld");
+
+    for i in linear_short.clone() {
+        db.override_slots(&contract, i as usize)
+            .expect("Unable to override contract storage");
+
+        let start_key = Bytes32::zeroed();
+        let data = start_key.iter().copied().collect::<Vec<_>>();
+
+        let post_call = vec![
+            op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
+            op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
+            op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
+        ];
+        let mut bench =
+            VmBench::contract_using_db(rng, db.to_vm_database(), op::spld(0x10, 0x11))
+                .expect("failed to prepare contract")
+                .with_post_call(post_call);
+        bench.data.extend(data);
+
+        spld.throughput(Throughput::Bytes(i));
+
+        run_group_ref(&mut spld, format!("{i}"), bench);
+    }
+
+    spld.finish();
 
     // time
     {

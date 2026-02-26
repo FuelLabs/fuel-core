@@ -59,6 +59,7 @@ pub enum ContractParametersVersion {
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum ScriptParametersVersion {
     V1,
+    V2,
 }
 
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
@@ -227,6 +228,7 @@ impl ScriptParameters {
     async fn version(&self) -> ScriptParametersVersion {
         match self.0 {
             fuel_tx::ScriptParameters::V1(_) => ScriptParametersVersion::V1,
+            fuel_tx::ScriptParameters::V2(_) => ScriptParametersVersion::V2,
         }
     }
 
@@ -236,6 +238,10 @@ impl ScriptParameters {
 
     async fn max_script_data_length(&self) -> U64 {
         self.0.max_script_data_length().into()
+    }
+
+    async fn max_storage_slot_length(&self) -> U64 {
+        self.0.max_storage_slot_length().into()
     }
 }
 
@@ -282,7 +288,8 @@ impl GasCosts {
             | GasCostsValues::V3(_)
             | GasCostsValues::V4(_)
             | GasCostsValues::V5(_)
-            | GasCostsValues::V6(_) => GasCostsVersion::V1,
+            | GasCostsValues::V6(_)
+            | GasCostsValues::V7(_) => GasCostsVersion::V1,
         }
     }
 
@@ -744,6 +751,30 @@ impl GasCosts {
 
     async fn epar(&self) -> Option<DependentCost> {
         self.0.epar().ok().map(Into::into)
+    }
+
+    async fn sclr(&self) -> Option<DependentCost> {
+        self.0.sclr().ok().map(Into::into)
+    }
+
+    async fn srdd(&self) -> Option<DependentCost> {
+        self.0.srdd().ok().map(Into::into)
+    }
+
+    async fn swrd(&self) -> Option<DependentCost> {
+        self.0.swrd().ok().map(Into::into)
+    }
+
+    async fn supd(&self) -> Option<DependentCost> {
+        self.0.supd().ok().map(Into::into)
+    }
+
+    async fn spld(&self) -> Option<DependentCost> {
+        self.0.spld().ok().map(Into::into)
+    }
+
+    async fn spcp(&self) -> Option<DependentCost> {
+        self.0.spcp().ok().map(Into::into)
     }
 
     // Non-opcode prices

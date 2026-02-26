@@ -5,6 +5,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsRef,
     StorageInspect,
+    StorageReadError,
     column::Column,
     iter::changes_iterator::ChangesIterator,
     kv_store::{
@@ -215,14 +216,25 @@ where
         self.storage.size_of_value(key, column)
     }
 
-    fn read(
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
+    ) -> StorageResult<Result<usize, StorageReadError>> {
         self.mark(key, column.id());
-        self.storage.read(key, column, offset, buf)
+        self.storage.read_exact(key, column, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        self.mark(key, column.id());
+        self.storage.read_zerofill(key, column, offset, buf)
     }
 }

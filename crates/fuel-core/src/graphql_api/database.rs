@@ -19,6 +19,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageInspect,
     StorageRead,
+    StorageReadError,
     StorageSize,
     iter::{
         BoxedIter,
@@ -339,13 +340,22 @@ impl StorageSize<BlobData> for ReadView {
 }
 
 impl StorageRead<BlobData> for ReadView {
-    fn read(
+    fn read_exact(
         &self,
         key: &BlobId,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<bool, Self::Error> {
-        StorageRead::<BlobData>::read(self.on_chain.as_ref(), key, offset, buf)
+    ) -> StorageResult<core::result::Result<usize, StorageReadError>> {
+        StorageRead::<BlobData>::read_exact(self.on_chain.as_ref(), key, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &BlobId,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<core::result::Result<usize, StorageReadError>> {
+        StorageRead::<BlobData>::read_zerofill(self.on_chain.as_ref(), key, offset, buf)
     }
 
     fn read_alloc(&self, key: &BlobId) -> Result<Option<Vec<u8>>, Self::Error> {

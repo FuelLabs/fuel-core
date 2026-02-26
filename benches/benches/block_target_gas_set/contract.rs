@@ -442,7 +442,7 @@ pub fn run_contract(group: &mut BenchmarkGroup<WallTime>) {
     // srw
 
     {
-        let contract = u256_iterator_loop(|iterator| op::srw(0x13, 0x14, iterator));
+        let contract = u256_iterator_loop(|iterator| op::srw(0x13, 0x14, iterator, 0));
 
         let mut runner =
             SanityBenchmarkRunnerBuilder::new_shared_with_contract(BenchContract {

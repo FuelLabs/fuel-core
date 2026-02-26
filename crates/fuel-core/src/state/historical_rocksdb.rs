@@ -31,6 +31,7 @@ use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
     StorageAsRef,
+    StorageReadError,
     iter::{
         BoxedIter,
         IterDirection,
@@ -518,15 +519,26 @@ where
         self.db.get(key, Column::OriginalColumn(column))
     }
 
-    fn read(
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
+    ) -> StorageResult<Result<usize, StorageReadError>> {
         self.db
-            .read(key, Column::OriginalColumn(column), offset, buf)
+            .read_exact(key, Column::OriginalColumn(column), offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        self.db
+            .read_zerofill(key, Column::OriginalColumn(column), offset, buf)
     }
 }
 

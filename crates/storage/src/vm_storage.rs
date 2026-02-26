@@ -48,7 +48,10 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use fuel_vm_private::{
-    fuel_storage::StorageWrite,
+    fuel_storage::{
+        StorageReadError,
+        StorageWrite,
+    },
     storage::{
         BlobData,
         ContractsStateData,
@@ -189,13 +192,22 @@ impl<D, M: Mappable> StorageRead<M> for VmStorage<D>
 where
     D: StorageRead<M, Error = StorageError>,
 {
-    fn read(
+    fn read_exact(
         &self,
         key: &M::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<bool, Self::Error> {
-        StorageRead::<M>::read(&self.database, key, offset, buf)
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        StorageRead::<M>::read_exact(&self.database, key, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &M::Key,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        StorageRead::<M>::read_zerofill(&self.database, key, offset, buf)
     }
 
     fn read_alloc(
@@ -425,6 +437,29 @@ where
         }
 
         if found_unset { Ok(None) } else { Ok(Some(())) }
+    }
+
+    fn contract_state_remove_range_nostatus(
+        &mut self,
+        contract_id: &ContractId,
+        start_key: &Bytes32,
+        range: usize,
+    ) -> Result<(), Self::DataError> {
+        let mut current_key = U256::from_big_endian(start_key.as_ref());
+
+        let mut key_bytes = Bytes32::zeroed();
+        for i in 0..range {
+            if i != 0 {
+                current_key.increase()?;
+            }
+            current_key.to_big_endian(key_bytes.as_mut());
+
+            self.database
+                .storage::<ContractsState>()
+                .remove(&(contract_id, &key_bytes).into())?;
+        }
+
+        Ok(())
     }
 }
 

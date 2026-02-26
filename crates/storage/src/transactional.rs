@@ -23,6 +23,7 @@ use alloc::{
     },
     vec::Vec,
 };
+use fuel_vm_private::fuel_storage::StorageReadError;
 
 #[cfg(feature = "test-helpers")]
 use crate::{
@@ -408,37 +409,63 @@ where
         }
     }
 
-    fn read(
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
+    ) -> StorageResult<Result<usize, StorageReadError>> {
         if let Some(operation) = self.get_from_changes(key, column) {
             match operation {
                 WriteOperation::Insert(value) => {
                     let bytes_len = value.as_ref().len();
-                    let start = offset;
-                    let buf_len = buf.len();
-                    let end = offset.saturating_add(buf.len());
 
-                    if end > bytes_len {
-                        return Err(anyhow::anyhow!(
-                            "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}`",
-                            key
-                        )
-                        .into());
-                    }
+                    let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+                        return Ok(Err(StorageReadError::OutOfBounds));
+                    };
 
-                    let starting_from_offset = &value.as_ref()[start..end];
-                    buf[..].copy_from_slice(starting_from_offset);
-                    Ok(true)
+                    let Some((dst, _)) = buf.split_at_mut_checked(after.len()) else {
+                        return Ok(Err(StorageReadError::OutOfBounds));
+                    };
+                    dst.copy_from_slice(&after);
+
+                    Ok(Ok(bytes_len))
                 }
-                WriteOperation::Remove => Ok(false),
+                WriteOperation::Remove => Ok(Err(StorageReadError::KeyNotFound)),
             }
         } else {
-            self.storage.read(key, column, offset, buf)
+            self.storage.read_exact(key, column, offset, buf)
+        }
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        if let Some(operation) = self.get_from_changes(key, column) {
+            match operation {
+                WriteOperation::Insert(value) => {
+                    let bytes_len = value.as_ref().len();
+                    let buf_len = buf.len();
+
+                    let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+                        return Ok(Err(StorageReadError::OutOfBounds));
+                    };
+
+                    let (dst, rest) = buf.split_at_mut(buf_len.min(after.len()));
+                    dst.copy_from_slice(&after[..dst.len()]);
+                    rest.fill(0);
+
+                    Ok(Ok(bytes_len))
+                }
+                WriteOperation::Remove => Ok(Err(StorageReadError::KeyNotFound)),
+            }
+        } else {
+            self.storage.read_exact(key, column, offset, buf)
         }
     }
 }
@@ -694,9 +721,11 @@ mod test {
             view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 3];
-            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
+            let ret = view
+                .read_exact(&key, Column::Metadata, 0, &mut buf)
+                .unwrap();
             // verify
-            assert!(ret);
+            assert_eq!(ret, Ok(3));
             assert_eq!(buf, [1, 2, 3]);
         }
 
@@ -710,9 +739,11 @@ mod test {
             view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 2];
-            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap();
+            let ret = view
+                .read_exact(&key, Column::Metadata, 0, &mut buf)
+                .unwrap();
             // verify
-            assert!(ret);
+            assert_eq!(ret, Ok(2));
             assert_eq!(buf, [1, 2]);
         }
 
@@ -726,9 +757,11 @@ mod test {
             view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 2];
-            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap();
+            let ret = view
+                .read_exact(&key, Column::Metadata, 1, &mut buf)
+                .unwrap();
             // verify
-            assert!(ret);
+            assert_eq!(ret, Ok(2));
             assert_eq!(buf, [2, 3]);
         }
 
@@ -742,9 +775,9 @@ mod test {
             view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 4];
-            let ret = view.read(&key, Column::Metadata, 0, &mut buf).unwrap_err();
+            let ret = view.read_exact(&key, Column::Metadata, 0, &mut buf);
             // verify
-            assert_eq!(ret, crate::Error::Other(anyhow::anyhow!("Offset `0` + buf_len `4` read until 4 which is out of bounds `3` for key `[10, 11, 12]`".to_string())));
+            assert_eq!(ret, Ok(Err(StorageReadError::OutOfBounds)));
         }
 
         #[test]
@@ -757,9 +790,9 @@ mod test {
             view.put(&key, Column::Metadata, value).unwrap();
             // test
             let mut buf = [0; 3];
-            let ret = view.read(&key, Column::Metadata, 1, &mut buf).unwrap_err();
+            let ret = view.read_exact(&key, Column::Metadata, 1, &mut buf);
             // verify
-            assert_eq!(ret, crate::Error::Other(anyhow::anyhow!("Offset `1` + buf_len `3` read until 4 which is out of bounds `3` for key `[10, 11, 12]`".to_string())));
+            assert_eq!(ret, Ok(Err(StorageReadError::OutOfBounds)));
         }
 
         #[test]

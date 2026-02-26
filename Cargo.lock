@@ -4098,8 +4098,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49ae81d896972a39cfbe6e5659624d08aa889d30950d2831cca1c50bce95898f"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 dependencies = [
  "bitflags 2.9.4",
  "fuel-types 0.65.0",
@@ -4110,8 +4109,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55258ae5ef436d6b6c024db4dbe80784c8eafc5062b8b90f365db416e6b4e7bc"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 dependencies = [
  "fuel-derive 0.65.0",
  "fuel-types 0.65.0",
@@ -5024,8 +5022,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1bbd5d5d9809d517dab5f92a8c915403d83375efb6f3f5dd3994ff1e4ae28fe"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 dependencies = [
  "base64ct",
  "coins-bip32",
@@ -5057,8 +5054,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb4078dbab152ef822bc092bd542796270031152ff8c96008b9006fb8c52ce53"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5095,8 +5091,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5ecc75b1771d36c86293fef3b63ebcd5fa5bafbc51d356d92ff60ebac59f636"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 dependencies = [
  "derive_more 0.99.20",
  "digest 0.10.7",
@@ -5128,8 +5123,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b9b46be43225f70c17f9e028f80a583c275fb2dec1e2a4e9100aa6385a2c86a"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 
 [[package]]
 name = "fuel-tx"
@@ -5156,8 +5150,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6c26aca0167279221e6ea9bc688f4f9688d2e5a42533c05f1bdf97f1d200b1b"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 dependencies = [
  "bitflags 2.9.4",
  "derive_more 1.0.0",
@@ -5190,8 +5183,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b128048cde245d6e895cb7f7824d38d3e4d9f1b4cb5d514c7186bd79308af6a9"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 dependencies = [
  "educe",
  "fuel-derive 0.65.0",
@@ -5234,8 +5226,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.65.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1632d884ec82f140f21f9943f0bcda8dfcdad02a94a032f67051e27eb1e8054"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdynamic-storage#b55b520e138387c65850c73ba1b1577f5c9cfd6c"
 dependencies = [
  "anyhow",
  "async-trait",
