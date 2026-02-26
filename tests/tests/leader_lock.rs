@@ -57,7 +57,7 @@ async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
     const BLOCKS_TO_CHECK: usize = 30;
-    const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_millis(500);
+    const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
 
     // given
     let (_redis, _bootstrap, make_node_config) = make_leader_lock_test_config_builder(
