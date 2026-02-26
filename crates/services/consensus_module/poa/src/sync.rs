@@ -32,10 +32,10 @@ pub enum SyncState {
 impl SyncState {
     pub fn from_config(
         min_connected_reserved_peers: usize,
-        time_until_synced: Duration,
+        time_until_synced: Option<Duration>,
         header: &BlockHeader,
     ) -> SyncState {
-        if min_connected_reserved_peers == 0 && time_until_synced == Duration::ZERO {
+        if min_connected_reserved_peers == 0 && time_until_synced.is_none() {
             SyncState::Synced(Arc::new(header.clone()))
         } else {
             SyncState::NotSynced
@@ -51,33 +51,40 @@ pub struct SyncTask {
     // shared with `MainTask` via SyncTask::SharedState
     state_receiver: watch::Receiver<SyncState>,
     inner_state: InnerSyncState,
-    timer: Option<tokio::time::Interval>,
+    sufficient_peer_timer: Option<tokio::time::Interval>,
+    insufficient_peer_timer: Option<tokio::time::Interval>,
 }
 
 impl SyncTask {
     pub fn new(
         peer_connections_stream: BoxStream<usize>,
         min_connected_reserved_peers: usize,
-        time_until_synced: Duration,
+        time_until_synced_sufficient_peer: Option<Duration>,
+        time_until_synced_insufficient_peer: Option<Duration>,
         block_stream: BoxStream<BlockImportInfo>,
         block_header: &BlockHeader,
     ) -> Self {
         let inner_state = InnerSyncState::from_config(
             min_connected_reserved_peers,
-            time_until_synced,
+            time_until_synced_sufficient_peer,
             block_header.clone(),
         );
-        let timer = if time_until_synced == Duration::ZERO {
-            None
-        } else {
-            let mut timer = tokio::time::interval(time_until_synced);
-            timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
-            Some(timer)
-        };
+        let sufficient_peer_timer =
+            time_until_synced_sufficient_peer.map(|time_until_synced| {
+                let mut timer = tokio::time::interval(time_until_synced);
+                timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                timer
+            });
+        let insufficient_peer_timer =
+            time_until_synced_insufficient_peer.map(|time_until_synced| {
+                let mut timer = tokio::time::interval(time_until_synced);
+                timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                timer
+            });
 
         let initial_sync_state = SyncState::from_config(
             min_connected_reserved_peers,
-            time_until_synced,
+            time_until_synced_sufficient_peer,
             block_header,
         );
 
@@ -91,7 +98,8 @@ impl SyncTask {
             state_sender,
             state_receiver,
             inner_state,
-            timer,
+            sufficient_peer_timer,
+            insufficient_peer_timer,
         }
     }
 
@@ -108,7 +116,10 @@ impl SyncTask {
     }
 
     fn restart_timer(&mut self) {
-        if let Some(timer) = &mut self.timer {
+        if let Some(timer) = &mut self.sufficient_peer_timer {
+            timer.reset();
+        }
+        if let Some(timer) = &mut self.insufficient_peer_timer {
             timer.reset();
         }
     }
@@ -138,13 +149,22 @@ impl RunnableService for SyncTask {
 
 impl RunnableTask for SyncTask {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        let tick: BoxFuture<tokio::time::Instant> = match &mut self.timer {
-            Some(timer) => Box::pin(timer.tick()),
-            _ => {
-                let future = core::future::pending();
-                Box::pin(future)
-            }
-        };
+        let sufficient_peer_tick: BoxFuture<tokio::time::Instant> =
+            match &mut self.sufficient_peer_timer {
+                Some(timer) => Box::pin(timer.tick()),
+                _ => {
+                    let future = core::future::pending();
+                    Box::pin(future)
+                }
+            };
+        let insufficient_peer_tick: BoxFuture<tokio::time::Instant> =
+            match &mut self.insufficient_peer_timer {
+                Some(timer) => Box::pin(timer.tick()),
+                _ => {
+                    let future = core::future::pending();
+                    Box::pin(future)
+                }
+            };
         tokio::select! {
             biased;
             _ = watcher.while_started() => {
@@ -206,8 +226,19 @@ impl RunnableTask for SyncTask {
                 }
                 TaskNextAction::Continue
             }
-            _ = tick => {
+            _ = sufficient_peer_tick => {
                 if let InnerSyncState::SufficientPeers(block_header) = &self.inner_state {
+                    let block_header = block_header.clone();
+                    self.inner_state = InnerSyncState::Synced {
+                        block_header: block_header.clone(),
+                        has_sufficient_peers: true
+                    };
+                    self.update_sync_state(SyncState::Synced(Arc::new(block_header)));
+                }
+                TaskNextAction::Continue
+            }
+            _ = insufficient_peer_tick => {
+                if let InnerSyncState::InsufficientPeers(block_header) = &self.inner_state {
                     let block_header = block_header.clone();
                     self.inner_state = InnerSyncState::Synced {
                         block_header: block_header.clone(),
@@ -254,11 +285,11 @@ enum InnerSyncState {
 impl InnerSyncState {
     fn from_config(
         min_connected_reserved_peers: usize,
-        time_until_synced: Duration,
+        time_until_synced: Option<Duration>,
         block_header: BlockHeader,
     ) -> Self {
         match (min_connected_reserved_peers, time_until_synced) {
-            (0, Duration::ZERO) => InnerSyncState::Synced {
+            (0, None) => InnerSyncState::Synced {
                 block_header,
                 has_sufficient_peers: true,
             },
@@ -333,7 +364,8 @@ mod tests {
     fn configure_sync_task(
         min_connected_reserved_peers: usize,
         connections_stream: impl IntoIterator<Item = usize>,
-        time_until_synced: Duration,
+        time_until_synced_sufficient_peer: Option<Duration>,
+        time_until_synced_insufficient_peer: Option<Duration>,
         biggest_block: u32,
     ) -> (
         SyncTask,
@@ -356,7 +388,8 @@ mod tests {
         let sync_task = SyncTask::new(
             connections_stream,
             min_connected_reserved_peers,
-            time_until_synced,
+            time_until_synced_sufficient_peer,
+            time_until_synced_insufficient_peer,
             block_stream,
             &Default::default(),
         );
