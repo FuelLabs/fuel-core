@@ -1229,8 +1229,7 @@ mod tests {
         let owners = redis_urls
             .iter()
             .filter(|redis_url| {
-                read_lease_owner(redis_url, &lease_key)
-                    .as_deref()
+                read_lease_owner(redis_url, &lease_key).as_deref()
                     == Some(adapter.lease_owner_token.as_str())
             })
             .count();
