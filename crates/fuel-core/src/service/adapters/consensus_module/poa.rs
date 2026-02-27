@@ -1089,7 +1089,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__when_fencing_token_is_uninitialized_then_returns_error()
-    {
+     {
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
