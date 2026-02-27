@@ -771,6 +771,15 @@ impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
         {
             Some(epoch) => epoch,
             None => {
+                if matches!(
+                    block.consensus,
+                    fuel_core_types::blockchain::consensus::Consensus::Genesis(_)
+                ) {
+                    tracing::debug!(
+                        "Skipping redis block publish for genesis block because fencing token is not initialized"
+                    );
+                    return Ok(());
+                }
                 return Err(anyhow!(
                     "Cannot publish block because fencing token is not initialized"
                 ));
