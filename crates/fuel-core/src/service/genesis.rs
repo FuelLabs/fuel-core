@@ -13,7 +13,7 @@ use crate::{
         genesis_progress::GenesisMetadata,
     },
     service::{
-        adapters::NoopBlockReconciliationWriteAdapter,
+        adapters::block_importer::NoopBlockReconciliationWriteAdapter,
         config::Config,
     },
 };
