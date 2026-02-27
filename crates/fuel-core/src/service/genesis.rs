@@ -12,9 +12,7 @@ use crate::{
         },
         genesis_progress::GenesisMetadata,
     },
-    service::{
-        config::Config,
-    },
+    service::config::Config,
 };
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_services::StateWatcher;
