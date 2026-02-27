@@ -12,7 +12,10 @@ use crate::{
         },
         genesis_progress::GenesisMetadata,
     },
-    service::config::Config,
+    service::{
+        adapters::NoopBlockReconciliationWriteAdapter,
+        config::Config,
+    },
 };
 use fuel_core_chain_config::GenesisCommitment;
 use fuel_core_services::StateWatcher;
@@ -207,20 +210,9 @@ pub async fn execute_and_commit_genesis_block(
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
     use fuel_core_importer::ports::{
-        BlockReconciliationWritePort,
         MockBlockVerifier,
         MockValidator,
     };
-    use fuel_core_types::blockchain::SealedBlock;
-
-    #[derive(Default)]
-    struct NoopBlockReconciliationWriteAdapter;
-
-    impl BlockReconciliationWritePort for NoopBlockReconciliationWriteAdapter {
-        fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
-            Ok(())
-        }
-    }
 
     let result = execute_genesis_block(StateWatcher::default(), config, db).await?;
     let importer = fuel_core_importer::Importer::new(
