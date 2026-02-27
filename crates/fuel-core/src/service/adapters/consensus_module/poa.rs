@@ -83,6 +83,11 @@ const PROMOTE_LEADER_SCRIPT: &str = include_str!(concat!(
     "/redis_leader_lease_adapter_scripts/promote_leader.lua"
 ));
 
+const RENEW_LEASE_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/redis_leader_lease_adapter_scripts/renew_lease.lua"
+));
+
 const WRITE_BLOCK_SCRIPT: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/redis_leader_lease_adapter_scripts/write_block.lua"
@@ -329,6 +334,33 @@ impl RedisLeaderLeaseAdapter {
         }
     }
 
+    async fn renew_lease_on_node(&self, redis_node: &RedisNode) -> bool {
+        let mut connection = match self.multiplexed_connection(redis_node).await {
+            Ok(connection) => connection,
+            Err(_) => return false,
+        };
+        let renewed = timeout(
+            self.node_timeout,
+            redis::Script::new(RENEW_LEASE_SCRIPT)
+                .key(&self.lease_key)
+                .arg(&self.lease_owner_token)
+                .arg(self.lease_ttl_millis)
+                .invoke_async::<i32>(&mut connection),
+        )
+        .await;
+        match renewed {
+            Ok(Ok(renewed)) => renewed == 1,
+            Err(_) => {
+                self.clear_cached_connection(redis_node).await;
+                false
+            }
+            Ok(Err(_)) => {
+                self.clear_cached_connection(redis_node).await;
+                false
+            }
+        }
+    }
+
     fn quorum_reached(&self, success_count: usize) -> bool {
         success_count >= self.quorum
     }
@@ -363,7 +395,7 @@ impl RedisLeaderLeaseAdapter {
         sleep(Duration::from_millis(retry_delay_millis)).await;
     }
 
-    async fn renew_lease_if_owner(&self) -> anyhow::Result<bool> {
+    async fn has_lease_owner_quorum(&self) -> anyhow::Result<bool> {
         let ownership = futures::future::join_all(
             self.redis_nodes
                 .iter()
@@ -372,6 +404,17 @@ impl RedisLeaderLeaseAdapter {
         .await;
         let owner_count = ownership.into_iter().filter(|is_owner| *is_owner).count();
         Ok(self.quorum_reached(owner_count))
+    }
+
+    async fn renew_lease_if_owner(&self) -> anyhow::Result<bool> {
+        let renewals = futures::future::join_all(
+            self.redis_nodes
+                .iter()
+                .map(|redis_node| self.renew_lease_on_node(redis_node)),
+        )
+        .await;
+        let renewed_count = renewals.into_iter().filter(|renewed| *renewed).count();
+        Ok(self.quorum_reached(renewed_count))
     }
 
     async fn acquire_lease_if_free(&self) -> anyhow::Result<bool> {
@@ -552,6 +595,15 @@ impl RedisLeaderLeaseAdapter {
 
     async fn release_if_owner(&self) -> anyhow::Result<()> {
         tracing::debug!("Releasing Redis leader lock");
+        if !self.has_lease_owner_quorum().await? {
+            let mut current_epoch_token = self
+                .current_epoch_token
+                .lock()
+                .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
+            *current_epoch_token = None;
+            return Ok(());
+        }
+
         let releases = futures::future::join_all(
             self.redis_nodes
                 .iter()
@@ -560,8 +612,10 @@ impl RedisLeaderLeaseAdapter {
         .await;
         let released_count = releases.into_iter().filter(|released| *released).count();
         if self.quorum_reached(released_count) {
-            let mut current_epoch_token =
-                self.current_epoch_token.lock().expect("poisoned lock");
+            let mut current_epoch_token = self
+                .current_epoch_token
+                .lock()
+                .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
             *current_epoch_token = None;
             Ok(())
         } else {
@@ -1114,6 +1168,89 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn release__when_adapter_is_not_lease_owner_then_returns_ok() {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:release-follower".to_string();
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let adapter = new_test_adapter(redis_urls, lease_key);
+
+        // when
+        let release_result = adapter.release().await;
+
+        // then
+        assert!(
+            release_result.is_ok(),
+            "Release should be idempotent for adapters that do not own quorum lease"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_called_again_before_ttl_then_renews_lease() {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:renew-on-leader-state".to_string();
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let adapter = RedisLeaderLeaseAdapter::new(
+            redis_urls.clone(),
+            lease_key.clone(),
+            Duration::from_millis(500),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+
+        // when
+        let first_state = adapter
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("first leader_state should succeed");
+        sleep(Duration::from_millis(350)).await;
+        let second_state = adapter
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("second leader_state should succeed");
+        sleep(Duration::from_millis(300)).await;
+        let owners = redis_urls
+            .iter()
+            .filter(|redis_url| {
+                read_lease_owner(redis_url, &lease_key)
+                    .as_deref()
+                    == Some(adapter.lease_owner_token.as_str())
+            })
+            .count();
+
+        // then
+        assert!(
+            matches!(first_state, LeaderState::ReconciledLeader),
+            "First check should establish leader ownership"
+        );
+        assert!(
+            matches!(second_state, LeaderState::ReconciledLeader),
+            "Second check should keep leader ownership by renewing lease"
+        );
+        assert!(
+            owners >= 2,
+            "Lease ownership should still be present on quorum after original TTL window"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__when_previous_leader_writes_after_handoff_then_rejects_zombie_write()
      {
         // given
@@ -1452,6 +1589,18 @@ mod tests {
             .arg(lease_ttl_millis)
             .query(&mut conn)
             .expect("lease owner set should succeed");
+    }
+
+    fn read_lease_owner(redis_url: &str, lease_key: &str) -> Option<String> {
+        let redis_client =
+            redis::Client::open(redis_url).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        redis::cmd("GET")
+            .arg(lease_key)
+            .query(&mut conn)
+            .expect("lease owner get should succeed")
     }
 
     fn clear_lease_on_nodes(redis_urls: &[String], lease_key: &str) {
