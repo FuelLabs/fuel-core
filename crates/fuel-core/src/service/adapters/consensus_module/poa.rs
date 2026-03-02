@@ -43,6 +43,7 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use std::{
+    collections::HashMap,
     path::{
         Path,
         PathBuf,
@@ -93,9 +94,9 @@ const WRITE_BLOCK_SCRIPT: &str = include_str!(concat!(
     "/redis_leader_lease_adapter_scripts/write_block.lua"
 ));
 
-const READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT: &str = include_str!(concat!(
+const READ_STREAM_ENTRIES_SCRIPT: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/redis_leader_lease_adapter_scripts/read_best_block_for_height.lua"
+    "/redis_leader_lease_adapter_scripts/read_stream_entries.lua"
 ));
 
 struct RedisNode {
@@ -514,54 +515,75 @@ impl RedisLeaderLeaseAdapter {
         });
     }
 
-    async fn read_block_for_height_on_node(
+    async fn read_stream_entries_on_node(
         &self,
         redis_node: &RedisNode,
-        next_height: BlockHeight,
-    ) -> anyhow::Result<Option<(u64, SealedBlock)>> {
+    ) -> Vec<(u32, u64, SealedBlock)> {
         let mut connection = match self.multiplexed_connection(redis_node).await {
             Ok(connection) => connection,
-            Err(_) => return Ok(None),
+            Err(_) => return Vec::new(),
         };
-        let block_data_with_epoch = timeout(
+        let stream_entries = timeout(
             self.node_timeout,
-            redis::Script::new(READ_BEST_BLOCK_FOR_HEIGHT_SCRIPT)
+            redis::Script::new(READ_STREAM_ENTRIES_SCRIPT)
                 .key(&self.block_stream_key)
-                .arg(u32::from(next_height))
-                .invoke_async::<Option<(u64, Vec<u8>)>>(&mut connection),
+                .invoke_async::<Vec<(u32, u64, Vec<u8>)>>(&mut connection),
         )
         .await;
-        let block_data_with_epoch = match block_data_with_epoch {
-            Ok(Ok(block_data_with_epoch)) => block_data_with_epoch,
+        let stream_entries = match stream_entries {
+            Ok(Ok(stream_entries)) => stream_entries,
             Ok(Err(_)) | Err(_) => {
                 self.clear_cached_connection(redis_node).await;
-                None
+                return Vec::new();
             }
         };
-        match block_data_with_epoch {
-            Some((epoch, bytes)) => {
-                Ok(Some((epoch, postcard::from_bytes::<SealedBlock>(&bytes)?)))
-            }
-            None => Ok(None),
-        }
+        stream_entries
+            .into_iter()
+            .filter_map(|(height, epoch, bytes)| {
+                postcard::from_bytes::<SealedBlock>(&bytes)
+                    .ok()
+                    .map(|block| (height, epoch, block))
+            })
+            .collect()
     }
 
     async fn unreconciled_blocks(
         &self,
         next_height: BlockHeight,
     ) -> anyhow::Result<Vec<SealedBlock>> {
-        const MAX_RECONCILE_BLOCKS_PER_ROUND: usize = 128;
         let mut reconciled = Vec::new();
-        let mut current_height = next_height;
+        let max_reconcile_blocks_per_round =
+            usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
+        let blocks_by_node = futures::future::join_all(
+            self.redis_nodes
+                .iter()
+                .map(|redis_node| self.read_stream_entries_on_node(redis_node)),
+        )
+        .await
+        .into_iter()
+        .map(|entries| {
+            entries.into_iter().fold(
+                HashMap::<u32, (u64, SealedBlock)>::new(),
+                |mut blocks_by_height, (height, epoch, block)| {
+                    match blocks_by_height.get(&height) {
+                        Some((current_epoch, _)) if *current_epoch >= epoch => {}
+                        _ => {
+                            blocks_by_height.insert(height, (epoch, block));
+                        }
+                    }
+                    blocks_by_height
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+        let mut current_height = u32::from(next_height);
 
-        for _ in 0..MAX_RECONCILE_BLOCKS_PER_ROUND {
-            let candidates =
-                futures::future::join_all(self.redis_nodes.iter().map(|redis_node| {
-                    self.read_block_for_height_on_node(redis_node, current_height)
-                }))
-                .await
-                .into_iter()
-                .filter_map(|result| result.ok().flatten())
+        for _ in 0..max_reconcile_blocks_per_round {
+            let candidates = blocks_by_node
+                .iter()
+                .filter_map(|blocks_by_height| {
+                    blocks_by_height.get(&current_height).cloned()
+                })
                 .collect::<Vec<_>>();
 
             if !self.quorum_reached(candidates.len()) {
@@ -578,7 +600,7 @@ impl RedisLeaderLeaseAdapter {
                 break;
             }
 
-            let Some(next) = current_height.succ() else {
+            let Some(next) = current_height.checked_add(1) else {
                 break;
             };
             current_height = next;
@@ -1153,6 +1175,73 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![1, 2],
             "Expected only contiguous quorum-backed heights to be reconciled",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_contiguous_quorum_blocks_exceed_128_then_reconciles_all_in_one_call()
+     {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:contiguous-over-128".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![
+                redis_a.redis_url(),
+                redis_b.redis_url(),
+                redis_c.redis_url(),
+            ],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+        let redis_a_client =
+            redis::Client::open(redis_a.redis_url()).expect("redis a client should open");
+        let redis_b_client =
+            redis::Client::open(redis_b.redis_url()).expect("redis b client should open");
+        let redis_c_client =
+            redis::Client::open(redis_c.redis_url()).expect("redis c client should open");
+        let mut conn_a = redis_a_client
+            .get_connection()
+            .expect("redis a connection should open");
+        let mut conn_b = redis_b_client
+            .get_connection()
+            .expect("redis b connection should open");
+        let mut conn_c = redis_c_client
+            .get_connection()
+            .expect("redis c connection should open");
+        let _ = &mut conn_c;
+
+        (1_u32..=129_u32).for_each(|height| {
+            let block = poa_block_at_time(height, u64::from(height));
+            let block_data =
+                postcard::to_allocvec(&block).expect("block should serialize");
+            append_stream_block(&mut conn_a, &stream_key, height, &block_data, 1);
+            append_stream_block(&mut conn_b, &stream_key, height, &block_data, 1);
+        });
+
+        // when
+        let leader_state = adapter
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("leader_state should succeed");
+
+        // then
+        let unreconciled_blocks = match leader_state {
+            LeaderState::UnreconciledBlocks(blocks) => blocks,
+            other => panic!("Expected unreconciled blocks, got: {other:?}"),
+        };
+        assert_eq!(
+            unreconciled_blocks.len(),
+            129,
+            "Expected all contiguous quorum-backed heights to reconcile in one call",
         );
     }
 

@@ -1,12 +1,9 @@
--- Read stream entries and return the highest-epoch block for target height.
+-- Read all stream entries and return compact tuples for reconciliation.
 -- KEYS[1]: block stream key (e.g., poa:leader:lock:block:stream)
--- ARGV[1]: target height
 --
--- Returns: {best_epoch, best_data} when found, false when no match exists.
+-- Returns: array of {height, epoch, data}
 local entries = redis.call("XRANGE", KEYS[1], "-", "+")
-local target_height = tonumber(ARGV[1])
-local best_epoch = nil
-local best_data = nil
+local result = {}
 
 for _, entry in ipairs(entries) do
     local fields = entry[2]
@@ -24,17 +21,9 @@ for _, entry in ipairs(entries) do
         end
     end
 
-    if entry_height == target_height then
-        local epoch = entry_epoch or 0
-        if (best_epoch == nil) or (epoch > best_epoch) then
-            best_epoch = epoch
-            best_data = entry_data
-        end
+    if entry_height ~= nil and entry_data ~= nil then
+        table.insert(result, {entry_height, entry_epoch or 0, entry_data})
     end
 end
 
-if best_data ~= nil then
-    return {tostring(best_epoch), best_data}
-end
-
-return false
+return result
