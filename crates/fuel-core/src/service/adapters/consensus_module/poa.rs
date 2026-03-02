@@ -437,8 +437,10 @@ impl RedisLeaderLeaseAdapter {
                 self.calculate_remaining_validity_millis(elapsed_millis);
             if self.quorum_reached(acquired_count) && validity_millis > 0 {
                 if let Some(max_token) = promoted_tokens.into_iter().max() {
-                    let mut current_epoch_token =
-                        self.current_epoch_token.lock().expect("poisoned lock");
+                    let mut current_epoch_token = self
+                        .current_epoch_token
+                        .lock()
+                        .map_err(|e| anyhow!("epoch token lock poisoned: {}", e))?;
                     *current_epoch_token = Some(max_token);
                 }
                 return Ok(true);
