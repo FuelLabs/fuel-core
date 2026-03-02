@@ -632,7 +632,11 @@ impl RedisLeaderLeaseAdapter {
         block: &SealedBlock,
         block_data: &[u8],
     ) -> anyhow::Result<bool> {
-        let mut connection = redis_node.redis_client.get_connection()?;
+        let mut connection = redis_node
+            .redis_client
+            .get_connection_with_timeout(self.node_timeout)?;
+        connection.set_read_timeout(Some(self.node_timeout))?;
+        connection.set_write_timeout(Some(self.node_timeout))?;
         let block_height = u32::from(*block.entity.header().height());
         let write_result = redis::Script::new(WRITE_BLOCK_SCRIPT)
             .key(&self.block_stream_key)
