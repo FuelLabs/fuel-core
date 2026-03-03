@@ -553,7 +553,7 @@ async fn execute_and_commit__when_source_is_network_then_does_not_publish_to_rec
 async fn commit_result__when_publish_to_reconciliation_writer_fails_then_returns_error() {
     // given
     let sealed_block = poa_block(1);
-    let mut database = underlying_db(ok(Some(0)), 1)();
+    let mut database = underlying_db(ok(Some(0)), 0)();
     database
         .expect_storage_transaction()
         .returning(move |_| db_transaction(ok(Some(0)), ok(true))());
