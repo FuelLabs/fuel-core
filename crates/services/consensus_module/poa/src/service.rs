@@ -575,7 +575,8 @@ where
         &mut self,
         deadline: Instant,
     ) -> anyhow::Result<TaskNextAction> {
-        const MAX_RECONCILE_ROUNDS: usize = 8;
+        // 1 should be enough for most cases, 2 is a safe bet, 3 for good measure
+        const MAX_RECONCILE_ROUNDS: usize = 3;
         let mut should_produce = false;
 
         for _ in 0..MAX_RECONCILE_ROUNDS {
@@ -585,6 +586,7 @@ where
                 .await?
             {
                 LeaderState::ReconciledFollower => {
+                    sleep_until(deadline).await;
                     return Ok(TaskNextAction::Continue);
                 }
                 LeaderState::ReconciledLeader => {

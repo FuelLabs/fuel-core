@@ -47,8 +47,6 @@ use std::{
     time::{
         Duration,
         Instant,
-        SystemTime,
-        UNIX_EPOCH,
     },
 };
 
@@ -113,13 +111,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
 
     // when
     // let all producers become leader, including the final single producer
-    let mut iteration = 0usize;
     while !active_producers.is_empty() {
-        eprintln!(
-            "ts_ms={}, leader_handoff_iteration={iteration}, node_count={}",
-            unix_time_ms(),
-            active_producers.len()
-        );
         let (leader, followers) =
             find_leader_and_followers(active_producers, LEADER_ELECTION_TIMEOUT).await;
 
@@ -136,10 +128,6 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
             break;
         }
 
-        eprintln!(
-            "ts_ms={}, leader_handoff_iteration={iteration}, action=shutdown_leader_start",
-            unix_time_ms()
-        );
         tokio::time::timeout(
             STOP_TIMEOUT,
             leader.node.send_stop_signal_and_await_shutdown(),
@@ -147,13 +135,8 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
         .await
         .expect("Should stop leader before timeout")
         .expect("Should stop leader without any error");
-        eprintln!(
-            "ts_ms={}, leader_handoff_iteration={iteration}, action=shutdown_leader_end",
-            unix_time_ms()
-        );
 
         active_producers = followers;
-        iteration += 1;
     }
 }
 
@@ -177,7 +160,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     let mut first_producer = make_node(make_node_config("First Producer"), vec![]).await;
     tokio::time::timeout(
         LEADER_ELECTION_TIMEOUT,
-        wait_for_local_block(&first_producer, Some(0)),
+        wait_for_local_block(&first_producer),
     )
     .await
     .expect("First producer should acquire leadership initially");
@@ -197,7 +180,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
         .expect("Should stop first producer before timeout");
     tokio::time::timeout(
         LEADER_ELECTION_TIMEOUT,
-        wait_for_local_block(&second_producer, Some(1)),
+        wait_for_local_block(&second_producer),
     )
     .await
     .expect("Second producer should acquire leadership after first shutdown");
@@ -240,15 +223,12 @@ async fn leader_lock__single_producer__when_quorum_is_restored_then_production_s
 
     // when
     let no_quorum_result =
-        tokio::time::timeout(NO_QUORUM_TIMEOUT, wait_for_local_block(&producer, None))
-            .await;
+        tokio::time::timeout(NO_QUORUM_TIMEOUT, wait_for_local_block(&producer)).await;
     second_redis.start();
     // third_redis.start();
-    let quorum_result = tokio::time::timeout(
-        QUORUM_RECOVERY_TIMEOUT,
-        wait_for_local_block(&producer, None),
-    )
-    .await;
+    let quorum_result =
+        tokio::time::timeout(QUORUM_RECOVERY_TIMEOUT, wait_for_local_block(&producer))
+            .await;
 
     // then
     assert!(
@@ -281,7 +261,7 @@ async fn leader_lock__two_producers__when_second_starts_after_first_shutdown_the
     // when
     let first_height = tokio::time::timeout(
         LOCAL_BLOCK_TIMEOUT,
-        wait_for_local_block_height(&first_producer, Some(0)),
+        wait_for_local_block_height(&first_producer),
     )
     .await
     .expect("First producer should produce a local block");
@@ -293,7 +273,7 @@ async fn leader_lock__two_producers__when_second_starts_after_first_shutdown_the
     let second_producer = make_node(make_node_config("Second Producer"), vec![]).await;
     let second_height = tokio::time::timeout(
         LOCAL_BLOCK_TIMEOUT,
-        wait_for_local_block_height(&second_producer, Some(1)),
+        wait_for_local_block_height(&second_producer),
     )
     .await
     .expect("Second producer should produce a local block");
@@ -317,7 +297,7 @@ async fn find_leader_and_followers(
         .iter()
         .enumerate()
         .map(|(index, node)| async move {
-            wait_for_local_block(node, Some(index)).await;
+            wait_for_local_block(node).await;
             index
         })
         .collect::<FuturesUnordered<_>>();
@@ -436,25 +416,14 @@ async fn make_leader_lock_test_config_builder_with_redis_urls(
     (bootstrap, make_node_config)
 }
 
-async fn wait_for_local_block(node: &Node, waiter_index: Option<usize>) {
+async fn wait_for_local_block(node: &Node) {
     let mut stream = node.node.shared.block_importer.block_stream();
     let mut saw_first_block = false;
     while let Some(block) = stream.next().await {
-        let height = *block.block_header.height();
         let is_local = block.is_locally_produced();
         if !saw_first_block {
-            eprintln!(
-                "ts_ms={}, wait_for_local_block(waiter={:?}), first_block_seen=true",
-                unix_time_ms(),
-                waiter_index
-            );
             saw_first_block = true;
         }
-        eprintln!(
-            "ts_ms={}, wait_for_local_block(waiter={:?}): height={height}, is_local={is_local}",
-            unix_time_ms(),
-            waiter_index
-        );
         if is_local {
             return;
         }
@@ -462,25 +431,15 @@ async fn wait_for_local_block(node: &Node, waiter_index: Option<usize>) {
     panic!("block stream ended unexpectedly");
 }
 
-async fn wait_for_local_block_height(node: &Node, waiter_index: Option<usize>) -> u32 {
+async fn wait_for_local_block_height(node: &Node) -> u32 {
     let mut stream = node.node.shared.block_importer.block_stream();
     let mut saw_first_block = false;
     while let Some(block) = stream.next().await {
         let height = *block.block_header.height();
         let is_local = block.is_locally_produced();
         if !saw_first_block {
-            eprintln!(
-                "ts_ms={}, wait_for_local_block_height(waiter={:?}), first_block_seen=true",
-                unix_time_ms(),
-                waiter_index
-            );
             saw_first_block = true;
         }
-        eprintln!(
-            "ts_ms={}, wait_for_local_block_height(waiter={:?}): height={height}, is_local={is_local}",
-            unix_time_ms(),
-            waiter_index
-        );
         if is_local {
             return u32::from(height);
         }
@@ -510,7 +469,7 @@ async fn only_first_leader_produces_blocks(
     block_import_timeout: Duration,
 ) {
     for _ in 0..non_local_blocks_to_check {
-        tokio::time::timeout(block_import_timeout, wait_for_local_block(leader, None))
+        tokio::time::timeout(block_import_timeout, wait_for_local_block(leader))
             .await
             .expect("Leader should import a local block");
         let mut follower_checks = non_leaders
@@ -606,13 +565,6 @@ fn wait_for_redis_ready(port: u16) {
         thread::sleep(Duration::from_millis(25));
     }
     panic!("redis-server did not become ready in time");
-}
-
-fn unix_time_ms() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("System time should be after UNIX_EPOCH")
-        .as_millis()
 }
 
 fn update_signing_key(config: &mut Config, key: Address) {
