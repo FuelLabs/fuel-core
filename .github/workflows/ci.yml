@@ -167,7 +167,7 @@ jobs:
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "latest"
+          version: "21"
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -226,7 +226,7 @@ jobs:
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "latest"
+          version: "21"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -267,7 +267,7 @@ jobs:
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "latest"
+          version: "21"
       - name: Start Redis
         run: |
           redis-server --daemonize yes
