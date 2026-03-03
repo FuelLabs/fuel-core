@@ -166,6 +166,8 @@ jobs:
           version: "0.36.4"
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "16.0"
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -223,6 +225,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "16.0"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -262,6 +266,8 @@ jobs:
           sudo apt-get install -y redis-server
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "16.0"
       - name: Start Redis
         run: |
           redis-server --daemonize yes
