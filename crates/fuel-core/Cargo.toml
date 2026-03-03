@@ -96,7 +96,7 @@ parking_lot = { workspace = true }
 postcard = { workspace = true }
 rand = { workspace = true }
 redis = { version = "1", features = ["tokio-comp"] }
-rocksdb = { version = "0.24", default-features = false, features = [
+rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
 ], optional = true }

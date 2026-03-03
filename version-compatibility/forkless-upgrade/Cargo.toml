@@ -14,6 +14,7 @@ hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
+cynic = { version = "=3.12.0" }
 
 # Neutral deps
 fuel-core = { path = "../../crates/fuel-core", default-features = false, features = ["test-helpers"] }
@@ -23,6 +24,7 @@ fuel-tx = { version = "0.63.0", features = ["random"] }
 
 # Latest fuel-core
 latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", default-features = false, features = [
+  "relayer",
   "parquet",
   "p2p",
 ] }
@@ -35,7 +37,7 @@ latest-fuel-core-upgradable-executor = { path = "../../crates/services/upgradabl
 ] }
 
 # Genesis fuel-core
-genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", default-features = false, features = [
+genesis-fuel-core-bin = { version = "0.26.0", package = "fuel-core-bin", features = [
   "parquet",
   "p2p",
 ] }
@@ -43,7 +45,7 @@ genesis-fuel-core-client = { version = "0.26.0", package = "fuel-core-client" }
 genesis-fuel-core-services = { version = "0.26.0", package = "fuel-core-services" }
 
 # Fuel core version 0.44.0
-version-44-fuel-core-bin = { version = "0.44.0", package = "fuel-core-bin", default-features = false, features = [
+version-44-fuel-core-bin = { version = "0.44.0", package = "fuel-core-bin", features = [
   "parquet",
   "p2p",
 ] }
