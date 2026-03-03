@@ -95,8 +95,8 @@ num_cpus = { version = "1.16.0", optional = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true }
 rand = { workspace = true }
-redis = { version = "0.27", features = ["tokio-comp"] }
-rocksdb = { version = "0.21", default-features = false, features = [
+redis = { version = "1", features = ["tokio-comp"] }
+rocksdb = { version = "0.24", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
 ], optional = true }
@@ -106,7 +106,7 @@ serde_with = { workspace = true, optional = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 tempfile = { workspace = true, optional = true }
-thiserror = "1.0"
+thiserror = "2"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
