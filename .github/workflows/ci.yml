@@ -164,6 +164,8 @@ jobs:
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.4"
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -219,6 +221,8 @@ jobs:
           role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
       - uses: actions/checkout@v4
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -256,6 +260,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y redis-server
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
       - name: Start Redis
         run: |
           redis-server --daemonize yes
