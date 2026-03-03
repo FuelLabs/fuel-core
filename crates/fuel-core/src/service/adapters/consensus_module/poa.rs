@@ -1179,7 +1179,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn leader_state__when_contiguous_quorum_blocks_exceed_128_then_reconciles_all_in_one_call()
+    async fn leader_state__when_contiguous_quorum_blocks_are_present_then_returns_all_available_contiguous_blocks()
      {
         // given
         let redis_a = RedisTestServer::spawn();
@@ -1350,6 +1350,75 @@ mod tests {
         assert!(
             owners >= 2,
             "Lease ownership should still be present on quorum after original TTL window"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_lease_expires_then_another_adapter_becomes_leader() {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:ttl-expiry-handoff".to_string();
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let first_adapter = RedisLeaderLeaseAdapter::new(
+            redis_urls.clone(),
+            lease_key.clone(),
+            Duration::from_millis(300),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("first adapter should be created");
+        let second_adapter = RedisLeaderLeaseAdapter::new(
+            redis_urls.clone(),
+            lease_key.clone(),
+            Duration::from_millis(300),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("second adapter should be created");
+
+        let first_state = first_adapter
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("first leader_state should succeed");
+        sleep(Duration::from_millis(900)).await;
+
+        // when
+        let second_state = second_adapter
+            .leader_state(0.into(), 1.into())
+            .await
+            .expect("second leader_state should succeed");
+        let second_owner_count = redis_urls
+            .iter()
+            .filter(|redis_url| {
+                read_lease_owner(redis_url, &lease_key).as_deref()
+                    == Some(second_adapter.lease_owner_token.as_str())
+            })
+            .count();
+
+        // then
+        assert!(
+            matches!(first_state, LeaderState::ReconciledLeader),
+            "First adapter should acquire lease initially"
+        );
+        assert!(
+            matches!(second_state, LeaderState::ReconciledLeader),
+            "Second adapter should become leader after TTL expiry"
+        );
+        assert!(
+            second_owner_count >= 2,
+            "Second adapter should own lease on quorum nodes after takeover"
         );
     }
 
