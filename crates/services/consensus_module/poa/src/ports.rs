@@ -128,6 +128,7 @@ pub trait BlockReconciliationReadPort: Send + Sync {
         local_height: BlockHeight,
         next_height: BlockHeight,
     ) -> anyhow::Result<LeaderState>;
+
     async fn release(&self) -> anyhow::Result<()>;
 }
 
