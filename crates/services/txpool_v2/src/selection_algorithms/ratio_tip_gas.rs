@@ -5,13 +5,19 @@ use std::{
     },
     collections::{
         BTreeMap,
+        HashMap,
+        HashSet,
         VecDeque,
     },
     fmt::Debug,
     time::SystemTime,
 };
 
-use fuel_core_types::fuel_tx::TxId;
+use fuel_core_types::fuel_tx::{
+    ContractId,
+    Input,
+    TxId,
+};
 use num_rational::Ratio;
 
 use crate::storage::{
@@ -26,9 +32,6 @@ use super::{
 
 #[cfg(test)]
 use fuel_core_types::services::txpool::ArcPoolTx;
-
-#[cfg(test)]
-use std::collections::HashMap;
 
 pub trait RatioTipGasSelectionAlgorithmStorage {
     type StorageIndex: Copy + Debug;
@@ -117,6 +120,8 @@ where
     S: RatioTipGasSelectionAlgorithmStorage,
 {
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
+    executable_transactions_by_contract:
+        HashMap<ContractId, BTreeMap<Reverse<Key>, S::StorageIndex>>,
     new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     eagerly_include_tx_dependency_graphs: bool,
 }
@@ -131,6 +136,7 @@ where
     ) -> Self {
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
+            executable_transactions_by_contract: HashMap::new(),
             new_executable_txs_notifier,
             eagerly_include_tx_dependency_graphs,
         }
@@ -153,9 +159,66 @@ where
         }
     }
 
-    fn on_removed_transaction_inner(&mut self, key: Key) {
+    fn remove_key_from_indexes(
+        &mut self,
+        key: Key,
+        contract_ids: &[ContractId],
+    ) {
         self.executable_transactions_sorted_tip_gas_ratio
             .remove(&Reverse(key));
+        contract_ids
+            .iter()
+            .for_each(|contract_id| self.remove_key_from_contract_index(*contract_id, key));
+    }
+
+    fn remove_key_from_contract_index(
+        &mut self,
+        contract_id: ContractId,
+        key: Key,
+    ) {
+        if let Some(contract_index) =
+            self.executable_transactions_by_contract.get_mut(&contract_id)
+        {
+            contract_index.remove(&Reverse(key));
+            if contract_index.is_empty() {
+                self.executable_transactions_by_contract.remove(&contract_id);
+            }
+        }
+    }
+
+    fn insert_key_into_indexes(
+        &mut self,
+        key: Key,
+        storage_id: S::StorageIndex,
+        contract_ids: &[ContractId],
+    ) {
+        self.executable_transactions_sorted_tip_gas_ratio
+            .insert(Reverse(key), storage_id);
+        contract_ids.iter().for_each(|contract_id| {
+            self.insert_key_into_contract_index(*contract_id, key, storage_id)
+        });
+    }
+
+    fn insert_key_into_contract_index(
+        &mut self,
+        contract_id: ContractId,
+        key: Key,
+        storage_id: S::StorageIndex,
+    ) {
+        self.executable_transactions_by_contract
+            .entry(contract_id)
+            .or_default()
+            .insert(Reverse(key), storage_id);
+    }
+
+    fn collect_contract_inputs(store_entry: &StorageData) -> Vec<ContractId> {
+        let mut contracts = HashSet::new();
+        store_entry.transaction.inputs().iter().for_each(|input| {
+            if let Input::Contract(contract_input) = input {
+                contracts.insert(contract_input.contract_id);
+            }
+        });
+        contracts.into_iter().collect()
     }
 
     fn batch_graphs_count(
@@ -231,14 +294,14 @@ where
         &mut self,
         constraints: &Constraints,
         storage: &S,
-        batch_graphs_count: usize,
+        queue_limit: usize,
         prioritized_queue: &mut VecDeque<S::StorageIndex>,
         budget: &mut SelectionBudget,
         skipped: &mut SkipCounters,
     ) -> bool {
-        let mut selected_keys = Vec::new();
+        let mut selected_transactions = Vec::new();
         for (key, storage_id) in &self.executable_transactions_sorted_tip_gas_ratio {
-            if prioritized_queue.len() >= batch_graphs_count || !budget.has_capacity() {
+            if prioritized_queue.len() >= queue_limit || !budget.has_capacity() {
                 break;
             }
 
@@ -250,7 +313,7 @@ where
                 tracing::warn!(
                     "Transaction not found in the storage during `gather_best_txs`."
                 );
-                selected_keys.push(key.0);
+                selected_transactions.push((key.0, Vec::new()));
                 continue;
             };
 
@@ -262,17 +325,83 @@ where
                 budget,
                 skipped,
             ) {
-                selected_keys.push(key.0);
+                selected_transactions
+                    .push((key.0, Self::collect_contract_inputs(stored_transaction)));
             }
         }
 
-        if selected_keys.is_empty() {
+        if selected_transactions.is_empty() {
             return false;
         }
 
-        for key in selected_keys {
-            self.on_removed_transaction_inner(key);
+        selected_transactions
+            .into_iter()
+            .for_each(|(key, contracts)| self.remove_key_from_indexes(key, &contracts));
+        true
+    }
+
+    fn fill_from_anchor_contract_set(
+        &mut self,
+        constraints: &Constraints,
+        storage: &S,
+        queue_limit: usize,
+        anchor_contract_id: ContractId,
+        prioritized_queue: &mut VecDeque<S::StorageIndex>,
+        budget: &mut SelectionBudget,
+        skipped: &mut SkipCounters,
+    ) -> bool {
+        let candidates = self
+            .executable_transactions_by_contract
+            .get(&anchor_contract_id)
+            .map(|entries| {
+                entries
+                    .iter()
+                    .map(|(key, storage_id)| (key.0, *storage_id))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        if candidates.is_empty() {
+            return false;
         }
+
+        let mut selected_transactions = Vec::new();
+        let mut stale_keys = Vec::new();
+        for (key, storage_id) in candidates {
+            if prioritized_queue.len() >= queue_limit || !budget.has_capacity() {
+                break;
+            }
+
+            let Some(stored_transaction) = storage.get(&storage_id) else {
+                stale_keys.push(key);
+                continue;
+            };
+
+            if self.try_enqueue_stored_transaction(
+                constraints,
+                stored_transaction,
+                storage_id,
+                prioritized_queue,
+                budget,
+                skipped,
+            ) {
+                selected_transactions
+                    .push((key, Self::collect_contract_inputs(stored_transaction)));
+            }
+        }
+
+        if selected_transactions.is_empty() && stale_keys.is_empty() {
+            return false;
+        }
+
+        stale_keys.into_iter().for_each(|key| {
+            self.executable_transactions_sorted_tip_gas_ratio
+                .remove(&Reverse(key));
+            self.remove_key_from_contract_index(anchor_contract_id, key);
+        });
+        selected_transactions
+            .into_iter()
+            .for_each(|(key, contracts)| self.remove_key_from_indexes(key, &contracts));
         true
     }
 
@@ -280,14 +409,14 @@ where
         &mut self,
         constraints: &Constraints,
         storage: &S,
-        batch_graphs_count: usize,
+        queue_limit: usize,
         prioritized_queue: &mut VecDeque<S::StorageIndex>,
         promoted_queue: &mut VecDeque<S::StorageIndex>,
         budget: &mut SelectionBudget,
         skipped: &mut SkipCounters,
     ) -> bool {
         let mut filled = false;
-        while budget.has_capacity() && prioritized_queue.len() < batch_graphs_count {
+        while budget.has_capacity() && prioritized_queue.len() < queue_limit {
             let Some(storage_id) = promoted_queue.pop_front() else {
                 break;
             };
@@ -312,11 +441,41 @@ where
                 skipped,
             ) {
                 let key = Self::key(stored_transaction);
-                self.on_removed_transaction_inner(key);
+                self.remove_key_from_indexes(
+                    key,
+                    &Self::collect_contract_inputs(stored_transaction),
+                );
                 filled = true;
             }
         }
         filled
+    }
+
+    fn contract_anchor_bias_enabled() -> bool {
+        std::env::var("TXPOOL_V2_CONTRACT_ANCHOR_BIAS")
+            .map(|value| {
+                matches!(
+                    value.to_ascii_lowercase().as_str(),
+                    "1" | "true" | "yes" | "on"
+                )
+            })
+            .unwrap_or(false)
+    }
+
+    fn select_anchor_contract(
+        &self,
+        constraints: &Constraints,
+        store_entry: &StorageData,
+    ) -> Option<ContractId> {
+        Self::collect_contract_inputs(store_entry)
+            .into_iter()
+            .filter(|contract_id| !constraints.excluded_contracts.contains(contract_id))
+            .max_by_key(|contract_id| {
+                self.executable_transactions_by_contract
+                    .get(contract_id)
+                    .map(BTreeMap::len)
+                    .unwrap_or(0)
+            })
     }
 
     #[cfg(test)]
@@ -365,15 +524,31 @@ where
         let mut add_new_executable = false;
         let mut prioritized_queue = VecDeque::with_capacity(batch_graphs_count);
         let mut promoted_queue = VecDeque::new();
+        let contract_anchor_bias_enabled = Self::contract_anchor_bias_enabled();
+        let initial_queue_limit = if contract_anchor_bias_enabled {
+            1
+        } else {
+            batch_graphs_count
+        };
 
         self.fill_from_executable_set(
             constraints,
             storage,
-            batch_graphs_count,
+            initial_queue_limit,
             &mut prioritized_queue,
             &mut budget,
             &mut skipped,
         );
+        let mut anchor_contract_id = if contract_anchor_bias_enabled {
+            prioritized_queue
+                .front()
+                .and_then(|storage_id| storage.get(storage_id))
+                .and_then(|store_entry| {
+                    self.select_anchor_contract(constraints, store_entry)
+                })
+        } else {
+            None
+        };
 
         loop {
             if budget.has_capacity() {
@@ -386,8 +561,25 @@ where
                     &mut budget,
                     &mut skipped,
                 );
-                let filled_from_executable = self.eagerly_include_tx_dependency_graphs
-                    && prioritized_queue.len() < batch_graphs_count
+                let filled_from_anchor = anchor_contract_id
+                    .filter(|_| prioritized_queue.len() < batch_graphs_count)
+                    .map(|anchor_contract| {
+                        self.fill_from_anchor_contract_set(
+                            constraints,
+                            storage,
+                            batch_graphs_count,
+                            anchor_contract,
+                            &mut prioritized_queue,
+                            &mut budget,
+                            &mut skipped,
+                        )
+                    })
+                    .unwrap_or(false);
+                let should_fill_from_executable =
+                    prioritized_queue.len() < batch_graphs_count
+                        && (contract_anchor_bias_enabled
+                            || self.eagerly_include_tx_dependency_graphs);
+                let filled_from_executable = should_fill_from_executable
                     && self.fill_from_executable_set(
                         constraints,
                         storage,
@@ -399,6 +591,7 @@ where
 
                 if prioritized_queue.is_empty()
                     && !filled_from_promoted
+                    && !filled_from_anchor
                     && !filled_from_executable
                 {
                     break;
@@ -447,6 +640,10 @@ where
                 };
                 self.new_executable_transaction(dependent, store_entry);
                 promoted_queue.push_back(dependent);
+                if anchor_contract_id.is_none() {
+                    anchor_contract_id =
+                        self.select_anchor_contract(constraints, store_entry);
+                }
                 add_new_executable = true;
             }
         }
@@ -465,6 +662,8 @@ where
             skipped_too_big_tx = skipped.too_big_tx,
             skipped_less_price = skipped.less_price,
             skipped_excluded_contracts = skipped.excluded_contracts,
+            contract_anchor_bias_enabled,
+            anchor_contract = ?anchor_contract_id,
             "txpool_v2 gather_best_txs summary"
         );
 
@@ -477,8 +676,11 @@ where
         store_entry: &StorageData,
     ) {
         let key = Self::key(store_entry);
-        self.executable_transactions_sorted_tip_gas_ratio
-            .insert(Reverse(key), storage_id);
+        self.insert_key_into_indexes(
+            key,
+            storage_id,
+            &Self::collect_contract_inputs(store_entry),
+        );
         // tracing::warn!(
         //     executable_set_size = self
         //         .executable_transactions_sorted_tip_gas_ratio
@@ -495,7 +697,10 @@ where
 
     fn on_removed_transaction(&mut self, storage_entry: &StorageData) {
         let key = Self::key(storage_entry);
-        self.on_removed_transaction_inner(key);
+        self.remove_key_from_indexes(
+            key,
+            &Self::collect_contract_inputs(storage_entry),
+        );
         // tracing::warn!(
         //     executable_set_size = self
         //         .executable_transactions_sorted_tip_gas_ratio
