@@ -575,41 +575,32 @@ where
         &mut self,
         deadline: Instant,
     ) -> anyhow::Result<TaskNextAction> {
-        // 1 should be enough for most cases, 2 is a safe bet, 3 for good measure
-        const MAX_RECONCILE_ROUNDS: usize = 3;
-        let mut should_produce = false;
-
-        for _ in 0..MAX_RECONCILE_ROUNDS {
-            match self
-                .reconciliation_port
-                .leader_state(self.last_height, self.next_height())
-                .await?
-            {
-                LeaderState::ReconciledFollower => {
-                    sleep_until(deadline).await;
-                    return Ok(TaskNextAction::Continue);
-                }
-                LeaderState::ReconciledLeader => {
-                    should_produce = true;
-                    break;
-                }
-                LeaderState::UnreconciledBlocks(blocks) => {
-                    for block in blocks {
-                        let block_height = *block.entity.header().height();
-                        let block_time = block.entity.header().time();
-                        self.block_importer.execute_and_commit(block).await?;
-                        self.last_height = block_height;
-                        self.last_timestamp = block_time;
-                        self.last_block_created = Instant::now();
-                    }
-                }
+        match self
+            .reconciliation_port
+            .leader_state(self.last_height, self.next_height())
+            .await?
+        {
+            LeaderState::ReconciledFollower => {
+                sleep_until(deadline).await;
+                return Ok(TaskNextAction::Continue);
             }
-        }
+            LeaderState::ReconciledLeader => {
+                // Do nothing, just produce the block as normal
+            }
+            LeaderState::UnreconciledBlocks(blocks) => {
+                for block in blocks {
+                    let block_height = *block.entity.header().height();
+                    let block_time = block.entity.header().time();
+                    self.block_importer.execute_and_commit(block).await?;
+                    self.last_height = block_height;
+                    self.last_timestamp = block_time;
+                    self.last_block_created = Instant::now();
+                }
 
-        if !should_produce {
-            return Err(anyhow!(
-                "Reconciliation did not converge after {MAX_RECONCILE_ROUNDS} rounds"
-            ));
+                // It will restart `run` loop and trigger block
+                // production immediately if we have a lease
+                return Ok(TaskNextAction::Continue);
+            }
         }
 
         Ok(self.handle_normal_block_production(deadline).await)

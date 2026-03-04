@@ -433,13 +433,9 @@ async fn wait_for_local_block(node: &Node) {
 
 async fn wait_for_local_block_height(node: &Node) -> u32 {
     let mut stream = node.node.shared.block_importer.block_stream();
-    let mut saw_first_block = false;
     while let Some(block) = stream.next().await {
         let height = *block.block_header.height();
         let is_local = block.is_locally_produced();
-        if !saw_first_block {
-            saw_first_block = true;
-        }
         if is_local {
             return u32::from(height);
         }

@@ -639,14 +639,13 @@ where
 
         // Then observe all blocks that are already available from the live
         // importer stream at startup and update the target height only.
-        // We intentionally don't process them here to preserve strict
-        // off-chain replay ordering via `sync_databases`.
         while let Some(Some(block)) = task.block_importer.next().now_or_never() {
+            if Some(*block.sealed_block.entity.header().height()) <= target_chain_height {
+                continue;
+            }
             target_chain_height = Some(*block.sealed_block.entity.header().height());
+            task.process_block(block)?;
         }
-
-        // Close the race window between initial catch-up and stream draining.
-        sync_databases(&mut task, target_chain_height, &block_importer)?;
 
         Ok(task)
     }
