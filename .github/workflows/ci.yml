@@ -22,7 +22,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
   AWS_ECR_ORG: fuellabs
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.90.0
+  RUST_VERSION: 1.93.0
   RUST_VERSION_FMT: nightly-2025-09-28
   RUST_VERSION_COV: nightly-2025-09-28
   RUSTFLAGS: -D warnings
@@ -164,6 +164,10 @@ jobs:
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.4"
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "21"
       - uses: rui314/setup-mold@v1
       - uses: buildjet/cache@v3
         with:
@@ -219,6 +223,10 @@ jobs:
           role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
       - uses: actions/checkout@v4
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "21"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -256,6 +264,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y redis-server
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "21"
       - name: Start Redis
         run: |
           redis-server --daemonize yes
@@ -461,6 +473,6 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/audit-check@v1
+      - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

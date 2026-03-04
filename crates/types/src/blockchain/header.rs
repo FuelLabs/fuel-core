@@ -649,9 +649,9 @@ impl From<&BlockHeader> for PartialBlockHeader {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 pub enum BlockHeaderError {
-    #[display(fmt = "The block header has too many transactions to fit into the `u16`")]
+    #[display("The block header has too many transactions to fit into the `u16`")]
     TooManyTransactions,
-    #[display(fmt = "The block header has too many messages to fit into the `u32`")]
+    #[display("The block header has too many messages to fit into the `u32`")]
     TooManyMessages,
 }
 
