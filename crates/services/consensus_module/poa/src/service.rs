@@ -582,10 +582,10 @@ where
         {
             LeaderState::ReconciledFollower => {
                 sleep_until(deadline).await;
-                return Ok(TaskNextAction::Continue);
+                Ok(TaskNextAction::Continue)
             }
             LeaderState::ReconciledLeader => {
-                // Do nothing, just produce the block as normal
+                Ok(self.handle_normal_block_production(deadline).await)
             }
             LeaderState::UnreconciledBlocks(blocks) => {
                 for block in blocks {
@@ -594,16 +594,10 @@ where
                     self.block_importer.execute_and_commit(block).await?;
                     self.last_height = block_height;
                     self.last_timestamp = block_time;
-                    self.last_block_created = Instant::now();
                 }
-
-                // It will restart `run` loop and trigger block
-                // production immediately if we have a lease
-                return Ok(TaskNextAction::Continue);
+                Ok(TaskNextAction::Continue)
             }
         }
-
-        Ok(self.handle_normal_block_production(deadline).await)
     }
 }
 
