@@ -81,7 +81,7 @@ async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
         find_leader_and_followers(all_nodes, LEADER_ELECTION_TIMEOUT).await;
 
     // then
-    only_first_leader_produces_blocks(
+    only_leader_produces_blocks(
         &leader,
         &non_leaders,
         BLOCKS_TO_CHECK,
@@ -116,7 +116,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
             find_leader_and_followers(active_producers, LEADER_ELECTION_TIMEOUT).await;
 
         // then
-        only_first_leader_produces_blocks(
+        only_leader_produces_blocks(
             &leader,
             &followers,
             PHASE_BLOCKS,
@@ -147,6 +147,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const BLOCKS_BEFORE_FAILOVER: usize = 3;
     const BLOCKS_AFTER_RESTART: usize = 5;
+    const FIRST_PRODUCER_NO_LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(60);
     const STOP_TIMEOUT: Duration = Duration::from_secs(1);
 
     // given
@@ -166,7 +167,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     .expect("First producer should acquire leadership initially");
     let second_producer = make_node(make_node_config("Second Producer"), vec![]).await;
 
-    only_first_leader_produces_blocks(
+    only_leader_produces_blocks(
         &first_producer,
         std::slice::from_ref(&second_producer),
         BLOCKS_BEFORE_FAILOVER,
@@ -188,13 +189,23 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     first_producer.start().await;
 
     // then
-    only_first_leader_produces_blocks(
+    only_leader_produces_blocks(
         &second_producer,
         std::slice::from_ref(&first_producer),
         BLOCKS_AFTER_RESTART,
         BLOCK_IMPORT_TIMEOUT,
     )
     .await;
+
+    let first_producer_local_block_result = tokio::time::timeout(
+        FIRST_PRODUCER_NO_LOCAL_BLOCK_TIMEOUT,
+        wait_for_local_block(&first_producer),
+    )
+    .await;
+    assert!(
+        first_producer_local_block_result.is_err(),
+        "First producer should not produce local blocks after restart while second holds the lock"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -458,7 +469,7 @@ async fn wait_for_non_local_block_and_fail_on_local(node: &Node) {
     panic!("block stream ended unexpectedly");
 }
 
-async fn only_first_leader_produces_blocks(
+async fn only_leader_produces_blocks(
     leader: &Node,
     non_leaders: &[Node],
     non_local_blocks_to_check: usize,
