@@ -757,7 +757,9 @@ impl Command {
                 heavy_work: pool_heavy_work_config,
                 service_channel_limits,
                 pending_pool_tx_ttl: tx_pending_pool_ttl.into(),
-                max_pending_pool_size_percentage: tx_pending_pool_size_percentage,
+                max_pending_pool_size_percentage: fuel_core_types::ClampedPercentage::new(
+                    tx_pending_pool_size_percentage.min(100) as u8,
+                ),
                 metrics: metrics.is_enabled(Module::TxPool),
             },
             block_producer: ProducerConfig {
