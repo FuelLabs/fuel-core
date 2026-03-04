@@ -31,6 +31,7 @@ use fuel_core_types::{
     blockchain::{
         SealedBlock,
         block::Block,
+        primitives::BlockId,
     },
     fuel_types::BlockHeight,
     services::{
@@ -520,37 +521,56 @@ impl RedisLeaderLeaseAdapter {
         .into_iter()
         .map(|entries| {
             entries.into_iter().fold(
-                HashMap::<u32, (u64, SealedBlock)>::new(),
+                HashMap::<u32, HashMap<u64, SealedBlock>>::new(),
                 |mut blocks_by_height, (height, epoch, block)| {
-                    match blocks_by_height.get(&height) {
-                        Some((current_epoch, _)) if *current_epoch >= epoch => {}
-                        _ => {
-                            blocks_by_height.insert(height, (epoch, block));
-                        }
-                    }
                     blocks_by_height
-                },
+                        .entry(height)
+                        .or_default()
+                        .insert(epoch, block);
+                    blocks_by_height
+                }
             )
         })
         .collect::<Vec<_>>();
         let mut current_height = u32::from(next_height);
 
         for _ in 0..max_reconcile_blocks_per_round {
-            let candidates = blocks_by_node
+            let nodes_with_height = blocks_by_node
                 .iter()
-                .filter_map(|blocks_by_height| {
-                    blocks_by_height.get(&current_height).cloned()
+                .filter(|blocks_by_height| {
+                    blocks_by_height.contains_key(&current_height)
                 })
-                .collect::<Vec<_>>();
+                .count();
 
-            if !self.quorum_reached(candidates.len()) {
+            if !self.quorum_reached(nodes_with_height) {
                 break;
             }
 
-            let winner = candidates
+            let votes = blocks_by_node
+                .iter()
+                .filter_map(|blocks_by_height| blocks_by_height.get(&current_height))
+                .flat_map(|blocks_by_epoch| blocks_by_epoch.iter())
+                .fold(
+                    HashMap::<(u64, BlockId), (usize, SealedBlock)>::new(),
+                    |mut votes, (epoch, block)| {
+                        let vote_key = (*epoch, block.entity.id());
+                        match votes.get_mut(&vote_key) {
+                            Some((count, _)) => {
+                                *count = count.saturating_add(1);
+                            }
+                            None => {
+                                votes.insert(vote_key, (1, block.clone()));
+                            }
+                        }
+                        votes
+                    },
+                );
+
+            let winner = votes
                 .into_iter()
-                .max_by_key(|(epoch, _)| *epoch)
-                .map(|(_, block)| block);
+                .filter(|(_, (count, _))| self.quorum_reached(*count))
+                .max_by_key(|((epoch, _), _)| *epoch)
+                .map(|(_, (_, block))| block);
             if let Some(block) = winner {
                 reconciled.push(block);
             } else {
@@ -1001,6 +1021,118 @@ mod tests {
             unreconciled_blocks[0].entity.header().time(),
             high_epoch_block.entity.header().time(),
             "Expected reconciliation to pick the highest epoch block for the same height",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_same_height_same_epoch_has_multiple_stream_entries_then_keeps_latest_entry()
+     {
+        // given
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:equal-epoch-latest-entry".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![redis.redis_url()],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+
+        let stale_block = poa_block_at_time(1, 10);
+        let retry_block = poa_block_at_time(1, 20);
+        let stale_data =
+            postcard::to_allocvec(&stale_block).expect("stale block should serialize");
+        let retry_data =
+            postcard::to_allocvec(&retry_block).expect("retry block should serialize");
+
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        append_stream_block(&mut conn, &stream_key, 1, &stale_data, 1);
+        append_stream_block(&mut conn, &stream_key, 1, &retry_data, 1);
+
+        // when
+        let leader_state = adapter
+            .leader_state(1.into())
+            .await
+            .expect("leader_state should succeed");
+
+        // then
+        let unreconciled_blocks = match leader_state {
+            LeaderState::UnreconciledBlocks(blocks) => blocks,
+            other => panic!("Expected unreconciled blocks, got: {other:?}"),
+        };
+        assert_eq!(unreconciled_blocks.len(), 1);
+        assert_eq!(
+            unreconciled_blocks[0].entity.id(),
+            retry_block.entity.id(),
+            "Expected reconciliation to keep latest stream entry for equal epoch",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_height_has_quorum_epoch_but_block_ids_disagree_then_does_not_reconcile_height()
+     {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:epoch-quorum-block-mismatch".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![
+                redis_a.redis_url(),
+                redis_b.redis_url(),
+                redis_c.redis_url(),
+            ],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+
+        let block_a = poa_block_at_time(1, 10);
+        let block_b = poa_block_at_time(1, 20);
+        let block_a_data =
+            postcard::to_allocvec(&block_a).expect("block a should serialize");
+        let block_b_data =
+            postcard::to_allocvec(&block_b).expect("block b should serialize");
+
+        let redis_a_client =
+            redis::Client::open(redis_a.redis_url()).expect("redis a client should open");
+        let redis_b_client =
+            redis::Client::open(redis_b.redis_url()).expect("redis b client should open");
+        let mut conn_a = redis_a_client
+            .get_connection()
+            .expect("redis a connection should open");
+        let mut conn_b = redis_b_client
+            .get_connection()
+            .expect("redis b connection should open");
+
+        append_stream_block(&mut conn_a, &stream_key, 1, &block_a_data, 7);
+        append_stream_block(&mut conn_b, &stream_key, 1, &block_b_data, 7);
+
+        // when
+        let leader_state = adapter
+            .leader_state(1.into())
+            .await
+            .expect("leader_state should succeed");
+
+        // then
+        assert!(
+            matches!(leader_state, LeaderState::ReconciledLeader),
+            "Expected reconciliation to reject epoch quorum without block-id quorum",
         );
     }
 
