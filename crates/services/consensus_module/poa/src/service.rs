@@ -577,7 +577,7 @@ where
     ) -> anyhow::Result<TaskNextAction> {
         match self
             .reconciliation_port
-            .leader_state(self.last_height, self.next_height())
+            .leader_state(self.next_height())
             .await?
         {
             LeaderState::ReconciledFollower => {
