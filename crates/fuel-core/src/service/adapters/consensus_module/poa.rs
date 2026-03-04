@@ -116,6 +116,7 @@ pub struct RedisLeaderLeaseAdapter {
     epoch_key: String,
     block_stream_key: String,
     lease_owner_token: String,
+    drop_release_guard: std::sync::Arc<()>,
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
     lease_ttl_millis: u64,
     lease_drift_millis: u64,
@@ -135,6 +136,7 @@ impl Clone for RedisLeaderLeaseAdapter {
             epoch_key: self.epoch_key.clone(),
             block_stream_key: self.block_stream_key.clone(),
             lease_owner_token: self.lease_owner_token.clone(),
+            drop_release_guard: self.drop_release_guard.clone(),
             current_epoch_token: self.current_epoch_token.clone(),
             lease_ttl_millis: self.lease_ttl_millis,
             lease_drift_millis: self.lease_drift_millis,
@@ -205,6 +207,7 @@ impl RedisLeaderLeaseAdapter {
             epoch_key,
             block_stream_key,
             lease_owner_token,
+            drop_release_guard: std::sync::Arc::new(()),
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
             lease_ttl_millis,
             lease_drift_millis,
@@ -731,6 +734,10 @@ impl BlockReconciliationReadPort for ReconciliationAdapter {
 
 impl Drop for RedisLeaderLeaseAdapter {
     fn drop(&mut self) {
+        if std::sync::Arc::strong_count(&self.drop_release_guard) != 1 {
+            return;
+        }
+
         let redis_clients = self
             .redis_nodes
             .iter()
@@ -1376,6 +1383,47 @@ mod tests {
         assert!(
             release_result.is_ok(),
             "Release should be idempotent for adapters that do not own quorum lease"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn drop__when_non_last_clone_is_dropped_then_does_not_release_shared_lease() {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:drop-non-last-clone".to_string();
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let adapter = new_test_adapter(redis_urls.clone(), lease_key.clone());
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Adapter should acquire lease"
+        );
+        let adapter_clone = adapter.clone();
+        let owner_token = adapter.lease_owner_token.clone();
+
+        // when
+        drop(adapter_clone);
+        sleep(Duration::from_millis(50)).await;
+
+        // then
+        let owners = redis_urls
+            .iter()
+            .filter(|redis_url| {
+                read_lease_owner(redis_url, &lease_key).as_deref()
+                    == Some(owner_token.as_str())
+            })
+            .count();
+        assert!(
+            owners >= 2,
+            "Dropping a non-last clone must not release quorum lease ownership"
         );
     }
 
