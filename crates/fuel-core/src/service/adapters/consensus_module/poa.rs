@@ -152,6 +152,7 @@ impl Clone for RedisLeaderLeaseAdapter {
 #[derive(Default, Clone)]
 pub struct NoopReconciliationAdapter;
 
+#[allow(clippy::large_enum_variant)]
 pub enum ReconciliationAdapter {
     Redis(RedisLeaderLeaseAdapter),
     Noop(NoopReconciliationAdapter),

@@ -62,6 +62,7 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::sync::Arc;
 
+#[allow(clippy::large_enum_variant)]
 pub enum BlockReconciliationWriteAdapter {
     Redis(RedisLeaderLeaseAdapter),
     Noop(NoopBlockReconciliationWriteAdapter),
