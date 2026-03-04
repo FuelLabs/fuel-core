@@ -303,7 +303,6 @@ impl FakeReconciliationPort {
 impl BlockReconciliationReadPort for FakeReconciliationPort {
     async fn leader_state(
         &self,
-        _local_height: BlockHeight,
         _next_height: BlockHeight,
     ) -> anyhow::Result<LeaderState> {
         let guard = self
