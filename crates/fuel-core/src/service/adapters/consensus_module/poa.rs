@@ -528,7 +528,7 @@ impl RedisLeaderLeaseAdapter {
                         .or_default()
                         .insert(epoch, block);
                     blocks_by_height
-                }
+                },
             )
         })
         .collect::<Vec<_>>();
@@ -537,9 +537,7 @@ impl RedisLeaderLeaseAdapter {
         for _ in 0..max_reconcile_blocks_per_round {
             let nodes_with_height = blocks_by_node
                 .iter()
-                .filter(|blocks_by_height| {
-                    blocks_by_height.contains_key(&current_height)
-                })
+                .filter(|blocks_by_height| blocks_by_height.contains_key(&current_height))
                 .count();
 
             if !self.quorum_reached(nodes_with_height) {
