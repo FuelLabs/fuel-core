@@ -1512,10 +1512,7 @@ mod tests {
             .count();
 
         // then
-        assert!(
-            publish_result.is_ok(),
-            "Publish should succeed on quorum"
-        );
+        assert!(publish_result.is_ok(), "Publish should succeed on quorum");
         assert!(
             owners >= 2,
             "Successful write should extend lease TTL on quorum beyond original window"
