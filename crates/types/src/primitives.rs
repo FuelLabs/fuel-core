@@ -2,7 +2,7 @@
 
 /// A value that represents a value between 0 and 100. Higher values are clamped to 100
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ClampedPercentage {
     value: u8,
 }
@@ -28,6 +28,24 @@ impl core::ops::Deref for ClampedPercentage {
 
     fn deref(&self) -> &Self::Target {
         &self.value
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for ClampedPercentage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // Deserialize the struct, but ensure the value is clamped
+        // We use a temporary struct to deserialize, then reconstruct with clamping
+        #[derive(serde::Deserialize)]
+        struct ClampedPercentageHelper {
+            value: u8,
+        }
+        
+        let helper = ClampedPercentageHelper::deserialize(deserializer)?;
+        Ok(Self::new(helper.value))
     }
 }
 
@@ -104,6 +122,27 @@ mod tests {
         let serialized = postcard::to_allocvec(&percentage).unwrap();
         let deserialized: ClampedPercentage = postcard::from_bytes(&serialized).unwrap();
         assert_eq!(percentage, deserialized);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn serde_clamps_on_deserialize() {
+        use postcard;
+
+        // Test that deserializing a struct with value > 100 gets clamped
+        // We create a helper struct with value > 100, serialize it,
+        // then deserialize as ClampedPercentage to ensure clamping works
+        #[derive(serde::Serialize)]
+        struct TestHelper {
+            value: u8,
+        }
+        
+        let helper = TestHelper { value: 150 };
+        let serialized = postcard::to_allocvec(&helper).unwrap();
+        
+        // Deserialize should clamp the value
+        let deserialized: ClampedPercentage = postcard::from_bytes(&serialized).unwrap();
+        assert_eq!(deserialized.value, 100, "Deserialized value > 100 should be clamped to 100");
     }
 
     #[cfg(feature = "serde")]
