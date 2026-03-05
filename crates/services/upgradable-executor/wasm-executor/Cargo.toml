@@ -28,25 +28,14 @@ fault-proving = [
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-executor = { workspace = true, default-features = false, features = [
-  "alloc",
-] }
-fuel-core-storage = { workspace = true, default-features = false, features = [
-  "alloc",
-] }
-fuel-core-types = { workspace = true, default-features = false, features = [
-  "alloc",
-] }
-fuel-core-types-v0 = { package = "fuel-core-types", version = "0.35.0", default-features = false, features = [
-  "alloc",
-  "serde",
-], optional = true }
+fuel-core-executor = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-core-storage = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-core-types = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-core-types-v0 = { package = "fuel-core-types", version = "0.35.0", default-features = false, features = ["alloc", "serde"], optional = true }
 futures = { workspace = true }
 postcard = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, default-features = false, features = [
-  "alloc",
-] }
+serde_json = { workspace = true, default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 proptest = { workspace = true }
