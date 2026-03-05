@@ -588,7 +588,7 @@ impl RedisLeaderLeaseAdapter {
         Ok(reconciled)
     }
 
-    async fn can_produce_block(&self, _height: BlockHeight) -> anyhow::Result<bool> {
+    async fn can_produce_block(&self) -> anyhow::Result<bool> {
         tracing::debug!("Checking Redis leader lock");
         if self.has_lease_owner_quorum().await? {
             return Ok(true);
@@ -696,7 +696,7 @@ impl BlockReconciliationReadPort for RedisLeaderLeaseAdapter {
         &self,
         next_height: BlockHeight,
     ) -> anyhow::Result<LeaderState> {
-        if self.can_produce_block(next_height).await? {
+        if self.can_produce_block().await? {
             let unreconciled_blocks = self.unreconciled_blocks(next_height).await?;
             if unreconciled_blocks.is_empty() {
                 Ok(LeaderState::ReconciledLeader)
