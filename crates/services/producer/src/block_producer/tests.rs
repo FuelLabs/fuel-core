@@ -12,7 +12,6 @@ use crate::{
         },
     },
     mocks::{
-        FailingMockExecutor,
         MockDb,
         MockExecutor,
         MockExecutorWithCapture,
@@ -518,9 +517,12 @@ mod produce_and_execute_block_txpool {
 
     #[tokio::test]
     async fn production_fails_on_execution_error() {
-        let ctx = TestContext::default_from_executor(FailingMockExecutor(Mutex::new(
-            Some(ExecutorError::TransactionIdCollision(Default::default())),
-        )));
+        let db = TestContext::<MockExecutor>::default_db();
+        let executor = crate::mocks::create_failing_mock_executor(
+            ExecutorError::TransactionIdCollision(Default::default()),
+            db.clone(),
+        );
+        let ctx = TestContext::default_from_db_and_executor(db, executor);
 
         let producer = ctx.producer();
 
@@ -1015,7 +1017,7 @@ impl TestContext<MockExecutor> {
     }
 
     pub fn default_from_db(db: MockDb) -> Self {
-        let executor = MockExecutor(db.clone());
+        let executor = crate::mocks::create_mock_executor(db.clone());
         Self::default_from_db_and_executor(db, executor)
     }
 }
@@ -1039,8 +1041,9 @@ impl<Executor> TestContext<Executor> {
     }
 
     pub fn default_from_db_and_executor(db: MockDb, executor: Executor) -> Self {
-        let txpool = MockTxPool::default();
-        let relayer = MockRelayer::default();
+        let txpool = crate::mocks::create_mock_txpool(vec![]);
+        let relayer =
+            crate::mocks::create_mock_relayer(DaBlockHeight::default(), HashMap::new());
         let config = Config::default();
         let gas_price = Some(0);
         Self {
@@ -1229,13 +1232,10 @@ impl TestContextBuilder {
     fn build(self) -> TestContext<MockExecutor> {
         let block_gas_limit = self.block_gas_limit.unwrap_or_default();
 
-        let mock_relayer = MockRelayer {
-            latest_block_height: self.latest_block_height,
-            latest_da_blocks_with_costs_and_transactions_number: self
-                .blocks_with_gas_costs_and_transactions_number
-                .clone(),
-            ..Default::default()
-        };
+        let mock_relayer = crate::mocks::create_mock_relayer(
+            self.latest_block_height,
+            self.blocks_with_gas_costs_and_transactions_number.clone(),
+        );
 
         let db = MockDb {
             blocks: self.pre_existing_blocks(),
@@ -1253,13 +1253,10 @@ impl TestContextBuilder {
     fn build_with_executor<Ex>(self, executor: Ex) -> TestContext<Ex> {
         let block_gas_limit = self.block_gas_limit.unwrap_or_default();
 
-        let mock_relayer = MockRelayer {
-            latest_block_height: self.latest_block_height,
-            latest_da_blocks_with_costs_and_transactions_number: self
-                .blocks_with_gas_costs_and_transactions_number
-                .clone(),
-            ..Default::default()
-        };
+        let mock_relayer = crate::mocks::create_mock_relayer(
+            self.latest_block_height,
+            self.blocks_with_gas_costs_and_transactions_number.clone(),
+        );
 
         let db = MockDb {
             blocks: self.pre_existing_blocks(),
