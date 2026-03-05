@@ -100,6 +100,46 @@ struct SelectionBudget {
     nb_left: TxCount,
 }
 
+struct AnchorState {
+    threshold_pct: u8,
+    total_gas: u64,
+    current_anchor: Option<ContractId>,
+    current_anchor_gas: u64,
+    locked_anchor: Option<ContractId>,
+}
+
+impl AnchorState {
+    fn new(threshold_pct: u8) -> Self {
+        Self {
+            threshold_pct,
+            total_gas: 0,
+            current_anchor: None,
+            current_anchor_gas: 0,
+            locked_anchor: None,
+        }
+    }
+
+    fn on_selected(&mut self, tx_anchor: Option<ContractId>, tx_gas: u64) {
+        self.total_gas = self.total_gas.saturating_add(tx_gas);
+        if self.locked_anchor.is_some() {
+            return;
+        }
+        if self.current_anchor == tx_anchor {
+            self.current_anchor_gas = self.current_anchor_gas.saturating_add(tx_gas);
+        } else {
+            self.current_anchor = tx_anchor;
+            self.current_anchor_gas = tx_gas;
+        }
+        if self.current_anchor_gas.saturating_mul(100)
+            >= self
+                .total_gas
+                .saturating_mul(u64::from(self.threshold_pct))
+        {
+            self.locked_anchor = self.current_anchor;
+        }
+    }
+}
+
 impl SelectionBudget {
     fn new(constraints: &Constraints) -> Self {
         Self {
@@ -242,9 +282,9 @@ where
         prioritized_queue: &mut VecDeque<S::StorageIndex>,
         budget: &mut SelectionBudget,
         skipped: &mut SkipCounters,
-    ) -> bool {
+    ) -> Option<u64> {
         if !budget.has_capacity() {
-            return false;
+            return None;
         }
 
         let has_excluded_contract =
@@ -259,35 +299,34 @@ where
             });
         if has_excluded_contract {
             skipped.excluded_contracts = skipped.excluded_contracts.saturating_add(1);
-            return false;
+            return None;
         }
 
         if stored_transaction.transaction.max_gas_price() < constraints.minimal_gas_price
         {
             skipped.less_price = skipped.less_price.saturating_add(1);
-            return false;
+            return None;
         }
 
-        if stored_transaction.transaction.max_gas() > budget.gas_left {
+        let tx_gas = stored_transaction.transaction.max_gas();
+        if tx_gas > budget.gas_left {
             skipped.not_enough_gas = skipped.not_enough_gas.saturating_add(1);
-            return false;
+            return None;
         }
 
         if stored_transaction.transaction.metered_bytes_size() as u64 > budget.space_left
         {
             skipped.too_big_tx = skipped.too_big_tx.saturating_add(1);
-            return false;
+            return None;
         }
 
-        budget.gas_left = budget
-            .gas_left
-            .saturating_sub(stored_transaction.transaction.max_gas());
+        budget.gas_left = budget.gas_left.saturating_sub(tx_gas);
         budget.space_left = budget
             .space_left
             .saturating_sub(stored_transaction.transaction.metered_bytes_size() as u64);
         budget.nb_left = budget.nb_left.saturating_sub(1);
         prioritized_queue.push_back(storage_id);
-        true
+        Some(tx_gas)
     }
 
     fn fill_from_executable_set(
@@ -298,7 +337,9 @@ where
         prioritized_queue: &mut VecDeque<S::StorageIndex>,
         budget: &mut SelectionBudget,
         skipped: &mut SkipCounters,
+        anchor_state: Option<&mut AnchorState>,
     ) -> bool {
+        let mut anchor_state = anchor_state;
         let mut selected_transactions = Vec::new();
         for (key, storage_id) in &self.executable_transactions_sorted_tip_gas_ratio {
             if prioritized_queue.len() >= queue_limit || !budget.has_capacity() {
@@ -317,7 +358,7 @@ where
                 continue;
             };
 
-            if self.try_enqueue_stored_transaction(
+            if let Some(gas) = self.try_enqueue_stored_transaction(
                 constraints,
                 stored_transaction,
                 *storage_id,
@@ -325,6 +366,12 @@ where
                 budget,
                 skipped,
             ) {
+                if let Some(state) = anchor_state.as_mut() {
+                    state.on_selected(
+                        self.select_anchor_contract(constraints, stored_transaction),
+                        gas,
+                    );
+                }
                 selected_transactions
                     .push((key.0, Self::collect_contract_inputs(stored_transaction)));
             }
@@ -349,7 +396,9 @@ where
         prioritized_queue: &mut VecDeque<S::StorageIndex>,
         budget: &mut SelectionBudget,
         skipped: &mut SkipCounters,
+        anchor_state: Option<&mut AnchorState>,
     ) -> bool {
+        let mut anchor_state = anchor_state;
         let candidates = self
             .executable_transactions_by_contract
             .get(&anchor_contract_id)
@@ -377,7 +426,7 @@ where
                 continue;
             };
 
-            if self.try_enqueue_stored_transaction(
+            if let Some(gas) = self.try_enqueue_stored_transaction(
                 constraints,
                 stored_transaction,
                 storage_id,
@@ -385,6 +434,9 @@ where
                 budget,
                 skipped,
             ) {
+                if let Some(state) = anchor_state.as_mut() {
+                    state.on_selected(Some(anchor_contract_id), gas);
+                }
                 selected_transactions
                     .push((key, Self::collect_contract_inputs(stored_transaction)));
             }
@@ -414,7 +466,9 @@ where
         promoted_queue: &mut VecDeque<S::StorageIndex>,
         budget: &mut SelectionBudget,
         skipped: &mut SkipCounters,
+        anchor_state: Option<&mut AnchorState>,
     ) -> bool {
+        let mut anchor_state = anchor_state;
         let mut filled = false;
         while budget.has_capacity() && prioritized_queue.len() < queue_limit {
             let Some(storage_id) = promoted_queue.pop_front() else {
@@ -432,7 +486,7 @@ where
                 continue;
             };
 
-            if self.try_enqueue_stored_transaction(
+            if let Some(gas) = self.try_enqueue_stored_transaction(
                 constraints,
                 stored_transaction,
                 storage_id,
@@ -440,6 +494,12 @@ where
                 budget,
                 skipped,
             ) {
+                if let Some(state) = anchor_state.as_mut() {
+                    state.on_selected(
+                        self.select_anchor_contract(constraints, stored_transaction),
+                        gas,
+                    );
+                }
                 let key = Self::key(stored_transaction);
                 self.remove_key_from_indexes(
                     key,
@@ -460,6 +520,14 @@ where
                 )
             })
             .unwrap_or(false)
+    }
+
+    fn contract_anchor_dominance_threshold_pct() -> u8 {
+        std::env::var("TXPOOL_V2_CONTRACT_ANCHOR_DOMINANCE_THRESHOLD_PCT")
+            .ok()
+            .and_then(|value| value.parse::<u8>().ok())
+            .filter(|value| *value > 0 && *value <= 100)
+            .unwrap_or(50)
     }
 
     fn select_anchor_contract(
@@ -525,6 +593,10 @@ where
         let mut prioritized_queue = VecDeque::with_capacity(batch_graphs_count);
         let mut promoted_queue = VecDeque::new();
         let contract_anchor_bias_enabled = Self::contract_anchor_bias_enabled();
+        let contract_anchor_dominance_threshold_pct =
+            Self::contract_anchor_dominance_threshold_pct();
+        let mut anchor_state = contract_anchor_bias_enabled
+            .then(|| AnchorState::new(contract_anchor_dominance_threshold_pct));
         let initial_queue_limit = if contract_anchor_bias_enabled {
             1
         } else {
@@ -538,6 +610,7 @@ where
             &mut prioritized_queue,
             &mut budget,
             &mut skipped,
+            anchor_state.as_mut(),
         );
         let mut anchor_contract_id = if contract_anchor_bias_enabled {
             prioritized_queue
@@ -552,6 +625,24 @@ where
 
         loop {
             if budget.has_capacity() {
+                let locked_anchor = anchor_state
+                    .as_ref()
+                    .and_then(|state| state.locked_anchor);
+                if let Some(locked_anchor) = locked_anchor {
+                    let filled_from_locked_anchor = self.fill_from_anchor_contract_set(
+                        constraints,
+                        storage,
+                        batch_graphs_count,
+                        locked_anchor,
+                        &mut prioritized_queue,
+                        &mut budget,
+                        &mut skipped,
+                        anchor_state.as_mut(),
+                    );
+                    if !filled_from_locked_anchor && prioritized_queue.is_empty() {
+                        break;
+                    }
+                }
                 let filled_from_promoted = self.fill_from_promoted_queue(
                     constraints,
                     storage,
@@ -560,6 +651,7 @@ where
                     &mut promoted_queue,
                     &mut budget,
                     &mut skipped,
+                    anchor_state.as_mut(),
                 );
                 let filled_from_anchor = anchor_contract_id
                     .filter(|_| prioritized_queue.len() < batch_graphs_count)
@@ -572,13 +664,13 @@ where
                             &mut prioritized_queue,
                             &mut budget,
                             &mut skipped,
+                            anchor_state.as_mut(),
                         )
                     })
                     .unwrap_or(false);
                 let should_fill_from_executable =
                     prioritized_queue.len() < batch_graphs_count
-                        && (contract_anchor_bias_enabled
-                            || self.eagerly_include_tx_dependency_graphs);
+                        && self.eagerly_include_tx_dependency_graphs;
                 let filled_from_executable = should_fill_from_executable
                     && self.fill_from_executable_set(
                         constraints,
@@ -587,6 +679,7 @@ where
                         &mut prioritized_queue,
                         &mut budget,
                         &mut skipped,
+                        anchor_state.as_mut(),
                     );
 
                 if prioritized_queue.is_empty()
@@ -663,7 +756,9 @@ where
             skipped_less_price = skipped.less_price,
             skipped_excluded_contracts = skipped.excluded_contracts,
             contract_anchor_bias_enabled,
+            contract_anchor_dominance_threshold_pct,
             anchor_contract = ?anchor_contract_id,
+            locked_anchor = ?anchor_state.as_ref().and_then(|state| state.locked_anchor),
             "txpool_v2 gather_best_txs summary"
         );
 
