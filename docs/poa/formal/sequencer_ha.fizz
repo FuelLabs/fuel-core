@@ -143,18 +143,18 @@ role Sequencer:
             self.state = State.LEADER
             self.my_epoch = max_epoch
             # Sync next_height from committed stream state (quorum-read)
-            # Only count a height as committed if present on >= QUORUM_SIZE nodes
-            height_counts = {}
-            for n in redis_nodes:
+            # Only count a height as committed if present on >= QUORUM_SIZE distinct nodes
+            height_node_sets = {}
+            for ni in range(len(redis_nodes)):
+                n = redis_nodes[ni]
                 for entry in n.stream:
                     h = entry["height"]
-                    if h in height_counts:
-                        height_counts[h] = height_counts[h] + 1
-                    else:
-                        height_counts[h] = 1
+                    if h not in height_node_sets:
+                        height_node_sets[h] = {}
+                    height_node_sets[h][ni] = True
             max_h = 0
-            for h in height_counts:
-                if height_counts[h] >= QUORUM_SIZE:
+            for h in height_node_sets:
+                if len(height_node_sets[h]) >= QUORUM_SIZE:
                     if h >= max_h:
                         max_h = h + 1
             self.next_height = max_h
@@ -238,8 +238,7 @@ atomic func set_election_count(v):
 #    block at height H, it must be the same block.
 always assertion NoFork:
     for h in range(MAX_BLOCKS):
-        # Check committed_blocks — only one entry per height by construction.
-        # But also verify across Redis node streams: if quorum nodes have an
+        # Verify across Redis node streams: if quorum nodes have an
         # entry at height h, all quorum-present entries must agree.
         entries_at_h = {}
         for n in redis_nodes:
