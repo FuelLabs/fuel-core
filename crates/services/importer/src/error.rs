@@ -42,6 +42,8 @@ pub enum Error {
     NotUnique(BlockHeight),
     #[display(fmt = "The previous block processing is not finished yet.")]
     PreviousBlockProcessingNotFinished,
+    #[display(fmt = "Failed to publish produced block to block reconciliation: {_0}.")]
+    FailedBlockReconciliationWrite(anyhow::Error),
     #[display(fmt = "The send command to the inner task failed.")]
     SendCommandToInnerTaskFailed,
     #[display(fmt = "The inner import task is not running.")]
