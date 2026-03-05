@@ -66,35 +66,35 @@ pub mod gas_price;
 
 #[derive(Debug, derive_more::Display)]
 pub enum Error {
-    #[display(fmt = "Genesis block is absent")]
+    #[display("Genesis block is absent")]
     NoGenesisBlock,
     #[display(
-        fmt = "The block height {height} should be higher than the previous block height {previous_block}"
+        "The block height {height} should be higher than the previous block height {previous_block}"
     )]
     BlockHeightShouldBeHigherThanPrevious {
         height: BlockHeight,
         previous_block: BlockHeight,
     },
-    #[display(fmt = "Previous block height {_0} doesn't exist")]
+    #[display("Previous block height {_0} doesn't exist")]
     MissingBlock(BlockHeight),
     #[display(
-        fmt = "Best finalized da_height {best} is behind previous block da_height {previous_block}"
+        "Best finalized da_height {best} is behind previous block da_height {previous_block}"
     )]
     InvalidDaFinalizationState {
         best: DaBlockHeight,
         previous_block: DaBlockHeight,
     },
-    #[display(fmt = "Couldn't produce genesis block")]
+    #[display("Couldn't produce genesis block")]
     CannotProduceGenesisBlock,
 
     #[display(
-        fmt = "Attempting to produce block at height {requested_height} when expecting block at height {expected_height}"
+        "Attempting to produce block at height {requested_height} when expecting block at height {expected_height}"
     )]
     MustProduceBlockWithExpectedHeight {
         requested_height: BlockHeight,
         expected_height: BlockHeight,
     },
-    #[display(fmt = "Reached maximum block height")]
+    #[display("Reached maximum block height")]
     MaximumBlockHeightReached,
 }
 
