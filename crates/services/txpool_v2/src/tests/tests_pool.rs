@@ -646,6 +646,7 @@ fn get_sorted_out_tx1_2_3() {
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
+            execution_worker_count: 1,
         });
 
     // Then
@@ -704,6 +705,7 @@ fn get_sorted_out_tx_same_tips() {
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
+            execution_worker_count: 1,
         });
 
     // Then
@@ -762,6 +764,7 @@ fn get_sorted_out_zero_tip() {
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
+            execution_worker_count: 1,
         });
 
     // Then
@@ -820,6 +823,7 @@ fn get_sorted_out_tx_profitable_ratios() {
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
+            execution_worker_count: 1,
         });
 
     // Then
@@ -860,6 +864,7 @@ fn get_sorted_out_tx_by_creation_instant() {
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
+            execution_worker_count: 1,
         });
 
     // Then
@@ -1300,6 +1305,7 @@ fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
                     maximum_txs: u32::MAX,
                     maximum_block_size: u64::MAX,
                     excluded_contracts: Default::default(),
+                    execution_worker_count: 1,
                 });
         assert_eq!(txs.len(), 1);
         assert_eq!(pool_dependency_tx.id(), txs[0].id());
@@ -1510,6 +1516,7 @@ fn extract__tx_with_excluded_contract() {
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts,
+            execution_worker_count: 1,
         });
 
     // Then

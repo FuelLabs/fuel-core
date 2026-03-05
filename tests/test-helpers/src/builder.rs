@@ -1,3 +1,5 @@
+#[cfg(feature = "parallel-executor")]
+use fuel_core::service::config::ParallelExecutorWorkerCountPolicy;
 use fuel_core::{
     chain_config::{
         ChainConfig,
@@ -12,7 +14,10 @@ use fuel_core::{
         Config,
         DbType,
         FuelService,
-        config::GasPriceConfig,
+        config::{
+            ExecutorMode,
+            GasPriceConfig,
+        },
     },
     state::rocks_db::DatabaseConfig,
 };
@@ -43,6 +48,7 @@ use std::num::NonZeroUsize;
 use std::{
     collections::HashMap,
     io,
+    path::PathBuf,
 };
 
 /// Helper for wrapping a currently running node environment
@@ -104,10 +110,21 @@ pub struct TestSetupBuilder {
     pub base_asset_id: AssetId,
     pub trigger: Trigger,
     pub max_txs: usize,
+    pub txpool_max_gas: Option<u64>,
     pub database_type: DbType,
     pub database_config: DatabaseConfig,
+    pub database_path: Option<PathBuf>,
     pub chain_config: Option<ChainConfig>,
     pub number_threads_pool_verif: usize,
+    pub txpool_verification_threads: usize,
+    pub txpool_verification_queue_size: usize,
+    pub txpool_p2p_sync_threads: usize,
+    pub txpool_p2p_sync_queue_size: usize,
+    pub executor_parallel_worker_count: usize,
+    #[cfg(feature = "parallel-executor")]
+    pub executor_parallel_worker_count_policy: ParallelExecutorWorkerCountPolicy,
+    pub executor_mode: ExecutorMode,
+    pub executor_metrics: bool,
 }
 
 impl TestSetupBuilder {
@@ -115,12 +132,22 @@ impl TestSetupBuilder {
         Self {
             rng: StdRng::seed_from_u64(seed),
             number_threads_pool_verif: 0,
+            txpool_verification_threads: 0,
+            txpool_verification_queue_size: 0,
+            txpool_p2p_sync_threads: 0,
+            txpool_p2p_sync_queue_size: 100,
+            executor_parallel_worker_count: 0,
             ..Default::default()
         }
     }
 
     pub fn set_chain_config(&mut self, chain_config: ChainConfig) -> &mut Self {
         self.chain_config = Some(chain_config);
+        self
+    }
+
+    pub fn set_database_path(&mut self, database_path: impl Into<PathBuf>) -> &mut Self {
+        self.database_path = Some(database_path.into());
         self
     }
 
@@ -247,13 +274,34 @@ impl TestSetupBuilder {
 
         let mut txpool = fuel_core_txpool::config::Config::default();
         txpool.pool_limits.max_txs = self.max_txs;
+        if let Some(max_gas) = self.txpool_max_gas {
+            txpool.pool_limits.max_gas = max_gas;
+        }
         txpool.service_channel_limits = fuel_core_txpool::config::ServiceChannelLimits {
             max_pending_write_pool_requests: self.max_txs,
             max_pending_read_pool_requests: self.max_txs,
         };
-        txpool.heavy_work.size_of_verification_queue = self.max_txs;
+        let txpool_verification_queue_size = if self.txpool_verification_queue_size == 0 {
+            self.max_txs
+        } else {
+            self.txpool_verification_queue_size
+        };
+        txpool.heavy_work.size_of_verification_queue = txpool_verification_queue_size;
+        let txpool_verification_threads = if self.txpool_verification_threads == 0 {
+            self.number_threads_pool_verif
+        } else {
+            self.txpool_verification_threads
+        };
+        let executor_parallel_worker_count = if self.executor_parallel_worker_count == 0 {
+            self.number_threads_pool_verif
+        } else {
+            self.executor_parallel_worker_count
+        };
+
         txpool.heavy_work.number_threads_to_verify_transactions =
-            self.number_threads_pool_verif;
+            txpool_verification_threads;
+        txpool.heavy_work.number_threads_p2p_sync = self.txpool_p2p_sync_threads;
+        txpool.heavy_work.size_of_p2p_sync_queue = self.txpool_p2p_sync_queue_size;
         txpool.utxo_validation = self.utxo_validation;
 
         let gas_price_config = GasPriceConfig {
@@ -261,18 +309,24 @@ impl TestSetupBuilder {
             ..GasPriceConfig::local_node()
         };
 
-        let mut config = Config {
-            utxo_validation: self.utxo_validation,
-            txpool,
-            block_production: self.trigger,
-            gas_price_config,
-            #[cfg(feature = "parallel-executor")]
-            executor_number_of_cores: NonZeroUsize::try_from(
-                self.number_threads_pool_verif,
-            )
-            .unwrap_or(NonZeroUsize::try_from(1).expect("1 is not 0")),
-            ..Config::local_node_with_configs(chain_conf, state)
-        };
+        let mut config = Config::local_node_with_configs(chain_conf, state);
+        if let Some(database_path) = self.database_path.clone() {
+            config.combined_db_config.database_path = database_path;
+        }
+        config.utxo_validation = self.utxo_validation;
+        config.txpool = txpool;
+        config.block_production = self.trigger;
+        config.gas_price_config = gas_price_config;
+        config.executor.mode = self.executor_mode;
+        #[cfg(feature = "parallel-executor")]
+        {
+            config.executor.parallel.worker_count =
+                NonZeroUsize::try_from(executor_parallel_worker_count)
+                    .unwrap_or(NonZeroUsize::try_from(1).expect("1 is not 0"));
+            config.executor.parallel.worker_count_policy =
+                self.executor_parallel_worker_count_policy;
+            config.executor.parallel.metrics = self.executor_metrics;
+        }
         config.combined_db_config.database_config = self.database_config;
 
         let srv = FuelService::new_node(config).await.unwrap();
@@ -301,10 +355,22 @@ impl Default for TestSetupBuilder {
             base_asset_id: AssetId::BASE,
             trigger: Trigger::Instant,
             max_txs: 100000,
+            txpool_max_gas: None,
             database_type: DbType::RocksDb,
             database_config: DatabaseConfig::config_for_tests(),
+            database_path: None,
             chain_config: None,
             number_threads_pool_verif: 0,
+            txpool_verification_threads: 0,
+            txpool_verification_queue_size: 0,
+            txpool_p2p_sync_threads: 0,
+            txpool_p2p_sync_queue_size: 100,
+            executor_parallel_worker_count: 0,
+            #[cfg(feature = "parallel-executor")]
+            executor_parallel_worker_count_policy:
+                ParallelExecutorWorkerCountPolicy::StaticMax,
+            executor_mode: ExecutorMode::Normal,
+            executor_metrics: false,
         }
     }
 }

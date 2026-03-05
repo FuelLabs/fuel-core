@@ -57,6 +57,7 @@ pub struct MockTxPoolResponse {
     pub filtered: TransactionFiltered,
     pub filter: Option<Filter>,
     pub gas_limit_lt: Option<u64>,
+    pub selection_worker_count: Option<usize>,
 }
 impl MockTxPoolResponse {
     pub fn new(transactions: &[&Transaction], filtered: TransactionFiltered) -> Self {
@@ -65,6 +66,7 @@ impl MockTxPoolResponse {
             filtered,
             filter: None,
             gas_limit_lt: None,
+            selection_worker_count: None,
         }
     }
     pub fn assert_filter(self, filter: Filter) -> Self {
@@ -73,6 +75,7 @@ impl MockTxPoolResponse {
             filtered: self.filtered,
             filter: Some(filter),
             gas_limit_lt: self.gas_limit_lt,
+            selection_worker_count: self.selection_worker_count,
         }
     }
     pub fn assert_gas_limit_lt(self, gas_limit: u64) -> Self {
@@ -81,6 +84,16 @@ impl MockTxPoolResponse {
             filtered: self.filtered,
             filter: self.filter,
             gas_limit_lt: Some(gas_limit),
+            selection_worker_count: self.selection_worker_count,
+        }
+    }
+    pub fn assert_selection_worker_count(self, selection_worker_count: usize) -> Self {
+        Self {
+            transactions: self.transactions,
+            filtered: self.filtered,
+            filter: self.filter,
+            gas_limit_lt: self.gas_limit_lt,
+            selection_worker_count: Some(selection_worker_count),
         }
     }
 }
@@ -111,6 +124,7 @@ impl TransactionsSource for MockTransactionsSource {
         gas_limit: u64,
         tx_count_limit: u32,
         _block_transaction_size_limit: u64,
+        selection_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
         let mut response_queue = self.response_queue.lock().expect("Mutex poisoned");
@@ -126,6 +140,10 @@ impl TransactionsSource for MockTransactionsSource {
                     expected_gas_limit,
                     gas_limit,
                 );
+            }
+            if let Some(expected_selection_worker_count) = response.selection_worker_count
+            {
+                assert_eq!(expected_selection_worker_count, selection_worker_count);
             }
             Ok(TransactionSourceExecutableTransactions {
                 transactions: response.transactions,

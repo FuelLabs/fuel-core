@@ -112,13 +112,17 @@ impl TestPoolUniverse {
     }
 
     pub fn build_pool(&mut self) -> TxPool<MockDBProvider> {
+        let (tx_new_executable_txs, _) = tokio::sync::watch::channel(());
         let pool = Arc::new(RwLock::new(Pool::new(
             MockDBProvider(self.mock_db.clone()),
             GraphStorage::new(GraphConfig {
                 max_txs_chain_count: self.config.max_txs_chain_count,
             }),
             BasicCollisionManager::new(),
-            RatioTipGasSelection::new(),
+            RatioTipGasSelection::new(
+                tx_new_executable_txs,
+                self.config.eagerly_include_tx_dependency_graphs,
+            ),
             self.config.clone(),
         )));
         self.pool = Some(pool.clone());

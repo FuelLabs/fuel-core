@@ -146,6 +146,8 @@ pub struct Config {
     pub max_pending_pool_size_percentage: u16,
     /// Enable metrics when set to true
     pub metrics: bool,
+    /// Allow mixing dependency graphs after the initial batch fill.
+    pub eagerly_include_tx_dependency_graphs: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -205,9 +207,10 @@ impl Default for Config {
                 max_pending_write_pool_requests: 1000,
                 max_pending_read_pool_requests: 1000,
             },
-            pending_pool_tx_ttl: Duration::from_secs(3),
+            pending_pool_tx_ttl: Duration::from_secs(100),
             max_pending_pool_size_percentage: 50,
             metrics: false,
+            eagerly_include_tx_dependency_graphs: false,
         }
     }
 }

@@ -22,6 +22,7 @@ use adapters::{
 pub use config::{
     Config,
     DbType,
+    ExecutorMode,
     RelayerConsensusConfig,
 };
 use fuel_core_chain_config::{

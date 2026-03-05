@@ -187,6 +187,7 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
             maximum_block_size: u64::MAX,
             minimal_gas_price: 0,
             excluded_contracts: Default::default(),
+            execution_worker_count: 1,
         });
 
         if result.is_empty() {
