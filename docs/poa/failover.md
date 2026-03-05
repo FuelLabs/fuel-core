@@ -1,12 +1,10 @@
-# Technical Design: High Availability Sequencer with Redis Fencing
+# High Availability Sequencer with Redis Fencing
 
-## 1. Executive Summary
+## 1. Overview
 
-Currently, the Fuel Network sequencer operates as a single point of failure (SPOF). This document outlines a "Strong Leader" architecture using Redis as a coordination and fencing layer.
+The Fuel Network sequencer uses a "Strong Leader" architecture with Redis as a coordination and fencing layer to eliminate single points of failure in block production. A Redlock-based distributed leader lease system (`RedisLeaderLeaseAdapter`) uses a quorum of Redis nodes to elect a single block producer. The leader acquires a distributed mutex, renews it with each block production, and releases it on graceful shutdown.
 
-**What's implemented today:** A Redlock-based distributed leader lease system (`RedisLeaderLeaseAdapter`) that uses a quorum of Redis nodes to elect a single block producer. The leader acquires a distributed mutex, renews it before each block production, and releases it on graceful shutdown. This provides basic leader exclusivity and prevents split-brain.
-
-**What this document proposes:** An enhanced architecture layering Fencing Tokens and Replayable Streams on top of the existing Redlock primitives. By adding a monotonic epoch counter and a Redis Stream as the source of truth for block history, we ensure that even during network partitions or process "gray failures," the network cannot fork and a secondary sequencer can safely take over without losing state.
+Fencing Tokens and Replayable Streams are layered on top of the Redlock primitives. A monotonic epoch counter and a Redis Stream serve as the source of truth for block history, ensuring that even during network partitions or process "gray failures," the network cannot fork and a secondary sequencer can safely take over without losing state.
 
 ## 2. Why Redis Fencing over Raft
 
@@ -45,7 +43,7 @@ In distributed systems, a "Zombie Leader" (a node that believes it is still the 
 
 ### 3.2 Fencing Tokens
 
-To solve this, we use a Fencing Token:
+To solve this, the system uses a Fencing Token:
 
 - Every time a new leader is elected, a global Epoch Counter (token) is incremented.
 - Every "write" to the Source of Truth must include this token.
@@ -55,9 +53,9 @@ This provides a logical ordering guarantee that is independent of wall-clock tim
 
 This directly addresses Martin Kleppmann's critique of Redlock ([*How to do distributed locking*](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html)). Kleppmann's central argument is that Redlock's safety depends on timing assumptions — a process can acquire the lock, pause (GC, page fault, network delay), and resume after the lock has expired and been granted to another process, leading to concurrent access with no mutual exclusion. His prescribed solution is exactly fencing tokens: a monotonically increasing token issued at lock acquisition, checked by the storage system on every write, so that a delayed process's stale token is rejected regardless of timing. The `seq:epoch:token` counter and the fencing check in `write_block.lua` implement this pattern. Combined with the lock-owner identity check (which Redlock already provides), the system has two independent defenses against zombie writes — neither of which depends on clock accuracy for safety.
 
-### 3.3 Redlock Algorithm (Implemented)
+### 3.3 Redlock Algorithm
 
-The codebase implements a Redlock-inspired distributed mutex for leader election. The algorithm works as follows:
+The system uses a Redlock-inspired distributed mutex for leader election. The algorithm works as follows:
 
 1. **Acquire**: The candidate attempts to set a key on N Redis nodes using `SET key value PX ttl NX` (set-if-not-exists with millisecond expiry). If a quorum of `ceil(N/2) + 1` nodes grant the lock and the elapsed time is less than the lock validity period, acquisition succeeds.
 
@@ -79,7 +77,7 @@ Key configuration parameters:
 
 ### 3.4 Quorum Model for All Operations
 
-The Redlock pattern — run a script on all N independent nodes in parallel, require quorum success — extends naturally beyond lock acquire/renew/release to cover **all** coordination operations, including fencing token management and stream writes.
+The Redlock pattern — run a script on all N independent nodes in parallel, require quorum success — covers **all** coordination operations, including fencing token management and stream writes.
 
 Each Redis node independently stores its own copy of the lock, epoch token, and block stream. Every Lua script (`write_block.lua`, `promote_leader.lua`) runs on each node as an atomic, self-contained unit against that node's local keys. The quorum across nodes provides the distributed safety guarantee.
 
@@ -274,9 +272,9 @@ sequenceDiagram
 
 > **Execution model:** All Lua scripts run on each Redlock node independently. Each script is atomic within its node (standard Redis Lua guarantee). An operation is considered **committed** when the script succeeds on a quorum of `ceil(N/2) + 1` nodes. If quorum is not reached, the operation fails and any partial state (e.g., locks acquired on individual nodes) is cleaned up.
 
-### 6.1 Existing Redlock Scripts (Implemented)
+### 6.1 Lock Management Scripts
 
-These scripts are already in the codebase (`crates/fuel-core/src/service/adapters/consensus_module/poa.rs`) and provide the foundation for leader election.
+These scripts provide the foundation for leader election.
 
 **Acquire Lock:**
 
@@ -322,7 +320,7 @@ end
 
 This script also serves as the **graceful stepdown** mechanism (see Section 5.3). No epoch or fencing check is needed here — each sequencer instance generates a unique UUID, so the ownership check alone guarantees that only the current lock holder can release. The epoch is incremented by the *next* leader during promotion via `promote_leader.lua`, not during stepdown.
 
-### 6.2 Atomic Fencing & Lease Renewal Script (Proposed)
+### 6.2 Atomic Fencing & Lease Renewal Script
 
 This script combines fencing, block publication, lock maintenance, and **epoch self-healing**. It ensures that a leader only keeps its lock if it is successfully persisting blocks. The identity check is performed first (primary safety), followed by the fencing check (defense-in-depth). If the leader's epoch (the `max()` from its promotion quorum) is greater than a node's local epoch — which can happen after election storms leave some nodes with lower epoch values — the script heals the divergence by setting the node's epoch to the leader's value. This means all nodes in the write quorum converge on the first successful block write.
 
@@ -373,7 +371,7 @@ redis.call('PEXPIRE', KEYS[3], ARGV[5])
 return stream_id
 ```
 
-### 6.3 Follower Promotion Script (Proposed)
+### 6.3 Follower Promotion Script
 
 Atomic follower promotion: check lock is free, acquire lock, increment epoch, and return the new fencing token — all in a single Lua script to prevent races between competing followers.
 
@@ -404,7 +402,7 @@ return new_token
 
 When a Lua script fails to achieve quorum, the caller must clean up partial state:
 
-- **`promote_leader.lua` fails quorum**: The follower acquired the lock and incremented the epoch on some nodes but not enough. The follower releases the lock on nodes where it succeeded (using the existing `release_lock` script). The `INCR` on those nodes cannot be rolled back, leaving their epoch ahead of other nodes. Repeated failed promotions across different node subsets can compound this drift — the divergence is bounded by the number of failed attempts during the election storm window, not a fixed ±1. In practice this is 1-3 attempts given retry jitter, but could be larger under sustained quorum failures. This does not affect safety: the lock-owner check is the primary safety mechanism (see Section 3.4), and the winning leader always uses `max(returned_values)` as its token. **Crucially, this divergence is automatically healed**: the winning leader's first `write_block.lua` call sets the epoch on any lagging node to the leader's `max()` value (see Section 6.2, step 3), converging all quorum nodes on the very first block write.
+- **`promote_leader.lua` fails quorum**: The follower acquired the lock and incremented the epoch on some nodes but not enough. The follower releases the lock on nodes where it succeeded (using the `release_lock` script). The `INCR` on those nodes cannot be rolled back, leaving their epoch ahead of other nodes. Repeated failed promotions across different node subsets can compound this drift — the divergence is bounded by the number of failed attempts during the election storm window, not a fixed ±1. In practice this is 1-3 attempts given retry jitter, but could be larger under sustained quorum failures. This does not affect safety: the lock-owner check is the primary safety mechanism (see Section 3.4), and the winning leader always uses `max(returned_values)` as its token. **Crucially, this divergence is automatically healed**: the winning leader's first `write_block.lua` call sets the epoch on any lagging node to the leader's `max()` value (see Section 6.2, step 3), converging all quorum nodes on the very first block write.
 
 - **`write_block.lua` fails quorum**: The block was written to the stream on some nodes but not enough to be considered committed. The leader should **not** gossip or commit this block locally. On those nodes, the stream contains an "orphaned" entry that will be ignored by followers during sync (the quorum-read algorithm in Section 4.4 requires quorum presence to consider a block committed). The new leader may produce a different block at the same height — the `epoch` field in the stream entry resolves this conflict (higher epoch wins).
 
@@ -454,7 +452,7 @@ With 1 block/sec production, the lock is renewed every second. The TTL controls 
 
 ### 7.3 Pre-warmed Connections
 
-Followers maintain persistent multiplexed Redis connections at all times. The existing implementation already caches connections per node via `redis_node.cached_connection`. This eliminates ~1-5ms of connection setup latency during the critical promotion path.
+Followers maintain persistent multiplexed Redis connections at all times, caching connections per node. This eliminates ~1-5ms of connection setup latency during the critical promotion path.
 
 ### 7.4 Staggered Follower Polling (Fallback)
 
@@ -466,9 +464,9 @@ While keyspace notifications are the primary detection mechanism, followers also
 
 ### 7.5 Leader Voluntary Stepdown
 
-Already implemented in the codebase. On graceful shutdown, the leader explicitly releases the lock via the conditional `DEL` script (see Section 6.1). Combined with keyspace notifications, this enables near-instant takeover since followers don't need to wait for TTL expiry.
+On graceful shutdown, the leader explicitly releases the lock via the conditional `DEL` script (see Section 6.1). Combined with keyspace notifications, this enables near-instant takeover since followers don't need to wait for TTL expiry.
 
-The existing `Drop` implementation provides a dual-path release:
+The release uses a dual-path approach:
 1. Attempts async release via a spawned tokio task
 2. Falls back to blocking release if the runtime is unavailable
 3. Both paths have a 100ms timeout to avoid blocking shutdown
@@ -510,7 +508,7 @@ If the leader fails at t=1.5s (after B2 but before B3):
 
 ### 8.3 Connection Pooling and Timeout Strategy
 
-The existing implementation uses multiplexed connections with the following strategy:
+The system uses multiplexed connections with the following strategy:
 
 - **Connection caching**: One multiplexed connection per Redis node, lazily initialized
 - **Operation timeout**: 100ms per node (configurable via `node_timeout`)
@@ -543,13 +541,13 @@ The existing implementation uses multiplexed connections with the following stra
 
 ## 11. Conclusion
 
-The architecture extends the Redlock quorum model from simple lock management to a complete coordination layer — locks, fencing tokens, and block streams all operate under the same quorum semantics across N independent Redis nodes.
+The architecture uses the Redlock quorum model as a complete coordination layer — locks, fencing tokens, and block streams all operate under the same quorum semantics across N independent Redis nodes.
 
 Two levels of safety reinforce each other:
 
-1. **Liveness (implemented)**: The Redlock-based distributed mutex ensures that at most one sequencer holds the leader lease at any time. Graceful shutdown releases the lock immediately; ungraceful failure relies on TTL expiry.
+1. **Liveness**: The Redlock-based distributed mutex ensures that at most one sequencer holds the leader lease at any time. Graceful shutdown releases the lock immediately; ungraceful failure relies on TTL expiry.
 
-2. **Safety (proposed)**: Fencing tokens and the Redis stream provide a logical ordering guarantee. The combined epoch + lock-owner check in `write_block.lua`, enforced per-node with quorum across nodes, ensures that even during network partitions, GC pauses, or partial failures, no stale leader can corrupt the block stream. The pigeonhole property of quorums guarantees that any zombie write attempt will be rejected on at least one node in common with the new leader's quorum.
+2. **Safety**: Fencing tokens and the Redis stream provide a logical ordering guarantee. The combined epoch + lock-owner check in `write_block.lua`, enforced per-node with quorum across nodes, ensures that even during network partitions, GC pauses, or partial failures, no stale leader can corrupt the block stream. The pigeonhole property of quorums guarantees that any zombie write attempt will be rejected on at least one node in common with the new leader's quorum.
 
 Epoch divergence across nodes (from partial promotions) and stream divergence (from partial writes) do not affect safety. Epoch divergence is actively healed: `write_block.lua` pulls lagging nodes forward to the leader's epoch on its first block write, making divergence transient rather than accumulating. The quorum-read sync algorithm enables followers to reconstruct a consistent view from potentially divergent per-node streams.
 
