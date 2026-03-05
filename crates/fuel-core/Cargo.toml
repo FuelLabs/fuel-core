@@ -14,6 +14,8 @@ version = { workspace = true }
 [features]
 default = ["rocksdb", "serde"]
 serde = ["dep:serde_with"]
+leader_lock = []
+not_leader_lock = []
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
 rpc = ["dep:fuel-core-block-aggregator-api"]
@@ -98,8 +100,7 @@ rand = { workspace = true }
 redis = { version = "1", features = ["tokio-comp"] }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
-    "multi-threaded-cf",
-], optional = true }
+    "multi-threaded-cf"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 serde_with = { workspace = true, optional = true }
@@ -123,15 +124,13 @@ fuel-core = { path = ".", features = ["test-helpers"] }
 fuel-core-executor = { workspace = true, features = [
     "std",
     "test-helpers",
-    "limited-tx-count",
-] }
+    "limited-tx-count"] }
 fuel-core-services = { path = "./../services", features = ["test-helpers"] }
 fuel-core-storage = { path = "./../storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "./../trace" }
 fuel-core-types = { path = "./../types", features = ["test-helpers", "random"] }
 fuel-core-upgradable-executor = { workspace = true, features = [
-    "test-helpers",
-] }
+    "test-helpers"] }
 proptest = { workspace = true }
 sha2 = { workspace = true, features = ["default"] }
 test-case = { workspace = true }

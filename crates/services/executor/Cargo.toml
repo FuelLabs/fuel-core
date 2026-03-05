@@ -20,15 +20,9 @@ fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-provi
 
 [dependencies]
 anyhow = { workspace = true }
-fuel-core-storage = { workspace = true, default-features = false, features = [
-  "alloc",
-] }
-fuel-core-syscall = { workspace = true, default-features = false, features = [
-  "alloc",
-] }
-fuel-core-types = { workspace = true, default-features = false, features = [
-  "alloc",
-] }
+fuel-core-storage = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-core-syscall = { workspace = true, default-features = false, features = ["alloc"] }
+fuel-core-types = { workspace = true, default-features = false, features = ["alloc"] }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true, default-features = false }

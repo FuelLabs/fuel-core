@@ -35,6 +35,7 @@ impl PoATriggerArgs {
             retry_delay,
             max_retry_delay_offset,
             max_attempts,
+            stream_max_len,
         } = self.leader_lock.clone();
         if enabled {
             Ok(Some(RedisLeaderLockConfig {
@@ -49,6 +50,7 @@ impl PoATriggerArgs {
                 retry_delay: retry_delay.into(),
                 max_retry_delay_offset: max_retry_delay_offset.into(),
                 max_attempts,
+                stream_max_len,
             }))
         } else {
             Ok(None)
@@ -159,6 +161,9 @@ struct LeaderLock {
     /// Maximum number of acquire attempts per can_produce_block call.
     #[clap(long = "poa-leader-lock-max-attempts", env, default_value_t = 3)]
     max_attempts: u32,
+    /// Maximum approximate number of entries retained in the Redis block stream.
+    #[clap(long = "poa-leader-lock-stream-max-len", env, default_value_t = 1000)]
+    stream_max_len: u32,
 }
 
 #[cfg(test)]
@@ -224,6 +229,7 @@ mod tests {
             StdDuration::from_millis(100)
         );
         assert_eq!(leader_lock.max_attempts, 3);
+        assert_eq!(leader_lock.stream_max_len, 1000);
     }
 
     #[test]

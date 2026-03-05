@@ -38,8 +38,7 @@ fuel-core-executor = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 fuel-core-wasm-executor = { workspace = true, features = [
-    "std",
-], optional = true }
+    "std"], optional = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true, optional = true }
@@ -49,8 +48,7 @@ wasmtime = { version = "41.0.1", default-features = false, features = [
     "cranelift",
     "parallel-compilation",
     "pooling-allocator",
-    "runtime",
-], optional = true }
+    "runtime"], optional = true }
 
 [build-dependencies]
 fuel-core-wasm-executor = { workspace = true, optional = true, default-features = false }

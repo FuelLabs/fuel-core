@@ -71,8 +71,7 @@ alloy-transport-http = { version = "1.7", default-features = false, features = [
 anyhow = "1.0"
 async-graphql = { version = "7.0.15", features = [
     "graphiql",
-    "tracing",
-], default-features = false }
+    "tracing"], default-features = false }
 async-graphql-value = { version = "7.0.15" }
 async-trait = "0.1"
 
@@ -92,8 +91,7 @@ educe = { version = "0.6", default-features = false, features = [
     "Eq",
     "PartialEq",
     "Hash",
-    "Debug",
-] }
+    "Debug"] }
 enum-iterator = "2"
 enum_dispatch = "0.3.13"
 flate2 = "1.1.5"
@@ -158,8 +156,7 @@ rayon = "1.10.0"
 # enable cookie store to support L7 sticky sessions
 reqwest = { version = "0.13", default-features = false, features = [
     "rustls",
-    "cookies",
-] }
+    "cookies"] }
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
