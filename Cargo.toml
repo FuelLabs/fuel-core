@@ -71,7 +71,7 @@ aws-smithy-mocks = "0.2.0"
 axum = "0.5"
 bytes = "1.5.0"
 clap = "4.4"
-cynic = { version = "3.1.0", features = ["http-reqwest"] }
+cynic = { version = "=3.12.0", features = ["http-reqwest"] }
 derive_more = { version = "0.99" }
 ed25519 = { version = "2.2.3", default-features = false }
 ed25519-dalek = { version = "2.1.1", default-features = false }
@@ -135,7 +135,7 @@ proptest = "1.1"
 rand = "0.8"
 rayon = "1.10.0"
 # enable cookie store to support L7 sticky sessions
-reqwest = { version = "0.12.0", default-features = false, features = ["rustls-tls", "cookies"] }
+reqwest = { version = "0.12.0", default-features = false, features = ["rustls-tls", "cookies", "json"] }
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
