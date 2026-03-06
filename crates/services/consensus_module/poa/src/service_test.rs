@@ -8,9 +8,11 @@ use crate::{
     new_service,
     ports::{
         BlockProducer,
+        BlockReconciliationReadPort,
         BlockSigner,
         GetTime,
         InMemoryPredefinedBlocks,
+        LeaderState,
         MockBlockImporter,
         MockBlockProducer,
         MockP2pPort,
@@ -66,6 +68,10 @@ use std::{
         Arc,
         Mutex as StdMutex,
         Mutex,
+        atomic::{
+            AtomicBool,
+            Ordering,
+        },
     },
     time::Duration,
 };
@@ -169,7 +175,7 @@ impl TestContextBuilder {
 
         let p2p_port = generate_p2p_port();
 
-        let predefined_blocks = HashMap::new().into();
+        let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
 
         let time = self.start_time.map(TestTime::new).unwrap_or_default();
 
@@ -188,6 +194,7 @@ impl TestContextBuilder {
             predefined_blocks,
             watch,
             block_production_ready_signal.clone(),
+            FakeReconciliationPort::reconciled_leader(),
         );
 
         service.start_and_await().await.unwrap();
@@ -233,6 +240,7 @@ pub type TestPoAService = Service<
     InMemoryPredefinedBlocks,
     test_time::Watch,
     FakeBlockProductionReadySignal,
+    FakeReconciliationPort,
 >;
 
 struct TestContext {
@@ -250,6 +258,288 @@ pub struct TxPoolContext {
     pub txpool: MockTransactionPool,
     pub txs: Arc<Mutex<Vec<Script>>>,
     pub new_txs_notifier: watch::Sender<()>,
+}
+
+#[derive(Clone)]
+pub(crate) struct FakeReconciliationPort {
+    state: Arc<StdMutex<anyhow::Result<LeaderState>>>,
+    release_called: Arc<AtomicBool>,
+}
+
+impl Default for FakeReconciliationPort {
+    fn default() -> Self {
+        Self::reconciled_leader()
+    }
+}
+
+impl FakeReconciliationPort {
+    pub fn reconciled_leader() -> Self {
+        Self {
+            state: Arc::new(StdMutex::new(Ok(LeaderState::ReconciledLeader))),
+            release_called: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn reconciled_follower() -> Self {
+        Self {
+            state: Arc::new(StdMutex::new(Ok(LeaderState::ReconciledFollower))),
+            release_called: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn with_state(state: anyhow::Result<LeaderState>) -> Self {
+        Self {
+            state: Arc::new(StdMutex::new(state)),
+            release_called: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    pub fn release_called_handle(&self) -> Arc<AtomicBool> {
+        self.release_called.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl BlockReconciliationReadPort for FakeReconciliationPort {
+    async fn leader_state(
+        &self,
+        _next_height: BlockHeight,
+    ) -> anyhow::Result<LeaderState> {
+        let guard = self
+            .state
+            .lock()
+            .expect("FakeReconciliationPort mutex poisoned");
+        match &*guard {
+            Ok(state) => Ok(state.clone()),
+            Err(err) => Err(anyhow::anyhow!("{err}")),
+        }
+    }
+
+    async fn release(&self) -> anyhow::Result<()> {
+        self.release_called.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn main_task__releases_reconciliation_port_on_shutdown() {
+    // given
+    let config = Config {
+        trigger: Trigger::Never,
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::default();
+    let watch = time.watch();
+    let reconciliation_port = FakeReconciliationPort::reconciled_leader();
+    let release_called = reconciliation_port.release_called_handle();
+
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        MockBlockProducer::default(),
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        reconciliation_port,
+    );
+
+    // when
+    service.start_and_await().await.unwrap();
+    let _ = service.stop_and_await().await.unwrap();
+
+    // then
+    assert!(release_called.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn main_task__when_reconciliation_returns_follower_then_does_not_produce_blocks() {
+    // given
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::default();
+    let watch = time.watch();
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        FakeReconciliationPort::reconciled_follower(),
+    );
+
+    // when
+    service.start_and_await().await.unwrap();
+    let receive_timeout = tokio::spawn(async move {
+        time::timeout(Duration::from_millis(100), block_receiver.recv()).await
+    });
+    tokio::task::yield_now().await;
+    time::advance(Duration::from_millis(101)).await;
+    let receive_result = receive_timeout.await.unwrap();
+    let stop_result = service.stop_and_await().await;
+
+    // then
+    assert!(
+        receive_result.is_err(),
+        "Expected block receive to time out"
+    );
+    let _ = stop_result.unwrap();
+}
+
+#[tokio::test]
+async fn run__when_leader_state_fails_then_does_not_produce_or_commit_result() {
+    // given
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().times(0);
+    block_importer.expect_execute_and_commit().times(0);
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::default();
+    let watch = time.watch();
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        FakeReconciliationPort::with_state(Err(anyhow::anyhow!("leader-state-failure"))),
+    );
+
+    // when
+    service.start_and_await().await.unwrap();
+    let receive_timeout = tokio::spawn(async move {
+        time::timeout(Duration::from_millis(100), block_receiver.recv()).await
+    });
+    tokio::task::yield_now().await;
+    time::advance(Duration::from_millis(101)).await;
+    let receive_result = receive_timeout.await.unwrap();
+    let stop_result = service.stop_and_await().await;
+
+    // then
+    assert!(
+        receive_result.is_err(),
+        "Expected block receive to time out"
+    );
+    let _ = stop_result.unwrap();
+}
+
+#[tokio::test]
+async fn run__when_execute_and_commit_fails_during_reconcile_then_does_not_produce_or_commit_result()
+ {
+    // given
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().times(0);
+    block_importer
+        .expect_execute_and_commit()
+        .returning(|_| Err(anyhow::anyhow!("invalid-block")));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::default();
+    let watch = time.watch();
+    let block = block_for_height(2);
+    let consensus = FakeBlockSigner { succeeds: true }
+        .seal_block(&block)
+        .await
+        .unwrap();
+    let unreconciled_state = LeaderState::UnreconciledBlocks(vec![SealedBlock {
+        entity: block,
+        consensus,
+    }]);
+
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        FakeReconciliationPort::with_state(Ok(unreconciled_state)),
+    );
+
+    // when
+    service.start_and_await().await.unwrap();
+    let receive_timeout = tokio::spawn(async move {
+        time::timeout(Duration::from_millis(100), block_receiver.recv()).await
+    });
+    tokio::task::yield_now().await;
+    time::advance(Duration::from_millis(101)).await;
+    let receive_result = receive_timeout.await.unwrap();
+    let stop_result = service.stop_and_await().await;
+
+    // then
+    assert!(
+        receive_result.is_err(),
+        "Expected block receive to time out"
+    );
+    let _ = stop_result.unwrap();
 }
 
 impl MockTransactionPool {
@@ -414,6 +704,7 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
         InMemoryPredefinedBlocks::new(blocks_map),
         time.watch(),
         block_production_ready_signal.clone(),
+        FakeReconciliationPort::reconciled_leader(),
     );
 
     // when
@@ -481,6 +772,7 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
         InMemoryPredefinedBlocks::new(predefined_blocks_map),
         time.watch(),
         block_production_ready_signal.clone(),
+        FakeReconciliationPort::reconciled_leader(),
     );
 
     // when
@@ -561,6 +853,7 @@ async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() 
         InMemoryPredefinedBlocks::new(HashMap::new()),
         time.watch(),
         block_production_ready_signal.clone(),
+        FakeReconciliationPort::reconciled_leader(),
     );
 
     // when
@@ -608,6 +901,7 @@ async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
         InMemoryPredefinedBlocks::new(HashMap::new()),
         time.watch(),
         block_production_ready_signal.clone(),
+        FakeReconciliationPort::reconciled_leader(),
     );
 
     // when
