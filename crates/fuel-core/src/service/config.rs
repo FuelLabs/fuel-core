@@ -28,7 +28,7 @@ use std::{
 use strum_macros::{
     Display,
     EnumString,
-    EnumVariantNames,
+    VariantNames,
 };
 
 #[cfg(feature = "parallel-executor")]
@@ -375,7 +375,7 @@ impl From<&Config> for fuel_core_poa::pre_confirmation_signature_service::config
 }
 
 #[derive(
-    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, VariantNames, ValueEnum,
 )]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {

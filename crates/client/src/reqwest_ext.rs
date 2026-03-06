@@ -146,11 +146,11 @@ where
     ResponseData: serde::de::DeserializeOwned + Send + 'static,
     Errors: serde::de::DeserializeOwned + Send + 'static,
 {
-    type Output = Result<FuelGraphQlResponse<ResponseData, Errors>, CynicReqwestError>;
+    type Output = Result<FuelGraphQlResponse<ResponseData, Errors>, anyhow::Error>;
 
     type IntoFuture = BoxFuture<
         'static,
-        Result<FuelGraphQlResponse<ResponseData, Errors>, CynicReqwestError>,
+        Result<FuelGraphQlResponse<ResponseData, Errors>, anyhow::Error>,
     >;
 
     fn into_future(self) -> Self::IntoFuture {
@@ -180,14 +180,14 @@ impl<ResponseData> CynicReqwestBuilder<ResponseData, serde::de::IgnoredAny> {
 
 async fn deser_gql<ResponseData, ErrorExtensions>(
     response: Result<reqwest::Response, reqwest::Error>,
-) -> Result<FuelGraphQlResponse<ResponseData, ErrorExtensions>, CynicReqwestError>
+) -> Result<FuelGraphQlResponse<ResponseData, ErrorExtensions>, anyhow::Error>
 where
     ResponseData: serde::de::DeserializeOwned + Send + 'static,
     ErrorExtensions: serde::de::DeserializeOwned + Send + 'static,
 {
     let response = match response {
         Ok(response) => response,
-        Err(e) => return Err(CynicReqwestError::ReqwestError(e)),
+        Err(e) => return Err(anyhow::anyhow!("{e}")),
     };
 
     let status = response.status();
@@ -195,18 +195,18 @@ where
         let text = response.text().await;
         let text = match text {
             Ok(text) => text,
-            Err(e) => return Err(CynicReqwestError::ReqwestError(e)),
+            Err(e) => return Err(anyhow::anyhow!("{e}")),
         };
 
         let Ok(deserred) = serde_json::from_str(&text) else {
-            let response = CynicReqwestError::ErrorResponse(status, text);
-            return Err(response);
+            let error = CynicReqwestError::ErrorResponse(status, text);
+            return Err(anyhow::anyhow!("{error}"));
         };
 
         Ok(deserred)
     } else {
         let json = response.json().await;
-        json.map_err(CynicReqwestError::ReqwestError)
+        json.map_err(|e| anyhow::anyhow!("{e}"))
     }
 }
 

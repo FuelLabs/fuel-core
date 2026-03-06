@@ -160,20 +160,20 @@ pub enum Event {
 #[non_exhaustive]
 pub enum ForcedTransactionFailure {
     /// Failed to decode transaction to a valid fuel_tx::Transaction
-    #[display(fmt = "Failed to decode transaction")]
+    #[display("Failed to decode transaction")]
     CodecError,
     /// Transaction failed basic checks
-    #[display(fmt = "Failed validity checks: {_0:?}")]
+    #[display("Failed validity checks: {_0:?}")]
     CheckError(CheckError),
     /// Invalid transaction type
-    #[display(fmt = "Transaction type is not accepted")]
+    #[display("Transaction type is not accepted")]
     InvalidTransactionType,
     /// Execution error which failed to include
-    #[display(fmt = "Transaction inclusion failed {_0}")]
+    #[display("Transaction inclusion failed {_0}")]
     ExecutionError(Error),
     /// Relayed Transaction didn't specify high enough max gas
     #[display(
-        fmt = "Insufficient max gas: Expected: {claimed_max_gas:?}, Actual: {actual_max_gas:?}"
+        "Insufficient max gas: Expected: {claimed_max_gas:?}, Actual: {actual_max_gas:?}"
     )]
     InsufficientMaxGas {
         /// The max gas claimed by the L1 transaction submitter
@@ -292,87 +292,85 @@ pub struct DryRunResult {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum Error {
-    #[display(fmt = "Transaction id was already used: {_0:#x}")]
+    #[display("Transaction id was already used: {_0:#x}")]
     TransactionIdCollision(Bytes32),
-    #[display(fmt = "Too many transactions in the block")]
+    #[display("Too many transactions in the block")]
     TooManyTransactions,
     /// Number of outputs is more than `u16::MAX`.
-    #[display(fmt = "Number of outputs is more than `u16::MAX`")]
+    #[display("Number of outputs is more than `u16::MAX`")]
     TooManyOutputs,
-    #[display(fmt = "output already exists")]
+    #[display("output already exists")]
     OutputAlreadyExists,
-    #[display(fmt = "The computed fee caused an integer overflow")]
+    #[display("The computed fee caused an integer overflow")]
     FeeOverflow,
     #[display(
-        fmt = "The computed gas caused an integer overflow. reason: {_0}, Augend: {_1}, Addend: {_2}"
+        "The computed gas caused an integer overflow. reason: {_0}, Augend: {_1}, Addend: {_2}"
     )]
     GasOverflow(String, u64, u64),
-    #[display(fmt = "The computed transaction size caused an integer overflow")]
+    #[display("The computed transaction size caused an integer overflow")]
     TxSizeOverflow,
-    #[display(fmt = "The block is missing `Mint` transaction.")]
+    #[display("The block is missing `Mint` transaction.")]
     MintMissing,
-    #[display(fmt = "Found the second entry of the `Mint` transaction in the block.")]
+    #[display("Found the second entry of the `Mint` transaction in the block.")]
     MintFoundSecondEntry,
-    #[display(fmt = "The `Mint` transaction has an unexpected index.")]
+    #[display("The `Mint` transaction has an unexpected index.")]
     MintHasUnexpectedIndex,
-    #[display(fmt = "The last transaction in the block is not `Mint`.")]
+    #[display("The last transaction in the block is not `Mint`.")]
     MintIsNotLastTransaction,
-    #[display(fmt = "The `Mint` transaction mismatches expectations.")]
+    #[display("The `Mint` transaction mismatches expectations.")]
     MintMismatch,
-    #[display(fmt = "Can't increase the balance of the coinbase contract: {_0}.")]
+    #[display("Can't increase the balance of the coinbase contract: {_0}.")]
     CoinbaseCannotIncreaseBalance(String),
-    #[display(fmt = "Coinbase amount mismatches with expected.")]
+    #[display("Coinbase amount mismatches with expected.")]
     CoinbaseAmountMismatch,
-    #[display(fmt = "Coinbase gas price mismatches with expected.")]
+    #[display("Coinbase gas price mismatches with expected.")]
     CoinbaseGasPriceMismatch,
     #[from]
     TransactionValidity(TransactionValidityError),
     // TODO: Replace with `fuel_core_storage::Error` when execution error will live in the
     //  `fuel-core-executor`.
-    #[display(fmt = "got error during work with storage {_0}")]
+    #[display("got error during work with storage {_0}")]
     StorageError(String),
-    #[display(fmt = "got error during work with relayer {_0}")]
+    #[display("got error during work with relayer {_0}")]
     RelayerError(String),
-    #[display(fmt = "occurred an error during block header generation {_0}")]
+    #[display("occurred an error during block header generation {_0}")]
     BlockHeaderError(BlockHeaderError),
-    #[display(fmt = "Transaction({transaction_id:#x}) execution error: {error:?}")]
+    #[display("Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
         // TODO: Use `InterpreterError<StorageError>` when `InterpreterError` implements serde
         error: String,
         transaction_id: Bytes32,
     },
-    #[display(fmt = "{_0:?}")]
+    #[display("{_0:?}")]
     InvalidTransaction(CheckError),
-    #[display(fmt = "Transaction doesn't match expected result: {transaction_id:#x}")]
+    #[display("Transaction doesn't match expected result: {transaction_id:#x}")]
     InvalidTransactionOutcome { transaction_id: Bytes32 },
-    #[display(fmt = "The amount of charged fees is invalid")]
+    #[display("The amount of charged fees is invalid")]
     InvalidFeeAmount,
-    #[display(
-        fmt = "Block generated during validation does not match the provided block"
-    )]
+    #[display("Block generated during validation does not match the provided block")]
     BlockMismatch,
-    #[display(fmt = "No matching utxo for contract id ${_0:#x}")]
+    #[display("No matching utxo for contract id ${_0:#x}")]
     ContractUtxoMissing(ContractId),
-    #[display(fmt = "message already spent {_0:#x}")]
+    #[display("message already spent {_0:#x}")]
     MessageDoesNotExist(Nonce),
-    #[display(fmt = "Expected input of type {_0}")]
+    #[display("Expected input of type {_0}")]
     InputTypeMismatch(String),
-    #[display(fmt = "Executing of the genesis block is not allowed")]
+    #[display("Executing of the genesis block is not allowed")]
     ExecutingGenesisBlock,
-    #[display(fmt = "The da height exceeded its maximum limit")]
+    #[display("The da height exceeded its maximum limit")]
     DaHeightExceededItsLimit,
-    #[display(fmt = "Unable to find the previous block to fetch the DA height")]
+    #[display("Unable to find the previous block to fetch the DA height")]
     PreviousBlockIsNotFound,
-    #[display(fmt = "The relayer gives incorrect messages for the requested da height")]
+    #[display("The relayer gives incorrect messages for the requested da height")]
     RelayerGivesIncorrectMessages,
-    #[display(fmt = "Consensus parameters not found for version {_0}")]
+    #[display("Consensus parameters not found for version {_0}")]
     ConsensusParametersNotFound(ConsensusParametersVersion),
     #[display(
-        fmt = "The expiration block height {_0} of the transaction is more than the current block height {_1}"
+        "The expiration block height {_0} of the transaction is more than the current block height {_1}"
     )]
     TransactionExpired(BlockHeight, BlockHeight),
     /// It is possible to occur untyped errors in the case of the upgrade.
-    #[display(fmt = "Occurred untyped error: {_0}")]
+    #[display("Occurred untyped error: {_0}")]
     Other(String),
 }
 
@@ -399,27 +397,27 @@ impl From<ValidityError> for Error {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum TransactionValidityError {
-    #[display(fmt = "Coin({_0:#x}) input was already spent")]
+    #[display("Coin({_0:#x}) input was already spent")]
     CoinAlreadySpent(UtxoId),
-    #[display(fmt = "The input coin({_0:#x}) doesn't match the coin from database")]
+    #[display("The input coin({_0:#x}) doesn't match the coin from database")]
     CoinMismatch(UtxoId),
-    #[display(fmt = "The specified coin({_0:#x}) doesn't exist")]
+    #[display("The specified coin({_0:#x}) doesn't exist")]
     CoinDoesNotExist(UtxoId),
     #[display(
-        fmt = "Message({_0:#x}) is not yet spendable, as it's DA height is newer than this block allows"
+        "Message({_0:#x}) is not yet spendable, as it's DA height is newer than this block allows"
     )]
     MessageSpendTooEarly(Nonce),
     #[display(
-        fmt = "The specified message({_0:#x}) doesn't exist, possibly because it was already spent"
+        "The specified message({_0:#x}) doesn't exist, possibly because it was already spent"
     )]
     MessageDoesNotExist(Nonce),
-    #[display(fmt = "The input message({_0:#x}) doesn't match the relayer message")]
+    #[display("The input message({_0:#x}) doesn't match the relayer message")]
     MessageMismatch(Nonce),
-    #[display(fmt = "The specified contract({_0:#x}) doesn't exist")]
+    #[display("The specified contract({_0:#x}) doesn't exist")]
     ContractDoesNotExist(ContractId),
-    #[display(fmt = "Contract output index isn't valid: {_0:#x}")]
+    #[display("Contract output index isn't valid: {_0:#x}")]
     InvalidContractInputIndex(UtxoId),
-    #[display(fmt = "Transaction validity: {_0:#?}")]
+    #[display("Transaction validity: {_0:#?}")]
     Validation(CheckError),
 }
 
