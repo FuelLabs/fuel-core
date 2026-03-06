@@ -29,11 +29,7 @@ fault-proving = ["fuel-core-types/fault-proving"]
 [dependencies]
 anyhow = { workspace = true }
 enum_dispatch = { workspace = true }
-fuel-core-types = { workspace = true, features = [
-  "alloc",
-  "serde",
-  "da-compression",
-] }
+fuel-core-types = { workspace = true, features = ["alloc", "serde", "da-compression"] }
 paste = { workspace = true }
 rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }

@@ -52,9 +52,12 @@ use crate::{
             TxPoolAdapter,
             UniversalGasPriceProvider,
             VerifierAdapter,
+            block_importer::BlockReconciliationWriteAdapter,
             chain_state_info_provider,
             consensus_module::poa::{
                 InDirectoryPredefinedBlocks,
+                NoopReconciliationAdapter,
+                ReconciliationAdapter,
                 RedisLeaderLeaseAdapter,
             },
             fuel_gas_price_provider::FuelGasPriceProvider,
@@ -113,7 +116,7 @@ pub type PoAService = fuel_core_poa::Service<
     InDirectoryPredefinedBlocks,
     SystemTime,
     ReadySignal,
-    RedisLeaderLeaseAdapter,
+    ReconciliationAdapter,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -229,12 +232,34 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     );
 
+    let redis_reconciliation_adapter = config
+        .leader_lock
+        .as_ref()
+        .map(|leader_lock| {
+            RedisLeaderLeaseAdapter::new(
+                leader_lock.redis_urls.clone(),
+                leader_lock.lease_key.clone(),
+                leader_lock.lease_ttl,
+                leader_lock.node_timeout,
+                leader_lock.retry_delay,
+                leader_lock.max_retry_delay_offset,
+                leader_lock.max_attempts,
+                leader_lock.stream_max_len,
+            )
+        })
+        .transpose()?;
+
     let importer_adapter = BlockImporterAdapter::new(
         chain_id,
         config.block_importer.clone(),
         database.on_chain().clone(),
         executor.clone(),
         verifier.clone(),
+        redis_reconciliation_adapter
+            .as_ref()
+            .cloned()
+            .map(BlockReconciliationWriteAdapter::Redis)
+            .unwrap_or_else(|| BlockReconciliationWriteAdapter::Noop(Default::default())),
     );
 
     let chain_state_info_provider_service = chain_state_info_provider::new_service(
@@ -393,21 +418,13 @@ pub fn init_sub_services(
 
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
-            let leader_lease_port = config
-                .leader_lock
+            let reconciliation_port = redis_reconciliation_adapter
                 .as_ref()
-                .map(|leader_lock| {
-                    RedisLeaderLeaseAdapter::new(
-                        leader_lock.redis_urls.clone(),
-                        leader_lock.lease_key.clone(),
-                        leader_lock.lease_ttl,
-                        leader_lock.node_timeout,
-                        leader_lock.retry_delay,
-                        leader_lock.max_retry_delay_offset,
-                        leader_lock.max_attempts,
-                    )
-                })
-                .transpose()?;
+                .cloned()
+                .map(ReconciliationAdapter::Redis)
+                .unwrap_or_else(|| {
+                    ReconciliationAdapter::Noop(NoopReconciliationAdapter)
+                });
 
             Ok(fuel_core_poa::new_service(
                 &last_block_header,
@@ -420,7 +437,7 @@ pub fn init_sub_services(
                 predefined_blocks,
                 SystemTime,
                 block_production_ready_signal,
-                leader_lease_port,
+                reconciliation_port,
             ))
         })
         .transpose()?;

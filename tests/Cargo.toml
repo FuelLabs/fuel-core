@@ -34,43 +34,26 @@ not_leader_lock = []
 
 [dependencies]
 anyhow = { workspace = true }
-aws-config = { workspace = true, features = [
-    "behavior-version-latest",
-], optional = true }
+aws-config = { workspace = true, features = ["behavior-version-latest"], optional = true }
 aws-sdk-kms = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true }
 clap = { workspace = true }
-fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
-    "p2p",
-    "relayer",
-    "wasm-executor",
-    "test-helpers",
-    "backup",
-] }
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["p2p", "relayer", "wasm-executor", "test-helpers", "backup"] }
 fuel-core-benches = { path = "../benches" }
 fuel-core-bin = { path = "../bin/fuel-core", features = ["parquet", "p2p"] }
 fuel-core-block-aggregator-api = { path = "../crates/services/block_aggregator_api" }
 fuel-core-client = { path = "../crates/client", features = ["test-helpers"] }
 fuel-core-compression = { path = "../crates/compression" }
-fuel-core-compression-service = { path = "../crates/services/compression", features = [
-    "test-helpers",
-] }
-fuel-core-gas-price-service = { path = "../crates/services/gas_price_service", features = [
-    "test-helpers",
-] }
-fuel-core-p2p = { path = "../crates/services/p2p", features = [
-    "test-helpers",
-], optional = true }
+fuel-core-compression-service = { path = "../crates/services/compression", features = ["test-helpers"] }
+
+fuel-core-gas-price-service = { path = "../crates/services/gas_price_service", features = ["test-helpers"] }
+fuel-core-p2p = { path = "../crates/services/p2p", features = ["test-helpers"], optional = true }
 fuel-core-poa = { path = "../crates/services/consensus_module/poa" }
 fuel-core-provider = { path = "../crates/provider" }
-fuel-core-relayer = { path = "../crates/services/relayer", features = [
-    "test-helpers",
-] }
+fuel-core-relayer = { path = "../crates/services/relayer", features = ["test-helpers"] }
 fuel-core-storage = { path = "../crates/storage", features = ["test-helpers"] }
 fuel-core-trace = { path = "../crates/trace" }
-fuel-core-txpool = { path = "../crates/services/txpool_v2", features = [
-    "test-helpers",
-] }
+fuel-core-txpool = { path = "../crates/services/txpool_v2", features = ["test-helpers"] }
 fuel-core-types = { path = "../crates/types", features = ["test-helpers"] }
 fuel-core-upgradable-executor = { path = "../crates/services/upgradable-executor" }
 futures = { workspace = true }
@@ -88,11 +71,7 @@ serde_json = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 test-helpers = { path = "./test-helpers" }
-tokio = { workspace = true, features = [
-    "macros",
-    "rt-multi-thread",
-    "test-util",
-] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
 

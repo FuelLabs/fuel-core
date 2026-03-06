@@ -244,7 +244,7 @@ jobs:
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
   leader-lock-integration-tests:
-    name: Leader Lock Integration Tests (w/Redis)
+    name: Leader Lock Tests (w/Redis)
     needs:
       - lint-toml-files
       - prevent-openssl
@@ -278,6 +278,7 @@ jobs:
           env | sort | grep -Ei 'REDIS|LEADER|LOCK|FUEL' || true
           (timeout 90s redis-cli MONITOR | stdbuf -oL grep -E 'SELECT|SET|PEXPIRE|DEL|leader|lock' || true) &
           cargo test --package fuel-core-tests --test integration_tests leader_lock --features leader_lock -- --test-threads=1 --nocapture
+          cargo test --package fuel-core --lib service::adapters::consensus_module::poa::tests:: --features leader_lock -- --test-threads=1 --nocapture
 
   verifications-complete:
     needs:
