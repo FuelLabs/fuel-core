@@ -176,7 +176,8 @@ where
 
         let Config {
             min_connected_reserved_peers,
-            time_until_synced,
+            time_until_synced_sufficient_peers,
+            time_until_synced_insufficient_peers,
             trigger,
             production_timeout,
             ..
@@ -185,7 +186,8 @@ where
         let sync_task = SyncTask::new(
             peer_connections_stream,
             min_connected_reserved_peers,
-            time_until_synced,
+            time_until_synced_sufficient_peers,
+            time_until_synced_insufficient_peers,
             block_stream,
             last_block,
         );

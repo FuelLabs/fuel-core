@@ -120,8 +120,13 @@ pub struct Config {
     pub relayer_consensus_config: fuel_core_consensus_module::RelayerConsensusConfig,
     /// The number of reserved peers to connect to before starting to sync.
     pub min_connected_reserved_peers: usize,
-    /// Time to wait after receiving the latest block before considered to be Synced.
-    pub time_until_synced: Duration,
+    /// Time to wait after receiving the latest block before considered to be Synced
+    /// when sufficient peers are connected.
+    pub time_until_synced_sufficient_peers: Option<Duration>,
+    /// Time to wait before starting block production when insufficient peers are connected.
+    /// If set, allows block production even without peers after this timeout expires
+    /// without receiving new blocks from the network.
+    pub time_until_synced_insufficient_peers: Option<Duration>,
     /// The timeout after which block production is considered failed.
     pub production_timeout: Duration,
     /// The size of the memory pool in number of `MemoryInstance`s.
@@ -290,7 +295,8 @@ impl Config {
             name: String::default(),
             relayer_consensus_config: Default::default(),
             min_connected_reserved_peers: 0,
-            time_until_synced: Duration::ZERO,
+            time_until_synced_sufficient_peers: None,
+            time_until_synced_insufficient_peers: None,
             production_timeout: Duration::from_secs(20),
             memory_pool_size: 4,
             #[cfg(feature = "rpc")]
@@ -338,7 +344,9 @@ impl From<&Config> for fuel_core_poa::Config {
             signer: config.consensus_signer.clone(),
             metrics: false,
             min_connected_reserved_peers: config.min_connected_reserved_peers,
-            time_until_synced: config.time_until_synced,
+            time_until_synced_sufficient_peers: config.time_until_synced_sufficient_peers,
+            time_until_synced_insufficient_peers: config
+                .time_until_synced_insufficient_peers,
             production_timeout: config.production_timeout,
             chain_id: config
                 .snapshot_reader
