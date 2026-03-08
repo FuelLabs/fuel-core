@@ -20,6 +20,7 @@ futures = { workspace = true }
 humantime = "2.1"
 tempfile = { workspace = true }
 rand = { workspace = true }
+redis = { version = "0.27", features = ["tokio-comp"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util", "time", "signal"] }
 tokio-stream = { workspace = true }
 tracing = { workspace = true }

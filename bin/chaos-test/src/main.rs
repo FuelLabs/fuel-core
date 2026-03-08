@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
     let gap_tolerance = Duration::from_secs(60);
     let stall_threshold = *cli.stall_threshold;
     let block_time = *cli.block_time;
-    let invariant_handle = tokio::spawn(async move {
+    let mut invariant_handle = tokio::spawn(async move {
         invariants::run_invariant_checker(
             invariant_cluster,
             invariant_timeline,
@@ -140,8 +140,9 @@ async fn main() -> anyhow::Result<()> {
             gap_tolerance,
             stall_threshold,
             block_time,
+            seed,
         )
-        .await;
+        .await
     });
 
     // Spawn fault scheduler
@@ -162,37 +163,50 @@ async fn main() -> anyhow::Result<()> {
             .await;
     });
 
-    // Run for the configured duration or until Ctrl+C
+    // Run for the configured duration, until Ctrl+C, or until the invariant
+    // checker bails early (e.g. fork detected).
     let test_duration = *cli.duration;
-    tokio::select! {
+    let early_bail = tokio::select! {
         _ = tokio::time::sleep(test_duration) => {
             info!("Test duration elapsed");
+            false
         }
         _ = tokio::signal::ctrl_c() => {
             info!("Ctrl+C received, stopping...");
+            false
         }
-    }
+        result = &mut invariant_handle => {
+            // Invariant checker exited early (fork detected)
+            let fork = result.unwrap_or(false);
+            if fork {
+                info!("Invariant checker detected a FORK — stopping test early");
+            }
+            fork
+        }
+    };
 
     // Stop fault scheduler
     info!("Stopping fault scheduler...");
     fault_stop_tx.send(true)?;
     fault_handle.await?;
 
-    // Settling period: restore all proxies and wait
-    info!("Settling period: restoring all proxies and waiting 10s...");
-    {
-        let cluster_guard = cluster.lock().await;
-        cluster_guard.restore_all_proxies();
-    }
-    timeline.record(TimelineEventKind::Info(
-        "Settling period: all proxies restored".to_string(),
-    ));
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    if !early_bail {
+        // Settling period: restore all proxies and wait
+        info!("Settling period: restoring all proxies and waiting 10s...");
+        {
+            let cluster_guard = cluster.lock().await;
+            cluster_guard.restore_all_proxies();
+        }
+        timeline.record(TimelineEventKind::Info(
+            "Settling period: all proxies restored".to_string(),
+        ));
+        tokio::time::sleep(Duration::from_secs(10)).await;
 
-    // Stop invariant checker
-    info!("Stopping invariant checker...");
-    invariant_stop_tx.send(true)?;
-    invariant_handle.await?;
+        // Stop invariant checker
+        info!("Stopping invariant checker...");
+        invariant_stop_tx.send(true)?;
+        invariant_handle.await?;
+    }
 
     // Print report
     timeline.print_report();

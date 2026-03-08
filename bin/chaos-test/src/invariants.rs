@@ -39,12 +39,13 @@ impl InvariantState {
         }
     }
 
+    /// Returns true if a fork was detected.
     fn check_block(
         &mut self,
         event: &BlockEvent,
         timeline: &Timeline,
         lease_ttl: Duration,
-    ) {
+    ) -> bool {
         let height = event.height;
         let node_idx = event.node_idx;
 
@@ -56,6 +57,7 @@ impl InvariantState {
         });
 
         // 1. Fork detection
+        let mut fork_detected = false;
         if let Some((existing_id, first_node)) =
             self.canonical.get(&height)
         {
@@ -69,6 +71,7 @@ impl InvariantState {
                 };
                 warn!("INVARIANT VIOLATION: {violation}");
                 timeline.record(TimelineEventKind::Violation(violation));
+                fork_detected = true;
             }
         } else {
             self.canonical
@@ -100,6 +103,8 @@ impl InvariantState {
                 }
             }
         }
+
+        fork_detected
     }
 }
 
@@ -246,7 +251,99 @@ pub fn spawn_block_readers(
     handles
 }
 
+/// Dump the contents of the block stream from each Redis server directly
+/// (bypassing proxies). This captures the ground truth of what was published.
+/// Dump the contents of the block stream from each Redis server directly
+/// (bypassing proxies). This captures the ground truth of what was published.
+///
+/// The stream entries are written by the Lua script as:
+///   XADD key * height epoch block_bytes
+/// where height and epoch are numeric strings, and block_bytes is raw postcard.
+/// We read entries as `(String, Vec<(Vec<u8>, Vec<u8>)>)` to handle binary values.
+async fn dump_redis_streams(cluster: &Cluster, seed: u64) {
+    let stream_key = format!("chaos-test:leader:{seed}:block:stream");
+    info!("=== REDIS STREAM DUMP (key: {stream_key}) ===");
+
+    for (idx, redis) in cluster.redis_servers.iter().enumerate() {
+        if !redis.is_running() {
+            info!("  Redis {idx}: DOWN (not running)");
+            continue;
+        }
+        let url = format!("redis://127.0.0.1:{}/", redis.port());
+        match redis::Client::open(url) {
+            Ok(client) => {
+                match tokio::time::timeout(
+                    Duration::from_secs(2),
+                    client.get_multiplexed_async_connection(),
+                )
+                .await
+                {
+                    Ok(Ok(mut conn)) => {
+                        let len: Result<usize, _> =
+                            redis::cmd("XLEN").arg(&stream_key).query_async(&mut conn).await;
+                        // Read entries with binary-safe types
+                        let entries: Result<
+                            Vec<(String, Vec<(Vec<u8>, Vec<u8>)>)>,
+                            _,
+                        > = redis::cmd("XRANGE")
+                            .arg(&stream_key)
+                            .arg("-")
+                            .arg("+")
+                            .query_async(&mut conn)
+                            .await;
+                        match (len, entries) {
+                            (Ok(len), Ok(entries)) => {
+                                info!("  Redis {idx}: {len} entries in stream");
+                                for (entry_id, fields) in &entries {
+                                    let mut height = None;
+                                    let mut epoch = None;
+                                    let mut data_len = 0;
+                                    for (key_bytes, val_bytes) in fields {
+                                        let key = String::from_utf8_lossy(key_bytes);
+                                        match key.as_ref() {
+                                            "height" => {
+                                                height = String::from_utf8_lossy(val_bytes)
+                                                    .parse::<u32>()
+                                                    .ok();
+                                            }
+                                            "epoch" => {
+                                                epoch = String::from_utf8_lossy(val_bytes)
+                                                    .parse::<u64>()
+                                                    .ok();
+                                            }
+                                            "data" => {
+                                                data_len = val_bytes.len();
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    info!(
+                                        "    {entry_id}: height={:?} epoch={:?} data={data_len} bytes",
+                                        height, epoch
+                                    );
+                                }
+                            }
+                            (len_res, entries_res) => {
+                                info!(
+                                    "  Redis {idx}: failed to read stream (XLEN: {:?}, XRANGE: {:?})",
+                                    len_res.err(),
+                                    entries_res.err()
+                                );
+                            }
+                        }
+                    }
+                    Ok(Err(e)) => info!("  Redis {idx}: connection failed: {e}"),
+                    Err(_) => info!("  Redis {idx}: connection timed out"),
+                }
+            }
+            Err(e) => info!("  Redis {idx}: client error: {e}"),
+        }
+    }
+    info!("=== END REDIS STREAM DUMP ===");
+}
+
 /// Runs the invariant checker loop. Receives block events and checks invariants.
+/// Returns true if a fork was detected (early bail).
 pub async fn run_invariant_checker(
     cluster: Arc<Mutex<Cluster>>,
     timeline: Timeline,
@@ -255,7 +352,8 @@ pub async fn run_invariant_checker(
     gap_tolerance: Duration,
     stall_threshold: Duration,
     block_time: Duration,
-) {
+    seed: u64,
+) -> bool {
     // Grace period: a freshly (re)started node needs time to initialize,
     // connect to P2P peers, pass ensure_synced, and acquire the Redis lease
     // before it can produce blocks.
@@ -283,10 +381,18 @@ pub async fn run_invariant_checker(
             .collect()
     };
 
+    let mut fork_detected = false;
+
     loop {
         tokio::select! {
             Some(event) = rx.recv() => {
-                state.check_block(&event, &timeline, lease_ttl);
+                if state.check_block(&event, &timeline, lease_ttl) {
+                    warn!("FORK DETECTED — dumping Redis stream state and bailing early");
+                    let cluster_guard = cluster.lock().await;
+                    dump_redis_streams(&cluster_guard, seed).await;
+                    fork_detected = true;
+                    break;
+                }
             }
             _ = gap_check_interval.tick() => {
                 let cluster_guard = cluster.lock().await;
@@ -357,4 +463,6 @@ pub async fn run_invariant_checker(
     for handle in reader_handles {
         handle.abort();
     }
+
+    fork_detected
 }

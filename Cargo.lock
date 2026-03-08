@@ -3769,6 +3769,7 @@ dependencies = [
  "futures",
  "humantime",
  "rand 0.8.5",
+ "redis",
  "tempfile",
  "tokio",
  "tokio-stream",
