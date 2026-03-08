@@ -339,58 +339,80 @@ for i in $(seq 1 5); do
 done
 ```
 
-### Root Cause: Under Investigation
+### Root Cause: `write_block.lua` Allows Duplicate Heights in the Stream
 
-The design correctly publishes to Redis quorum BEFORE committing locally — the `_commit_result` function calls `publish_produced_block` first, and only commits to RocksDB if the publish succeeds. Block 322 **was** published to Redis quorum (confirmed by the "Committed block" log, which only fires after successful Redis publish).
+The design correctly publishes to Redis quorum BEFORE committing locally, and the read-side safeguards (quorum reads, error propagation) are already in place. The fork occurs through a **different vector**: two successive leaders can both achieve quorum writes at the same block height because `write_block.lua` does not check for existing entries at the same height.
 
-The silent read failure path (Issue 2b) has been closed: `read_stream_entries_on_node` now returns `Err` on failure (commit `48209e5f35`), and `unreconciled_blocks` already requires a quorum of successful reads before proceeding (line 586).
+### Redis Stream Dump (Captured at Fork, Seed 8, Height 326)
 
-Despite both safeguards being in place, the fork still occurs. Possible remaining vectors:
+The chaos test's early-bail fork detection dumps each Redis server's stream state:
 
-1. **XTRIM race**: Block 322 was published but `XTRIM MAXLEN ~` on some Redis nodes removed it before Node 2's reconciliation read (~1.1s later). The approximate `~` flag means different nodes may trim different entries.
-2. **Successful reads that miss the block**: Node 2 gets a quorum of successful reads, but the block exists only on Redis nodes that were not in that quorum (e.g., published to Redis 0 and 1, but Node 2 successfully reads from Redis 1 and 2 where Redis 2 doesn't have it yet or was trimmed).
-3. **Publish quorum vs read quorum asymmetry**: The block was published to exactly quorum nodes (2/3), and the reading node happened to read a different quorum subset that doesn't overlap.
+```
+Redis 0: 39 entries  — height 326 at epoch 76 only
+Redis 1: 102 entries — height 326 at epoch 77 only
+Redis 2: 333 entries — height 326 at epoch 76 AND epoch 77 (two entries!)
+```
 
-### Fork Sequence (Seed 8, Height 322)
+Both leaders achieved quorum writes at the same height:
+- **Leader A** (epoch 76): wrote to Redis 0 + Redis 2 = quorum (2/3), committed locally
+- **Leader B** (epoch 77): wrote to Redis 1 + Redis 2 = quorum (2/3), committed locally
+- **Result**: Two different blocks at height 326, both quorum-committed → **FORK**
 
-| Time | Event |
+### Why the Pigeonhole Argument Doesn't Prevent This
+
+The spec (Section 3.4) correctly states: *"Any two quorums must share at least one member."* Redis 2 is the overlapping node. The pigeonhole **does** work — but it only prevents **concurrent zombie writes** (a stale leader whose lock has expired). It does NOT prevent **sequential legitimate writes** at the same height by two different leaders who each held the lock at the time they wrote:
+
+1. Leader A holds the lock, writes block at height H. The lock-owner check passes on all nodes. Quorum reached. Block committed.
+2. Leader A is killed. Lock released (graceful shutdown) or expires.
+3. Leader B acquires lock, gets new epoch. Writes a DIFFERENT block at height H. The lock-owner check passes (B owns the lock now). The epoch fencing check passes (B's epoch is higher). **XADD appends a second entry at the same height.** Quorum reached. Different block committed.
+
+The fencing token only rejects **lower** epochs. It does not reject writes at already-occupied heights. And `XADD` always appends — it never checks for duplicates.
+
+### Fork Sequence (Seed 8, Height 326)
+
+| Step | Event |
 |------|-------|
-| t+81.5s | Node 0 is leader, commits block 321. |
-| t+81.7s | **Kill Node 0 injected** — graceful shutdown begins |
-| t+81.9s | Block 322 (`68a3cded...`) committed — Redis publish **succeeded**, then local DB commit |
-| t+81.9s | PoA shuts down. Block 322 exists in both Redis and Node 0's local DB. |
-| t+82.1s | Node 1 logs: "Timed out while connecting to redis leader-lock node" — Redis connectivity degraded |
-| t+82.5s | Node 2 restarts, P2P-syncs blocks 302-321 from Node 1 |
-| t+83.0s | Node 2 acquires Redis lease, calls `unreconciled_blocks(322)` |
-| t+83.0s | `read_stream_entries_on_node` fails silently on enough nodes → returns empty → `ReconciledLeader` |
-| t+83.0s | **Node 2 produces a different block 322** (`c79b4850...`) → **FORK** |
-
-### Key Evidence
-
-1. The "Committed block" log at `19:45:06.975` proves Redis publish succeeded — `_commit_result` publishes first, then commits.
-2. Node 1 had "Timed out while connecting to redis leader-lock node" at `19:45:07.200` — confirming Redis connectivity issues in this window.
-3. No `read_stream_entries` error logs appear for Node 2 — the failures are **silent** (errors return empty Vec, not logged at info level).
+| 1 | Leader A (epoch 76) produces block at height 326 |
+| 2 | `write_block.lua` succeeds on Redis 0 and Redis 2 (quorum 2/3) |
+| 3 | Block committed to Leader A's local DB |
+| 4 | Leader A killed (graceful shutdown, lock released) |
+| 5 | Leader B acquires lock, epoch incremented to 77 |
+| 6 | Leader B reconciles: reads streams. Due to proxy faults, doesn't see height 326 on quorum → `ReconciledLeader` |
+| 7 | Leader B produces a DIFFERENT block at height 326 |
+| 8 | `write_block.lua` succeeds on Redis 1 and Redis 2 (quorum 2/3) |
+| 9 | Redis 2 now has TWO entries at height 326 (epoch 76 and epoch 77) |
+| 10 | Block committed to Leader B's local DB → **FORK** |
 
 ### Cascading Consequences
 
-1. **Fork at height 323**: Node 0 restarts with divergent block 322, produces block 323 on top of it (committed during a subsequent shutdown). Nodes 1 and 2 have a different block 323.
+1. **Permanent divergence**: Leader A (when restarted) has a different block at height 326 than Leaders B's chain. Every P2P sync attempt fails: "Previous root of the next block should match the previous block root."
 
-2. **Permanent divergence**: Node 0 can never sync from peers — every import attempt fails with "Previous root of the next block should match the previous block root."
+2. **Production stall**: If the sole producer loses Redis quorum, no node can produce.
 
-3. **Production stall**: When the remaining leader loses Redis quorum, no node can produce, causing a 25s stall at height 367+.
+### The Design Gap
 
-### Existing Safeguards (Already In Place)
+The spec's Section 6.4 acknowledges that a new leader "may produce a different block at the same height" and claims the epoch field resolves conflicts. But this only works if the **old leader's block was NOT committed locally**. When the old leader successfully published to quorum and committed, there's no mechanism to un-commit it — the fork is permanent.
 
-Both the read-side and reconciliation-side fixes are already implemented:
+The fundamental issue: `write_block.lua` has no **height-uniqueness constraint**. The Lua script's `XADD` always appends, allowing multiple entries at the same height. The fencing token prevents writes from stale (lower) epochs but explicitly allows writes from higher epochs at the same height.
 
-1. `read_stream_entries_on_node` returns `Err` on failure and clears cached connection (commit `48209e5f35`)
-2. `unreconciled_blocks` requires a quorum of successful reads before proceeding (line 586 of `poa.rs`)
+### Fix: Add Height-Uniqueness Check to `write_block.lua`
 
-**The fork occurs despite these safeguards**, which means the root cause is more subtle — likely a quorum overlap issue or stream trimming race rather than a silent failure.
+Before the `XADD`, scan the stream for an existing entry at the requested height. If one exists, reject the write:
 
-### Next Steps
+```lua
+-- Before XADD, check if this height is already in the stream
+-- Use XREVRANGE to efficiently check the most recent entries
+local existing = redis.call('XREVRANGE', KEYS[1], '+', '-', 'COUNT', 100)
+for _, entry in ipairs(existing) do
+    local fields = entry[2]
+    for i = 1, #fields, 2 do
+        if fields[i] == 'height' and fields[i+1] == ARGV[3] then
+            return redis.error_reply("HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream")
+        end
+    end
+end
+```
 
-1. Add tracing to `publish_produced_block` to log which specific Redis nodes received the block
-2. Add tracing to `unreconciled_blocks` to log which Redis nodes were successfully read and what heights/blocks they returned
-3. Re-run seed 8 with enhanced tracing to identify the exact asymmetry
-4. Consider requiring that publish reaches ALL Redis nodes (not just quorum) or that reconciliation reads ALL nodes before concluding no blocks exist at a height
+**Tradeoff — stall over fork:** If Leader A published to Redis {0, 1} and Leader B can only reach Redis {1, 2}, Leader B's write at the same height would be rejected on Redis 1 (height already exists), leaving only Redis 2 — below quorum. Leader B stalls until the partition resolves and it can read Leader A's block from quorum nodes.
+
+**This is the correct CAP tradeoff for a sequencer**: choose consistency (no forks) over availability (temporary stall) during a partition. Once connectivity is restored, Leader B reconciles Leader A's block and produces at height H+1.
