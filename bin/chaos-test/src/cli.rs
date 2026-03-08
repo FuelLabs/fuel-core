@@ -30,6 +30,11 @@ pub struct Cli {
     #[arg(long, default_value = "2s")]
     pub fault_interval: humantime::Duration,
 
+    /// Max allowed production stall (no blocks from any node). Should be
+    /// greater than lease_ttl to allow for normal failover.
+    #[arg(long, default_value = "6s")]
+    pub stall_threshold: humantime::Duration,
+
     /// Log level
     #[arg(long, default_value = "info")]
     pub log_level: String,

@@ -31,6 +31,10 @@ pub enum Violation {
         height: u32,
         nodes: Vec<usize>,
     },
+    ProductionStall {
+        last_height: u32,
+        stalled_for: Duration,
+    },
 }
 
 impl fmt::Display for Violation {
@@ -75,6 +79,16 @@ impl fmt::Display for Violation {
                 write!(
                     f,
                     "CONCURRENT LEADERS at height {height}: nodes {nodes:?}"
+                )
+            }
+            Violation::ProductionStall {
+                last_height,
+                stalled_for,
+            } => {
+                write!(
+                    f,
+                    "PRODUCTION STALL: no new blocks for {stalled_for:?}, \
+                     stuck at height {last_height}"
                 )
             }
         }

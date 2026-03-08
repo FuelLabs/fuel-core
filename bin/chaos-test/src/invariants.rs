@@ -103,13 +103,32 @@ impl InvariantState {
     }
 }
 
+/// Tracks global production progress for stall detection.
+pub struct ProductionTracker {
+    last_max_height: u32,
+    last_advance_time: Instant,
+}
+
+impl ProductionTracker {
+    pub fn new() -> Self {
+        Self {
+            last_max_height: 0,
+            last_advance_time: Instant::now(),
+        }
+    }
+}
+
 /// Poll the actual committed database height for each live node.
 /// This is reliable — it reads directly from RocksDB, not from the lossy
 /// broadcast stream which silently drops events when the consumer lags.
+///
+/// Also checks for production stalls — periods where NO node advances.
 fn check_gaps_from_db(
     cluster: &Cluster,
     gap_tolerance: Duration,
+    stall_threshold: Duration,
     last_progress: &mut HashMap<usize, (u32, Instant)>,
+    production: &mut ProductionTracker,
     timeline: &Timeline,
 ) {
     let mut max_height: u32 = 0;
@@ -134,12 +153,29 @@ fn check_gaps_from_db(
         return;
     }
 
+    // Production stall detection: has ANY node advanced?
+    if max_height > production.last_max_height {
+        production.last_max_height = max_height;
+        production.last_advance_time = Instant::now();
+    } else {
+        let stalled_for = production.last_advance_time.elapsed();
+        // Only flag if at least one node is alive (otherwise stall is expected)
+        if stalled_for > stall_threshold && !node_heights.is_empty() {
+            let violation = Violation::ProductionStall {
+                last_height: production.last_max_height,
+                stalled_for,
+            };
+            warn!("INVARIANT VIOLATION: {violation}");
+            timeline.record(TimelineEventKind::Violation(violation));
+        }
+    }
+
+    // Per-node gap detection
     for (node_idx, height) in &node_heights {
         let entry = last_progress
             .entry(*node_idx)
             .or_insert((*height, Instant::now()));
 
-        // Update timestamp if height advanced
         if *height > entry.0 {
             *entry = (*height, Instant::now());
         }
@@ -207,6 +243,7 @@ pub async fn run_invariant_checker(
     mut stop: tokio::sync::watch::Receiver<bool>,
     lease_ttl: Duration,
     gap_tolerance: Duration,
+    stall_threshold: Duration,
 ) {
     let (tx, mut rx) = mpsc::unbounded_channel::<BlockEvent>();
     let mut state = InvariantState::new();
@@ -218,9 +255,10 @@ pub async fn run_invariant_checker(
         reader_handles = spawn_block_readers(&cluster_guard, tx.clone());
     }
 
-    let mut gap_check_interval = tokio::time::interval(Duration::from_secs(10));
+    let mut gap_check_interval = tokio::time::interval(Duration::from_secs(1));
     // Track last-progress per node for DB-based gap detection
     let mut last_progress: HashMap<usize, (u32, Instant)> = HashMap::new();
+    let mut production = ProductionTracker::new();
 
     // Track which nodes had readers spawned
     let mut reader_nodes: Vec<bool> = {
@@ -238,11 +276,13 @@ pub async fn run_invariant_checker(
             _ = gap_check_interval.tick() => {
                 let cluster_guard = cluster.lock().await;
 
-                // Gap detection via direct DB polling (reliable)
+                // Gap + stall detection via direct DB polling (reliable)
                 check_gaps_from_db(
                     &cluster_guard,
                     gap_tolerance,
+                    stall_threshold,
                     &mut last_progress,
+                    &mut production,
                     &timeline,
                 );
 
