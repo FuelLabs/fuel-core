@@ -5,9 +5,13 @@ use std::{
     time::{Duration, Instant},
 };
 
+use tempfile::TempDir;
+
 pub struct RedisTestServer {
     child: Option<Child>,
     port: u16,
+    /// Persistent data directory for AOF — survives kill/restart
+    data_dir: TempDir,
 }
 
 
@@ -20,9 +24,13 @@ impl RedisTestServer {
 
     pub fn new_stopped() -> Self {
         let port = bind_unused_port();
+        let data_dir = TempDir::new().unwrap_or_else(|e| {
+            panic!("Failed to create temp dir for Redis on port {port}: {e}")
+        });
         Self {
             child: None,
             port,
+            data_dir,
         }
     }
 
@@ -30,7 +38,7 @@ impl RedisTestServer {
         if self.child.is_some() {
             return;
         }
-        let child = spawn_redis_server(self.port);
+        let child = spawn_redis_server(self.port, self.data_dir.path());
         wait_for_redis_ready(self.port);
         self.child = Some(child);
     }
@@ -70,14 +78,18 @@ pub fn bind_unused_port() -> u16 {
     port
 }
 
-fn spawn_redis_server(port: u16) -> Child {
+fn spawn_redis_server(port: u16, data_dir: &std::path::Path) -> Child {
     Command::new("redis-server")
         .arg("--port")
         .arg(port.to_string())
         .arg("--save")
         .arg("")
         .arg("--appendonly")
-        .arg("no")
+        .arg("yes")
+        .arg("--appendfsync")
+        .arg("everysec")
+        .arg("--dir")
+        .arg(data_dir.to_str().expect("data dir should be valid UTF-8"))
         .arg("--bind")
         .arg("127.0.0.1")
         .stdout(Stdio::null())
