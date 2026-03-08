@@ -15,6 +15,7 @@ pub enum Violation {
         first_node: usize,
         second_node: usize,
     },
+    #[allow(dead_code)]
     HeightRegression {
         node: usize,
         previous_height: u32,

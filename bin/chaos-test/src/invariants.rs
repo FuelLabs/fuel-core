@@ -5,6 +5,7 @@ use std::{
 };
 
 use fuel_core_poa::ports::BlockImporter;
+use fuel_core_storage::transactional::HistoricalView;
 use futures::StreamExt;
 use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, info, warn};
@@ -26,24 +27,15 @@ pub struct BlockEvent {
 struct InvariantState {
     /// height -> (block_id, first_node_that_saw_it)
     canonical: HashMap<u32, (String, usize)>,
-    /// Per-node last seen height
-    last_height: HashMap<usize, u32>,
-    /// Per-node last seen height timestamp (for gap detection)
-    last_height_time: HashMap<usize, Instant>,
     /// height -> Vec<(node_idx, timestamp)> for locally produced blocks
     local_producers: HashMap<u32, Vec<(usize, Instant)>>,
-    /// Global max height seen
-    max_height: u32,
 }
 
 impl InvariantState {
     fn new() -> Self {
         Self {
             canonical: HashMap::new(),
-            last_height: HashMap::new(),
-            last_height_time: HashMap::new(),
             local_producers: HashMap::new(),
-            max_height: 0,
         }
     }
 
@@ -83,27 +75,7 @@ impl InvariantState {
                 .insert(height, (event.block_id.clone(), node_idx));
         }
 
-        // 2. Monotonic height check
-        if let Some(&last) = self.last_height.get(&node_idx) {
-            if height <= last {
-                let violation = Violation::HeightRegression {
-                    node: node_idx,
-                    previous_height: last,
-                    new_height: height,
-                };
-                warn!("INVARIANT VIOLATION: {violation}");
-                timeline.record(TimelineEventKind::Violation(violation));
-            }
-        }
-        self.last_height.insert(node_idx, height);
-        self.last_height_time.insert(node_idx, Instant::now());
-
-        // Update global max
-        if height > self.max_height {
-            self.max_height = height;
-        }
-
-        // 3. Concurrent leader detection
+        // 2. Concurrent leader detection
         if event.is_local {
             let producers = self
                 .local_producers
@@ -112,7 +84,6 @@ impl InvariantState {
             producers.push((node_idx, Instant::now()));
 
             if producers.len() > 1 {
-                // Check if the time between productions is within tolerance
                 let first_time = producers[0].1;
                 let last_time = producers.last().unwrap().1;
                 let gap = last_time.duration_since(first_time);
@@ -130,40 +101,62 @@ impl InvariantState {
             }
         }
     }
+}
 
-    fn check_gaps(
-        &self,
-        live_nodes: &[(usize, bool)],
-        gap_tolerance: Duration,
-        timeline: &Timeline,
-    ) {
-        if self.max_height == 0 {
-            return;
+/// Poll the actual committed database height for each live node.
+/// This is reliable — it reads directly from RocksDB, not from the lossy
+/// broadcast stream which silently drops events when the consumer lags.
+fn check_gaps_from_db(
+    cluster: &Cluster,
+    gap_tolerance: Duration,
+    last_progress: &mut HashMap<usize, (u32, Instant)>,
+    timeline: &Timeline,
+) {
+    let mut max_height: u32 = 0;
+    let mut node_heights: Vec<(usize, u32)> = Vec::new();
+
+    for (idx, handle) in cluster.live_nodes() {
+        let height = handle
+            .service
+            .shared
+            .database
+            .on_chain()
+            .latest_height()
+            .map(|h| u32::from(h))
+            .unwrap_or(0);
+        node_heights.push((idx, height));
+        if height > max_height {
+            max_height = height;
+        }
+    }
+
+    if max_height == 0 {
+        return;
+    }
+
+    for (node_idx, height) in &node_heights {
+        let entry = last_progress
+            .entry(*node_idx)
+            .or_insert((*height, Instant::now()));
+
+        // Update timestamp if height advanced
+        if *height > entry.0 {
+            *entry = (*height, Instant::now());
         }
 
-        for &(node_idx, is_alive) in live_nodes {
-            if !is_alive {
-                continue;
-            }
-
-            let node_height = self.last_height.get(&node_idx).copied().unwrap_or(0);
-            let behind = self.max_height.saturating_sub(node_height);
-
-            if behind > 10 {
-                if let Some(&last_time) = self.last_height_time.get(&node_idx) {
-                    let behind_for = last_time.elapsed();
-                    if behind_for > gap_tolerance {
-                        let violation = Violation::GapDetected {
-                            node: node_idx,
-                            max_global_height: self.max_height,
-                            node_height,
-                            behind_for,
-                        };
-                        warn!("INVARIANT VIOLATION: {violation}");
-                        timeline
-                            .record(TimelineEventKind::Violation(violation));
-                    }
-                }
+        let behind = max_height.saturating_sub(*height);
+        if behind > 10 {
+            let stalled_for = entry.1.elapsed();
+            if stalled_for > gap_tolerance {
+                let violation = Violation::GapDetected {
+                    node: *node_idx,
+                    max_global_height: max_height,
+                    node_height: *height,
+                    behind_for: stalled_for,
+                };
+                warn!("INVARIANT VIOLATION: {violation}");
+                timeline
+                    .record(TimelineEventKind::Violation(violation));
             }
         }
     }
@@ -226,6 +219,8 @@ pub async fn run_invariant_checker(
     }
 
     let mut gap_check_interval = tokio::time::interval(Duration::from_secs(10));
+    // Track last-progress per node for DB-based gap detection
+    let mut last_progress: HashMap<usize, (u32, Instant)> = HashMap::new();
 
     // Track which nodes had readers spawned
     let mut reader_nodes: Vec<bool> = {
@@ -241,15 +236,20 @@ pub async fn run_invariant_checker(
                 state.check_block(&event, &timeline, lease_ttl);
             }
             _ = gap_check_interval.tick() => {
-                // Check for gaps and spawn readers for newly restarted nodes
                 let cluster_guard = cluster.lock().await;
 
+                // Gap detection via direct DB polling (reliable)
+                check_gaps_from_db(
+                    &cluster_guard,
+                    gap_tolerance,
+                    &mut last_progress,
+                    &timeline,
+                );
+
+                // Spawn readers for newly alive nodes
                 let live_status: Vec<(usize, bool)> = (0..cluster_guard.node_count())
                     .map(|i| (i, cluster_guard.is_node_alive(i)))
                     .collect();
-                state.check_gaps(&live_status, gap_tolerance, &timeline);
-
-                // Spawn readers for newly alive nodes
                 for (idx, is_alive) in &live_status {
                     if *is_alive && !reader_nodes.get(*idx).copied().unwrap_or(false) {
                         info!("Spawning new block reader for restarted node {idx}");

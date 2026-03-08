@@ -14,6 +14,7 @@ clap = { workspace = true, features = ["derive"] }
 fuel-core = { workspace = true, features = ["p2p", "test-helpers", "rocksdb"] }
 fuel-core-chain-config = { workspace = true }
 fuel-core-poa = { workspace = true }
+fuel-core-storage = { workspace = true }
 fuel-core-types = { workspace = true, features = ["test-helpers"] }
 futures = { workspace = true }
 humantime = "2.1"

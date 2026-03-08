@@ -3764,6 +3764,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-chain-config",
  "fuel-core-poa",
+ "fuel-core-storage",
  "fuel-core-types 0.47.2",
  "futures",
  "humantime",
