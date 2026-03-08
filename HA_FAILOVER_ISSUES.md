@@ -464,3 +464,69 @@ Node 0 reads from 2 Redis nodes and gets zero stream entries. But `write_block.l
 1. Investigate whether `read_stream_entries_on_node` and `publish_block_on_node` use the same connection type — if the read path uses a cached multiplexed connection that can go stale without erroring, it needs additional validation (e.g., a ping check or periodic refresh).
 2. Consider switching the read path to use fresh connections per call (like the write path), or adding a heartbeat/validation to the cached connection.
 3. Add more granular logging to `read_stream_entries_on_node` to capture the raw response from each Redis node.
+
+---
+
+## Issue 6: Concurrent Leaders Both Achieve Quorum Writes at Same Height
+
+### Observation
+
+Chaos test seeds 6 and 9 produce forks despite the `HEIGHT_EXISTS` check in `write_block.lua`. Both blocks are committed via `_commit_result` (the Redis publish path), 616ms apart, with both achieving quorum. The invariant checker also flags `CONCURRENT_LEADERS` at the fork height.
+
+### Reproduction
+
+```bash
+cargo run -p fuel-core-chaos-test -- --seed 6 --duration 2m
+cargo run -p fuel-core-chaos-test -- --seed 9 --duration 2m
+```
+
+### Evidence (Seed 6, Height 584)
+
+**Both blocks committed via `_commit_result`:**
+```
+22:45:45.528  Node 0: Committed block c02954f5... height=584 (tx=bcb6f0ec...)
+22:45:46.144  Node 2: Committed block d1b3ab03... height=584 (tx=bcb6f0ec...)
+```
+
+Both went through `publish_produced_block` → `write_block.lua` → quorum check → local commit. Same transaction ID, different block IDs (different timestamps/headers). 616ms apart.
+
+**Redis stream dump at fork:**
+```
+Redis 0: height=584 epoch=295
+Redis 1: height=584 epoch=292
+Redis 2: height=584 epoch=295
+```
+
+**Invariant violations:**
+```
+FORK at height 584: node 0 has c029..., node 2 has d1b3...
+CONCURRENT LEADERS at height 584: nodes [0, 2]
+```
+
+### Analysis
+
+Both blocks were quorum-published — both passed through `_commit_result` which only fires after successful Redis publish. This means both leaders achieved quorum writes at height 584 within 616ms of each other.
+
+With 3 Redis nodes and quorum 2, the pigeonhole principle guarantees any two quorums overlap on at least one node. The `HEIGHT_EXISTS` check on the overlapping node should have rejected the second write. Yet both succeeded.
+
+The Redis dump shows epoch 292 on Redis 1 and epoch 295 on Redis 0 and Redis 2. The epoch-aware `HEIGHT_EXISTS` check allows a higher-epoch write to replace a lower-epoch orphan. If both concurrent leaders had epochs higher than 292, both could write to Redis 1 by deleting the epoch-292 orphan. Combined with each writing to one other node, both could achieve quorum:
+- Leader A writes to Redis 0 + Redis 1 (after deleting epoch-292 orphan) = quorum
+- Leader B writes to Redis 1 (after deleting Leader A's entry!) + Redis 2 = quorum
+
+**This is a race condition in the epoch-aware HEIGHT_EXISTS check.** The XDEL + XADD in `write_block.lua` is atomic within a single Lua script execution, but two leaders can each execute the script on the same Redis node in sequence — the second deletes what the first just wrote.
+
+### Root Cause
+
+The epoch-aware `HEIGHT_EXISTS` check has a TOCTOU (time-of-check-time-of-use) vulnerability when two concurrent leaders both have epochs higher than an existing orphan:
+
+1. Leader A (epoch 295) runs `write_block.lua` on Redis 1: finds epoch-292 orphan, deletes it, XADDs its block
+2. Leader B (epoch 296) runs `write_block.lua` on Redis 1 moments later: finds Leader A's epoch-295 entry, but epoch 296 > 295, so it deletes it and XADDs its own block
+3. Both leaders achieved quorum by using Redis 1 as part of their quorum set
+
+The original strict `HEIGHT_EXISTS` (reject all duplicates regardless of epoch) would have prevented this — Leader B's write to Redis 1 would fail because height 584 already exists, regardless of epoch. But we relaxed it to fix the orphan deadlock (Issue 4).
+
+### Potential Fixes
+
+1. **Only allow epoch-aware replacement when the existing entry's epoch is strictly less than the CURRENT NODE'S epoch token** (not the writer's epoch). This ensures only the rightful lock owner's writes persist.
+2. **Revert to strict HEIGHT_EXISTS** (reject all duplicates) and fix the orphan deadlock differently — e.g., by having the new leader explicitly clean up sub-quorum orphans during promotion rather than during writes.
+3. **Add the writer's node ID to the stream entry** and only allow replacement if the node ID differs AND the epoch is higher. Same-epoch writes from different nodes should always be rejected.
