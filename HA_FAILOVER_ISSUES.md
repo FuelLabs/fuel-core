@@ -260,3 +260,58 @@ if !self.quorum_reached(blocks_by_node.len()) {
 1. **Wait for P2P sync before producing:** After acquiring the lease, wait for at least one P2P sync round to complete. This provides a second chance to receive blocks that Redis reconciliation might miss.
 2. **Add TTL renewal in `can_produce_block`:** Replace `has_lease_owner_quorum()` with a TTL-renewing check to prevent lease decay between ownership verification and block publish.
 3. **Require quorum reads, not just quorum heights:** The `nodes_with_height` check is necessary but not sufficient. The pre-check should also verify that quorum nodes were successfully contacted.
+
+---
+
+## Issue 3: Node Permanently Bricked After Graceful Shutdown — `NoHistoryForRequestedHeight` Panic
+
+### Observation
+
+Chaos testing (seed 3) shows that after a graceful shutdown (`send_stop_signal_and_await_shutdown`), restarting a node on the same data directory causes a panic in `GraphQL_Off_Chain_Worker` initialization, which cascades to shut down the entire `FuelService`. The node is **permanently bricked** — every subsequent restart crashes identically within ~15ms, before any Redis or P2P operations execute.
+
+### Reproduction
+
+```bash
+# Build the chaos test binary
+cargo build -p fuel-core-chaos-test
+
+# Seed 3 reliably reproduces this (nodes 0 and 2 get bricked)
+cargo run -p fuel-core-chaos-test -- --seed 3 --stall-threshold 6s
+
+# Seed 200 also hits this
+cargo run -p fuel-core-chaos-test -- --seed 200 --stall-threshold 6s
+```
+
+### Root Cause
+
+When a node is gracefully stopped, a block commit can land during the shutdown sequence. This leaves the on-chain database at height N, but the off-chain historical state database lacks the entry for height N-1 (the previous block the off-chain worker needs for initialization).
+
+On restart, `GraphQL_Off_Chain_Worker` tries to read history at `committed_height - 1`, gets `NoHistoryForRequestedHeight`, and panics. The panic cascades via `FuelService` to shut down all sub-services (PoA, SyncTask, ImportTask, P2P).
+
+### Evidence from Seed 3
+
+| Time | Event |
+|------|-------|
+| t=13.6s | Node 0 stopped at height 38. Block 39 commits during shutdown. |
+| t=27.6s | Node 2 stopped at height 79. Block 80 commits during shutdown. |
+| t=29.4s | Node 0 restarted → panics: `NoHistoryForRequestedHeight { requested_height: 38 }` → full shutdown |
+| t=35.5s | Node 2 restarted → panics: `NoHistoryForRequestedHeight { requested_height: 79 }` → full shutdown |
+| t=29-310s | Node 0 restarted **10 times**, Node 2 restarted **6 times** — every attempt crashes instantly |
+
+Node 1 survives because it was always shut down cleanly with history intact. It becomes the sole producer (reaching height 428) while Nodes 0 and 2 are permanently dead.
+
+### Key Detail: This Is a Graceful Shutdown
+
+The chaos framework does **not** forcibly kill nodes. `FaultAction::KillNode` calls `cluster.stop_node()`, which calls `send_stop_signal_and_await_shutdown()`. The bug occurs even with cooperative shutdown — the issue is that the shutdown sequence allows a block commit to complete while the off-chain worker is shutting down (or has already shut down), leaving the databases in an inconsistent state.
+
+### Impact
+
+- **Permanent node failure**: Once bricked, the node cannot recover without manual data directory cleanup.
+- **Cascading production stalls**: If the sole remaining producer is also killed, there are zero functional nodes. The chaos framework keeps restarting bricked nodes, but they crash instantly every time. In seed 3, this caused a 58s stall (height 110) and a 117s stall (height 188).
+- **Redis quorum and P2P are irrelevant**: The crash happens during service initialization, before any network operations.
+
+### Potential Fixes
+
+1. **Don't panic on missing history**: `GraphQL_Off_Chain_Worker` initialization should handle `NoHistoryForRequestedHeight` gracefully — skip to the next available height or start from the current height.
+2. **Don't cascade non-critical panics**: A failure in the off-chain indexer should not shut down core consensus, sync, and P2P services. The node should continue operating even if the GraphQL worker can't initialize.
+3. **Atomic shutdown gating**: Prevent new block commits from landing once the stop signal has been sent. If the off-chain worker has already shut down, the commit should not proceed.
