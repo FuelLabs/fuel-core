@@ -1,11 +1,29 @@
 use std::time::Duration;
 
+use crate::{
+    proxy::{
+        ProxyMode,
+        TcpProxy,
+    },
+    redis_server::RedisTestServer,
+};
 use fuel_core::{
     chain_config::ConsensusConfig,
     combined_database::CombinedDatabase,
-    p2p_test_helpers::{Bootstrap, CustomizeConfig, make_config},
-    service::{Config, FuelService, config::RedisLeaderLockConfig},
-    state::rocks_db::DatabaseConfig,
+    p2p_test_helpers::{
+        Bootstrap,
+        CustomizeConfig,
+        make_config,
+    },
+    service::{
+        Config,
+        FuelService,
+        config::RedisLeaderLockConfig,
+    },
+    state::{
+        historical_rocksdb::StateRewindPolicy,
+        rocks_db::DatabaseConfig,
+    },
 };
 use fuel_core_poa::Trigger;
 use fuel_core_types::{
@@ -15,14 +33,12 @@ use fuel_core_types::{
     secrecy::Secret,
     signer::SignMode,
 };
-use rand::{SeedableRng, rngs::StdRng};
+use rand::{
+    SeedableRng,
+    rngs::StdRng,
+};
 use tempfile::TempDir;
 use tracing::info;
-
-use crate::{
-    proxy::{ProxyMode, TcpProxy},
-    redis_server::RedisTestServer,
-};
 
 /// A running node with its service handle.
 pub struct NodeHandle {
@@ -64,8 +80,7 @@ impl Cluster {
         for node_idx in 0..node_count {
             let mut node_proxies = Vec::with_capacity(redis_count);
             for redis_idx in 0..redis_count {
-                let target =
-                    format!("127.0.0.1:{}", redis_servers[redis_idx].port());
+                let target = format!("127.0.0.1:{}", redis_servers[redis_idx].port());
                 let proxy = TcpProxy::start(target).await;
                 info!(
                     "  Proxy node {node_idx} -> Redis {redis_idx}: port {}",
@@ -103,15 +118,10 @@ impl Cluster {
             let tmp_dir = TempDir::new().unwrap_or_else(|e| {
                 panic!("Failed to create temp dir for node {node_idx}: {e}")
             });
-            info!(
-                "  Node {node_idx} data dir: {}",
-                tmp_dir.path().display()
-            );
+            info!("  Node {node_idx} data dir: {}", tmp_dir.path().display());
 
-            let redis_urls: Vec<String> = proxies[node_idx]
-                .iter()
-                .map(|p| p.listen_url())
-                .collect();
+            let redis_urls: Vec<String> =
+                proxies[node_idx].iter().map(|p| p.listen_url()).collect();
 
             let leader_lock_config = RedisLeaderLockConfig {
                 redis_urls,
@@ -130,11 +140,9 @@ impl Cluster {
                 CustomizeConfig::no_overrides(),
             );
             node_config.debug = true;
-            node_config.block_production =
-                Trigger::Interval { block_time };
+            node_config.block_production = Trigger::Interval { block_time };
             node_config.leader_lock = Some(leader_lock_config);
-            node_config.consensus_signer =
-                SignMode::Key(Secret::new(secret.into()));
+            node_config.consensus_signer = SignMode::Key(Secret::new(secret.into()));
             node_config.p2p.as_mut().unwrap().bootstrap_nodes =
                 bootstrap_listeners.clone();
             node_config.p2p.as_mut().unwrap().reserved_nodes =
@@ -152,11 +160,8 @@ impl Cluster {
         info!("Starting {node_count} PoA nodes with persistent storage...");
         let mut nodes = Vec::with_capacity(node_count);
         for idx in 0..node_count {
-            let handle = start_node_with_db(
-                &node_data_dirs[idx],
-                &node_configs[idx],
-            )
-            .await;
+            let handle =
+                start_node_with_db(&node_data_dirs[idx], &node_configs[idx]).await;
             info!("  Node {idx} started");
             nodes.push(Some(handle));
         }
@@ -179,9 +184,7 @@ impl Cluster {
     }
 
     pub fn is_redis_alive(&self, idx: usize) -> bool {
-        self.redis_servers
-            .get(idx)
-            .is_some_and(|r| r.is_running())
+        self.redis_servers.get(idx).is_some_and(|r| r.is_running())
     }
 
     pub fn alive_node_count(&self) -> usize {
@@ -212,8 +215,7 @@ impl Cluster {
     pub fn any_node_has_redis_quorum(&self) -> bool {
         let quorum = self.redis_servers.len() / 2 + 1;
         (0..self.node_count).any(|node_idx| {
-            self.is_node_alive(node_idx)
-                && self.reachable_redis_count(node_idx) >= quorum
+            self.is_node_alive(node_idx) && self.reachable_redis_count(node_idx) >= quorum
         })
     }
 
@@ -233,11 +235,8 @@ impl Cluster {
         self.stop_node(idx).await;
 
         info!("Restarting node {idx} (same data dir)");
-        let handle = start_node_with_db(
-            &self.node_data_dirs[idx],
-            &self.node_configs[idx],
-        )
-        .await;
+        let handle =
+            start_node_with_db(&self.node_data_dirs[idx], &self.node_configs[idx]).await;
         self.nodes[idx] = Some(handle);
     }
 
@@ -251,12 +250,7 @@ impl Cluster {
         self.redis_servers[idx].start();
     }
 
-    pub fn set_proxy_mode(
-        &self,
-        node_idx: usize,
-        redis_idx: usize,
-        mode: ProxyMode,
-    ) {
+    pub fn set_proxy_mode(&self, node_idx: usize, redis_idx: usize, mode: ProxyMode) {
         self.proxies[node_idx][redis_idx].set_mode(mode);
     }
 
@@ -282,7 +276,7 @@ impl Cluster {
 async fn start_node_with_db(data_dir: &TempDir, config: &Config) -> NodeHandle {
     let database = CombinedDatabase::open(
         data_dir.path(),
-        Default::default(), // StateRewindPolicy::NoRewind
+        StateRewindPolicy::RewindFullRange,
         DatabaseConfig::config_for_tests(),
     )
     .unwrap_or_else(|e| {
@@ -314,6 +308,5 @@ fn update_signing_key(config: &mut Config, key: Address) {
             poa.set_genesis_signing_key(key);
         }
     }
-    config.snapshot_reader =
-        snapshot_reader.clone().with_chain_config(chain_config);
+    config.snapshot_reader = snapshot_reader.clone().with_chain_config(chain_config);
 }
