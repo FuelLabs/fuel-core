@@ -196,6 +196,27 @@ impl Cluster {
         self.node_count
     }
 
+    /// Count how many Redis instances a given node can reach
+    /// (Redis must be alive AND the proxy must be healthy).
+    pub fn reachable_redis_count(&self, node_idx: usize) -> usize {
+        self.proxies[node_idx]
+            .iter()
+            .enumerate()
+            .filter(|(redis_idx, proxy)| {
+                self.is_redis_alive(*redis_idx) && proxy.is_healthy()
+            })
+            .count()
+    }
+
+    /// Returns true if at least one live node can reach a quorum of Redis.
+    pub fn any_node_has_redis_quorum(&self) -> bool {
+        let quorum = self.redis_servers.len() / 2 + 1;
+        (0..self.node_count).any(|node_idx| {
+            self.is_node_alive(node_idx)
+                && self.reachable_redis_count(node_idx) >= quorum
+        })
+    }
+
     pub async fn stop_node(&mut self, idx: usize) {
         if let Some(handle) = self.nodes[idx].take() {
             info!("Stopping node {idx}");

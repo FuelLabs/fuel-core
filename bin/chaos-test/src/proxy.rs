@@ -56,6 +56,15 @@ impl TcpProxy {
         *self.mode.lock().unwrap() = new_mode;
     }
 
+    /// Returns true if the proxy is passing traffic (Normal or Latency).
+    /// Returns false for DropAll and CloseAfterBytes (connection-breaking modes).
+    pub fn is_healthy(&self) -> bool {
+        matches!(
+            *self.mode.lock().unwrap(),
+            ProxyMode::Normal | ProxyMode::Latency(_)
+        )
+    }
+
     pub fn listen_url(&self) -> String {
         format!("redis://127.0.0.1:{}/", self.listen_port)
     }

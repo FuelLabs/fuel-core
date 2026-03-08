@@ -356,6 +356,18 @@ impl FaultScheduler {
 
         let mut cluster_guard = cluster.lock().await;
         self.apply_action(&mut cluster_guard, &action).await;
+
+        // Safety check: if no live node can reach a Redis quorum after
+        // applying this fault, undo it immediately. This prevents the
+        // scheduler from creating scenarios where block production is
+        // impossible (which would cause expected but uninformative stalls).
+        if !cluster_guard.any_node_has_redis_quorum() {
+            warn!(
+                "Fault '{action}' broke Redis quorum for all nodes — reverting"
+            );
+            self.undo_action(&mut cluster_guard, &action).await;
+            self.pending_recoveries.pop_back(); // remove scheduled recovery
+        }
     }
 
     async fn apply_action(
@@ -430,6 +442,59 @@ impl FaultScheduler {
             FaultAction::RestartNode(idx) => {
                 cluster.restart_node(*idx).await;
             }
+        }
+    }
+
+    /// Undo a fault action (best-effort inverse).
+    async fn undo_action(
+        &self,
+        cluster: &mut Cluster,
+        action: &FaultAction,
+    ) {
+        match action {
+            FaultAction::KillRedis(idx) => {
+                cluster.start_redis(*idx);
+            }
+            FaultAction::PartitionNodeFromRedis {
+                node_idx,
+                redis_idx,
+            } => {
+                cluster.set_proxy_mode(
+                    *node_idx,
+                    *redis_idx,
+                    ProxyMode::Normal,
+                );
+            }
+            FaultAction::PartitionAllFromRedis(redis_idx) => {
+                for node_idx in 0..self.node_count {
+                    cluster.set_proxy_mode(
+                        node_idx,
+                        *redis_idx,
+                        ProxyMode::Normal,
+                    );
+                }
+            }
+            FaultAction::AddLatency {
+                node_idx,
+                redis_idx,
+                ..
+            }
+            | FaultAction::DropMidOperation {
+                node_idx,
+                redis_idx,
+                ..
+            } => {
+                cluster.set_proxy_mode(
+                    *node_idx,
+                    *redis_idx,
+                    ProxyMode::Normal,
+                );
+            }
+            FaultAction::KillNode(idx) => {
+                cluster.restart_node(*idx).await;
+            }
+            // Recovery actions don't need undoing
+            _ => {}
         }
     }
 }
