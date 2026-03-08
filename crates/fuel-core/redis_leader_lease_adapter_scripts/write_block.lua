@@ -26,7 +26,25 @@ if tonumber(ARGV[1]) > current_token then
     redis.call("SET", KEYS[2], ARGV[1])
 end
 
--- 4) Persist block entry.
+-- 4) Height-uniqueness check: reject if this height already exists in the
+--    stream. This prevents two successive leaders from both achieving quorum
+--    writes at the same height (which causes a fork). The overlapping quorum
+--    node (pigeonhole) will reject the second write, forcing the new leader
+--    to stall until it can reconcile the existing block — choosing consistency
+--    over availability during partitions.
+local existing = redis.call("XREVRANGE", KEYS[1], "+", "-")
+for _, entry in ipairs(existing) do
+    local fields = entry[2]
+    for i = 1, #fields, 2 do
+        if fields[i] == "height" and fields[i + 1] == ARGV[3] then
+            return redis.error_reply(
+                "HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream"
+            )
+        end
+    end
+end
+
+-- 5) Persist block entry.
 local stream_id = redis.call("XADD", KEYS[1], "*",
     "height", ARGV[3],
     "data", ARGV[4],

@@ -615,6 +615,11 @@ impl RedisLeaderLeaseAdapter {
                 .filter(|blocks_by_height| blocks_by_height.contains_key(&current_height))
                 .count();
 
+            tracing::debug!(
+                "unreconciled_blocks: height={current_height} nodes_with_height={nodes_with_height}/{}",
+                blocks_by_node.len()
+            );
+
             if !self.quorum_reached(nodes_with_height) {
                 break;
             }
@@ -723,7 +728,15 @@ impl RedisLeaderLeaseAdapter {
             .invoke::<String>(&mut connection);
         match write_result {
             Ok(_) => Ok(true),
-            Err(err) if err.to_string().contains("FENCING_ERROR:") => Ok(false),
+            Err(err)
+                if err.to_string().contains("FENCING_ERROR:")
+                    || err.to_string().contains("HEIGHT_EXISTS:") =>
+            {
+                tracing::warn!(
+                    "write_block rejected: {err} (height={block_height})"
+                );
+                Ok(false)
+            }
             Err(err) => Err(err.into()),
         }
     }
@@ -1828,13 +1841,14 @@ mod tests {
         );
     }
 
-    /// When a partial publish leaves a stale entry and the leader retries
-    /// with a different block at the same height, the per-node fold uses
-    /// `HashMap<u64, SealedBlock>` keyed by epoch — so the later entry
-    /// (block_b) overwrites the earlier one (block_a) at the same epoch.
-    /// Reconciliation correctly returns block_b (the committed block).
+    /// When a partial publish leaves a stale entry at a given height,
+    /// a subsequent write at the same height is rejected by
+    /// write_block.lua's HEIGHT_EXISTS check. This prevents two blocks
+    /// at the same height from coexisting in the stream, which would
+    /// cause a fork if a different leader also achieved quorum at that
+    /// height.
     #[tokio::test(flavor = "multi_thread")]
-    async fn partial_publish_then_retry_at_same_height__reconciles_latest_block()
+    async fn partial_publish_then_retry_at_same_height__new_leader_reconciles_stale_block()
     {
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:fork-repro".to_string();
@@ -1864,18 +1878,23 @@ mod tests {
             .expect("redis connection should open");
         append_stream_block(&mut conn, &stream_key, 1, &block_a_data, epoch_a as u32);
 
-        // Leader A retries with a different block at the same height
+        // Leader A retries with a different block at the same height —
+        // this should FAIL because height 1 already exists in the stream.
         let block_b = poa_block_at_time(1, 999);
         assert_ne!(block_a.entity.header().time(), block_b.entity.header().time());
 
-        adapter_a
-            .publish_produced_block(&block_b)
-            .expect("publish block_b should succeed");
+        let result = adapter_a.publish_produced_block(&block_b);
+        assert!(
+            result.is_err(),
+            "publish at same height should fail due to HEIGHT_EXISTS"
+        );
 
-        assert_eq!(stream_len(&redis.redis_url(), &stream_key), 2);
+        // Stream should still have only the original entry
+        assert_eq!(stream_len(&redis.redis_url(), &stream_key), 1);
 
         adapter_a.release().await.expect("release should succeed");
 
+        // A new leader reconciles and sees block_a (the only entry)
         let adapter_b = new_test_adapter(vec![redis.redis_url()], lease_key.clone());
         assert!(
             adapter_b
@@ -1890,13 +1909,11 @@ mod tests {
             .await
             .expect("reconciliation should succeed");
 
-        // The HashMap<u64, SealedBlock> fold overwrites block_a with block_b
-        // at the same epoch — correctly returning the committed block.
         assert_eq!(unreconciled.len(), 1, "Should reconcile exactly one block");
         assert_eq!(
             unreconciled[0].entity.header().time(),
-            block_b.entity.header().time(),
-            "Reconciliation should return block_b (the committed block), not stale block_a"
+            block_a.entity.header().time(),
+            "Reconciliation should return block_a (the only entry in the stream)"
         );
     }
 
