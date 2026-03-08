@@ -315,3 +315,82 @@ The chaos framework does **not** forcibly kill nodes. `FaultAction::KillNode` ca
 1. **Don't panic on missing history**: `GraphQL_Off_Chain_Worker` initialization should handle `NoHistoryForRequestedHeight` gracefully — skip to the next available height or start from the current height.
 2. **Don't cascade non-critical panics**: A failure in the off-chain indexer should not shut down core consensus, sync, and P2P services. The node should continue operating even if the GraphQL worker can't initialize.
 3. **Atomic shutdown gating**: Prevent new block commits from landing once the stop signal has been sent. If the off-chain worker has already shut down, the commit should not proceed.
+
+### Status
+
+**Partially mitigated** — the `NoHistoryForRequestedHeight` panic was fixed by enabling `StateRewindPolicy::RewindFullRange` in the chaos test cluster config (commit `7358294006`). Nodes no longer brick on restart. However, the underlying issue of blocks committing during shutdown remains open and may contribute to other edge cases.
+
+---
+
+## Issue 4: Fork from Silent Reconciliation Read Failure During Failover
+
+### Observation
+
+Chaos testing (seed 8) produces a **chain fork** — two nodes commit different blocks at the same height. This is a critical safety violation. The fork is non-deterministic but reproduces in roughly 2 out of 3 runs.
+
+### Reproduction
+
+```bash
+# Seed 8 reproduces this fork ~66% of the time
+# Run in a loop to catch it reliably:
+for i in $(seq 1 5); do
+    cargo run -p fuel-core-chaos-test -- --seed 8 --stall-threshold 6s --duration 2m
+    if [ $? -ne 0 ]; then echo "Fork reproduced on attempt $i"; break; fi
+done
+```
+
+### Root Cause: Under Investigation
+
+The design correctly publishes to Redis quorum BEFORE committing locally — the `_commit_result` function calls `publish_produced_block` first, and only commits to RocksDB if the publish succeeds. Block 322 **was** published to Redis quorum (confirmed by the "Committed block" log, which only fires after successful Redis publish).
+
+The silent read failure path (Issue 2b) has been closed: `read_stream_entries_on_node` now returns `Err` on failure (commit `48209e5f35`), and `unreconciled_blocks` already requires a quorum of successful reads before proceeding (line 586).
+
+Despite both safeguards being in place, the fork still occurs. Possible remaining vectors:
+
+1. **XTRIM race**: Block 322 was published but `XTRIM MAXLEN ~` on some Redis nodes removed it before Node 2's reconciliation read (~1.1s later). The approximate `~` flag means different nodes may trim different entries.
+2. **Successful reads that miss the block**: Node 2 gets a quorum of successful reads, but the block exists only on Redis nodes that were not in that quorum (e.g., published to Redis 0 and 1, but Node 2 successfully reads from Redis 1 and 2 where Redis 2 doesn't have it yet or was trimmed).
+3. **Publish quorum vs read quorum asymmetry**: The block was published to exactly quorum nodes (2/3), and the reading node happened to read a different quorum subset that doesn't overlap.
+
+### Fork Sequence (Seed 8, Height 322)
+
+| Time | Event |
+|------|-------|
+| t+81.5s | Node 0 is leader, commits block 321. |
+| t+81.7s | **Kill Node 0 injected** — graceful shutdown begins |
+| t+81.9s | Block 322 (`68a3cded...`) committed — Redis publish **succeeded**, then local DB commit |
+| t+81.9s | PoA shuts down. Block 322 exists in both Redis and Node 0's local DB. |
+| t+82.1s | Node 1 logs: "Timed out while connecting to redis leader-lock node" — Redis connectivity degraded |
+| t+82.5s | Node 2 restarts, P2P-syncs blocks 302-321 from Node 1 |
+| t+83.0s | Node 2 acquires Redis lease, calls `unreconciled_blocks(322)` |
+| t+83.0s | `read_stream_entries_on_node` fails silently on enough nodes → returns empty → `ReconciledLeader` |
+| t+83.0s | **Node 2 produces a different block 322** (`c79b4850...`) → **FORK** |
+
+### Key Evidence
+
+1. The "Committed block" log at `19:45:06.975` proves Redis publish succeeded — `_commit_result` publishes first, then commits.
+2. Node 1 had "Timed out while connecting to redis leader-lock node" at `19:45:07.200` — confirming Redis connectivity issues in this window.
+3. No `read_stream_entries` error logs appear for Node 2 — the failures are **silent** (errors return empty Vec, not logged at info level).
+
+### Cascading Consequences
+
+1. **Fork at height 323**: Node 0 restarts with divergent block 322, produces block 323 on top of it (committed during a subsequent shutdown). Nodes 1 and 2 have a different block 323.
+
+2. **Permanent divergence**: Node 0 can never sync from peers — every import attempt fails with "Previous root of the next block should match the previous block root."
+
+3. **Production stall**: When the remaining leader loses Redis quorum, no node can produce, causing a 25s stall at height 367+.
+
+### Existing Safeguards (Already In Place)
+
+Both the read-side and reconciliation-side fixes are already implemented:
+
+1. `read_stream_entries_on_node` returns `Err` on failure and clears cached connection (commit `48209e5f35`)
+2. `unreconciled_blocks` requires a quorum of successful reads before proceeding (line 586 of `poa.rs`)
+
+**The fork occurs despite these safeguards**, which means the root cause is more subtle — likely a quorum overlap issue or stream trimming race rather than a silent failure.
+
+### Next Steps
+
+1. Add tracing to `publish_produced_block` to log which specific Redis nodes received the block
+2. Add tracing to `unreconciled_blocks` to log which Redis nodes were successfully read and what heights/blocks they returned
+3. Re-run seed 8 with enhanced tracing to identify the exact asymmetry
+4. Consider requiring that publish reaches ALL Redis nodes (not just quorum) or that reconciliation reads ALL nodes before concluding no blocks exist at a height
