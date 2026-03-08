@@ -123,10 +123,14 @@ impl ProductionTracker {
 /// broadcast stream which silently drops events when the consumer lags.
 ///
 /// Also checks for production stalls — periods where NO node advances.
+/// A stall is only flagged when at least one node is capable of producing
+/// (alive long enough to have initialized + has Redis quorum). When no node
+/// can produce, the stall timer is reset so recovery time isn't penalized.
 fn check_gaps_from_db(
     cluster: &Cluster,
     gap_tolerance: Duration,
     stall_threshold: Duration,
+    producer_grace_period: Duration,
     last_progress: &mut HashMap<usize, (u32, Instant)>,
     production: &mut ProductionTracker,
     timeline: &Timeline,
@@ -158,15 +162,21 @@ fn check_gaps_from_db(
         production.last_max_height = max_height;
         production.last_advance_time = Instant::now();
     } else {
-        let stalled_for = production.last_advance_time.elapsed();
-        // Only flag if at least one node is alive (otherwise stall is expected)
-        if stalled_for > stall_threshold && !node_heights.is_empty() {
-            let violation = Violation::ProductionStall {
-                last_height: production.last_max_height,
-                stalled_for,
-            };
-            warn!("INVARIANT VIOLATION: {violation}");
-            timeline.record(TimelineEventKind::Violation(violation));
+        let can_produce = cluster.any_node_can_produce(producer_grace_period);
+        if !can_produce {
+            // No node is capable of producing right now — reset the timer
+            // so we don't penalize expected downtime.
+            production.last_advance_time = Instant::now();
+        } else {
+            let stalled_for = production.last_advance_time.elapsed();
+            if stalled_for > stall_threshold {
+                let violation = Violation::ProductionStall {
+                    last_height: production.last_max_height,
+                    stalled_for,
+                };
+                warn!("INVARIANT VIOLATION: {violation}");
+                timeline.record(TimelineEventKind::Violation(violation));
+            }
         }
     }
 
@@ -244,7 +254,12 @@ pub async fn run_invariant_checker(
     lease_ttl: Duration,
     gap_tolerance: Duration,
     stall_threshold: Duration,
+    block_time: Duration,
 ) {
+    // Grace period: a freshly (re)started node needs time to initialize,
+    // connect to P2P peers, pass ensure_synced, and acquire the Redis lease
+    // before it can produce blocks.
+    let producer_grace_period = lease_ttl + block_time + Duration::from_secs(1);
     let (tx, mut rx) = mpsc::unbounded_channel::<BlockEvent>();
     let mut state = InvariantState::new();
     let mut reader_handles: Vec<tokio::task::JoinHandle<()>>;
@@ -281,6 +296,7 @@ pub async fn run_invariant_checker(
                     &cluster_guard,
                     gap_tolerance,
                     stall_threshold,
+                    producer_grace_period,
                     &mut last_progress,
                     &mut production,
                     &timeline,

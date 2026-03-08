@@ -130,6 +130,7 @@ async fn main() -> anyhow::Result<()> {
     let lease_ttl = Duration::from_secs(2);
     let gap_tolerance = Duration::from_secs(60);
     let stall_threshold = *cli.stall_threshold;
+    let block_time = *cli.block_time;
     let invariant_handle = tokio::spawn(async move {
         invariants::run_invariant_checker(
             invariant_cluster,
@@ -138,6 +139,7 @@ async fn main() -> anyhow::Result<()> {
             lease_ttl,
             gap_tolerance,
             stall_threshold,
+            block_time,
         )
         .await;
     });

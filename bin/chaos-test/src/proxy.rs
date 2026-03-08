@@ -65,6 +65,14 @@ impl TcpProxy {
         )
     }
 
+    /// Returns true only if the proxy is in Normal mode with no faults.
+    /// Used by the liveness invariant to determine if a node can reliably
+    /// reach Redis — latency and byte-limit faults cause timeouts and
+    /// should not count as "reachable" for production expectations.
+    pub fn is_unfaulted(&self) -> bool {
+        matches!(*self.mode.lock().unwrap(), ProxyMode::Normal)
+    }
+
     pub fn listen_url(&self) -> String {
         format!("redis://127.0.0.1:{}/", self.listen_port)
     }

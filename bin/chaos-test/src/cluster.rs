@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
     proxy::{
@@ -54,6 +54,8 @@ pub struct Cluster {
     /// Persistent temp directories for each node's RocksDB — survive restarts
     node_data_dirs: Vec<TempDir>,
     node_count: usize,
+    /// When each node last became alive (started or restarted)
+    node_alive_since: Vec<Option<Instant>>,
 }
 
 impl Cluster {
@@ -159,11 +161,14 @@ impl Cluster {
         // 6. Start all nodes with persistent RocksDB
         info!("Starting {node_count} PoA nodes with persistent storage...");
         let mut nodes = Vec::with_capacity(node_count);
+        let now = Instant::now();
+        let mut node_alive_since = Vec::with_capacity(node_count);
         for idx in 0..node_count {
             let handle =
                 start_node_with_db(&node_data_dirs[idx], &node_configs[idx]).await;
             info!("  Node {idx} started");
             nodes.push(Some(handle));
+            node_alive_since.push(Some(now));
         }
 
         // Keep bootstrap alive by leaking it (cleaned up on process exit)
@@ -176,6 +181,7 @@ impl Cluster {
             node_configs,
             node_data_dirs,
             node_count,
+            node_alive_since,
         }
     }
 
@@ -222,6 +228,7 @@ impl Cluster {
     pub async fn stop_node(&mut self, idx: usize) {
         if let Some(handle) = self.nodes[idx].take() {
             info!("Stopping node {idx}");
+            self.node_alive_since[idx] = None;
             handle
                 .service
                 .send_stop_signal_and_await_shutdown()
@@ -238,6 +245,37 @@ impl Cluster {
         let handle =
             start_node_with_db(&self.node_data_dirs[idx], &self.node_configs[idx]).await;
         self.nodes[idx] = Some(handle);
+        self.node_alive_since[idx] = Some(Instant::now());
+    }
+
+    /// Count how many Redis instances a given node can reach through
+    /// unfaulted (Normal mode) proxies. Used by the liveness invariant —
+    /// latency and byte-limit faults cause timeouts that prevent reliable
+    /// Redis operations even though the proxy is technically forwarding.
+    pub fn cleanly_reachable_redis_count(&self, node_idx: usize) -> usize {
+        self.proxies[node_idx]
+            .iter()
+            .enumerate()
+            .filter(|(redis_idx, proxy)| {
+                self.is_redis_alive(*redis_idx) && proxy.is_unfaulted()
+            })
+            .count()
+    }
+
+    /// Returns true if at least one node is alive, has been alive longer
+    /// than `grace_period`, and can cleanly reach a Redis quorum (no
+    /// latency/drop faults on the path). Only such a node could reasonably
+    /// be expected to produce blocks.
+    pub fn any_node_can_produce(&self, grace_period: Duration) -> bool {
+        let quorum = self.redis_servers.len() / 2 + 1;
+        let now = Instant::now();
+        (0..self.node_count).any(|idx| {
+            self.is_node_alive(idx)
+                && self
+                    .node_alive_since[idx]
+                    .is_some_and(|t| now.duration_since(t) >= grace_period)
+                && self.cleanly_reachable_redis_count(idx) >= quorum
+        })
     }
 
     pub fn stop_redis(&mut self, idx: usize) {
