@@ -533,21 +533,28 @@ impl RedisLeaderLeaseAdapter {
                 .key(&self.block_stream_key)
                 .invoke_async::<Vec<(u32, u64, Vec<u8>)>>(&mut connection),
         )
-        .await
-        .map_err(|_| {
-            anyhow!("Timed out reading stream entries from Redis node")
-        })?
-        .map_err(|e| {
-            anyhow!("Failed to read stream entries from Redis node: {e}")
-        })?;
-        Ok(stream_entries
-            .into_iter()
-            .filter_map(|(height, epoch, bytes)| {
-                postcard::from_bytes::<SealedBlock>(&bytes)
-                    .ok()
-                    .map(|block| (height, epoch, block))
-            })
-            .collect())
+        .await;
+
+        match stream_entries {
+            Err(_) => {
+                self.clear_cached_connection(redis_node).await;
+                Err(anyhow!("Timed out reading stream entries from Redis node"))
+            }
+            Ok(Err(e)) => {
+                self.clear_cached_connection(redis_node).await;
+                Err(anyhow!(
+                    "Failed to read stream entries from Redis node: {e}"
+                ))
+            }
+            Ok(Ok(entries)) => Ok(entries
+                .into_iter()
+                .filter_map(|(height, epoch, bytes)| {
+                    postcard::from_bytes::<SealedBlock>(&bytes)
+                        .ok()
+                        .map(|block| (height, epoch, block))
+                })
+                .collect()),
+        }
     }
 
     async fn unreconciled_blocks(
