@@ -395,24 +395,72 @@ The spec's Section 6.4 acknowledges that a new leader "may produce a different b
 
 The fundamental issue: `write_block.lua` has no **height-uniqueness constraint**. The Lua script's `XADD` always appends, allowing multiple entries at the same height. The fencing token prevents writes from stale (lower) epochs but explicitly allows writes from higher epochs at the same height.
 
-### Fix: Add Height-Uniqueness Check to `write_block.lua`
+### Fix: Height-Uniqueness Check in `write_block.lua` (Implemented)
 
-Before the `XADD`, scan the stream for an existing entry at the requested height. If one exists, reject the write:
+Added a height-uniqueness check before the `XADD` in `write_block.lua`. Before persisting a block entry, the script scans the stream for an existing entry at the requested height. If one exists, the write is rejected with `HEIGHT_EXISTS`:
 
 ```lua
--- Before XADD, check if this height is already in the stream
--- Use XREVRANGE to efficiently check the most recent entries
-local existing = redis.call('XREVRANGE', KEYS[1], '+', '-', 'COUNT', 100)
+-- 4) Height-uniqueness check
+local existing = redis.call("XREVRANGE", KEYS[1], "+", "-")
 for _, entry in ipairs(existing) do
     local fields = entry[2]
     for i = 1, #fields, 2 do
-        if fields[i] == 'height' and fields[i+1] == ARGV[3] then
-            return redis.error_reply("HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream")
+        if fields[i] == "height" and fields[i + 1] == ARGV[3] then
+            return redis.error_reply(
+                "HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream"
+            )
         end
     end
 end
 ```
 
-**Tradeoff — stall over fork:** If Leader A published to Redis {0, 1} and Leader B can only reach Redis {1, 2}, Leader B's write at the same height would be rejected on Redis 1 (height already exists), leaving only Redis 2 — below quorum. Leader B stalls until the partition resolves and it can read Leader A's block from quorum nodes.
+**Why this works:** The pigeonhole principle guarantees any two quorums overlap on at least one Redis node. If Leader A published a block at height H to quorum, that overlapping node already has an entry at height H. When Leader B tries to write a different block at the same height, the overlapping node rejects it with `HEIGHT_EXISTS`, preventing Leader B from reaching quorum. This makes it impossible for two different blocks at the same height to both achieve quorum — eliminating the fork.
 
-**This is the correct CAP tradeoff for a sequencer**: choose consistency (no forks) over availability (temporary stall) during a partition. Once connectivity is restored, Leader B reconciles Leader A's block and produces at height H+1.
+**Tradeoff — stall over fork:** If Leader A published to Redis {0, 1} and Leader B can only reach Redis {1, 2}, Leader B's write at the same height would be rejected on Redis 1 (height already exists), leaving only Redis 2 — below quorum. Leader B stalls until the partition resolves and it can read Leader A's block from quorum nodes. **This is the correct CAP tradeoff for a sequencer**: choose consistency (no forks) over availability (temporary stall) during a partition.
+
+**Rust-side handling:** `HEIGHT_EXISTS` is treated the same as `FENCING_ERROR` in `publish_block_on_node` — the node counts as a non-success for quorum purposes. The existing error handling in `handle_normal_block_production` releases the lease and retries, which re-enters `leader_state` → `unreconciled_blocks` to check for blocks to reconcile before producing.
+
+**Verification:** Chaos test seed 8, which previously forked ~66% of the time, now produces **zero forks** across 6+ consecutive runs.
+
+### Status
+
+**Fork prevention: FIXED.** The `HEIGHT_EXISTS` check eliminates the fork.
+
+**Remaining issue: reconciliation stall.** After the fork is prevented, seed 8 now shows a persistent production stall at height 23. Diagnostic logging reveals that nodes attempting to reconcile via `read_stream_entries_on_node` receive **zero entries** from Redis even though the entries exist (confirmed by `write_block.lua` hitting `HEIGHT_EXISTS` on the same Redis nodes). The root cause of this read discrepancy is under investigation — it could be a stale cached connection, a bug in the test framework's proxy layer, or another issue in the read path. See **Issue 5**.
+
+---
+
+## Issue 5: Reconciliation Reads Return Empty Despite Entries Existing in Redis
+
+### Observation
+
+After the `HEIGHT_EXISTS` fix prevents forks, chaos test seed 8 reveals a production stall where the leader cannot reconcile blocks that demonstrably exist in Redis. The leader's `read_stream_entries_on_node` returns zero entries at every height, while `write_block.lua` on the same Redis nodes hits `HEIGHT_EXISTS` — proving the entries are there.
+
+### Reproduction
+
+```bash
+cargo run -p fuel-core-chaos-test -- --seed 8 --stall-threshold 6s --duration 30s
+```
+
+### Evidence
+
+Diagnostic logging shows:
+```
+unreconciled_blocks: height=24 nodes_with_height=0/2   (Node 0 — sees nothing)
+unreconciled_blocks: height=24 nodes_with_height=2/2   (Node 2 — sees the block)
+write_block rejected: HEIGHT_EXISTS: Block at height 24 already in stream  (on all 3 Redis nodes)
+```
+
+Node 0 reads from 2 Redis nodes and gets zero stream entries. But `write_block.lua` running on those same nodes confirms the entries exist. The reads succeed without error — they simply return empty results.
+
+### Possible Root Causes
+
+1. **Stale cached multiplexed connection**: `read_stream_entries_on_node` uses a cached `MultiplexedConnection` while `publish_block_on_node` creates a fresh blocking connection per call. A broken multiplexed connection might return empty results without erroring, bypassing the `clear_cached_connection` on-error path.
+2. **Test framework proxy artifact**: The chaos test's TCP proxy might behave differently for long-lived multiplexed connections vs fresh per-call connections, causing reads to silently fail.
+3. **Connection state after fault recovery**: After proxy faults are restored, the cached connection might be in a state where it appears connected but doesn't receive new data.
+
+### Next Steps
+
+1. Investigate whether `read_stream_entries_on_node` and `publish_block_on_node` use the same connection type — if the read path uses a cached multiplexed connection that can go stale without erroring, it needs additional validation (e.g., a ping check or periodic refresh).
+2. Consider switching the read path to use fresh connections per call (like the write path), or adding a heartbeat/validation to the cached connection.
+3. Add more granular logging to `read_stream_entries_on_node` to capture the raw response from each Redis node.
