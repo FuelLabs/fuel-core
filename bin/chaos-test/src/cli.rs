@@ -23,16 +23,16 @@ pub struct Cli {
     pub redis_nodes: usize,
 
     /// Block production interval
-    #[arg(long, default_value = "200ms")]
+    #[arg(long, default_value = "100ms")]
     pub block_time: humantime::Duration,
 
     /// Average interval between fault injections
-    #[arg(long, default_value = "2s")]
+    #[arg(long, default_value = "1s")]
     pub fault_interval: humantime::Duration,
 
     /// Max allowed production stall (no blocks from any node). Should be
-    /// greater than lease_ttl to allow for normal failover.
-    #[arg(long, default_value = "6s")]
+    /// greater than lease_ttl to allow for normal failover and reconnection.
+    #[arg(long, default_value = "10s")]
     pub stall_threshold: humantime::Duration,
 
     /// Log level
