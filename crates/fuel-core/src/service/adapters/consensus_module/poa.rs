@@ -376,8 +376,53 @@ impl RedisLeaderLeaseAdapter {
                 .map(|redis_node| self.check_lease_owner_on_node(redis_node)),
         )
         .await;
-        let owner_count = ownership.into_iter().filter(|is_owner| *is_owner).count();
-        Ok(self.quorum_reached(owner_count))
+        let owner_count = ownership.iter().filter(|&&is_owner| is_owner).count();
+        if !self.quorum_reached(owner_count) {
+            return Ok(false);
+        }
+
+        // Best-effort: acquire the lock on nodes we don't own yet.
+        // Expands write coverage beyond minimum quorum so block data
+        // is replicated to more nodes, improving fault tolerance.
+        // If a newly-acquired node returns a higher epoch (from
+        // election storm drift), adopt it so write_block.lua uses
+        // a consistent epoch across all owned nodes.
+        let non_owned: Vec<&RedisNode> = self
+            .redis_nodes
+            .iter()
+            .zip(ownership.iter())
+            .filter(|(_, is_owner)| !**is_owner)
+            .map(|(node, _)| node)
+            .collect();
+
+        if !non_owned.is_empty() {
+            let results = futures::future::join_all(
+                non_owned
+                    .into_iter()
+                    .map(|redis_node| self.promote_leader_on_node(redis_node)),
+            )
+            .await;
+
+            if let Some(max_new) = results
+                .into_iter()
+                .filter_map(|r| r.ok().flatten())
+                .max()
+            {
+                if let Ok(mut epoch) = self.current_epoch_token.lock() {
+                    let current = epoch.unwrap_or(0);
+                    if max_new > current {
+                        tracing::info!(
+                            old_epoch = current,
+                            new_epoch = max_new,
+                            "Adopted higher epoch from lock expansion"
+                        );
+                        *epoch = Some(max_new);
+                    }
+                }
+            }
+        }
+
+        Ok(true)
     }
 
     async fn acquire_lease_if_free(&self) -> anyhow::Result<bool> {
@@ -480,33 +525,29 @@ impl RedisLeaderLeaseAdapter {
     async fn read_stream_entries_on_node(
         &self,
         redis_node: &RedisNode,
-    ) -> Vec<(u32, u64, SealedBlock)> {
-        let mut connection = match self.multiplexed_connection(redis_node).await {
-            Ok(connection) => connection,
-            Err(_) => return Vec::new(),
-        };
+    ) -> anyhow::Result<Vec<(u32, u64, SealedBlock)>> {
+        let mut connection = self.multiplexed_connection(redis_node).await?;
         let stream_entries = timeout(
             self.node_timeout,
             redis::Script::new(READ_STREAM_ENTRIES_SCRIPT)
                 .key(&self.block_stream_key)
                 .invoke_async::<Vec<(u32, u64, Vec<u8>)>>(&mut connection),
         )
-        .await;
-        let stream_entries = match stream_entries {
-            Ok(Ok(stream_entries)) => stream_entries,
-            Ok(Err(_)) | Err(_) => {
-                self.clear_cached_connection(redis_node).await;
-                return Vec::new();
-            }
-        };
-        stream_entries
+        .await
+        .map_err(|_| {
+            anyhow!("Timed out reading stream entries from Redis node")
+        })?
+        .map_err(|e| {
+            anyhow!("Failed to read stream entries from Redis node: {e}")
+        })?;
+        Ok(stream_entries
             .into_iter()
             .filter_map(|(height, epoch, bytes)| {
                 postcard::from_bytes::<SealedBlock>(&bytes)
                     .ok()
                     .map(|block| (height, epoch, block))
             })
-            .collect()
+            .collect())
     }
 
     async fn unreconciled_blocks(
@@ -516,26 +557,49 @@ impl RedisLeaderLeaseAdapter {
         let mut reconciled = Vec::new();
         let max_reconcile_blocks_per_round =
             usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
-        let blocks_by_node = futures::future::join_all(
+        let read_results = futures::future::join_all(
             self.redis_nodes
                 .iter()
                 .map(|redis_node| self.read_stream_entries_on_node(redis_node)),
         )
-        .await
-        .into_iter()
-        .map(|entries| {
-            entries.into_iter().fold(
-                HashMap::<u32, HashMap<u64, SealedBlock>>::new(),
-                |mut blocks_by_height, (height, epoch, block)| {
-                    blocks_by_height
-                        .entry(height)
-                        .or_default()
-                        .insert(epoch, block);
-                    blocks_by_height
-                },
-            )
-        })
-        .collect::<Vec<_>>();
+        .await;
+
+        let mut successful_reads = Vec::new();
+        let mut failed_count = 0usize;
+        for result in read_results {
+            match result {
+                Ok(entries) => successful_reads.push(entries),
+                Err(e) => {
+                    tracing::warn!("Redis stream read failed: {e}");
+                    failed_count = failed_count.saturating_add(1);
+                }
+            }
+        }
+
+        if !self.quorum_reached(successful_reads.len()) {
+            return Err(anyhow!(
+                "Cannot reconcile: only {}/{} Redis nodes responded ({} failed)",
+                successful_reads.len(),
+                self.redis_nodes.len(),
+                failed_count
+            ));
+        }
+
+        let blocks_by_node = successful_reads
+            .into_iter()
+            .map(|entries| {
+                entries.into_iter().fold(
+                    HashMap::<u32, HashMap<u64, SealedBlock>>::new(),
+                    |mut blocks_by_height, (height, epoch, block)| {
+                        blocks_by_height
+                            .entry(height)
+                            .or_default()
+                            .insert(epoch, block);
+                        blocks_by_height
+                    },
+                )
+            })
+            .collect::<Vec<_>>();
         let mut current_height = u32::from(next_height);
 
         for _ in 0..max_reconcile_blocks_per_round {
@@ -1757,6 +1821,78 @@ mod tests {
         );
     }
 
+    /// When a partial publish leaves a stale entry and the leader retries
+    /// with a different block at the same height, the per-node fold uses
+    /// `HashMap<u64, SealedBlock>` keyed by epoch — so the later entry
+    /// (block_b) overwrites the earlier one (block_a) at the same epoch.
+    /// Reconciliation correctly returns block_b (the committed block).
+    #[tokio::test(flavor = "multi_thread")]
+    async fn partial_publish_then_retry_at_same_height__reconciles_latest_block()
+    {
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:fork-repro".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+
+        let adapter_a = new_test_adapter(vec![redis.redis_url()], lease_key.clone());
+        assert!(
+            adapter_a
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter_a should acquire lease"
+        );
+        let epoch_a = (*adapter_a
+            .current_epoch_token
+            .lock()
+            .expect("lock"))
+        .expect("epoch should be set");
+
+        // Simulate stale partial publish by writing directly to stream
+        let block_a = poa_block_at_time(1, 100);
+        let block_a_data = postcard::to_allocvec(&block_a).expect("serialize block_a");
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        append_stream_block(&mut conn, &stream_key, 1, &block_a_data, epoch_a as u32);
+
+        // Leader A retries with a different block at the same height
+        let block_b = poa_block_at_time(1, 999);
+        assert_ne!(block_a.entity.header().time(), block_b.entity.header().time());
+
+        adapter_a
+            .publish_produced_block(&block_b)
+            .expect("publish block_b should succeed");
+
+        assert_eq!(stream_len(&redis.redis_url(), &stream_key), 2);
+
+        adapter_a.release().await.expect("release should succeed");
+
+        let adapter_b = new_test_adapter(vec![redis.redis_url()], lease_key.clone());
+        assert!(
+            adapter_b
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter_b should acquire lease"
+        );
+
+        let unreconciled = adapter_b
+            .unreconciled_blocks(1.into())
+            .await
+            .expect("reconciliation should succeed");
+
+        // The HashMap<u64, SealedBlock> fold overwrites block_a with block_b
+        // at the same epoch — correctly returning the committed block.
+        assert_eq!(unreconciled.len(), 1, "Should reconcile exactly one block");
+        assert_eq!(
+            unreconciled[0].entity.header().time(),
+            block_b.entity.header().time(),
+            "Reconciliation should return block_b (the committed block), not stale block_a"
+        );
+    }
+
     struct RedisTestServer {
         child: Option<Child>,
         port: u16,
@@ -1786,6 +1922,14 @@ mod tests {
             let child = spawn_redis_server(self.port);
             wait_for_redis_ready(self.port);
             self.child = Some(child);
+        }
+
+        fn stop(&mut self) {
+            if let Some(child) = self.child.as_mut() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            self.child = None;
         }
 
         fn redis_url(&self) -> String {
@@ -1974,5 +2118,366 @@ mod tests {
             .arg(stream_key)
             .query(&mut conn)
             .expect("stream length query should succeed")
+    }
+
+    /// When Redis read calls fail on a quorum of nodes,
+    /// `unreconciled_blocks` must return an error — not silently
+    /// return an empty list that would let the caller produce
+    /// a divergent block.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unreconciled_blocks__when_reads_fail_on_quorum_nodes__returns_error()
+    {
+        // given — 3 Redis nodes, leader A publishes block to all 3
+        let mut redis_a = RedisTestServer::spawn();
+        let mut redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:read-failure-fork".to_string();
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+
+        let adapter_a = new_test_adapter(redis_urls.clone(), lease_key.clone());
+        assert!(
+            adapter_a
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Leader A should acquire lease"
+        );
+
+        let block = poa_block_at_time(1, 100);
+        adapter_a
+            .publish_produced_block(&block)
+            .expect("publish should succeed on all 3 nodes");
+
+        // Verify block exists on all 3 nodes
+        let stream_key = format!("{lease_key}:block:stream");
+        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
+        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
+        assert_eq!(stream_len(&redis_c.redis_url(), &stream_key), 1);
+
+        // Simulate A releasing lease
+        adapter_a.release().await.expect("release should succeed");
+
+        // when — kill 2 of 3 Redis nodes BEFORE new leader reconciles
+        redis_a.stop();
+        redis_b.stop();
+
+        let adapter_b =
+            new_test_adapter(redis_urls.clone(), lease_key.clone());
+        // Manually set epoch so we can call unreconciled_blocks directly
+        {
+            let mut epoch = adapter_b
+                .current_epoch_token
+                .lock()
+                .expect("lock");
+            *epoch = Some(99);
+        }
+
+        let result = adapter_b.unreconciled_blocks(1.into()).await;
+
+        // then — must return Err, not Ok([])
+        assert!(
+            result.is_err(),
+            "unreconciled_blocks must return error when reads fail on quorum of nodes"
+        );
+    }
+
+    /// Proves that when a Redis node restarts (losing all in-memory data),
+    /// a block that was published to exactly quorum nodes drops below quorum
+    /// and reconciliation cannot find it — enabling a fork.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unreconciled_blocks__when_redis_node_restarts_and_loses_data__drops_block_below_quorum()
+    {
+        // given — 3 Redis nodes, leader A publishes block to nodes A and B only
+        // (simulating a partial publish where node C timed out)
+        let redis_a = RedisTestServer::spawn();
+        let mut redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:data-loss-fork".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+
+        let adapter_a = new_test_adapter(redis_urls.clone(), lease_key.clone());
+        assert!(
+            adapter_a
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Leader A should acquire lease"
+        );
+        let epoch_a = (*adapter_a
+            .current_epoch_token
+            .lock()
+            .expect("lock"))
+        .expect("epoch should be set");
+
+        // Publish block to nodes A and B only (simulating node C timeout).
+        // We write directly to simulate the partial publish that still
+        // reaches quorum (2/3).
+        let block = poa_block_at_time(1, 100);
+        let block_data = postcard::to_allocvec(&block).expect("serialize");
+
+        let client_a =
+            redis::Client::open(redis_a.redis_url()).expect("client");
+        let mut conn_a = client_a.get_connection().expect("conn");
+        let client_b =
+            redis::Client::open(redis_b.redis_url()).expect("client");
+        let mut conn_b = client_b.get_connection().expect("conn");
+
+        append_stream_block(
+            &mut conn_a,
+            &stream_key,
+            1,
+            &block_data,
+            epoch_a as u32,
+        );
+        append_stream_block(
+            &mut conn_b,
+            &stream_key,
+            1,
+            &block_data,
+            epoch_a as u32,
+        );
+        // Node C has no entry (simulated timeout during publish)
+
+        // Verify: block on A and B, not on C
+        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
+        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
+        assert_eq!(stream_len(&redis_c.redis_url(), &stream_key), 0);
+
+        // Confirm reconciliation works BEFORE data loss — quorum=2, both A and B have it
+        let pre_loss = adapter_a
+            .unreconciled_blocks(1.into())
+            .await
+            .expect("reconciliation should succeed");
+        assert_eq!(
+            pre_loss.len(),
+            1,
+            "Block should be reconcilable with 2/3 nodes having it"
+        );
+
+        // when — Redis node B restarts (pod eviction / rolling deploy / AMI drift)
+        // All in-memory data is lost (no persistence configured)
+        drop(conn_b);
+        drop(client_b);
+        redis_b.stop();
+        redis_b.start();
+
+        // Verify node B lost its stream data
+        assert_eq!(
+            stream_len(&redis_b.redis_url(), &stream_key),
+            0,
+            "Restarted node should have empty stream"
+        );
+
+        // Release A's lease so B can acquire
+        adapter_a.release().await.expect("release should succeed");
+
+        // New leader acquires
+        let adapter_b =
+            new_test_adapter(redis_urls.clone(), lease_key.clone());
+        assert!(
+            adapter_b
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "New leader should acquire lease"
+        );
+
+        let post_loss = adapter_b
+            .unreconciled_blocks(1.into())
+            .await
+            .expect("reconciliation should succeed");
+
+        // then — BUG: block that was committed (published to quorum) is now
+        // invisible because one of the quorum nodes lost its data.
+        // Only node A has the block (1 < quorum=2) → reconciliation skips it.
+        assert!(
+            post_loss.is_empty(),
+            "BUG: committed block dropped below quorum after Redis node restart. \
+             New leader would produce a divergent block at height 1 → FORK."
+        );
+    }
+
+    /// After an election storm where leader A wins on nodes 1,2 but
+    /// another candidate held node 3, `has_lease_owner_quorum` should
+    /// expand the lock to node 3 once it's free. Subsequent block
+    /// writes then go to all 3 nodes instead of just 2.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn has_lease_owner_quorum__expands_lock_to_non_owned_nodes()
+    {
+        // given — 3 Redis nodes
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:lock-expansion".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+
+        // Simulate election storm: candidate B grabs node C first
+        let candidate_b =
+            new_test_adapter(redis_urls.clone(), lease_key.clone());
+        // Manually acquire on node C only (simulate B winning SET NX on C)
+        {
+            let client =
+                redis::Client::open(redis_c.redis_url()).expect("client");
+            let mut conn = client.get_connection().expect("conn");
+            let _: () = redis::cmd("SET")
+                .arg(&lease_key)
+                .arg(&candidate_b.lease_owner_token)
+                .arg("PX")
+                .arg(5000u64)
+                .query(&mut conn)
+                .expect("set should succeed");
+        }
+
+        // Leader A acquires — gets nodes A,B but not C (B holds it)
+        let adapter_a =
+            new_test_adapter(redis_urls.clone(), lease_key.clone());
+        assert!(
+            adapter_a
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Leader A should acquire quorum (2/3)"
+        );
+
+        // Verify A owns nodes A,B but NOT node C
+        let owns_a = read_lease_owner(&redis_a.redis_url(), &lease_key)
+            == Some(adapter_a.lease_owner_token.clone());
+        let owns_b = read_lease_owner(&redis_b.redis_url(), &lease_key)
+            == Some(adapter_a.lease_owner_token.clone());
+        let owns_c = read_lease_owner(&redis_c.redis_url(), &lease_key)
+            == Some(adapter_a.lease_owner_token.clone());
+        assert!(owns_a && owns_b, "A should own nodes A and B");
+        assert!(!owns_c, "A should NOT own node C (held by B)");
+
+        // Candidate B releases node C (simulating failed-quorum cleanup)
+        clear_lease_on_nodes(&[redis_c.redis_url()], &lease_key);
+        assert!(
+            read_lease_owner(&redis_c.redis_url(), &lease_key).is_none(),
+            "Node C should be free after B releases"
+        );
+
+        // when — A calls has_lease_owner_quorum (which now expands)
+        let has_quorum = adapter_a
+            .has_lease_owner_quorum()
+            .await
+            .expect("quorum check should succeed");
+        assert!(has_quorum, "A should still have quorum");
+
+        // then — A should now own node C too
+        let owns_c_after = read_lease_owner(&redis_c.redis_url(), &lease_key)
+            == Some(adapter_a.lease_owner_token.clone());
+        assert!(
+            owns_c_after,
+            "Lock expansion should have acquired node C"
+        );
+
+        // Verify writes now go to all 3 nodes
+        let block = poa_block_at_time(1, 100);
+        adapter_a
+            .publish_produced_block(&block)
+            .expect("publish should succeed");
+
+        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
+        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
+        assert_eq!(
+            stream_len(&redis_c.redis_url(), &stream_key),
+            1,
+            "Block should be written to expanded node C"
+        );
+    }
+
+    /// When lock expansion acquires a node with a higher epoch
+    /// (from election storm drift), the leader adopts the higher epoch
+    /// so write_block.lua succeeds on all nodes.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn has_lease_owner_quorum__adopts_higher_epoch_from_expanded_node()
+    {
+        // given — 3 Redis nodes
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:epoch-adoption".to_string();
+        let epoch_key = format!("{lease_key}:epoch:token");
+        let stream_key = format!("{lease_key}:block:stream");
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+
+        // Simulate election storm: B promotes on node C (incrementing epoch)
+        // then fails quorum and releases the lock, leaving epoch drifted
+        let candidate_b =
+            new_test_adapter(redis_urls.clone(), lease_key.clone());
+        {
+            let client =
+                redis::Client::open(redis_c.redis_url()).expect("client");
+            let mut conn = client.get_connection().expect("conn");
+            // Simulate B's promote_leader.lua on node C: SET NX + INCR
+            let _: () = redis::cmd("SET")
+                .arg(&lease_key)
+                .arg(&candidate_b.lease_owner_token)
+                .arg("PX")
+                .arg(5000u64)
+                .query(&mut conn)
+                .expect("set should succeed");
+            let _: u64 = redis::cmd("INCR")
+                .arg(&epoch_key)
+                .query(&mut conn)
+                .expect("incr should succeed");
+            // B releases (failed quorum cleanup)
+        }
+        clear_lease_on_nodes(&[redis_c.redis_url()], &lease_key);
+
+        // Node C now has epoch=1 but no lock owner
+        let epoch_c_before = read_epoch(&redis_c.redis_url(), &epoch_key);
+
+        // Leader A acquires on all free nodes (A,B,C all free now)
+        let adapter_a =
+            new_test_adapter(redis_urls.clone(), lease_key.clone());
+        assert!(
+            adapter_a
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+        );
+        let epoch_a = (*adapter_a
+            .current_epoch_token
+            .lock()
+            .expect("lock"))
+        .expect("epoch should be set");
+
+        // A's epoch should be max across all 3 nodes
+        // Node C had epoch=1 from B's INCR, then A's promote INCR'd it to 2
+        // Nodes A,B were at 0, A's promote INCR'd them to 1
+        // A takes max(1, 1, 2) = 2
+        assert!(
+            epoch_a > epoch_c_before,
+            "Leader's epoch ({epoch_a}) should be > node C's pre-acquisition epoch ({epoch_c_before})"
+        );
+
+        // Verify writes succeed on ALL nodes with the adopted epoch
+        let block = poa_block_at_time(1, 100);
+        adapter_a
+            .publish_produced_block(&block)
+            .expect("publish should succeed on all 3 nodes");
+
+        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
+        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
+        assert_eq!(stream_len(&redis_c.redis_url(), &stream_key), 1);
     }
 }
