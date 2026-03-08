@@ -3756,6 +3756,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-chaos-test"
+version = "0.47.2"
+dependencies = [
+ "anyhow",
+ "clap",
+ "fuel-core",
+ "fuel-core-chain-config",
+ "fuel-core-poa",
+ "fuel-core-types 0.47.2",
+ "futures",
+ "humantime",
+ "rand 0.8.5",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "fuel-core-client"
 version = "0.47.2"
 dependencies = [
