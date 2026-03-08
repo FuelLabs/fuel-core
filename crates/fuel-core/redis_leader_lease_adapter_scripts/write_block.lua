@@ -26,20 +26,38 @@ if tonumber(ARGV[1]) > current_token then
     redis.call("SET", KEYS[2], ARGV[1])
 end
 
--- 4) Height-uniqueness check: reject if this height already exists in the
---    stream. This prevents two successive leaders from both achieving quorum
---    writes at the same height (which causes a fork). The overlapping quorum
---    node (pigeonhole) will reject the second write, forcing the new leader
---    to stall until it can reconcile the existing block — choosing consistency
---    over availability during partitions.
+-- 4) Height-uniqueness check: prevent two blocks at the same height from
+--    coexisting in the stream (which causes forks via quorum overlap).
+--
+--    If an entry at this height already exists:
+--      - Same or higher epoch: reject (the existing block was written by an
+--        equal or newer leader — it may be quorum-committed).
+--      - Lower epoch: the existing entry is an orphaned sub-quorum write from
+--        an older leader. Replace it (delete old, allow XADD below) so the
+--        stream doesn't permanently deadlock with conflicting orphans.
+local my_epoch = tonumber(ARGV[1])
 local existing = redis.call("XREVRANGE", KEYS[1], "+", "-")
 for _, entry in ipairs(existing) do
+    local entry_id = entry[1]
     local fields = entry[2]
+    local entry_height = nil
+    local entry_epoch = 0
     for i = 1, #fields, 2 do
-        if fields[i] == "height" and fields[i + 1] == ARGV[3] then
+        if fields[i] == "height" then
+            entry_height = fields[i + 1]
+        elseif fields[i] == "epoch" then
+            entry_epoch = tonumber(fields[i + 1]) or 0
+        end
+    end
+    if entry_height == ARGV[3] then
+        if entry_epoch >= my_epoch then
             return redis.error_reply(
-                "HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream"
+                "HEIGHT_EXISTS: Block at height " .. ARGV[3] ..
+                " already in stream at epoch " .. entry_epoch
             )
+        else
+            -- Orphaned entry from older epoch — remove it to make room
+            redis.call("XDEL", KEYS[1], entry_id)
         end
     end
 end
