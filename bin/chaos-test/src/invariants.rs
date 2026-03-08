@@ -112,6 +112,8 @@ impl InvariantState {
 pub struct ProductionTracker {
     last_max_height: u32,
     last_advance_time: Instant,
+    /// Whether we've already dumped diagnostics for the current stall
+    stall_dumped: bool,
 }
 
 impl ProductionTracker {
@@ -119,6 +121,7 @@ impl ProductionTracker {
         Self {
             last_max_height: 0,
             last_advance_time: Instant::now(),
+            stall_dumped: false,
         }
     }
 }
@@ -131,6 +134,9 @@ impl ProductionTracker {
 /// A stall is only flagged when at least one node is capable of producing
 /// (alive long enough to have initialized + has Redis quorum). When no node
 /// can produce, the stall timer is reset so recovery time isn't penalized.
+///
+/// Returns true if a new stall was first detected this tick (for one-shot
+/// diagnostics like Redis stream dumps).
 fn check_gaps_from_db(
     cluster: &Cluster,
     gap_tolerance: Duration,
@@ -139,7 +145,7 @@ fn check_gaps_from_db(
     last_progress: &mut HashMap<usize, (u32, Instant)>,
     production: &mut ProductionTracker,
     timeline: &Timeline,
-) {
+) -> bool {
     let mut max_height: u32 = 0;
     let mut node_heights: Vec<(usize, u32)> = Vec::new();
 
@@ -159,13 +165,15 @@ fn check_gaps_from_db(
     }
 
     if max_height == 0 {
-        return;
+        return false;
     }
 
     // Production stall detection: has ANY node advanced?
+    let mut first_stall = false;
     if max_height > production.last_max_height {
         production.last_max_height = max_height;
         production.last_advance_time = Instant::now();
+        production.stall_dumped = false;
     } else {
         let can_produce = cluster.any_node_can_produce(producer_grace_period);
         if !can_produce {
@@ -175,6 +183,10 @@ fn check_gaps_from_db(
         } else {
             let stalled_for = production.last_advance_time.elapsed();
             if stalled_for > stall_threshold {
+                if !production.stall_dumped {
+                    first_stall = true;
+                    production.stall_dumped = true;
+                }
                 let violation = Violation::ProductionStall {
                     last_height: production.last_max_height,
                     stalled_for,
@@ -211,6 +223,8 @@ fn check_gaps_from_db(
             }
         }
     }
+
+    first_stall
 }
 
 /// Spawns block stream reader tasks for all live nodes, feeding events
@@ -398,7 +412,7 @@ pub async fn run_invariant_checker(
                 let cluster_guard = cluster.lock().await;
 
                 // Gap + stall detection via direct DB polling (reliable)
-                check_gaps_from_db(
+                let first_stall = check_gaps_from_db(
                     &cluster_guard,
                     gap_tolerance,
                     stall_threshold,
@@ -407,6 +421,13 @@ pub async fn run_invariant_checker(
                     &mut production,
                     &timeline,
                 );
+                if first_stall {
+                    warn!(
+                        "STALL DETECTED at height {} — dumping Redis stream state",
+                        production.last_max_height
+                    );
+                    dump_redis_streams(&cluster_guard, seed).await;
+                }
 
                 // Spawn readers for newly alive nodes
                 let live_status: Vec<(usize, bool)> = (0..cluster_guard.node_count())
