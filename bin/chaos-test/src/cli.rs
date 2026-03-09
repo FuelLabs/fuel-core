@@ -32,7 +32,7 @@ pub struct Cli {
 
     /// Max allowed production stall (no blocks from any node). Should be
     /// greater than lease_ttl to allow for normal failover and reconnection.
-    #[arg(long, default_value = "15s")]
+    #[arg(long, default_value = "20s")]
     pub stall_threshold: humantime::Duration,
 
     /// Log level

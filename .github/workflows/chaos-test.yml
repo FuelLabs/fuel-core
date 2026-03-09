@@ -1,0 +1,121 @@
+name: Leader Lock Chaos Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: 'Seed range (e.g. "0-100")'
+        required: false
+        default: '0-50'
+      duration:
+        description: 'Test duration per seed (e.g. "30m")'
+        required: false
+        default: '30m'
+      block_time:
+        description: 'Block production interval'
+        required: false
+        default: '100ms'
+      fault_interval:
+        description: 'Average fault injection interval'
+        required: false
+        default: '1s'
+      stall_threshold:
+        description: 'Max allowed production stall'
+        required: false
+        default: '20s'
+      parallelism:
+        description: 'Number of seeds per runner'
+        required: false
+        default: '5'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        run: |
+          RANGE="${{ inputs.seeds }}"
+          START="${RANGE%-*}"
+          END="${RANGE#*-}"
+          BATCH_SIZE=${{ inputs.parallelism }}
+          BATCHES="["
+          FIRST=true
+          for ((i=START; i<=END; i+=BATCH_SIZE)); do
+            BATCH_END=$((i + BATCH_SIZE - 1))
+            if [ $BATCH_END -gt $END ]; then BATCH_END=$END; fi
+            if [ "$FIRST" = true ]; then FIRST=false; else BATCHES+=","; fi
+            BATCHES+="{\"start\":$i,\"end\":$BATCH_END}"
+          done
+          BATCHES+="]"
+          echo "matrix={\"batch\":$BATCHES}" >> "$GITHUB_OUTPUT"
+
+  chaos-test:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Redis
+        run: sudo apt-get update && sudo apt-get install -y redis-server
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: chaos-test-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build chaos test
+        run: cargo build --release -p fuel-core-chaos-test
+
+      - name: Run chaos tests (seeds ${{ matrix.batch.start }}-${{ matrix.batch.end }})
+        run: |
+          FAILED=0
+          for seed in $(seq ${{ matrix.batch.start }} ${{ matrix.batch.end }}); do
+            echo "=== Seed $seed ==="
+            LOG="chaos_seed${seed}.log"
+            cargo run --release -p fuel-core-chaos-test -- \
+              --seed $seed \
+              --duration ${{ inputs.duration }} \
+              --block-time ${{ inputs.block_time }} \
+              --fault-interval ${{ inputs.fault_interval }} \
+              --stall-threshold ${{ inputs.stall_threshold }} \
+              > "$LOG" 2>&1
+            RC=$?
+            if [ $RC -ne 0 ]; then
+              echo "SEED $seed: FAIL"
+              grep -E "FORK|RESULT" "$LOG" | tail -3
+              if grep -q "FORK" "$LOG"; then
+                echo "::error::FORK detected at seed $seed"
+              fi
+              FAILED=$((FAILED + 1))
+            else
+              echo "SEED $seed: PASS"
+            fi
+          done
+          if [ $FAILED -gt 0 ]; then
+            echo "::error::$FAILED seed(s) failed"
+            exit 1
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-logs-${{ matrix.batch.start }}-${{ matrix.batch.end }}
+          path: chaos_seed*.log
+          retention-days: 14

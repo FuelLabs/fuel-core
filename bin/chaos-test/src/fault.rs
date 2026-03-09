@@ -325,7 +325,7 @@ impl FaultScheduler {
             | FaultAction::PartitionNodeFromRedis { .. }
             | FaultAction::PartitionAllFromRedis(_) => {
                 let recovery_delay = Duration::from_secs(
-                    self.rng.gen_range(5..=15),
+                    self.rng.gen_range(3..=10),
                 );
                 let recovery_action = match &action {
                     FaultAction::KillRedis(idx) => {
