@@ -10,7 +10,8 @@ pub struct Config {
     pub signer: SignMode,
     pub metrics: bool,
     pub min_connected_reserved_peers: usize,
-    pub time_until_synced: Duration,
+    pub time_until_synced_sufficient_peers: Option<Duration>,
+    pub time_until_synced_insufficient_peers: Option<Duration>,
     pub production_timeout: Duration,
     pub chain_id: ChainId,
 }
@@ -23,7 +24,8 @@ impl Default for Config {
             signer: SignMode::Unavailable,
             metrics: false,
             min_connected_reserved_peers: 0,
-            time_until_synced: Duration::ZERO,
+            time_until_synced_sufficient_peers: None,
+            time_until_synced_insufficient_peers: None,
             production_timeout: Duration::from_secs(20),
             chain_id: ChainId::default(),
         }

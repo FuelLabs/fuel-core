@@ -326,9 +326,16 @@ pub struct Command {
     #[clap(long = "min-connected-reserved-peers", default_value = "0", env)]
     pub min_connected_reserved_peers: usize,
 
-    /// Time to wait after receiving the latest block before considered to be Synced.
-    #[clap(long = "time-until-synced", default_value = "0s", env)]
-    pub time_until_synced: humantime::Duration,
+    /// Time to wait after receiving the latest block before considered to be Synced
+    /// when sufficient peers are connected.
+    #[clap(long = "time-until-synced-sufficient-peers", env)]
+    pub time_until_synced_sufficient_peers: Option<humantime::Duration>,
+
+    /// Time to wait before starting block production when insufficient peers are connected.
+    /// If set, allows block production even without peers after this timeout expires
+    /// without receiving new blocks from the network.
+    #[clap(long = "time-until-synced-insufficient-peers", env)]
+    pub time_until_synced_insufficient_peers: Option<humantime::Duration>,
 
     /// The timeout after which the production of a block is considered failed.
     #[clap(long = "production-timeout", default_value = "20s", env)]
@@ -394,7 +401,8 @@ impl Command {
             tx_status_manager,
             graphql,
             min_connected_reserved_peers,
-            time_until_synced,
+            time_until_synced_sufficient_peers,
+            time_until_synced_insufficient_peers,
             production_timeout,
             memory_pool_size,
             profiling: _,
@@ -784,7 +792,10 @@ impl Command {
             name,
             relayer_consensus_config: verifier,
             min_connected_reserved_peers,
-            time_until_synced: time_until_synced.into(),
+            time_until_synced_sufficient_peers: time_until_synced_sufficient_peers
+                .map(|d| d.into()),
+            time_until_synced_insufficient_peers: time_until_synced_insufficient_peers
+                .map(|d| d.into()),
             production_timeout: production_timeout.into(),
             memory_pool_size,
             tx_status_manager: TxStatusManagerConfig {
