@@ -452,11 +452,21 @@ The `HEIGHT_EXISTS` check correctly prevents forks. Transient stalls during acti
 
 ---
 
-## Issue 6: Concurrent Leaders Both Achieve Quorum Writes at Same Height
+## Issue 6: ~~Concurrent Leaders Both Achieve Quorum Writes at Same Height~~ (Resolved — Strict HEIGHT_EXISTS)
 
-### Observation
+### Original Observation
 
-Chaos test seeds 6 and 9 produce forks despite the `HEIGHT_EXISTS` check in `write_block.lua`. Both blocks are committed via `_commit_result` (the Redis publish path), 616ms apart, with both achieving quorum. The invariant checker also flags `CONCURRENT_LEADERS` at the fork height.
+Chaos test seeds 6 and 9 produced forks despite the `HEIGHT_EXISTS` check in `write_block.lua`. Both blocks were committed via `_commit_result` (the Redis publish path), 616ms apart, with both achieving quorum. The invariant checker also flagged `CONCURRENT_LEADERS` at the fork height.
+
+### Resolution
+
+This was caused by the **epoch-aware relaxation** of `HEIGHT_EXISTS` — the check allowed a higher-epoch leader to delete-and-replace an existing entry. Two concurrent leaders could each delete what the other just wrote on the overlapping Redis node, both achieving quorum.
+
+Reverting to **strict HEIGHT_EXISTS** (reject all duplicates regardless of epoch) eliminates this race entirely. The pigeonhole principle guarantees the overlapping node rejects the second write unconditionally. Seeds 6 and 9 show zero forks across 6 runs with the strict check.
+
+Sub-quorum orphans from failed leaders are handled by the leader writing to the remaining nodes — if an orphan occupies one node, the leader can still reach quorum on the other two. If orphans block quorum entirely, the leader reconciles via the read path once proxy faults clear.
+
+### Status: CLOSED
 
 ### Reproduction
 
