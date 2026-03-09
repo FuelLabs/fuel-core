@@ -69,10 +69,7 @@ alloy-sol-types = "1.5"
 alloy-transport = { version = "1.7", default-features = false }
 alloy-transport-http = { version = "1.7", default-features = false, features = ["reqwest", "reqwest-rustls-tls"] }
 anyhow = "1.0"
-async-graphql = { version = "7.0.15", features = [
-    "graphiql",
-    "tracing",
-], default-features = false }
+async-graphql = { version = "7.0.15", features = ["graphiql", "tracing"], default-features = false }
 async-graphql-value = { version = "7.0.15" }
 async-trait = "0.1"
 
@@ -88,12 +85,7 @@ cynic = { version = "3.1.0", features = ["http-reqwest"] }
 derive_more = { version = "2", features = ["full"] }
 ed25519 = { version = "2.2.3", default-features = false }
 ed25519-dalek = { version = "2.1.1", default-features = false }
-educe = { version = "0.6", default-features = false, features = [
-    "Eq",
-    "PartialEq",
-    "Hash",
-    "Debug",
-] }
+educe = { version = "0.6", default-features = false, features = ["Eq", "PartialEq", "Hash", "Debug"] }
 enum-iterator = "2"
 enum_dispatch = "0.3.13"
 flate2 = "1.1.5"
@@ -156,10 +148,7 @@ prost = "0.14.1"
 rand = "0.8"
 rayon = "1.10.0"
 # enable cookie store to support L7 sticky sessions
-reqwest = { version = "0.13", default-features = false, features = [
-    "rustls",
-    "cookies",
-] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "cookies"] }
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }
