@@ -620,7 +620,7 @@ impl RedisLeaderLeaseAdapter {
                 blocks_by_node.len()
             );
 
-            if !self.quorum_reached(nodes_with_height) {
+            if nodes_with_height == 0 {
                 break;
             }
 
@@ -646,11 +646,46 @@ impl RedisLeaderLeaseAdapter {
 
             let winner = votes
                 .into_iter()
-                .filter(|(_, (count, _))| self.quorum_reached(*count))
                 .max_by_key(|((epoch, _), _)| *epoch)
-                .map(|(_, (_, block))| block);
-            if let Some(block) = winner {
-                reconciled.push(block);
+                .map(|(_, (count, block))| (count, block));
+
+            if let Some((count, block)) = winner {
+                if self.quorum_reached(count) {
+                    // Block already has quorum — reconcile it directly
+                    reconciled.push(block);
+                } else {
+                    // Sub-quorum block: repropose to all nodes to reach quorum.
+                    // This repairs orphaned partial writes from failed leaders.
+                    // HEIGHT_EXISTS on nodes that already have the block returns
+                    // Ok(false), and nodes missing it accept the write.
+                    tracing::info!(
+                        "Repairing sub-quorum block at height {current_height} \
+                         (found on {count}/{} nodes)",
+                        blocks_by_node.len()
+                    );
+                    match self.repair_sub_quorum_block(&block) {
+                        Ok(true) => {
+                            tracing::info!(
+                                "Repair succeeded — block at height {current_height} \
+                                 now has quorum"
+                            );
+                            reconciled.push(block);
+                        }
+                        Ok(false) => {
+                            tracing::warn!(
+                                "Repair failed to reach quorum at height \
+                                 {current_height} — will retry next round"
+                            );
+                            break;
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Repair error at height {current_height}: {e}"
+                            );
+                            break;
+                        }
+                    }
+                }
             } else {
                 break;
             }
@@ -708,7 +743,7 @@ impl RedisLeaderLeaseAdapter {
         epoch: u64,
         block: &SealedBlock,
         block_data: &[u8],
-    ) -> anyhow::Result<bool> {
+    ) -> anyhow::Result<WriteBlockResult> {
         let mut connection = redis_node
             .redis_client
             .get_connection_with_timeout(self.node_timeout)?;
@@ -727,19 +762,85 @@ impl RedisLeaderLeaseAdapter {
             .arg(self.stream_max_len)
             .invoke::<String>(&mut connection);
         match write_result {
-            Ok(_) => Ok(true),
-            Err(err)
-                if err.to_string().contains("FENCING_ERROR:")
-                    || err.to_string().contains("HEIGHT_EXISTS:") =>
-            {
-                tracing::warn!(
-                    "write_block rejected: {err} (height={block_height})"
+            Ok(_) => Ok(WriteBlockResult::Written),
+            Err(err) if err.to_string().contains("HEIGHT_EXISTS:") => {
+                tracing::debug!(
+                    "write_block: height already exists (height={block_height})"
                 );
-                Ok(false)
+                Ok(WriteBlockResult::HeightExists)
+            }
+            Err(err) if err.to_string().contains("FENCING_ERROR:") => {
+                tracing::warn!(
+                    "write_block: fencing rejected (height={block_height}): {err}"
+                );
+                Ok(WriteBlockResult::FencingRejected)
             }
             Err(err) => Err(err.into()),
         }
     }
+
+    /// Repropose a sub-quorum block to all Redis nodes to reach quorum.
+    /// Called during reconciliation when a block exists on some nodes but
+    /// below quorum — possibly from a leader that published and committed
+    /// locally but whose write only reached a subset of nodes.
+    ///
+    /// Uses `publish_block_on_node` which runs `write_block.lua`:
+    /// - Nodes that already have the block return HEIGHT_EXISTS (counted
+    ///   as having the block)
+    /// - Nodes missing it accept the write (counted as having the block)
+    /// - FENCING_ERROR means we lost the lock — abort the repair
+    /// - The total must reach quorum for the repair to succeed
+    fn repair_sub_quorum_block(
+        &self,
+        block: &SealedBlock,
+    ) -> anyhow::Result<bool> {
+        let epoch = match *self
+            .current_epoch_token
+            .lock()
+            .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?
+        {
+            Some(epoch) => epoch,
+            None => {
+                return Err(anyhow!(
+                    "Cannot repair block because fencing token is not initialized"
+                ));
+            }
+        };
+        let block_data = postcard::to_allocvec(block)?;
+        let mut total_with_block = 0usize;
+        for redis_node in &self.redis_nodes {
+            match self.publish_block_on_node(redis_node, epoch, block, &block_data)
+            {
+                Ok(WriteBlockResult::Written) => {
+                    total_with_block = total_with_block.saturating_add(1);
+                }
+                Ok(WriteBlockResult::HeightExists) => {
+                    // Node already has a block at this height — count it
+                    total_with_block = total_with_block.saturating_add(1);
+                }
+                Ok(WriteBlockResult::FencingRejected) => {
+                    // Lost the lock — repair is invalid, abort
+                    return Err(anyhow!(
+                        "Lost lock during repair — another leader took over"
+                    ));
+                }
+                Err(err) => {
+                    tracing::debug!("Repair write to node failed: {err}");
+                }
+            }
+        }
+        Ok(self.quorum_reached(total_with_block))
+    }
+}
+
+/// Result of a `write_block.lua` invocation on a single Redis node.
+enum WriteBlockResult {
+    /// Block was successfully written to the stream.
+    Written,
+    /// A block at this height already exists in the stream.
+    HeightExists,
+    /// Lock lost or epoch is stale — another leader holds the lock.
+    FencingRejected,
 }
 
 impl PoAAdapter {
@@ -883,7 +984,8 @@ impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
             .iter()
             .map(|redis_node| {
                 match self.publish_block_on_node(redis_node, epoch, block, &block_data) {
-                    Ok(success) => success,
+                    Ok(WriteBlockResult::Written) => true,
+                    Ok(_) => false,
                     Err(err) => {
                         tracing::debug!("Redis publish on node failed: {err}");
                         false
@@ -1168,29 +1270,29 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn leader_state__when_height_has_quorum_epoch_but_block_ids_disagree_then_does_not_reconcile_height()
-     {
-        // given
+    async fn leader_state__when_height_has_disagreeing_block_ids_then_repairs_with_highest_epoch_block()
+    {
+        // given: two different blocks at height 1 on different nodes, same epoch
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
         let lease_key = "poa:test:epoch-quorum-block-mismatch".to_string();
         let stream_key = format!("{lease_key}:block:stream");
-        let adapter = RedisLeaderLeaseAdapter::new(
+        let adapter = new_test_adapter(
             vec![
                 redis_a.redis_url(),
                 redis_b.redis_url(),
                 redis_c.redis_url(),
             ],
             lease_key,
-            Duration::from_secs(2),
-            Duration::from_millis(100),
-            Duration::from_millis(50),
-            Duration::from_millis(0),
-            1,
-            1000,
-        )
-        .expect("adapter should be created");
+        );
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter should acquire lease"
+        );
 
         let block_a = poa_block_at_time(1, 10);
         let block_b = poa_block_at_time(1, 20);
@@ -1210,46 +1312,48 @@ mod tests {
             .get_connection()
             .expect("redis b connection should open");
 
+        // Both at epoch 7 but different block data — each on 1 node (sub-quorum)
         append_stream_block(&mut conn_a, &stream_key, 1, &block_a_data, 7);
         append_stream_block(&mut conn_b, &stream_key, 1, &block_b_data, 7);
 
-        // when
+        // when: leader reconciles — should pick one and repair to quorum
+        // The repair writes to node C (empty), giving the winner 2/3
         let leader_state = adapter
             .leader_state(1.into())
             .await
             .expect("leader_state should succeed");
 
-        // then
+        // then: one of the blocks is repaired and returned
         assert!(
-            matches!(leader_state, LeaderState::ReconciledLeader),
-            "Expected reconciliation to reject epoch quorum without block-id quorum",
+            matches!(leader_state, LeaderState::UnreconciledBlocks(ref blocks) if blocks.len() == 1),
+            "Expected repair to pick one block and reach quorum, got {leader_state:?}",
         );
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn leader_state__when_same_height_entry_exists_on_less_than_quorum_nodes_then_ignores_it()
-     {
-        // given
+    async fn leader_state__when_same_height_entry_exists_on_less_than_quorum_nodes_then_repairs_it()
+    {
+        // given: orphan block on only 1 of 3 nodes (below quorum)
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
         let lease_key = "poa:test:below-quorum".to_string();
         let stream_key = format!("{lease_key}:block:stream");
-        let adapter = RedisLeaderLeaseAdapter::new(
+        let adapter = new_test_adapter(
             vec![
                 redis_a.redis_url(),
                 redis_b.redis_url(),
                 redis_c.redis_url(),
             ],
             lease_key,
-            Duration::from_secs(2),
-            Duration::from_millis(100),
-            Duration::from_millis(50),
-            Duration::from_millis(0),
-            1,
-            1000,
-        )
-        .expect("adapter should be created");
+        );
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter should acquire lease"
+        );
 
         let orphan_block = poa_block_at_time(1, 10);
         let orphan_block_data =
@@ -1262,43 +1366,43 @@ mod tests {
             .expect("redis connection should open");
         append_stream_block(&mut conn, &stream_key, 1, &orphan_block_data, 1);
 
-        // when
+        // when: leader reconciles — should repair the orphan to quorum
         let leader_state = adapter
             .leader_state(1.into())
             .await
             .expect("leader_state should succeed");
 
-        // then
+        // then: orphan was reproposed to other nodes and returned for import
         assert!(
-            matches!(leader_state, LeaderState::ReconciledLeader),
-            "Expected below-quorum entry to be ignored"
+            matches!(leader_state, LeaderState::UnreconciledBlocks(ref blocks) if blocks.len() == 1),
+            "Expected sub-quorum entry to be repaired and returned, got {leader_state:?}"
         );
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn leader_state__when_contiguous_heights_have_quorum_then_returns_blocks_until_first_non_quorum_height()
-     {
-        // given
+    async fn leader_state__when_contiguous_heights_have_quorum_then_repairs_sub_quorum_tail()
+    {
+        // given: h1, h2 on quorum (a,b). h3 below quorum (a only).
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
         let lease_key = "poa:test:contiguous-quorum".to_string();
         let stream_key = format!("{lease_key}:block:stream");
-        let adapter = RedisLeaderLeaseAdapter::new(
+        let adapter = new_test_adapter(
             vec![
                 redis_a.redis_url(),
                 redis_b.redis_url(),
                 redis_c.redis_url(),
             ],
             lease_key,
-            Duration::from_secs(2),
-            Duration::from_millis(100),
-            Duration::from_millis(50),
-            Duration::from_millis(0),
-            1,
-            1000,
-        )
-        .expect("adapter should be created");
+        );
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter should acquire lease"
+        );
 
         let h1 = poa_block_at_time(1, 10);
         let h2 = poa_block_at_time(2, 20);
@@ -1311,17 +1415,12 @@ mod tests {
             redis::Client::open(redis_a.redis_url()).expect("redis a client should open");
         let redis_b_client =
             redis::Client::open(redis_b.redis_url()).expect("redis b client should open");
-        let redis_c_client =
-            redis::Client::open(redis_c.redis_url()).expect("redis c client should open");
         let mut conn_a = redis_a_client
             .get_connection()
             .expect("redis a connection should open");
         let mut conn_b = redis_b_client
             .get_connection()
             .expect("redis b connection should open");
-        let mut conn_c = redis_c_client
-            .get_connection()
-            .expect("redis c connection should open");
 
         // h1 on quorum (a,b)
         append_stream_block(&mut conn_a, &stream_key, 1, &h1_data, 1);
@@ -1331,15 +1430,14 @@ mod tests {
         append_stream_block(&mut conn_b, &stream_key, 2, &h2_data, 1);
         // h3 below quorum (a only)
         append_stream_block(&mut conn_a, &stream_key, 3, &h3_data, 1);
-        let _ = &mut conn_c;
 
-        // when
+        // when: leader reconciles — h3 should be repaired to quorum
         let leader_state = adapter
             .leader_state(1.into())
             .await
             .expect("leader_state should succeed");
 
-        // then
+        // then: all 3 heights returned (h3 was repaired)
         let unreconciled_blocks = match leader_state {
             LeaderState::UnreconciledBlocks(blocks) => blocks,
             other => panic!("Expected unreconciled blocks, got: {other:?}"),
@@ -1349,8 +1447,8 @@ mod tests {
                 .iter()
                 .map(|b| u32::from(*b.entity.header().height()))
                 .collect::<Vec<_>>(),
-            vec![1, 2],
-            "Expected only contiguous quorum-backed heights to be reconciled",
+            vec![1, 2, 3],
+            "Expected all heights including repaired sub-quorum h3",
         );
     }
 
@@ -2320,13 +2418,12 @@ mod tests {
             .await
             .expect("reconciliation should succeed");
 
-        // then — BUG: block that was committed (published to quorum) is now
-        // invisible because one of the quorum nodes lost its data.
-        // Only node A has the block (1 < quorum=2) → reconciliation skips it.
-        assert!(
-            post_loss.is_empty(),
-            "BUG: committed block dropped below quorum after Redis node restart. \
-             New leader would produce a divergent block at height 1 → FORK."
+        // then — repair reproposed the block from node A to node B (now empty)
+        // and node C, reaching quorum again. The block is recovered.
+        assert_eq!(
+            post_loss.len(),
+            1,
+            "Repair should recover the block by reproposing from node A to the other nodes"
         );
     }
 
