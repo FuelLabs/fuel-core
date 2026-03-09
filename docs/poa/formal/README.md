@@ -1,26 +1,38 @@
 # Formal Verification of PoA Sequencer HA Protocol
 
-FizzBee model-checking specification for the high-availability sequencer protocol described in [`../failover.md`](../failover.md).
+FizzBee model-checking specifications for the high-availability sequencer protocol described in [`../failover.md`](../failover.md).
 
-## What This Verifies
+## Specifications
 
-The specification models the **core coordination protocol** — Redlock-based leader election with fencing tokens, Redis Streams as a block log, and epoch self-healing — and exhaustively checks all possible interleavings, crash points, and election storms.
+| File | Description |
+|------|-------------|
+| `sequencer_ha_v2.fizz` | **Current** — Adversarial model with HEIGHT_EXISTS, de-atomized commits, per-sequencer local_db, and sub-quorum repair |
+| `sequencer_ha.fizz` | **Historical** — Original model that passed verification but missed two critical bugs (see [POST_MORTEM.md](POST_MORTEM.md)) |
+| `POST_MORTEM.md` | Analysis of six abstraction flaws in the original model |
+
+## What v2 Verifies
+
+The v2 specification models the **implementation-aware** protocol — including the actual commit boundaries, local persistence, and repair mechanisms discovered through chaos testing.
 
 ### Safety Properties (Invariants)
 
 | # | Property | Description |
 |---|----------|-------------|
-| 1 | **NoFork** | At most one committed block per height across all Redis nodes. If two sequencers both achieved write quorum at the same height, it must be the same block. |
-| 2 | **EpochMonotonicity** | Epoch counters on each Redis node never decrease between consecutive states (transition assertion). |
-| 3 | **LockMutualExclusion** | Each Redis node has at most one live lock owner at any time. |
+| 1 | **NoFork** | No two sequencers have different blocks at the same height in their `local_db`. Defined over client-observable state, not Redis streams. |
+| 2 | **RedisNoDoubleQuorum** | At most one distinct block per height has quorum presence across Redis nodes. |
+| 3 | **EpochMonotonicity** | Epoch counters on each Redis node never decrease between states. |
+| 4 | **LockMutualExclusion** | Each Redis node has at most one live lock owner. |
 
-### Modeling Decisions
+### Key Modeling Decisions (v2)
 
-- **TTL as nondeterministic expiry**: `RedisNode.ExpireLock` fires nondeterministically — no wall-clock needed.
-- **Quorum as subset selection**: `oneof` blocks nondeterministically determine which nodes respond, modeling network partitions/timeouts.
-- **Lua script atomicity**: Each Lua script maps to an `atomic func` — this correctly models Redis's single-threaded Lua execution guarantee.
-- **Crash injection**: An explicit `Crash` action resets ephemeral sequencer state (locks remain until TTL expiry on nodes).
-- **Epoch healing**: Modeled directly in `write_block` — if the caller's epoch exceeds the node's, the node is pulled forward.
+| Aspect | v1 (flawed) | v2 (corrected) |
+|--------|-------------|----------------|
+| **Block commit** | Single atomic `ProduceBlock` action | Split into `ProduceBlock` (Redis write) + `CommitLocal` (local DB) with yield between |
+| **Fork definition** | Checked Redis streams | Checks per-sequencer `local_db` (client-observable state) |
+| **HEIGHT_EXISTS** | Not modeled | `write_block` scans stream for existing height before append |
+| **Sub-quorum repair** | Orphaned entries ignored | `Promote` repropose highest-epoch entry to reach quorum |
+| **Deadlock detection** | Disabled | Enabled (catches livelock from unrepaired orphans) |
+| **Local persistence** | No `local_db` | Each sequencer has `local_db` dict that persists across crashes |
 
 ## Prerequisites
 
@@ -31,101 +43,71 @@ brew tap fizzbee-io/fizzbee
 brew install fizzbee
 ```
 
-Or download a prebuilt binary from the [releases page](https://github.com/fizzbee-io/fizzbee/releases).
-
-Verify installation:
-
-```bash
-fizz --help
-```
+Or download from the [releases page](https://github.com/fizzbee-io/fizzbee/releases).
 
 ## Running the Specification
 
 ```bash
 cd docs/poa/formal
-fizz --exploration_strategy dfs sequencer_ha.fizz
+fizz --exploration_strategy dfs sequencer_ha_v2.fizz
 ```
 
-DFS exploration is recommended — it keeps memory usage low (queue depth ~70) and completes in ~22 seconds. BFS works too but uses significantly more memory.
+DFS exploration is recommended for memory efficiency.
 
 ### Expected Output
 
 ```
-Nodes: 58409, queued: 0, elapsed: 21.787454209s
-Time taken for model checking: 21.787495541s
-Valid Nodes: 58409 Unique states: 23479
-IsLive: true
 PASSED: Model checker completed successfully
 ```
 
-## Interpreting Results
+## Mutation Testing
 
-### All properties pass
+The model's value is proven by demonstrating it catches known bugs when safety mechanisms are removed.
 
-```
-PASSED: Model checker completed successfully
-```
+### Test 1: Remove HEIGHT_EXISTS (expect NoFork violation)
 
-This means the model checker exhaustively verified all reachable states (58,409 nodes / 23,479 unique states with default bounds).
+In `sequencer_ha_v2.fizz`, comment out the HEIGHT_EXISTS check in `write_block`:
 
-### Counterexample found
-
-```
-Assertion "NoFork" violated!
-Trace:
-  State 0: ...
-  State 1: ...
-  ...
+```python
+# 4. HEIGHT_EXISTS — reject if this height is already in the stream
+# for entry in self.stream:
+#     if entry["height"] == height:
+#         return {"ok": False, "reason": "HEIGHT_EXISTS"}
 ```
 
-The trace shows the exact sequence of actions leading to the violation. Each state in the trace shows the full system state (all Redis nodes and sequencers).
+Re-run — the `NoFork` assertion should produce a counterexample showing two sequencers committing different blocks at the same height to their `local_db`.
 
-## Configuration Knobs
+### Test 2: Remove sub-quorum repair (expect deadlock)
 
-Edit the constants at the top of `sequencer_ha.fizz` to adjust the state space:
+In `sequencer_ha_v2.fizz`, remove the repair loop from `Promote` (the `for h in height_node_sets:` block). Re-run — the model checker should detect a deadlock: a state where the leader cannot produce (HEIGHT_EXISTS blocks it) and no other action can resolve the situation.
 
-| Constant | Default | Description |
-|----------|---------|-------------|
-| `NUM_REDIS_NODES` | 3 | Number of independent Redis nodes (N) |
-| `QUORUM_SIZE` | 2 | Quorum threshold: `ceil(N/2) + 1` |
-| `NUM_SEQUENCERS` | 2 | Number of sequencer processes (1 leader + followers) |
-| `MAX_BLOCKS` | 2 | Maximum block height to explore |
-| `MAX_ELECTIONS` | 2 | Maximum election rounds |
+### Test 3: Remove identity check (sanity check)
 
-The `action_options` in the YAML front matter bound how many times each action can fire, keeping the state space tractable. Increase these to explore deeper but expect longer run times and larger state spaces.
-
-**State space scaling**: With default bounds, the spec explores ~58K nodes in ~22s using DFS. Increasing `MAX_BLOCKS` or `MAX_ELECTIONS` by 1 roughly doubles the state space.
-
-## Validating the Spec Is Meaningful
-
-To confirm the spec actually catches bugs, intentionally break a property and verify the model checker finds a counterexample:
-
-**Example — remove the identity check from `write_block`:**
-
-In the `write_block` func on `RedisNode`, comment out the lock-owner check:
+Comment out the lock-owner check in `write_block`:
 
 ```python
 # if self.lock_owner != node_id or not self.lock_alive:
 #     return {"ok": False, "reason": "LOCK_LOST"}
 ```
 
-Re-run `fizz --exploration_strategy dfs sequencer_ha.fizz` — the `NoFork` assertion should now produce a counterexample trace showing a zombie leader writing a conflicting block.
+Re-run — the `NoFork` assertion should produce a counterexample (zombie leader writes a conflicting block).
 
-**Example — remove the fencing check:**
+## Configuration
 
-Comment out the epoch comparison:
-
-```python
-# if caller_epoch < self.epoch:
-#     return {"ok": False, "reason": "STALE_EPOCH"}
-```
-
-This removes the defense-in-depth layer. Depending on the interleaving, the identity check alone may still prevent forks (it's the primary mechanism), but removing both checks will definitely produce counterexamples.
+| Constant | Default | Description |
+|----------|---------|-------------|
+| `NUM_REDIS_NODES` | 3 | Number of independent Redis nodes |
+| `QUORUM_SIZE` | 2 | Quorum threshold: `ceil(N/2) + 1` |
+| `NUM_SEQUENCERS` | 2 | Number of sequencer processes |
+| `MAX_BLOCKS` | 2 | Maximum block height to explore |
+| `MAX_ELECTIONS` | 3 | Maximum election rounds |
 
 ## File Structure
 
 ```
 docs/poa/formal/
-├── sequencer_ha.fizz   # FizzBee specification
-└── README.md           # This file
+├── sequencer_ha_v2.fizz   # Current adversarial FizzBee specification
+├── sequencer_ha.fizz      # Historical v1 specification (flawed)
+├── POST_MORTEM.md         # Analysis of v1's abstraction errors
+└── README.md              # This file
 ```

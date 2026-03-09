@@ -1,0 +1,338 @@
+# ============================================================================
+# FizzBee Formal Specification: PoA Sequencer HA Protocol (v2 — Adversarial)
+# ============================================================================
+#
+# Corrected model addressing six abstraction flaws found by chaos testing.
+# See POST_MORTEM.md for the full analysis.
+#
+# Key differences from v1:
+#   - HEIGHT_EXISTS check in write_block (prevents duplicate-height quorum)
+#   - De-atomized ProduceBlock + CommitLocal (models crash between Redis
+#     write and local commit)
+#   - Per-sequencer local_db (fork defined over client-observable state)
+#   - Sub-quorum repair in Promote (prevents livelock from orphaned entries)
+#   - Deadlock detection ENABLED (catches livelock as terminal states)
+#
+# Safety claims verified:
+#   1. NoFork — no two sequencers have different blocks at the same height
+#      in their local_db
+#   2. RedisNoDoubleQuorum — at most one block per height has quorum in Redis
+#   3. EpochMonotonicity — epoch counters never decrease
+#   4. LockMutualExclusion — at most one live lock owner per node
+#
+# Run: fizz --exploration_strategy dfs sequencer_ha_v2.fizz
+# ============================================================================
+
+---
+options:
+  max_actions: 10
+action_options:
+  "RedisNode.ExpireLock":
+    max_actions: 2
+  "Sequencer.Crash":
+    max_actions: 2
+  "Sequencer.Promote":
+    max_actions: 3
+  "Sequencer.ProduceBlock":
+    max_actions: 3
+  "Sequencer.CommitLocal":
+    max_actions: 3
+  "Sequencer.StepDown":
+    max_actions: 1
+---
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+NUM_REDIS_NODES = 3
+QUORUM_SIZE     = 2          # ceil(N/2) + 1
+NUM_SEQUENCERS  = 2
+MAX_BLOCKS      = 2          # bound on block heights to explore
+MAX_ELECTIONS   = 3          # bound on election rounds (increased for repair)
+
+State = enum("FOLLOWER", "LEADER")
+
+# ---------------------------------------------------------------------------
+# Role: RedisNode
+# ---------------------------------------------------------------------------
+# Models one independent Redis node's local state.
+# Each Lua script maps to an atomic func (Redis single-threaded guarantee).
+# ---------------------------------------------------------------------------
+
+role RedisNode:
+    action Init:
+        self.lock_owner  = None
+        self.lock_alive  = False
+        self.epoch       = 0
+        self.stream      = []
+
+    # --- promote_leader.lua ---
+    atomic func promote_leader(node_id, ttl_ignored):
+        if self.lock_owner != None and self.lock_alive:
+            return {"ok": False, "epoch": self.epoch}
+        self.lock_owner = node_id
+        self.lock_alive = True
+        self.epoch += 1
+        return {"ok": True, "epoch": self.epoch}
+
+    # --- write_block.lua (with HEIGHT_EXISTS) ---
+    atomic func write_block(caller_epoch, node_id, height, data):
+        # 1. Identity check (primary safety)
+        if self.lock_owner != node_id or not self.lock_alive:
+            return {"ok": False, "reason": "LOCK_LOST"}
+        # 2. Fencing check (defense-in-depth)
+        if caller_epoch < self.epoch:
+            return {"ok": False, "reason": "STALE_EPOCH"}
+        # 3. Epoch healing
+        if caller_epoch > self.epoch:
+            self.epoch = caller_epoch
+        # 4. HEIGHT_EXISTS — reject if this height is already in the stream
+        for entry in self.stream:
+            if entry["height"] == height:
+                return {"ok": False, "reason": "HEIGHT_EXISTS"}
+        # 5. Append to stream
+        self.stream = self.stream + [{"height": height, "data": data, "epoch": caller_epoch}]
+        # 6. Lease renewal
+        self.lock_alive = True
+        return {"ok": True}
+
+    # --- release_lock.lua ---
+    atomic func release_lock(node_id):
+        if self.lock_owner == node_id:
+            self.lock_owner = None
+            self.lock_alive = False
+        return True
+
+    # --- Nondeterministic TTL expiry ---
+    atomic action ExpireLock:
+        require self.lock_alive
+        self.lock_alive = False
+
+# ---------------------------------------------------------------------------
+# Role: Sequencer
+# ---------------------------------------------------------------------------
+# Models a sequencer process with persistent local storage.
+# ---------------------------------------------------------------------------
+
+role Sequencer:
+    action Init:
+        self.state         = State.FOLLOWER
+        self.my_epoch      = 0
+        self.next_height   = 0
+        self.local_db      = {}       # height -> block_data (persists across crashes)
+        self.pending_block = None     # set by ProduceBlock, consumed by CommitLocal
+
+    # --- Promote: attempt to become leader + repair sub-quorum entries ---
+    atomic action Promote:
+        require self.state == State.FOLLOWER
+        require election_count < MAX_ELECTIONS
+
+        # Phase 1: Acquire lock on quorum
+        results = []
+        for n in redis_nodes:
+            oneof:
+                atomic:
+                    result = n.promote_leader(self.__id__, 3000)
+                    results = results + [result]
+                atomic:
+                    results = results + [{"ok": False, "epoch": 0}]
+
+        successes = 0
+        max_epoch = 0
+        for r in results:
+            if r["ok"]:
+                successes += 1
+                if r["epoch"] > max_epoch:
+                    max_epoch = r["epoch"]
+
+        if successes < QUORUM_SIZE:
+            for n in redis_nodes:
+                n.release_lock(self.__id__)
+            set_election_count(election_count + 1)
+            return
+
+        self.state    = State.LEADER
+        self.my_epoch = max_epoch
+        set_election_count(election_count + 1)
+
+        # Phase 2: Read streams, identify sub-quorum entries, repair
+        height_node_sets = {}
+        height_best_entry = {}
+        for ni in range(len(redis_nodes)):
+            n = redis_nodes[ni]
+            for entry in n.stream:
+                h = entry["height"]
+                if h not in height_node_sets:
+                    height_node_sets[h] = {}
+                    height_best_entry[h] = entry
+                height_node_sets[h][ni] = True
+                if entry["epoch"] > height_best_entry[h]["epoch"]:
+                    height_best_entry[h] = entry
+
+        # Repair sub-quorum entries
+        for h in height_node_sets:
+            node_count = len(height_node_sets[h])
+            if node_count > 0 and node_count < QUORUM_SIZE:
+                # Repropose highest-epoch entry to all nodes
+                repair_entry = height_best_entry[h]
+                repair_ok = 0
+                for n in redis_nodes:
+                    oneof:
+                        atomic:
+                            wr = n.write_block(self.my_epoch, self.__id__, h, repair_entry["data"])
+                            if wr["ok"] or wr["reason"] == "HEIGHT_EXISTS":
+                                repair_ok += 1
+                        atomic:
+                            pass  # node unreachable
+
+                if repair_ok >= QUORUM_SIZE:
+                    self.local_db[h] = repair_entry["data"]
+
+        # Phase 3: Determine next_height from quorum-committed heights
+        # Re-read after repair
+        height_node_sets2 = {}
+        for ni in range(len(redis_nodes)):
+            n = redis_nodes[ni]
+            for entry in n.stream:
+                h = entry["height"]
+                if h not in height_node_sets2:
+                    height_node_sets2[h] = {}
+                height_node_sets2[h][ni] = True
+
+        max_h = 0
+        for h in height_node_sets2:
+            if len(height_node_sets2[h]) >= QUORUM_SIZE:
+                if h >= max_h:
+                    max_h = h + 1
+        self.next_height = max_h
+
+    # --- ProduceBlock: write block to Redis quorum ---
+    # NOT atomic — yield between Redis write and pending_block assignment
+    # allows the model checker to explore crash/interleaving at that point.
+    action ProduceBlock:
+        require self.state == State.LEADER
+        require self.next_height < MAX_BLOCKS
+        require self.pending_block == None
+
+        height = self.next_height
+        data   = self.__id__
+
+        # Redis quorum write (atomic — parallel calls in same round-trip)
+        successes = 0
+        for n in redis_nodes:
+            oneof:
+                atomic:
+                    wr = n.write_block(self.my_epoch, self.__id__, height, data)
+                    if wr["ok"]:
+                        successes += 1
+                atomic:
+                    pass  # node unreachable
+
+        # --- implicit yield point: crash/interleaving explored here ---
+
+        if successes >= QUORUM_SIZE:
+            self.pending_block = {"height": height, "data": data}
+        else:
+            # Write quorum failed — step down
+            self.state = State.FOLLOWER
+
+    # --- CommitLocal: commit pending block to local DB ---
+    # Separate action from ProduceBlock — models the real-world gap between
+    # successful Redis publish and local RocksDB commit.
+    atomic action CommitLocal:
+        require self.state == State.LEADER
+        require self.pending_block != None
+
+        h = self.pending_block["height"]
+        d = self.pending_block["data"]
+        self.local_db[h] = d
+        self.next_height  = h + 1
+        self.pending_block = None
+
+    # --- StepDown: graceful shutdown ---
+    atomic action StepDown:
+        require self.state == State.LEADER
+        for n in redis_nodes:
+            n.release_lock(self.__id__)
+        self.state         = State.FOLLOWER
+        self.pending_block = None
+
+    # --- Crash: nondeterministic process failure ---
+    atomic action Crash:
+        require self.state == State.LEADER
+        # Ephemeral state lost; locks remain until TTL expires
+        # local_db is NOT cleared — it persists (RocksDB)
+        self.state         = State.FOLLOWER
+        self.my_epoch      = 0
+        self.next_height   = 0
+        self.pending_block = None
+
+# ---------------------------------------------------------------------------
+# Global State & Init
+# ---------------------------------------------------------------------------
+
+action Init:
+    redis_nodes = []
+    for i in range(NUM_REDIS_NODES):
+        redis_nodes.append(RedisNode())
+
+    sequencers = []
+    for i in range(NUM_SEQUENCERS):
+        sequencers.append(Sequencer())
+
+    election_count = 0
+
+atomic func set_election_count(v):
+    election_count = v
+
+# ---------------------------------------------------------------------------
+# Safety Invariants
+# ---------------------------------------------------------------------------
+
+# 1. NoFork: no two sequencers disagree on a block at the same height.
+#    This checks LOCAL STATE (what clients observe), not Redis streams.
+always assertion NoFork:
+    for h in range(MAX_BLOCKS):
+        seen_data = None
+        for s in sequencers:
+            if h in s.local_db:
+                if seen_data == None:
+                    seen_data = s.local_db[h]
+                elif s.local_db[h] != seen_data:
+                    return False
+    return True
+
+# 2. RedisNoDoubleQuorum: at most one distinct block per height has quorum.
+always assertion RedisNoDoubleQuorum:
+    for h in range(MAX_BLOCKS):
+        entries_at_h = {}
+        for n in redis_nodes:
+            for entry in n.stream:
+                if entry["height"] == h:
+                    key = str(entry["data"]) + ":" + str(entry["epoch"])
+                    if key in entries_at_h:
+                        entries_at_h[key] = entries_at_h[key] + 1
+                    else:
+                        entries_at_h[key] = 1
+        quorum_blocks = 0
+        for key in entries_at_h:
+            if entries_at_h[key] >= QUORUM_SIZE:
+                quorum_blocks += 1
+        if quorum_blocks > 1:
+            return False
+    return True
+
+# 3. Epoch monotonicity per node.
+transition assertion EpochMonotonicity(before, after):
+    for i in range(NUM_REDIS_NODES):
+        if after.redis_nodes[i].epoch < before.redis_nodes[i].epoch:
+            return False
+    return True
+
+# 4. Lock mutual exclusion per node.
+always assertion LockMutualExclusion:
+    for n in redis_nodes:
+        if n.lock_alive and n.lock_owner == None:
+            return False
+    return True
