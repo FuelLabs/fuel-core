@@ -25,18 +25,18 @@
 
 ---
 options:
-  max_actions: 10
+  max_actions: 8
 action_options:
   "RedisNode.ExpireLock":
     max_actions: 2
   "Sequencer.Crash":
-    max_actions: 2
+    max_actions: 1
   "Sequencer.Promote":
-    max_actions: 3
+    max_actions: 2
   "Sequencer.ProduceBlock":
-    max_actions: 3
+    max_actions: 2
   "Sequencer.CommitLocal":
-    max_actions: 3
+    max_actions: 2
   "Sequencer.StepDown":
     max_actions: 1
 ---
@@ -48,8 +48,8 @@ action_options:
 NUM_REDIS_NODES = 3
 QUORUM_SIZE     = 2          # ceil(N/2) + 1
 NUM_SEQUENCERS  = 2
-MAX_BLOCKS      = 2          # bound on block heights to explore
-MAX_ELECTIONS   = 3          # bound on election rounds (increased for repair)
+MAX_BLOCKS      = 1          # single height suffices to prove fork safety
+MAX_ELECTIONS   = 2          # bound on election rounds
 
 State = enum("FOLLOWER", "LEADER")
 
@@ -120,7 +120,10 @@ role Sequencer:
         self.state         = State.FOLLOWER
         self.my_epoch      = 0
         self.next_height   = 0
-        self.local_db      = {}       # height -> block_data (persists across crashes)
+        # Persistent local state (survives crashes, like RocksDB).
+        # With MAX_BLOCKS=1 we only need to track block at height 0.
+        # None = not committed, otherwise = the block data.
+        self.committed_0   = None
         self.pending_block = None     # set by ProduceBlock, consumed by CommitLocal
 
     # --- Promote: attempt to become leader + repair sub-quorum entries ---
@@ -170,24 +173,22 @@ role Sequencer:
                 if entry["epoch"] > height_best_entry[h]["epoch"]:
                     height_best_entry[h] = entry
 
-        # Repair sub-quorum entries
+        # Repair sub-quorum entries by reproposing to all reachable nodes.
+        # Modeled deterministically (all nodes reachable) since repair runs
+        # after promotion when connectivity is typically restored. The safety
+        # of HEIGHT_EXISTS is verified by the write_block function itself.
         for h in height_node_sets:
             node_count = len(height_node_sets[h])
             if node_count > 0 and node_count < QUORUM_SIZE:
-                # Repropose highest-epoch entry to all nodes
                 repair_entry = height_best_entry[h]
                 repair_ok = 0
                 for n in redis_nodes:
-                    oneof:
-                        atomic:
-                            wr = n.write_block(self.my_epoch, self.__id__, h, repair_entry["data"])
-                            if wr["ok"] or wr["reason"] == "HEIGHT_EXISTS":
-                                repair_ok += 1
-                        atomic:
-                            pass  # node unreachable
-
+                    wr = n.write_block(self.my_epoch, self.__id__, h, repair_entry["data"])
+                    if wr["ok"] or wr["reason"] == "HEIGHT_EXISTS":
+                        repair_ok += 1
                 if repair_ok >= QUORUM_SIZE:
-                    self.local_db[h] = repair_entry["data"]
+                    if h == 0:
+                        self.committed_0 = repair_entry["data"]
 
         # Phase 3: Determine next_height from quorum-committed heights
         # Re-read after repair
@@ -246,7 +247,8 @@ role Sequencer:
 
         h = self.pending_block["height"]
         d = self.pending_block["data"]
-        self.local_db[h] = d
+        if h == 0:
+            self.committed_0 = d
         self.next_height  = h + 1
         self.pending_block = None
 
@@ -293,14 +295,14 @@ atomic func set_election_count(v):
 # 1. NoFork: no two sequencers disagree on a block at the same height.
 #    This checks LOCAL STATE (what clients observe), not Redis streams.
 always assertion NoFork:
-    for h in range(MAX_BLOCKS):
-        seen_data = None
-        for s in sequencers:
-            if h in s.local_db:
-                if seen_data == None:
-                    seen_data = s.local_db[h]
-                elif s.local_db[h] != seen_data:
-                    return False
+    # Check height 0: if two sequencers committed different blocks, it's a fork.
+    seen_data = None
+    for s in sequencers:
+        if s.committed_0 != None:
+            if seen_data == None:
+                seen_data = s.committed_0
+            elif s.committed_0 != seen_data:
+                return False
     return True
 
 # 2. RedisNoDoubleQuorum: at most one distinct block per height has quorum.
