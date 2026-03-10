@@ -300,6 +300,177 @@ async fn leader_lock__two_producers__when_second_starts_after_first_shutdown_the
     );
 }
 
+/// When one of three Redis nodes is down during a leadership handoff,
+/// the new leader should still reconcile blocks from the remaining two
+/// nodes (quorum) and continue producing at the correct height.
+#[tokio::test(flavor = "multi_thread")]
+async fn leader_lock__two_producers__when_one_redis_node_is_down_then_handoff_reconciles_correctly()
+{
+    const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
+    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+
+    // given — 3 Redis nodes, all running
+    let redis_a = RedisTestServer::spawn();
+    let redis_b = RedisTestServer::spawn();
+    let mut redis_c = RedisTestServer::spawn();
+    let redis_urls = vec![
+        redis_a.redis_url(),
+        redis_b.redis_url(),
+        redis_c.redis_url(),
+    ];
+    let (_bootstrap, make_node_config) =
+        make_leader_lock_test_config_builder_with_redis_urls(
+            9991,
+            BLOCK_TIME,
+            "poa:leader:degraded-handoff",
+            redis_urls,
+        )
+        .await;
+
+    let mut first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+    let first_height = tokio::time::timeout(
+        LOCAL_BLOCK_TIMEOUT,
+        wait_for_local_block_height(&first_producer),
+    )
+    .await
+    .expect("First producer should produce a local block");
+
+    // when — kill one Redis node, then shut down the leader
+    redis_c.stop();
+
+    tokio::time::timeout(STOP_TIMEOUT, first_producer.shutdown())
+        .await
+        .expect("Should stop first producer before timeout");
+
+    // Second producer starts with only 2/3 Redis nodes up
+    let second_producer = make_node(make_node_config("Second Producer"), vec![]).await;
+    let second_height = tokio::time::timeout(
+        LOCAL_BLOCK_TIMEOUT,
+        wait_for_local_block_height(&second_producer),
+    )
+    .await
+    .expect("Second producer should produce a local block with degraded Redis");
+
+    // then — second producer should reconcile from 2 surviving nodes
+    // and continue from the correct height
+    assert_eq!(first_height, 1);
+    assert!(
+        second_height > first_height,
+        "Second producer should build on first producer's height (got {second_height}, first was {first_height})"
+    );
+}
+
+/// When a Redis node restarts (losing all in-memory data) during a
+/// leadership handoff, the new leader should still reconcile from the
+/// remaining nodes that have the data and continue at the correct height.
+#[tokio::test(flavor = "multi_thread")]
+async fn leader_lock__two_producers__when_redis_node_restarts_then_handoff_reconciles_from_surviving_nodes()
+{
+    const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
+    const STOP_TIMEOUT: Duration = Duration::from_secs(1);
+
+    // given — 3 Redis nodes, all running
+    let redis_a = RedisTestServer::spawn();
+    let redis_b = RedisTestServer::spawn();
+    let mut redis_c = RedisTestServer::spawn();
+    let redis_urls = vec![
+        redis_a.redis_url(),
+        redis_b.redis_url(),
+        redis_c.redis_url(),
+    ];
+    let (_bootstrap, make_node_config) =
+        make_leader_lock_test_config_builder_with_redis_urls(
+            9992,
+            BLOCK_TIME,
+            "poa:leader:data-loss-handoff",
+            redis_urls,
+        )
+        .await;
+
+    let mut first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+    let first_height = tokio::time::timeout(
+        LOCAL_BLOCK_TIMEOUT,
+        wait_for_local_block_height(&first_producer),
+    )
+    .await
+    .expect("First producer should produce a local block");
+
+    // when — restart one Redis node (loses all stream data), then handoff
+    redis_c.stop();
+    redis_c.start();
+
+    tokio::time::timeout(STOP_TIMEOUT, first_producer.shutdown())
+        .await
+        .expect("Should stop first producer before timeout");
+
+    let second_producer = make_node(make_node_config("Second Producer"), vec![]).await;
+    let second_height = tokio::time::timeout(
+        LOCAL_BLOCK_TIMEOUT,
+        wait_for_local_block_height(&second_producer),
+    )
+    .await
+    .expect("Second producer should produce after Redis data loss on one node");
+
+    // then — second producer reconciles from 2 surviving nodes (a, b)
+    // and continues at the correct height despite node c having no data
+    assert_eq!(first_height, 1);
+    assert!(
+        second_height > first_height,
+        "Second producer should build on first producer's height (got {second_height}, first was {first_height})"
+    );
+}
+
+/// When two of three Redis nodes go down while a producer is running,
+/// the producer should stop producing (cannot reach quorum for lease
+/// or reconciliation) rather than producing divergent blocks.
+#[tokio::test(flavor = "multi_thread")]
+async fn leader_lock__single_producer__when_two_redis_nodes_go_down_then_production_stops()
+{
+    const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
+    const NO_PRODUCTION_TIMEOUT: Duration = Duration::from_secs(3);
+
+    // given — 3 Redis nodes, all running, producer active
+    let redis_a = RedisTestServer::spawn();
+    let mut redis_b = RedisTestServer::spawn();
+    let mut redis_c = RedisTestServer::spawn();
+    let redis_urls = vec![
+        redis_a.redis_url(),
+        redis_b.redis_url(),
+        redis_c.redis_url(),
+    ];
+    let (_bootstrap, make_node_config) =
+        make_leader_lock_test_config_builder_with_redis_urls(
+            9993,
+            BLOCK_TIME,
+            "poa:leader:quorum-loss",
+            redis_urls,
+        )
+        .await;
+
+    let producer = make_node(make_node_config("Producer"), vec![]).await;
+    tokio::time::timeout(LOCAL_BLOCK_TIMEOUT, wait_for_local_block(&producer))
+        .await
+        .expect("Producer should produce blocks with full quorum");
+
+    // when — kill 2 of 3 Redis nodes
+    redis_b.stop();
+    redis_c.stop();
+
+    // then — producer should stop producing (can't reach quorum)
+    let result = tokio::time::timeout(
+        NO_PRODUCTION_TIMEOUT,
+        wait_for_local_block(&producer),
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "Producer should not produce new blocks when Redis quorum is lost"
+    );
+}
+
 async fn find_leader_and_followers(
     nodes: Vec<Node>,
     timeout: Duration,
@@ -523,6 +694,14 @@ impl RedisTestServer {
         let child = spawn_redis_server(self.port);
         wait_for_redis_ready(self.port);
         self.child = Some(child);
+    }
+
+    fn stop(&mut self) {
+        if let Some(child) = self.child.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        self.child = None;
     }
 
     fn redis_url(&self) -> String {
