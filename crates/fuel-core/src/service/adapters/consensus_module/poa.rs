@@ -116,6 +116,7 @@ pub struct RedisLeaderLeaseAdapter {
     lease_key: String,
     epoch_key: String,
     block_stream_key: String,
+    height_index_key: String,
     lease_owner_token: String,
     drop_release_guard: std::sync::Arc<()>,
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
@@ -136,6 +137,7 @@ impl Clone for RedisLeaderLeaseAdapter {
             lease_key: self.lease_key.clone(),
             epoch_key: self.epoch_key.clone(),
             block_stream_key: self.block_stream_key.clone(),
+            height_index_key: self.height_index_key.clone(),
             lease_owner_token: self.lease_owner_token.clone(),
             drop_release_guard: self.drop_release_guard.clone(),
             current_epoch_token: self.current_epoch_token.clone(),
@@ -198,6 +200,7 @@ impl RedisLeaderLeaseAdapter {
         let lease_owner_token = uuid::Uuid::new_v4().to_string();
         let epoch_key = format!("{lease_key}:epoch:token");
         let block_stream_key = format!("{lease_key}:block:stream");
+        let height_index_key = format!("{lease_key}:block:heights");
         let lease_drift_millis = lease_ttl_millis
             .checked_div(100)
             .unwrap_or(0)
@@ -208,6 +211,7 @@ impl RedisLeaderLeaseAdapter {
             lease_key,
             epoch_key,
             block_stream_key,
+            height_index_key,
             lease_owner_token,
             drop_release_guard: std::sync::Arc::new(()),
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
@@ -791,6 +795,7 @@ impl RedisLeaderLeaseAdapter {
             .key(&self.block_stream_key)
             .key(&self.epoch_key)
             .key(&self.lease_key)
+            .key(&self.height_index_key)
             .arg(epoch)
             .arg(&self.lease_owner_token)
             .arg(block_height)
@@ -806,10 +811,17 @@ impl RedisLeaderLeaseAdapter {
                 poa_metrics().write_block_success_total.inc();
                 Ok(WriteBlockResult::Written)
             }
+            Err(err) if err.to_string().contains("HEIGHT_EXISTS_MATCH:") => {
+                poa_metrics().write_block_height_exists_total.inc();
+                tracing::debug!(
+                    "write_block: identical block already at height (height={block_height})"
+                );
+                Ok(WriteBlockResult::HeightExistsMatch)
+            }
             Err(err) if err.to_string().contains("HEIGHT_EXISTS:") => {
                 poa_metrics().write_block_height_exists_total.inc();
                 tracing::debug!(
-                    "write_block: height already exists (height={block_height})"
+                    "write_block: different block already at height (height={block_height})"
                 );
                 Ok(WriteBlockResult::HeightExists)
             }
@@ -833,9 +845,12 @@ impl RedisLeaderLeaseAdapter {
     /// locally but whose write only reached a subset of nodes.
     ///
     /// Uses `publish_block_on_node` which runs `write_block.lua`:
-    /// - Nodes that already have the block return HEIGHT_EXISTS (counted
-    ///   as having the block)
-    /// - Nodes missing it accept the write (counted as having the block)
+    /// - Nodes that accept the write return Written (counted)
+    /// - Nodes that already have the same block return
+    ///   HEIGHT_EXISTS_MATCH (counted)
+    /// - Nodes that have a different block at the same height return
+    ///   HEIGHT_EXISTS (NOT counted — prevents inflated quorum from
+    ///   conflicting partial writes)
     /// - FENCING_ERROR means we lost the lock — abort the repair
     /// - The total must reach quorum for the repair to succeed
     fn repair_sub_quorum_block(&self, block: &SealedBlock) -> anyhow::Result<bool> {
@@ -858,9 +873,13 @@ impl RedisLeaderLeaseAdapter {
                 Ok(WriteBlockResult::Written) => {
                     total_with_block = total_with_block.saturating_add(1);
                 }
-                Ok(WriteBlockResult::HeightExists) => {
-                    // Node already has a block at this height — count it
+                Ok(WriteBlockResult::HeightExistsMatch) => {
                     total_with_block = total_with_block.saturating_add(1);
+                }
+                Ok(WriteBlockResult::HeightExists) => {
+                    tracing::debug!(
+                        "Repair: node has a conflicting block at same height"
+                    );
                 }
                 Ok(WriteBlockResult::FencingRejected) => {
                     // Lost the lock — repair is invalid, abort
@@ -887,7 +906,9 @@ impl RedisLeaderLeaseAdapter {
 enum WriteBlockResult {
     /// Block was successfully written to the stream.
     Written,
-    /// A block at this height already exists in the stream.
+    /// The exact same block (matching data) already exists at this height.
+    HeightExistsMatch,
+    /// A different block already exists at this height.
     HeightExists,
     /// Lock lost or epoch is stale — another leader holds the lock.
     FencingRejected,
