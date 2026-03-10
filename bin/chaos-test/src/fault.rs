@@ -5,14 +5,24 @@ use std::{
     time::Duration,
 };
 
-use rand::{Rng, SeedableRng, rngs::StdRng};
+use rand::{
+    Rng,
+    SeedableRng,
+    rngs::StdRng,
+};
 use tokio::sync::Mutex;
-use tracing::{info, warn};
+use tracing::{
+    info,
+    warn,
+};
 
 use crate::{
     cluster::Cluster,
     proxy::ProxyMode,
-    timeline::{Timeline, TimelineEventKind},
+    timeline::{
+        Timeline,
+        TimelineEventKind,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -54,10 +64,7 @@ impl fmt::Display for FaultAction {
                 node_idx,
                 redis_idx,
             } => {
-                write!(
-                    f,
-                    "Partition node {node_idx} from Redis {redis_idx}"
-                )
+                write!(f, "Partition node {node_idx} from Redis {redis_idx}")
             }
             FaultAction::PartitionAllFromRedis(idx) => {
                 write!(f, "Partition all nodes from Redis {idx}")
@@ -86,10 +93,7 @@ impl fmt::Display for FaultAction {
                 node_idx,
                 redis_idx,
             } => {
-                write!(
-                    f,
-                    "Restore proxy: node {node_idx} <-> Redis {redis_idx}"
-                )
+                write!(f, "Restore proxy: node {node_idx} <-> Redis {redis_idx}")
             }
             FaultAction::RestoreAllProxies => write!(f, "Restore all proxies"),
             FaultAction::KillNode(idx) => write!(f, "Kill node {idx}"),
@@ -174,18 +178,13 @@ impl FaultScheduler {
         timeline: &Timeline,
     ) {
         let now = tokio::time::Instant::now();
-        while self
-            .pending_recoveries
-            .front()
-            .is_some_and(|r| r.at <= now)
-        {
+        while self.pending_recoveries.front().is_some_and(|r| r.at <= now) {
             let recovery = self.pending_recoveries.pop_front().unwrap();
             info!("Applying scheduled recovery: {}", recovery.action);
-            timeline.record(TimelineEventKind::FaultRecovered(
-                recovery.action.clone(),
-            ));
+            timeline.record(TimelineEventKind::FaultRecovered(recovery.action.clone()));
             let mut cluster_guard = cluster.lock().await;
-            self.apply_action(&mut cluster_guard, &recovery.action).await;
+            self.apply_action(&mut cluster_guard, &recovery.action)
+                .await;
         }
     }
 
@@ -315,8 +314,7 @@ impl FaultScheduler {
         action: FaultAction,
     ) {
         info!("Injecting fault: {action}");
-        timeline
-            .record(TimelineEventKind::FaultInjected(action.clone()));
+        timeline.record(TimelineEventKind::FaultInjected(action.clone()));
 
         // Schedule recovery for destructive faults
         match &action {
@@ -324,16 +322,10 @@ impl FaultScheduler {
             | FaultAction::KillNode(_)
             | FaultAction::PartitionNodeFromRedis { .. }
             | FaultAction::PartitionAllFromRedis(_) => {
-                let recovery_delay = Duration::from_secs(
-                    self.rng.gen_range(3..=10),
-                );
+                let recovery_delay = Duration::from_secs(self.rng.gen_range(3..=10));
                 let recovery_action = match &action {
-                    FaultAction::KillRedis(idx) => {
-                        FaultAction::RestartRedis(*idx)
-                    }
-                    FaultAction::KillNode(idx) => {
-                        FaultAction::RestartNode(*idx)
-                    }
+                    FaultAction::KillRedis(idx) => FaultAction::RestartRedis(*idx),
+                    FaultAction::KillNode(idx) => FaultAction::RestartNode(*idx),
                     FaultAction::PartitionNodeFromRedis {
                         node_idx,
                         redis_idx,
@@ -362,19 +354,13 @@ impl FaultScheduler {
         // scheduler from creating scenarios where block production is
         // impossible (which would cause expected but uninformative stalls).
         if !cluster_guard.any_node_has_redis_quorum() {
-            warn!(
-                "Fault '{action}' broke Redis quorum for all nodes — reverting"
-            );
+            warn!("Fault '{action}' broke Redis quorum for all nodes — reverting");
             self.undo_action(&mut cluster_guard, &action).await;
             self.pending_recoveries.pop_back(); // remove scheduled recovery
         }
     }
 
-    async fn apply_action(
-        &self,
-        cluster: &mut Cluster,
-        action: &FaultAction,
-    ) {
+    async fn apply_action(&self, cluster: &mut Cluster, action: &FaultAction) {
         match action {
             FaultAction::KillRedis(idx) => {
                 cluster.stop_redis(*idx);
@@ -386,19 +372,11 @@ impl FaultScheduler {
                 node_idx,
                 redis_idx,
             } => {
-                cluster.set_proxy_mode(
-                    *node_idx,
-                    *redis_idx,
-                    ProxyMode::DropAll,
-                );
+                cluster.set_proxy_mode(*node_idx, *redis_idx, ProxyMode::DropAll);
             }
             FaultAction::PartitionAllFromRedis(redis_idx) => {
                 for node_idx in 0..self.node_count {
-                    cluster.set_proxy_mode(
-                        node_idx,
-                        *redis_idx,
-                        ProxyMode::DropAll,
-                    );
+                    cluster.set_proxy_mode(node_idx, *redis_idx, ProxyMode::DropAll);
                 }
             }
             FaultAction::AddLatency {
@@ -427,11 +405,7 @@ impl FaultScheduler {
                 node_idx,
                 redis_idx,
             } => {
-                cluster.set_proxy_mode(
-                    *node_idx,
-                    *redis_idx,
-                    ProxyMode::Normal,
-                );
+                cluster.set_proxy_mode(*node_idx, *redis_idx, ProxyMode::Normal);
             }
             FaultAction::RestoreAllProxies => {
                 cluster.restore_all_proxies();
@@ -446,11 +420,7 @@ impl FaultScheduler {
     }
 
     /// Undo a fault action (best-effort inverse).
-    async fn undo_action(
-        &self,
-        cluster: &mut Cluster,
-        action: &FaultAction,
-    ) {
+    async fn undo_action(&self, cluster: &mut Cluster, action: &FaultAction) {
         match action {
             FaultAction::KillRedis(idx) => {
                 cluster.start_redis(*idx);
@@ -459,19 +429,11 @@ impl FaultScheduler {
                 node_idx,
                 redis_idx,
             } => {
-                cluster.set_proxy_mode(
-                    *node_idx,
-                    *redis_idx,
-                    ProxyMode::Normal,
-                );
+                cluster.set_proxy_mode(*node_idx, *redis_idx, ProxyMode::Normal);
             }
             FaultAction::PartitionAllFromRedis(redis_idx) => {
                 for node_idx in 0..self.node_count {
-                    cluster.set_proxy_mode(
-                        node_idx,
-                        *redis_idx,
-                        ProxyMode::Normal,
-                    );
+                    cluster.set_proxy_mode(node_idx, *redis_idx, ProxyMode::Normal);
                 }
             }
             FaultAction::AddLatency {
@@ -484,11 +446,7 @@ impl FaultScheduler {
                 redis_idx,
                 ..
             } => {
-                cluster.set_proxy_mode(
-                    *node_idx,
-                    *redis_idx,
-                    ProxyMode::Normal,
-                );
+                cluster.set_proxy_mode(*node_idx, *redis_idx, ProxyMode::Normal);
             }
             FaultAction::KillNode(idx) => {
                 cluster.restart_node(*idx).await;

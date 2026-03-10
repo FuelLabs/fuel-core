@@ -577,8 +577,7 @@ where
             Err(err) => {
                 // Release the lease on production failure so followers can
                 // acquire it faster instead of waiting for TTL expiry.
-                if let Err(release_err) = self.reconciliation_port.release().await
-                {
+                if let Err(release_err) = self.reconciliation_port.release().await {
                     tracing::warn!(
                         "Failed to release lease after production error: {release_err}"
                     );

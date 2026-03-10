@@ -1,14 +1,27 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::{
+        Arc,
+        Mutex,
+    },
     time::Duration,
 };
 
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
+    io::{
+        AsyncReadExt,
+        AsyncWriteExt,
+    },
+    net::{
+        TcpListener,
+        TcpStream,
+    },
     task::JoinHandle,
 };
-use tracing::{debug, trace, warn};
+use tracing::{
+    debug,
+    trace,
+    warn,
+};
 
 use crate::redis_server::bind_unused_port;
 
@@ -37,7 +50,9 @@ impl TcpProxy {
 
         let listener = TcpListener::bind(format!("127.0.0.1:{listen_port}"))
             .await
-            .unwrap_or_else(|e| panic!("Failed to bind proxy on port {listen_port}: {e}"));
+            .unwrap_or_else(|e| {
+                panic!("Failed to bind proxy on port {listen_port}: {e}")
+            });
 
         let task_mode = mode.clone();
         let task_target = target_addr.clone();
@@ -102,8 +117,7 @@ impl TcpProxy {
             trace!("Proxy accepted connection from {addr}, mode: {current_mode:?}");
 
             tokio::spawn(async move {
-                if let Err(e) =
-                    Self::handle_connection(client, &target, conn_mode).await
+                if let Err(e) = Self::handle_connection(client, &target, conn_mode).await
                 {
                     debug!("Proxy connection ended: {e}");
                 }
@@ -125,31 +139,16 @@ impl TcpProxy {
                 return Ok(());
             }
             ProxyMode::Normal => {
-                let mut upstream =
-                    TcpStream::connect(target_addr).await?;
-                tokio::io::copy_bidirectional(&mut client, &mut upstream)
-                    .await?;
+                let mut upstream = TcpStream::connect(target_addr).await?;
+                tokio::io::copy_bidirectional(&mut client, &mut upstream).await?;
             }
             ProxyMode::Latency(delay) => {
-                let mut upstream =
-                    TcpStream::connect(target_addr).await?;
-                Self::relay_with_latency(
-                    &mut client,
-                    &mut upstream,
-                    delay,
-                    mode,
-                )
-                .await?;
+                let mut upstream = TcpStream::connect(target_addr).await?;
+                Self::relay_with_latency(&mut client, &mut upstream, delay, mode).await?;
             }
             ProxyMode::CloseAfterBytes(limit) => {
-                let mut upstream =
-                    TcpStream::connect(target_addr).await?;
-                Self::relay_with_byte_limit(
-                    &mut client,
-                    &mut upstream,
-                    limit,
-                )
-                .await?;
+                let mut upstream = TcpStream::connect(target_addr).await?;
+                Self::relay_with_byte_limit(&mut client, &mut upstream, limit).await?;
             }
         }
 

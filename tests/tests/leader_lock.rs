@@ -305,7 +305,7 @@ async fn leader_lock__two_producers__when_second_starts_after_first_shutdown_the
 /// nodes (quorum) and continue producing at the correct height.
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__two_producers__when_one_redis_node_is_down_then_handoff_reconciles_correctly()
-{
+ {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
     const STOP_TIMEOUT: Duration = Duration::from_secs(1);
@@ -366,7 +366,7 @@ async fn leader_lock__two_producers__when_one_redis_node_is_down_then_handoff_re
 /// remaining nodes that have the data and continue at the correct height.
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__two_producers__when_redis_node_restarts_then_handoff_reconciles_from_surviving_nodes()
-{
+ {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
     const STOP_TIMEOUT: Duration = Duration::from_secs(1);
@@ -427,7 +427,7 @@ async fn leader_lock__two_producers__when_redis_node_restarts_then_handoff_recon
 /// or reconciliation) rather than producing divergent blocks.
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__single_producer__when_two_redis_nodes_go_down_then_production_stops()
-{
+ {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LOCAL_BLOCK_TIMEOUT: Duration = Duration::from_secs(5);
     const NO_PRODUCTION_TIMEOUT: Duration = Duration::from_secs(3);
@@ -460,11 +460,9 @@ async fn leader_lock__single_producer__when_two_redis_nodes_go_down_then_product
     redis_c.stop();
 
     // then — producer should stop producing (can't reach quorum)
-    let result = tokio::time::timeout(
-        NO_PRODUCTION_TIMEOUT,
-        wait_for_local_block(&producer),
-    )
-    .await;
+    let result =
+        tokio::time::timeout(NO_PRODUCTION_TIMEOUT, wait_for_local_block(&producer))
+            .await;
     assert!(
         result.is_err(),
         "Producer should not produce new blocks when Redis quorum is lost"

@@ -1,8 +1,19 @@
 use std::{
-    net::{SocketAddrV4, TcpListener, TcpStream},
-    process::{Child, Command, Stdio},
+    net::{
+        SocketAddrV4,
+        TcpListener,
+        TcpStream,
+    },
+    process::{
+        Child,
+        Command,
+        Stdio,
+    },
     thread,
-    time::{Duration, Instant},
+    time::{
+        Duration,
+        Instant,
+    },
 };
 
 use tempfile::TempDir;
@@ -13,7 +24,6 @@ pub struct RedisTestServer {
     /// Persistent data directory for AOF — survives kill/restart
     data_dir: TempDir,
 }
-
 
 impl RedisTestServer {
     pub fn spawn() -> Self {
@@ -70,9 +80,8 @@ impl Drop for RedisTestServer {
 }
 
 pub fn bind_unused_port() -> u16 {
-    let socket =
-        TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
-            .expect("Should bind an ephemeral port");
+    let socket = TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
+        .expect("Should bind an ephemeral port");
     let port = socket.local_addr().expect("Should get local addr").port();
     drop(socket);
     port

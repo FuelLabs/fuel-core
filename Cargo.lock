@@ -3757,7 +3757,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-chaos-test"
-version = "0.47.2"
+version = "0.47.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -3765,7 +3765,7 @@ dependencies = [
  "fuel-core-chain-config",
  "fuel-core-poa",
  "fuel-core-storage",
- "fuel-core-types 0.47.2",
+ "fuel-core-types 0.47.3",
  "futures",
  "humantime",
  "rand 0.8.5",

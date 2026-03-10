@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::time::{
+    Duration,
+    Instant,
+};
 
 use crate::{
     proxy::{
@@ -271,8 +274,7 @@ impl Cluster {
         let now = Instant::now();
         (0..self.node_count).any(|idx| {
             self.is_node_alive(idx)
-                && self
-                    .node_alive_since[idx]
+                && self.node_alive_since[idx]
                     .is_some_and(|t| now.duration_since(t) >= grace_period)
                 && self.cleanly_reachable_redis_count(idx) >= quorum
         })

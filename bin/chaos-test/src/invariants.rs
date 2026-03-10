@@ -1,18 +1,32 @@
 use std::{
     collections::HashMap,
     sync::Arc,
-    time::{Duration, Instant},
+    time::{
+        Duration,
+        Instant,
+    },
 };
 
 use fuel_core_poa::ports::BlockImporter;
 use fuel_core_storage::transactional::HistoricalView;
 use futures::StreamExt;
-use tokio::sync::{Mutex, mpsc};
-use tracing::{debug, info, warn};
+use tokio::sync::{
+    Mutex,
+    mpsc,
+};
+use tracing::{
+    debug,
+    info,
+    warn,
+};
 
 use crate::{
     cluster::Cluster,
-    timeline::{Timeline, TimelineEventKind, Violation},
+    timeline::{
+        Timeline,
+        TimelineEventKind,
+        Violation,
+    },
 };
 
 /// A block event received from a node's block stream.
@@ -58,9 +72,7 @@ impl InvariantState {
 
         // 1. Fork detection
         let mut fork_detected = false;
-        if let Some((existing_id, first_node)) =
-            self.canonical.get(&height)
-        {
+        if let Some((existing_id, first_node)) = self.canonical.get(&height) {
             if *existing_id != event.block_id {
                 let violation = Violation::Fork {
                     height,
@@ -80,10 +92,7 @@ impl InvariantState {
 
         // 2. Concurrent leader detection
         if event.is_local {
-            let producers = self
-                .local_producers
-                .entry(height)
-                .or_insert_with(Vec::new);
+            let producers = self.local_producers.entry(height).or_insert_with(Vec::new);
             producers.push((node_idx, Instant::now()));
 
             if producers.len() > 1 {
@@ -93,13 +102,10 @@ impl InvariantState {
 
                 // Only flag if within lease_ttl (brief overlap during handoff is expected)
                 if gap < lease_ttl {
-                    let nodes: Vec<usize> =
-                        producers.iter().map(|(n, _)| *n).collect();
-                    let violation =
-                        Violation::ConcurrentLeaders { height, nodes };
+                    let nodes: Vec<usize> = producers.iter().map(|(n, _)| *n).collect();
+                    let violation = Violation::ConcurrentLeaders { height, nodes };
                     warn!("INVARIANT VIOLATION: {violation}");
-                    timeline
-                        .record(TimelineEventKind::Violation(violation));
+                    timeline.record(TimelineEventKind::Violation(violation));
                 }
             }
         }
@@ -218,8 +224,7 @@ fn check_gaps_from_db(
                     behind_for: stalled_for,
                 };
                 warn!("INVARIANT VIOLATION: {violation}");
-                timeline
-                    .record(TimelineEventKind::Violation(violation));
+                timeline.record(TimelineEventKind::Violation(violation));
             }
         }
     }
@@ -293,18 +298,18 @@ async fn dump_redis_streams(cluster: &Cluster, seed: u64) {
                 .await
                 {
                     Ok(Ok(mut conn)) => {
-                        let len: Result<usize, _> =
-                            redis::cmd("XLEN").arg(&stream_key).query_async(&mut conn).await;
-                        // Read entries with binary-safe types
-                        let entries: Result<
-                            Vec<(String, Vec<(Vec<u8>, Vec<u8>)>)>,
-                            _,
-                        > = redis::cmd("XRANGE")
+                        let len: Result<usize, _> = redis::cmd("XLEN")
                             .arg(&stream_key)
-                            .arg("-")
-                            .arg("+")
                             .query_async(&mut conn)
                             .await;
+                        // Read entries with binary-safe types
+                        let entries: Result<Vec<(String, Vec<(Vec<u8>, Vec<u8>)>)>, _> =
+                            redis::cmd("XRANGE")
+                                .arg(&stream_key)
+                                .arg("-")
+                                .arg("+")
+                                .query_async(&mut conn)
+                                .await;
                         match (len, entries) {
                             (Ok(len), Ok(entries)) => {
                                 info!("  Redis {idx}: {len} entries in stream");
@@ -316,14 +321,16 @@ async fn dump_redis_streams(cluster: &Cluster, seed: u64) {
                                         let key = String::from_utf8_lossy(key_bytes);
                                         match key.as_ref() {
                                             "height" => {
-                                                height = String::from_utf8_lossy(val_bytes)
-                                                    .parse::<u32>()
-                                                    .ok();
+                                                height =
+                                                    String::from_utf8_lossy(val_bytes)
+                                                        .parse::<u32>()
+                                                        .ok();
                                             }
                                             "epoch" => {
-                                                epoch = String::from_utf8_lossy(val_bytes)
-                                                    .parse::<u64>()
-                                                    .ok();
+                                                epoch =
+                                                    String::from_utf8_lossy(val_bytes)
+                                                        .parse::<u64>()
+                                                        .ok();
                                             }
                                             "data" => {
                                                 data_len = val_bytes.len();

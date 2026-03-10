@@ -1,7 +1,13 @@
 use std::{
     fmt,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    sync::{
+        Arc,
+        Mutex,
+    },
+    time::{
+        Duration,
+        Instant,
+    },
 };
 
 use crate::fault::FaultAction;
@@ -76,10 +82,7 @@ impl fmt::Display for Violation {
                 )
             }
             Violation::ConcurrentLeaders { height, nodes } => {
-                write!(
-                    f,
-                    "CONCURRENT LEADERS at height {height}: nodes {nodes:?}"
-                )
+                write!(f, "CONCURRENT LEADERS at height {height}: nodes {nodes:?}")
             }
             Violation::ProductionStall {
                 last_height,

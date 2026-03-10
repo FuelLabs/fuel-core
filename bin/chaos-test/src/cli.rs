@@ -1,10 +1,7 @@
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-#[command(
-    name = "chaos-test",
-    about = "Chaos test for HA leader lock failover"
-)]
+#[command(name = "chaos-test", about = "Chaos test for HA leader lock failover")]
 pub struct Cli {
     /// RNG seed for reproducibility (random if omitted)
     #[arg(long)]

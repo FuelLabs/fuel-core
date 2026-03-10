@@ -6,7 +6,10 @@ mod proxy;
 mod redis_server;
 mod timeline;
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::Duration,
+};
 
 use clap::Parser;
 use tokio::sync::Mutex;
@@ -15,7 +18,11 @@ use tracing::info;
 use cli::Cli;
 use cluster::Cluster;
 use fault::FaultScheduler;
-use timeline::{Timeline, TimelineEventKind, Violation};
+use timeline::{
+    Timeline,
+    TimelineEventKind,
+    Violation,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -30,9 +37,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Init tracing
     let filter = tracing_subscriber::EnvFilter::try_new(&cli.log_level)
-        .unwrap_or_else(|_| {
-            tracing_subscriber::EnvFilter::new("info")
-        });
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
@@ -53,19 +58,12 @@ async fn main() -> anyhow::Result<()> {
     )));
 
     // Create cluster
-    let cluster = Cluster::new(
-        cli.nodes,
-        cli.redis_nodes,
-        *cli.block_time,
-        seed,
-    )
-    .await;
+    let cluster = Cluster::new(cli.nodes, cli.redis_nodes, *cli.block_time, seed).await;
     let cluster = Arc::new(Mutex::new(cluster));
 
     // Wait for initial leader election
     info!("Waiting for initial leader election (up to 30s)...");
-    let election_deadline =
-        tokio::time::Instant::now() + Duration::from_secs(30);
+    let election_deadline = tokio::time::Instant::now() + Duration::from_secs(30);
     let mut leader_found = false;
 
     {
@@ -75,16 +73,14 @@ async fn main() -> anyhow::Result<()> {
         let cluster_guard = cluster.lock().await;
         let live = cluster_guard.live_nodes();
         if let Some((_, node)) = live.first() {
-            let mut stream =
-                node.service.shared.block_importer.block_stream();
+            let mut stream = node.service.shared.block_importer.block_stream();
             loop {
                 let remaining = election_deadline
                     .saturating_duration_since(tokio::time::Instant::now());
                 if remaining.is_zero() {
                     break;
                 }
-                match tokio::time::timeout(remaining, stream.next()).await
-                {
+                match tokio::time::timeout(remaining, stream.next()).await {
                     Ok(Some(block)) => {
                         if block.is_locally_produced() {
                             info!(
@@ -121,8 +117,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create stop channels
     let (fault_stop_tx, fault_stop_rx) = tokio::sync::watch::channel(false);
-    let (invariant_stop_tx, invariant_stop_rx) =
-        tokio::sync::watch::channel(false);
+    let (invariant_stop_tx, invariant_stop_rx) = tokio::sync::watch::channel(false);
 
     // Spawn invariant checker
     let invariant_cluster = cluster.clone();
@@ -152,12 +147,8 @@ async fn main() -> anyhow::Result<()> {
     let redis_count = cli.redis_nodes;
     let fault_interval = *cli.fault_interval;
     let fault_handle = tokio::spawn(async move {
-        let scheduler = FaultScheduler::new(
-            seed,
-            fault_interval,
-            node_count,
-            redis_count,
-        );
+        let scheduler =
+            FaultScheduler::new(seed, fault_interval, node_count, redis_count);
         scheduler
             .run(fault_cluster, fault_timeline, fault_stop_rx)
             .await;
