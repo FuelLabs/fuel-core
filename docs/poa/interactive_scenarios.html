@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PoA Redis Fencing - Interactive Scenarios</title>
+<style>
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #e6edf3; --text-dim: #8b949e; --text-bright: #f0f6fc;
+    --green: #3fb950; --green-bg: rgba(63,185,80,0.15);
+    --red: #f85149; --red-bg: rgba(248,81,73,0.15);
+    --yellow: #d29922; --yellow-bg: rgba(210,153,34,0.15);
+    --blue: #58a6ff; --blue-bg: rgba(88,166,255,0.15);
+    --purple: #bc8cff; --purple-bg: rgba(188,140,255,0.15);
+    --orange: #f0883e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { width: 280px; min-width: 280px; background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; }
+  .sidebar h1 { font-size: 16px; padding: 20px 16px 8px; color: var(--text-bright); }
+  .sidebar .subtitle { font-size: 12px; padding: 0 16px 16px; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+  .scenario-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .scenario-btn { display: block; width: 100%; text-align: left; padding: 10px 12px; margin: 2px 0;
+    background: transparent; border: 1px solid transparent; border-radius: 6px;
+    color: var(--text); cursor: pointer; font-size: 13px; line-height: 1.4; }
+  .scenario-btn:hover { background: var(--border); }
+  .scenario-btn.active { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+  .scenario-btn .num { display: inline-block; width: 22px; height: 22px; line-height: 22px;
+    text-align: center; border-radius: 50%; background: var(--border); font-size: 11px;
+    margin-right: 8px; font-weight: 600; }
+  .scenario-btn.active .num { background: var(--blue); color: var(--bg); }
+
+  /* Main area */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .main-header { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+  .main-header h2 { font-size: 18px; color: var(--text-bright); }
+  .main-header .tagline { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  /* Canvas */
+  .canvas-wrap { flex: 1; display: flex; justify-content: center; align-items: center;
+    padding: 24px; overflow: auto; }
+  .canvas { width: 100%; max-width: 900px; position: relative; }
+
+  /* Nodes */
+  .nodes-row { display: flex; justify-content: space-around; align-items: flex-start;
+    margin: 0 40px; position: relative; z-index: 2; }
+  .node-group { text-align: center; }
+  .node-group.seq { margin-bottom: 0; }
+  .node-box { border: 2px solid var(--border); border-radius: 10px; padding: 12px 16px;
+    min-width: 120px; background: var(--surface); transition: all 0.35s ease;
+    position: relative; }
+  .node-box.leader { border-color: var(--green); }
+  .node-box.follower { border-color: var(--text-dim); }
+  .node-box.zombie { border-color: var(--red); }
+  .node-box.promoting { border-color: var(--yellow); }
+  .node-box.empty-node { visibility: hidden; }
+  .node-label { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+  .node-role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    font-weight: 600; padding: 2px 8px; border-radius: 10px; display: inline-block; margin-bottom: 4px; }
+  .role-leader { background: var(--green-bg); color: var(--green); }
+  .role-follower { background: rgba(139,148,158,0.15); color: var(--text-dim); }
+  .role-zombie { background: var(--red-bg); color: var(--red); }
+  .role-promoting { background: var(--yellow-bg); color: var(--yellow); }
+
+  /* Spacer for SVG arrows between seq and redis rows */
+  .arrow-spacer { height: 120px; position: relative; z-index: 1; }
+
+  /* Redis nodes */
+  .redis-row { display: flex; justify-content: space-around; margin: 0 20px;
+    position: relative; z-index: 2; }
+  .redis-box { border: 2px solid var(--border); border-radius: 10px; padding: 12px 14px;
+    min-width: 160px; background: var(--surface); transition: all 0.35s ease; }
+  .redis-box.highlight-green { border-color: var(--green); background: var(--green-bg); }
+  .redis-box.highlight-red { border-color: var(--red); background: var(--red-bg); }
+  .redis-box.highlight-yellow { border-color: var(--yellow); background: var(--yellow-bg); }
+  .redis-box.highlight-blue { border-color: var(--blue); background: var(--blue-bg); }
+  .redis-box.highlight-purple { border-color: var(--purple); background: var(--purple-bg); }
+  .redis-box.offline { opacity: 0.35; border-style: dashed; }
+  .redis-name { font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--text-bright); }
+  .redis-field { font-size: 11px; font-family: 'SFMono-Regular', Consolas, monospace; margin: 3px 0;
+    display: flex; justify-content: space-between; gap: 8px; }
+  .redis-field .key { color: var(--text-dim); }
+  .redis-field .val { color: var(--text); font-weight: 600; }
+  .redis-field .val.owner-a { color: var(--green); }
+  .redis-field .val.owner-b { color: var(--blue); }
+  .redis-field .val.expired { color: var(--red); font-style: italic; }
+  .redis-field .val.free { color: var(--text-dim); font-style: italic; }
+
+  /* SVG overlay */
+  #overlay-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 1; overflow: visible; }
+
+  /* Connection lines */
+  .conn-line { stroke-width: 1; fill: none; }
+  .conn-ok { stroke: var(--border); stroke-dasharray: 4 4; opacity: 0.5; }
+  .conn-partition { stroke: var(--red); stroke-dasharray: 6 4; opacity: 0.6; }
+
+  /* Partition X marker */
+  .partition-x { stroke: var(--red); stroke-width: 2.5; opacity: 0.85; }
+
+  /* Message arrows */
+  .msg-line { stroke-width: 2.5; fill: none; }
+  .msg-line.c-ok { stroke: var(--green); }
+  .msg-line.c-err { stroke: var(--red); stroke-dasharray: 6 4; }
+  .msg-line.c-info { stroke: var(--blue); }
+  .msg-line.c-warn { stroke: var(--yellow); }
+  .msg-arrow-head { stroke: none; }
+  .msg-arrow-head.c-ok { fill: var(--green); }
+  .msg-arrow-head.c-err { fill: var(--red); }
+  .msg-arrow-head.c-info { fill: var(--blue); }
+  .msg-arrow-head.c-warn { fill: var(--yellow); }
+
+  /* Arrow travel animation — dasharray/offset set per-line in JS */
+  @keyframes arrow-draw {
+    to { stroke-dashoffset: 0; opacity: 1; }
+  }
+  .msg-line-anim {
+    opacity: 0;
+    animation: arrow-draw 0.4s ease-out forwards;
+  }
+  @keyframes fade-in-arrow {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  .msg-label-anim {
+    animation: fade-in-arrow 0.25s ease-out forwards;
+    opacity: 0;
+  }
+  .msg-head-anim {
+    animation: fade-in-arrow 0.2s ease-out forwards;
+    opacity: 0;
+  }
+
+  /* Concept cards */
+  .concept-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 16px 0; }
+  .concept-card { border: 1px solid var(--border); border-radius: 10px; padding: 16px; background: var(--surface); }
+  .concept-card h4 { font-size: 13px; color: var(--blue); margin-bottom: 8px; }
+  .concept-card p { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .venn { display: flex; justify-content: center; align-items: center; height: 120px; position: relative; margin: 12px 0; }
+  .venn-circle { width: 100px; height: 100px; border-radius: 50%; position: absolute; opacity: 0.25; }
+  .venn-circle.qa { background: var(--green); left: calc(50% - 70px); }
+  .venn-circle.qb { background: var(--blue); left: calc(50% - 30px); }
+  .venn-label { position: absolute; font-size: 11px; font-weight: 700; }
+  .venn-label.la { left: calc(50% - 65px); color: var(--green); }
+  .venn-label.lb { left: calc(50% + 30px); color: var(--blue); }
+  .venn-label.lo { left: calc(50% - 12px); color: var(--yellow); }
+  .overlap-node { position: absolute; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--yellow); display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: var(--bg); left: calc(50% - 14px); }
+
+  /* Bottom bar */
+  .bottom-bar { border-top: 1px solid var(--border); padding: 16px 24px;
+    display: flex; align-items: center; gap: 16px; background: var(--surface); min-height: 120px; }
+  .step-nav { display: flex; gap: 8px; flex-shrink: 0; }
+  .step-btn { padding: 6px 16px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); color: var(--text); cursor: pointer; font-size: 13px; }
+  .step-btn:hover:not(:disabled) { background: var(--border); }
+  .step-btn:disabled { opacity: 0.3; cursor: default; }
+  .step-counter { font-size: 12px; color: var(--text-dim); min-width: 60px; text-align: center; }
+  .step-desc { flex: 1; font-size: 13px; line-height: 1.6; color: var(--text); }
+  .step-desc code { background: var(--border); padding: 1px 6px; border-radius: 3px;
+    font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; }
+  .step-desc .highlight { color: var(--green); font-weight: 600; }
+  .step-desc .danger { color: var(--red); font-weight: 600; }
+  .step-desc .info { color: var(--blue); font-weight: 600; }
+  .step-desc .warn { color: var(--yellow); font-weight: 600; }
+  .step-dots { display: flex; gap: 4px; margin-top: 6px; }
+  .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border);
+    cursor: pointer; transition: background 0.2s; }
+  .step-dot.active { background: var(--blue); }
+  .step-dot.done { background: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <h1>PoA Redis Fencing</h1>
+  <div class="subtitle">Interactive Scenario Diagrams</div>
+  <div class="scenario-list" id="scenarioList"></div>
+</div>
+
+<div class="main">
+  <div class="main-header">
+    <h2 id="scenarioTitle">Select a scenario</h2>
+    <div class="tagline" id="scenarioTagline"></div>
+  </div>
+  <div class="canvas-wrap">
+    <div class="canvas" id="canvas"></div>
+  </div>
+  <div class="bottom-bar">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div class="step-nav">
+        <button class="step-btn" id="prevBtn" onclick="prevStep()">&#8592; Prev</button>
+        <div class="step-counter" id="stepCounter">1 / 1</div>
+        <button class="step-btn" id="nextBtn" onclick="nextStep()">Next &#8594;</button>
+      </div>
+      <div class="step-dots" id="stepDots"></div>
+    </div>
+    <div class="step-desc" id="stepDesc"></div>
+  </div>
+</div>
+
+<script>
+// ── Scenario Data ─────────────────────────────────────────────────
+// partitions: array of strings like 'seqA-r2' meaning seqA cannot reach r2
+
+const S = [
+  {
+    id: 'happy', num: 1,
+    title: 'Happy Path: Block Production',
+    tagline: 'Leader produces a block, writes to quorum, and renews its lease atomically.',
+    steps: [
+      {
+        desc: '<span class="highlight">Leader A</span> holds the lock on all 3 Redis nodes with <code>epoch=3</code>. It produces a new block at <span class="info">height 41</span>.',
+        seqs: [ { name: 'Sequencer A', role: 'leader', cls: 'leader' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..40', hl: '' },
+          { name: 'R1', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..40', hl: '' },
+          { name: 'R2', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..40', hl: '' },
+        ],
+        arrows: [],
+      },
+      {
+        desc: 'Leader A calls <code>write_block.lua</code> on <span class="highlight">all 3 nodes in parallel</span>. The script checks: (1) lock owner = A, (2) epoch &ge; 3, (3) no existing block at height 41.',
+        seqs: [ { name: 'Sequencer A', role: 'leader', cls: 'leader' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..40', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..40', hl: 'highlight-yellow' },
+          { name: 'R2', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..40', hl: 'highlight-yellow' },
+        ],
+        arrows: [
+          { from: 'seqA', to: 'r0', label: 'write_block.lua', cls: 'info' },
+          { from: 'seqA', to: 'r1', label: 'write_block.lua', cls: 'info' },
+          { from: 'seqA', to: 'r2', label: 'write_block.lua', cls: 'info' },
+        ],
+      },
+      {
+        desc: 'R0 and R1 return <span class="highlight">OK</span>. R2 times out. <span class="highlight">2/3 = quorum reached</span> &mdash; the block is committed.',
+        seqs: [ { name: 'Sequencer A', role: 'leader', cls: 'leader' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: 'highlight-green' },
+          { name: 'R1', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: 'highlight-green' },
+          { name: 'R2', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..40', hl: 'highlight-red' },
+        ],
+        partitions: ['seqA-r2'],
+        arrows: [
+          { from: 'r0', to: 'seqA', label: 'OK + stream_id', cls: 'ok' },
+          { from: 'r1', to: 'seqA', label: 'OK + stream_id', cls: 'ok' },
+          { from: 'r2', to: 'seqA', label: 'timeout', cls: 'err' },
+        ],
+      },
+      {
+        desc: 'Leader A gossips the block via P2P and commits to local DB. <code>PEXPIRE</code> in <code>write_block.lua</code> reset the lease TTL &mdash; <span class="highlight">block production IS the heartbeat</span>.',
+        seqs: [ { name: 'Sequencer A', role: 'leader', cls: 'leader' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A (TTL reset)', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: 'highlight-green' },
+          { name: 'R1', lock: 'A (TTL reset)', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: 'highlight-green' },
+          { name: 'R2', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..40', hl: '' },
+        ],
+        arrows: [],
+      },
+    ],
+  },
+  {
+    id: 'failover', num: 2,
+    title: 'Failover: Leader Crash & Promotion',
+    tagline: 'Leader crashes, lock TTL expires, follower detects and promotes itself atomically.',
+    steps: [
+      {
+        desc: '<span class="highlight">Leader A</span> crashes unexpectedly. Its lock has TTL remaining on all 3 Redis nodes. <span class="info">Follower B</span> is monitoring via keyspace notifications.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A (TTL ticking)', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+          { name: 'R1', lock: 'A (TTL ticking)', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+          { name: 'R2', lock: 'A (TTL ticking)', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [],
+      },
+      {
+        desc: 'After ~2-3s, the lock TTL expires. Redis fires a <span class="warn">keyspace expiry notification</span>. Follower B receives it within milliseconds.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'promoting', cls: 'promoting' } ],
+        redis: [
+          { name: 'R0', lock: '(expired)', lockCls: 'expired', epoch: 3, stream: '1..41', hl: 'highlight-yellow' },
+          { name: 'R1', lock: '(expired)', lockCls: 'expired', epoch: 3, stream: '1..41', hl: 'highlight-yellow' },
+          { name: 'R2', lock: '(expired)', lockCls: 'expired', epoch: 3, stream: '1..41', hl: 'highlight-yellow' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [ { from: 'r0', to: 'seqB', label: 'key expired event', cls: 'warn' } ],
+      },
+      {
+        desc: 'Follower B runs <code>promote_leader.lua</code> on all 3 nodes. The script atomically: <code>SET lock B PX ttl NX</code> + <code>INCR epoch</code>. All 3 succeed &rarr; <span class="highlight">epoch becomes 4</span>.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'promoting', cls: 'promoting' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [
+          { from: 'seqB', to: 'r0', label: 'promote_leader.lua', cls: 'info' },
+          { from: 'seqB', to: 'r1', label: 'promote_leader.lua', cls: 'info' },
+          { from: 'seqB', to: 'r2', label: 'promote_leader.lua', cls: 'info' },
+        ],
+      },
+      {
+        desc: 'B syncs streams via <code>XRANGE</code>. Streams are identical &mdash; no repair needed. B selects <code>max(epochs) = 4</code> as its fencing token.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-green' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-green' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [],
+      },
+      {
+        desc: '<span class="highlight">Sequencer B is now the leader</span> with epoch=4. It begins producing blocks at height 42. Total failover: ~2-3s (dominated by TTL expiry).',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [
+          { from: 'seqB', to: 'r0', label: 'write_block.lua', cls: 'ok' },
+          { from: 'seqB', to: 'r1', label: 'write_block.lua', cls: 'ok' },
+          { from: 'seqB', to: 'r2', label: 'write_block.lua', cls: 'ok' },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'zombie', num: 3,
+    title: 'Zombie Leader: Split-Brain Prevention',
+    tagline: 'A zombie leader\'s write succeeds on one node but the quorum overlap guarantees it can never commit.',
+    steps: [
+      {
+        desc: '<span class="highlight">Leader A</span> (epoch=3) is producing blocks normally. A <span class="danger">network partition</span> forms &mdash; A is isolated from R2, B is isolated from R0.',
+        seqs: [ { name: 'Sequencer A', role: 'leader', cls: 'leader' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+          { name: 'R1', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+          { name: 'R2', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+        ],
+        partitions: ['seqA-r2', 'seqB-r0'],
+        arrows: [],
+      },
+      {
+        desc: 'A hits a <span class="danger">GC pause</span>. Lock TTL counts down. Lock expires on R1 and R2, but A resumes <span class="warn">just before R0\'s TTL expires</span> (clock skew / network latency). R0 still has <code>lock=A</code>.',
+        seqs: [ { name: 'Sequencer A', role: 'zombie (resuming)', cls: 'zombie' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A (TTL almost up)', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: 'highlight-yellow' },
+          { name: 'R1', lock: '(expired)', lockCls: 'expired', epoch: 3, stream: '1..41', hl: 'highlight-red' },
+          { name: 'R2', lock: '(expired)', lockCls: 'expired', epoch: 3, stream: '1..41', hl: 'highlight-red' },
+        ],
+        partitions: ['seqA-r2', 'seqB-r0'],
+        arrows: [],
+      },
+      {
+        desc: 'B detects the expiry on R1 and R2 and promotes on <span class="info">{R1, R2}</span> (quorum=2). B <span class="danger">cannot reach R0</span>. Epoch becomes 4 on R1, R2. R0 is stale: still has <code>lock=A, epoch=3</code>.',
+        seqs: [ { name: 'Sequencer A', role: 'zombie', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+        ],
+        partitions: ['seqA-r2', 'seqB-r0'],
+        arrows: [
+          { from: 'seqB', to: 'r1', label: 'promote_leader.lua', cls: 'info' },
+          { from: 'seqB', to: 'r2', label: 'promote_leader.lua', cls: 'info' },
+        ],
+      },
+      {
+        desc: 'B produces block at height 42 on R1, R2 (quorum). R0 is unreachable from B &mdash; it still has <span class="warn">lock=A, epoch=3, no block at height 42</span>.',
+        seqs: [ { name: 'Sequencer A', role: 'zombie', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+        ],
+        partitions: ['seqA-r2', 'seqB-r0'],
+        arrows: [
+          { from: 'seqB', to: 'r1', label: 'write_block.lua', cls: 'ok' },
+          { from: 'seqB', to: 'r2', label: 'write_block.lua', cls: 'ok' },
+        ],
+      },
+      {
+        desc: '<span class="danger">Zombie A</span> wakes up from GC pause and tries <code>write_block.lua</code> at height 42 with stale <code>epoch=3</code> on the nodes it can reach: <strong>R0 and R1</strong>.',
+        seqs: [ { name: 'Sequencer A', role: 'zombie', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-yellow' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: '' },
+        ],
+        partitions: ['seqA-r2', 'seqB-r0'],
+        arrows: [
+          { from: 'seqA', to: 'r0', label: 'write_block(epoch=3)', cls: 'warn' },
+          { from: 'seqA', to: 'r1', label: 'write_block(epoch=3)', cls: 'err' },
+        ],
+      },
+      {
+        desc: '<strong>R0</strong>: lock=A &check;, epoch 3&ge;3 &check;, no block at 42 &check; &rarr; <span class="warn">write SUCCEEDS</span>. A\'s zombie block is written to R0.<br><br>' +
+          '<strong>R1</strong> (the <span class="info">pigeonhole overlap</span>): lock=B &ne; A &rarr; <span class="danger">FENCING_ERROR</span>. Even without the lock check: epoch 4 > 3 &rarr; rejected. Even without that: HEIGHT_EXISTS for block 42 &rarr; rejected.',
+        seqs: [ { name: 'Sequencer A', role: 'zombie', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..42 [zombie]', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-red' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: '' },
+        ],
+        partitions: ['seqA-r2', 'seqB-r0'],
+        arrows: [
+          { from: 'r0', to: 'seqA', label: 'OK (written!)', cls: 'warn' },
+          { from: 'r1', to: 'seqA', label: 'FENCING_ERROR', cls: 'err' },
+        ],
+      },
+      {
+        desc: 'A gets <span class="warn">1/2 successes</span> = below quorum. <span class="highlight">A cannot commit the block.</span> Steps down to FOLLOWER. The zombie write on R0 is a <span class="warn">harmless orphan</span> (1/3, sub-quorum).<br><br>' +
+          'B\'s block at height 42 is on R1+R2 (quorum) &mdash; it is the canonical block. <span class="highlight">No fork.</span> Next time a leader reconciles, the orphan on R0 is detected and either adopted or superseded.',
+        seqs: [ { name: 'Sequencer A', role: 'follower', cls: 'follower' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'A (expiring)', lockCls: 'owner-a', epoch: 3, stream: '1..42 [orphan]', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+        ],
+        arrows: [],
+      },
+    ],
+  },
+  {
+    id: 'repair-full', num: 4,
+    title: 'Orphan Repair: Full Quorum Visible',
+    tagline: 'A leader crashes mid-write, leaving a sub-quorum orphan. The new leader detects and repairs it.',
+    steps: [
+      {
+        desc: '<span class="highlight">Leader A</span> (epoch=3) produces block at height 42. Sends <code>write_block.lua</code> to all 3 nodes. R0 accepts, then A <span class="danger">crashes</span> before R1 and R2 respond.',
+        seqs: [ { name: 'Sequencer A', role: 'leader', cls: 'leader' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R1', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+          { name: 'R2', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+        ],
+        arrows: [
+          { from: 'r0', to: 'seqA', label: 'OK (written)', cls: 'ok' },
+          { from: 'r1', to: 'seqA', label: 'no response', cls: 'err' },
+          { from: 'r2', to: 'seqA', label: 'no response', cls: 'err' },
+        ],
+      },
+      {
+        desc: 'A is down. Block at height 42 exists only on R0 &mdash; <span class="warn">1/3, sub-quorum orphan</span>. Lock TTL expires on all nodes.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A (expiring)', lockCls: 'owner-a', epoch: 3, stream: '1..42', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'A (expiring)', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+          { name: 'R2', lock: 'A (expiring)', lockCls: 'owner-a', epoch: 3, stream: '1..41', hl: '' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [],
+      },
+      {
+        desc: 'A\'s lock expires. <span class="info">B promotes</span> (epoch=4). Reads streams from all nodes via <code>XRANGE</code>.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'promoting', cls: 'promoting' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-blue' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [
+          { from: 'seqB', to: 'r0', label: 'XRANGE stream', cls: 'info' },
+          { from: 'seqB', to: 'r1', label: 'XRANGE stream', cls: 'info' },
+          { from: 'seqB', to: 'r2', label: 'XRANGE stream', cls: 'info' },
+        ],
+      },
+      {
+        desc: 'Block at height 42 exists on <span class="warn">1/3 nodes</span> (below quorum). B identifies it as a <span class="warn">sub-quorum orphan</span>.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'promoting', cls: 'promoting' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42 \u2713', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41 (missing)', hl: 'highlight-yellow' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41 (missing)', hl: 'highlight-yellow' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [],
+      },
+      {
+        desc: 'B <span class="highlight">repropose the orphan</span> via <code>write_block.lua</code>. R0: <code>HEIGHT_EXISTS</code> (counted). R1 and R2 accept.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'promoting', cls: 'promoting' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [
+          { from: 'r0', to: 'seqB', label: 'HEIGHT_EXISTS', cls: 'warn' },
+          { from: 'r1', to: 'seqB', label: 'OK (written)', cls: 'ok' },
+          { from: 'r2', to: 'seqB', label: 'OK (written)', cls: 'ok' },
+        ],
+      },
+      {
+        desc: '<span class="highlight">Repair complete:</span> block at height 42 on 3/3 (quorum). B applies it, transitions to LEADER, continues at height 43. <span class="highlight">No block lost. No deadlock.</span>',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [],
+      },
+    ],
+  },
+  {
+    id: 'repair-part', num: 5,
+    title: 'Orphan Repair: Partitioned Node',
+    tagline: 'Repair when one Redis node is unreachable — quorum still holds on remaining nodes.',
+    steps: [
+      {
+        desc: 'Orphan block at height 42 exists only on R0 (1/3). <span class="danger">R2 is partitioned</span>. B can only reach R0 and R1.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'promoting', cls: 'promoting' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-blue' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+          { name: 'R2 (partitioned)', lock: '?', lockCls: 'expired', epoch: '?', stream: '?', hl: 'offline' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2','seqB-r2'],
+        arrows: [],
+      },
+      {
+        desc: 'B reads R0 and R1 (R2 times out). <span class="highlight">2/3 reads = quorum</span>. Sees height 42 on R0 but not R1 &rarr; sub-quorum orphan.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'promoting', cls: 'promoting' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42 \u2713', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-yellow' },
+          { name: 'R2 (partitioned)', lock: '?', lockCls: 'expired', epoch: '?', stream: '?', hl: 'offline' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2','seqB-r2'],
+        arrows: [
+          { from: 'seqB', to: 'r0', label: 'XRANGE \u2192 has h42', cls: 'ok' },
+          { from: 'seqB', to: 'r1', label: 'XRANGE \u2192 missing', cls: 'warn' },
+          { from: 'seqB', to: 'r2', label: 'timeout', cls: 'err' },
+        ],
+      },
+      {
+        desc: 'Repropose orphan: R0 <code>HEIGHT_EXISTS</code>, R1 <code>OK</code>, R2 timeout. Total = <span class="highlight">2/3 = quorum</span>.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..42', hl: 'highlight-green' },
+          { name: 'R2 (partitioned)', lock: '?', lockCls: 'expired', epoch: '?', stream: '?', hl: 'offline' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2','seqB-r2'],
+        arrows: [
+          { from: 'r0', to: 'seqB', label: 'HEIGHT_EXISTS', cls: 'warn' },
+          { from: 'r1', to: 'seqB', label: 'OK (written)', cls: 'ok' },
+          { from: 'r2', to: 'seqB', label: 'timeout', cls: 'err' },
+        ],
+      },
+      {
+        desc: 'Repair succeeded with 2/3. When R2 recovers, B\'s subsequent writes populate it via normal <code>write_block.lua</code> (epoch healing included).',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..43', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..43', hl: 'highlight-green' },
+          { name: 'R2 (recovering)', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '43', hl: 'highlight-blue' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [],
+      },
+    ],
+  },
+  {
+    id: 'pigeonhole', num: 6,
+    title: 'Pigeonhole Principle: No Forks Possible',
+    tagline: 'Why any two quorums must overlap — making it mathematically impossible for two leaders to both commit.',
+    steps: [
+      {
+        desc: 'With <strong>N=3</strong> and <strong>quorum=2</strong>, any operation needs &ge;2 nodes. Only 3 possible quorums: <code>{R0,R1}</code>, <code>{R0,R2}</code>, <code>{R1,R2}</code>.',
+        type: 'concept',
+        content: `
+          <div class="concept-grid">
+            <div class="concept-card"><h4>The Pigeonhole Argument</h4><p>If you place <strong>ceil(N/2)+1</strong> items into <strong>N</strong> slots, and someone else also places <strong>ceil(N/2)+1</strong> items, at least one slot must contain items from both. That shared slot is the <strong>overlapping node</strong>.</p></div>
+            <div class="concept-card"><h4>Applied to Redlock</h4><p>Leader A's promotion quorum Q<sub>A</sub> and Leader B's promotion quorum Q<sub>B</sub> each have &ge;2 nodes out of 3. They <strong>must share at least one node</strong>. That node has B's lock and rejects A's writes.</p></div>
+          </div>
+          <div class="venn"><div class="venn-circle qa"></div><div class="venn-circle qb"></div><div class="venn-label la">Q_A</div><div class="venn-label lb">Q_B</div><div class="overlap-node">R1</div><div class="venn-label lo" style="top:10px">overlap</div></div>`,
+      },
+      {
+        desc: 'Leader A held <code>{R0, R1}</code>. B promoted on <code>{R1, R2}</code>. <span class="warn">R1 is in both quorums.</span>',
+        seqs: [ { name: 'Sequencer A', role: 'zombie', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: 'A (expired)', lockCls: 'expired', epoch: 3, stream: '1..41', hl: '' },
+          { name: 'R1 (OVERLAP)', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-purple' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+        ],
+        arrows: [],
+      },
+      {
+        desc: 'Zombie A tries <code>write_block.lua</code>. Any quorum A contacts <span class="danger">must include R1</span> (or R2). R1 checks: lock = "B" &ne; "A" &rarr; <span class="danger">FENCING_ERROR</span>. A cannot reach quorum.',
+        seqs: [ { name: 'Sequencer A', role: 'zombie', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: '(expired)', lockCls: 'expired', epoch: 3, stream: '1..41', hl: '' },
+          { name: 'R1 (OVERLAP)', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-red' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '1..41', hl: 'highlight-blue' },
+        ],
+        arrows: [ { from: 'seqA', to: 'r1', label: 'write_block \u2192 FENCING_ERROR', cls: 'err' } ],
+      },
+      {
+        desc: '<span class="highlight">HEIGHT_EXISTS as the definitive backstop:</span> Even if A bypassed the lock check, B already wrote height 42 to R1 &mdash; <code>HEIGHT_EXISTS</code> rejects. Combined with pigeonhole, <span class="highlight">no two different blocks at the same height can both achieve quorum</span>.',
+        type: 'concept',
+        content: `
+          <div class="concept-grid">
+            <div class="concept-card"><h4>Layer 1: Lock-Owner</h4><p><code>if current_leader ~= my_id then FENCING_ERROR</code><br><br>Primary defense. Overlapping node has B's lock &rarr; rejects A.</p></div>
+            <div class="concept-card"><h4>Layer 2: Epoch Fencing</h4><p><code>if my_epoch < node_epoch then FENCING_ERROR</code><br><br>Defense-in-depth. A's stale epoch 3 < node epoch 4.</p></div>
+            <div class="concept-card"><h4>Layer 3: HEIGHT_EXISTS</h4><p><code>if height in stream then REJECT</code><br><br>Definitive fork prevention. B wrote height 42 on the overlap node &rarr; A can't write a different block there.</p></div>
+            <div class="concept-card"><h4>Why No Deadlock</h4><p>HEIGHT_EXISTS could block production if an orphan sits on a node. The <strong>repair mechanism</strong> resolves this by reproposing orphans to fill missing nodes.</p></div>
+          </div>`,
+      },
+    ],
+  },
+  {
+    id: 'repair-deadlock', num: 7,
+    title: 'Repair Prevents Deadlock',
+    tagline: 'Two successive partial writes fill every Redis node with HEIGHT_EXISTS — only repair can unstick production.',
+    steps: [
+      {
+        desc: '<span class="highlight">Leader A</span> (epoch=3) produces block <span class="warn">X</span> at height 42. A is partitioned: can only reach <strong>R0 and R1</strong>. R2 is unreachable.',
+        seqs: [ { name: 'Sequencer A', role: 'leader', cls: 'leader' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '..41', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '..41', hl: 'highlight-yellow' },
+          { name: 'R2', lock: 'A', lockCls: 'owner-a', epoch: 3, stream: '..41', hl: 'offline' },
+        ],
+        partitions: ['seqA-r2','seqB-r2'],
+        arrows: [
+          { from: 'seqA', to: 'r0', label: 'write_block(X)', cls: 'info' },
+          { from: 'seqA', to: 'r1', label: 'write_block(X)', cls: 'info' },
+        ],
+      },
+      {
+        desc: 'R0 accepts X. R1 <span class="danger">times out</span>. Only <span class="danger">1/3 = below quorum</span>. A crashes. Block X is an <span class="warn">orphan on R0 only</span>.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'follower', cls: 'follower' } ],
+        redis: [
+          { name: 'R0', lock: 'A (expiring)', lockCls: 'owner-a', epoch: 3, stream: '..42 [X]', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'A (expiring)', lockCls: 'owner-a', epoch: 3, stream: '..41', hl: '' },
+          { name: 'R2', lock: 'A (expiring)', lockCls: 'owner-a', epoch: 3, stream: '..41', hl: '' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2'],
+        arrows: [
+          { from: 'r0', to: 'seqA', label: 'OK (X written)', cls: 'ok' },
+          { from: 'r1', to: 'seqA', label: 'timeout', cls: 'err' },
+        ],
+      },
+      {
+        desc: 'A\'s lock expires. <span class="info">B promotes</span> (epoch=4). B produces a <em>different</em> block <span class="info">Y</span> at height 42. B is partitioned: can only reach <strong>R1 and R2</strong>. R0 is unreachable.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: '(expired)', lockCls: 'expired', epoch: 3, stream: '..42 [X]', hl: 'offline' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..41', hl: 'highlight-blue' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..41', hl: 'highlight-blue' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2','seqB-r0'],
+        arrows: [
+          { from: 'seqB', to: 'r1', label: 'write_block(Y)', cls: 'info' },
+          { from: 'seqB', to: 'r2', label: 'write_block(Y)', cls: 'info' },
+        ],
+      },
+      {
+        desc: 'R1 <span class="danger">times out</span>. R2 accepts Y. Only <span class="danger">1/3 = below quorum</span>. B\'s write fails. Block Y is an <span class="warn">orphan on R2 only</span>.',
+        seqs: [ { name: 'Sequencer A', role: 'crashed', cls: 'zombie' }, { name: 'Sequencer B', role: 'leader', cls: 'leader' } ],
+        redis: [
+          { name: 'R0', lock: '(expired)', lockCls: 'expired', epoch: 3, stream: '..42 [X]', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..41 (empty)', hl: '' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..42 [Y]', hl: 'highlight-yellow' },
+        ],
+        partitions: ['seqA-r0','seqA-r1','seqA-r2','seqB-r0'],
+        arrows: [
+          { from: 'r1', to: 'seqB', label: 'timeout', cls: 'err' },
+          { from: 'r2', to: 'seqB', label: 'OK (Y written)', cls: 'ok' },
+        ],
+      },
+      {
+        desc: '<span class="danger">The deadlock (without repair):</span> R0 has X, R2 has Y, R1 is empty. <code>HEIGHT_EXISTS</code> rejects any new write at height 42 on R0 and R2. Only R1 is free = 1/3 = below quorum. <span class="danger">Production is permanently stuck.</span>',
+        type: 'concept',
+        content: `<div class="concept-grid" style="grid-template-columns:1fr"><div class="concept-card" style="border-color:var(--red)"><h4 style="color:var(--red)">Every Node Is Blocked</h4><p style="font-size:13px;line-height:1.8"><strong>R0:</strong> has block X at height 42 &rarr; <code>HEIGHT_EXISTS</code> rejects any write at height 42<br><strong>R1:</strong> empty at height 42 &rarr; could accept, but alone it's only 1/3<br><strong>R2:</strong> has block Y at height 42 &rarr; <code>HEIGHT_EXISTS</code> rejects any write at height 42<br><br>Any new leader writing block Z at height 42:<br>&bull; R0 &rarr; <span style="color:var(--red)">HEIGHT_EXISTS</span> (has X) &mdash; <strong>rejected</strong><br>&bull; R1 &rarr; <span style="color:var(--green)">OK</span> (empty) &mdash; written<br>&bull; R2 &rarr; <span style="color:var(--red)">HEIGHT_EXISTS</span> (has Y) &mdash; <strong>rejected</strong><br><br>Result: 1/3 = <strong>below quorum</strong>. Can't produce at height 42, can't skip to 43.<br><span style="color:var(--red);font-weight:700">Network is permanently stalled.</span></p></div></div>`,
+      },
+      {
+        desc: '<span class="highlight">Repair to the rescue.</span> Partitions heal. B reads streams from <strong>all 3 nodes</strong>. Sees X (epoch=3) on R0 and Y (epoch=4) on R2. Picks <span class="info">Y</span> (highest epoch) as canonical.',
+        seqs: [ { name: 'Sequencer B', role: 'leader (repairing)', cls: 'promoting' }, { name: '', role: '', cls: 'empty-node' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..42 [X, e=3]', hl: 'highlight-yellow' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..41', hl: '' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..42 [Y, e=4]', hl: 'highlight-blue' },
+        ],
+        arrows: [
+          { from: 'seqA', to: 'r0', label: 'XRANGE \u2192 X (epoch 3)', cls: 'warn' },
+          { from: 'seqA', to: 'r1', label: 'XRANGE \u2192 (empty)', cls: 'info' },
+          { from: 'seqA', to: 'r2', label: 'XRANGE \u2192 Y (epoch 4) \u2713', cls: 'ok' },
+        ],
+      },
+      {
+        desc: 'B repropose block Y via <code>write_block.lua</code>:<br><br>' +
+          '&bull; <strong>R0:</strong> <code>HEIGHT_EXISTS</code> &mdash; has X, but repair <span class="highlight">counts "has a block at this height"</span><br>' +
+          '&bull; <strong>R1:</strong> <code>OK</code> &mdash; empty, Y written<br>' +
+          '&bull; <strong>R2:</strong> <code>HEIGHT_EXISTS</code> &mdash; already has Y<br><br>' +
+          'Total with block at height 42: <span class="highlight">3/3 = quorum</span>',
+        seqs: [ { name: 'Sequencer B', role: 'leader (repairing)', cls: 'promoting' }, { name: '', role: '', cls: 'empty-node' } ],
+        redis: [
+          { name: 'R0', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..42 [X]', hl: 'highlight-green' },
+          { name: 'R1', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..42 [Y]', hl: 'highlight-green' },
+          { name: 'R2', lock: 'B', lockCls: 'owner-b', epoch: 4, stream: '..42 [Y]', hl: 'highlight-green' },
+        ],
+        arrows: [
+          { from: 'r0', to: 'seqA', label: 'HEIGHT_EXISTS (has X)', cls: 'warn' },
+          { from: 'r1', to: 'seqA', label: 'OK (Y written)', cls: 'ok' },
+          { from: 'r2', to: 'seqA', label: 'HEIGHT_EXISTS (has Y)', cls: 'warn' },
+        ],
+      },
+      {
+        desc: 'B applies block Y (highest epoch) to local DB. <span class="highlight">Production resumes at height 43.</span> Orphan X on R0 is harmless &mdash; never reached quorum, will be trimmed by <code>XTRIM</code>.',
+        type: 'concept',
+        content: `<div class="concept-grid"><div class="concept-card" style="border-color:var(--green)"><h4 style="color:var(--green)">Why This Is Safe</h4><p>Block X (epoch=3) on R0 never reached quorum. Block Y (epoch=4) is canonical, now confirmed on R1+R2 (quorum). Reconciliation selects by highest epoch, so Y wins. R0's stale X is ignored.</p></div><div class="concept-card" style="border-color:var(--blue)"><h4 style="color:var(--blue)">The Key Insight</h4><p><strong>HEIGHT_EXISTS prevents forks</strong> &mdash; no two different blocks at the same height can both reach quorum.<br><strong>Repair prevents deadlocks</strong> &mdash; adopts orphans and fills missing nodes.<br>They are complementary: you need both for safety + liveness.</p></div></div>`,
+      },
+    ],
+  },
+];
+
+// ── State ─────────────────────────────────────────────────────────
+let curS = 0, curStep = 0;
+
+// ── Init ──────────────────────────────────────────────────────────
+function init() {
+  const list = document.getElementById('scenarioList');
+  S.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'scenario-btn' + (i === 0 ? ' active' : '');
+    btn.id = 'sbtn-' + i;
+    btn.innerHTML = `<span class="num">${s.num}</span>${s.title}`;
+    btn.onclick = () => selectScenario(i);
+    list.appendChild(btn);
+  });
+  selectScenario(0);
+}
+
+function selectScenario(idx) {
+  curS = idx; curStep = 0;
+  scaffoldScenario = -1; // force scaffold rebuild for new scenario
+  document.querySelectorAll('.scenario-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  document.getElementById('scenarioTitle').textContent = S[idx].title;
+  document.getElementById('scenarioTagline').textContent = S[idx].tagline;
+  renderStep();
+}
+
+// ── Rendering ─────────────────────────────────────────────────────
+// Build the static scaffold once per scenario; steps update in-place.
+let scaffoldScenario = -1;
+
+function ensureScaffold() {
+  if (scaffoldScenario === curS) return;
+  scaffoldScenario = curS;
+  const canvas = document.getElementById('canvas');
+  let html = '';
+  // Sequencer row (2 slots)
+  html += '<div class="nodes-row" style="margin-bottom:0">';
+  ['seqA', 'seqB'].forEach(id => {
+    html += `<div class="node-group seq"><div class="node-box follower" id="node-${id}">
+      <div class="node-label" id="label-${id}">&nbsp;</div>
+      <div class="node-role role-follower" id="role-${id}"></div>
+    </div></div>`;
+  });
+  html += '</div>';
+  // Spacer
+  html += '<div class="arrow-spacer"></div>';
+  // Redis row (3 slots)
+  html += '<div class="redis-row">';
+  [0, 1, 2].forEach(i => {
+    html += `<div class="redis-box" id="node-r${i}">
+      <div class="redis-name" id="rname-${i}"></div>
+      <div class="redis-field"><span class="key">lock:</span><span class="val" id="rlock-${i}"></span></div>
+      <div class="redis-field"><span class="key">epoch:</span><span class="val" id="repoch-${i}"></span></div>
+      <div class="redis-field"><span class="key">stream:</span><span class="val" id="rstream-${i}"></span></div>
+    </div>`;
+  });
+  html += '</div>';
+  // Concept overlay (hidden by default)
+  html += '<div id="concept-overlay" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:var(--bg);z-index:10;overflow:auto;padding:16px;"></div>';
+  canvas.innerHTML = html;
+}
+
+function renderStep() {
+  const s = S[curS], step = s.steps[curStep], canvas = document.getElementById('canvas');
+
+  // Controls
+  document.getElementById('prevBtn').disabled = curStep === 0;
+  document.getElementById('nextBtn').disabled = curStep === s.steps.length - 1;
+  document.getElementById('stepCounter').textContent = `${curStep + 1} / ${s.steps.length}`;
+  document.getElementById('stepDesc').innerHTML = step.desc;
+
+  // Dots
+  const dots = document.getElementById('stepDots');
+  dots.innerHTML = '';
+  s.steps.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'step-dot' + (i === curStep ? ' active' : i < curStep ? ' done' : '');
+    d.onclick = () => { curStep = i; renderStep(); };
+    dots.appendChild(d);
+  });
+
+  ensureScaffold();
+
+  const conceptOverlay = document.getElementById('concept-overlay');
+
+  // Concept-only steps: show overlay, hide diagram nodes
+  if (step.type === 'concept') {
+    conceptOverlay.innerHTML = step.content;
+    conceptOverlay.style.display = 'block';
+    // Remove SVG
+    const old = document.getElementById('overlay-svg');
+    if (old) old.remove();
+    return;
+  }
+  conceptOverlay.style.display = 'none';
+
+  // Update sequencer nodes in-place
+  if (step.seqs) {
+    step.seqs.forEach((seq, i) => {
+      const id = i === 0 ? 'seqA' : 'seqB';
+      const box = document.getElementById('node-' + id);
+      const label = document.getElementById('label-' + id);
+      const role = document.getElementById('role-' + id);
+
+      // Reset classes, keep node-box
+      box.className = 'node-box ' + (seq.cls || 'follower');
+      if (!seq.name) box.classList.add('empty-node');
+
+      label.textContent = seq.name || '\u00A0';
+
+      const roleClass = seq.role.includes('leader') || seq.role.includes('repair') ? 'role-leader' :
+        seq.role.includes('zombie') || seq.role.includes('crashed') ? 'role-zombie' :
+        seq.role.includes('promoting') ? 'role-promoting' : 'role-follower';
+      role.className = 'node-role ' + roleClass;
+      role.textContent = seq.role || '';
+    });
+  }
+
+  // Update redis nodes in-place
+  if (step.redis) {
+    step.redis.forEach((r, i) => {
+      const box = document.getElementById('node-r' + i);
+      box.className = 'redis-box ' + (r.hl || '');
+
+      document.getElementById('rname-' + i).textContent = r.name;
+      const lockEl = document.getElementById('rlock-' + i);
+      lockEl.className = 'val ' + (r.lockCls || '');
+      lockEl.textContent = r.lock;
+      document.getElementById('repoch-' + i).textContent = r.epoch;
+      document.getElementById('rstream-' + i).textContent = r.stream;
+    });
+  }
+
+  // Redraw SVG overlay
+  requestAnimationFrame(() => requestAnimationFrame(() => drawOverlay(step)));
+}
+
+// ── SVG Overlay ───────────────────────────────────────────────────
+function drawOverlay(step) {
+  const old = document.getElementById('overlay-svg');
+  if (old) old.remove();
+  if (step.type === 'concept') return;
+
+  const canvas = document.getElementById('canvas');
+  const cRect = canvas.getBoundingClientRect();
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.id = 'overlay-svg';
+  svg.setAttribute('style', 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:1;');
+  canvas.appendChild(svg);
+
+  // Helper: get center-bottom / center-top of a node relative to canvas
+  function nodePos(id, edge) {
+    const el = document.getElementById('node-' + id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2 - cRect.left;
+    const y = edge === 'bottom' ? r.bottom - cRect.top : r.top - cRect.top;
+    return { x, y };
+  }
+
+  const partitions = new Set(step.partitions || []);
+
+  // Build set of paths that have message arrows (to skip their connection lines)
+  const arrowPaths = new Set();
+  (step.arrows || []).forEach(a => {
+    // Normalize to seqX-rY regardless of direction
+    const s = a.from.startsWith('seq') ? a.from : a.to;
+    const r = a.from.startsWith('r') ? a.from : a.to;
+    arrowPaths.add(s + '-' + r);
+  });
+
+  // All possible connections: each seq to each redis
+  const seqIds = step.seqs ? step.seqs.map((_, i) => i === 0 ? 'seqA' : 'seqB').filter((id, i) => step.seqs[i].name) : [];
+  const redisIds = step.redis ? step.redis.map((_, i) => 'r' + i) : [];
+
+  // Draw background connection lines (skip where a message arrow exists)
+  seqIds.forEach(sId => {
+    redisIds.forEach(rId => {
+      const key = sId + '-' + rId;
+      if (arrowPaths.has(key)) return; // message arrow will draw this path
+
+      const from = nodePos(sId, 'bottom');
+      const to = nodePos(rId, 'top');
+      if (!from || !to) return;
+
+      const isPartitioned = partitions.has(key);
+
+      const line = document.createElementNS(ns, 'line');
+      line.setAttribute('x1', from.x); line.setAttribute('y1', from.y);
+      line.setAttribute('x2', to.x);   line.setAttribute('y2', to.y);
+      line.setAttribute('class', 'conn-line ' + (isPartitioned ? 'conn-partition' : 'conn-ok'));
+      svg.appendChild(line);
+
+      // Draw X marker on partitioned connections
+      if (isPartitioned) {
+        const mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2;
+        const sz = 6;
+        const x1 = document.createElementNS(ns, 'line');
+        x1.setAttribute('x1', mx - sz); x1.setAttribute('y1', my - sz);
+        x1.setAttribute('x2', mx + sz); x1.setAttribute('y2', my + sz);
+        x1.setAttribute('class', 'partition-x');
+        svg.appendChild(x1);
+        const x2 = document.createElementNS(ns, 'line');
+        x2.setAttribute('x1', mx + sz); x2.setAttribute('y1', my - sz);
+        x2.setAttribute('x2', mx - sz); x2.setAttribute('y2', my + sz);
+        x2.setAttribute('class', 'partition-x');
+        svg.appendChild(x2);
+      }
+    });
+  });
+
+  // Draw message arrows
+  if (!step.arrows) return;
+  step.arrows.forEach((a, idx) => {
+    const isDown = a.from.startsWith('seq');
+    const fromEdge = isDown ? 'bottom' : 'top';
+    const toEdge = isDown ? 'top' : 'bottom';
+    const from = nodePos(a.from, fromEdge);
+    const to = nodePos(a.to, toEdge);
+    if (!from || !to) return;
+
+    const delay = idx * 0.15;
+    const g = document.createElementNS(ns, 'g');
+
+    // Line — compute length for dash animation
+    const dx0 = to.x - from.x, dy0 = to.y - from.y;
+    const lineLen = Math.sqrt(dx0 * dx0 + dy0 * dy0);
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', from.x); line.setAttribute('y1', from.y);
+    line.setAttribute('x2', to.x);   line.setAttribute('y2', to.y);
+    line.setAttribute('class', 'msg-line msg-line-anim c-' + a.cls);
+    line.style.strokeDasharray = lineLen;
+    line.style.strokeDashoffset = lineLen;
+    line.style.opacity = '0';
+    line.style.animationDelay = delay + 's';
+    g.appendChild(line);
+
+    // Arrowhead
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    const ax = to.x - ux * 2, ay = to.y - uy * 2;
+    const px = -uy, py = ux;
+    const s1 = 5;
+    const pts = `${to.x},${to.y} ${ax - ux * 8 + px * s1},${ay - uy * 8 + py * s1} ${ax - ux * 8 - px * s1},${ay - uy * 8 - py * s1}`;
+    const head = document.createElementNS(ns, 'polygon');
+    head.setAttribute('points', pts);
+    head.setAttribute('class', 'msg-arrow-head msg-head-anim c-' + a.cls);
+    head.style.animationDelay = (delay + 0.25) + 's';
+    g.appendChild(head);
+
+    // Label
+    const mx = (from.x + to.x) / 2, my = (from.y + to.y) / 2;
+    const labelOffset = isDown ? -10 : 12;
+    const text = document.createElementNS(ns, 'text');
+    text.setAttribute('x', mx + 8); text.setAttribute('y', my + labelOffset);
+    text.setAttribute('class', 'msg-label-anim');
+    text.setAttribute('font-size', '11');
+    text.setAttribute('font-family', "'SFMono-Regular', Consolas, monospace");
+    text.setAttribute('fill', getComputedStyle(document.documentElement).getPropertyValue('--' + ({ok:'green',err:'red',info:'blue',warn:'yellow'}[a.cls] || 'text')).trim());
+    text.style.animationDelay = (delay + 0.3) + 's';
+    text.textContent = a.label;
+
+    // Background rect for readability
+    const bg = document.createElementNS(ns, 'rect');
+    bg.setAttribute('x', mx + 5); bg.setAttribute('y', my + labelOffset - 10);
+    bg.setAttribute('width', a.label.length * 7 + 6); bg.setAttribute('height', 14);
+    bg.setAttribute('rx', 3); bg.setAttribute('fill', '#161b22'); bg.setAttribute('opacity', '0.85');
+    bg.setAttribute('class', 'msg-label-anim');
+    bg.style.animationDelay = (delay + 0.3) + 's';
+    g.appendChild(bg);
+    g.appendChild(text);
+
+    svg.appendChild(g);
+  });
+}
+
+// ── Navigation ────────────────────────────────────────────────────
+function nextStep() { if (curStep < S[curS].steps.length - 1) { curStep++; renderStep(); } }
+function prevStep() { if (curStep > 0) { curStep--; renderStep(); } }
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextStep(); }
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevStep(); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); if (curS < S.length - 1) selectScenario(curS + 1); }
+  if (e.key === 'ArrowUp') { e.preventDefault(); if (curS > 0) selectScenario(curS - 1); }
+});
+
+init();
+</script>
+</body>
+</html>
