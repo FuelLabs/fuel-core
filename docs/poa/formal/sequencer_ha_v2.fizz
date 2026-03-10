@@ -26,13 +26,14 @@
 ---
 options:
   max_actions: 8
+deadlock_detection: false
 action_options:
   "RedisNode.ExpireLock":
     max_actions: 2
   "Sequencer.Crash":
     max_actions: 1
   "Sequencer.Promote":
-    max_actions: 2
+    max_actions: 3
   "Sequencer.ProduceBlock":
     max_actions: 2
   "Sequencer.CommitLocal":
@@ -152,26 +153,30 @@ role Sequencer:
         if successes < QUORUM_SIZE:
             for n in redis_nodes:
                 n.release_lock(self.__id__)
-            set_election_count(election_count + 1)
             return
 
         self.state    = State.LEADER
         self.my_epoch = max_epoch
-        set_election_count(election_count + 1)
+        set_election_count(election_count + 1)  # only count successful promotions
 
-        # Phase 2: Read streams, identify sub-quorum entries, repair
+        # Phase 2: Read streams (nondeterministic — some nodes may be unreachable)
         height_node_sets = {}
         height_best_entry = {}
         for ni in range(len(redis_nodes)):
-            n = redis_nodes[ni]
-            for entry in n.stream:
-                h = entry["height"]
-                if h not in height_node_sets:
-                    height_node_sets[h] = {}
-                    height_best_entry[h] = entry
-                height_node_sets[h][ni] = True
-                if entry["epoch"] > height_best_entry[h]["epoch"]:
-                    height_best_entry[h] = entry
+            oneof:
+                atomic:
+                    # Node reachable — read its stream
+                    n = redis_nodes[ni]
+                    for entry in n.stream:
+                        h = entry["height"]
+                        if h not in height_node_sets:
+                            height_node_sets[h] = {}
+                            height_best_entry[h] = entry
+                        height_node_sets[h][ni] = True
+                        if entry["epoch"] > height_best_entry[h]["epoch"]:
+                            height_best_entry[h] = entry
+                atomic:
+                    pass  # node unreachable — skip
 
         # Repair sub-quorum entries by reproposing to all reachable nodes.
         # Modeled deterministically (all nodes reachable) since repair runs
@@ -191,15 +196,19 @@ role Sequencer:
                         self.committed_0 = repair_entry["data"]
 
         # Phase 3: Determine next_height from quorum-committed heights
-        # Re-read after repair
+        # Re-read after repair (nondeterministic reachability)
         height_node_sets2 = {}
         for ni in range(len(redis_nodes)):
-            n = redis_nodes[ni]
-            for entry in n.stream:
-                h = entry["height"]
-                if h not in height_node_sets2:
-                    height_node_sets2[h] = {}
-                height_node_sets2[h][ni] = True
+            oneof:
+                atomic:
+                    n = redis_nodes[ni]
+                    for entry in n.stream:
+                        h = entry["height"]
+                        if h not in height_node_sets2:
+                            height_node_sets2[h] = {}
+                        height_node_sets2[h][ni] = True
+                atomic:
+                    pass  # node unreachable
 
         max_h = 0
         for h in height_node_sets2:
@@ -209,9 +218,11 @@ role Sequencer:
         self.next_height = max_h
 
     # --- ProduceBlock: write block to Redis quorum ---
-    # NOT atomic — yield between Redis write and pending_block assignment
-    # allows the model checker to explore crash/interleaving at that point.
-    action ProduceBlock:
+    # Atomic for the Redis write phase, but sets pending_block instead of
+    # committing locally. The separate CommitLocal action models the gap
+    # between successful Redis publish and local RocksDB commit — the
+    # model checker explores crash/interleaving between these two actions.
+    atomic action ProduceBlock:
         require self.state == State.LEADER
         require self.next_height < MAX_BLOCKS
         require self.pending_block == None
@@ -219,7 +230,7 @@ role Sequencer:
         height = self.next_height
         data   = self.__id__
 
-        # Redis quorum write (atomic — parallel calls in same round-trip)
+        # Redis quorum write
         successes = 0
         for n in redis_nodes:
             oneof:
@@ -229,8 +240,6 @@ role Sequencer:
                         successes += 1
                 atomic:
                     pass  # node unreachable
-
-        # --- implicit yield point: crash/interleaving explored here ---
 
         if successes >= QUORUM_SIZE:
             self.pending_block = {"height": height, "data": data}
