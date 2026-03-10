@@ -553,8 +553,8 @@ impl GasCosts {
         self.0.srli().into()
     }
 
-    async fn srw(&self) -> U64 {
-        self.0.srw().into()
+    async fn srw(&self) -> Option<U64> {
+        self.0.srw().ok().map(Into::into)
     }
 
     async fn sub(&self) -> U64 {
@@ -569,8 +569,8 @@ impl GasCosts {
         self.0.sw().into()
     }
 
-    async fn sww(&self) -> U64 {
-        self.0.sww().into()
+    async fn sww(&self) -> Option<U64> {
+        self.0.sww().ok().map(Into::into)
     }
 
     async fn time(&self) -> U64 {
@@ -733,48 +733,42 @@ impl GasCosts {
         self.0.s256().into()
     }
 
-    async fn scwq(&self) -> DependentCost {
-        self.0.scwq().into()
+    async fn scwq(&self) -> Option<DependentCost> {
+        self.0.scwq().ok().map(Into::into)
     }
 
     async fn smo(&self) -> DependentCost {
         self.0.smo().into()
     }
 
-    async fn srwq(&self) -> DependentCost {
-        self.0.srwq().into()
+    async fn srwq(&self) -> Option<DependentCost> {
+        self.0.srwq().ok().map(Into::into)
     }
 
-    async fn swwq(&self) -> DependentCost {
-        self.0.swwq().into()
+    async fn swwq(&self) -> Option<DependentCost> {
+        self.0.swwq().ok().map(Into::into)
     }
 
     async fn epar(&self) -> Option<DependentCost> {
         self.0.epar().ok().map(Into::into)
     }
 
-    async fn sclr(&self) -> Option<DependentCost> {
-        self.0.sclr().ok().map(Into::into)
+    // Storage micro-ops
+
+    async fn storage_read_cold(&self) -> Option<DependentCost> {
+        self.0.storage_read_cold().ok().map(Into::into)
     }
 
-    async fn srdd(&self) -> Option<DependentCost> {
-        self.0.srdd().ok().map(Into::into)
+    async fn storage_read_hot(&self) -> Option<DependentCost> {
+        self.0.storage_read_hot().ok().map(Into::into)
     }
 
-    async fn swrd(&self) -> Option<DependentCost> {
-        self.0.swrd().ok().map(Into::into)
+    async fn storage_write(&self) -> Option<DependentCost> {
+        self.0.storage_write().ok().map(Into::into)
     }
 
-    async fn supd(&self) -> Option<DependentCost> {
-        self.0.supd().ok().map(Into::into)
-    }
-
-    async fn spld(&self) -> Option<DependentCost> {
-        self.0.spld().ok().map(Into::into)
-    }
-
-    async fn spcp(&self) -> Option<DependentCost> {
-        self.0.spcp().ok().map(Into::into)
+    async fn storage_clear(&self) -> Option<DependentCost> {
+        self.0.storage_clear().ok().map(Into::into)
     }
 
     // Non-opcode prices

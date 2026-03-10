@@ -54,7 +54,6 @@ use fuel_vm_private::{
     },
     storage::{
         BlobData,
-        ContractsStateData,
         UploadedBytecodes,
     },
 };
@@ -348,98 +347,7 @@ where
         )
     }
 
-    fn contract_state_range(
-        &self,
-        contract_id: &ContractId,
-        start_key: &Bytes32,
-        range: usize,
-    ) -> Result<Vec<Option<Cow<'_, ContractsStateData>>>, Self::DataError> {
-        use crate::StorageAsRef;
-
-        let mut key = U256::from_big_endian(start_key.as_ref());
-        let mut state_key = Bytes32::zeroed();
-
-        let mut results = Vec::new();
-        for i in 0..range {
-            if i != 0 {
-                key.increase()?;
-            }
-            key.to_big_endian(state_key.as_mut());
-            let multikey = ContractsStateKey::new(contract_id, &state_key);
-            results.push(self.database.storage::<ContractsState>().get(&multikey)?);
-        }
-        Ok(results)
-    }
-
-    fn contract_state_insert_range<'a, I>(
-        &mut self,
-        contract_id: &ContractId,
-        start_key: &Bytes32,
-        values: I,
-    ) -> Result<usize, Self::DataError>
-    where
-        I: Iterator<Item = &'a [u8]>,
-    {
-        let values: Vec<_> = values.collect();
-        let mut current_key = U256::from_big_endian(start_key.as_ref());
-
-        // verify key is in range
-        current_key
-            .checked_add(U256::from(values.len().saturating_sub(1)))
-            .ok_or_else(|| anyhow!("range op exceeded available keyspace"))?;
-
-        let mut key_bytes = Bytes32::zeroed();
-        let mut found_unset = 0u32;
-        for (idx, value) in values.iter().enumerate() {
-            if idx != 0 {
-                current_key.increase()?;
-            }
-            current_key.to_big_endian(key_bytes.as_mut());
-
-            let option = self
-                .database
-                .storage::<ContractsState>()
-                .replace(&(contract_id, &key_bytes).into(), value)?;
-
-            if option.is_none() {
-                found_unset = found_unset
-                    .checked_add(1)
-                    .expect("We've checked it above via `values.len()`");
-            }
-        }
-
-        Ok(found_unset as usize)
-    }
-
     fn contract_state_remove_range(
-        &mut self,
-        contract_id: &ContractId,
-        start_key: &Bytes32,
-        range: usize,
-    ) -> Result<Option<()>, Self::DataError> {
-        let mut found_unset = false;
-
-        let mut current_key = U256::from_big_endian(start_key.as_ref());
-
-        let mut key_bytes = Bytes32::zeroed();
-        for i in 0..range {
-            if i != 0 {
-                current_key.increase()?;
-            }
-            current_key.to_big_endian(key_bytes.as_mut());
-
-            let option = self
-                .database
-                .storage::<ContractsState>()
-                .take(&(contract_id, &key_bytes).into())?;
-
-            found_unset |= option.is_none();
-        }
-
-        if found_unset { Ok(None) } else { Ok(Some(())) }
-    }
-
-    fn contract_state_remove_range_nostatus(
         &mut self,
         contract_id: &ContractId,
         start_key: &Bytes32,
