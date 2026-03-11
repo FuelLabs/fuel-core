@@ -96,6 +96,11 @@ const READ_STREAM_ENTRIES_SCRIPT: &str = include_str!(concat!(
     "/redis_leader_lease_adapter_scripts/read_stream_entries.lua"
 ));
 
+const READ_LATEST_STREAM_ENTRY_SCRIPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/redis_leader_lease_adapter_scripts/read_latest_stream_entry.lua"
+));
+
 struct RedisNode {
     redis_client: redis::Client,
     cached_connection: Mutex<Option<redis::aio::MultiplexedConnection>>,
@@ -119,6 +124,7 @@ pub struct RedisLeaderLeaseAdapter {
     lease_owner_token: String,
     drop_release_guard: std::sync::Arc<()>,
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
+    stream_cursors: std::sync::Arc<Mutex<Vec<Option<String>>>>,
     lease_ttl_millis: u64,
     lease_drift_millis: u64,
     node_timeout: Duration,
@@ -139,6 +145,7 @@ impl Clone for RedisLeaderLeaseAdapter {
             lease_owner_token: self.lease_owner_token.clone(),
             drop_release_guard: self.drop_release_guard.clone(),
             current_epoch_token: self.current_epoch_token.clone(),
+            stream_cursors: self.stream_cursors.clone(),
             lease_ttl_millis: self.lease_ttl_millis,
             lease_drift_millis: self.lease_drift_millis,
             node_timeout: self.node_timeout,
@@ -195,6 +202,7 @@ impl RedisLeaderLeaseAdapter {
         let max_retry_delay_offset_millis =
             u64::try_from(max_retry_delay_offset.as_millis())?;
         let max_attempts = usize::try_from(max_attempts)?.max(1);
+        let redis_nodes_len = redis_nodes.len();
         let lease_owner_token = uuid::Uuid::new_v4().to_string();
         let epoch_key = format!("{lease_key}:epoch:token");
         let block_stream_key = format!("{lease_key}:block:stream");
@@ -211,6 +219,10 @@ impl RedisLeaderLeaseAdapter {
             lease_owner_token,
             drop_release_guard: std::sync::Arc::new(()),
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            stream_cursors: std::sync::Arc::new(Mutex::new(vec![
+                None;
+                redis_nodes_len
+            ])),
             lease_ttl_millis,
             lease_drift_millis,
             node_timeout,
@@ -546,16 +558,125 @@ impl RedisLeaderLeaseAdapter {
         });
     }
 
+    async fn stream_cursor_for_node(
+        &self,
+        node_index: usize,
+    ) -> Option<String> {
+        let cursors = self.stream_cursors.lock().await;
+        cursors.get(node_index).cloned().flatten()
+    }
+
+    async fn set_stream_cursor_for_node(
+        &self,
+        node_index: usize,
+        cursor: Option<String>,
+    ) {
+        let mut cursors = self.stream_cursors.lock().await;
+        if let Some(entry) = cursors.get_mut(node_index) {
+            *entry = cursor;
+        }
+    }
+
+    async fn read_latest_stream_entry_on_node(
+        &self,
+        redis_node: &RedisNode,
+    ) -> anyhow::Result<Option<(u32, String)>> {
+        let mut connection = self.multiplexed_connection(redis_node).await?;
+        let latest_entry = timeout(
+            self.node_timeout,
+            redis::Script::new(READ_LATEST_STREAM_ENTRY_SCRIPT)
+                .key(&self.block_stream_key)
+                .invoke_async::<Vec<String>>(&mut connection),
+        )
+        .await;
+        match latest_entry {
+            Err(_) => {
+                self.clear_cached_connection(redis_node).await;
+                Err(anyhow!(
+                    "Timed out reading latest stream entry from Redis node"
+                ))
+            }
+            Ok(Err(e)) => {
+                self.clear_cached_connection(redis_node).await;
+                Err(anyhow!(
+                    "Failed to read latest stream entry from Redis node: {e}"
+                ))
+            }
+            Ok(Ok(entry)) => {
+                if entry.len() != 2 {
+                    return Ok(None);
+                }
+                let height = entry[0]
+                    .parse::<u32>()
+                    .map_err(|e| anyhow!("Invalid latest stream entry height: {e}"))?;
+                Ok(Some((height, entry[1].clone())))
+            }
+        }
+    }
+
+    async fn should_reconcile_from_stream(
+        &self,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<bool> {
+        let next_height = u32::from(next_height);
+        let latest_results = futures::future::join_all(
+            self.redis_nodes
+                .iter()
+                .map(|redis_node| self.read_latest_stream_entry_on_node(redis_node)),
+        )
+        .await;
+        let mut successful_reads = 0usize;
+        let mut failed_count = 0usize;
+        let mut nodes_indicating_backlog = 0usize;
+        for (node_index, result) in latest_results.into_iter().enumerate() {
+            match result {
+                Ok(Some((latest_height, latest_stream_id))) => {
+                    successful_reads = successful_reads.saturating_add(1);
+                    if latest_height >= next_height {
+                        nodes_indicating_backlog =
+                            nodes_indicating_backlog.saturating_add(1);
+                    } else {
+                        self.set_stream_cursor_for_node(
+                            node_index,
+                            Some(latest_stream_id),
+                        )
+                        .await;
+                    }
+                }
+                Ok(None) => {
+                    successful_reads = successful_reads.saturating_add(1);
+                    self.set_stream_cursor_for_node(node_index, None).await;
+                }
+                Err(e) => {
+                    tracing::warn!("Redis latest stream read failed: {e}");
+                    failed_count = failed_count.saturating_add(1);
+                }
+            }
+        }
+        if !self.quorum_reached(successful_reads) {
+            return Err(anyhow!(
+                "Cannot reconcile: only {}/{} Redis nodes responded ({} failed)",
+                successful_reads,
+                self.redis_nodes.len(),
+                failed_count
+            ));
+        }
+        Ok(nodes_indicating_backlog > 0)
+    }
+
     async fn read_stream_entries_on_node(
         &self,
+        node_index: usize,
         redis_node: &RedisNode,
     ) -> anyhow::Result<Vec<(u32, u64, SealedBlock)>> {
         let mut connection = self.multiplexed_connection(redis_node).await?;
+        let start_id = self.stream_cursor_for_node(node_index).await.unwrap_or_default();
         let stream_entries = timeout(
             self.node_timeout,
             redis::Script::new(READ_STREAM_ENTRIES_SCRIPT)
                 .key(&self.block_stream_key)
-                .invoke_async::<Vec<(u32, u64, Vec<u8>)>>(&mut connection),
+                .arg(start_id)
+                .invoke_async::<Vec<(u32, u64, Vec<u8>, String)>>(&mut connection),
         )
         .await;
 
@@ -570,14 +691,23 @@ impl RedisLeaderLeaseAdapter {
                     "Failed to read stream entries from Redis node: {e}"
                 ))
             }
-            Ok(Ok(entries)) => Ok(entries
-                .into_iter()
-                .filter_map(|(height, epoch, bytes)| {
-                    postcard::from_bytes::<SealedBlock>(&bytes)
-                        .ok()
-                        .map(|block| (height, epoch, block))
-                })
-                .collect()),
+            Ok(Ok(entries)) => {
+                let (blocks, last_stream_id) = entries.into_iter().fold(
+                    (Vec::new(), None),
+                    |(mut blocks, _), (height, epoch, bytes, stream_id)| {
+                        if let Ok(block) =
+                            postcard::from_bytes::<SealedBlock>(&bytes)
+                        {
+                            blocks.push((height, epoch, block));
+                        }
+                        (blocks, Some(stream_id))
+                    },
+                );
+                if last_stream_id.is_some() {
+                    self.set_stream_cursor_for_node(node_index, last_stream_id).await;
+                }
+                Ok(blocks)
+            }
         }
     }
 
@@ -585,13 +715,19 @@ impl RedisLeaderLeaseAdapter {
         &self,
         next_height: BlockHeight,
     ) -> anyhow::Result<Vec<SealedBlock>> {
+        if !self.should_reconcile_from_stream(next_height).await? {
+            return Ok(Vec::new());
+        }
         let mut reconciled = Vec::new();
         let max_reconcile_blocks_per_round =
             usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
         let read_results = futures::future::join_all(
             self.redis_nodes
                 .iter()
-                .map(|redis_node| self.read_stream_entries_on_node(redis_node)),
+                .enumerate()
+                .map(|(node_index, redis_node)| {
+                    self.read_stream_entries_on_node(node_index, redis_node)
+                }),
         )
         .await;
 
@@ -1999,6 +2135,105 @@ mod tests {
             stream_len(&redis_a.redis_url(), &stream_key),
             1,
             "One orphan entry should exist on the single successful node"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unreconciled_blocks__when_quorum_latest_height_is_below_next_height_then_returns_empty_and_advances_cursor()
+     {
+        // given
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:cursor-fast-path".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![redis.redis_url()],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+        let block = poa_block_at_time(1, 10);
+        let block_data = postcard::to_allocvec(&block).expect("serialize block");
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        append_stream_block(&mut conn, &stream_key, 1, &block_data, 1);
+
+        // when
+        let blocks = adapter
+            .unreconciled_blocks(2.into())
+            .await
+            .expect("reconciliation read should succeed");
+        let cursor = {
+            let cursors = adapter.stream_cursors.lock().await;
+            cursors.first().cloned().flatten()
+        };
+
+        // then
+        assert!(blocks.is_empty(), "Expected fast path to skip full reconciliation");
+        assert!(
+            cursor.is_some(),
+            "Expected fast path to advance cursor to latest stream entry"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn read_stream_entries_on_node__when_cursor_exists_then_reads_only_new_entries()
+    {
+        // given
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:cursor-incremental-read".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![redis.redis_url()],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        let h1 = poa_block_at_time(1, 10);
+        let h2 = poa_block_at_time(2, 20);
+        let h3 = poa_block_at_time(3, 30);
+        let h1_data = postcard::to_allocvec(&h1).expect("serialize block");
+        let h2_data = postcard::to_allocvec(&h2).expect("serialize block");
+        let h3_data = postcard::to_allocvec(&h3).expect("serialize block");
+        append_stream_block(&mut conn, &stream_key, 1, &h1_data, 1);
+        append_stream_block(&mut conn, &stream_key, 2, &h2_data, 1);
+        let redis_node = adapter.redis_nodes[0].clone();
+
+        // when
+        let first_read = adapter
+            .read_stream_entries_on_node(0, &redis_node)
+            .await
+            .expect("first read should succeed");
+        append_stream_block(&mut conn, &stream_key, 3, &h3_data, 1);
+        let second_read = adapter
+            .read_stream_entries_on_node(0, &redis_node)
+            .await
+            .expect("second read should succeed");
+
+        // then
+        assert_eq!(first_read.len(), 2, "Expected initial read to include existing entries");
+        assert_eq!(second_read.len(), 1, "Expected cursor read to include only new entries");
+        assert_eq!(
+            u32::from(*second_read[0].2.entity.header().height()),
+            3,
+            "Expected only newly appended height after cursor advancement"
         );
     }
 
