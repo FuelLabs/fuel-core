@@ -42,7 +42,7 @@ FROM gcr.io/distroless/cc-debian12:nonroot AS run
 
 WORKDIR /home/nonroot/
 
-COPY --from=builder /root/fuel-core-e2e-client .
-COPY --from=builder /root/fuel-core-e2e-client.d .
+COPY --from=builder --chown=nonroot:nonroot /root/fuel-core-e2e-client .
+COPY --from=builder --chown=nonroot:nonroot /root/fuel-core-e2e-client.d .
 
 CMD exec ./fuel-core-e2e-client
