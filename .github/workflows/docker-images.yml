@@ -24,7 +24,7 @@ env:
   SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
 
 jobs:
-  build-docker-images:
+  publish-docker-image:
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: read
