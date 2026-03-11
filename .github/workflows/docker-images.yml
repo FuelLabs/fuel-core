@@ -72,7 +72,6 @@ jobs:
             ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}
           tags: |
             type=sha
-            type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
             type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
@@ -147,7 +146,6 @@ jobs:
             ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-debug
           tags: |
             type=sha
-            type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
             type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
@@ -242,7 +240,6 @@ jobs:
             ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-e2e-client
           tags: |
             type=sha
-            type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
             type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
