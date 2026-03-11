@@ -45,4 +45,4 @@ WORKDIR /home/nonroot/
 COPY --from=builder --chown=nonroot:nonroot /root/fuel-core-e2e-client .
 COPY --from=builder --chown=nonroot:nonroot /root/fuel-core-e2e-client.d .
 
-CMD exec ./fuel-core-e2e-client
+CMD ["./fuel-core-e2e-client"]

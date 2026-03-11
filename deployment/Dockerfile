@@ -85,7 +85,7 @@ COPY --from=builder --chown=nonroot:nonroot /chain-config ./config
 EXPOSE ${PORT}
 EXPOSE ${P2P_PORT}
 
-# https://stackoverflow.com/a/44671685
-# https://stackoverflow.com/a/40454758
+# note - cannot pass env vars into the command line
+# since there is no shell to interpret them
 # hadolint ignore=DL3025
-CMD exec ./fuel-core run --ip ${IP} --port ${PORT} --db-path ${DB_PATH}
+CMD ["./fuel-core", "run"]
