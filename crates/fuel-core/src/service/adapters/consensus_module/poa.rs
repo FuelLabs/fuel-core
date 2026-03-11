@@ -714,7 +714,12 @@ impl RedisLeaderLeaseAdapter {
         if !self.should_reconcile_from_stream(next_height).await? {
             return Ok(Vec::new());
         }
+        let initial_stream_cursors = {
+            let cursors = self.stream_cursors.lock().await;
+            cursors.clone()
+        };
         let mut reconciled = Vec::new();
+        let mut restore_stream_cursors = false;
         let max_reconcile_blocks_per_round =
             usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
         let read_results =
@@ -842,12 +847,14 @@ impl RedisLeaderLeaseAdapter {
                                 "Repair failed to reach quorum at height \
                                  {current_height} — will retry next round"
                             );
+                            restore_stream_cursors = true;
                             break;
                         }
                         Err(e) => {
                             tracing::warn!(
                                 "Repair error at height {current_height}: {e}"
                             );
+                            restore_stream_cursors = true;
                             break;
                         }
                     }
@@ -860,6 +867,11 @@ impl RedisLeaderLeaseAdapter {
                 break;
             };
             current_height = next;
+        }
+
+        if restore_stream_cursors {
+            let mut cursors = self.stream_cursors.lock().await;
+            *cursors = initial_stream_cursors;
         }
 
         Ok(reconciled)
@@ -2239,6 +2251,78 @@ mod tests {
             u32::from(*second_read[0].2.entity.header().height()),
             3,
             "Expected only newly appended height after cursor advancement"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unreconciled_blocks__when_repair_errors_then_restores_cursor_for_retry() {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:cursor-restore-on-repair-error".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let adapter = new_test_adapter(redis_urls.clone(), lease_key.clone());
+        let block = poa_block_at_time(1, 10);
+        let block_data = postcard::to_allocvec(&block).expect("serialize block");
+        let redis_client =
+            redis::Client::open(redis_a.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        append_stream_block(&mut conn, &stream_key, 1, &block_data, 1);
+        {
+            let mut epoch = adapter.current_epoch_token.lock().expect("lock");
+            *epoch = Some(1);
+        }
+
+        // Force repair to fail with fencing errors on all nodes.
+        redis_urls.iter().for_each(|redis_url| {
+            set_lease_owner(
+                redis_url,
+                &lease_key,
+                "other-owner",
+                adapter.lease_ttl_millis,
+            );
+        });
+
+        // when
+        let first_attempt = adapter
+            .unreconciled_blocks(1.into())
+            .await
+            .expect("first reconciliation read should succeed");
+        redis_urls.iter().for_each(|redis_url| {
+            set_lease_owner(
+                redis_url,
+                &lease_key,
+                &adapter.lease_owner_token,
+                adapter.lease_ttl_millis,
+            );
+        });
+        let second_attempt = adapter
+            .unreconciled_blocks(1.into())
+            .await
+            .expect("second reconciliation read should succeed");
+
+        // then
+        assert!(
+            first_attempt.is_empty(),
+            "Expected first attempt to defer reconciliation on repair error"
+        );
+        assert_eq!(
+            second_attempt.len(),
+            1,
+            "Expected failed repair entry to be retried next round"
+        );
+        assert_eq!(
+            u32::from(*second_attempt[0].entity.header().height()),
+            1,
+            "Expected retried reconciliation to return the same height"
         );
     }
 
