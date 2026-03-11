@@ -92,7 +92,7 @@ impl InvariantState {
 
         // 2. Concurrent leader detection
         if event.is_local {
-            let producers = self.local_producers.entry(height).or_insert_with(Vec::new);
+            let producers = self.local_producers.entry(height).or_default();
             producers.push((node_idx, Instant::now()));
 
             if producers.len() > 1 {
@@ -162,7 +162,7 @@ fn check_gaps_from_db(
             .database
             .on_chain()
             .latest_height()
-            .map(|h| u32::from(h))
+            .map(u32::from)
             .unwrap_or(0);
         node_heights.push((idx, height));
         if height > max_height {
@@ -303,13 +303,16 @@ async fn dump_redis_streams(cluster: &Cluster, seed: u64) {
                             .query_async(&mut conn)
                             .await;
                         // Read entries with binary-safe types
-                        let entries: Result<Vec<(String, Vec<(Vec<u8>, Vec<u8>)>)>, _> =
-                            redis::cmd("XRANGE")
-                                .arg(&stream_key)
-                                .arg("-")
-                                .arg("+")
-                                .query_async(&mut conn)
-                                .await;
+                        #[allow(clippy::type_complexity)]
+                        let entries: Result<
+                            Vec<(String, Vec<(Vec<u8>, Vec<u8>)>)>,
+                            _,
+                        > = redis::cmd("XRANGE")
+                            .arg(&stream_key)
+                            .arg("-")
+                            .arg("+")
+                            .query_async(&mut conn)
+                            .await;
                         match (len, entries) {
                             (Ok(len), Ok(entries)) => {
                                 info!("  Redis {idx}: {len} entries in stream");
@@ -365,6 +368,7 @@ async fn dump_redis_streams(cluster: &Cluster, seed: u64) {
 
 /// Runs the invariant checker loop. Receives block events and checks invariants.
 /// Returns true if a fork was detected (early bail).
+#[allow(clippy::too_many_arguments)]
 pub async fn run_invariant_checker(
     cluster: Arc<Mutex<Cluster>>,
     timeline: Timeline,

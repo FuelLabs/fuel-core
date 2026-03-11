@@ -84,8 +84,9 @@ impl Cluster {
         let mut proxies = Vec::with_capacity(node_count);
         for node_idx in 0..node_count {
             let mut node_proxies = Vec::with_capacity(redis_count);
-            for redis_idx in 0..redis_count {
-                let target = format!("127.0.0.1:{}", redis_servers[redis_idx].port());
+            for (redis_idx, server) in redis_servers.iter().enumerate().take(redis_count)
+            {
+                let target = format!("127.0.0.1:{}", server.port());
                 let proxy = TcpProxy::start(target).await;
                 info!(
                     "  Proxy node {node_idx} -> Redis {redis_idx}: port {}",
@@ -119,14 +120,14 @@ impl Cluster {
         // 5. Create persistent temp directories and node configs
         let mut node_configs = Vec::with_capacity(node_count);
         let mut node_data_dirs = Vec::with_capacity(node_count);
-        for node_idx in 0..node_count {
+        for (node_idx, node_proxies) in proxies.iter().enumerate() {
             let tmp_dir = TempDir::new().unwrap_or_else(|e| {
                 panic!("Failed to create temp dir for node {node_idx}: {e}")
             });
             info!("  Node {node_idx} data dir: {}", tmp_dir.path().display());
 
             let redis_urls: Vec<String> =
-                proxies[node_idx].iter().map(|p| p.listen_url()).collect();
+                node_proxies.iter().map(|p| p.listen_url()).collect();
 
             let leader_lock_config = RedisLeaderLockConfig {
                 redis_urls,

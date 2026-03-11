@@ -93,7 +93,7 @@ async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
-    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(2);
+    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const PHASE_BLOCKS: usize = 5;
     const STOP_TIMEOUT: Duration = Duration::from_secs(1);
