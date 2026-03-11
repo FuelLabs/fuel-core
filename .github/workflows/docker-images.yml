@@ -85,7 +85,8 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           file: deployment/Dockerfile
-          profile-name: "fuel-core-builder"
+          profile-name: "fuel-core-builder" # manually set up in WarpBuild
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
