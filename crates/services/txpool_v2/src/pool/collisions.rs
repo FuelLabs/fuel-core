@@ -44,7 +44,7 @@ where
 
         for (collision, reason) in self.iter() {
             if !is_better_than_collision(tx, collision, storage)? {
-                tracing::debug!(
+                tracing::info!(
                     "Transaction {} collided with {} because of {:?}",
                     tx.id(),
                     storage
