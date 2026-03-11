@@ -219,10 +219,7 @@ impl RedisLeaderLeaseAdapter {
             lease_owner_token,
             drop_release_guard: std::sync::Arc::new(()),
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            stream_cursors: std::sync::Arc::new(Mutex::new(vec![
-                None;
-                redis_nodes_len
-            ])),
+            stream_cursors: std::sync::Arc::new(Mutex::new(vec![None; redis_nodes_len])),
             lease_ttl_millis,
             lease_drift_millis,
             node_timeout,
@@ -558,10 +555,7 @@ impl RedisLeaderLeaseAdapter {
         });
     }
 
-    async fn stream_cursor_for_node(
-        &self,
-        node_index: usize,
-    ) -> Option<String> {
+    async fn stream_cursor_for_node(&self, node_index: usize) -> Option<String> {
         let cursors = self.stream_cursors.lock().await;
         cursors.get(node_index).cloned().flatten()
     }
@@ -670,7 +664,10 @@ impl RedisLeaderLeaseAdapter {
         redis_node: &RedisNode,
     ) -> anyhow::Result<Vec<(u32, u64, SealedBlock)>> {
         let mut connection = self.multiplexed_connection(redis_node).await?;
-        let start_id = self.stream_cursor_for_node(node_index).await.unwrap_or_default();
+        let start_id = self
+            .stream_cursor_for_node(node_index)
+            .await
+            .unwrap_or_default();
         let stream_entries = timeout(
             self.node_timeout,
             redis::Script::new(READ_STREAM_ENTRIES_SCRIPT)
@@ -695,16 +692,15 @@ impl RedisLeaderLeaseAdapter {
                 let (blocks, last_stream_id) = entries.into_iter().fold(
                     (Vec::new(), None),
                     |(mut blocks, _), (height, epoch, bytes, stream_id)| {
-                        if let Ok(block) =
-                            postcard::from_bytes::<SealedBlock>(&bytes)
-                        {
+                        if let Ok(block) = postcard::from_bytes::<SealedBlock>(&bytes) {
                             blocks.push((height, epoch, block));
                         }
                         (blocks, Some(stream_id))
                     },
                 );
                 if last_stream_id.is_some() {
-                    self.set_stream_cursor_for_node(node_index, last_stream_id).await;
+                    self.set_stream_cursor_for_node(node_index, last_stream_id)
+                        .await;
                 }
                 Ok(blocks)
             }
@@ -721,15 +717,13 @@ impl RedisLeaderLeaseAdapter {
         let mut reconciled = Vec::new();
         let max_reconcile_blocks_per_round =
             usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
-        let read_results = futures::future::join_all(
-            self.redis_nodes
-                .iter()
-                .enumerate()
-                .map(|(node_index, redis_node)| {
+        let read_results =
+            futures::future::join_all(self.redis_nodes.iter().enumerate().map(
+                |(node_index, redis_node)| {
                     self.read_stream_entries_on_node(node_index, redis_node)
-                }),
-        )
-        .await;
+                },
+            ))
+            .await;
 
         let mut successful_reads = Vec::new();
         let mut failed_count = 0usize;
@@ -2176,7 +2170,10 @@ mod tests {
         };
 
         // then
-        assert!(blocks.is_empty(), "Expected fast path to skip full reconciliation");
+        assert!(
+            blocks.is_empty(),
+            "Expected fast path to skip full reconciliation"
+        );
         assert!(
             cursor.is_some(),
             "Expected fast path to advance cursor to latest stream entry"
@@ -2228,8 +2225,16 @@ mod tests {
             .expect("second read should succeed");
 
         // then
-        assert_eq!(first_read.len(), 2, "Expected initial read to include existing entries");
-        assert_eq!(second_read.len(), 1, "Expected cursor read to include only new entries");
+        assert_eq!(
+            first_read.len(),
+            2,
+            "Expected initial read to include existing entries"
+        );
+        assert_eq!(
+            second_read.len(),
+            1,
+            "Expected cursor read to include only new entries"
+        );
         assert_eq!(
             u32::from(*second_read[0].2.entity.header().height()),
             3,
