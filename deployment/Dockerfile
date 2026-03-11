@@ -88,4 +88,5 @@ EXPOSE ${P2P_PORT}
 # note - cannot pass env vars into the command line
 # since there is no shell to interpret them
 # hadolint ignore=DL3025
-CMD ["./fuel-core", "run"]
+ENTRYPOINT ["/home/nonroot/fuel-core"]
+CMD ["run"]
