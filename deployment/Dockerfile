@@ -65,7 +65,9 @@ RUN \
     && cp ./target/$(xx-cargo --print-target-triple)/release/fuel-core.d /root/fuel-core.d
 
 # Stage 2: Run
-FROM debian:bookworm-slim AS run
+FROM gcr.io/distroless/cc-debian12:nonroot AS run
+
+WORKDIR /home/nonroot/
 
 ARG IP=0.0.0.0
 ARG PORT=4000
@@ -76,18 +78,9 @@ ENV IP="${IP}"
 ENV PORT="${PORT}"
 ENV DB_PATH="${DB_PATH}"
 
-WORKDIR /root/
-
-RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates curl procps iputils-ping jq \
-    # Clean up
-    && apt-get autoremove -y \
-    && apt-get clean -y \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /root/fuel-core .
-COPY --from=builder /root/fuel-core.d .
-COPY --from=builder /chain-config ./config
+COPY --from=builder --chown=nonroot:nonroot /root/fuel-core .
+COPY --from=builder --chown=nonroot:nonroot /root/fuel-core.d .
+COPY --from=builder --chown=nonroot:nonroot /chain-config ./config
 
 EXPOSE ${PORT}
 EXPOSE ${P2P_PORT}
