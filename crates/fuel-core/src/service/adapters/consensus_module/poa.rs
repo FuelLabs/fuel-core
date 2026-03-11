@@ -416,17 +416,16 @@ impl RedisLeaderLeaseAdapter {
 
             if let Some(max_new) =
                 results.into_iter().filter_map(|r| r.ok().flatten()).max()
+                && let Ok(mut epoch) = self.current_epoch_token.lock()
             {
-                if let Ok(mut epoch) = self.current_epoch_token.lock() {
-                    let current = epoch.unwrap_or(0);
-                    if max_new > current {
-                        tracing::info!(
-                            old_epoch = current,
-                            new_epoch = max_new,
-                            "Adopted higher epoch from lock expansion"
-                        );
-                        *epoch = Some(max_new);
-                    }
+                let current = epoch.unwrap_or(0);
+                if max_new > current {
+                    tracing::info!(
+                        old_epoch = current,
+                        new_epoch = max_new,
+                        "Adopted higher epoch from lock expansion"
+                    );
+                    *epoch = Some(max_new);
                 }
             }
         }
@@ -455,16 +454,16 @@ impl RedisLeaderLeaseAdapter {
                 self.calculate_remaining_validity_millis(elapsed_millis);
             if self.quorum_reached(acquired_count) && validity_millis > 0 {
                 // Record epoch drift across quorum nodes
-                if promoted_tokens.len() > 1 {
-                    if let (Some(min_tok), Some(max_tok)) = (
+                if promoted_tokens.len() > 1
+                    && let (Some(min_tok), Some(max_tok)) = (
                         promoted_tokens.iter().copied().min(),
                         promoted_tokens.iter().copied().max(),
-                    ) {
-                        poa_metrics().epoch_max_drift.set(
-                            i64::try_from(max_tok.saturating_sub(min_tok))
-                                .unwrap_or(i64::MAX),
-                        );
-                    }
+                    )
+                {
+                    poa_metrics().epoch_max_drift.set(
+                        i64::try_from(max_tok.saturating_sub(min_tok))
+                            .unwrap_or(i64::MAX),
+                    );
                 }
                 if let Some(max_token) = promoted_tokens.into_iter().max() {
                     let mut current_epoch_token = self
@@ -1063,12 +1062,12 @@ impl BlockReconciliationReadPort for RedisLeaderLeaseAdapter {
     ) -> anyhow::Result<LeaderState> {
         if self.can_produce_block().await? {
             poa_metrics().is_leader.set(1);
-            if let Ok(epoch) = self.current_epoch_token.lock() {
-                if let Some(epoch) = *epoch {
-                    poa_metrics()
-                        .leader_epoch
-                        .set(i64::try_from(epoch).unwrap_or(i64::MAX));
-                }
+            if let Ok(epoch) = self.current_epoch_token.lock()
+                && let Some(epoch) = *epoch
+            {
+                poa_metrics()
+                    .leader_epoch
+                    .set(i64::try_from(epoch).unwrap_or(i64::MAX));
             }
             let reconcile_start = std::time::Instant::now();
             let unreconciled_blocks = self.unreconciled_blocks(next_height).await?;
