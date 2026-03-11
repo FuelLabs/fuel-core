@@ -201,7 +201,7 @@ impl State {
     fn apply_status(&mut self, status: Option<Status>) {
         match status {
             Some(s) => {
-                tracing::info!("Status change from: {:?}, to: {:?}", self.status, s);
+                tracing::debug!("Status change from: {:?}, to: {:?}", self.status, s);
                 self.status = s;
             }
             _ => {
