@@ -169,16 +169,12 @@ pub enum ReconciliationAdapter {
 }
 
 impl RedisLeaderLeaseAdapter {
-    fn calculate_quorum(
-        redis_nodes_len: usize,
-        quorum_disruption_budget: u32,
-    ) -> usize {
+    fn calculate_quorum(redis_nodes_len: usize, quorum_disruption_budget: u32) -> usize {
         let majority = redis_nodes_len
             .checked_div(2)
             .unwrap_or(0)
             .saturating_add(1);
-        let disruption_budget =
-            usize::try_from(quorum_disruption_budget).unwrap_or(0);
+        let disruption_budget = usize::try_from(quorum_disruption_budget).unwrap_or(0);
         majority
             .saturating_add(disruption_budget)
             .min(redis_nodes_len)
@@ -210,8 +206,7 @@ impl RedisLeaderLeaseAdapter {
             ));
         }
         let quorum_disruption_budget = 0u32;
-        let quorum =
-            Self::calculate_quorum(redis_nodes.len(), quorum_disruption_budget);
+        let quorum = Self::calculate_quorum(redis_nodes.len(), quorum_disruption_budget);
         let lease_ttl_millis = u64::try_from(lease_ttl.as_millis())?;
         let retry_delay_millis = u64::try_from(retry_delay.as_millis())?;
         let max_retry_delay_offset_millis =
@@ -251,10 +246,8 @@ impl RedisLeaderLeaseAdapter {
         quorum_disruption_budget: u32,
     ) -> Self {
         self.quorum_disruption_budget = quorum_disruption_budget;
-        self.quorum = Self::calculate_quorum(
-            self.redis_nodes.len(),
-            quorum_disruption_budget,
-        );
+        self.quorum =
+            Self::calculate_quorum(self.redis_nodes.len(), quorum_disruption_budget);
         self
     }
 
@@ -711,9 +704,7 @@ impl RedisLeaderLeaseAdapter {
                     .key(&self.block_stream_key)
                     .arg(&start_id)
                     .arg(page_size)
-                    .invoke_async::<Vec<(u32, u64, Vec<u8>, String)>>(
-                        &mut connection,
-                    ),
+                    .invoke_async::<Vec<(u32, u64, Vec<u8>, String)>>(&mut connection),
             )
             .await;
 
@@ -2304,7 +2295,8 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn read_stream_entries_on_node__when_max_entries_is_small_then_reads_next_page_from_cursor() {
+    async fn read_stream_entries_on_node__when_max_entries_is_small_then_reads_next_page_from_cursor()
+     {
         // given
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:cursor-pagination".to_string();

@@ -233,9 +233,8 @@ pub fn init_sub_services(
                 leader_lock.stream_max_len,
             )
             .map(|adapter| {
-                adapter.with_quorum_disruption_budget(
-                    leader_lock.quorum_disruption_budget,
-                )
+                adapter
+                    .with_quorum_disruption_budget(leader_lock.quorum_disruption_budget)
             })
         })
         .transpose()?;
