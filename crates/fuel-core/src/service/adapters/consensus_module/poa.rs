@@ -661,49 +661,79 @@ impl RedisLeaderLeaseAdapter {
         &self,
         node_index: usize,
         redis_node: &RedisNode,
+        max_entries: usize,
     ) -> anyhow::Result<Vec<(u32, u64, SealedBlock)>> {
+        if max_entries == 0 {
+            return Ok(Vec::new());
+        }
+
         let mut connection = self.multiplexed_connection(redis_node).await?;
-        let start_id = self
+        let mut start_id = self
             .stream_cursor_for_node(node_index)
             .await
             .unwrap_or_default();
-        let stream_entries = timeout(
-            self.node_timeout,
-            redis::Script::new(READ_STREAM_ENTRIES_SCRIPT)
-                .key(&self.block_stream_key)
-                .arg(start_id)
-                .invoke_async::<Vec<(u32, u64, Vec<u8>, String)>>(&mut connection),
-        )
-        .await;
+        let mut blocks = Vec::new();
 
-        match stream_entries {
-            Err(_) => {
-                self.clear_cached_connection(redis_node).await;
-                Err(anyhow!("Timed out reading stream entries from Redis node"))
-            }
-            Ok(Err(e)) => {
-                self.clear_cached_connection(redis_node).await;
-                Err(anyhow!(
-                    "Failed to read stream entries from Redis node: {e}"
-                ))
-            }
-            Ok(Ok(entries)) => {
-                let (blocks, last_stream_id) = entries.into_iter().fold(
-                    (Vec::new(), None),
-                    |(mut blocks, _), (height, epoch, bytes, stream_id)| {
-                        if let Ok(block) = postcard::from_bytes::<SealedBlock>(&bytes) {
-                            blocks.push((height, epoch, block));
-                        }
-                        (blocks, Some(stream_id))
-                    },
-                );
-                if last_stream_id.is_some() {
-                    self.set_stream_cursor_for_node(node_index, last_stream_id)
-                        .await;
+        while blocks.len() < max_entries {
+            let page_size = max_entries.saturating_sub(blocks.len());
+            let page_size = u32::try_from(page_size).unwrap_or(u32::MAX);
+            let stream_entries = timeout(
+                self.node_timeout,
+                redis::Script::new(READ_STREAM_ENTRIES_SCRIPT)
+                    .key(&self.block_stream_key)
+                    .arg(&start_id)
+                    .arg(page_size)
+                    .invoke_async::<Vec<(u32, u64, Vec<u8>, String)>>(
+                        &mut connection,
+                    ),
+            )
+            .await;
+
+            let entries = match stream_entries {
+                Err(_) => {
+                    self.clear_cached_connection(redis_node).await;
+                    return Err(anyhow!(
+                        "Timed out reading stream entries from Redis node"
+                    ));
                 }
-                Ok(blocks)
+                Ok(Err(e)) => {
+                    self.clear_cached_connection(redis_node).await;
+                    return Err(anyhow!(
+                        "Failed to read stream entries from Redis node: {e}"
+                    ));
+                }
+                Ok(Ok(entries)) => entries,
+            };
+
+            if entries.is_empty() {
+                break;
+            }
+
+            let fetched_count = entries.len();
+            let mut last_stream_id = None;
+            for (height, epoch, bytes, stream_id) in entries {
+                if let Ok(block) = postcard::from_bytes::<SealedBlock>(&bytes) {
+                    blocks.push((height, epoch, block));
+                    if blocks.len() == max_entries {
+                        last_stream_id = Some(stream_id);
+                        break;
+                    }
+                }
+                last_stream_id = Some(stream_id);
+            }
+
+            if let Some(last_stream_id) = last_stream_id {
+                start_id = last_stream_id.clone();
+                self.set_stream_cursor_for_node(node_index, Some(last_stream_id))
+                    .await;
+            }
+
+            if fetched_count < usize::try_from(page_size).unwrap_or(usize::MAX) {
+                break;
             }
         }
+
+        Ok(blocks)
     }
 
     async fn unreconciled_blocks(
@@ -719,7 +749,11 @@ impl RedisLeaderLeaseAdapter {
         let read_results =
             futures::future::join_all(self.redis_nodes.iter().enumerate().map(
                 |(node_index, redis_node)| {
-                    self.read_stream_entries_on_node(node_index, redis_node)
+                    self.read_stream_entries_on_node(
+                        node_index,
+                        redis_node,
+                        max_reconcile_blocks_per_round,
+                    )
                 },
             ))
             .await;
@@ -2214,12 +2248,12 @@ mod tests {
 
         // when
         let first_read = adapter
-            .read_stream_entries_on_node(0, &redis_node)
+            .read_stream_entries_on_node(0, &redis_node, 1000)
             .await
             .expect("first read should succeed");
         append_stream_block(&mut conn, &stream_key, 3, &h3_data, 1);
         let second_read = adapter
-            .read_stream_entries_on_node(0, &redis_node)
+            .read_stream_entries_on_node(0, &redis_node, 1000)
             .await
             .expect("second read should succeed");
 
@@ -2238,6 +2272,73 @@ mod tests {
             u32::from(*second_read[0].2.entity.header().height()),
             3,
             "Expected only newly appended height after cursor advancement"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn read_stream_entries_on_node__when_max_entries_is_small_then_reads_next_page_from_cursor() {
+        // given
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:cursor-pagination".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![redis.redis_url()],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("adapter should be created");
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        let h1 = poa_block_at_time(1, 10);
+        let h2 = poa_block_at_time(2, 20);
+        let h3 = poa_block_at_time(3, 30);
+        let h1_data = postcard::to_allocvec(&h1).expect("serialize block");
+        let h2_data = postcard::to_allocvec(&h2).expect("serialize block");
+        let h3_data = postcard::to_allocvec(&h3).expect("serialize block");
+        append_stream_block(&mut conn, &stream_key, 1, &h1_data, 1);
+        append_stream_block(&mut conn, &stream_key, 2, &h2_data, 1);
+        append_stream_block(&mut conn, &stream_key, 3, &h3_data, 1);
+        let redis_node = adapter.redis_nodes[0].clone();
+
+        // when
+        let first_page = adapter
+            .read_stream_entries_on_node(0, &redis_node, 2)
+            .await
+            .expect("first page should succeed");
+        let second_page = adapter
+            .read_stream_entries_on_node(0, &redis_node, 2)
+            .await
+            .expect("second page should succeed");
+
+        // then
+        assert_eq!(first_page.len(), 2, "Expected first page to be capped");
+        assert_eq!(
+            u32::from(*first_page[0].2.entity.header().height()),
+            1,
+            "Expected first page to start from earliest height"
+        );
+        assert_eq!(
+            u32::from(*first_page[1].2.entity.header().height()),
+            2,
+            "Expected first page to include second height"
+        );
+        assert_eq!(
+            second_page.len(),
+            1,
+            "Expected second page to include the remaining entry"
+        );
+        assert_eq!(
+            u32::from(*second_page[0].2.entity.header().height()),
+            3,
+            "Expected second page to continue from the cursor"
         );
     }
 

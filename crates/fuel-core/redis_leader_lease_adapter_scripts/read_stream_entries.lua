@@ -1,6 +1,7 @@
 -- Read stream entries from an optional cursor and return compact tuples for reconciliation.
 -- KEYS[1]: block stream key (e.g., poa:leader:lock:block:stream)
 -- ARGV[1]: optional start stream id (exclusive); if empty, reads from stream head
+-- ARGV[2]: max entries to read
 --
 -- Returns: array of {height, epoch, data, stream_id}
 local start_id = "-"
@@ -8,7 +9,12 @@ if ARGV[1] ~= nil and ARGV[1] ~= "" then
     start_id = "(" .. ARGV[1]
 end
 
-local entries = redis.call("XRANGE", KEYS[1], start_id, "+")
+local count = tonumber(ARGV[2])
+if count == nil or count <= 0 then
+    return {}
+end
+
+local entries = redis.call("XRANGE", KEYS[1], start_id, "+", "COUNT", count)
 local result = {}
 
 for _, entry in ipairs(entries) do
