@@ -58,6 +58,7 @@ pub struct RedisLeaderLockConfig {
     pub max_retry_delay_offset: Duration,
     pub max_attempts: u32,
     pub stream_max_len: u32,
+    pub quorum_disruption_budget: u32,
 }
 
 #[derive(Clone, Debug)]

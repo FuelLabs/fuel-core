@@ -118,6 +118,7 @@ impl Clone for RedisNode {
 pub struct RedisLeaderLeaseAdapter {
     redis_nodes: Vec<RedisNode>,
     quorum: usize,
+    quorum_disruption_budget: u32,
     lease_key: String,
     epoch_key: String,
     block_stream_key: String,
@@ -139,6 +140,7 @@ impl Clone for RedisLeaderLeaseAdapter {
         Self {
             redis_nodes: self.redis_nodes.clone(),
             quorum: self.quorum,
+            quorum_disruption_budget: self.quorum_disruption_budget,
             lease_key: self.lease_key.clone(),
             epoch_key: self.epoch_key.clone(),
             block_stream_key: self.block_stream_key.clone(),
@@ -167,6 +169,21 @@ pub enum ReconciliationAdapter {
 }
 
 impl RedisLeaderLeaseAdapter {
+    fn calculate_quorum(
+        redis_nodes_len: usize,
+        quorum_disruption_budget: u32,
+    ) -> usize {
+        let majority = redis_nodes_len
+            .checked_div(2)
+            .unwrap_or(0)
+            .saturating_add(1);
+        let disruption_budget =
+            usize::try_from(quorum_disruption_budget).unwrap_or(0);
+        majority
+            .saturating_add(disruption_budget)
+            .min(redis_nodes_len)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         redis_urls: Vec<String>,
@@ -192,11 +209,9 @@ impl RedisLeaderLeaseAdapter {
                 "At least one redis url is required for leader lock"
             ));
         }
-        let quorum = redis_nodes
-            .len()
-            .checked_div(2)
-            .unwrap_or(0)
-            .saturating_add(1);
+        let quorum_disruption_budget = 0u32;
+        let quorum =
+            Self::calculate_quorum(redis_nodes.len(), quorum_disruption_budget);
         let lease_ttl_millis = u64::try_from(lease_ttl.as_millis())?;
         let retry_delay_millis = u64::try_from(retry_delay.as_millis())?;
         let max_retry_delay_offset_millis =
@@ -213,6 +228,7 @@ impl RedisLeaderLeaseAdapter {
         Ok(Self {
             redis_nodes,
             quorum,
+            quorum_disruption_budget,
             lease_key,
             epoch_key,
             block_stream_key,
@@ -228,6 +244,18 @@ impl RedisLeaderLeaseAdapter {
             max_attempts,
             stream_max_len,
         })
+    }
+
+    pub fn with_quorum_disruption_budget(
+        mut self,
+        quorum_disruption_budget: u32,
+    ) -> Self {
+        self.quorum_disruption_budget = quorum_disruption_budget;
+        self.quorum = Self::calculate_quorum(
+            self.redis_nodes.len(),
+            quorum_disruption_budget,
+        );
+        self
     }
 
     async fn multiplexed_connection(

@@ -138,6 +138,7 @@ impl Cluster {
                 max_retry_delay_offset: Duration::from_millis(25),
                 max_attempts: 2,
                 stream_max_len: 1000,
+                quorum_disruption_budget: 0,
             };
 
             let mut node_config = make_config(

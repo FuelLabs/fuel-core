@@ -583,6 +583,7 @@ async fn make_leader_lock_test_config_builder_with_redis_urls(
         max_retry_delay_offset: Duration::from_millis(25),
         max_attempts: 2,
         stream_max_len: 1000,
+        quorum_disruption_budget: 0,
     };
     let make_node_config = make_leader_lock_node_config_builder(
         secret,
