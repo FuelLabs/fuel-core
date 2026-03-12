@@ -29,23 +29,23 @@ fault-proving = [
 [dependencies]
 anyhow = { workspace = true }
 fuel-core-executor = { workspace = true, default-features = false, features = [
-  "alloc",
+    "alloc",
 ] }
 fuel-core-storage = { workspace = true, default-features = false, features = [
-  "alloc",
+    "alloc",
 ] }
 fuel-core-types = { workspace = true, default-features = false, features = [
-  "alloc",
+    "alloc",
 ] }
 fuel-core-types-v0 = { package = "fuel-core-types", version = "0.35.0", default-features = false, features = [
-  "alloc",
-  "serde",
+    "alloc",
+    "serde",
 ], optional = true }
 futures = { workspace = true }
 postcard = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, default-features = false, features = [
-  "alloc",
+    "alloc",
 ] }
 
 [dev-dependencies]
