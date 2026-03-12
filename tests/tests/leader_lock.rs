@@ -473,25 +473,38 @@ async fn find_leader_and_followers(
     nodes: Vec<Node>,
     timeout: Duration,
 ) -> (Node, Vec<Node>) {
-    let mut waiters = nodes
-        .iter()
-        .enumerate()
-        .map(|(index, node)| async move {
-            wait_for_local_block(node).await;
-            index
-        })
-        .collect::<FuturesUnordered<_>>();
-
     let node_count = nodes.len();
-    let leader_index = tokio::time::timeout(timeout, async { waiters.next().await })
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "No producer emitted a local block within {timeout:?} (nodes: {node_count})"
-                )
+    let max_attempts = 2usize;
+    let mut leader_index = None;
+
+    for attempt in 1..=max_attempts {
+        let mut waiters = nodes
+            .iter()
+            .enumerate()
+            .map(|(index, node)| async move {
+                wait_for_local_block(node).await;
+                index
             })
-            .expect("Block stream ended unexpectedly before leader election");
-    drop(waiters);
+            .collect::<FuturesUnordered<_>>();
+
+        match tokio::time::timeout(timeout, async { waiters.next().await }).await {
+            Ok(Some(index)) => {
+                leader_index = Some(index);
+                break;
+            }
+            Ok(None) => {
+                panic!("Block stream ended unexpectedly before leader election");
+            }
+            Err(_) if attempt == max_attempts => {
+                panic!(
+                    "No producer emitted a local block within {timeout:?} after {max_attempts} attempts (nodes: {node_count})"
+                );
+            }
+            Err(_) => {}
+        }
+    }
+
+    let leader_index = leader_index.expect("Leader index should exist");
 
     let mut leader = None;
     let mut follower_nodes = Vec::with_capacity(nodes.len().saturating_sub(1));
