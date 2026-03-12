@@ -28,8 +28,8 @@ tracing = { workspace = true }
 [dev-dependencies]
 fuel-core-services = { workspace = true, features = ["test-helpers"] }
 fuel-core-types = { path = "./../../types", features = [
-  "test-helpers",
-  "serde",
+    "test-helpers",
+    "serde",
 ] }
 mockall = { workspace = true }
 postcard = { workspace = true }
