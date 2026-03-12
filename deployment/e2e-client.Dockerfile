@@ -38,18 +38,11 @@ RUN \
     && cp ./target/release/fuel-core-e2e-client.d /root/fuel-core-e2e-client.d
 
 # Stage 2: Run
-FROM debian:bookworm-slim as run
+FROM gcr.io/distroless/cc-debian12:nonroot AS run
 
-WORKDIR /root/
+WORKDIR /home/nonroot/
 
-RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates \
-    # Clean up
-    && apt-get autoremove -y \
-    && apt-get clean -y \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder --chown=nonroot:nonroot /root/fuel-core-e2e-client .
+COPY --from=builder --chown=nonroot:nonroot /root/fuel-core-e2e-client.d .
 
-COPY --from=builder /root/fuel-core-e2e-client .
-COPY --from=builder /root/fuel-core-e2e-client.d .
-
-CMD exec ./fuel-core-e2e-client
+ENTRYPOINT ["/home/nonroot/fuel-core-e2e-client"]
