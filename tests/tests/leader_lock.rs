@@ -93,6 +93,8 @@ async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LEASE_TTL: Duration = Duration::from_secs(2);
+    const HANDOFF_SETTLE_BUFFER: Duration = Duration::from_millis(200);
     const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const PHASE_BLOCKS: usize = 5;
@@ -108,6 +110,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     let third_producer = make_node(make_node_config("Third Producer"), vec![]).await;
 
     let mut active_producers = vec![first_producer, second_producer, third_producer];
+    let handoff_settle_delay = LEASE_TTL + HANDOFF_SETTLE_BUFFER;
 
     // when
     // let all producers become leader, including the final single producer
@@ -135,6 +138,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
         .await
         .expect("Should stop leader before timeout")
         .expect("Should stop leader without any error");
+        tokio::time::sleep(handoff_settle_delay).await;
 
         active_producers = followers;
     }
@@ -143,6 +147,8 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LEASE_TTL: Duration = Duration::from_secs(2);
+    const HANDOFF_SETTLE_BUFFER: Duration = Duration::from_millis(200);
     const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const BLOCKS_BEFORE_FAILOVER: usize = 3;
@@ -159,6 +165,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     .await;
 
     let mut first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+    let handoff_settle_delay = LEASE_TTL + HANDOFF_SETTLE_BUFFER;
     tokio::time::timeout(
         LEADER_ELECTION_TIMEOUT,
         wait_for_local_block(&first_producer),
@@ -179,6 +186,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     tokio::time::timeout(STOP_TIMEOUT, first_producer.shutdown())
         .await
         .expect("Should stop first producer before timeout");
+    tokio::time::sleep(handoff_settle_delay).await;
     tokio::time::timeout(
         LEADER_ELECTION_TIMEOUT,
         wait_for_local_block(&second_producer),
