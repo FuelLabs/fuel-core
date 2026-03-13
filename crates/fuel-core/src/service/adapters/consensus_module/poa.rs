@@ -762,6 +762,11 @@ impl RedisLeaderLeaseAdapter {
         if !self.should_reconcile_from_stream(next_height).await? {
             return Ok(Vec::new());
         }
+        // Snapshot cursors before full reads so we can restore them if
+        // reconciliation fails partway through (e.g. repair failure).
+        // Without this, cursors advance past entries that were read but
+        // not reconciled, making them permanently unreachable.
+        let cursor_snapshot = self.stream_cursors.lock().await.clone();
         let mut reconciled = Vec::new();
         let max_reconcile_blocks_per_round =
             usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
@@ -826,6 +831,7 @@ impl RedisLeaderLeaseAdapter {
         }
 
         let mut current_height = u32::from(next_height);
+        let mut reconciliation_incomplete = false;
 
         for _ in 0..max_reconcile_blocks_per_round {
             let nodes_with_height = blocks_by_node
@@ -894,12 +900,14 @@ impl RedisLeaderLeaseAdapter {
                                 "Repair failed to reach quorum at height \
                                  {current_height} — will retry next round"
                             );
+                            reconciliation_incomplete = true;
                             break;
                         }
                         Err(e) => {
                             tracing::warn!(
                                 "Repair error at height {current_height}: {e}"
                             );
+                            reconciliation_incomplete = true;
                             break;
                         }
                     }
@@ -912,6 +920,13 @@ impl RedisLeaderLeaseAdapter {
                 break;
             };
             current_height = next;
+        }
+
+        // Restore cursors so the unreconciled entries will be re-read
+        // on the next round. Without this, the cursors would be past
+        // those entries and they'd be permanently skipped.
+        if reconciliation_incomplete {
+            *self.stream_cursors.lock().await = cursor_snapshot;
         }
 
         Ok(reconciled)
