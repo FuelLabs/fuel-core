@@ -795,6 +795,7 @@ impl RedisLeaderLeaseAdapter {
         }
 
         if !self.quorum_reached(successful_reads.len()) {
+            *self.stream_cursors.lock().await = cursor_snapshot;
             return Err(anyhow!(
                 "Cannot reconcile: only {}/{} Redis nodes responded ({} failed)",
                 successful_reads.len(),
@@ -3137,5 +3138,148 @@ mod tests {
                 "Metric '{name}' should be non-zero, got: {metric_line}"
             );
         }
+    }
+
+    /// When quorum reads fail during reconciliation, cursors must be
+    /// restored so that a subsequent call can still see the entries.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unreconciled_blocks__cursors_restored_after_quorum_read_failure() {
+        // given — 3 Redis nodes, block published to all 3
+        let mut redis_a = RedisTestServer::spawn();
+        let mut redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:cursor-restore-quorum".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+
+        let adapter = new_test_adapter(redis_urls.clone(), lease_key.clone());
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Should acquire lease"
+        );
+
+        let block = poa_block_at_time(1, 100);
+        adapter
+            .publish_produced_block(&block)
+            .expect("publish should succeed on all 3 nodes");
+        adapter.release().await.expect("release should succeed");
+
+        // when — kill 2 nodes so quorum read fails, advancing cursors
+        // on the 1 node that responded
+        redis_a.stop();
+        redis_b.stop();
+
+        let adapter_b = new_test_adapter(redis_urls.clone(), lease_key.clone());
+        {
+            let mut epoch = adapter_b.current_epoch_token.lock().expect("lock");
+            *epoch = Some(99);
+        }
+        let result = adapter_b.unreconciled_blocks(1.into()).await;
+        assert!(result.is_err(), "Should fail with quorum read failure");
+
+        // Restart the killed nodes — all 3 now reachable
+        redis_a.start();
+        redis_b.start();
+
+        // Re-publish block to the restarted nodes so they have data
+        let client_a =
+            redis::Client::open(redis_a.redis_url()).expect("client");
+        let mut conn_a = client_a.get_connection().expect("conn");
+        let client_b =
+            redis::Client::open(redis_b.redis_url()).expect("client");
+        let mut conn_b = client_b.get_connection().expect("conn");
+        let block_data = postcard::to_allocvec(&block).expect("serialize");
+        append_stream_block(&mut conn_a, &stream_key, 1, &block_data, 1);
+        append_stream_block(&mut conn_b, &stream_key, 1, &block_data, 1);
+
+        // then — subsequent call must still see the block on node C
+        // (cursor must have been restored, not left past the entry)
+        let blocks = adapter_b
+            .unreconciled_blocks(1.into())
+            .await
+            .expect("reconciliation should succeed now");
+        assert_eq!(
+            blocks.len(),
+            1,
+            "Cursor restore after quorum failure should allow re-reading entries"
+        );
+    }
+
+    /// When sub-quorum repair fails, cursors must be restored so that
+    /// the next reconciliation round can re-read and retry.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unreconciled_blocks__cursors_restored_after_repair_failure() {
+        // given — 3 Redis nodes, block published to only 1 node (sub-quorum)
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:cursor-restore-repair".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+
+        let block = poa_block_at_time(1, 100);
+        let block_data = postcard::to_allocvec(&block).expect("serialize");
+
+        // Write block to only node A — sub-quorum (1/3)
+        let client_a =
+            redis::Client::open(redis_a.redis_url()).expect("client");
+        let mut conn_a = client_a.get_connection().expect("conn");
+        append_stream_block(&mut conn_a, &stream_key, 1, &block_data, 1);
+
+        // Adapter without a lease — repair will fail (no lock held)
+        let adapter = new_test_adapter(redis_urls.clone(), lease_key.clone());
+        // Set epoch but do NOT acquire lease — repair_sub_quorum_block
+        // will get FencingRejected or fail to reach quorum
+        {
+            let mut epoch = adapter.current_epoch_token.lock().expect("lock");
+            *epoch = Some(99);
+        }
+
+        // First call: reads entries (advancing cursors), then repair
+        // fails because we don't hold the lock
+        let result = adapter.unreconciled_blocks(1.into()).await;
+        // Repair failure returns Ok([]) since the block is sub-quorum
+        // and repair can't succeed, but the entries were read
+        assert!(
+            result.is_ok(),
+            "Should return Ok even if repair fails (not a quorum read error)"
+        );
+        let blocks = result.unwrap();
+        assert!(
+            blocks.is_empty(),
+            "Should return empty — repair could not reach quorum"
+        );
+
+        // Now acquire the lease so repair can succeed
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "Should acquire lease"
+        );
+
+        // then — second call must still see the sub-quorum block
+        // (cursor must have been restored after repair failure)
+        let blocks = adapter
+            .unreconciled_blocks(1.into())
+            .await
+            .expect("reconciliation should succeed with lock held");
+        assert_eq!(
+            blocks.len(),
+            1,
+            "Cursor restore after repair failure should allow re-reading and repairing the block"
+        );
     }
 }
