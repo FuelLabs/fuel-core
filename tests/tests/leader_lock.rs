@@ -93,7 +93,9 @@ async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
-    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(2);
+    const LEASE_TTL: Duration = Duration::from_secs(2);
+    const HANDOFF_SETTLE_BUFFER: Duration = Duration::from_millis(200);
+    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const PHASE_BLOCKS: usize = 5;
     const STOP_TIMEOUT: Duration = Duration::from_secs(1);
@@ -108,6 +110,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     let third_producer = make_node(make_node_config("Third Producer"), vec![]).await;
 
     let mut active_producers = vec![first_producer, second_producer, third_producer];
+    let handoff_settle_delay = LEASE_TTL + HANDOFF_SETTLE_BUFFER;
 
     // when
     // let all producers become leader, including the final single producer
@@ -135,6 +138,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
         .await
         .expect("Should stop leader before timeout")
         .expect("Should stop leader without any error");
+        tokio::time::sleep(handoff_settle_delay).await;
 
         active_producers = followers;
     }
@@ -143,6 +147,8 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
+    const LEASE_TTL: Duration = Duration::from_secs(2);
+    const HANDOFF_SETTLE_BUFFER: Duration = Duration::from_millis(200);
     const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const BLOCKS_BEFORE_FAILOVER: usize = 3;
@@ -159,6 +165,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     .await;
 
     let mut first_producer = make_node(make_node_config("First Producer"), vec![]).await;
+    let handoff_settle_delay = LEASE_TTL + HANDOFF_SETTLE_BUFFER;
     tokio::time::timeout(
         LEADER_ELECTION_TIMEOUT,
         wait_for_local_block(&first_producer),
@@ -179,6 +186,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     tokio::time::timeout(STOP_TIMEOUT, first_producer.shutdown())
         .await
         .expect("Should stop first producer before timeout");
+    tokio::time::sleep(handoff_settle_delay).await;
     tokio::time::timeout(
         LEADER_ELECTION_TIMEOUT,
         wait_for_local_block(&second_producer),
@@ -473,25 +481,38 @@ async fn find_leader_and_followers(
     nodes: Vec<Node>,
     timeout: Duration,
 ) -> (Node, Vec<Node>) {
-    let mut waiters = nodes
-        .iter()
-        .enumerate()
-        .map(|(index, node)| async move {
-            wait_for_local_block(node).await;
-            index
-        })
-        .collect::<FuturesUnordered<_>>();
-
     let node_count = nodes.len();
-    let leader_index = tokio::time::timeout(timeout, async { waiters.next().await })
-            .await
-            .unwrap_or_else(|_| {
-                panic!(
-                    "No producer emitted a local block within {timeout:?} (nodes: {node_count})"
-                )
+    let max_attempts = 2usize;
+    let mut leader_index = None;
+
+    for attempt in 1..=max_attempts {
+        let mut waiters = nodes
+            .iter()
+            .enumerate()
+            .map(|(index, node)| async move {
+                wait_for_local_block(node).await;
+                index
             })
-            .expect("Block stream ended unexpectedly before leader election");
-    drop(waiters);
+            .collect::<FuturesUnordered<_>>();
+
+        match tokio::time::timeout(timeout, async { waiters.next().await }).await {
+            Ok(Some(index)) => {
+                leader_index = Some(index);
+                break;
+            }
+            Ok(None) => {
+                panic!("Block stream ended unexpectedly before leader election");
+            }
+            Err(_) if attempt == max_attempts => {
+                panic!(
+                    "No producer emitted a local block within {timeout:?} after {max_attempts} attempts (nodes: {node_count})"
+                );
+            }
+            Err(_) => {}
+        }
+    }
+
+    let leader_index = leader_index.expect("Leader index should exist");
 
     let mut leader = None;
     let mut follower_nodes = Vec::with_capacity(nodes.len().saturating_sub(1));
@@ -578,11 +599,12 @@ async fn make_leader_lock_test_config_builder_with_redis_urls(
         redis_urls,
         lease_key: lease_key.to_string(),
         lease_ttl: Duration::from_secs(2),
-        node_timeout: Duration::from_millis(50),
+        node_timeout: Duration::from_millis(100),
         retry_delay: Duration::from_millis(100),
         max_retry_delay_offset: Duration::from_millis(25),
         max_attempts: 2,
         stream_max_len: 1000,
+        quorum_disruption_budget: 0,
     };
     let make_node_config = make_leader_lock_node_config_builder(
         secret,

@@ -212,7 +212,7 @@ impl worker::TxStatusCompletion for TxStatusManagerAdapter {
         block_height: &BlockHeight,
         status: TransactionStatus,
     ) {
-        tracing::info!("Transaction {id} successfully included in block {block_height}");
+        tracing::debug!("Transaction {id} successfully included in block {block_height}");
         self.tx_status_manager_shared_data.update_status(id, status);
     }
 }
