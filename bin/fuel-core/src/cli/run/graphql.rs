@@ -105,6 +105,12 @@ pub struct GraphQLArgs {
 
     #[clap(flatten)]
     pub costs: QueryCosts,
+
+    #[clap(long = "concurrent-full-block-requests", default_value = "10", env)]
+    pub concurrent_full_block_requests: usize,
+
+    #[clap(long = "full-block-request-timeout", default_value = "3s", env)]
+    pub full_block_request_timeout: humantime::Duration,
 }
 
 /// Costs for individual graphql queries.
