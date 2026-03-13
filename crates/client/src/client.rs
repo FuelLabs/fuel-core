@@ -388,24 +388,6 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
-    pub fn new_unchecked(url: impl AsRef<str>) -> anyhow::Result<Self> {
-        let url = Url::parse(url.as_ref())
-            .map_err(anyhow::Error::msg)
-            .with_context(|| format!("Invalid fuel-core URL: {:?}", url.as_ref()))?;
-
-        Ok(Self {
-            transport: FailoverTransport::new(vec![url])?,
-            require_height: ConsistencyPolicy::Auto {
-                height: Arc::new(Mutex::new(None)),
-            },
-            chain_state_info: Default::default(),
-            #[cfg(feature = "rpc")]
-            rpc_client: None,
-            #[cfg(feature = "rpc")]
-            aws_client: AWSClientManager::new(),
-        })
-    }
-
     #[cfg(feature = "rpc")]
     pub async fn new_with_rpc<G: AsRef<str>, R: AsRef<str>>(
         graph_ql_urls: impl Iterator<Item = G>,
@@ -419,22 +401,6 @@ impl FuelClient {
         if !raw_rpc_url.starts_with("http") {
             raw_rpc_url = format!("http://{raw_rpc_url}");
         }
-        let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
-        client.rpc_client = Some(rpc_client);
-        client.aws_client = AWSClientManager::new();
-        Ok(client)
-    }
-
-    #[cfg(feature = "rpc")]
-    pub async fn new_unchecked_with_rpc<G: AsRef<str>, R: AsRef<str>>(
-        graph_ql_urls: impl Iterator<Item = G>,
-        rpc_url: R,
-    ) -> anyhow::Result<Self> {
-        let urls: Vec<_> = graph_ql_urls
-            .map(|str| Url::parse(str.as_ref()))
-            .try_collect()?;
-        let mut client = Self::with_urls(&urls)?;
-        let raw_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url).to_string();
         let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
         client.rpc_client = Some(rpc_client);
         client.aws_client = AWSClientManager::new();
@@ -1979,14 +1945,14 @@ impl FuelClient {
 mod tests {
     use super::*;
 
+    #[allow(deprecated)]
     #[test]
     fn new_and_with_urls_produce_same_url() {
         // Given
         let url = "http://localhost:8080/v1/graphql";
 
         // When
-        let client_new =
-            FuelClient::new_unchecked(url).expect("should create client via new");
+        let client_new = FuelClient::new(url).expect("should create client via new");
         let client_with_urls =
             FuelClient::with_urls(&[url]).expect("should create client via with_urls");
 

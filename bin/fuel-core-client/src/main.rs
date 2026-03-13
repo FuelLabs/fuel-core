@@ -42,7 +42,7 @@ struct CliArgs {
 
 impl CliArgs {
     async fn exec(&self) {
-        let client = FuelClient::new_unchecked(self.endpoint.as_str())
+        let client = FuelClient::with_urls(&[self.endpoint.as_str()])
             .expect("expected valid endpoint");
 
         match &self.command {

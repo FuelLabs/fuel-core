@@ -75,7 +75,7 @@ impl TestContext {
     fn new_client(default_endpoint: String, wallet: &ClientConfig) -> FuelClient {
         let endpoint = wallet.endpoint.clone().unwrap_or(default_endpoint);
         let url = normalize_url(&endpoint).unwrap();
-        FuelClient::new_unchecked(url.as_str()).unwrap()
+        FuelClient::with_urls(&[url.as_str()]).unwrap()
     }
 }
 
