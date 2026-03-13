@@ -888,7 +888,7 @@ impl RedisLeaderLeaseAdapter {
                          (found on {count}/{} nodes)",
                         blocks_by_node.len()
                     );
-                    match self.repair_sub_quorum_block(&block) {
+                    match self.repair_sub_quorum_block(&block, count) {
                         Ok(true) => {
                             tracing::info!(
                                 "Repair succeeded — block at height {current_height} \
@@ -1030,13 +1030,20 @@ impl RedisLeaderLeaseAdapter {
     /// below quorum — possibly from a leader that published and committed
     /// locally but whose write only reached a subset of nodes.
     ///
+    /// `pre_existing_count` is the number of nodes already confirmed to
+    /// have this specific block during the reconciliation read phase.
+    ///
     /// Uses `publish_block_on_node` which runs `write_block.lua`:
-    /// - Nodes that already have the block return HEIGHT_EXISTS (counted
-    ///   as having the block)
-    /// - Nodes missing it accept the write (counted as having the block)
-    /// - FENCING_ERROR means we lost the lock — abort the repair
-    /// - The total must reach quorum for the repair to succeed
-    fn repair_sub_quorum_block(&self, block: &SealedBlock) -> anyhow::Result<bool> {
+    /// - Written: node accepted the block (counted toward quorum)
+    /// - HEIGHT_EXISTS: node has *some* block at this height — may be a
+    ///   different block from a competing partial write, so NOT counted
+    /// - FENCING_ERROR: lost the lock — abort the repair
+    /// - The total (pre_existing + newly written) must reach quorum
+    fn repair_sub_quorum_block(
+        &self,
+        block: &SealedBlock,
+        pre_existing_count: usize,
+    ) -> anyhow::Result<bool> {
         let epoch = match *self
             .current_epoch_token
             .lock()
@@ -1050,15 +1057,21 @@ impl RedisLeaderLeaseAdapter {
             }
         };
         let block_data = postcard::to_allocvec(block)?;
-        let mut total_with_block = 0usize;
+        // Start from the pre-existing count (nodes already confirmed to
+        // have this specific block during reconciliation). Only count
+        // newly Written nodes — HeightExists means the node has *some*
+        // block at this height, but it might be a different block from
+        // a competing leader's partial write.
+        let mut total_with_block = pre_existing_count;
         for redis_node in &self.redis_nodes {
             match self.publish_block_on_node(redis_node, epoch, block, &block_data) {
                 Ok(WriteBlockResult::Written) => {
                     total_with_block = total_with_block.saturating_add(1);
                 }
                 Ok(WriteBlockResult::HeightExists) => {
-                    // Node already has a block at this height — count it
-                    total_with_block = total_with_block.saturating_add(1);
+                    // Node has some block at this height — may or may
+                    // not be ours. Don't count it; the pre_existing_count
+                    // already includes nodes confirmed to have our block.
                 }
                 Ok(WriteBlockResult::FencingRejected) => {
                     // Lost the lock — repair is invalid, abort
