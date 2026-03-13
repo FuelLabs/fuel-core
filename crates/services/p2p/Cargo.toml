@@ -59,7 +59,7 @@ tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 void = "1"
 # Fix publishing of the crate
-yamux = "=0.13.5"
+yamux = "=0.13.9"
 
 [dev-dependencies]
 fuel-core-services = { path = "../../services", features = ["test-helpers"] }
