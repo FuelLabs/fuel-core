@@ -8,6 +8,7 @@ use alloc::{
     string::String,
     vec::Vec,
 };
+use fuel_vm_private::fuel_storage::StorageReadError;
 
 #[cfg(feature = "std")]
 use core::ops::Deref;
@@ -61,34 +62,62 @@ pub trait KeyValueInspect {
     /// Returns the value from the storage.
     fn get(&self, key: &[u8], column: Self::Column) -> StorageResult<Option<Value>>;
 
-    /// Reads the value from the storage into the `buf` and returns the whether the value exists.
-    fn read(
+    /// Reads the value from the storage into the `buf` and returns
+    /// the total number of read bytes if the value exists.
+    ///
+    /// Attempting to read past the end of the value will result in an error.
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
+    ) -> StorageResult<core::result::Result<usize, StorageReadError>> {
         let Some(value) = self.get(key, column)? else {
-            return Ok(false);
+            return Ok(Err(StorageReadError::KeyNotFound));
         };
 
         let bytes_len = value.as_ref().len();
-        let start = offset;
+
+        let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+            return Ok(Err(StorageReadError::OutOfBounds));
+        };
+
+        let Some((dst, _)) = buf.split_at_mut_checked(after.len()) else {
+            return Ok(Err(StorageReadError::OutOfBounds));
+        };
+        dst.copy_from_slice(&after);
+
+        Ok(Ok(bytes_len))
+    }
+
+    /// Reads the value from the storage into the `buf` and returns
+    /// the total number of read bytes if the value exists.
+    ///
+    /// Attempting to read past the end of the value will zero-fill the remainder of the buffer.
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<core::result::Result<usize, StorageReadError>> {
+        let Some(value) = self.get(key, column)? else {
+            return Ok(Err(StorageReadError::KeyNotFound));
+        };
+
+        let bytes_len = value.as_ref().len();
         let buf_len = buf.len();
-        let end = offset.saturating_add(buf_len);
 
-        if end > bytes_len {
-            return Err(anyhow::anyhow!(
-                        "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}`",
-                        key
-                    )
-                    .into());
-        }
+        let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+            return Ok(Err(StorageReadError::OutOfBounds));
+        };
 
-        let starting_from_offset = &value.as_ref()[start..end];
-        buf[..].copy_from_slice(starting_from_offset);
-        Ok(true)
+        let (dst, rest) = buf.split_at_mut(buf_len.min(after.len()));
+        dst.copy_from_slice(&after[..dst.len()]);
+        rest.fill(0);
+
+        Ok(Ok(bytes_len))
     }
 }
 
@@ -115,14 +144,14 @@ where
         self.deref().get(key, column)
     }
 
-    fn read(
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
-        self.deref().read(key, column, offset, buf)
+    ) -> StorageResult<core::result::Result<usize, StorageReadError>> {
+        self.deref().read_exact(key, column, offset, buf)
     }
 }
 

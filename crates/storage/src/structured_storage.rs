@@ -60,9 +60,12 @@ use alloc::{
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
-use fuel_vm_private::storage::{
-    BlobData,
-    predicate::PredicateStorageRequirements,
+use fuel_vm_private::{
+    fuel_storage::StorageReadError,
+    storage::{
+        BlobData,
+        predicate::PredicateStorageRequirements,
+    },
 };
 
 pub mod balances;
@@ -159,14 +162,24 @@ where
         self.inner.get(key, column)
     }
 
-    fn read(
+    fn read_exact(
         &self,
         key: &[u8],
         column: Self::Column,
         offset: usize,
         buf: &mut [u8],
-    ) -> StorageResult<bool> {
-        self.inner.read(key, column, offset, buf)
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        self.inner.read_exact(key, column, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        self.inner.read_zerofill(key, column, offset, buf)
     }
 }
 
@@ -372,15 +385,31 @@ where
     M: Mappable + TableWithBlueprint<Column = Column, Value = [u8]>,
     M::Blueprint: BlueprintInspect<M, StructuredStorage<S>, ValueCodec = Raw>,
 {
-    fn read(
+    fn read_exact(
         &self,
         key: &<M as Mappable>::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<bool, Self::Error> {
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
         let key_encoder = <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(key);
         let key_bytes = key_encoder.as_bytes();
-        self.inner.read(
+        self.inner.read_exact(
+            key_bytes.as_ref(),
+            <M as TableWithBlueprint>::column(),
+            offset,
+            buf,
+        )
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &<M as Mappable>::Key,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        let key_encoder = <M::Blueprint as BlueprintCodec<M>>::KeyCodec::encode(key);
+        let key_bytes = key_encoder.as_bytes();
+        self.inner.read_zerofill(
             key_bytes.as_ref(),
             <M as TableWithBlueprint>::column(),
             offset,
