@@ -16,7 +16,7 @@ default = ["rocksdb", "serde"]
 serde = ["dep:serde_with"]
 p2p = ["dep:fuel-core-p2p", "dep:fuel-core-sync"]
 relayer = ["dep:fuel-core-relayer"]
-rpc = ["fuel-core/rpc", "dep:fuel-core-block-aggregator-api"]
+rpc = ["dep:fuel-core-block-aggregator-api"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer", "dep:cosmrs"]
 rocksdb = ["dep:rocksdb", "dep:tempfile", "dep:num_cpus"]
 backup = ["rocksdb", "fuel-core-database/backup"]
@@ -95,6 +95,7 @@ num_cpus = { version = "1.16.0", optional = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true }
 rand = { workspace = true }
+redis = { version = "1", features = ["tokio-comp"] }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
@@ -105,7 +106,7 @@ serde_with = { workspace = true, optional = true }
 strum = { workspace = true, features = ["derive"] }
 strum_macros = { workspace = true }
 tempfile = { workspace = true, optional = true }
-thiserror = "1.0"
+thiserror = "2"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tokio-rayon = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }

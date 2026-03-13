@@ -30,11 +30,7 @@ pub(crate) const FUEL_BLOCK_HEIGHT_PRECONDITION_FAILED: &str =
 /// The value of the REQUIRED_FUEL_BLOCK_HEADER is set in
 /// the request data by the graphql handler as a value of type
 /// `RequiredHeight`.
-#[derive(Debug, derive_more::Display, derive_more::From)]
-#[display(
-    fmt = "RequiredFuelBlockHeightExtension(tolerance: {})",
-    tolerance_threshold
-)]
+#[derive(Debug)]
 pub(crate) struct RequiredFuelBlockHeightExtension {
     tolerance_threshold: u32,
     timeout: Duration,
