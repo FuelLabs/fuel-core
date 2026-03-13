@@ -731,11 +731,19 @@ impl RedisLeaderLeaseAdapter {
             let fetched_count = entries.len();
             let mut last_stream_id = None;
             for (height, epoch, bytes, stream_id) in entries {
-                if let Ok(block) = postcard::from_bytes::<SealedBlock>(&bytes) {
-                    blocks.push((height, epoch, block));
-                    if blocks.len() == max_entries {
-                        last_stream_id = Some(stream_id);
-                        break;
+                match postcard::from_bytes::<SealedBlock>(&bytes) {
+                    Ok(block) => {
+                        blocks.push((height, epoch, block));
+                        if blocks.len() == max_entries {
+                            last_stream_id = Some(stream_id);
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Skipping stream entry on node {node_index}: \
+                             failed to deserialize block at height {height}: {e}"
+                        );
                     }
                 }
                 last_stream_id = Some(stream_id);
@@ -3202,11 +3210,9 @@ mod tests {
         redis_b.start();
 
         // Re-publish block to the restarted nodes so they have data
-        let client_a =
-            redis::Client::open(redis_a.redis_url()).expect("client");
+        let client_a = redis::Client::open(redis_a.redis_url()).expect("client");
         let mut conn_a = client_a.get_connection().expect("conn");
-        let client_b =
-            redis::Client::open(redis_b.redis_url()).expect("client");
+        let client_b = redis::Client::open(redis_b.redis_url()).expect("client");
         let mut conn_b = client_b.get_connection().expect("conn");
         let block_data = postcard::to_allocvec(&block).expect("serialize");
         append_stream_block(&mut conn_a, &stream_key, 1, &block_data, 1);
@@ -3245,8 +3251,7 @@ mod tests {
         let block_data = postcard::to_allocvec(&block).expect("serialize");
 
         // Write block to only node A — sub-quorum (1/3)
-        let client_a =
-            redis::Client::open(redis_a.redis_url()).expect("client");
+        let client_a = redis::Client::open(redis_a.redis_url()).expect("client");
         let mut conn_a = client_a.get_connection().expect("conn");
         append_stream_block(&mut conn_a, &stream_key, 1, &block_data, 1);
 
