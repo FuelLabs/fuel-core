@@ -36,10 +36,6 @@ use fuel_core::{
         },
         genesis::NotifyCancel,
     },
-    state::rocks_db::{
-        ColumnsPolicy,
-        DatabaseConfig,
-    },
     tx_status_manager::config::Config as TxStatusManagerConfig,
     txpool::config::{
         BlackList,
@@ -53,6 +49,12 @@ use fuel_core::{
         fuel_vm::SecretKey,
         secrecy::Secret,
     },
+};
+
+#[cfg(feature = "rocksdb")]
+use fuel_core::state::rocks_db::{
+    ColumnsPolicy,
+    DatabaseConfig,
 };
 
 use fuel_core_chain_config::{
@@ -75,6 +77,7 @@ use pyroscope_pprofrs::{
     PprofConfig,
     pprof_backend,
 };
+#[cfg(feature = "rocksdb")]
 use rlimit::{
     Resource,
     getrlimit,
@@ -106,6 +109,9 @@ use std::num::NonZeroUsize;
 
 #[cfg(feature = "p2p")]
 mod p2p;
+
+#[cfg(feature = "rpc")]
+mod rpc;
 
 #[cfg(feature = "shared-sequencer")]
 mod shared_sequencer;
@@ -290,6 +296,10 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     pub p2p_args: p2p::P2PArgs,
 
+    #[clap(flatten)]
+    #[cfg(feature = "rpc")]
+    pub rpc_args: Option<rpc::RpcArgs>,
+
     #[cfg_attr(feature = "p2p", clap(flatten))]
     #[cfg(feature = "p2p")]
     pub sync_args: p2p::SyncArgs,
@@ -369,6 +379,8 @@ impl Command {
             relayer_args,
             #[cfg(feature = "p2p")]
             p2p_args,
+            #[cfg(feature = "rpc")]
+            rpc_args,
             #[cfg(feature = "p2p")]
             sync_args,
             #[cfg(feature = "p2p")]
@@ -451,6 +463,10 @@ impl Command {
                     .echo_delegation_interval,
             };
 
+        #[cfg(feature = "rpc")]
+        let rpc_config = rpc_args.map(|args| args.into_config());
+
+        let leader_lock = poa_trigger.leader_lock()?;
         let trigger: Trigger = poa_trigger.into();
 
         if trigger != Trigger::Never {
@@ -733,6 +749,7 @@ impl Command {
             #[cfg(feature = "parallel-executor")]
             executor_number_of_cores,
             block_production: trigger,
+            leader_lock,
             predefined_blocks_path,
             txpool: TxPoolConfig {
                 max_txs_chain_count: tx_max_chain_count,
@@ -778,6 +795,8 @@ impl Command {
                 status_cache_ttl: status_cache_ttl.into(),
                 metrics: metrics.is_enabled(Module::TxStatusManager),
             },
+            #[cfg(feature = "rpc")]
+            rpc_config,
         };
         Ok(config)
     }

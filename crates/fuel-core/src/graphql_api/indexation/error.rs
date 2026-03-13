@@ -12,7 +12,7 @@ use fuel_core_types::{
 #[derive(derive_more::From, derive_more::Display, Debug)]
 pub enum IndexationError {
     #[display(
-        fmt = "Coin balance would underflow for owner: {}, asset_id: {}, current_amount: {}, requested_deduction: {}",
+        "Coin balance would underflow for owner: {}, asset_id: {}, current_amount: {}, requested_deduction: {}",
         owner,
         asset_id,
         current_amount,
@@ -25,7 +25,7 @@ pub enum IndexationError {
         requested_deduction: u128,
     },
     #[display(
-        fmt = "Message balance would underflow for owner: {}, current_amount: {}, requested_deduction: {}, retryable: {}",
+        "Message balance would underflow for owner: {}, current_amount: {}, requested_deduction: {}, retryable: {}",
         owner,
         current_amount,
         requested_deduction,
@@ -38,7 +38,7 @@ pub enum IndexationError {
         retryable: bool,
     },
     #[display(
-        fmt = "Asset metadata would overflow for asset_id: {}, current_supply: {}, minted_amount: {}",
+        "Asset metadata would overflow for asset_id: {}, current_supply: {}, minted_amount: {}",
         asset_id,
         current_supply,
         minted_amount
@@ -49,7 +49,7 @@ pub enum IndexationError {
         minted_amount: u64,
     },
     #[display(
-        fmt = "Coin not found in coins to spend index for owner: {}, asset_id: {}, amount: {}, utxo_id: {}",
+        "Coin not found in coins to spend index for owner: {}, asset_id: {}, amount: {}, utxo_id: {}",
         owner,
         asset_id,
         amount,
@@ -62,7 +62,7 @@ pub enum IndexationError {
         utxo_id: UtxoId,
     },
     #[display(
-        fmt = "Coin already in the coins to spend index for owner: {}, asset_id: {}, amount: {}, utxo_id: {}",
+        "Coin already in the coins to spend index for owner: {}, asset_id: {}, amount: {}, utxo_id: {}",
         owner,
         asset_id,
         amount,
@@ -75,7 +75,7 @@ pub enum IndexationError {
         utxo_id: UtxoId,
     },
     #[display(
-        fmt = "Message not found in coins to spend index for owner: {}, amount: {}, nonce: {}",
+        "Message not found in coins to spend index for owner: {}, amount: {}, nonce: {}",
         owner,
         amount,
         nonce
@@ -86,7 +86,7 @@ pub enum IndexationError {
         nonce: Nonce,
     },
     #[display(
-        fmt = "Message already in the coins to spend index for owner: {}, amount: {}, nonce: {}",
+        "Message already in the coins to spend index for owner: {}, amount: {}, nonce: {}",
         owner,
         amount,
         nonce
@@ -96,10 +96,10 @@ pub enum IndexationError {
         amount: u64,
         nonce: Nonce,
     },
-    #[display(fmt = "Invalid coin type encountered in the index: {:?}", coin_type)]
+    #[display("Invalid coin type encountered in the index: {:?}", coin_type)]
     InvalidIndexedCoinType { coin_type: Option<u8> },
     #[display(
-        fmt = "Trying to burn more than the supply: current_supply: {}, burned_amount: {}",
+        "Trying to burn more than the supply: current_supply: {}, burned_amount: {}",
         current_supply,
         burned_amount
     )]
@@ -108,7 +108,7 @@ pub enum IndexationError {
         burned_amount: u64,
     },
     #[display(
-        fmt = "Expected to get either `Mint` or `Burn` receipt, but got: {:?}",
+        "Expected to get either `Mint` or `Burn` receipt, but got: {:?}",
         receipt
     )]
     UnexpectedReceipt { receipt: String },

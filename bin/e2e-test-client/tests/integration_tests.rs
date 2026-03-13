@@ -78,8 +78,11 @@ async fn works_in_multinode_local_env() {
         ..Default::default()
     };
 
-    config.wallet_a.endpoint = Some(producer.node.bound_address.to_string());
-    config.wallet_b.endpoint = Some(validator.node.bound_address.to_string());
+    let producer_bound_addr = producer.node.bound_address.to_string();
+    let validator_bound_addr = validator.node.bound_address.to_string();
+
+    config.wallet_a.endpoint = Some(producer_bound_addr.clone());
+    config.wallet_b.endpoint = Some(validator_bound_addr);
 
     // save config file
     let config = save_config_file(config);

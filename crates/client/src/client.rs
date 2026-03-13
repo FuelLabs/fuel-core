@@ -173,6 +173,40 @@ use types::{
 #[cfg(feature = "subscriptions")]
 use std::pin::Pin;
 
+#[cfg(feature = "rpc")]
+mod rpc_deps {
+    pub use aws_config::{
+        BehaviorVersion,
+        default_provider::credentials::DefaultCredentialsChain,
+    };
+    pub use aws_sdk_s3::Client as AWSClient;
+    pub use flate2::read::GzDecoder;
+    pub use fuel_core_block_aggregator_api::{
+        blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
+        protobuf_types::{
+            Block as ProtoBlock,
+            BlockHeightRequest as ProtoBlockHeightRequest,
+            BlockRangeRequest as ProtoBlockRangeRequest,
+            BlockResponse,
+            NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
+            RemoteBlockResponse,
+            RemoteS3Bucket,
+            block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
+            block_response::Payload,
+            remote_block_response::Location,
+        },
+    };
+    pub use prost::Message;
+    pub use std::{
+        collections::HashMap,
+        io::Read,
+    };
+    pub use tokio::sync::RwLock;
+    pub use tonic::transport::Channel;
+}
+#[cfg(feature = "rpc")]
+use rpc_deps::*;
+
 pub mod pagination;
 pub mod schema;
 pub mod types;
@@ -249,6 +283,45 @@ pub struct FuelClient {
     transport: FailoverTransport,
     require_height: ConsistencyPolicy,
     chain_state_info: ChainStateInfo,
+    #[cfg(feature = "rpc")]
+    rpc_client: Option<ProtoBlockAggregatorClient<Channel>>,
+    #[cfg(feature = "rpc")]
+    aws_client: AWSClientManager,
+}
+
+#[cfg(feature = "rpc")]
+#[derive(Debug, Clone)]
+pub struct AWSClientManager {
+    specific: Arc<RwLock<HashMap<Option<String>, AWSClient>>>,
+}
+
+#[cfg(feature = "rpc")]
+impl AWSClientManager {
+    pub fn new() -> Self {
+        Self {
+            specific: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub async fn get_client(&self, url: &Option<String>) -> Result<AWSClient, io::Error> {
+        if let Some(existing) = self.specific.read().await.get(url).cloned() {
+            return Ok(existing);
+        }
+        let client = FuelClient::new_aws_client(url).await;
+        let mut guard = self.specific.write().await;
+        let client = guard
+            .entry(url.clone())
+            .or_insert_with(|| client.clone())
+            .clone();
+        Ok(client)
+    }
+}
+
+#[cfg(feature = "rpc")]
+impl Default for AWSClientManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Normalizes a URL string by ensuring it has an http(s) scheme and the `/v1/graphql` path.
@@ -278,6 +351,10 @@ impl FromStr for FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
+            rpc_client: None,
+            #[cfg(feature = "rpc")]
+            aws_client: AWSClientManager::new(),
         })
     }
 }
@@ -310,6 +387,25 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
+    #[cfg(feature = "rpc")]
+    pub async fn new_with_rpc<G: AsRef<str>, R: AsRef<str>>(
+        graph_ql_urls: impl Iterator<Item = G>,
+        rpc_url: R,
+    ) -> anyhow::Result<Self> {
+        let urls: Vec<_> = graph_ql_urls
+            .map(|str| normalize_url(str.as_ref()))
+            .try_collect()?;
+        let mut client = Self::with_urls(&urls)?;
+        let mut raw_rpc_url = <R as AsRef<str>>::as_ref(&rpc_url).to_string();
+        if !raw_rpc_url.starts_with("http") {
+            raw_rpc_url = format!("http://{raw_rpc_url}");
+        }
+        let rpc_client = ProtoBlockAggregatorClient::connect(raw_rpc_url).await?;
+        client.rpc_client = Some(rpc_client);
+        client.aws_client = AWSClientManager::new();
+        Ok(client)
+    }
+
     pub fn with_urls(urls: &[impl AsRef<str>]) -> anyhow::Result<Self> {
         if urls.is_empty() {
             return Err(anyhow!("Failed to create FuelClient. No URL is provided."));
@@ -324,6 +420,10 @@ impl FuelClient {
                 height: Arc::new(Mutex::new(None)),
             },
             chain_state_info: Default::default(),
+            #[cfg(feature = "rpc")]
+            rpc_client: None,
+            #[cfg(feature = "rpc")]
+            aws_client: AWSClientManager::new(),
         })
     }
 
@@ -1639,6 +1739,204 @@ impl FuelClient {
                 Ok::<_, ConversionError>(response.transaction)
             })
             .transpose()?)
+    }
+}
+
+#[cfg(feature = "rpc")]
+impl FuelClient {
+    fn rpc_client(&self) -> io::Result<ProtoBlockAggregatorClient<Channel>> {
+        self.rpc_client
+            .clone()
+            .ok_or(io::Error::other("RPC client not initialized"))
+    }
+
+    pub async fn get_block_range(
+        &self,
+        start: BlockHeight,
+        end: BlockHeight,
+    ) -> io::Result<
+        impl Stream<
+            Item = io::Result<(
+                fuel_core_types::blockchain::block::Block,
+                Vec<Vec<Receipt>>,
+            )>,
+        >,
+    > {
+        let request = ProtoBlockRangeRequest {
+            start: *start,
+            end: *end,
+        };
+
+        let stream = self
+            .rpc_client()?
+            .get_block_range(request)
+            .await
+            .map_err(io::Error::other)?
+            .into_inner()
+            .then(|res| {
+                let maybe_aws_client = self.aws_client.clone();
+                async move {
+                    let maybe_aws_client = maybe_aws_client.clone();
+                    let resp =
+                        res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
+                    Self::convert_block_response(resp, maybe_aws_client).await
+                }
+            });
+        Ok(stream)
+    }
+
+    async fn convert_block_response(
+        resp: BlockResponse,
+        s3_client: AWSClientManager,
+    ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
+        let payload = resp
+            .payload
+            .ok_or(io::Error::other("No RPC payload for `BlockResponse`"))?;
+        match payload {
+            Payload::Literal(_) => {
+                // Should never happen, as we don't return blocks as literal payloads
+                Err(io::Error::other("Literal payloads are not supported yet"))
+            }
+            Payload::Bytes(bytes) => {
+                let proto_block =
+                    ProtoBlock::decode(bytes.as_slice()).map_err(io::Error::other)?;
+                fuel_block_from_protobuf(proto_block).map_err(|e| {
+                    io::Error::other(format!(
+                        "Failed to convert RPC block to internal block: {e:?}"
+                    ))
+                })
+            }
+            Payload::Remote(remote) => {
+                let RemoteBlockResponse { location } = remote;
+                match location {
+                    Some(Location::S3(s3)) => {
+                        let RemoteS3Bucket {
+                            bucket,
+                            key,
+                            endpoint,
+                            requester_pays,
+                        } = s3;
+                        let zipped_bytes = Self::get_block_from_s3_bucket(
+                            s3_client,
+                            &endpoint,
+                            &bucket,
+                            &key,
+                            requester_pays,
+                        )
+                        .await?;
+
+                        let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
+                        let block =
+                            ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
+                                io::Error::other(format!("Failed to decode block: {e}"))
+                            })?;
+                        let (block, receipts) =
+                            fuel_block_from_protobuf(block).map_err(|e| {
+                                io::Error::other(format!(
+                                    "Failed to convert RPC block to internal block: {e:?}"
+                                ))
+                            })?;
+                        Ok((block, receipts))
+                    }
+                    _ => Err(io::Error::other("Remote blocks are not supported yet")),
+                }
+            }
+        }
+    }
+    async fn get_block_from_s3_bucket(
+        s3_client: AWSClientManager,
+        url: &Option<String>,
+        bucket: &str,
+        key: &str,
+        requester_pays: bool,
+    ) -> io::Result<prost::bytes::Bytes> {
+        use aws_sdk_s3::types::RequestPayer;
+        tracing::debug!("getting block from bucket: {} with key {}", bucket, key);
+        let mut req = s3_client
+            .get_client(url)
+            .await?
+            .get_object()
+            .bucket(bucket)
+            .key(key);
+        if requester_pays {
+            req = req.request_payer(RequestPayer::Requester);
+        }
+        let obj = req.send().await.map_err(|e| {
+            io::Error::other(format!("Failed to get object from S3: {e:?}"))
+        })?;
+        let bytes = obj
+            .body
+            .collect()
+            .await
+            .map_err(|e| {
+                io::Error::other(format!("Failed to get object from S3: {e:?}"))
+            })?
+            .into_bytes();
+        Ok(bytes)
+    }
+
+    async fn new_aws_client(url: &Option<String>) -> AWSClient {
+        let credentials = DefaultCredentialsChain::builder().build().await;
+        let mut config_builder = aws_config::defaults(BehaviorVersion::latest())
+            .credentials_provider(credentials);
+        if let Some(url) = url {
+            config_builder = config_builder.endpoint_url(url);
+        }
+        let sdk_config = config_builder.load().await;
+        let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
+        let config = builder.force_path_style(true).build();
+        AWSClient::from_conf(config)
+    }
+
+    fn unzip_bytes(bytes: &[u8]) -> io::Result<Vec<u8>> {
+        let mut decoder = GzDecoder::new(bytes);
+        let mut output = Vec::new();
+        decoder.read_to_end(&mut output).map_err(io::Error::other)?;
+        Ok(output)
+    }
+
+    /// Used to get the synced height of the block aggregator,
+    /// as it doesn't always match the latest block height
+    pub async fn get_aggregated_height(&self) -> io::Result<BlockHeight> {
+        let request = ProtoBlockHeightRequest {};
+        let height = self
+            .rpc_client()?
+            .get_synced_block_height(request)
+            .await
+            .map_err(io::Error::other)?
+            .into_inner()
+            .height
+            .ok_or(io::Error::other("No height in RPC response"))?;
+        Ok(BlockHeight::from(height))
+    }
+
+    pub async fn new_block_subscription(
+        &self,
+    ) -> io::Result<
+        impl Stream<
+            Item = io::Result<(
+                fuel_core_types::blockchain::block::Block,
+                Vec<Vec<Receipt>>,
+            )>,
+        >,
+    > {
+        let request = ProtoNewBlockSubscriptionRequest {};
+        let stream = self
+            .rpc_client()?
+            .new_block_subscription(request)
+            .await
+            .map_err(io::Error::other)?
+            .into_inner()
+            .then(|res| {
+                let maybe_aws_client = self.aws_client.clone();
+                async move {
+                    let maybe_aws_client = maybe_aws_client.clone();
+                    let resp =
+                        res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
+                    Self::convert_block_response(resp, maybe_aws_client).await
+                }
+            });
+        Ok(stream)
     }
 }
 

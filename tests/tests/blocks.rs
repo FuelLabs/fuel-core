@@ -17,6 +17,7 @@ use fuel_core_client::client::{
     },
     types::TransactionStatus,
 };
+use fuel_core_executor::executor::max_tx_count;
 use fuel_core_poa::Trigger;
 use fuel_core_storage::{
     StorageAsMut,
@@ -27,12 +28,17 @@ use fuel_core_storage::{
     transactional::WriteTransaction,
     vm_storage::VmStorageRequirements,
 };
+use fuel_core_txpool::config::{
+    HeavyWorkConfig,
+    PoolLimits,
+};
 use fuel_core_types::{
     blockchain::{
         block::CompressedBlock,
         consensus::Consensus,
     },
     fuel_tx::*,
+    fuel_types::BlockHeight,
     secrecy::ExposeSecret,
     signer::SignMode,
     tai64::Tai64,
@@ -42,14 +48,20 @@ use itertools::{
     Itertools,
     rev,
 };
+use rand::{
+    SeedableRng,
+    prelude::StdRng,
+};
 use rstest::rstest;
 use std::{
     ops::Deref,
     time::Duration,
 };
-use test_helpers::send_graph_ql_query;
-
-use rand::SeedableRng;
+use test_helpers::{
+    client_ext::ClientExt,
+    make_tx,
+    send_graph_ql_query,
+};
 
 #[tokio::test]
 async fn block() {
@@ -725,82 +737,80 @@ mod full_block {
             "Rate limit exceeded for this operation",
         );
     }
+}
+#[tokio::test]
+async fn too_many_transactions_are_split_in_blocks() {
+    // Given
+    let max_gas_limit = 50_000_000;
+    let mut rng = StdRng::seed_from_u64(2322);
 
-    #[tokio::test]
-    async fn too_many_transactions_are_split_in_blocks() {
-        // Given
-        let max_gas_limit = 50_000_000;
-        let mut rng = StdRng::seed_from_u64(2322);
+    let local_node_config = Config::local_node();
+    let txpool = fuel_core_txpool::config::Config {
+        pool_limits: PoolLimits {
+            max_txs: 2_000_000,
+            max_gas: u64::MAX,
+            max_bytes_size: usize::MAX,
+        },
+        heavy_work: HeavyWorkConfig {
+            number_threads_to_verify_transactions: 4,
+            number_threads_p2p_sync: 0,
+            size_of_verification_queue: u16::MAX as usize,
+            size_of_p2p_sync_queue: 1,
+        },
+        ..local_node_config.txpool
+    };
+    let chain_config = local_node_config.snapshot_reader.chain_config().clone();
+    let mut consensus_parameters = chain_config.consensus_parameters;
+    consensus_parameters.set_block_gas_limit(u64::MAX);
+    consensus_parameters
+        .set_block_transaction_size_limit(u64::MAX)
+        .expect("should be able to set the limit");
+    let snapshot_reader = local_node_config.snapshot_reader.with_chain_config(
+        fuel_core::chain_config::ChainConfig {
+            consensus_parameters,
+            ..chain_config
+        },
+    );
 
-        let local_node_config = Config::local_node();
-        let txpool = fuel_core_txpool::config::Config {
-            pool_limits: PoolLimits {
-                max_txs: 2_000_000,
-                max_gas: u64::MAX,
-                max_bytes_size: usize::MAX,
-            },
-            heavy_work: HeavyWorkConfig {
-                number_threads_to_verify_transactions: 4,
-                number_threads_p2p_sync: 0,
-                size_of_verification_queue: u16::MAX as usize,
-                size_of_p2p_sync_queue: 1,
-            },
-            ..local_node_config.txpool
-        };
-        let chain_config = local_node_config.snapshot_reader.chain_config().clone();
-        let mut consensus_parameters = chain_config.consensus_parameters;
-        consensus_parameters.set_block_gas_limit(u64::MAX);
-        consensus_parameters
-            .set_block_transaction_size_limit(u64::MAX)
-            .expect("should be able to set the limit");
-        let snapshot_reader = local_node_config.snapshot_reader.with_chain_config(
-            fuel_core::chain_config::ChainConfig {
-                consensus_parameters,
-                ..chain_config
-            },
-        );
+    let patched_node_config = Config {
+        block_production: Trigger::Never,
+        txpool,
+        snapshot_reader,
+        ..local_node_config
+    };
 
-        let patched_node_config = Config {
-            block_production: Trigger::Never,
-            txpool,
-            snapshot_reader,
-            ..local_node_config
-        };
+    let srv = FuelService::new_node(patched_node_config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
-        let srv = FuelService::new_node(patched_node_config).await.unwrap();
-        let client = FuelClient::from(srv.bound_address);
+    let tx_count: u64 = max_tx_count() as u64 + 100;
+    let txs = (1..=tx_count)
+        .map(|i| make_tx(&mut rng, i, max_gas_limit))
+        .collect_vec();
 
-        let tx_count: u64 = max_tx_count() as u64 + 100;
-        let txs = (1..=tx_count)
-            .map(|i| test_helpers::make_tx(&mut rng, i, max_gas_limit))
-            .collect_vec();
-
-        // When
-        for tx in txs.iter() {
-            let _tx_id = client.submit(tx).await.unwrap();
-        }
-
-        // Then
-        let _last_block_height: u32 =
-            client.produce_blocks(2, None).await.unwrap().into();
-        let second_last_block = client
-            .block_by_height(BlockHeight::from(1))
-            .await
-            .unwrap()
-            .expect("Second last block should be defined");
-        let last_block = client
-            .block_by_height(BlockHeight::from(2))
-            .await
-            .unwrap()
-            .expect("Last Block should be defined");
-
-        assert_eq!(
-            second_last_block.transactions.len(),
-            max_tx_count() as usize + 1 // Mint transaction for one block
-        );
-        assert_eq!(
-            last_block.transactions.len(),
-            (tx_count as usize - (max_tx_count() as usize)) + 1 /* Mint transaction for second block */
-        );
+    // When
+    for tx in txs.iter() {
+        let _tx_id = client.submit(tx).await.unwrap();
     }
+
+    // Then
+    let _last_block_height: u32 = client.produce_blocks(2, None).await.unwrap().into();
+    let second_last_block = client
+        .block_by_height(BlockHeight::from(1))
+        .await
+        .unwrap()
+        .expect("Second last block should be defined");
+    let last_block = client
+        .block_by_height(BlockHeight::from(2))
+        .await
+        .unwrap()
+        .expect("Last Block should be defined");
+
+    assert_eq!(
+        second_last_block.transactions.len(),
+        max_tx_count() as usize + 1 // Mint transaction for one block
+    );
+    assert_eq!(
+        last_block.transactions.len(),
+        (tx_count as usize - (max_tx_count() as usize)) + 1 /* Mint transaction for second block */
+    );
 }

@@ -313,7 +313,7 @@ fn message_receipts_proof<T: MessageProofData + ?Sized>(
         return Err(anyhow::anyhow!(
             "Unable to generate the Merkle proof for the message from its receipts"
         )
-        .into());
+        .into())
     };
 
     // Return the proof.

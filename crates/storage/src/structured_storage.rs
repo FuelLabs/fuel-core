@@ -110,6 +110,21 @@ impl<S> StructuredStorage<S> {
     }
 }
 
+/// The trait that allows wrapping the storage into the structured storage.
+pub trait AsStructuredStorage {
+    /// Wraps the storage into the structured storage.
+    fn as_structured_storage(&self) -> StructuredStorage<&Self>;
+}
+
+impl<S> AsStructuredStorage for S
+where
+    S: KeyValueInspect,
+{
+    fn as_structured_storage(&self) -> StructuredStorage<&Self> {
+        StructuredStorage::new(self)
+    }
+}
+
 impl<S> AsRef<S> for StructuredStorage<S> {
     fn as_ref(&self) -> &S {
         &self.inner

@@ -1,9 +1,14 @@
 use crate::{
     block_range_response::BlockRangeResponse,
-    blocks::Block,
     db::{
-        BlockAggregatorDB,
-        storage_db::table::Column,
+        BlocksProvider,
+        BlocksStorage,
+        table::{
+            Blocks,
+            Column,
+            LatestBlock,
+            Mode,
+        },
     },
     result::{
         Error,
@@ -13,128 +18,160 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_services::stream::Stream;
 use fuel_core_storage::{
-    Error as StorageError,
     StorageAsMut,
     StorageAsRef,
-    StorageInspect,
-    StorageMutate,
     kv_store::KeyValueInspect,
+    structured_storage::AsStructuredStorage,
     transactional::{
         AtomicView,
         Modifiable,
-        ReadTransaction,
-        StorageTransaction,
         WriteTransaction,
     },
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
-    cmp::Ordering,
-    collections::BTreeSet,
     pin::Pin,
+    sync::Arc,
     task::{
         Context,
         Poll,
     },
 };
-use table::Blocks;
 
-pub mod table;
 #[cfg(test)]
 mod tests;
 
+pub struct StorageBlocksProvider<S> {
+    storage: S,
+}
+
+impl<S> StorageBlocksProvider<S> {
+    pub fn new(storage: S) -> Self {
+        Self { storage }
+    }
+}
+
 pub struct StorageDB<S> {
-    highest_contiguous_block: BlockHeight,
-    orphaned_heights: BTreeSet<BlockHeight>,
     storage: S,
 }
 
 impl<S> StorageDB<S> {
     pub fn new(storage: S) -> Self {
-        let height = BlockHeight::new(0);
-        Self::new_with_height(storage, height)
-    }
-
-    pub fn new_with_height(storage: S, highest_contiguous_block: BlockHeight) -> Self {
-        let orphaned_heights = BTreeSet::new();
-        Self {
-            highest_contiguous_block,
-            orphaned_heights,
-            storage,
-        }
-    }
-
-    fn update_highest_contiguous_block(&mut self, height: BlockHeight) {
-        let next_height = self.next_height();
-        match height.cmp(&next_height) {
-            Ordering::Equal => {
-                self.highest_contiguous_block = height;
-                while let Some(next_height) = self.orphaned_heights.first() {
-                    if next_height == &self.next_height() {
-                        self.highest_contiguous_block = *next_height;
-                        let _ = self.orphaned_heights.pop_first();
-                    } else {
-                        break;
-                    }
-                }
-            }
-            Ordering::Greater => {
-                self.orphaned_heights.insert(height);
-            }
-            Ordering::Less => {
-                tracing::warn!(
-                    "Received block at height {:?}, but the syncing is already at height {:?}. Ignoring block.",
-                    height,
-                    self.highest_contiguous_block
-                );
-            }
-        }
-    }
-    fn next_height(&self) -> BlockHeight {
-        let last_height = *self.highest_contiguous_block;
-        BlockHeight::new(last_height.saturating_add(1))
+        Self { storage }
     }
 }
 
-impl<S, T> BlockAggregatorDB for StorageDB<S>
+impl<S> BlocksStorage for StorageDB<S>
 where
-    S: Modifiable + std::fmt::Debug,
+    S: Modifiable + Send + Sync,
     S: KeyValueInspect<Column = Column>,
-    for<'b> StorageTransaction<&'b mut S>: StorageMutate<Blocks, Error = StorageError>,
-    S: AtomicView<LatestView = T>,
-    T: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static + std::fmt::Debug,
-    StorageTransaction<T>: AtomicView + StorageInspect<Blocks, Error = StorageError>,
 {
+    type Block = Arc<[u8]>;
     type BlockRangeResponse = BlockRangeResponse;
 
-    async fn store_block(&mut self, height: BlockHeight, block: Block) -> Result<()> {
-        self.update_highest_contiguous_block(height);
+    async fn store_block(
+        &mut self,
+        height: BlockHeight,
+        block: &Self::Block,
+    ) -> Result<()> {
+        let current_height = self.get_current_height()?;
+
+        if let Some(current_height) = current_height
+            && let Some(next_height) = current_height.succ()
+            && height != next_height
+        {
+            return Err(Error::DB(anyhow!(
+                "Cannot store block at height {:?}, expected height {:?}",
+                height,
+                next_height
+            )));
+        }
+
         let mut tx = self.storage.write_transaction();
         tx.storage_as_mut::<Blocks>()
-            .insert(&height, &block)
-            .map_err(|e| Error::DB(anyhow!(e)))?;
-        tx.commit().map_err(|e| Error::DB(anyhow!(e)))?;
+            .insert(&height, block)
+            .map_err(|e| {
+                Error::DB(
+                    anyhow!(e)
+                        .context(format!("while storing block at height: {height:?}")),
+                )
+            })?;
+        tx.storage_as_mut::<LatestBlock>()
+            .insert(&(), &Mode::Local(height))
+            .map_err(|e| {
+                Error::DB(
+                    anyhow!(e).context(format!(
+                        "while storing latest block height: {height:?}"
+                    )),
+                )
+            })?;
+        tx.commit().map_err(|e| {
+            Error::DB(
+                anyhow!(e).context(format!("while committing transaction: {height:?}")),
+            )
+        })?;
+
         Ok(())
     }
+}
 
-    async fn get_block_range(
+impl<S> BlocksProvider for StorageBlocksProvider<S>
+where
+    S: 'static,
+    S: KeyValueInspect<Column = Column>,
+    S: AtomicView,
+    S::LatestView: Unpin + Send + Sync + KeyValueInspect<Column = Column> + 'static,
+{
+    type Block = Arc<[u8]>;
+    type BlockRangeResponse = BlockRangeResponse;
+
+    fn get_block_range(
         &self,
         first: BlockHeight,
         last: BlockHeight,
     ) -> Result<BlockRangeResponse> {
-        let latest_view = self
-            .storage
-            .latest_view()
-            .map_err(|e| Error::DB(anyhow!(e)))?;
+        let latest_view = self.storage.latest_view().map_err(|e| {
+            Error::DB(
+                anyhow!(e).context("while getting latest view for block range query"),
+            )
+        })?;
         let stream = StorageStream::new(latest_view, first, last);
-        Ok(BlockRangeResponse::Literal(Box::pin(stream)))
+        Ok(BlockRangeResponse::Bytes(Box::pin(stream)))
     }
 
-    async fn get_current_height(&self) -> Result<BlockHeight> {
-        Ok(self.highest_contiguous_block)
+    fn get_current_height(&self) -> Result<Option<BlockHeight>> {
+        let height = self
+            .storage
+            .as_structured_storage()
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| {
+                Error::DB(anyhow!(e).context("while getting latest block height"))
+            })?
+            .map(|b| b.height());
+
+        Ok(height)
     }
 }
 
+impl<S> StorageDB<S>
+where
+    S: KeyValueInspect<Column = Column>,
+{
+    pub fn get_current_height(&self) -> Result<Option<BlockHeight>> {
+        let height = self
+            .storage
+            .as_structured_storage()
+            .storage_as_ref::<LatestBlock>()
+            .get(&())
+            .map_err(|e| {
+                Error::DB(anyhow!(e).context("while getting latest block height"))
+            })?
+            .map(|b| b.height());
+
+        Ok(height)
+    }
+}
 pub struct StorageStream<S> {
     inner: S,
     next: Option<BlockHeight>,
@@ -153,10 +190,10 @@ impl<S> StorageStream<S> {
 
 impl<S> Stream for StorageStream<S>
 where
-    S: Unpin + ReadTransaction + std::fmt::Debug,
-    for<'a> StorageTransaction<&'a S>: StorageInspect<Blocks, Error = StorageError>,
+    S: Unpin,
+    S: KeyValueInspect<Column = Column>,
 {
-    type Item = Block;
+    type Item = (BlockHeight, Arc<[u8]>);
 
     fn poll_next(
         self: Pin<&mut Self>,
@@ -168,11 +205,16 @@ where
         );
         let this = self.get_mut();
         if let Some(height) = this.next {
-            let tx = this.inner.read_transaction();
-            let next_block = tx
-                .storage_as_ref::<Blocks>()
-                .get(&height)
-                .map_err(|e| Error::DB(anyhow!(e)));
+            let storage = this.inner.as_structured_storage();
+            let next_block =
+                storage
+                    .storage_as_ref::<Blocks>()
+                    .get(&height)
+                    .map_err(|e| {
+                        Error::DB(anyhow!(e).context(format!(
+                            "while getting block at height {height:?} in storage stream"
+                        )))
+                    });
             match next_block {
                 Ok(Some(block)) => {
                     tracing::debug!("Found block at height: {:?}", height);
@@ -182,7 +224,7 @@ where
                         None
                     };
                     this.next = next;
-                    Poll::Ready(Some(block.into_owned()))
+                    Poll::Ready(Some((height, block.into_owned())))
                 }
                 Ok(None) => {
                     tracing::debug!("No block at height: {:?}", height);

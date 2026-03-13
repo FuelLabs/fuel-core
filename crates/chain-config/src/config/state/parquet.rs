@@ -132,7 +132,7 @@ mod tests {
         // then
         let actually_read = bytes_read.load(std::sync::atomic::Ordering::SeqCst);
 
-        assert_eq!(total_size, 36930);
-        assert_eq!(actually_read, 509);
+        assert_eq!(total_size, 36643);
+        assert_eq!(actually_read, 490);
     }
 }

@@ -1,4 +1,22 @@
+use crate::{
+    combined_database::CombinedDatabaseConfig,
+    graphql_api::ServiceConfig as GraphQLConfig,
+};
 use clap::ValueEnum;
+use fuel_core_chain_config::SnapshotReader;
+pub use fuel_core_consensus_module::RelayerConsensusConfig;
+pub use fuel_core_importer;
+pub use fuel_core_poa::Trigger;
+use fuel_core_tx_status_manager::config::Config as TxStatusManagerConfig;
+use fuel_core_txpool::config::Config as TxPoolConfig;
+use fuel_core_types::{
+    blockchain::header::StateTransitionBytecodeVersion,
+    fuel_types::{
+        AssetId,
+        ChainId,
+    },
+    signer::SignMode,
+};
 use std::{
     num::{
         NonZeroU32,
@@ -10,43 +28,48 @@ use std::{
 use strum_macros::{
     Display,
     EnumString,
-    EnumVariantNames,
+    VariantNames,
 };
 
-use fuel_core_chain_config::SnapshotReader;
-#[cfg(feature = "test-helpers")]
-use fuel_core_chain_config::{
-    ChainConfig,
-    StateConfig,
-};
-pub use fuel_core_consensus_module::RelayerConsensusConfig;
-pub use fuel_core_importer;
+#[cfg(feature = "parallel-executor")]
+use std::num::NonZeroUsize;
+
+#[cfg(feature = "relayer")]
+use fuel_core_relayer::Config as RelayerConfig;
+
 #[cfg(feature = "p2p")]
 use fuel_core_p2p::config::{
     Config as P2PConfig,
     NotInitialized,
 };
-pub use fuel_core_poa::Trigger;
-#[cfg(feature = "relayer")]
-use fuel_core_relayer::Config as RelayerConfig;
-use fuel_core_tx_status_manager::config::Config as TxStatusManagerConfig;
-use fuel_core_txpool::config::Config as TxPoolConfig;
-use fuel_core_types::{
-    blockchain::header::StateTransitionBytecodeVersion,
-    signer::SignMode,
+
+#[cfg(feature = "test-helpers")]
+#[cfg(feature = "rpc")]
+use fuel_core_block_aggregator_api::service::StorageMethod;
+#[cfg(feature = "test-helpers")]
+use fuel_core_chain_config::{
+    ChainConfig,
+    StateConfig,
+};
+#[cfg(feature = "test-helpers")]
+#[cfg(feature = "rpc")]
+use fuel_core_types::fuel_types::BlockHeight;
+#[cfg(feature = "test-helpers")]
+use std::net::{
+    SocketAddr,
+    TcpListener,
 };
 
-use crate::{
-    combined_database::CombinedDatabaseConfig,
-    graphql_api::ServiceConfig as GraphQLConfig,
-};
-
-use fuel_core_types::fuel_types::{
-    AssetId,
-    ChainId,
-};
-#[cfg(feature = "parallel-executor")]
-use std::num::NonZeroUsize;
+#[derive(Clone, Debug)]
+pub struct RedisLeaderLockConfig {
+    pub redis_urls: Vec<String>,
+    pub lease_key: String,
+    pub lease_ttl: Duration,
+    pub node_timeout: Duration,
+    pub retry_delay: Duration,
+    pub max_retry_delay_offset: Duration,
+    pub max_attempts: u32,
+}
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -71,11 +94,14 @@ pub struct Config {
     #[cfg(feature = "parallel-executor")]
     pub executor_number_of_cores: NonZeroUsize,
     pub block_production: Trigger,
+    pub leader_lock: Option<RedisLeaderLockConfig>,
     pub predefined_blocks_path: Option<PathBuf>,
     pub txpool: TxPoolConfig,
     pub tx_status_manager: TxStatusManagerConfig,
     pub block_producer: fuel_core_producer::Config,
     pub gas_price_config: GasPriceConfig,
+    #[cfg(feature = "rpc")]
+    pub rpc_config: Option<fuel_core_block_aggregator_api::service::Config>,
     pub da_compression: DaCompressionMode,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
@@ -102,10 +128,44 @@ pub struct Config {
     pub memory_pool_size: usize,
 }
 
+#[cfg(feature = "test-helpers")]
+pub fn free_local_addr() -> SocketAddr {
+    let listener = TcpListener::bind("[::1]:0").unwrap();
+    listener.local_addr().unwrap() // OS picks a free port
+}
+
 impl Config {
     #[cfg(feature = "test-helpers")]
     pub fn local_node() -> Self {
         Self::local_node_with_state_config(StateConfig::local_testnet())
+    }
+
+    #[cfg(feature = "test-helpers")]
+    #[cfg(feature = "rpc")]
+    pub fn local_node_with_rpc() -> Self {
+        let mut config = Self::local_node_with_state_config(StateConfig::local_testnet());
+        let rpc_config = fuel_core_block_aggregator_api::service::Config {
+            addr: free_local_addr(),
+            sync_from: Some(BlockHeight::new(0)),
+            storage_method: StorageMethod::Local,
+            api_buffer_size: 100,
+        };
+        config.rpc_config = Some(rpc_config);
+        config
+    }
+
+    #[cfg(feature = "test-helpers")]
+    #[cfg(feature = "rpc")]
+    pub fn local_node_with_rpc_and_storage_method(storage_method: StorageMethod) -> Self {
+        let mut config = Self::local_node_with_state_config(StateConfig::local_testnet());
+        let rpc_config = fuel_core_block_aggregator_api::service::Config {
+            addr: free_local_addr(),
+            sync_from: Some(BlockHeight::new(0)),
+            storage_method,
+            api_buffer_size: 100,
+        };
+        config.rpc_config = Some(rpc_config);
+        config
     }
 
     #[cfg(feature = "test-helpers")]
@@ -156,6 +216,9 @@ impl Config {
 
         const MAX_TXS_TTL: Duration = Duration::from_secs(60 * 100000000);
 
+        #[cfg(feature = "rpc")]
+        let rpc_config = None;
+
         Self {
             graphql_config: GraphQLConfig {
                 addr: std::net::SocketAddr::new(
@@ -194,6 +257,7 @@ impl Config {
             executor_number_of_cores: NonZeroUsize::new(1).expect("1 is not zero"),
             snapshot_reader,
             block_production: Trigger::Instant,
+            leader_lock: None,
             predefined_blocks_path: None,
             txpool: TxPoolConfig {
                 utxo_validation,
@@ -231,6 +295,8 @@ impl Config {
             time_until_synced: Duration::ZERO,
             production_timeout: Duration::from_secs(20),
             memory_pool_size: 4,
+            #[cfg(feature = "rpc")]
+            rpc_config,
         }
     }
 
@@ -303,7 +369,7 @@ impl From<&Config> for fuel_core_poa::pre_confirmation_signature_service::config
 }
 
 #[derive(
-    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, VariantNames, ValueEnum,
 )]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {
