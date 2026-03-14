@@ -244,7 +244,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           profile-name: 'fuel-core-builder'
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
