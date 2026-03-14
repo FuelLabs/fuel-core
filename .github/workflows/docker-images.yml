@@ -171,11 +171,13 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          profile-name: 'fuel-core-builder'
+          profile-name: 'fuel-core-profiling-builder'
           platforms: linux/amd64,linux/arm64
           build-args: "DEBUG_SYMBOLS=true"
 
   publish-e2e-client-docker-image:
+    needs:
+      - publish-docker-images
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: read
