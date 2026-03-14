@@ -169,15 +169,14 @@ jobs:
         with:
           version: "21"
       - uses: rui314/setup-mold@v1
-      - uses: WarpBuilds/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: actions-rs/cargo@v1
+          key: ${{ matrix.command }}-${{ matrix.args }}
+      - name: Install cargo-nextest
         if: ${{ matrix.command == 'nextest' }}
+        uses: taiki-e/install-action@v2
         with:
-          command: install
-          args: cargo-nextest --locked --version 0.9.100 # supported by rust 1.85.0
-        continue-on-error: true
+          tool: nextest@0.9.100
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
 
@@ -225,9 +224,9 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: rui314/setup-mold@v1
-      - uses: WarpBuilds/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
-          key: cargo-test-kms-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-test-kms
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
@@ -238,12 +237,12 @@ jobs:
       - prevent-openssl
       - rustfmt
       - check-changelog
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
     timeout-minutes: 45
     env:
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -256,6 +255,10 @@ jobs:
         uses: KyleMayes/install-llvm-action@v2
         with:
           version: "21"
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: leader-lock-integration-tests
       - name: Start Redis
         run: |
           redis-server --daemonize yes
