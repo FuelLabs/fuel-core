@@ -21,8 +21,10 @@ use std::sync::Arc;
 #[cfg(not(feature = "std"))]
 use alloc::sync::Arc;
 
+use crate::fuel_tx::TxId;
 #[cfg(feature = "alloc")]
 use alloc::{
+    format,
     string::{
         String,
         ToString,
@@ -106,7 +108,9 @@ impl From<TransactionExecutionStatus> for TransactionStatus {
             // TODO: Removed this variant as part of the
             //  https://github.com/FuelLabs/fuel-core/issues/2794
             TransactionExecutionStatus::SqueezedOut { reason } => {
-                TransactionStatus::SqueezedOut(statuses::SqueezedOut { reason }.into())
+                TransactionStatus::SqueezedOut(
+                    statuses::SqueezedOut::new(reason, TxId::zeroed()).into(),
+                )
             }
             TransactionExecutionStatus::Failed {
                 block_height,
@@ -195,8 +199,8 @@ impl TransactionStatus {
     }
 
     /// Creates a new `TransactionStatus::SqueezedOut` variant.
-    pub fn squeezed_out(reason: String) -> Self {
-        Self::SqueezedOut(statuses::SqueezedOut { reason }.into())
+    pub fn squeezed_out(reason: String, tx_id: TxId) -> Self {
+        Self::SqueezedOut(statuses::SqueezedOut::new(reason, tx_id).into())
     }
 
     /// Creates a new `TransactionStatus::PreConfirmationSqueezedOut` variant.
@@ -210,9 +214,12 @@ impl TransactionStatus {
 impl From<PreconfirmationStatus> for TransactionStatus {
     fn from(value: PreconfirmationStatus) -> Self {
         match value {
-            PreconfirmationStatus::SqueezedOut { reason } => {
+            PreconfirmationStatus::SqueezedOut(reason) => {
                 TransactionStatus::PreConfirmationSqueezedOut(
-                    statuses::PreConfirmationSqueezedOut { reason }.into(),
+                    statuses::PreConfirmationSqueezedOut {
+                        reason: reason.reason().to_string(),
+                    }
+                    .into(),
                 )
             }
             PreconfirmationStatus::Success {
@@ -270,7 +277,10 @@ pub enum PreConfirmationStatus {
 /// The status of the transaction during its lifecycle.
 pub mod statuses {
     use super::*;
-    use crate::fuel_tx::UtxoId;
+    use crate::fuel_tx::{
+        TxId,
+        UtxoId,
+    };
 
     /// Transaction was submitted into the TxPool
     #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -340,7 +350,21 @@ pub mod statuses {
     #[derive(Clone, Debug, PartialEq, Eq)]
     pub struct SqueezedOut {
         /// The reason why the transaction was squeezed out
-        pub reason: String,
+        reason: String,
+    }
+
+    impl SqueezedOut {
+        /// Creates a new SqueezedOut
+        pub fn new(reason: String, tx_id: TxId) -> Self {
+            Self {
+                reason: format!("{reason} TxId: {tx_id}"),
+            }
+        }
+
+        /// Returns why the transaction was squeezed out.
+        pub fn reason(&self) -> &str {
+            &self.reason
+        }
     }
 
     impl Default for SqueezedOut {

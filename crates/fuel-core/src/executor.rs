@@ -3821,6 +3821,241 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn preconfirmation__tx_index_correct_for_first_transaction() {
+        use fuel_core_executor::{
+            executor::TimeoutOnlyTxWaiter,
+            ports::PreconfirmationSenderPort,
+        };
+        use fuel_core_types::services::preconfirmation::{
+            Preconfirmation,
+            PreconfirmationStatus,
+        };
+
+        // Given
+        struct MockPreconfirmationsSender {
+            sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+        }
+
+        impl PreconfirmationSenderPort for MockPreconfirmationsSender {
+            fn try_send(
+                &self,
+                preconfirmations: Vec<Preconfirmation>,
+            ) -> Vec<Preconfirmation> {
+                preconfirmations
+            }
+
+            async fn send(&self, preconfirmations: Vec<Preconfirmation>) {
+                self.sender.send(preconfirmations).await.unwrap();
+            }
+        }
+
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.r#gen();
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let tx_id = tx.id(&ChainId::default());
+
+        let config = Config {
+            forbid_fake_coins_default: false,
+            ..Default::default()
+        };
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let _res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![tx.into()]),
+                    gas_price: 0,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                MockPreconfirmationsSender { sender },
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let preconfirmations = receiver.recv().await.unwrap();
+        // Find the preconfirmation for our transaction
+        let our_preconfirmation = preconfirmations
+            .iter()
+            .find(|p| p.tx_id == tx_id)
+            .expect("Should have preconfirmation for our transaction");
+
+        match &our_preconfirmation.status {
+            PreconfirmationStatus::Success { tx_pointer, .. } => {
+                assert_eq!(
+                    tx_pointer.tx_index(),
+                    0,
+                    "First transaction should have index 0"
+                );
+            }
+            status => panic!("Expected Success status, got: {:?}", status),
+        }
+    }
+
+    #[tokio::test]
+    async fn preconfirmation__tx_indices_correct_for_multiple_transactions() {
+        use fuel_core_executor::{
+            executor::TimeoutOnlyTxWaiter,
+            ports::PreconfirmationSenderPort,
+        };
+        use fuel_core_types::services::preconfirmation::{
+            Preconfirmation,
+            PreconfirmationStatus,
+        };
+
+        // Given
+        struct MockPreconfirmationsSender {
+            sender: tokio::sync::mpsc::Sender<Vec<Preconfirmation>>,
+        }
+
+        impl PreconfirmationSenderPort for MockPreconfirmationsSender {
+            fn try_send(
+                &self,
+                preconfirmations: Vec<Preconfirmation>,
+            ) -> Vec<Preconfirmation> {
+                preconfirmations
+            }
+
+            async fn send(&self, preconfirmations: Vec<Preconfirmation>) {
+                self.sender.send(preconfirmations).await.unwrap();
+            }
+        }
+
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let base_asset_id = rng.r#gen();
+
+        // Create 3 transactions with different script data to ensure unique tx ids
+        let tx1 = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let tx2 = TransactionBuilder::script(vec![], vec![1])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let tx3 = TransactionBuilder::script(vec![], vec![1, 2])
+            .add_unsigned_coin_input(
+                SecretKey::random(&mut rng),
+                rng.r#gen(),
+                1000,
+                base_asset_id,
+                Default::default(),
+            )
+            .finalize();
+
+        let tx1_id = tx1.id(&ChainId::default());
+        let tx2_id = tx2.id(&ChainId::default());
+        let tx3_id = tx3.id(&ChainId::default());
+
+        let config = Config {
+            forbid_fake_coins_default: false,
+            ..Default::default()
+        };
+        let (sender, mut receiver) = tokio::sync::mpsc::channel(2);
+        let exec = create_executor(Database::default(), config.clone());
+
+        // When
+        let _res = exec
+            .produce_without_commit_with_source(
+                Components {
+                    header_to_produce: Default::default(),
+                    transactions_source: OnceTransactionsSource::new(vec![
+                        tx1.into(),
+                        tx2.into(),
+                        tx3.into(),
+                    ]),
+                    gas_price: 0,
+                    coinbase_recipient: [1u8; 32].into(),
+                },
+                TimeoutOnlyTxWaiter,
+                MockPreconfirmationsSender { sender },
+            )
+            .await
+            .unwrap()
+            .into_result();
+
+        // Then
+        let preconfirmations = receiver.recv().await.unwrap();
+
+        // Find preconfirmations for our transactions
+        let tx1_preconf = preconfirmations
+            .iter()
+            .find(|p| p.tx_id == tx1_id)
+            .expect("Should have preconfirmation for tx1");
+        let tx2_preconf = preconfirmations
+            .iter()
+            .find(|p| p.tx_id == tx2_id)
+            .expect("Should have preconfirmation for tx2");
+        let tx3_preconf = preconfirmations
+            .iter()
+            .find(|p| p.tx_id == tx3_id)
+            .expect("Should have preconfirmation for tx3");
+
+        // Verify tx1 has index 0
+        match &tx1_preconf.status {
+            PreconfirmationStatus::Success { tx_pointer, .. } => {
+                assert_eq!(
+                    tx_pointer.tx_index(),
+                    0,
+                    "First transaction should have index 0"
+                );
+            }
+            status => panic!("Expected Success status for tx1, got: {:?}", status),
+        }
+
+        // Verify tx2 has index 1
+        match &tx2_preconf.status {
+            PreconfirmationStatus::Success { tx_pointer, .. } => {
+                assert_eq!(
+                    tx_pointer.tx_index(),
+                    1,
+                    "Second transaction should have index 1"
+                );
+            }
+            status => panic!("Expected Success status for tx2, got: {:?}", status),
+        }
+
+        // Verify tx3 has index 2
+        match &tx3_preconf.status {
+            PreconfirmationStatus::Success { tx_pointer, .. } => {
+                assert_eq!(
+                    tx_pointer.tx_index(),
+                    2,
+                    "Third transaction should have index 2"
+                );
+            }
+            status => panic!("Expected Success status for tx3, got: {:?}", status),
+        }
+    }
+
+    #[tokio::test]
     async fn produce_without_commit_with_source__includes_a_mint_with_whatever_gas_price_provided()
      {
         use fuel_core_executor::executor::{

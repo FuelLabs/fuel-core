@@ -19,7 +19,7 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BlockByIdArgs {
     pub id: Option<BlockId>,
 }
@@ -35,7 +35,7 @@ pub struct BlockByIdQuery {
     pub block: Option<Block>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BlockByHeightArgs {
     pub height: Option<U32>,
 }
@@ -107,7 +107,7 @@ pub struct BlockHeightFragment {
     pub height: U32,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ProduceBlockArgs {
     pub start_timestamp: Option<Tai64Timestamp>,
     pub blocks_to_produce: U32,

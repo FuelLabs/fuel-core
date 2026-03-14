@@ -4,13 +4,7 @@ categories = ["cryptography::cryptocurrencies"]
 description = "The primitives and types use by Fuel core protocol."
 edition = { workspace = true }
 homepage = { workspace = true }
-keywords = [
-    "blockchain",
-    "cryptocurrencies",
-    "fuel-client",
-    "fuel-core",
-    "fuel-types",
-]
+keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core", "fuel-types"]
 license = { workspace = true }
 name = "fuel-core-types"
 repository = { workspace = true }
@@ -20,22 +14,11 @@ version = { workspace = true }
 [features]
 default = ["std"]
 alloc = ["fuel-vm-private/alloc", "educe"]
-serde = [
-    "dep:serde",
-    "fuel-vm-private/serde",
-    "ed25519/serde",
-    "ed25519-dalek/serde",
-]
+serde = ["dep:serde", "fuel-vm-private/serde", "ed25519/serde", "ed25519-dalek/serde"]
 da-compression = ["fuel-vm-private/da-compression"]
-std = [
-    "alloc",
-    "fuel-vm-private/std",
-    "bs58",
-    "ed25519/std",
-    "ed25519-dalek/std",
-]
+std = ["alloc", "fuel-vm-private/std", "bs58", "ed25519/std", "ed25519-dalek/std"]
 random = ["dep:rand", "fuel-vm-private/random"]
-test-helpers = ["random", "fuel-vm-private/test-helpers"]
+test-helpers = ["random", "fuel-vm-private/test-helpers", "dep:proptest"]
 aws-kms = ["dep:aws-sdk-kms"]
 fault-proving = []
 
@@ -44,15 +27,16 @@ anyhow = { workspace = true }
 aws-sdk-kms = { workspace = true, optional = true }
 bs58 = { version = "0.5", optional = true }
 
-derive_more = { version = "0.99" }
+derive_more = { workspace = true }
 ed25519 = { workspace = true, default-features = false }
 ed25519-dalek = { workspace = true, default-features = false }
 educe = { workspace = true, optional = true }
 fuel-vm-private = { workspace = true, default-features = false, features = [
-  "alloc",
+    "alloc",
 ] }
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
 parking_lot = { workspace = true }
+proptest = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 secrecy = "0.8"
 serde = { workspace = true, features = ["derive"], optional = true }
@@ -61,7 +45,6 @@ tai64 = { version = "=4.0.0", features = ["serde"] }
 zeroize = "1.5"
 
 [dev-dependencies]
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
-fuel-core-types = { path = ".", features = ["test-helpers", "serde"] }
+aws-config = { workspace = true, features = ["behavior-version-latest"] }
 postcard = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

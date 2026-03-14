@@ -12,7 +12,7 @@ use crate::client::{
     },
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractByIdArgs {
     pub id: ContractId,
 }
@@ -36,7 +36,7 @@ pub struct ContractBalance {
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractBalanceQueryArgs {
     pub id: ContractId,
     pub asset: AssetId,
@@ -74,7 +74,7 @@ pub struct ContractBalanceFilterInput {
     pub contract: ContractId,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractBalancesConnectionArgs {
     /// Filter balances based on a filter
     filter: ContractBalanceFilterInput,

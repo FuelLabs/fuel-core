@@ -1,39 +1,37 @@
 use crate::result::Result;
-use bytes::Bytes;
-use fuel_core_types::fuel_types::BlockHeight;
+use fuel_core_types::fuel_types::{
+    BlockHeight,
+    bytes::Bytes,
+};
 use std::fmt::Debug;
 
-pub mod importer_and_db_source;
+pub mod old_block_source;
 
 /// Source from which blocks can be gathered for aggregation
-pub trait BlockSource: Send + Sync {
-    /// Asynchronously fetch the next block and its height
-    fn next_block(&mut self) -> impl Future<Output = Result<BlockSourceEvent>> + Send;
+pub trait BlockSource: Send + Sync + 'static {
+    type Block;
 
-    /// Drain any remaining blocks from the source
-    fn drain(&mut self) -> impl Future<Output = Result<()>> + Send;
-}
-
-#[derive(Debug, Eq, PartialEq, Hash)]
-pub enum BlockSourceEvent {
-    NewBlock(BlockHeight, Block),
-    OldBlock(BlockHeight, Block),
+    /// Returns an iterator over blocks starting from the given block height
+    fn blocks_starting_from(
+        &self,
+        block_height: BlockHeight,
+    ) -> impl Iterator<Item = Result<(BlockHeight, Self::Block)>> + Send + Sync + 'static;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct Block {
+pub struct BlockBytes {
     bytes: Bytes,
 }
 
-impl Block {
+impl BlockBytes {
     pub fn new(bytes: Bytes) -> Self {
         Self { bytes }
     }
 
     #[cfg(test)]
     pub fn arb_size<Rng: rand::Rng + ?Sized>(rng: &mut Rng, size: usize) -> Self {
-        let bytes: Bytes = (0..size).map(|_| rng.r#gen()).collect();
-        Self::new(bytes)
+        let bytes: Vec<u8> = (0..size).map(|_| rng.r#gen::<u8>()).collect();
+        Self::new(bytes.into())
     }
 
     #[cfg(test)]
@@ -47,7 +45,7 @@ impl Block {
     }
 }
 
-impl From<Vec<u8>> for Block {
+impl From<Vec<u8>> for BlockBytes {
     fn from(value: Vec<u8>) -> Self {
         let bytes = Bytes::from(value);
         Self::new(bytes)

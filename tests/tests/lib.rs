@@ -31,6 +31,8 @@ mod dos;
 #[cfg(not(feature = "only-p2p"))]
 mod fee_collection_contract;
 #[cfg(not(feature = "only-p2p"))]
+mod fuel_client;
+#[cfg(not(feature = "only-p2p"))]
 mod gas_price;
 #[cfg(not(feature = "only-p2p"))]
 mod graphql_extensions;
@@ -38,6 +40,10 @@ mod graphql_extensions;
 mod health;
 #[cfg(not(feature = "only-p2p"))]
 mod helpers;
+#[cfg(feature = "leader_lock")]
+#[cfg(not(feature = "not_leader_lock"))]
+#[cfg(not(feature = "only-p2p"))]
+mod leader_lock;
 #[cfg(not(feature = "only-p2p"))]
 mod local_node;
 #[cfg(not(feature = "only-p2p"))]
@@ -58,6 +64,15 @@ mod regenesis;
 mod relayer;
 #[cfg(not(feature = "only-p2p"))]
 mod required_fuel_block_height_extension;
+#[cfg(feature = "rpc")]
+#[cfg(feature = "local_rpc")]
+#[cfg(not(feature = "only-p2p"))]
+mod rpc;
+#[cfg(feature = "rpc")]
+#[cfg(not(feature = "local_rpc"))]
+#[cfg(not(feature = "only-p2p"))]
+mod rpc_s3;
+
 #[cfg(not(feature = "only-p2p"))]
 mod snapshot;
 #[cfg(not(feature = "only-p2p"))]
