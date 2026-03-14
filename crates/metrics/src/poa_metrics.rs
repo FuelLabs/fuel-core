@@ -24,11 +24,6 @@ pub struct PoAMetrics {
     /// Large positive = stream has old blocks not yet trimmed.
     /// Near zero = XTRIM may remove blocks the follower hasn't synced.
     pub stream_trim_headroom: Gauge,
-    /// Height difference between P2P gossip tip and Redis stream tip.
-    /// Positive = P2P ahead (Redis lagging); negative = Redis ahead.
-    /// Set by external callers that have P2P context.
-    pub p2p_redis_height_lag: Gauge,
-
     /// Successful write_block.lua per-node invocations.
     pub write_block_success_total: Counter,
     /// write_block.lua rejections due to HEIGHT_EXISTS.
@@ -65,8 +60,6 @@ impl Default for PoAMetrics {
         let is_leader = Gauge::default();
         let epoch_max_drift = Gauge::default();
         let stream_trim_headroom = Gauge::default();
-        let p2p_redis_height_lag = Gauge::default();
-
         let write_block_success_total = Counter::default();
         let write_block_height_exists_total = Counter::default();
         let write_block_fencing_error_total = Counter::default();
@@ -106,12 +99,6 @@ impl Default for PoAMetrics {
             "Min height in Redis stream minus max committed local height",
             stream_trim_headroom.clone(),
         );
-        registry.register(
-            "poa_p2p_redis_height_lag",
-            "Height difference between P2P gossip tip and Redis stream tip",
-            p2p_redis_height_lag.clone(),
-        );
-
         // Counter names omit `_total` — prometheus-client adds it automatically.
         registry.register(
             "poa_write_block_success",
@@ -183,7 +170,6 @@ impl Default for PoAMetrics {
             is_leader,
             epoch_max_drift,
             stream_trim_headroom,
-            p2p_redis_height_lag,
             write_block_success_total,
             write_block_height_exists_total,
             write_block_fencing_error_total,
