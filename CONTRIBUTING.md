@@ -102,7 +102,7 @@ This is a rough outline of what a contributor's workflow looks like:
 -   Write code, add test cases, and commit your work.
 -   Run tests and make sure all tests pass.
 -   If the PR contains any breaking changes, add the breaking label to your PR.
--   Update `CHANGELOG.md` with a proper description of your changes.
+-   Add a [changelog entry](#changelog) for your PR.
     -   If the change is breaking, please include a migration guide.
 -   If you are part of the FuelLabs Github org, please open a PR from the repository itself.
 -   Otherwise, push your changes to a branch in your fork of the repository and submit a pull request.
@@ -116,6 +116,26 @@ This is a rough outline of what a contributor's workflow looks like:
 -   Use Github to merge the PR once approved.
 
 Thanks for your contributions!
+
+### Changelog
+
+Each PR requires a changelog entry unless it has the `no changelog` label. Create a markdown file named `<PR_NUMBER>.md` in the appropriate subdirectory of `.changes/`:
+
+| Directory | When to use |
+|---|---|
+| `.changes/added/` | New features |
+| `.changes/changed/` | Changes to existing functionality |
+| `.changes/fixed/` | Bug fixes |
+| `.changes/breaking/` | Breaking changes |
+| `.changes/removed/` | Removed features |
+
+The file should contain a single line describing the change. For example, `.changes/fixed/1234.md`:
+
+```
+Fix off-by-one error in block height validation.
+```
+
+The CI `check-changelog` job will fail if no changelog file exists for your PR number and the `no changelog` label is not set.
 
 ### Finding something to work on
 

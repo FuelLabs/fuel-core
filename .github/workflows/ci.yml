@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check for a file with the PR number in a sub-directory of the .changes directory" or "no changelog" label.
         run: |
@@ -57,9 +57,9 @@ jobs:
           fi
 
   rustfmt:
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@master
         with:
@@ -70,9 +70,9 @@ jobs:
         run: cargo +${{ env.RUST_VERSION_FMT }} fmt --all -- --check
 
   lint-toml-files:
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -82,9 +82,9 @@ jobs:
         run: cargo sort -w --check
 
   prevent-openssl:
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # ensure openssl hasn't crept into the dep tree
       - name: Check if openssl is included
         run: ./.github/workflows/scripts/verify_openssl.sh
@@ -95,7 +95,7 @@ jobs:
       - prevent-openssl
       - rustfmt
       - check-changelog
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
     env:
       RUSTFLAGS: -D warnings
     strategy:
@@ -154,7 +154,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -164,34 +164,24 @@ jobs:
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.4"
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "21"
       - uses: rui314/setup-mold@v1
-      - uses: buildjet/cache@v3
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ matrix.command }}-${{ matrix.args }}-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: actions-rs/cargo@v1
+          key: ${{ matrix.command }}-${{ matrix.args }}
+          cache-on-failure: true
+      - name: Install cargo-nextest
         if: ${{ matrix.command == 'nextest' }}
+        uses: taiki-e/install-action@v2
         with:
-          command: install
-          args: cargo-nextest --locked --version 0.9.100 # supported by rust 1.85.0
-        continue-on-error: true
+          tool: nextest@0.9.100
       - name: ${{ matrix.command }} ${{ matrix.args }}
         run: ${{ matrix.env }} cargo ${{ matrix.command }} ${{ matrix.args }}
 
   publish-crates-check:
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -208,7 +198,7 @@ jobs:
     needs:
       - rustfmt
       - check-changelog
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
     env:
       RUSTFLAGS: -D warnings
       FUEL_CORE_TEST_AWS_KMS_ARN: "arn:aws:kms:us-east-1:249945542445:key/mrk-e13c7118ce544f7da66294f6e87c8790"
@@ -222,24 +212,15 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
-      - uses: actions/checkout@v4
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "21"
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: rui314/setup-mold@v1
-      - uses: buildjet/cache@v3
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: cargo-test-kms-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-test-kms
+          cache-on-failure: true
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
@@ -250,12 +231,12 @@ jobs:
       - prevent-openssl
       - rustfmt
       - check-changelog
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
     timeout-minutes: 45
     env:
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -264,10 +245,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y redis-server
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
         with:
-          version: "21"
+          key: leader-lock-integration-tests
+          cache-on-failure: true
       - name: Start Redis
         run: |
           redis-server --daemonize yes
@@ -296,7 +278,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Verify tag version
         run: |
@@ -311,11 +293,11 @@ jobs:
       - verify-tag-version
       - verifications-complete
     if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-2404-x64-4x
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
@@ -342,11 +324,11 @@ jobs:
       fail-fast: false
       matrix:
         job:
-          - os: buildjet-4vcpu-ubuntu-2204
+          - os: warp-ubuntu-2404-x64-4x
             platform: linux
             target: x86_64-unknown-linux-gnu
             cross_image: x86_64-linux-gnu
-          - os: buildjet-4vcpu-ubuntu-2204
+          - os: warp-ubuntu-2404-x64-4x
             platform: linux-arm
             target: aarch64-unknown-linux-gnu
             cross_image: aarch64-linux-gnu
@@ -358,30 +340,30 @@ jobs:
             target: aarch64-apple-darwin
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         if: matrix.job.cross_image
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to the ghcr.io registry
-        if: matrix.job.os == 'buildjet-4vcpu-ubuntu-2204'
-        uses: docker/login-action@v1
+        if: matrix.job.cross_image
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to the docker.io registry
-        if: matrix.job.os == 'buildjet-4vcpu-ubuntu-2204'
-        uses: docker/login-action@v2
+        if: matrix.job.cross_image
+        uses: docker/login-action@v3
         with:
           username: fuellabs
           password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
 
       - name: Setup custom cross env ${{ matrix.job.cross_image }}
         if: matrix.job.cross_image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: ci
           file: ci/Dockerfile.${{ matrix.job.target }}-clang
@@ -472,7 +454,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
+      - uses: actions/checkout@v6
+      - uses: taiki-e/install-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tool: cargo-audit
+      - run: cargo audit

@@ -12,7 +12,7 @@ jobs:
     env:
       DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }} 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - run: |
         git clone https://github.com/FuelLabs/releasy && cd releasy && git checkout kayagokalp/releasy-handle && cd ..
         cargo install --path ./releasy/releasy-emit
