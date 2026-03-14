@@ -172,6 +172,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.command }}-${{ matrix.args }}
+          cache-on-failure: true
       - name: Install cargo-nextest
         if: ${{ matrix.command == 'nextest' }}
         uses: taiki-e/install-action@v2
@@ -227,6 +228,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: cargo-test-kms
+          cache-on-failure: true
       - name: Run integration tests for kms only
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
@@ -259,6 +261,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: leader-lock-integration-tests
+          cache-on-failure: true
       - name: Start Redis
         run: |
           redis-server --daemonize yes
@@ -464,6 +467,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
+      - uses: taiki-e/install-action@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          tool: cargo-audit
+      - run: cargo audit
