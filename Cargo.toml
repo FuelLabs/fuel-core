@@ -2,6 +2,7 @@
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
 members = [
     "benches",
+    "bin/chaos-test",
     "bin/e2e-test-client",
     "bin/fuel-core",
     "bin/fuel-core-client",

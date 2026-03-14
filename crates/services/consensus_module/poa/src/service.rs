@@ -557,6 +557,17 @@ where
         }
     }
 
+    /// Returns the error retry delay based on the trigger's block time.
+    /// Uses the block production interval instead of a hardcoded 1s
+    /// so that followers can retry lease acquisition sooner.
+    fn error_retry_delay(&self) -> Duration {
+        match self.trigger {
+            Trigger::Interval { block_time } => block_time,
+            Trigger::Open { period } => period,
+            _ => Duration::from_secs(1),
+        }
+    }
+
     async fn handle_normal_block_production(
         &mut self,
         deadline: Instant,
@@ -564,8 +575,16 @@ where
         match self.produce_next_block(deadline).await {
             Ok(()) => TaskNextAction::Continue,
             Err(err) => {
-                // Wait some time in case of error to avoid spamming retry block production
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                // Release the lease on production failure so followers can
+                // acquire it faster instead of waiting for TTL expiry.
+                if let Err(release_err) = self.reconciliation_port.release().await {
+                    tracing::warn!(
+                        "Failed to release lease after production error: {release_err}"
+                    );
+                }
+                // Wait before retrying to avoid spamming, but use the
+                // block_time interval rather than a hardcoded 1s delay.
+                tokio::time::sleep(self.error_retry_delay()).await;
                 TaskNextAction::ErrorContinue(err)
             }
         }

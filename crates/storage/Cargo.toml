@@ -4,13 +4,7 @@ categories = ["cryptography::cryptocurrencies"]
 description = "Storage types and primitives used by Fuel core protocol."
 edition = { workspace = true }
 homepage = { workspace = true }
-keywords = [
-    "blockchain",
-    "cryptocurrencies",
-    "fuel-client",
-    "fuel-core",
-    "fuel-storage",
-]
+keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core", "fuel-storage"]
 license = { workspace = true }
 name = "fuel-core-storage"
 repository = { workspace = true }
