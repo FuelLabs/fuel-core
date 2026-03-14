@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Check for a file with the PR number in a sub-directory of the .changes directory" or "no changelog" label.
         run: |
@@ -59,7 +59,7 @@ jobs:
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install latest nightly
         uses: dtolnay/rust-toolchain@master
         with:
@@ -72,7 +72,7 @@ jobs:
   lint-toml-files:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -84,7 +84,7 @@ jobs:
   prevent-openssl:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       # ensure openssl hasn't crept into the dep tree
       - name: Check if openssl is included
         run: ./.github/workflows/scripts/verify_openssl.sh
@@ -154,7 +154,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -184,7 +184,7 @@ jobs:
     runs-on: warp-ubuntu-2404-x64-4x
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -215,7 +215,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::249945542445:role/github_oidc_FuelLabs_fuel-core
           aws-region: us-east-1
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v2
         with:
@@ -242,7 +242,7 @@ jobs:
     env:
       RUSTFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -287,7 +287,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Verify tag version
         run: |
@@ -306,7 +306,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@master
@@ -349,7 +349,7 @@ jobs:
             target: aarch64-apple-darwin
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set up Docker Buildx
         if: matrix.job.cross_image
@@ -463,7 +463,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

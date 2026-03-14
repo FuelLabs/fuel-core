@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
@@ -60,7 +60,7 @@ jobs:
       pull-requests: write
     steps:
       - name: checkout the source code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: download Cargo.lock from update job
         uses: actions/download-artifact@v6
