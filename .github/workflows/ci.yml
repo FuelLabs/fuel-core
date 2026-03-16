@@ -271,6 +271,8 @@ jobs:
           printf '%s\n' "$TEST_LIST" | grep -Fq "$FLAKY_TEST_ONE" || { echo "Expected flaky test not found in list: $FLAKY_TEST_ONE"; exit 1; }
           printf '%s\n' "$TEST_LIST" | grep -Fq "$FLAKY_TEST_TWO" || { echo "Expected flaky test not found in list: $FLAKY_TEST_TWO"; exit 1; }
           cargo test --package fuel-core-tests --test integration_tests leader_lock --features leader_lock -- --test-threads=1 --nocapture --skip "$FLAKY_TEST_ONE" --skip "$FLAKY_TEST_TWO"
+          cargo test --package fuel-core-tests --test integration_tests "$FLAKY_TEST_ONE" --features leader_lock -- --test-threads=1 --nocapture
+          cargo test --package fuel-core-tests --test integration_tests "$FLAKY_TEST_TWO" --features leader_lock -- --test-threads=1 --nocapture
           FLAKY_UT_ONE="service::adapters::consensus_module::poa::tests::metrics__poa_metrics_appear_in_encoded_output_after_exercising_all_paths"
           FLAKY_UT_TWO="service::adapters::consensus_module::poa::tests::read_stream_entries_on_node__when_cursor_exists_then_reads_only_new_entries"
           FLAKY_UT_THREE="service::adapters::consensus_module::poa::tests::read_stream_entries_on_node__when_max_entries_is_small_then_reads_next_page_from_cursor"
@@ -279,6 +281,9 @@ jobs:
           printf '%s\n' "$UT_LIST" | grep -Fq "$FLAKY_UT_TWO" || { echo "Expected flaky test not found in list: $FLAKY_UT_TWO"; exit 1; }
           printf '%s\n' "$UT_LIST" | grep -Fq "$FLAKY_UT_THREE" || { echo "Expected flaky test not found in list: $FLAKY_UT_THREE"; exit 1; }
           cargo test --package fuel-core --lib service::adapters::consensus_module::poa::tests:: --features leader_lock -- --test-threads=1 --nocapture --skip "$FLAKY_UT_ONE" --skip "$FLAKY_UT_TWO" --skip "$FLAKY_UT_THREE"
+          cargo test --package fuel-core --lib "$FLAKY_UT_ONE" --features leader_lock -- --test-threads=1 --nocapture
+          cargo test --package fuel-core --lib "$FLAKY_UT_TWO" --features leader_lock -- --test-threads=1 --nocapture
+          cargo test --package fuel-core --lib "$FLAKY_UT_THREE" --features leader_lock -- --test-threads=1 --nocapture
 
   verifications-complete:
     needs:
