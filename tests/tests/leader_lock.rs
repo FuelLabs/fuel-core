@@ -576,7 +576,7 @@ async fn make_leader_lock_node_config_builder(
         node_config.p2p.as_mut().unwrap().reserved_nodes = bootstrap_listeners.clone();
         node_config.p2p.as_mut().unwrap().info_interval =
             Some(Duration::from_millis(100));
-        node_config.min_connected_reserved_peers = 1;
+        node_config.min_connected_reserved_peers = 0;
         node_config.time_until_synced = block_time;
         node_config
     }
