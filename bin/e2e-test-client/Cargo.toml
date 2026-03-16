@@ -36,10 +36,10 @@ toml = { version = "0.5" }
 [dev-dependencies]
 assert_cmd = "2.0"
 fuel-core = { workspace = true, features = [
-  "rocksdb",
-  "wasm-executor",
-  "p2p",
-  "test-helpers",
+    "rocksdb",
+    "wasm-executor",
+    "p2p",
+    "test-helpers",
 ] }
 fuel-core-trace = { path = "../../crates/trace" }
 insta = { workspace = true }
