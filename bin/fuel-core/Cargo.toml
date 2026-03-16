@@ -17,15 +17,15 @@ name = "fuel-core"
 path = "src/main.rs"
 
 [features]
-default = ["env", "relayer", "rocksdb", "archive"]
+default = ["env", "relayer", "rocksdb", "archive", "jemalloc"]
 archive = ["dep:tar", "dep:tempfile", "dep:rayon"]
 aws-kms = ["dep:aws-config", "dep:aws-sdk-kms", "fuel-core-types/aws-kms"]
 env = ["dep:dotenvy"]
 p2p = ["fuel-core/p2p", "const_format", "dep:fuel-core-poa"]
 shared-sequencer = ["dep:fuel-core-shared-sequencer", "fuel-core/shared-sequencer"]
-relayer = ["fuel-core/relayer", "dep:url"]
+relayer = ["fuel-core/relayer"]
 parquet = ["fuel-core-chain-config/parquet", "fuel-core-types/serde"]
-rocksdb = ["fuel-core/rocksdb", "fuel-core/backup"]
+rocksdb = ["fuel-core/rocksdb", "fuel-core/backup", "jemalloc", "dep:rlimit"]
 rocksdb-production = ["fuel-core/rocksdb-production", "rocksdb"]
 rpc = ["fuel-core/rpc"]
 # features to enable in production, but increase build times
@@ -39,6 +39,7 @@ production = [
     "aws-kms",
     "rpc",
 ]
+jemalloc = ["dep:tikv-jemallocator"]
 parallel-executor = ["fuel-core/parallel-executor"]
 fault-proving = [
     "fuel-core-storage/fault-proving",
@@ -57,7 +58,7 @@ clap = { workspace = true, features = ["derive", "env", "string"] }
 const_format = { version = "0.2", optional = true }
 dirs = "4.0"
 dotenvy = { version = "0.15", optional = true }
-fuel-core = { workspace = true, features = ["wasm-executor"] }
+fuel-core = { workspace = true, default-features = false, features = ["wasm-executor"] }
 fuel-core-block-aggregator-api = { workspace = true }
 fuel-core-chain-config = { workspace = true }
 fuel-core-metrics = { workspace = true }
@@ -69,11 +70,11 @@ humantime = "2.1"
 pyroscope = "0.5"
 pyroscope_pprofrs = "0.2"
 rayon = { workspace = true, optional = true }
-rlimit = "0.10.2"
+rlimit = { version = "0.10.2", optional = true }
 serde_json = { workspace = true }
 tar = { version = "0.4.44", optional = true }
 tempfile = { workspace = true, optional = true }
-tikv-jemallocator = { workspace = true }
+tikv-jemallocator = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = [
@@ -81,7 +82,7 @@ tracing-subscriber = { workspace = true, features = [
     "env-filter",
     "json",
 ] }
-url = { workspace = true, optional = true }
+url = { workspace = true }
 
 [dev-dependencies]
 fuel-core = { workspace = true, features = ["test-helpers"] }

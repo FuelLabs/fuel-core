@@ -14,36 +14,17 @@ hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
-# pin to prevent compilation error from 1.13.6
-yamux = "=0.13.5"
-alloy-tx-macros = "=1.0.41"
-aws-credential-types = "=1.2.11"
-aws-runtime = "=1.5.17"
-aws-sdk-sso = "=1.91.0"
-aws-sdk-ssooidc = "=1.93.0"
-aws-sdk-sts = "=1.95.0"
-aws-sigv4 = "=1.3.7"
-aws-smithy-async = "=1.2.7"
-aws-smithy-eventstream = "=0.60.14"
-aws-smithy-http = "=0.62.6"
-aws-smithy-http-client = "=1.1.5"
-aws-smithy-json = "=0.61.9"
-aws-smithy-observability = "=0.1.5"
-aws-smithy-query = "=0.60.9"
-aws-smithy-runtime = "=1.9.5"
-aws-smithy-runtime-api = "=1.9.3"
-aws-smithy-types = "=1.3.5"
-aws-smithy-xml = "=0.60.13"
-aws-types = "=1.3.11"
+cynic = { version = "=3.12.0" }
 
 # Neutral deps
-fuel-core = { path = "../../crates/fuel-core", features = ["test-helpers"] }
+fuel-core = { path = "../../crates/fuel-core", default-features = false, features = ["test-helpers"] }
 fuel-core-trace = { path = "../../crates/trace" }
 fuel-crypto = { version = "0.63.0" }
 fuel-tx = { version = "0.63.0", features = ["random"] }
 
 # Latest fuel-core
-latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", features = [
+latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", default-features = false, features = [
+  "relayer",
   "parquet",
   "p2p",
 ] }

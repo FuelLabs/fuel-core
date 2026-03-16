@@ -36,10 +36,6 @@ use fuel_core::{
         },
         genesis::NotifyCancel,
     },
-    state::rocks_db::{
-        ColumnsPolicy,
-        DatabaseConfig,
-    },
     tx_status_manager::config::Config as TxStatusManagerConfig,
     txpool::config::{
         BlackList,
@@ -53,6 +49,12 @@ use fuel_core::{
         fuel_vm::SecretKey,
         secrecy::Secret,
     },
+};
+
+#[cfg(feature = "rocksdb")]
+use fuel_core::state::rocks_db::{
+    ColumnsPolicy,
+    DatabaseConfig,
 };
 
 use fuel_core_chain_config::{
@@ -75,6 +77,7 @@ use pyroscope_pprofrs::{
     PprofConfig,
     pprof_backend,
 };
+#[cfg(feature = "rocksdb")]
 use rlimit::{
     Resource,
     getrlimit,

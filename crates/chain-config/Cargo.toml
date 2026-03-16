@@ -38,8 +38,8 @@ bech32 = { version = "0.9.0", default-features = false, optional = true }
 educe = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["alloc"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
-  "alloc",
-  "serde",
+    "alloc",
+    "serde",
 ] }
 itertools = { workspace = true, features = ["use_alloc"] }
 parquet = { workspace = true, features = ["zstd"], optional = true }
@@ -54,9 +54,9 @@ tracing = { version = "0.1", default-features = false, optional = true }
 bytes = { workspace = true }
 fuel-core-chain-config = { path = ".", features = ["parquet", "test-helpers"] }
 fuel-core-types = { workspace = true, default-features = false, features = [
-  "alloc",
-  "random",
-  "serde",
+    "alloc",
+    "random",
+    "serde",
 ] }
 insta = { workspace = true }
 pretty_assertions = { workspace = true }

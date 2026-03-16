@@ -31,20 +31,20 @@ futures = { workspace = true }
 hex = { workspace = true }
 hickory-resolver = "0.24.1"
 libp2p = { version = "0.54.1", default-features = false, features = [
-  "dns",
-  "gossipsub",
-  "identify",
-  "kad",
-  "macros",
-  "mdns",
-  "noise",
-  "request-response",
-  "secp256k1",
-  "tcp",
-  "tokio",
-  "yamux",
-  "websocket",
-  "metrics",
+    "dns",
+    "gossipsub",
+    "identify",
+    "kad",
+    "macros",
+    "mdns",
+    "noise",
+    "request-response",
+    "secp256k1",
+    "tcp",
+    "tokio",
+    "yamux",
+    "websocket",
+    "metrics",
 ] }
 parking_lot = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
