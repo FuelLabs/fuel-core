@@ -637,7 +637,9 @@ async fn observe_node_block_activity(node: &Node, window: Duration) -> String {
     }
 
     format!(
-        "local={local_count} non_local={non_local_count} last_height={} stream_ended={ended}",
+        "state={service_state:?} redis=[{redis_status}] local={local_count} non_local={non_local_count} last_height={} stream_ended={ended}",
+        service_state = node.node.state(),
+        redis_status = redis_status_summary(node),
         last_height
             .map(|height| height.to_string())
             .unwrap_or_else(|| "none".to_string())
@@ -646,6 +648,32 @@ async fn observe_node_block_activity(node: &Node, window: Duration) -> String {
 
 fn node_label(node: &Node) -> String {
     node.config.name.clone()
+}
+
+fn redis_status_summary(node: &Node) -> String {
+    node.config
+        .leader_lock
+        .as_ref()
+        .map(|lock| {
+            lock.redis_urls
+                .iter()
+                .map(|url| {
+                    let status = parse_redis_port(url)
+                        .map(redis_ping)
+                        .map(|is_up| if is_up { "up" } else { "down" })
+                        .unwrap_or("unknown");
+                    format!("{url}:{status}")
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_else(|| "none".to_string())
+}
+
+fn parse_redis_port(redis_url: &str) -> Option<u16> {
+    let after_scheme = redis_url.strip_prefix("redis://")?;
+    let host_port = after_scheme.split('/').next()?;
+    host_port.rsplit(':').next()?.parse::<u16>().ok()
 }
 
 async fn make_leader_lock_node_config_builder(
