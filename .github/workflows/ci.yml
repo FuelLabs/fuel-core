@@ -246,6 +246,7 @@ jobs:
     timeout-minutes: 45
     env:
       RUSTFLAGS: -D warnings
+      REDIS_VERSION: 8.6.0
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
@@ -255,7 +256,13 @@ jobs:
       - name: Install Redis
         run: |
           sudo apt-get update
-          sudo apt-get install -y redis-server
+          sudo apt-get install -y build-essential tcl curl ca-certificates
+          curl -fsSL "https://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz" -o /tmp/redis.tar.gz
+          tar -xzf /tmp/redis.tar.gz -C /tmp
+          cd "/tmp/redis-${REDIS_VERSION}"
+          make -j"$(nproc)"
+          sudo make install
+          redis-server --version
       - name: Start Redis
         run: |
           redis-server --daemonize yes
