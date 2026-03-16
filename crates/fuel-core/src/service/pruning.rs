@@ -13,7 +13,11 @@ use crate::{
             OldFuelBlocks,
             OldTransactions,
         },
-        transactions::TransactionStatuses,
+        transactions::{
+            OwnedTransactionIndexKey,
+            OwnedTransactions,
+            TransactionStatuses,
+        },
     },
     service::config::HistoryRetentionConfig,
 };
@@ -39,6 +43,16 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
+    fuel_tx::{
+        Input,
+        Output,
+        input::{
+            coin::{
+                CoinPredicate,
+                CoinSigned,
+            },
+        },
+    },
     fuel_types::BlockHeight,
     services::block_importer::SharedImportResult,
     tai64::Tai64,
@@ -104,8 +118,47 @@ pub fn compute_cutoff_height(
     Ok(None)
 }
 
+/// Collect owner addresses from a transaction's inputs and outputs.
+fn collect_owners(
+    on_chain_db: &Database<OnChain>,
+    tx_id: &fuel_core_types::fuel_tx::Bytes32,
+) -> Vec<fuel_core_types::fuel_tx::Address> {
+    let view = match on_chain_db.latest_view() {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+    use fuel_core_types::blockchain::transaction::TransactionExt;
+
+    let tx = match view.storage::<Transactions>().get(tx_id) {
+        Ok(Some(tx)) => tx.into_owned(),
+        _ => return vec![],
+    };
+
+    let mut owners: Vec<fuel_core_types::fuel_tx::Address> = vec![];
+    for input in tx.inputs().iter() {
+        if let Input::CoinSigned(CoinSigned { owner, .. })
+        | Input::CoinPredicate(CoinPredicate { owner, .. }) = input
+        {
+            owners.push((*owner).into());
+        }
+    }
+    for output in tx.outputs().iter() {
+        match output {
+            Output::Coin { to, .. }
+            | Output::Change { to, .. }
+            | Output::Variable { to, .. } => {
+                owners.push((*to).into());
+            }
+            _ => {}
+        }
+    }
+    owners.sort();
+    owners.dedup();
+    owners
+}
+
 /// Prune a single block at the given height.
-/// Uses write transactions for batched mutations.
+/// Uses write transactions for batched mutations, bypassing height validation.
 pub fn prune_block_at_height(
     on_chain_db: &mut Database<OnChain>,
     off_chain_db: &mut Database<OffChain>,
@@ -121,7 +174,35 @@ pub fn prune_block_at_height(
         let tx_ids: Vec<_> = block.transactions().to_vec();
         drop(view);
 
-        // 2. Delete on-chain data via write transaction
+        // 2. Collect owners for OwnedTransactions removal (must happen before on-chain deletion)
+        let mut all_owners: Vec<(fuel_core_types::fuel_tx::Address, u16)> = Vec::new();
+        for (tx_idx, tx_id) in tx_ids.iter().enumerate() {
+            let owners = collect_owners(on_chain_db, tx_id);
+            for owner in owners {
+                all_owners.push((owner, tx_idx as u16));
+            }
+        }
+
+        // 3. Delete off-chain data first (before on-chain data is removed)
+        {
+            let mut tx = off_chain_db.write_transaction();
+            for tx_id in &tx_ids {
+                let _ = tx.storage_as_mut::<TransactionStatuses>().take(tx_id);
+                let _ = tx.storage_as_mut::<OldTransactions>().take(tx_id);
+            }
+            // Remove OwnedTransactions entries
+            for (owner, tx_idx) in &all_owners {
+                let key = OwnedTransactionIndexKey::new(owner, height, *tx_idx);
+                let _ = tx.storage_as_mut::<OwnedTransactions>().take(&key);
+            }
+            let _ = tx.storage_as_mut::<FuelBlockIdsToHeights>().take(&block_id);
+            let _ = tx.storage_as_mut::<OldFuelBlocks>().take(&height);
+            let _ = tx.storage_as_mut::<OldFuelBlockConsensus>().take(&height);
+            let changes = tx.into_changes();
+            off_chain_db.commit_changes_without_height_check(changes)?;
+        }
+
+        // 4. Delete on-chain data, bypassing height validation
         {
             let mut tx = on_chain_db.write_transaction();
             for tx_id in &tx_ids {
@@ -129,20 +210,8 @@ pub fn prune_block_at_height(
             }
             let _ = tx.storage_as_mut::<FuelBlocks>().take(&height);
             let _ = tx.storage_as_mut::<SealedBlockConsensus>().take(&height);
-            tx.commit()?;
-        }
-
-        // 3. Delete off-chain data via write transaction
-        {
-            let mut tx = off_chain_db.write_transaction();
-            for tx_id in &tx_ids {
-                let _ = tx.storage_as_mut::<TransactionStatuses>().take(tx_id);
-                let _ = tx.storage_as_mut::<OldTransactions>().take(tx_id);
-            }
-            let _ = tx.storage_as_mut::<FuelBlockIdsToHeights>().take(&block_id);
-            let _ = tx.storage_as_mut::<OldFuelBlocks>().take(&height);
-            let _ = tx.storage_as_mut::<OldFuelBlockConsensus>().take(&height);
-            tx.commit()?;
+            let changes = tx.into_changes();
+            on_chain_db.commit_changes_without_height_check(changes)?;
         }
     } else {
         drop(view);
@@ -150,7 +219,8 @@ pub fn prune_block_at_height(
         let mut tx = off_chain_db.write_transaction();
         let _ = tx.storage_as_mut::<OldFuelBlocks>().take(&height);
         let _ = tx.storage_as_mut::<OldFuelBlockConsensus>().take(&height);
-        tx.commit()?;
+        let changes = tx.into_changes();
+        off_chain_db.commit_changes_without_height_check(changes)?;
     }
 
     Ok(())

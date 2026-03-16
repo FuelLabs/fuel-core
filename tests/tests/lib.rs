@@ -39,6 +39,8 @@ mod graphql_extensions;
 #[cfg(not(feature = "only-p2p"))]
 mod health;
 #[cfg(not(feature = "only-p2p"))]
+mod history_retention;
+#[cfg(not(feature = "only-p2p"))]
 mod helpers;
 #[cfg(feature = "leader_lock")]
 #[cfg(not(feature = "not_leader_lock"))]

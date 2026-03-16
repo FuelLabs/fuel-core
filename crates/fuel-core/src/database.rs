@@ -190,6 +190,18 @@ where
 
         storage.data.shutdown()
     }
+
+    /// Commit changes without height validation.
+    /// Used by pruning to delete old block data without triggering
+    /// the monotonic height check.
+    pub fn commit_changes_without_height_check(
+        &self,
+        changes: Changes,
+    ) -> StorageResult<()> {
+        self.inner_storage()
+            .data
+            .commit_changes(None, changes.into())
+    }
 }
 
 impl<Description> GenesisDatabase<Description>
