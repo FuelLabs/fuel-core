@@ -713,7 +713,9 @@ impl RedisTestServer {
             }
         }
 
-        panic!("Failed to spawn redis-server after {MAX_START_ATTEMPTS} attempts: {last_error}");
+        panic!(
+            "Failed to spawn redis-server after {MAX_START_ATTEMPTS} attempts: {last_error}"
+        );
     }
 
     fn new_stopped() -> Self {
@@ -802,9 +804,7 @@ fn wait_for_redis_ready(port: u16, child: &mut Child) -> Result<(), String> {
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline {
         if let Some(status) = child.try_wait().map_err(|error| {
-            format!(
-                "Failed to check redis-server process state on port {port}: {error}"
-            )
+            format!("Failed to check redis-server process state on port {port}: {error}")
         })? {
             return Err(format!(
                 "redis-server exited before becoming ready on port {port} with status {status}"
