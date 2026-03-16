@@ -637,10 +637,10 @@ async fn observe_node_block_activity(node: &Node, window: Duration) -> String {
     }
 
     format!(
-        "state={service_state:?} redis=[{redis_status}] local={local_count} non_local={non_local_count} last_height={} stream_ended={ended}",
+        "state={service_state:?} redis=[{redis_status}] local={local_count} non_local={non_local_count} last_height={last_height} stream_ended={ended}",
         service_state = node.node.state(),
         redis_status = redis_status_summary(node),
-        last_height
+        last_height = last_height
             .map(|height| height.to_string())
             .unwrap_or_else(|| "none".to_string())
     )
