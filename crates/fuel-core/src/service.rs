@@ -70,6 +70,7 @@ pub mod adapters;
 pub mod config;
 pub mod genesis;
 pub mod metrics;
+pub mod pruning;
 mod query;
 pub mod sub_services;
 pub mod vm_pool;

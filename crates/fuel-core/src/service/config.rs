@@ -103,6 +103,7 @@ pub struct Config {
     #[cfg(feature = "rpc")]
     pub rpc_config: Option<fuel_core_block_aggregator_api::service::Config>,
     pub da_compression: DaCompressionMode,
+    pub history_retention: Option<HistoryRetentionConfig>,
     pub block_importer: fuel_core_importer::Config,
     #[cfg(feature = "relayer")]
     pub relayer: Option<RelayerConfig>,
@@ -270,6 +271,7 @@ impl Config {
                 ..Default::default()
             },
             da_compression: DaCompressionMode::Disabled,
+            history_retention: None,
             gas_price_config,
             block_importer,
             #[cfg(feature = "relayer")]
@@ -440,4 +442,11 @@ pub struct DaCompressionConfig {
 pub enum DaCompressionMode {
     Disabled,
     Enabled(DaCompressionConfig),
+}
+
+/// Configuration for historical data pruning.
+#[derive(Debug, Clone)]
+pub struct HistoryRetentionConfig {
+    /// Data older than this duration will be pruned.
+    pub retention_duration: Duration,
 }

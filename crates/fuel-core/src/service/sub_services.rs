@@ -83,6 +83,7 @@ use fuel_core_storage::{
 };
 #[cfg(feature = "relayer")]
 use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::fuel_types::BlockHeight;
 use fuel_core_types::signer::SignMode;
 #[cfg(feature = "rpc")]
 use rpc::*;
@@ -526,6 +527,11 @@ pub fn init_sub_services(
         Box::new(compression_service_adapter),
     )?;
 
+    // Clone databases and importer for pruning service before they're moved into SharedState
+    let pruning_on_chain_db = database.on_chain().clone();
+    let pruning_off_chain_db = database.off_chain().clone();
+    let pruning_importer_adapter = importer_adapter.clone();
+
     let shared = SharedState {
         poa_adapter,
         txpool_shared_state: txpool.shared.clone(),
@@ -581,6 +587,35 @@ pub fn init_sub_services(
 
     if let Some(compression_service) = compression_service {
         services.push(Box::new(compression_service));
+    }
+
+    // History retention pruning service
+    if let Some(ref retention_config) = config.history_retention {
+        use crate::service::pruning;
+
+        let mut on_chain_mut = pruning_on_chain_db;
+        let mut off_chain_mut = pruning_off_chain_db;
+
+        // Determine earliest retained height (default to 0)
+        let earliest_retained = BlockHeight::new(0);
+
+        // Perform startup pruning
+        let earliest_retained = pruning::startup_prune(
+            retention_config,
+            &mut on_chain_mut,
+            &mut off_chain_mut,
+            earliest_retained,
+        )?;
+
+        let pruning_stream = pruning_importer_adapter.events_shared_result();
+        let pruning_service = pruning::new_service(
+            retention_config.clone(),
+            on_chain_mut,
+            off_chain_mut,
+            pruning_stream,
+            earliest_retained,
+        );
+        services.push(Box::new(pruning_service));
     }
 
     // always make sure that the block producer is inserted last

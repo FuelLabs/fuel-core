@@ -103,7 +103,7 @@ use tracing::{
 use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
 use crate::cli::run::gas_price::GasPriceArgs;
-use fuel_core::service::config::GasPriceConfig;
+use fuel_core::service::config::{GasPriceConfig, HistoryRetentionConfig};
 #[cfg(feature = "parallel-executor")]
 use std::num::NonZeroUsize;
 
@@ -262,6 +262,11 @@ pub struct Command {
     #[arg(long = "da-compression-starting-height", env)]
     pub da_compression_starting_height: Option<NonZeroU32>,
 
+    /// Prunes historical block/transaction data older than this duration.
+    /// On startup prunes all data outside the window; on each new block prunes incrementally.
+    #[arg(long = "history-retention", env)]
+    pub history_retention: Option<humantime::Duration>,
+
     /// A new block is produced instantly when transactions are available.
     #[clap(flatten)]
     pub poa_trigger: PoATriggerArgs,
@@ -372,6 +377,7 @@ impl Command {
             consensus_aws_kms,
             da_compression,
             da_compression_starting_height,
+            history_retention,
             poa_trigger,
             predefined_blocks_path,
             coinbase_recipient,
@@ -768,6 +774,9 @@ impl Command {
                 metrics: metrics.is_enabled(Module::Producer),
             },
             gas_price_config,
+            history_retention: history_retention.map(|d| HistoryRetentionConfig {
+                retention_duration: d.into(),
+            }),
             block_importer,
             da_compression,
             #[cfg(feature = "relayer")]
