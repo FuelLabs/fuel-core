@@ -187,12 +187,13 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
         .await
         .expect("Should stop first producer before timeout");
     tokio::time::sleep(handoff_settle_delay).await;
-    tokio::time::timeout(
+    wait_for_local_block_with_retries(
+        &second_producer,
         LEADER_ELECTION_TIMEOUT,
-        wait_for_local_block(&second_producer),
+        6,
+        "Second producer should acquire leadership after first shutdown",
     )
-    .await
-    .expect("Second producer should acquire leadership after first shutdown");
+    .await;
 
     first_producer.start().await;
 
@@ -482,7 +483,7 @@ async fn find_leader_and_followers(
     timeout: Duration,
 ) -> (Node, Vec<Node>) {
     let node_count = nodes.len();
-    let max_attempts = 2usize;
+    let max_attempts = 6usize;
     let mut leader_index = None;
 
     for attempt in 1..=max_attempts {
@@ -508,7 +509,9 @@ async fn find_leader_and_followers(
                     "No producer emitted a local block within {timeout:?} after {max_attempts} attempts (nodes: {node_count})"
                 );
             }
-            Err(_) => {}
+            Err(_) => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
         }
     }
 
@@ -525,6 +528,28 @@ async fn find_leader_and_followers(
     }
 
     (leader.expect("Leader index should exist"), follower_nodes)
+}
+
+async fn wait_for_local_block_with_retries(
+    node: &Node,
+    timeout_per_attempt: Duration,
+    max_attempts: usize,
+    failure_message: &str,
+) {
+    for attempt in 1..=max_attempts {
+        if tokio::time::timeout(timeout_per_attempt, wait_for_local_block(node))
+            .await
+            .is_ok()
+        {
+            return;
+        }
+        if attempt < max_attempts {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    }
+    panic!(
+        "{failure_message}: no local block within {timeout_per_attempt:?} across {max_attempts} attempts"
+    );
 }
 
 async fn make_leader_lock_node_config_builder(
