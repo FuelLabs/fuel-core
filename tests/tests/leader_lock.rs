@@ -118,9 +118,19 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
 
     // when
     // let all producers become leader, including the final single producer
+    let mut phase = 1usize;
     while !active_producers.is_empty() {
+        eprintln!(
+            "[leader-lock][handoff-exclusive] phase={phase} active_nodes={}",
+            active_producers.len()
+        );
         let (mut leader, followers) =
             find_leader_and_followers(active_producers, LEADER_ELECTION_TIMEOUT).await;
+        eprintln!(
+            "[leader-lock][handoff-exclusive] phase={phase} elected_leader={} follower_count={}",
+            node_label(&leader),
+            followers.len()
+        );
 
         // then
         only_leader_produces_blocks(
@@ -135,12 +145,20 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
             break;
         }
 
+        eprintln!(
+            "[leader-lock][handoff-exclusive] phase={phase} stopping_leader={}",
+            node_label(&leader)
+        );
         tokio::time::timeout(STOP_TIMEOUT, leader.shutdown())
             .await
             .expect("Should stop leader before timeout");
+        eprintln!(
+            "[leader-lock][handoff-exclusive] phase={phase} leader_stopped sleeping_for={handoff_settle_delay:?}"
+        );
         tokio::time::sleep(handoff_settle_delay).await;
 
         active_producers = followers;
+        phase += 1;
     }
 }
 
@@ -186,7 +204,13 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     tokio::time::timeout(STOP_TIMEOUT, first_producer.shutdown())
         .await
         .expect("Should stop first producer before timeout");
+    eprintln!(
+        "[leader-lock][restart-lock-retention] first producer stopped, waiting for settle delay {handoff_settle_delay:?}"
+    );
     tokio::time::sleep(handoff_settle_delay).await;
+    eprintln!(
+        "[leader-lock][restart-lock-retention] waiting for second producer local block; timeout_per_attempt={LEADER_ELECTION_TIMEOUT:?}"
+    );
     wait_for_local_block_with_retries(
         &second_producer,
         LEADER_ELECTION_TIMEOUT,
@@ -505,11 +529,13 @@ async fn find_leader_and_followers(
                 panic!("Block stream ended unexpectedly before leader election");
             }
             Err(_) if attempt == max_attempts => {
+                log_leader_election_attempt_diagnostics(&nodes, attempt, timeout).await;
                 panic!(
                     "No producer emitted a local block within {timeout:?} after {max_attempts} attempts (nodes: {node_count})"
                 );
             }
             Err(_) => {
+                log_leader_election_attempt_diagnostics(&nodes, attempt, timeout).await;
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
@@ -543,6 +569,12 @@ async fn wait_for_local_block_with_retries(
         {
             return;
         }
+        let node_summary =
+            observe_node_block_activity(node, Duration::from_millis(500)).await;
+        eprintln!(
+            "[leader-lock][local-block-retry] attempt={attempt}/{max_attempts} timeout={timeout_per_attempt:?} node={node_label} summary={node_summary}",
+            node_label = node_label(node),
+        );
         if attempt < max_attempts {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -550,6 +582,70 @@ async fn wait_for_local_block_with_retries(
     panic!(
         "{failure_message}: no local block within {timeout_per_attempt:?} across {max_attempts} attempts"
     );
+}
+
+async fn log_leader_election_attempt_diagnostics(
+    nodes: &[Node],
+    attempt: usize,
+    timeout: Duration,
+) {
+    let mut diagnostics = Vec::with_capacity(nodes.len());
+    for (index, node) in nodes.iter().enumerate() {
+        let summary = observe_node_block_activity(node, Duration::from_millis(500)).await;
+        diagnostics.push(format!(
+            "index={index} node={} {}",
+            node_label(node),
+            summary
+        ));
+    }
+    eprintln!(
+        "[leader-lock][election-timeout] attempt={attempt} timeout={timeout:?} diagnostics=[{}]",
+        diagnostics.join(" | ")
+    );
+}
+
+async fn observe_node_block_activity(node: &Node, window: Duration) -> String {
+    let mut stream = node.node.shared.block_importer.block_stream();
+    let deadline = tokio::time::Instant::now() + window;
+    let mut local_count = 0usize;
+    let mut non_local_count = 0usize;
+    let mut last_height = None;
+    let mut ended = false;
+
+    loop {
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            break;
+        }
+        let remaining = deadline.saturating_duration_since(now);
+        match tokio::time::timeout(remaining, stream.next()).await {
+            Ok(Some(block)) => {
+                let height = u32::from(*block.block_header.height());
+                last_height = Some(height);
+                if block.is_locally_produced() {
+                    local_count += 1;
+                } else {
+                    non_local_count += 1;
+                }
+            }
+            Ok(None) => {
+                ended = true;
+                break;
+            }
+            Err(_) => break,
+        }
+    }
+
+    format!(
+        "local={local_count} non_local={non_local_count} last_height={} stream_ended={ended}",
+        last_height
+            .map(|height| height.to_string())
+            .unwrap_or_else(|| "none".to_string())
+    )
+}
+
+fn node_label(node: &Node) -> String {
+    node.config.name.clone()
 }
 
 async fn make_leader_lock_node_config_builder(
