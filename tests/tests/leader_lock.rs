@@ -119,7 +119,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     // when
     // let all producers become leader, including the final single producer
     while !active_producers.is_empty() {
-        let (leader, followers) =
+        let (mut leader, followers) =
             find_leader_and_followers(active_producers, LEADER_ELECTION_TIMEOUT).await;
 
         // then
@@ -135,13 +135,9 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
             break;
         }
 
-        tokio::time::timeout(
-            STOP_TIMEOUT,
-            leader.node.send_stop_signal_and_await_shutdown(),
-        )
-        .await
-        .expect("Should stop leader before timeout")
-        .expect("Should stop leader without any error");
+        tokio::time::timeout(STOP_TIMEOUT, leader.shutdown())
+            .await
+            .expect("Should stop leader before timeout");
         tokio::time::sleep(handoff_settle_delay).await;
 
         active_producers = followers;
