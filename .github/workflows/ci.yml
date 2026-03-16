@@ -265,8 +265,22 @@ jobs:
           redis-server --version
       - name: Start Redis
         run: |
-          redis-server --daemonize yes
-          redis-cli ping
+          redis-server \
+            --port 6379 \
+            --bind 127.0.0.1 \
+            --save "" \
+            --appendonly no \
+            --daemonize yes \
+            --pidfile /tmp/redis-ci.pid \
+            --dir /tmp
+          for _ in $(seq 1 20); do
+            if redis-cli -h 127.0.0.1 -p 6379 ping | grep -q PONG; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "Redis failed to start"
+          exit 1
       - name: Run leader lock integration tests
         run: |
           echo "REDIS_URL=${REDIS_URL:-redis://127.0.0.1:6379} REDIS_DB=${REDIS_DB:-0} LEADER_LOCK_KEY_PREFIX=${LEADER_LOCK_KEY_PREFIX:-<unset>}"
