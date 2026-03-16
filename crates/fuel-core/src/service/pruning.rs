@@ -30,7 +30,6 @@ use fuel_core_storage::{
     StorageAsRef,
     tables::{
         FuelBlocks,
-        ProcessedTransactions,
         SealedBlockConsensus,
         Transactions,
     },
@@ -127,7 +126,6 @@ pub fn prune_block_at_height(
             let mut tx = on_chain_db.write_transaction();
             for tx_id in &tx_ids {
                 let _ = tx.storage_as_mut::<Transactions>().take(tx_id);
-                let _ = tx.storage_as_mut::<ProcessedTransactions>().take(tx_id);
             }
             let _ = tx.storage_as_mut::<FuelBlocks>().take(&height);
             let _ = tx.storage_as_mut::<SealedBlockConsensus>().take(&height);
