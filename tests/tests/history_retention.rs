@@ -1,7 +1,5 @@
 #![allow(non_snake_case)]
 
-use fuel_core_client::client::types::TransactionStatus;
-use fuel_core_types::fuel_types::BlockHeight;
 use rand::{
     SeedableRng,
     prelude::StdRng,
@@ -23,8 +21,16 @@ async fn history_retention__basic_pruning_on_restart() -> anyhow::Result<()> {
     ])
     .await?;
 
-    // Produce 10 blocks with transactions
-    for _ in 0..10 {
+    // Produce 5 early blocks
+    for _ in 0..5 {
+        produce_block_with_tx(&mut rng, &driver.client).await;
+    }
+
+    // Wait so that early blocks have timestamps well before the retention window
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    // Produce 5 more recent blocks
+    for _ in 0..5 {
         produce_block_with_tx(&mut rng, &driver.client).await;
     }
 
@@ -35,21 +41,23 @@ async fn history_retention__basic_pruning_on_restart() -> anyhow::Result<()> {
     // Stop the node, keep the db directory
     let db_dir = driver.kill().await;
 
-    // Restart with very short history retention (1 second)
-    let driver2 = FuelCoreDriver::spawn_feeless_with_directory(
+    // Restart with very short history retention (2 seconds).
+    // The early blocks are now >3s older than the latest block, so they
+    // fall outside the retention window and will be pruned on startup.
+    let driver2 = FuelCoreDriver::spawn_with_directory(
         db_dir,
         &[
             "--debug",
             "--poa-instant",
             "true",
             "--history-retention",
-            "1s",
+            "2s",
         ],
     )
     .await?;
 
     // Wait a moment for startup pruning to complete
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
     // Old blocks should be pruned (block 1 should be gone)
     let block_1 = driver2.client.block_by_height(1u32.into()).await?;

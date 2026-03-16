@@ -236,7 +236,11 @@ pub fn prune_blocks_range(
     let from_u32: u32 = from.into();
     let to_u32: u32 = to.into();
 
-    for h in from_u32..to_u32 {
+    // Never prune the genesis block (height 0) — it is needed for
+    // startup initialization and peer handshake.
+    let start = if from_u32 == 0 { 1 } else { from_u32 };
+
+    for h in start..to_u32 {
         prune_block_at_height(on_chain_db, off_chain_db, BlockHeight::new(h))?;
     }
 
