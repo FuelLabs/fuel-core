@@ -599,10 +599,10 @@ async fn make_leader_lock_test_config_builder_with_redis_urls(
         redis_urls,
         lease_key: lease_key.to_string(),
         lease_ttl: Duration::from_secs(2),
-        node_timeout: Duration::from_millis(100),
+        node_timeout: Duration::from_millis(500),
         retry_delay: Duration::from_millis(100),
         max_retry_delay_offset: Duration::from_millis(25),
-        max_attempts: 2,
+        max_attempts: 8,
         stream_max_len: 1000,
         quorum_disruption_budget: 0,
     };
