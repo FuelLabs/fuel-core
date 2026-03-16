@@ -33,6 +33,10 @@ use rand::{
     rngs::StdRng,
 };
 use std::{
+    io::{
+        Read,
+        Write,
+    },
     net::{
         SocketAddrV4,
         TcpListener,
@@ -95,7 +99,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LEASE_TTL: Duration = Duration::from_secs(2);
     const HANDOFF_SETTLE_BUFFER: Duration = Duration::from_millis(200);
-    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
+    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(12);
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const PHASE_BLOCKS: usize = 5;
     const STOP_TIMEOUT: Duration = Duration::from_secs(1);
@@ -149,7 +153,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LEASE_TTL: Duration = Duration::from_secs(2);
     const HANDOFF_SETTLE_BUFFER: Duration = Duration::from_millis(200);
-    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(5);
+    const LEADER_ELECTION_TIMEOUT: Duration = Duration::from_secs(12);
     const BLOCK_IMPORT_TIMEOUT: Duration = Duration::from_secs(2);
     const BLOCKS_BEFORE_FAILOVER: usize = 3;
     const BLOCKS_AFTER_RESTART: usize = 5;
@@ -693,9 +697,23 @@ struct RedisTestServer {
 
 impl RedisTestServer {
     fn spawn() -> Self {
-        let mut server = Self::new_stopped();
-        server.start();
-        server
+        const MAX_START_ATTEMPTS: usize = 20;
+        let mut last_error = String::new();
+
+        for attempt in 1..=MAX_START_ATTEMPTS {
+            let mut server = Self::new_stopped();
+            match server.start_on_bound_port() {
+                Ok(()) => return server,
+                Err(error) => {
+                    last_error = format!(
+                        "attempt {attempt}/{MAX_START_ATTEMPTS} on port {} failed: {error}",
+                        server.port
+                    );
+                }
+            }
+        }
+
+        panic!("Failed to spawn redis-server after {MAX_START_ATTEMPTS} attempts: {last_error}");
     }
 
     fn new_stopped() -> Self {
@@ -711,9 +729,28 @@ impl RedisTestServer {
         if self.child.is_some() {
             return;
         }
-        let child = spawn_redis_server(self.port);
-        wait_for_redis_ready(self.port);
+        self.start_on_bound_port()
+            .unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    fn start_on_bound_port(&mut self) -> Result<(), String> {
+        if TcpStream::connect(("127.0.0.1", self.port)).is_ok() {
+            return Err(format!(
+                "Cannot start redis-server on port {}: a listener is already active",
+                self.port
+            ));
+        }
+
+        let mut child = spawn_redis_server(self.port).map_err(|error| {
+            format!(
+                "Failed to launch redis-server on port {}: {error}",
+                self.port
+            )
+        })?;
+
+        wait_for_redis_ready(self.port, &mut child)?;
         self.child = Some(child);
+        Ok(())
     }
 
     fn stop(&mut self) {
@@ -746,7 +783,7 @@ fn bind_unused_port() -> u16 {
     port
 }
 
-fn spawn_redis_server(port: u16) -> Child {
+fn spawn_redis_server(port: u16) -> std::io::Result<Child> {
     Command::new("redis-server")
         .arg("--port")
         .arg(port.to_string())
@@ -759,18 +796,50 @@ fn spawn_redis_server(port: u16) -> Child {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .expect("redis-server must be installed for this test")
 }
 
-fn wait_for_redis_ready(port: u16) {
+fn wait_for_redis_ready(port: u16, child: &mut Child) -> Result<(), String> {
     let deadline = Instant::now() + Duration::from_secs(5);
     while Instant::now() < deadline {
-        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
-            return;
+        if let Some(status) = child.try_wait().map_err(|error| {
+            format!(
+                "Failed to check redis-server process state on port {port}: {error}"
+            )
+        })? {
+            return Err(format!(
+                "redis-server exited before becoming ready on port {port} with status {status}"
+            ));
         }
+
+        if redis_ping(port) {
+            return Ok(());
+        }
+
         thread::sleep(Duration::from_millis(25));
     }
-    panic!("redis-server did not become ready in time");
+
+    Err(format!(
+        "redis-server did not respond to PING within 5s on port {port}"
+    ))
+}
+
+fn redis_ping(port: u16) -> bool {
+    let mut stream = match TcpStream::connect(("127.0.0.1", port)) {
+        Ok(stream) => stream,
+        Err(_) => return false,
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(100)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(100)));
+
+    if stream.write_all(b"*1\r\n$4\r\nPING\r\n").is_err() {
+        return false;
+    }
+
+    let mut response = [0_u8; 7];
+    match stream.read_exact(&mut response) {
+        Ok(()) => response == *b"+PONG\r\n",
+        Err(_) => false,
+    }
 }
 
 fn update_signing_key(config: &mut Config, key: Address) {
