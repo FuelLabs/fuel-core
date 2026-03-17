@@ -96,19 +96,6 @@ async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
-    // Enable tracing so PoA errors/warnings are visible in CI output
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| {
-                    tracing_subscriber::EnvFilter::new(
-                        "fuel_core::service::adapters::consensus_module::poa=debug,fuel_core_poa=debug,warn",
-                    )
-                }),
-        )
-        .with_test_writer()
-        .try_init();
-
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LEASE_TTL: Duration = Duration::from_secs(2);
     const HANDOFF_SETTLE_BUFFER: Duration = Duration::from_secs(2);
@@ -131,19 +118,9 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
 
     // when
     // let all producers become leader, including the final single producer
-    let mut phase = 1usize;
     while !active_producers.is_empty() {
-        eprintln!(
-            "[leader-lock][handoff-exclusive] phase={phase} active_nodes={}",
-            active_producers.len()
-        );
         let (mut leader, followers) =
             find_leader_and_followers(active_producers, LEADER_ELECTION_TIMEOUT).await;
-        eprintln!(
-            "[leader-lock][handoff-exclusive] phase={phase} elected_leader={} follower_count={}",
-            node_label(&leader),
-            followers.len()
-        );
 
         // then
         only_leader_produces_blocks(
@@ -158,20 +135,12 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
             break;
         }
 
-        eprintln!(
-            "[leader-lock][handoff-exclusive] phase={phase} stopping_leader={}",
-            node_label(&leader)
-        );
         tokio::time::timeout(STOP_TIMEOUT, leader.shutdown())
             .await
             .expect("Should stop leader before timeout");
-        eprintln!(
-            "[leader-lock][handoff-exclusive] phase={phase} leader_stopped sleeping_for={handoff_settle_delay:?}"
-        );
         tokio::time::sleep(handoff_settle_delay).await;
 
         active_producers = followers;
-        phase += 1;
     }
 }
 
@@ -217,13 +186,7 @@ async fn leader_lock__two_producers__when_first_restarts_then_second_keeps_lock(
     tokio::time::timeout(STOP_TIMEOUT, first_producer.shutdown())
         .await
         .expect("Should stop first producer before timeout");
-    eprintln!(
-        "[leader-lock][restart-lock-retention] first producer stopped, waiting for settle delay {handoff_settle_delay:?}"
-    );
     tokio::time::sleep(handoff_settle_delay).await;
-    eprintln!(
-        "[leader-lock][restart-lock-retention] waiting for second producer local block; timeout_per_attempt={LEADER_ELECTION_TIMEOUT:?}"
-    );
     wait_for_local_block_with_retries(
         &second_producer,
         LEADER_ELECTION_TIMEOUT,
@@ -542,13 +505,11 @@ async fn find_leader_and_followers(
                 panic!("Block stream ended unexpectedly before leader election");
             }
             Err(_) if attempt == max_attempts => {
-                log_leader_election_attempt_diagnostics(&nodes, attempt, timeout).await;
                 panic!(
                     "No producer emitted a local block within {timeout:?} after {max_attempts} attempts (nodes: {node_count})"
                 );
             }
             Err(_) => {
-                log_leader_election_attempt_diagnostics(&nodes, attempt, timeout).await;
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
@@ -582,12 +543,6 @@ async fn wait_for_local_block_with_retries(
         {
             return;
         }
-        let node_summary =
-            observe_node_block_activity(node, Duration::from_millis(500)).await;
-        eprintln!(
-            "[leader-lock][local-block-retry] attempt={attempt}/{max_attempts} timeout={timeout_per_attempt:?} node={node_label} summary={node_summary}",
-            node_label = node_label(node),
-        );
         if attempt < max_attempts {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
@@ -595,161 +550,6 @@ async fn wait_for_local_block_with_retries(
     panic!(
         "{failure_message}: no local block within {timeout_per_attempt:?} across {max_attempts} attempts"
     );
-}
-
-async fn log_leader_election_attempt_diagnostics(
-    nodes: &[Node],
-    attempt: usize,
-    timeout: Duration,
-) {
-    let mut diagnostics = Vec::with_capacity(nodes.len());
-    for (index, node) in nodes.iter().enumerate() {
-        let summary = observe_node_block_activity(node, Duration::from_millis(500)).await;
-        diagnostics.push(format!(
-            "index={index} node={} {}",
-            node_label(node),
-            summary
-        ));
-    }
-    // Query Redis state directly to see lock and stream status
-    let redis_state = nodes
-        .first()
-        .and_then(|n| n.config.leader_lock.as_ref())
-        .map(|lock| query_redis_state(&lock.redis_urls, &lock.lease_key))
-        .unwrap_or_else(|| "no-lock-config".to_string());
-    eprintln!(
-        "[leader-lock][election-timeout] attempt={attempt} timeout={timeout:?} redis_state=[{redis_state}] diagnostics=[{}]",
-        diagnostics.join(" | ")
-    );
-}
-
-fn query_redis_state(redis_urls: &[String], lease_key: &str) -> String {
-    // Key names match RedisLeaderLeaseAdapter::new(): {lease_key}, {lease_key}:epoch:token, {lease_key}:block:stream
-    let lock_key = lease_key.to_string();
-    let epoch_key = format!("{lease_key}:epoch:token");
-    let stream_key = format!("{lease_key}:block:stream");
-    let mut parts = Vec::new();
-    for url in redis_urls {
-        let port = match parse_redis_port(url) {
-            Some(p) => p,
-            None => {
-                parts.push(format!("{url}:parse-error"));
-                continue;
-            }
-        };
-        let result = query_single_redis(port, &lock_key, &stream_key, &epoch_key);
-        parts.push(format!("{url}:{result}"));
-    }
-    parts.join(",")
-}
-
-fn query_single_redis(
-    port: u16,
-    lock_key: &str,
-    stream_key: &str,
-    epoch_key: &str,
-) -> String {
-    let mut stream = match TcpStream::connect(("127.0.0.1", port)) {
-        Ok(s) => s,
-        Err(e) => return format!("connect-err({e})"),
-    };
-    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
-
-    // Send a pipeline: GET lock_key, GET epoch_key, XLEN stream_key, XREVRANGE stream_key + - COUNT 1
-    let pipeline = format!(
-        "*2\r\n$3\r\nGET\r\n${lk_len}\r\n{lock_key}\r\n\
-         *2\r\n$3\r\nGET\r\n${ek_len}\r\n{epoch_key}\r\n\
-         *2\r\n$4\r\nXLEN\r\n${sk_len}\r\n{stream_key}\r\n\
-         *2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n",
-        lk_len = lock_key.len(),
-        ek_len = epoch_key.len(),
-        sk_len = stream_key.len(),
-    );
-    if stream.write_all(pipeline.as_bytes()).is_err() {
-        return "write-err".to_string();
-    }
-
-    let mut buf = vec![0u8; 4096];
-    let n = match stream.read(&mut buf) {
-        Ok(n) => n,
-        Err(e) => return format!("read-err({e})"),
-    };
-    let raw = String::from_utf8_lossy(&buf[..n]);
-    // Parse the raw RESP responses into a human-readable summary
-    format!("lock_key={lock_key} raw_resp={}", raw.replace("\r\n", "|"))
-}
-
-async fn observe_node_block_activity(node: &Node, window: Duration) -> String {
-    let mut stream = node.node.shared.block_importer.block_stream();
-    let deadline = tokio::time::Instant::now() + window;
-    let mut local_count = 0usize;
-    let mut non_local_count = 0usize;
-    let mut last_height = None;
-    let mut ended = false;
-
-    loop {
-        let now = tokio::time::Instant::now();
-        if now >= deadline {
-            break;
-        }
-        let remaining = deadline.saturating_duration_since(now);
-        match tokio::time::timeout(remaining, stream.next()).await {
-            Ok(Some(block)) => {
-                let height = u32::from(*block.block_header.height());
-                last_height = Some(height);
-                if block.is_locally_produced() {
-                    local_count += 1;
-                } else {
-                    non_local_count += 1;
-                }
-            }
-            Ok(None) => {
-                ended = true;
-                break;
-            }
-            Err(_) => break,
-        }
-    }
-
-    format!(
-        "state={service_state:?} redis=[{redis_status}] local={local_count} non_local={non_local_count} last_height={last_height} stream_ended={ended}",
-        service_state = node.node.state(),
-        redis_status = redis_status_summary(node),
-        last_height = last_height
-            .map(|height| height.to_string())
-            .unwrap_or_else(|| "none".to_string())
-    )
-}
-
-fn node_label(node: &Node) -> String {
-    node.config.name.clone()
-}
-
-fn redis_status_summary(node: &Node) -> String {
-    node.config
-        .leader_lock
-        .as_ref()
-        .map(|lock| {
-            lock.redis_urls
-                .iter()
-                .map(|url| {
-                    let status = parse_redis_port(url)
-                        .map(redis_ping)
-                        .map(|is_up| if is_up { "up" } else { "down" })
-                        .unwrap_or("unknown");
-                    format!("{url}:{status}")
-                })
-                .collect::<Vec<_>>()
-                .join(",")
-        })
-        .unwrap_or_else(|| "none".to_string())
-}
-
-fn parse_redis_port(redis_url: &str) -> Option<u16> {
-    let after_scheme = redis_url.strip_prefix("redis://")?;
-    let host_port = after_scheme.split('/').next()?;
-    host_port.rsplit(':').next()?.parse::<u16>().ok()
 }
 
 async fn make_leader_lock_node_config_builder(
