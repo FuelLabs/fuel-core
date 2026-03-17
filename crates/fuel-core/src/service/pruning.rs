@@ -105,17 +105,36 @@ pub fn compute_cutoff_height(
 
     let latest_height: u32 = (*latest_block.header().height()).into();
 
-    // Scan backward from latest to find the cutoff height
-    for h in (0..=latest_height).rev() {
-        let height = BlockHeight::new(h);
+    tracing::info!(
+        "Computing pruning cutoff height (binary search over {} blocks)...",
+        latest_height
+    );
+
+    // Binary search for the highest block whose timestamp is below the cutoff.
+    let mut lo: u32 = 0;
+    let mut hi: u32 = latest_height;
+    let mut result: Option<BlockHeight> = None;
+
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        let height = BlockHeight::new(mid);
         if let Some(block) = view.storage::<FuelBlocks>().get(&height)? {
             if block.header().time() < cutoff_tai64 {
-                return Ok(Some(height));
+                result = Some(height);
+                lo = mid + 1;
+            } else {
+                if mid == 0 {
+                    break;
+                }
+                hi = mid - 1;
             }
+        } else {
+            // Block missing (possibly pruned), move right
+            lo = mid + 1;
         }
     }
 
-    Ok(None)
+    Ok(result)
 }
 
 /// Collect owner addresses from a transaction's inputs and outputs.
