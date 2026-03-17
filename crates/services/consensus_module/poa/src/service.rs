@@ -599,10 +599,10 @@ where
         // SyncTask, which can lag. Using a stale next_height causes
         // unreconciled_blocks to return blocks the DB already has,
         // leading to IncorrectBlockHeight errors.
-        if let Ok(Some(db_height)) = self.block_importer.latest_block_height() {
-            if db_height > self.last_height {
-                self.last_height = db_height;
-            }
+        if let Ok(Some(db_height)) = self.block_importer.latest_block_height()
+            && db_height > self.last_height
+        {
+            self.last_height = db_height;
         }
 
         match self
@@ -621,29 +621,33 @@ where
                 for block in blocks {
                     let block_height = *block.entity.header().height();
                     let block_time = block.entity.header().time();
+
+                    // Skip blocks the DB already has (can happen when
+                    // P2P imports race with reconciliation).
+                    if block_height <= self.last_height {
+                        continue;
+                    }
+
                     match self.block_importer.execute_and_commit(block).await {
                         Ok(()) => {
                             self.last_height = block_height;
                             self.last_timestamp = block_time;
                         }
                         Err(err) => {
-                            // The block may already exist in the DB (e.g.
-                            // imported via P2P between our
-                            // latest_block_height check and now). Re-sync
-                            // from the DB so the next iteration uses the
-                            // correct height. The adapter always restores
-                            // stream cursors, so these entries will be
-                            // re-readable if needed.
+                            // Re-sync from the DB and skip — the block
+                            // may have been imported via P2P between our
+                            // latest_block_height check and now. Stream
+                            // cursors are always restored by the adapter,
+                            // so these entries remain re-readable.
                             tracing::warn!(
                                 "Reconciliation import failed at height \
                                  {block_height}: {err}. Re-syncing from DB."
                             );
                             if let Ok(Some(db_height)) =
                                 self.block_importer.latest_block_height()
+                                && db_height > self.last_height
                             {
-                                if db_height > self.last_height {
-                                    self.last_height = db_height;
-                                }
+                                self.last_height = db_height;
                             }
                         }
                     }
