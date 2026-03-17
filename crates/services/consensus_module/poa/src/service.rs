@@ -618,20 +618,35 @@ where
                 Ok(self.handle_normal_block_production(deadline).await)
             }
             LeaderState::UnreconciledBlocks(blocks) => {
-                // NOTE: If execute_and_commit fails here, the error
-                // propagates and the Redis adapter's stream cursors
-                // remain advanced past the entries we failed to import
-                // (see cursor note in unreconciled_blocks). The
-                // latest_block_height sync above prevents the most
-                // common failure (stale height), but a more robust
-                // design would have the adapter only advance cursors
-                // after the caller confirms successful import.
                 for block in blocks {
                     let block_height = *block.entity.header().height();
                     let block_time = block.entity.header().time();
-                    self.block_importer.execute_and_commit(block).await?;
-                    self.last_height = block_height;
-                    self.last_timestamp = block_time;
+                    match self.block_importer.execute_and_commit(block).await {
+                        Ok(()) => {
+                            self.last_height = block_height;
+                            self.last_timestamp = block_time;
+                        }
+                        Err(err) => {
+                            // The block may already exist in the DB (e.g.
+                            // imported via P2P between our
+                            // latest_block_height check and now). Re-sync
+                            // from the DB so the next iteration uses the
+                            // correct height. The adapter always restores
+                            // stream cursors, so these entries will be
+                            // re-readable if needed.
+                            tracing::warn!(
+                                "Reconciliation import failed at height \
+                                 {block_height}: {err}. Re-syncing from DB."
+                            );
+                            if let Ok(Some(db_height)) =
+                                self.block_importer.latest_block_height()
+                            {
+                                if db_height > self.last_height {
+                                    self.last_height = db_height;
+                                }
+                            }
+                        }
+                    }
                 }
                 Ok(TaskNextAction::Continue)
             }

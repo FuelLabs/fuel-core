@@ -773,25 +773,13 @@ impl RedisLeaderLeaseAdapter {
         if !self.should_reconcile_from_stream(next_height).await? {
             return Ok(Vec::new());
         }
-        // Snapshot cursors before full reads so we can restore them if
-        // reconciliation fails partway through (e.g. repair failure).
-        // Without this, cursors advance past entries that were read but
-        // not reconciled, making them permanently unreachable.
-        //
-        // NOTE: Cursor advancement here is optimistic — cursors advance
-        // during read_stream_entries_on_node, before the caller (PoA
-        // service) has confirmed the blocks were successfully imported.
-        // If the caller fails to import (e.g. IncorrectBlockHeight from
-        // a DB/PoA height desync), cursors stay advanced and those
-        // entries become permanently invisible on subsequent reads.
-        //
-        // A more robust design would decouple cursor advancement from
-        // reading: return the entries along with a "commit handle" that
-        // the caller invokes after successful import to advance cursors.
-        // This would make the read → import → cursor-advance pipeline
-        // atomic from the caller's perspective. For now, the PoA syncs
-        // its last_height from the DB before calling leader_state(),
-        // which prevents the most common failure case.
+        // Snapshot cursors and always restore them after reading. This
+        // ensures entries are re-readable if the caller (PoA service)
+        // fails to import them (e.g. block already imported via P2P).
+        // Cursors advance implicitly on the next call: when the caller
+        // has imported the blocks and next_height has advanced past all
+        // stream entries, should_reconcile_from_stream skips the cursor
+        // forward.
         let cursor_snapshot = self.stream_cursors.lock().await.clone();
         let mut reconciled = Vec::new();
         let max_reconcile_blocks_per_round =
@@ -858,7 +846,6 @@ impl RedisLeaderLeaseAdapter {
         }
 
         let mut current_height = u32::from(next_height);
-        let mut reconciliation_incomplete = false;
 
         for _ in 0..max_reconcile_blocks_per_round {
             let nodes_with_height = blocks_by_node
@@ -927,14 +914,12 @@ impl RedisLeaderLeaseAdapter {
                                 "Repair failed to reach quorum at height \
                                  {current_height} — will retry next round"
                             );
-                            reconciliation_incomplete = true;
                             break;
                         }
                         Err(e) => {
                             tracing::warn!(
                                 "Repair error at height {current_height}: {e}"
                             );
-                            reconciliation_incomplete = true;
                             break;
                         }
                     }
@@ -949,12 +934,12 @@ impl RedisLeaderLeaseAdapter {
             current_height = next;
         }
 
-        // Restore cursors so the unreconciled entries will be re-read
-        // on the next round. Without this, the cursors would be past
-        // those entries and they'd be permanently skipped.
-        if reconciliation_incomplete {
-            *self.stream_cursors.lock().await = cursor_snapshot;
-        }
+        // Always restore cursors so entries are re-readable if the
+        // caller (PoA service) fails to import them. The caller
+        // advances past successfully imported entries implicitly:
+        // on the next call, should_reconcile_from_stream advances
+        // cursors when latest_stream_height < next_height.
+        *self.stream_cursors.lock().await = cursor_snapshot;
 
         Ok(reconciled)
     }
