@@ -249,8 +249,20 @@ pub fn prune_blocks_range(
     // startup initialization and peer handshake.
     let start = if from_u32 == 0 { 1 } else { from_u32 };
 
+    let total = to_u32.saturating_sub(start);
+    let mut pruned: u32 = 0;
+
     for h in start..to_u32 {
         prune_block_at_height(on_chain_db, off_chain_db, BlockHeight::new(h))?;
+        pruned += 1;
+        if pruned % 10_000 == 0 {
+            tracing::info!(
+                "Pruning progress: {}/{} blocks ({:.1}%)",
+                pruned,
+                total,
+                (pruned as f64 / total as f64) * 100.0
+            );
+        }
     }
 
     Ok(())
