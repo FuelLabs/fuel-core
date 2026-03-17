@@ -172,6 +172,11 @@ pub fn prune_block_at_height(
         let block = block.into_owned();
         let block_id = block.id();
         let tx_ids: Vec<_> = block.transactions().to_vec();
+        tracing::trace!(
+            "Pruning block at height {} ({} transactions)",
+            u32::from(height),
+            tx_ids.len()
+        );
         drop(view);
 
         // 2. Collect owners for OwnedTransactions removal (must happen before on-chain deletion)
@@ -215,6 +220,10 @@ pub fn prune_block_at_height(
         }
     } else {
         drop(view);
+        tracing::trace!(
+            "Block at height {} already pruned, cleaning up off-chain remnants",
+            u32::from(height)
+        );
         // Block already pruned — try off-chain cleanup
         let mut tx = off_chain_db.write_transaction();
         let _ = tx.storage_as_mut::<OldFuelBlocks>().take(&height);
@@ -257,6 +266,11 @@ pub fn startup_prune(
     let cutoff = compute_cutoff_height(on_chain_db, config.retention_duration)?;
 
     let Some(cutoff_height) = cutoff else {
+        let earliest_u32: u32 = earliest_retained.into();
+        tracing::info!(
+            "No startup pruning needed. Earliest retained height: {}",
+            earliest_u32
+        );
         return Ok(earliest_retained);
     };
 
@@ -264,6 +278,10 @@ pub fn startup_prune(
     let earliest_u32: u32 = earliest_retained.into();
 
     if cutoff_u32 <= earliest_u32 {
+        tracing::info!(
+            "No startup pruning needed. Earliest retained height: {}",
+            earliest_u32
+        );
         return Ok(earliest_retained);
     }
 
@@ -276,7 +294,10 @@ pub fn startup_prune(
     prune_blocks_range(on_chain_db, off_chain_db, earliest_retained, cutoff_height)?;
 
     tracing::info!(
-        "Startup pruning complete. Earliest retained height: {}",
+        "Startup pruning complete. Pruned {} blocks (height {} to {}). Earliest retained height: {}",
+        cutoff_u32 - earliest_u32,
+        earliest_u32,
+        cutoff_u32,
         cutoff_u32
     );
 
@@ -297,6 +318,10 @@ impl RunnableService for PruningInitTask {
         _watcher: &StateWatcher,
         _params: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
+        tracing::info!(
+            "History pruning enabled with retention duration of {:?}",
+            self.config.retention_duration
+        );
         Ok(PruningTask {
             config: self.config,
             on_chain_db: self.on_chain_db,
@@ -338,8 +363,11 @@ impl RunnableTask for PruningTask {
                                     return TaskNextAction::ErrorContinue(e);
                                 }
                                 self.earliest_retained_height = cutoff_height;
-                                tracing::debug!(
-                                    "Pruned up to height {}",
+                                tracing::info!(
+                                    "Pruned {} blocks (height {} to {}). Earliest retained height: {}",
+                                    cutoff_u32 - earliest_u32,
+                                    earliest_u32,
+                                    cutoff_u32,
                                     cutoff_u32,
                                 );
                             }
