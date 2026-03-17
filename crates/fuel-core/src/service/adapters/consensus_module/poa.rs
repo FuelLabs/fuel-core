@@ -679,9 +679,7 @@ impl RedisLeaderLeaseAdapter {
         let entries = match stream_entries {
             Err(_) => {
                 self.clear_cached_connection(redis_node).await;
-                return Err(anyhow!(
-                    "Timed out reading stream entries from Redis node"
-                ));
+                return Err(anyhow!("Timed out reading stream entries from Redis node"));
             }
             Ok(Err(e)) => {
                 self.clear_cached_connection(redis_node).await;
@@ -2217,7 +2215,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn read_stream_entries_on_node__when_next_height_is_provided_then_reads_matching_entries()
-    {
+     {
         // given
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:cursor-incremental-read".to_string();
@@ -2278,8 +2276,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn read_stream_entries_on_node__when_max_entries_is_small_then_caps_results()
-     {
+    async fn read_stream_entries_on_node__when_max_entries_is_small_then_caps_results() {
         // given
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:cursor-pagination".to_string();
@@ -3111,7 +3108,7 @@ mod tests {
     /// should still be able to read the same backlog entries.
     #[tokio::test(flavor = "multi_thread")]
     async fn unreconciled_blocks__after_quorum_read_failure_then_backlog_remains_readable()
-    {
+     {
         // given — 3 Redis nodes, block published to all 3
         let mut redis_a = RedisTestServer::spawn();
         let mut redis_b = RedisTestServer::spawn();
@@ -3179,8 +3176,7 @@ mod tests {
     /// When sub-quorum repair fails, the next reconciliation round
     /// should still be able to re-read and retry.
     #[tokio::test(flavor = "multi_thread")]
-    async fn unreconciled_blocks__after_repair_failure_then_backlog_remains_readable()
-    {
+    async fn unreconciled_blocks__after_repair_failure_then_backlog_remains_readable() {
         // given — 3 Redis nodes, block published to only 1 node (sub-quorum)
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
