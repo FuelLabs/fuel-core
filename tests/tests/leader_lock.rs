@@ -96,6 +96,19 @@ async fn leader_lock__four_producers__only_first_leader_produces_blocks() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
+    // Enable tracing so PoA errors/warnings are visible in CI output
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| {
+                    tracing_subscriber::EnvFilter::new(
+                        "fuel_core::service::adapters::consensus_module::poa=debug,fuel_core_poa=debug,warn",
+                    )
+                }),
+        )
+        .with_test_writer()
+        .try_init();
+
     const BLOCK_TIME: Duration = Duration::from_millis(200);
     const LEASE_TTL: Duration = Duration::from_secs(2);
     const HANDOFF_SETTLE_BUFFER: Duration = Duration::from_secs(2);
