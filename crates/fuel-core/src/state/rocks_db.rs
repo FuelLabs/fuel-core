@@ -646,6 +646,15 @@ where
         Ok(())
     }
 
+    /// Trigger full compaction on all column families to reclaim disk space.
+    pub fn compact_all(&self) {
+        for cf_id in enum_iterator::all::<Description::Column>() {
+            let cf = self.cf(cf_id);
+            self.db
+                .compact_range_cf(&cf, None::<&[u8]>, None::<&[u8]>);
+        }
+    }
+
     pub fn multi_get<K, I>(
         &self,
         column: u32,

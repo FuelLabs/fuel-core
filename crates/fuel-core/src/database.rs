@@ -191,6 +191,12 @@ where
         storage.data.shutdown()
     }
 
+    /// Trigger RocksDB compaction on all column families to reclaim disk space
+    /// after bulk deletions (e.g., pruning).
+    pub fn compact_all(&self) {
+        self.inner_storage().data.compact_all()
+    }
+
     /// Commit changes without height validation.
     /// Used by pruning to delete old block data without triggering
     /// the monotonic height check.

@@ -172,6 +172,11 @@ where
         Ok(reverse_changes)
     }
 
+    /// Trigger full compaction on all column families to reclaim disk space.
+    pub fn compact_all(&self) {
+        self.db.compact_all();
+    }
+
     pub fn latest_view(&self) -> RocksDb<Description> {
         self.db.create_snapshot_generic()
     }
@@ -620,6 +625,10 @@ where
 
     fn shutdown(&self) {
         self.db.shutdown()
+    }
+
+    fn compact_all(&self) {
+        self.compact_all();
     }
 }
 

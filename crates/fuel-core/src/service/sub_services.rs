@@ -607,6 +607,16 @@ pub fn init_sub_services(
             earliest_retained,
         )?;
 
+        // Trigger compaction to reclaim disk space after bulk pruning
+        if earliest_retained > BlockHeight::new(0) {
+            tracing::info!(
+                "Triggering RocksDB compaction to reclaim disk space..."
+            );
+            on_chain_mut.compact_all();
+            off_chain_mut.compact_all();
+            tracing::info!("RocksDB compaction complete");
+        }
+
         let pruning_stream = pruning_importer_adapter.events_shared_result();
         let pruning_service = pruning::new_service(
             retention_config.clone(),

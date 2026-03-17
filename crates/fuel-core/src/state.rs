@@ -72,6 +72,11 @@ pub trait TransactableStorage<Height>: IterableStore + Debug + Send + Sync {
     fn shutdown(&self) {
         // Do nothing by default
     }
+
+    /// Trigger full compaction to reclaim disk space after bulk deletions.
+    fn compact_all(&self) {
+        // Do nothing by default (only meaningful for RocksDB backends)
+    }
 }
 
 // It is used only to allow conversion of the `StorageTransaction` into the `DataSource`.
