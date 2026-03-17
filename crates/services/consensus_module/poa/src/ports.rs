@@ -68,6 +68,9 @@ pub trait BlockImporter: Send + Sync {
     async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()>;
 
     fn block_stream(&self) -> BoxStream<BlockImportInfo>;
+
+    /// Returns the latest committed block height from the database.
+    fn latest_block_height(&self) -> anyhow::Result<Option<BlockHeight>>;
 }
 
 #[async_trait::async_trait]

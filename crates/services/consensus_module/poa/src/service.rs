@@ -594,6 +594,17 @@ where
         &mut self,
         deadline: Instant,
     ) -> anyhow::Result<TaskNextAction> {
+        // Sync last_height with the DB to avoid stale reconciliation.
+        // P2P block imports advance the DB height independently of the
+        // SyncTask, which can lag. Using a stale next_height causes
+        // unreconciled_blocks to return blocks the DB already has,
+        // leading to IncorrectBlockHeight errors.
+        if let Ok(Some(db_height)) = self.block_importer.latest_block_height() {
+            if db_height > self.last_height {
+                self.last_height = db_height;
+            }
+        }
+
         match self
             .reconciliation_port
             .leader_state(self.next_height())
@@ -607,6 +618,14 @@ where
                 Ok(self.handle_normal_block_production(deadline).await)
             }
             LeaderState::UnreconciledBlocks(blocks) => {
+                // NOTE: If execute_and_commit fails here, the error
+                // propagates and the Redis adapter's stream cursors
+                // remain advanced past the entries we failed to import
+                // (see cursor note in unreconciled_blocks). The
+                // latest_block_height sync above prevents the most
+                // common failure (stale height), but a more robust
+                // design would have the adapter only advance cursors
+                // after the caller confirms successful import.
                 for block in blocks {
                     let block_height = *block.entity.header().height();
                     let block_time = block.entity.header().time();

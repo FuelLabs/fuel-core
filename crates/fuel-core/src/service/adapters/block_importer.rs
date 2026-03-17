@@ -77,6 +77,7 @@ impl BlockImporterAdapter {
         verifier: VerifierAdapter,
         block_reconciliation_write_adapter: BlockReconciliationWriteAdapter,
     ) -> Self {
+        let database_for_height = database.clone();
         let importer = Importer::new(
             chain_id,
             config,
@@ -87,6 +88,7 @@ impl BlockImporterAdapter {
         );
         Self {
             block_importer: Arc::new(importer),
+            database: database_for_height,
         }
     }
 

@@ -9,7 +9,10 @@ use crate::{
     },
 };
 use anyhow::anyhow;
-use fuel_core_importer::ports::BlockReconciliationWritePort;
+use fuel_core_importer::ports::{
+    BlockReconciliationWritePort,
+    ImporterDatabase,
+};
 use fuel_core_metrics::poa_metrics::poa_metrics;
 use fuel_core_poa::{
     ports::{
@@ -774,6 +777,21 @@ impl RedisLeaderLeaseAdapter {
         // reconciliation fails partway through (e.g. repair failure).
         // Without this, cursors advance past entries that were read but
         // not reconciled, making them permanently unreachable.
+        //
+        // NOTE: Cursor advancement here is optimistic — cursors advance
+        // during read_stream_entries_on_node, before the caller (PoA
+        // service) has confirmed the blocks were successfully imported.
+        // If the caller fails to import (e.g. IncorrectBlockHeight from
+        // a DB/PoA height desync), cursors stay advanced and those
+        // entries become permanently invisible on subsequent reads.
+        //
+        // A more robust design would decouple cursor advancement from
+        // reading: return the entries along with a "commit handle" that
+        // the caller invokes after successful import to advance cursors.
+        // This would make the read → import → cursor-advance pipeline
+        // atomic from the caller's perspective. For now, the PoA syncs
+        // its last_height from the DB before calling leader_state(),
+        // which prevents the most common failure case.
         let cursor_snapshot = self.stream_cursors.lock().await.clone();
         let mut reconciled = Vec::new();
         let max_reconcile_blocks_per_round =
@@ -1419,6 +1437,10 @@ impl BlockImporter for BlockImporterAdapter {
                 .filter_map(|result| result.ok())
                 .map(|result| BlockImportInfo::from(result.shared_result)),
         )
+    }
+
+    fn latest_block_height(&self) -> anyhow::Result<Option<BlockHeight>> {
+        self.database.latest_block_height().map_err(Into::into)
     }
 }
 
