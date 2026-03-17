@@ -50,6 +50,10 @@ use fuel_core_types::{
         GTFArgs,
         RegId,
         op,
+        wideint::{
+            MathArgs,
+            MathOp,
+        },
     },
     fuel_tx::{
         ContractIdExt,
@@ -683,6 +687,26 @@ pub fn run(c: &mut Criterion) {
     // dynamic storage
     let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
+    // Instructions to warm up slots 1..=10_000 each with zero bytes of data.
+    // Used to populate VM storage cache so that miss/hit detection takes realistic time.
+    let warmup_nonzero_slots = {
+        let mut ops = vec![op::movi(0x20, 32), op::aloc(0x20)];
+        // Can't use instruction-based loops in post_call so do it manually here.
+        for _ in 0..10_000 {
+            ops.push(op::wqop_args(
+                RegId::HP,
+                RegId::HP,
+                RegId::ONE,
+                MathArgs {
+                    op: MathOp::ADD,
+                    indirect_rhs: false,
+                },
+            ));
+            ops.push(op::swri(RegId::HP, RegId::HP, 0));
+        }
+        ops
+    };
+
     for hot in [true, false] {
         let caching = if hot { "hot" } else { "cold" };
         {
@@ -694,7 +718,7 @@ pub fn run(c: &mut Criterion) {
                 let start_key = Bytes32::zeroed();
                 let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                let post_call = vec![
+                let mut post_call = vec![
                     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
@@ -702,6 +726,8 @@ pub fn run(c: &mut Criterion) {
                     op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
                     op::movi(0x12, i as u32),
                 ];
+                post_call.extend(warmup_nonzero_slots.clone());
+
                 let mut bench = VmBench::contract_using_db(
                     rng,
                     db.to_vm_database(),
@@ -727,7 +753,7 @@ pub fn run(c: &mut Criterion) {
                 let start_key = Bytes32::zeroed();
                 let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                let post_call = vec![
+                let mut post_call = vec![
                     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
@@ -736,6 +762,8 @@ pub fn run(c: &mut Criterion) {
                     op::movi(0x12, i as u32),
                     op::aloc(0x12),
                 ];
+                post_call.extend(warmup_nonzero_slots.clone());
+
                 let mut bench = VmBench::contract_using_db(
                     rng,
                     db.to_vm_database(),
@@ -761,7 +789,7 @@ pub fn run(c: &mut Criterion) {
                 let start_key = Bytes32::zeroed();
                 let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                let post_call = vec![
+                let mut post_call = vec![
                     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
@@ -770,6 +798,8 @@ pub fn run(c: &mut Criterion) {
                     op::movi(0x12, i as u32),
                     op::aloc(0x12),
                 ];
+                post_call.extend(warmup_nonzero_slots.clone());
+
                 let mut bench = VmBench::contract_using_db(
                     rng,
                     db.to_vm_database(),
@@ -795,13 +825,15 @@ pub fn run(c: &mut Criterion) {
                 let start_key = Bytes32::zeroed();
                 let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                let post_call = vec![
+                let mut post_call = vec![
                     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
                     op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
                 ];
+                post_call.extend(warmup_nonzero_slots.clone());
+
                 let mut bench = VmBench::contract_using_db(
                     rng,
                     db.to_vm_database(),
