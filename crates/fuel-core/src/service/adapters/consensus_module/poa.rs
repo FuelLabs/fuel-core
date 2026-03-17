@@ -128,7 +128,6 @@ pub struct RedisLeaderLeaseAdapter {
     lease_owner_token: String,
     drop_release_guard: std::sync::Arc<()>,
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
-    stream_cursors: std::sync::Arc<Mutex<Vec<Option<String>>>>,
     lease_ttl_millis: u64,
     lease_drift_millis: u64,
     node_timeout: Duration,
@@ -150,7 +149,6 @@ impl Clone for RedisLeaderLeaseAdapter {
             lease_owner_token: self.lease_owner_token.clone(),
             drop_release_guard: self.drop_release_guard.clone(),
             current_epoch_token: self.current_epoch_token.clone(),
-            stream_cursors: self.stream_cursors.clone(),
             lease_ttl_millis: self.lease_ttl_millis,
             lease_drift_millis: self.lease_drift_millis,
             node_timeout: self.node_timeout,
@@ -215,7 +213,6 @@ impl RedisLeaderLeaseAdapter {
         let max_retry_delay_offset_millis =
             u64::try_from(max_retry_delay_offset.as_millis())?;
         let max_attempts = usize::try_from(max_attempts)?.max(1);
-        let redis_nodes_len = redis_nodes.len();
         let lease_owner_token = uuid::Uuid::new_v4().to_string();
         let epoch_key = format!("{lease_key}:epoch:token");
         let block_stream_key = format!("{lease_key}:block:stream");
@@ -233,7 +230,6 @@ impl RedisLeaderLeaseAdapter {
             lease_owner_token,
             drop_release_guard: std::sync::Arc::new(()),
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
-            stream_cursors: std::sync::Arc::new(Mutex::new(vec![None; redis_nodes_len])),
             lease_ttl_millis,
             lease_drift_millis,
             node_timeout,
@@ -578,22 +574,6 @@ impl RedisLeaderLeaseAdapter {
         });
     }
 
-    async fn stream_cursor_for_node(&self, node_index: usize) -> Option<String> {
-        let cursors = self.stream_cursors.lock().await;
-        cursors.get(node_index).cloned().flatten()
-    }
-
-    async fn set_stream_cursor_for_node(
-        &self,
-        node_index: usize,
-        cursor: Option<String>,
-    ) {
-        let mut cursors = self.stream_cursors.lock().await;
-        if let Some(entry) = cursors.get_mut(node_index) {
-            *entry = cursor;
-        }
-    }
-
     async fn read_latest_stream_entry_on_node(
         &self,
         redis_node: &RedisNode,
@@ -645,24 +625,17 @@ impl RedisLeaderLeaseAdapter {
         let mut successful_reads = 0usize;
         let mut failed_count = 0usize;
         let mut nodes_indicating_backlog = 0usize;
-        for (node_index, result) in latest_results.into_iter().enumerate() {
+        for result in latest_results {
             match result {
-                Ok(Some((latest_height, latest_stream_id))) => {
+                Ok(Some((latest_height, _latest_stream_id))) => {
                     successful_reads = successful_reads.saturating_add(1);
                     if latest_height >= next_height {
                         nodes_indicating_backlog =
                             nodes_indicating_backlog.saturating_add(1);
-                    } else {
-                        self.set_stream_cursor_for_node(
-                            node_index,
-                            Some(latest_stream_id),
-                        )
-                        .await;
                     }
                 }
                 Ok(None) => {
                     successful_reads = successful_reads.saturating_add(1);
-                    self.set_stream_cursor_for_node(node_index, None).await;
                 }
                 Err(e) => {
                     tracing::warn!("Redis latest stream read failed: {e}");
@@ -683,8 +656,8 @@ impl RedisLeaderLeaseAdapter {
 
     async fn read_stream_entries_on_node(
         &self,
-        node_index: usize,
         redis_node: &RedisNode,
+        next_height: u32,
         max_entries: usize,
     ) -> anyhow::Result<Vec<(u32, u64, SealedBlock)>> {
         if max_entries == 0 {
@@ -692,74 +665,42 @@ impl RedisLeaderLeaseAdapter {
         }
 
         let mut connection = self.multiplexed_connection(redis_node).await?;
-        let mut start_id = self
-            .stream_cursor_for_node(node_index)
-            .await
-            .unwrap_or_default();
+        let count = u32::try_from(max_entries).unwrap_or(u32::MAX);
+        let stream_entries = timeout(
+            self.node_timeout,
+            redis::Script::new(READ_STREAM_ENTRIES_SCRIPT)
+                .key(&self.block_stream_key)
+                .arg(next_height)
+                .arg(count)
+                .invoke_async::<Vec<(u32, u64, Vec<u8>, String)>>(&mut connection),
+        )
+        .await;
+
+        let entries = match stream_entries {
+            Err(_) => {
+                self.clear_cached_connection(redis_node).await;
+                return Err(anyhow!(
+                    "Timed out reading stream entries from Redis node"
+                ));
+            }
+            Ok(Err(e)) => {
+                self.clear_cached_connection(redis_node).await;
+                return Err(anyhow!(
+                    "Failed to read stream entries from Redis node: {e}"
+                ));
+            }
+            Ok(Ok(entries)) => entries,
+        };
+
         let mut blocks = Vec::new();
-
-        while blocks.len() < max_entries {
-            let page_size = max_entries.saturating_sub(blocks.len());
-            let page_size = u32::try_from(page_size).unwrap_or(u32::MAX);
-            let stream_entries = timeout(
-                self.node_timeout,
-                redis::Script::new(READ_STREAM_ENTRIES_SCRIPT)
-                    .key(&self.block_stream_key)
-                    .arg(&start_id)
-                    .arg(page_size)
-                    .invoke_async::<Vec<(u32, u64, Vec<u8>, String)>>(&mut connection),
-            )
-            .await;
-
-            let entries = match stream_entries {
-                Err(_) => {
-                    self.clear_cached_connection(redis_node).await;
-                    return Err(anyhow!(
-                        "Timed out reading stream entries from Redis node"
-                    ));
+        for (height, epoch, bytes, _stream_id) in entries {
+            match postcard::from_bytes::<SealedBlock>(&bytes) {
+                Ok(block) => blocks.push((height, epoch, block)),
+                Err(e) => {
+                    tracing::warn!(
+                        "Skipping stream entry: failed to deserialize block at height {height}: {e}"
+                    );
                 }
-                Ok(Err(e)) => {
-                    self.clear_cached_connection(redis_node).await;
-                    return Err(anyhow!(
-                        "Failed to read stream entries from Redis node: {e}"
-                    ));
-                }
-                Ok(Ok(entries)) => entries,
-            };
-
-            if entries.is_empty() {
-                break;
-            }
-
-            let fetched_count = entries.len();
-            let mut last_stream_id = None;
-            for (height, epoch, bytes, stream_id) in entries {
-                match postcard::from_bytes::<SealedBlock>(&bytes) {
-                    Ok(block) => {
-                        blocks.push((height, epoch, block));
-                        if blocks.len() == max_entries {
-                            last_stream_id = Some(stream_id);
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            "Skipping stream entry on node {node_index}: \
-                             failed to deserialize block at height {height}: {e}"
-                        );
-                    }
-                }
-                last_stream_id = Some(stream_id);
-            }
-
-            if let Some(last_stream_id) = last_stream_id {
-                start_id = last_stream_id.clone();
-                self.set_stream_cursor_for_node(node_index, Some(last_stream_id))
-                    .await;
-            }
-
-            if fetched_count < usize::try_from(page_size).unwrap_or(usize::MAX) {
-                break;
             }
         }
 
@@ -773,23 +714,16 @@ impl RedisLeaderLeaseAdapter {
         if !self.should_reconcile_from_stream(next_height).await? {
             return Ok(Vec::new());
         }
-        // Snapshot cursors and always restore them after reading. This
-        // ensures entries are re-readable if the caller (PoA service)
-        // fails to import them (e.g. block already imported via P2P).
-        // Cursors advance implicitly on the next call: when the caller
-        // has imported the blocks and next_height has advanced past all
-        // stream entries, should_reconcile_from_stream skips the cursor
-        // forward.
-        let cursor_snapshot = self.stream_cursors.lock().await.clone();
         let mut reconciled = Vec::new();
         let max_reconcile_blocks_per_round =
             usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
+        let next_height_u32 = u32::from(next_height);
         let read_results =
             futures::future::join_all(self.redis_nodes.iter().enumerate().map(
-                |(node_index, redis_node)| {
+                |(_node_index, redis_node)| {
                     self.read_stream_entries_on_node(
-                        node_index,
                         redis_node,
+                        next_height_u32,
                         max_reconcile_blocks_per_round,
                     )
                 },
@@ -809,7 +743,6 @@ impl RedisLeaderLeaseAdapter {
         }
 
         if !self.quorum_reached(successful_reads.len()) {
-            *self.stream_cursors.lock().await = cursor_snapshot;
             return Err(anyhow!(
                 "Cannot reconcile: only {}/{} Redis nodes responded ({} failed)",
                 successful_reads.len(),
@@ -860,7 +793,6 @@ impl RedisLeaderLeaseAdapter {
 
             if nodes_with_height == 0 {
                 if reconciled.is_empty() {
-                    *self.stream_cursors.lock().await = cursor_snapshot;
                     return Err(anyhow!(
                         "Backlog unresolved at height {current_height}: \
                          stream indicates backlog but no entries found at next height"
@@ -922,7 +854,6 @@ impl RedisLeaderLeaseAdapter {
                                  {current_height} — will retry next round"
                             );
                             if reconciled.is_empty() {
-                                *self.stream_cursors.lock().await = cursor_snapshot;
                                 return Err(anyhow!(
                                     "Backlog unresolved at height {current_height}: \
                                      repair failed to reach quorum"
@@ -935,7 +866,6 @@ impl RedisLeaderLeaseAdapter {
                                 "Repair error at height {current_height}: {e}"
                             );
                             if reconciled.is_empty() {
-                                *self.stream_cursors.lock().await = cursor_snapshot;
                                 return Err(anyhow!(
                                     "Backlog unresolved at height {current_height}: \
                                      repair error: {e}"
@@ -947,7 +877,6 @@ impl RedisLeaderLeaseAdapter {
                 }
             } else {
                 if reconciled.is_empty() {
-                    *self.stream_cursors.lock().await = cursor_snapshot;
                     return Err(anyhow!(
                         "Backlog unresolved at height {current_height}: \
                          no winning block candidate"
@@ -961,13 +890,6 @@ impl RedisLeaderLeaseAdapter {
             };
             current_height = next;
         }
-
-        // Always restore cursors so entries are re-readable if the
-        // caller (PoA service) fails to import them. The caller
-        // advances past successfully imported entries implicitly:
-        // on the next call, should_reconcile_from_stream advances
-        // cursors when latest_stream_height < next_height.
-        *self.stream_cursors.lock().await = cursor_snapshot;
 
         Ok(reconciled)
     }
@@ -2254,7 +2176,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn unreconciled_blocks__when_quorum_latest_height_is_below_next_height_then_returns_empty_and_advances_cursor()
+    async fn unreconciled_blocks__when_quorum_latest_height_is_below_next_height_then_returns_empty()
      {
         // given
         let redis = RedisTestServer::spawn();
@@ -2285,24 +2207,16 @@ mod tests {
             .unreconciled_blocks(2.into())
             .await
             .expect("reconciliation read should succeed");
-        let cursor = {
-            let cursors = adapter.stream_cursors.lock().await;
-            cursors.first().cloned().flatten()
-        };
 
         // then
         assert!(
             blocks.is_empty(),
             "Expected fast path to skip full reconciliation"
         );
-        assert!(
-            cursor.is_some(),
-            "Expected fast path to advance cursor to latest stream entry"
-        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn read_stream_entries_on_node__when_cursor_exists_then_reads_only_new_entries()
+    async fn read_stream_entries_on_node__when_next_height_is_provided_then_reads_matching_entries()
     {
         // given
         let redis = RedisTestServer::spawn();
@@ -2336,12 +2250,12 @@ mod tests {
 
         // when
         let first_read = adapter
-            .read_stream_entries_on_node(0, &redis_node, 1000)
+            .read_stream_entries_on_node(&redis_node, 1, 1000)
             .await
             .expect("first read should succeed");
         append_stream_block(&mut conn, &stream_key, 3, &h3_data, 1);
         let second_read = adapter
-            .read_stream_entries_on_node(0, &redis_node, 1000)
+            .read_stream_entries_on_node(&redis_node, 3, 1000)
             .await
             .expect("second read should succeed");
 
@@ -2354,17 +2268,17 @@ mod tests {
         assert_eq!(
             second_read.len(),
             1,
-            "Expected cursor read to include only new entries"
+            "Expected height-filtered read to include only matching entries"
         );
         assert_eq!(
             u32::from(*second_read[0].2.entity.header().height()),
             3,
-            "Expected only newly appended height after cursor advancement"
+            "Expected only the requested next height"
         );
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn read_stream_entries_on_node__when_max_entries_is_small_then_reads_next_page_from_cursor()
+    async fn read_stream_entries_on_node__when_max_entries_is_small_then_caps_results()
      {
         // given
         let redis = RedisTestServer::spawn();
@@ -2399,11 +2313,11 @@ mod tests {
 
         // when
         let first_page = adapter
-            .read_stream_entries_on_node(0, &redis_node, 2)
+            .read_stream_entries_on_node(&redis_node, 1, 2)
             .await
             .expect("first page should succeed");
         let second_page = adapter
-            .read_stream_entries_on_node(0, &redis_node, 2)
+            .read_stream_entries_on_node(&redis_node, 3, 2)
             .await
             .expect("second page should succeed");
 
@@ -2422,12 +2336,12 @@ mod tests {
         assert_eq!(
             second_page.len(),
             1,
-            "Expected second page to include the remaining entry"
+            "Expected height filter to return only matching trailing entry"
         );
         assert_eq!(
             u32::from(*second_page[0].2.entity.header().height()),
             3,
-            "Expected second page to continue from the cursor"
+            "Expected second read to include only the requested next height"
         );
     }
 
@@ -3193,10 +3107,11 @@ mod tests {
         }
     }
 
-    /// When quorum reads fail during reconciliation, cursors must be
-    /// restored so that a subsequent call can still see the entries.
+    /// When quorum reads fail during reconciliation, a subsequent call
+    /// should still be able to read the same backlog entries.
     #[tokio::test(flavor = "multi_thread")]
-    async fn unreconciled_blocks__cursors_restored_after_quorum_read_failure() {
+    async fn unreconciled_blocks__after_quorum_read_failure_then_backlog_remains_readable()
+    {
         // given — 3 Redis nodes, block published to all 3
         let mut redis_a = RedisTestServer::spawn();
         let mut redis_b = RedisTestServer::spawn();
@@ -3224,8 +3139,7 @@ mod tests {
             .expect("publish should succeed on all 3 nodes");
         adapter.release().await.expect("release should succeed");
 
-        // when — kill 2 nodes so quorum read fails, advancing cursors
-        // on the 1 node that responded
+        // when — kill 2 nodes so quorum read fails
         redis_a.stop();
         redis_b.stop();
 
@@ -3251,7 +3165,6 @@ mod tests {
         append_stream_block(&mut conn_b, &stream_key, 1, &block_data, 1);
 
         // then — subsequent call must still see the block on node C
-        // (cursor must have been restored, not left past the entry)
         let blocks = adapter_b
             .unreconciled_blocks(1.into())
             .await
@@ -3259,14 +3172,15 @@ mod tests {
         assert_eq!(
             blocks.len(),
             1,
-            "Cursor restore after quorum failure should allow re-reading entries"
+            "Quorum read failure should not make backlog entries unreadable"
         );
     }
 
-    /// When sub-quorum repair fails, cursors must be restored so that
-    /// the next reconciliation round can re-read and retry.
+    /// When sub-quorum repair fails, the next reconciliation round
+    /// should still be able to re-read and retry.
     #[tokio::test(flavor = "multi_thread")]
-    async fn unreconciled_blocks__cursors_restored_after_repair_failure() {
+    async fn unreconciled_blocks__after_repair_failure_then_backlog_remains_readable()
+    {
         // given — 3 Redis nodes, block published to only 1 node (sub-quorum)
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -3296,8 +3210,7 @@ mod tests {
             *epoch = Some(99);
         }
 
-        // First call: reads entries (advancing cursors), then repair
-        // fails because we don't hold the lock
+        // First call reads entries, then repair fails because we don't hold the lock.
         let result = adapter.unreconciled_blocks(1.into()).await;
         // Repair failure now returns an error because backlog remains unresolved.
         assert!(
@@ -3315,7 +3228,6 @@ mod tests {
         );
 
         // then — second call must still see the sub-quorum block
-        // (cursor must have been restored after repair failure)
         let blocks = adapter
             .unreconciled_blocks(1.into())
             .await
@@ -3323,7 +3235,7 @@ mod tests {
         assert_eq!(
             blocks.len(),
             1,
-            "Cursor restore after repair failure should allow re-reading and repairing the block"
+            "Repair failure should not make backlog unreadable on the next round"
         );
     }
 }
