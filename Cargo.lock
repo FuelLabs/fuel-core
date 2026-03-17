@@ -4195,7 +4195,7 @@ version = "0.66.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7549a5a1eda5763a8c45fe75226de3ddb7793735a33e35cf270ebef3cb916ed"
 dependencies = [
- "bitflags 2.9.4",
+ "bitflags 2.11.0",
  "fuel-types 0.66.1",
  "serde",
  "strum 0.24.1",
