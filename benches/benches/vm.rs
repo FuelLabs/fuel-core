@@ -27,25 +27,8 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 /// Measures a single instruction using `iter_custom` with production-like
 /// storage nesting.
-///
-/// `cold` controls the between-iteration reset strategy:
-///
-/// * `false` (**hot**) – after each timed iteration `reset_vm_state` is called
-///   to restore the diff and `reset_changes` clears pending DB writes.
-///   `reset_vm_state` either leaves read-cache entries intact (read-only ops)
-///   or re-warms them with the pre-instruction values (write ops), so every
-///   iteration after the first hits the in-memory `storage_slot_cache`.
-///
-/// * `true` (**cold**) – the VM is snapshotted *after* DB setup but *before*
-///   any timed execution, then restored from that snapshot before each
-///   iteration.  The snapshot carries an empty `storage_slot_cache`, so every
-///   measured iteration pays the cold-read cost.
-fn run_group_ref_impl<I>(
-    group: &mut BenchmarkGroup<WallTime>,
-    id: I,
-    bench: VmBench,
-    cold: bool,
-) where
+pub fn run_group_ref<I>(group: &mut BenchmarkGroup<WallTime>, id: I, bench: VmBench)
+where
     I: AsRef<str>,
 {
     let mut i = bench.prepare().expect("failed to prepare bench");
@@ -54,7 +37,7 @@ fn run_group_ref_impl<I>(
             let VmBenchPrepared {
                 vm,
                 instruction,
-                diff,
+                reset,
             } = &mut i;
 
             let clock = quanta::Clock::new();
@@ -69,16 +52,8 @@ fn run_group_ref_impl<I>(
             let database = GenesisDatabase::new(Arc::new(tx_database_tx));
             *vm.as_mut().database_mut() = database.into_transaction();
 
-            // For cold mode: snapshot the VM (with empty storage_slot_cache)
-            // before any timed execution so each iteration can be reset to it.
-            let cold_vm = cold.then(|| vm.clone());
-
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
-                if let Some(cold_vm) = &cold_vm {
-                    *vm = cold_vm.clone();
-                }
-
                 let start = black_box(clock.raw());
                 match instruction {
                     Instruction::CALL(call) => {
@@ -93,39 +68,21 @@ fn run_group_ref_impl<I>(
                 let end = black_box(clock.raw());
                 total += clock.delta(start, end);
 
-                if cold_vm.is_none() {
-                    vm.reset_vm_state(diff);
-                    // Reset database changes.
-                    vm.as_mut().database_mut().reset_changes();
+                // Reset database changes.
+                match reset {
+                    VmBenchPreparedReset::Registers(registers) => {
+                        vm.registers_mut().copy_from_slice(&*registers);
+                    }
+                    VmBenchPreparedReset::Diff(diff) => {
+                        vm.reset_vm_state(diff);
+                    }
                 }
+                vm.as_mut().database_mut().reset_changes();
             }
             *vm.as_mut().database_mut() = original_db;
             total
         })
     });
-}
-
-/// Benchmarks `bench` with a warm `storage_slot_cache` (hot reads).
-///
-/// After criterion's warm-up phase every sample sees pre-populated cache
-/// entries, measuring steady-state hot-path performance.
-pub fn run_group_ref<I>(group: &mut BenchmarkGroup<WallTime>, id: I, bench: VmBench)
-where
-    I: AsRef<str>,
-{
-    run_group_ref_impl(group, id, bench, false);
-}
-
-/// Benchmarks `bench` with a cold `storage_slot_cache` (cold reads).
-///
-/// The VM is restored from a pre-execution snapshot before each timed
-/// iteration so every sample pays the first-access storage cost, regardless
-/// of criterion's warm-up iterations.
-pub fn run_group_ref_cold<I>(group: &mut BenchmarkGroup<WallTime>, id: I, bench: VmBench)
-where
-    I: AsRef<str>,
-{
-    run_group_ref_impl(group, id, bench, true);
 }
 
 fn vm(c: &mut Criterion) {

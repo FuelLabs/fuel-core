@@ -122,6 +122,8 @@ pub struct VmBench {
     pub witnesses: Vec<Witness>,
     pub db: Option<VmStorage<StorageTransaction<GenesisDatabase>>>,
     pub instruction: Instruction,
+    /// Minimal VM reset only sets registers to pre-instruction values
+    pub minimal_vm_reset: bool,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
@@ -138,7 +140,13 @@ pub struct VmBenchPrepared {
         Script,
     >,
     pub instruction: Instruction,
-    pub diff: diff::Diff<diff::InitialVmState>,
+    pub reset: VmBenchPreparedReset,
+}
+
+#[derive(Debug, Clone)]
+pub enum VmBenchPreparedReset {
+    Registers([u64; VM_REGISTER_COUNT]),
+    Diff(diff::Diff<diff::InitialVmState>),
 }
 
 const TX_SIZE: u64 = 64 * 1024 * 1024;
@@ -177,6 +185,7 @@ impl VmBench {
             witnesses: vec![],
             db: None,
             instruction,
+            minimal_vm_reset: false,
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
@@ -361,6 +370,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_minimal_vm_reset(mut self, value: bool) -> Self {
+        self.minimal_vm_reset = value;
+        self
+    }
+
     pub fn prepare(self) -> anyhow::Result<VmBenchPrepared> {
         self.try_into()
     }
@@ -385,6 +399,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             witnesses,
             db,
             instruction,
+            minimal_vm_reset,
             prepare_call,
             dummy_contract,
             contract_code,
@@ -563,7 +578,12 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         Ok(Self {
             vm,
             instruction,
-            diff,
+            reset: match minimal_vm_reset {
+                true => VmBenchPreparedReset::Registers(
+                    vm_before_first_instruction.registers().try_into().unwrap(),
+                ),
+                false => VmBenchPreparedReset::Diff(diff),
+            },
         })
     }
 }
