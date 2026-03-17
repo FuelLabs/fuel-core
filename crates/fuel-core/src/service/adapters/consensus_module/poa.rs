@@ -859,6 +859,13 @@ impl RedisLeaderLeaseAdapter {
             );
 
             if nodes_with_height == 0 {
+                if reconciled.is_empty() {
+                    *self.stream_cursors.lock().await = cursor_snapshot;
+                    return Err(anyhow!(
+                        "Backlog unresolved at height {current_height}: \
+                         stream indicates backlog but no entries found at next height"
+                    ));
+                }
                 break;
             }
 
@@ -914,17 +921,38 @@ impl RedisLeaderLeaseAdapter {
                                 "Repair failed to reach quorum at height \
                                  {current_height} — will retry next round"
                             );
+                            if reconciled.is_empty() {
+                                *self.stream_cursors.lock().await = cursor_snapshot;
+                                return Err(anyhow!(
+                                    "Backlog unresolved at height {current_height}: \
+                                     repair failed to reach quorum"
+                                ));
+                            }
                             break;
                         }
                         Err(e) => {
                             tracing::warn!(
                                 "Repair error at height {current_height}: {e}"
                             );
+                            if reconciled.is_empty() {
+                                *self.stream_cursors.lock().await = cursor_snapshot;
+                                return Err(anyhow!(
+                                    "Backlog unresolved at height {current_height}: \
+                                     repair error: {e}"
+                                ));
+                            }
                             break;
                         }
                     }
                 }
             } else {
+                if reconciled.is_empty() {
+                    *self.stream_cursors.lock().await = cursor_snapshot;
+                    return Err(anyhow!(
+                        "Backlog unresolved at height {current_height}: \
+                         no winning block candidate"
+                    ));
+                }
                 break;
             }
 
@@ -2207,10 +2235,7 @@ mod tests {
 
         // when
         let publish_result = adapter.publish_produced_block(&block);
-        let unreconciled = adapter
-            .unreconciled_blocks(1.into())
-            .await
-            .expect("reconciliation read should succeed");
+        let unreconciled = adapter.unreconciled_blocks(1.into()).await;
 
         // then
         assert!(
@@ -2218,8 +2243,8 @@ mod tests {
             "Publish must fail when fewer than quorum nodes accept write"
         );
         assert!(
-            unreconciled.is_empty(),
-            "Below-quorum stream entry must not be reconciled as committed"
+            unreconciled.is_err(),
+            "Unresolved backlog should return an error instead of empty result"
         );
         assert_eq!(
             stream_len(&redis_a.redis_url(), &stream_key),
@@ -3274,16 +3299,10 @@ mod tests {
         // First call: reads entries (advancing cursors), then repair
         // fails because we don't hold the lock
         let result = adapter.unreconciled_blocks(1.into()).await;
-        // Repair failure returns Ok([]) since the block is sub-quorum
-        // and repair can't succeed, but the entries were read
+        // Repair failure now returns an error because backlog remains unresolved.
         assert!(
-            result.is_ok(),
-            "Should return Ok even if repair fails (not a quorum read error)"
-        );
-        let blocks = result.unwrap();
-        assert!(
-            blocks.is_empty(),
-            "Should return empty — repair could not reach quorum"
+            result.is_err(),
+            "Should return error when repair fails and backlog remains unresolved"
         );
 
         // Now acquire the lease so repair can succeed
