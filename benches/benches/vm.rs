@@ -37,7 +37,8 @@ where
             let VmBenchPrepared {
                 vm,
                 instruction,
-                reset,
+                pre_instruction_hook,
+                diff,
             } = &mut i;
 
             let clock = quanta::Clock::new();
@@ -54,6 +55,10 @@ where
 
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
+                if let Some(hook) = pre_instruction_hook {
+                    hook(vm);
+                }
+
                 let start = black_box(clock.raw());
                 match instruction {
                     Instruction::CALL(call) => {
@@ -68,15 +73,7 @@ where
                 let end = black_box(clock.raw());
                 total += clock.delta(start, end);
 
-                // Reset database changes.
-                match reset {
-                    VmBenchPreparedReset::Registers(registers) => {
-                        vm.registers_mut().copy_from_slice(&*registers);
-                    }
-                    VmBenchPreparedReset::Diff(diff) => {
-                        vm.reset_vm_state(diff);
-                    }
-                }
+                vm.reset_vm_state(diff);
                 vm.as_mut().database_mut().reset_changes();
             }
             *vm.as_mut().database_mut() = original_db;

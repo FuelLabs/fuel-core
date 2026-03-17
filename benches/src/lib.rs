@@ -122,8 +122,15 @@ pub struct VmBench {
     pub witnesses: Vec<Witness>,
     pub db: Option<VmStorage<StorageTransaction<GenesisDatabase>>>,
     pub instruction: Instruction,
-    /// Minimal VM reset only sets registers to pre-instruction values
-    pub minimal_vm_reset: bool,
+    pub pre_instruction_hook: Option<
+        fn(
+            &mut Interpreter<
+                MemoryInstance,
+                VmStorage<StorageTransaction<GenesisDatabase>>,
+                Script,
+            >,
+        ),
+    >,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
@@ -140,13 +147,16 @@ pub struct VmBenchPrepared {
         Script,
     >,
     pub instruction: Instruction,
-    pub reset: VmBenchPreparedReset,
-}
-
-#[derive(Debug, Clone)]
-pub enum VmBenchPreparedReset {
-    Registers([u64; VM_REGISTER_COUNT]),
-    Diff(diff::Diff<diff::InitialVmState>),
+    pub pre_instruction_hook: Option<
+        fn(
+            &mut Interpreter<
+                MemoryInstance,
+                VmStorage<StorageTransaction<GenesisDatabase>>,
+                Script,
+            >,
+        ),
+    >,
+    pub diff: diff::Diff<diff::InitialVmState>,
 }
 
 const TX_SIZE: u64 = 64 * 1024 * 1024;
@@ -185,7 +195,7 @@ impl VmBench {
             witnesses: vec![],
             db: None,
             instruction,
-            minimal_vm_reset: false,
+            pre_instruction_hook: None,
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
@@ -370,8 +380,17 @@ impl VmBench {
         self
     }
 
-    pub fn with_minimal_vm_reset(mut self, value: bool) -> Self {
-        self.minimal_vm_reset = value;
+    pub fn with_pre_instruction_hook(
+        mut self,
+        hook: fn(
+            &mut Interpreter<
+                MemoryInstance,
+                VmStorage<StorageTransaction<GenesisDatabase>>,
+                Script,
+            >,
+        ),
+    ) -> Self {
+        self.pre_instruction_hook = Some(hook);
         self
     }
 
@@ -399,7 +418,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             witnesses,
             db,
             instruction,
-            minimal_vm_reset,
+            pre_instruction_hook,
             prepare_call,
             dummy_contract,
             contract_code,
@@ -578,12 +597,8 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         Ok(Self {
             vm,
             instruction,
-            reset: match minimal_vm_reset {
-                true => VmBenchPreparedReset::Registers(
-                    vm_before_first_instruction.registers().try_into().unwrap(),
-                ),
-                false => VmBenchPreparedReset::Diff(diff),
-            },
+            pre_instruction_hook,
+            diff,
         })
     }
 }

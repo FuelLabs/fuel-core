@@ -3437,7 +3437,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -4192,7 +4192,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 dependencies = [
  "bitflags 2.11.0",
  "fuel-types 0.66.1",
@@ -4203,7 +4203,7 @@ dependencies = [
 [[package]]
 name = "fuel-compression"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 dependencies = [
  "fuel-derive 0.66.1",
  "fuel-types 0.66.1",
@@ -5116,7 +5116,7 @@ dependencies = [
 [[package]]
 name = "fuel-crypto"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 dependencies = [
  "base64ct",
  "coins-bip32",
@@ -5148,7 +5148,7 @@ dependencies = [
 [[package]]
 name = "fuel-derive"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5185,7 +5185,7 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 dependencies = [
  "derive_more 0.99.20",
  "digest 0.10.7",
@@ -5217,7 +5217,7 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 [[package]]
 name = "fuel-storage"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 
 [[package]]
 name = "fuel-tx"
@@ -5244,7 +5244,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 dependencies = [
  "bitflags 2.11.0",
  "derive_more 1.0.0",
@@ -5277,7 +5277,7 @@ dependencies = [
 [[package]]
 name = "fuel-types"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 dependencies = [
  "educe",
  "fuel-derive 0.66.1",
@@ -5320,7 +5320,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#1e5c011ad09f6307a9b26134b6a5b30fb6dd24ab"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
 dependencies = [
  "anyhow",
  "async-trait",

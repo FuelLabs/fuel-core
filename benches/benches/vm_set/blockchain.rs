@@ -50,22 +50,23 @@ use fuel_core_types::{
         GTFArgs,
         RegId,
         op,
-        wideint::{
-            MathArgs,
-            MathOp,
-        },
     },
     fuel_tx::{
         ContractIdExt,
         Finalizable,
         Input,
         Output,
+        Script,
         Transaction,
         TransactionBuilder,
         Word,
     },
     fuel_types::*,
-    fuel_vm::consts::*,
+    fuel_vm::{
+        Interpreter,
+        consts::*,
+        interpreter::MemoryInstance,
+    },
     tai64::Tai64,
 };
 use rand::{
@@ -687,38 +688,53 @@ pub fn run(c: &mut Criterion) {
     // dynamic storage
     let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
-    // Instructions to warm up slots 1..=10_000 each with zero bytes of data.
-    // Used to populate VM storage cache so that miss/hit detection takes realistic time.
-    let warmup_nonzero_slots = {
-        let mut ops = vec![op::movi(0x20, 32), op::aloc(0x20)];
-        // Can't use instruction-based loops in post_call so do it manually here.
-        for _ in 0..10_000 {
-            ops.push(op::wqop_args(
-                RegId::HP,
-                RegId::HP,
-                RegId::ONE,
-                MathArgs {
-                    op: MathOp::ADD,
-                    indirect_rhs: false,
-                },
-            ));
-            ops.push(op::swri(RegId::HP, RegId::HP, 0));
-        }
-        ops
-    };
+    static CACHE_ACTIVE_SLOT_SIZE: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0);
+
+    fn pre_instruction_hook_hot(
+        vm: &mut Interpreter<
+            MemoryInstance,
+            VmStorage<StorageTransaction<GenesisDatabase>>,
+            Script,
+        >,
+    ) {
+        let entry = vm
+            .bench_storage_slot_cache_mut()
+            .entry((VmBench::CONTRACT, Bytes32::zeroed()));
+        let value = CACHE_ACTIVE_SLOT_SIZE.load(std::sync::atomic::Ordering::SeqCst);
+        entry.or_insert_with(|| Some(vec![0u8; value as usize]));
+    }
+
+    fn pre_instruction_hook_cold(
+        vm: &mut Interpreter<
+            MemoryInstance,
+            VmStorage<StorageTransaction<GenesisDatabase>>,
+            Script,
+        >,
+    ) {
+        vm.bench_storage_slot_cache_mut()
+            .remove(&(VmBench::CONTRACT, Bytes32::zeroed()));
+    }
 
     for hot in [true, false] {
+        let pre_instruction_hook = if hot {
+            pre_instruction_hook_hot
+        } else {
+            pre_instruction_hook_cold
+        };
+
         let caching = if hot { "hot" } else { "cold" };
         {
             let mut sclr = c.benchmark_group(&format!("sclr_{caching}"));
             for i in linear_short.clone() {
+                CACHE_ACTIVE_SLOT_SIZE.store(i, std::sync::atomic::Ordering::SeqCst);
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
 
                 let start_key = Bytes32::zeroed();
                 let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                let mut post_call = vec![
+                let post_call = vec![
                     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
@@ -726,7 +742,6 @@ pub fn run(c: &mut Criterion) {
                     op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
                     op::movi(0x12, i as u32),
                 ];
-                post_call.extend(warmup_nonzero_slots.clone());
 
                 let mut bench = VmBench::contract_using_db(
                     rng,
@@ -735,7 +750,7 @@ pub fn run(c: &mut Criterion) {
                 )
                 .expect("failed to prepare contract")
                 .with_post_call(post_call)
-                .with_minimal_vm_reset(hot);
+                .with_pre_instruction_hook(pre_instruction_hook);
                 bench.data.extend(data);
 
                 sclr.throughput(Throughput::Bytes(i));
@@ -747,13 +762,14 @@ pub fn run(c: &mut Criterion) {
         {
             let mut srdd = c.benchmark_group(&format!("srdd_{caching}"));
             for i in linear_short.clone() {
+                CACHE_ACTIVE_SLOT_SIZE.store(i, std::sync::atomic::Ordering::SeqCst);
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
 
                 let start_key = Bytes32::zeroed();
                 let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                let mut post_call = vec![
+                let post_call = vec![
                     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
@@ -762,7 +778,6 @@ pub fn run(c: &mut Criterion) {
                     op::movi(0x12, i as u32),
                     op::aloc(0x12),
                 ];
-                post_call.extend(warmup_nonzero_slots.clone());
 
                 let mut bench = VmBench::contract_using_db(
                     rng,
@@ -771,7 +786,7 @@ pub fn run(c: &mut Criterion) {
                 )
                 .expect("failed to prepare contract")
                 .with_post_call(post_call)
-                .with_minimal_vm_reset(hot);
+                .with_pre_instruction_hook(pre_instruction_hook);
                 bench.data.extend(data);
 
                 srdd.throughput(Throughput::Bytes(i));
@@ -783,13 +798,14 @@ pub fn run(c: &mut Criterion) {
         {
             let mut swrd = c.benchmark_group(&format!("swrd_{caching}"));
             for i in linear_short.clone() {
+                CACHE_ACTIVE_SLOT_SIZE.store(i, std::sync::atomic::Ordering::SeqCst);
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
 
                 let start_key = Bytes32::zeroed();
                 let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                let mut post_call = vec![
+                let post_call = vec![
                     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
@@ -798,7 +814,6 @@ pub fn run(c: &mut Criterion) {
                     op::movi(0x12, i as u32),
                     op::aloc(0x12),
                 ];
-                post_call.extend(warmup_nonzero_slots.clone());
 
                 let mut bench = VmBench::contract_using_db(
                     rng,
@@ -807,7 +822,7 @@ pub fn run(c: &mut Criterion) {
                 )
                 .expect("failed to prepare contract")
                 .with_post_call(post_call)
-                .with_minimal_vm_reset(hot);
+                .with_pre_instruction_hook(pre_instruction_hook);
                 bench.data.extend(data);
 
                 swrd.throughput(Throughput::Bytes(i));
@@ -817,22 +832,22 @@ pub fn run(c: &mut Criterion) {
         }
 
         {
-            let mut spld = c.benchmark_group(&format!("spld_hot_{caching}"));
+            let mut spld = c.benchmark_group(&format!("spld_{caching}"));
             for i in linear_short.clone() {
+                CACHE_ACTIVE_SLOT_SIZE.store(i, std::sync::atomic::Ordering::SeqCst);
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
 
                 let start_key = Bytes32::zeroed();
                 let data = start_key.iter().copied().collect::<Vec<_>>();
 
-                let mut post_call = vec![
+                let post_call = vec![
                     op::gtf_args(0x10, 0x00, GTFArgs::ScriptData),
                     op::addi(0x11, 0x10, ContractId::LEN.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
                     op::addi(0x11, 0x11, WORD_SIZE.try_into().unwrap()),
                     op::addi(0x11, 0x11, AssetId::LEN.try_into().unwrap()),
                 ];
-                post_call.extend(warmup_nonzero_slots.clone());
 
                 let mut bench = VmBench::contract_using_db(
                     rng,
@@ -841,7 +856,7 @@ pub fn run(c: &mut Criterion) {
                 )
                 .expect("failed to prepare contract")
                 .with_post_call(post_call)
-                .with_minimal_vm_reset(hot);
+                .with_pre_instruction_hook(pre_instruction_hook);
                 bench.data.extend(data);
 
                 spld.throughput(Throughput::Bytes(i));
