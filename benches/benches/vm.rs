@@ -32,6 +32,7 @@ where
     I: AsRef<str>,
 {
     let mut i = bench.prepare().expect("failed to prepare bench");
+    let bench_id = id.as_ref().to_owned();
     group.bench_function::<_, _>(id.as_ref(), move |b| {
         b.iter_custom(|iters| {
             let VmBenchPrepared {
@@ -56,7 +57,7 @@ where
             let mut total = core::time::Duration::ZERO;
             for _ in 0..iters {
                 if let Some(hook) = pre_instruction_hook {
-                    hook(vm);
+                    hook(vm, &bench_id);
                 }
 
                 let start = black_box(clock.raw());

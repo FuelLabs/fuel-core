@@ -129,6 +129,7 @@ pub struct VmBench {
                 VmStorage<StorageTransaction<GenesisDatabase>>,
                 Script,
             >,
+            &str,
         ),
     >,
     pub prepare_call: Option<PrepareCall>,
@@ -154,6 +155,7 @@ pub struct VmBenchPrepared {
                 VmStorage<StorageTransaction<GenesisDatabase>>,
                 Script,
             >,
+            &str,
         ),
     >,
     pub diff: diff::Diff<diff::InitialVmState>,
@@ -388,6 +390,7 @@ impl VmBench {
                 VmStorage<StorageTransaction<GenesisDatabase>>,
                 Script,
             >,
+            &str,
         ),
     ) -> Self {
         self.pre_instruction_hook = Some(hook);

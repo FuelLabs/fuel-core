@@ -1,4 +1,10 @@
-use std::sync::Arc;
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc,
+        OnceLock,
+    },
+};
 
 use crate::utils::{
     linear,
@@ -162,7 +168,7 @@ impl BenchDb {
             (0..(state_size / (slot_size as u64) + 1)).map(|_| {
                 storage_key.to_big_endian(key_bytes.as_mut());
                 storage_key.increase().unwrap();
-                (key_bytes, key_bytes.to_vec().repeat(slot_size / 32 + 1))
+                (key_bytes, key_bytes.to_vec().repeat(slot_size))
             }),
         )?;
         Ok(())
@@ -688,8 +694,22 @@ pub fn run(c: &mut Criterion) {
     // dynamic storage
     let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
-    static CACHE_ACTIVE_SLOT_SIZE: std::sync::atomic::AtomicU64 =
-        std::sync::atomic::AtomicU64::new(0);
+    static FILLED_CACHE_SLOTS: OnceLock<
+        BTreeMap<(ContractId, Bytes32), Option<Vec<u8>>>,
+    > = OnceLock::new();
+    fn get_filled_cache_slots()
+    -> &'static BTreeMap<(ContractId, Bytes32), Option<Vec<u8>>> {
+        FILLED_CACHE_SLOTS.get_or_init(|| {
+            let mut map = BTreeMap::new();
+            // A realistic number of slots for an adversarial state access scenario
+            for i in 1..=10_000u64 {
+                let mut key = Bytes32::zeroed();
+                key.as_mut()[..8].copy_from_slice(&i.to_be_bytes());
+                map.insert((VmBench::CONTRACT, key), Some(vec![0u8; 32]));
+            }
+            map
+        })
+    }
 
     fn pre_instruction_hook_hot(
         vm: &mut Interpreter<
@@ -697,12 +717,16 @@ pub fn run(c: &mut Criterion) {
             VmStorage<StorageTransaction<GenesisDatabase>>,
             Script,
         >,
+        bench_id: &str,
     ) {
-        let entry = vm
-            .bench_storage_slot_cache_mut()
-            .entry((VmBench::CONTRACT, Bytes32::zeroed()));
-        let value = CACHE_ACTIVE_SLOT_SIZE.load(std::sync::atomic::Ordering::SeqCst);
-        entry.or_insert_with(|| Some(vec![0u8; value as usize]));
+        let slot_size = bench_id
+            .parse::<u32>()
+            .expect("bench_id should be a number");
+        *vm.bench_storage_slot_cache_mut() = get_filled_cache_slots().clone();
+        vm.bench_storage_slot_cache_mut().insert(
+            (VmBench::CONTRACT, Bytes32::zeroed()),
+            Some(vec![0u8; slot_size as usize]),
+        );
     }
 
     fn pre_instruction_hook_cold(
@@ -711,9 +735,11 @@ pub fn run(c: &mut Criterion) {
             VmStorage<StorageTransaction<GenesisDatabase>>,
             Script,
         >,
+        _bench_id: &str,
     ) {
-        vm.bench_storage_slot_cache_mut()
-            .remove(&(VmBench::CONTRACT, Bytes32::zeroed()));
+        *vm.bench_storage_slot_cache_mut() = get_filled_cache_slots().clone();
+        // vm.bench_storage_slot_cache_mut()
+        //     .remove(&(VmBench::CONTRACT, Bytes32::zeroed()));
     }
 
     for hot in [true, false] {
@@ -727,7 +753,7 @@ pub fn run(c: &mut Criterion) {
         {
             let mut sclr = c.benchmark_group(&format!("sclr_{caching}"));
             for i in linear_short.clone() {
-                CACHE_ACTIVE_SLOT_SIZE.store(i, std::sync::atomic::Ordering::SeqCst);
+                // We double use slot count as slot size. I hope it's going to be fine.
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
 
@@ -762,7 +788,6 @@ pub fn run(c: &mut Criterion) {
         {
             let mut srdd = c.benchmark_group(&format!("srdd_{caching}"));
             for i in linear_short.clone() {
-                CACHE_ACTIVE_SLOT_SIZE.store(i, std::sync::atomic::Ordering::SeqCst);
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
 
@@ -798,7 +823,6 @@ pub fn run(c: &mut Criterion) {
         {
             let mut swrd = c.benchmark_group(&format!("swrd_{caching}"));
             for i in linear_short.clone() {
-                CACHE_ACTIVE_SLOT_SIZE.store(i, std::sync::atomic::Ordering::SeqCst);
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
 
@@ -834,7 +858,6 @@ pub fn run(c: &mut Criterion) {
         {
             let mut spld = c.benchmark_group(&format!("spld_{caching}"));
             for i in linear_short.clone() {
-                CACHE_ACTIVE_SLOT_SIZE.store(i, std::sync::atomic::Ordering::SeqCst);
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
 
