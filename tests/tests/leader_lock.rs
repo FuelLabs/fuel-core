@@ -598,10 +598,73 @@ async fn log_leader_election_attempt_diagnostics(
             summary
         ));
     }
+    // Query Redis state directly to see lock and stream status
+    let redis_state = nodes
+        .first()
+        .and_then(|n| n.config.leader_lock.as_ref())
+        .map(|lock| query_redis_state(&lock.redis_urls, &lock.lease_key))
+        .unwrap_or_else(|| "no-lock-config".to_string());
     eprintln!(
-        "[leader-lock][election-timeout] attempt={attempt} timeout={timeout:?} diagnostics=[{}]",
+        "[leader-lock][election-timeout] attempt={attempt} timeout={timeout:?} redis_state=[{redis_state}] diagnostics=[{}]",
         diagnostics.join(" | ")
     );
+}
+
+fn query_redis_state(redis_urls: &[String], lease_key: &str) -> String {
+    // Key names match RedisLeaderLeaseAdapter::new(): {lease_key}, {lease_key}:epoch:token, {lease_key}:block:stream
+    let lock_key = lease_key.to_string();
+    let epoch_key = format!("{lease_key}:epoch:token");
+    let stream_key = format!("{lease_key}:block:stream");
+    let mut parts = Vec::new();
+    for url in redis_urls {
+        let port = match parse_redis_port(url) {
+            Some(p) => p,
+            None => {
+                parts.push(format!("{url}:parse-error"));
+                continue;
+            }
+        };
+        let result = query_single_redis(port, &lock_key, &stream_key, &epoch_key);
+        parts.push(format!("{url}:{result}"));
+    }
+    parts.join(",")
+}
+
+fn query_single_redis(
+    port: u16,
+    lock_key: &str,
+    stream_key: &str,
+    epoch_key: &str,
+) -> String {
+    let mut stream = match TcpStream::connect(("127.0.0.1", port)) {
+        Ok(s) => s,
+        Err(e) => return format!("connect-err({e})"),
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+
+    // Send a pipeline: GET lock_key, GET epoch_key, XLEN stream_key, XREVRANGE stream_key + - COUNT 1
+    let pipeline = format!(
+        "*2\r\n$3\r\nGET\r\n${lk_len}\r\n{lock_key}\r\n\
+         *2\r\n$3\r\nGET\r\n${ek_len}\r\n{epoch_key}\r\n\
+         *2\r\n$4\r\nXLEN\r\n${sk_len}\r\n{stream_key}\r\n\
+         *2\r\n$4\r\nKEYS\r\n$1\r\n*\r\n",
+        lk_len = lock_key.len(),
+        ek_len = epoch_key.len(),
+        sk_len = stream_key.len(),
+    );
+    if stream.write_all(pipeline.as_bytes()).is_err() {
+        return "write-err".to_string();
+    }
+
+    let mut buf = vec![0u8; 4096];
+    let n = match stream.read(&mut buf) {
+        Ok(n) => n,
+        Err(e) => return format!("read-err({e})"),
+    };
+    let raw = String::from_utf8_lossy(&buf[..n]);
+    // Parse the raw RESP responses into a human-readable summary
+    format!("lock_key={lock_key} raw_resp={}", raw.replace("\r\n", "|"))
 }
 
 async fn observe_node_block_activity(node: &Node, window: Duration) -> String {
