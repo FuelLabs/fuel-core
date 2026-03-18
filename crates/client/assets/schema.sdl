@@ -458,11 +458,11 @@ type GasCosts {
 	slli: U64!
 	srl: U64!
 	srli: U64!
-	srw: U64!
+	srw: U64
 	sub: U64!
 	subi: U64!
 	sw: U64!
-	sww: U64!
+	sww: U64
 	time: U64!
 	tr: U64!
 	tro: U64!
@@ -503,11 +503,15 @@ type GasCosts {
 	meq: DependentCost!
 	retd: DependentCost!
 	s256: DependentCost!
-	scwq: DependentCost!
+	scwq: DependentCost
 	smo: DependentCost!
-	srwq: DependentCost!
-	swwq: DependentCost!
+	srwq: DependentCost
+	swwq: DependentCost
 	epar: DependentCost
+	storageReadCold: DependentCost
+	storageReadHot: DependentCost
+	storageWrite: DependentCost
+	storageClear: DependentCost
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
 	vmInitialization: DependentCost!
@@ -1271,10 +1275,12 @@ type ScriptParameters {
 	version: ScriptParametersVersion!
 	maxScriptLength: U64!
 	maxScriptDataLength: U64!
+	maxStorageSlotLength: U64!
 }
 
 enum ScriptParametersVersion {
 	V1
+	V2
 }
 
 scalar Signature
