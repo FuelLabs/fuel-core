@@ -168,7 +168,7 @@ impl BenchDb {
             (0..(state_size / (slot_size as u64) + 1)).map(|_| {
                 storage_key.to_big_endian(key_bytes.as_mut());
                 storage_key.increase().unwrap();
-                (key_bytes, key_bytes.to_vec().repeat(slot_size))
+                (key_bytes, vec![0; slot_size])
             }),
         )?;
         Ok(())
@@ -738,8 +738,6 @@ pub fn run(c: &mut Criterion) {
         _bench_id: &str,
     ) {
         *vm.bench_storage_slot_cache_mut() = get_filled_cache_slots().clone();
-        // vm.bench_storage_slot_cache_mut()
-        //     .remove(&(VmBench::CONTRACT, Bytes32::zeroed()));
     }
 
     for hot in [true, false] {
