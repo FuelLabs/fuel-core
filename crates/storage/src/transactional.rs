@@ -419,18 +419,14 @@ where
         if let Some(operation) = self.get_from_changes(key, column) {
             match operation {
                 WriteOperation::Insert(value) => {
-                    let bytes_len = value.as_ref().len();
+                    let buf_len = buf.len();
 
-                    let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+                    let Some(data) = value.as_ref().get(offset..offset.saturating_add(buf_len)) else {
                         return Ok(Err(StorageReadError::OutOfBounds));
                     };
+                    buf.copy_from_slice(data);
 
-                    let Some((dst, _)) = buf.split_at_mut_checked(after.len()) else {
-                        return Ok(Err(StorageReadError::OutOfBounds));
-                    };
-                    dst.copy_from_slice(&after);
-
-                    Ok(Ok(bytes_len))
+                    Ok(Ok(buf_len))
                 }
                 WriteOperation::Remove => Ok(Err(StorageReadError::KeyNotFound)),
             }
@@ -465,7 +461,7 @@ where
                 WriteOperation::Remove => Ok(Err(StorageReadError::KeyNotFound)),
             }
         } else {
-            self.storage.read_exact(key, column, offset, buf)
+            self.storage.read_zerofill(key, column, offset, buf)
         }
     }
 }

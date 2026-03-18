@@ -200,18 +200,14 @@ impl StorageRead<BlobData> for MockDb {
             return Ok(Err(StorageReadError::KeyNotFound));
         };
 
-        let bytes_len = value.as_ref().len();
+        let buf_len = buf.len();
 
-        let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+        let Some(data) = value.as_ref().get(offset..offset.saturating_add(buf_len)) else {
             return Ok(Err(StorageReadError::OutOfBounds));
         };
+        buf.copy_from_slice(data);
 
-        let Some((dst, _)) = buf.split_at_mut_checked(after.len()) else {
-            return Ok(Err(StorageReadError::OutOfBounds));
-        };
-        dst.copy_from_slice(&after);
-
-        Ok(Ok(bytes_len))
+        Ok(Ok(buf_len))
     }
 
     fn read_zerofill(
@@ -226,15 +222,15 @@ impl StorageRead<BlobData> for MockDb {
         };
 
         let bytes_len = value.as_ref().len();
+        let buf_len = buf.len();
 
         let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
             return Ok(Err(StorageReadError::OutOfBounds));
         };
 
-        let Some((dst, _)) = buf.split_at_mut_checked(after.len()) else {
-            return Ok(Err(StorageReadError::OutOfBounds));
-        };
-        dst.copy_from_slice(&after);
+        let (dst, rest) = buf.split_at_mut(buf_len.min(after.len()));
+        dst.copy_from_slice(&after[..dst.len()]);
+        rest.fill(0);
 
         Ok(Ok(bytes_len))
     }

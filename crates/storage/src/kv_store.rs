@@ -77,18 +77,14 @@ pub trait KeyValueInspect {
             return Ok(Err(StorageReadError::KeyNotFound));
         };
 
-        let bytes_len = value.as_ref().len();
+        let buf_len = buf.len();
 
-        let Some((_, after)) = value.as_ref().split_at_checked(offset) else {
+        let Some(data) = value.as_ref().get(offset..offset.saturating_add(buf_len)) else {
             return Ok(Err(StorageReadError::OutOfBounds));
         };
+        buf.copy_from_slice(data);
 
-        let Some((dst, _)) = buf.split_at_mut_checked(after.len()) else {
-            return Ok(Err(StorageReadError::OutOfBounds));
-        };
-        dst.copy_from_slice(&after);
-
-        Ok(Ok(bytes_len))
+        Ok(Ok(buf_len))
     }
 
     /// Reads the value from the storage into the `buf` and returns

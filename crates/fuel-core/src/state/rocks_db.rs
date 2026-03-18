@@ -997,7 +997,7 @@ where
             .bytes_read
             .inc_by(starting_from_offset.len() as u64);
 
-        Ok(Ok(value.len()))
+        Ok(Ok(buf_len))
     }
 }
 
