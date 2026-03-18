@@ -165,7 +165,7 @@ impl BenchDb {
         let mut key_bytes = Bytes32::zeroed();
         self.db.init_contract_state(
             contract_id,
-            (0..(state_size / (slot_size as u64) + 1)).map(|_| {
+            (0..(state_size.checked_div(slot_size as u64).unwrap_or(1) + 1)).map(|_| {
                 storage_key.to_big_endian(key_bytes.as_mut());
                 storage_key.increase().unwrap();
                 (key_bytes, vec![0; slot_size])
