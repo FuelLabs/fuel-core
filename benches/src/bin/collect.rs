@@ -620,18 +620,6 @@ impl State {
             }
         }
 
-        // swrd_hot measures (write) + (uncharged hot cache lookup for old_len).
-        // Subtract storage_read_hot so storage_write reflects only the write itself.
-        if let (Some(Cost::Dependent(write)), Some(Cost::Dependent(read_hot))) = (
-            costs.0.get("storage_write").cloned(),
-            costs.0.get("storage_read_hot").cloned(),
-        ) {
-            costs.0.insert(
-                "storage_write".to_string(),
-                Cost::Dependent(subtract_dependent_cost(&write, &read_hot)),
-            );
-        }
-
         // Drop groups that served only as sanity-check inputs.
         for name in SANITY_ONLY_GROUPS {
             costs.0.remove(*name);
@@ -878,46 +866,6 @@ fn dependent_cost(name: &String, x_y: Vec<(u64, u64)>) -> DependentCost {
         DependentCost::HeavyOperation {
             base,
             gas_per_unit: (1.0 / amount) as u64,
-        }
-    }
-}
-
-/// Subtracts `sub` from `from`, working in gas-per-unit space.
-/// Both base and per-unit components are subtracted, saturating at zero.
-fn subtract_dependent_cost(from: &DependentCost, sub: &DependentCost) -> DependentCost {
-    let to_gas_per_unit = |c: &DependentCost| -> (u64, f64) {
-        match c {
-            DependentCost::LightOperation {
-                base,
-                units_per_gas,
-            } => (*base, 1.0 / (*units_per_gas as f64).max(1.0)),
-            DependentCost::HeavyOperation { base, gas_per_unit } => {
-                (*base, *gas_per_unit as f64)
-            }
-        }
-    };
-
-    let (base_from, gpu_from) = to_gas_per_unit(from);
-    let (base_sub, gpu_sub) = to_gas_per_unit(sub);
-
-    let base = base_from.saturating_sub(base_sub);
-    let gpu = (gpu_from - gpu_sub).max(0.0);
-
-    // Mirror the same Light/Heavy split used in dependent_cost().
-    let amount = if gpu > 0.0 {
-        1.0 / gpu
-    } else {
-        u64::MAX as f64
-    };
-    if amount > 1.0 {
-        DependentCost::LightOperation {
-            base,
-            units_per_gas: (amount as u64).max(1),
-        }
-    } else {
-        DependentCost::HeavyOperation {
-            base,
-            gas_per_unit: gpu as u64,
         }
     }
 }
