@@ -79,7 +79,8 @@ pub trait KeyValueInspect {
 
         let buf_len = buf.len();
 
-        let Some(data) = value.as_ref().get(offset..offset.saturating_add(buf_len)) else {
+        let Some(data) = value.as_ref().get(offset..offset.saturating_add(buf_len))
+        else {
             return Ok(Err(StorageReadError::OutOfBounds));
         };
         buf.copy_from_slice(data);
