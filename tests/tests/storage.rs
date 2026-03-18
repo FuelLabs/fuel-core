@@ -203,7 +203,7 @@ async fn contract_storage_dynamically_sized_slots() {
     let TransactionStatus::Success {
         block_height: height_after,
         ..
-    } = dbg!(client.submit_and_await_commit(&call.into()).await.unwrap())
+    } = client.submit_and_await_commit(&call.into()).await.unwrap()
     else {
         panic!("Failed to send tx");
     };

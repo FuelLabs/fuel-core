@@ -999,6 +999,41 @@ where
 
         Ok(Ok(buf_len))
     }
+
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<Result<usize, StorageReadError>> {
+        self.metrics.read_meter.inc();
+        let column_metrics = self.metrics.columns_read_statistic.get(&column.id());
+        column_metrics.map(|metric| metric.inc());
+
+        let Some(value) = self
+            .db
+            .get_pinned_cf_opt(&self.cf(column), key, &self.read_options)
+            .map_err(|e| DatabaseError::Other(e.into()))?
+        else {
+            return Ok(Err(StorageReadError::KeyNotFound));
+        };
+
+        let bytes_len = value.len();
+        let buf_len = buf.len();
+
+        let Some((_, after)) = value.split_at_checked(offset) else {
+            return Ok(Err(StorageReadError::OutOfBounds));
+        };
+
+        let (dst, rest) = buf.split_at_mut(buf_len.min(after.len()));
+        dst.copy_from_slice(&after[..dst.len()]);
+        rest.fill(0);
+
+        self.metrics.bytes_read.inc_by(dst.len() as u64);
+
+        Ok(Ok(bytes_len))
+    }
 }
 
 impl<Description> IterableStore for RocksDb<Description>
