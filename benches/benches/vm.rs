@@ -25,8 +25,6 @@ use vm_set::*;
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
-/// Measures a single instruction using `iter_custom` with production-like
-/// storage nesting.
 pub fn run_group_ref<I>(group: &mut BenchmarkGroup<WallTime>, id: I, bench: VmBench)
 where
     I: AsRef<str>,

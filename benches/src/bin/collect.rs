@@ -404,7 +404,7 @@ fn sanity_check_storage_costs(costs: &Costs) {
     }
 
     // Cold writes include a DB read for the old slot length; hot writes read
-    // from cache.  Cold should therefore be at least as expensive as hot.
+    // from cache. Cold should therefore be at least as expensive as hot.
     if let (Some(cold), Some(hot)) = (costs.0.get("swrd_cold"), costs.0.get("swrd_hot")) {
         let cold_cpu = cost_per_unit(cold);
         let hot_cpu = cost_per_unit(hot);
@@ -416,9 +416,7 @@ fn sanity_check_storage_costs(costs: &Costs) {
         }
     }
 
-    // `sclr` removes slots without reading them; the hot/cold cache state
-    // should not matter, so hot and cold costs should be within ~2× of each
-    // other.
+    // `sclr` reads are always hot, so costs should be within ~2× of each other.
     if let (Some(cold), Some(hot)) = (costs.0.get("sclr_cold"), costs.0.get("sclr_hot")) {
         let cold_cpu = cost_per_unit(cold);
         let hot_cpu = cost_per_unit(hot);
