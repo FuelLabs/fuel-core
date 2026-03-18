@@ -150,6 +150,16 @@ where
     ) -> StorageResult<core::result::Result<usize, StorageReadError>> {
         self.deref().read_exact(key, column, offset, buf)
     }
+
+    fn read_zerofill(
+        &self,
+        key: &[u8],
+        column: Self::Column,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> StorageResult<core::result::Result<usize, StorageReadError>> {
+        self.deref().read_zerofill(key, column, offset, buf)
+    }
 }
 
 /// The definition of the key-value mutation store.
