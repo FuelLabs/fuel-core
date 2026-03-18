@@ -694,6 +694,7 @@ pub fn run(c: &mut Criterion) {
     // dynamic storage
     let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
 
+    #[allow(clippy::type_complexity)]
     static FILLED_CACHE_SLOTS: OnceLock<
         BTreeMap<(ContractId, Bytes32), Option<Vec<u8>>>,
     > = OnceLock::new();
@@ -749,7 +750,7 @@ pub fn run(c: &mut Criterion) {
 
         let caching = if hot { "hot" } else { "cold" };
         {
-            let mut sclr = c.benchmark_group(&format!("sclr_{caching}"));
+            let mut sclr = c.benchmark_group(format!("sclr_{caching}"));
             for i in linear_short.clone() {
                 // We double use slot count as slot size. I hope it's going to be fine.
                 db.override_slots(&contract, i as usize)
@@ -784,7 +785,7 @@ pub fn run(c: &mut Criterion) {
         }
 
         {
-            let mut srdd = c.benchmark_group(&format!("srdd_{caching}"));
+            let mut srdd = c.benchmark_group(format!("srdd_{caching}"));
             for i in linear_short.clone() {
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
@@ -819,7 +820,7 @@ pub fn run(c: &mut Criterion) {
         }
 
         {
-            let mut swrd = c.benchmark_group(&format!("swrd_{caching}"));
+            let mut swrd = c.benchmark_group(format!("swrd_{caching}"));
             for i in linear_short.clone() {
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");
@@ -854,7 +855,7 @@ pub fn run(c: &mut Criterion) {
         }
 
         {
-            let mut spld = c.benchmark_group(&format!("spld_{caching}"));
+            let mut spld = c.benchmark_group(format!("spld_{caching}"));
             for i in linear_short.clone() {
                 db.override_slots(&contract, i as usize)
                     .expect("Unable to override contract storage");

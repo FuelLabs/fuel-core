@@ -256,7 +256,7 @@ impl GasCosts {
     }
 
     pub fn srw(&self) -> Option<Word> {
-        self.0.srw().ok().map(Into::into)
+        self.0.srw().ok()
     }
 
     pub fn sub(&self) -> Word {
@@ -272,7 +272,7 @@ impl GasCosts {
     }
 
     pub fn sww(&self) -> Option<Word> {
-        self.0.sww().ok().map(Into::into)
+        self.0.sww().ok()
     }
 
     pub fn time(&self) -> Word {
