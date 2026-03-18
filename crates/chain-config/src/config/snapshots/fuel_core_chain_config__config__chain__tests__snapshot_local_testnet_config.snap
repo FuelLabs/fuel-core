@@ -108,11 +108,9 @@ expression: json
           "slli": 1,
           "srl": 1,
           "srli": 1,
-          "srw": 12,
           "sub": 1,
           "subi": 1,
           "sw": 1,
-          "sww": 67,
           "time": 1,
           "tr": 105,
           "tro": 60,
@@ -253,28 +251,10 @@ expression: json
               "units_per_gas": 214
             }
           },
-          "scwq": {
-            "LightOperation": {
-              "base": 13,
-              "units_per_gas": 5
-            }
-          },
           "smo": {
             "LightOperation": {
               "base": 209,
               "units_per_gas": 55
-            }
-          },
-          "srwq": {
-            "LightOperation": {
-              "base": 47,
-              "units_per_gas": 5
-            }
-          },
-          "swwq": {
-            "LightOperation": {
-              "base": 44,
-              "units_per_gas": 5
             }
           },
           "epar": {
@@ -283,40 +263,28 @@ expression: json
               "gas_per_unit": 52000
             }
           },
-          "sclr": {
+          "storage_read_cold": {
             "LightOperation": {
-              "base": 50,
-              "units_per_gas": 5
+              "base": 100,
+              "units_per_gas": 123
             }
           },
-          "srdd": {
+          "storage_read_hot": {
             "LightOperation": {
-              "base": 50,
-              "units_per_gas": 5
+              "base": 10,
+              "units_per_gas": 123
             }
           },
-          "swrd": {
+          "storage_write": {
             "LightOperation": {
-              "base": 50,
-              "units_per_gas": 5
+              "base": 10,
+              "units_per_gas": 1234
             }
           },
-          "supd": {
+          "storage_clear": {
             "LightOperation": {
-              "base": 50,
-              "units_per_gas": 5
-            }
-          },
-          "spld": {
-            "LightOperation": {
-              "base": 50,
-              "units_per_gas": 5
-            }
-          },
-          "spcp": {
-            "LightOperation": {
-              "base": 50,
-              "units_per_gas": 5
+              "base": 10,
+              "units_per_gas": 4
             }
           },
           "contract_root": {
