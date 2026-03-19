@@ -717,15 +717,13 @@ impl RedisLeaderLeaseAdapter {
             usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
         let next_height_u32 = u32::from(next_height);
         let read_results =
-            futures::future::join_all(self.redis_nodes.iter().enumerate().map(
-                |(_node_index, redis_node)| {
-                    self.read_stream_entries_on_node(
-                        redis_node,
-                        next_height_u32,
-                        max_reconcile_blocks_per_round,
-                    )
-                },
-            ))
+            futures::future::join_all(self.redis_nodes.iter().map(|redis_node| {
+                self.read_stream_entries_on_node(
+                    redis_node,
+                    next_height_u32,
+                    max_reconcile_blocks_per_round,
+                )
+            }))
             .await;
 
         let mut successful_reads = Vec::new();
