@@ -3,6 +3,7 @@ use crate::{
     behavior::{
         FuelBehaviour,
         FuelBehaviourEvent,
+        MessageValidationContext,
     },
     codecs::{
         GossipsubCodec,
@@ -92,6 +93,14 @@ mod tests;
 
 /// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
+
+fn message_acceptance_label(acceptance: &MessageAcceptance) -> &'static str {
+    match acceptance {
+        MessageAcceptance::Accept => "accept",
+        MessageAcceptance::Reject => "reject",
+        MessageAcceptance::Ignore => "ignore",
+    }
+}
 
 impl Punisher for Swarm<FuelBehaviour> {
     fn ban_peer(&mut self, peer_id: PeerId) {
@@ -464,19 +473,56 @@ impl FuelP2PService {
         &mut self,
         msg_id: &MessageId,
         propagation_source: PeerId,
-        mut acceptance: MessageAcceptance,
+        acceptance: MessageAcceptance,
     ) {
+        self.report_message_validation_result_with_context(
+            msg_id,
+            propagation_source,
+            acceptance,
+            "external_report",
+            None,
+            None,
+            None,
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn report_message_validation_result_with_context(
+        &mut self,
+        msg_id: &MessageId,
+        propagation_source: PeerId,
+        mut acceptance: MessageAcceptance,
+        report_origin: &'static str,
+        topic_hash: Option<TopicHash>,
+        payload_len_bytes: Option<usize>,
+        decode_error: Option<String>,
+    ) {
+        let original_acceptance_label = message_acceptance_label(&acceptance);
+        let is_reserved_peer = self.peer_manager.is_reserved(&propagation_source);
+
         // Even invalid transactions shouldn't affect reserved peer reputation.
         if let MessageAcceptance::Reject = acceptance
-            && self.peer_manager.is_reserved(&propagation_source)
+            && is_reserved_peer
         {
             acceptance = MessageAcceptance::Ignore;
         }
+        let final_acceptance_label = message_acceptance_label(&acceptance);
+
+        let context = MessageValidationContext {
+            report_origin,
+            original_acceptance_label,
+            final_acceptance: acceptance,
+            final_acceptance_label,
+            is_reserved_peer,
+            topic_hash,
+            payload_len_bytes,
+            decode_error,
+        };
 
         if let Some(gossip_score) = self
             .swarm
             .behaviour_mut()
-            .report_message_validation_result(msg_id, &propagation_source, acceptance)
+            .report_message_validation_result(msg_id, &propagation_source, context)
         {
             self.peer_manager.handle_gossip_score_update(
                 propagation_source,
@@ -609,10 +655,14 @@ impl FuelP2PService {
                     Err(err) => {
                         warn!(target: "fuel-p2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
 
-                        self.report_message_validation_result(
+                        self.report_message_validation_result_with_context(
                             &message_id,
                             propagation_source,
                             MessageAcceptance::Reject,
+                            "decode_failure",
+                            Some(message.topic),
+                            Some(message.data.len()),
+                            Some(err.to_string()),
                         );
                         None
                     }

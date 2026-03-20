@@ -43,6 +43,18 @@ use std::collections::HashSet;
 const MAX_PENDING_INCOMING_CONNECTIONS: u32 = 100;
 const MAX_PENDING_OUTGOING_CONNECTIONS: u32 = 100;
 
+#[derive(Debug)]
+pub struct MessageValidationContext {
+    pub report_origin: &'static str,
+    pub original_acceptance_label: &'static str,
+    pub final_acceptance: MessageAcceptance,
+    pub final_acceptance_label: &'static str,
+    pub is_reserved_peer: bool,
+    pub topic_hash: Option<TopicHash>,
+    pub payload_len_bytes: Option<usize>,
+    pub decode_error: Option<String>,
+}
+
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
 pub struct FuelBehaviour {
@@ -219,14 +231,14 @@ impl FuelBehaviour {
         &mut self,
         msg_id: &MessageId,
         propagation_source: &PeerId,
-        acceptance: MessageAcceptance,
+        context: MessageValidationContext,
     ) -> Option<f64> {
-        let should_check_score = matches!(acceptance, MessageAcceptance::Reject);
+        let should_check_score = context.final_acceptance_label == "reject";
 
         match self.gossipsub.report_message_validation_result(
             msg_id,
             propagation_source,
-            acceptance,
+            context.final_acceptance,
         ) {
             Ok(true) => {
                 tracing::debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
@@ -235,7 +247,23 @@ impl FuelBehaviour {
                 }
             }
             Ok(false) => {
-                tracing::warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
+                let peer_score_at_report = self.gossipsub.peer_score(propagation_source);
+                tracing::warn!(
+                    target: "fuel-p2p",
+                    message_id = %msg_id,
+                    peer_id = %propagation_source,
+                    report_origin = context.report_origin,
+                    original_acceptance = context.original_acceptance_label,
+                    final_acceptance = context.final_acceptance_label,
+                    is_reserved_peer = context.is_reserved_peer,
+                    topic_hash = ?context.topic_hash.as_ref(),
+                    payload_len_bytes = ?context.payload_len_bytes,
+                    decode_error = ?context.decode_error.as_deref(),
+                    should_check_score,
+                    peer_score_at_report = ?peer_score_at_report,
+                    report_outcome = "not_in_cache",
+                    "Message not found in gossipsub message cache while reporting validation result"
+                );
             }
             Err(e) => {
                 tracing::error!(target: "fuel-p2p", "Failed to report Message with MessageId: {} with Error: {:?}", msg_id, e);
