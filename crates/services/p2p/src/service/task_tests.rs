@@ -312,6 +312,8 @@ async fn peer_heartbeat_reputation_checks__slow_heartbeat_sends_reports() {
         next_check_time: Instant::now(),
         heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
         cached_view: Arc::new(CachedView::new(100, false)),
+        pending_gossip_report_timers: Default::default(),
+        pending_gossip_report_order: Default::default(),
     };
     let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
     let mut watcher = StateWatcher::from(watch_receiver);
@@ -406,6 +408,8 @@ async fn peer_heartbeat_reputation_checks__old_heartbeat_sends_reports() {
         next_check_time: Instant::now(),
         heartbeat_peer_reputation_config: heartbeat_peer_reputation_config.clone(),
         cached_view: Arc::new(CachedView::new(100, false)),
+        pending_gossip_report_timers: Default::default(),
+        pending_gossip_report_order: Default::default(),
     };
     let (watch_sender, watch_receiver) = tokio::sync::watch::channel(State::Started);
     let mut watcher = StateWatcher::from(watch_receiver);
@@ -486,6 +490,8 @@ async fn should_process_all_imported_block_under_infinite_events_from_p2p() {
         next_check_time: Instant::now(),
         heartbeat_peer_reputation_config: Default::default(),
         cached_view: Arc::new(CachedView::new(100, false)),
+        pending_gossip_report_timers: Default::default(),
+        pending_gossip_report_order: Default::default(),
     };
     let mut watcher = StateWatcher::started();
     // End of initialization
@@ -551,6 +557,8 @@ async fn run__gossip_message_from_p2p_service_is_broadcasted__tx_preconfirmation
         next_check_time: Instant::now(),
         heartbeat_peer_reputation_config: Default::default(),
         cached_view: Arc::new(CachedView::new(100, false)),
+        pending_gossip_report_timers: Default::default(),
+        pending_gossip_report_order: Default::default(),
     };
 
     // when
