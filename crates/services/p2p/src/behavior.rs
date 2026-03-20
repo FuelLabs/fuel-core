@@ -53,6 +53,12 @@ pub struct MessageValidationContext {
     pub topic_hash: Option<TopicHash>,
     pub payload_len_bytes: Option<usize>,
     pub decode_error: Option<String>,
+    pub seen_in_local_cache: bool,
+    pub report_age_ms: Option<u64>,
+    pub seen_topic_hash: Option<TopicHash>,
+    pub seen_payload_len_bytes: Option<usize>,
+    pub first_seen_peer_id: Option<PeerId>,
+    pub report_count_for_message: u32,
 }
 
 /// Handles all p2p protocols needed for Fuel.
@@ -259,6 +265,12 @@ impl FuelBehaviour {
                     topic_hash = ?context.topic_hash.as_ref(),
                     payload_len_bytes = ?context.payload_len_bytes,
                     decode_error = ?context.decode_error.as_deref(),
+                    seen_in_local_cache = context.seen_in_local_cache,
+                    report_age_ms = ?context.report_age_ms,
+                    seen_topic_hash = ?context.seen_topic_hash.as_ref(),
+                    seen_payload_len_bytes = ?context.seen_payload_len_bytes,
+                    first_seen_peer_id = ?context.first_seen_peer_id.as_ref(),
+                    report_count_for_message = context.report_count_for_message,
                     should_check_score,
                     peer_score_at_report = ?peer_score_at_report,
                     report_outcome = "not_in_cache",
