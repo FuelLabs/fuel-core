@@ -72,7 +72,7 @@ pyroscope_pprofrs = "0.2"
 rayon = { workspace = true, optional = true }
 rlimit = { version = "0.10.2", optional = true }
 serde_json = { workspace = true }
-tar = { version = "0.4.44", optional = true }
+tar = { version = "0.4.45", optional = true }
 tempfile = { workspace = true, optional = true }
 tikv-jemallocator = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
