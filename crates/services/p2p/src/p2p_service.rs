@@ -113,6 +113,7 @@ fn message_acceptance_label(acceptance: &MessageAcceptance) -> &'static str {
 struct SeenGossipMessage {
     first_seen_at: Instant,
     topic_hash: TopicHash,
+    topic_tag: GossipTopicTag,
     payload_len_bytes: usize,
     first_seen_peer_id: PeerId,
     report_count_for_message: u32,
@@ -122,9 +123,17 @@ struct SeenGossipMessage {
 struct SeenGossipMessageReportContext {
     report_age_ms: u64,
     topic_hash: TopicHash,
+    topic_tag_label: &'static str,
     payload_len_bytes: usize,
     first_seen_peer_id: PeerId,
     report_count_for_message: u32,
+}
+
+fn gossip_topic_tag_label(topic_tag: GossipTopicTag) -> &'static str {
+    match topic_tag {
+        GossipTopicTag::NewTx => "new_tx",
+        GossipTopicTag::TxPreconfirmations => "tx_preconfirmations",
+    }
 }
 
 impl Punisher for Swarm<FuelBehaviour> {
@@ -404,6 +413,7 @@ impl FuelP2PService {
         message_id: &MessageId,
         propagation_source: &PeerId,
         topic_hash: TopicHash,
+        topic_tag: GossipTopicTag,
         payload_len_bytes: usize,
     ) {
         let key = message_id.to_string();
@@ -416,6 +426,7 @@ impl FuelP2PService {
             SeenGossipMessage {
                 first_seen_at: Instant::now(),
                 topic_hash,
+                topic_tag,
                 payload_len_bytes,
                 first_seen_peer_id: *propagation_source,
                 report_count_for_message: 0,
@@ -449,6 +460,7 @@ impl FuelP2PService {
                     .try_into()
                     .unwrap_or(u64::MAX),
                 topic_hash: message.topic_hash.clone(),
+                topic_tag_label: gossip_topic_tag_label(message.topic_tag),
                 payload_len_bytes: message.payload_len_bytes,
                 first_seen_peer_id: message.first_seen_peer_id,
                 report_count_for_message: message.report_count_for_message,
@@ -601,6 +613,7 @@ impl FuelP2PService {
             seen_in_local_cache,
             report_age_ms,
             seen_topic_hash,
+            seen_topic_tag,
             seen_payload_len_bytes,
             first_seen_peer_id,
             report_count_for_message,
@@ -609,12 +622,13 @@ impl FuelP2PService {
                 true,
                 Some(context.report_age_ms),
                 Some(context.topic_hash),
+                Some(context.topic_tag_label),
                 Some(context.payload_len_bytes),
                 Some(context.first_seen_peer_id),
                 context.report_count_for_message,
             )
         } else {
-            (false, None, None, None, None, 0)
+            (false, None, None, None, None, None, 0)
         };
 
         let context = MessageValidationContext {
@@ -629,6 +643,7 @@ impl FuelP2PService {
             seen_in_local_cache,
             report_age_ms,
             seen_topic_hash,
+            seen_topic_tag,
             seen_payload_len_bytes,
             first_seen_peer_id,
             report_count_for_message,
@@ -759,13 +774,14 @@ impl FuelP2PService {
                 message,
                 message_id,
             } => {
+                let correct_topic = self.get_topic_tag(&message.topic)?;
                 self.remember_seen_gossip_message(
                     &message_id,
                     &propagation_source,
                     message.topic.clone(),
+                    correct_topic,
                     message.data.len(),
                 );
-                let correct_topic = self.get_topic_tag(&message.topic)?;
                 match self.gossipsub_codec.decode(&message.data, correct_topic) {
                     Ok(decoded_message) => Some(FuelP2PEvent::GossipsubMessage {
                         peer_id: propagation_source,
