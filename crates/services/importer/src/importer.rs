@@ -363,7 +363,7 @@ where
         fields(
             block_id = % prepare.result.result().sealed_block.entity.id(),
             height = * * prepare.result.result().sealed_block.entity.header().height(),
-            tx_status = ? prepare.result.result().tx_status,
+            tx_count = prepare.result.result().tx_status.len(),
         ),
         err
     )]
@@ -378,6 +378,7 @@ where
         } = prepare;
 
         let (result, changes) = result.into();
+        tracing::trace!(tx_status = ?result.tx_status, "Full transaction execution status");
         let block = &result.sealed_block.entity;
         let actual_next_height = *block.header().height();
 

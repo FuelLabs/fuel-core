@@ -167,6 +167,9 @@ impl TestContextBuilder {
                 .expect_block_stream()
                 .returning(|| Box::pin(tokio_stream::pending()));
             importer
+                .expect_latest_block_height()
+                .returning(|| Ok(Some(BlockHeight::from(0u32))));
+            importer
         });
 
         let txpool = self
@@ -335,6 +338,9 @@ async fn main_task__releases_reconciliation_port_on_shutdown() {
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -382,6 +388,9 @@ async fn main_task__when_reconciliation_returns_follower_then_does_not_produce_b
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -437,6 +446,9 @@ async fn run__when_leader_state_fails_then_does_not_produce_or_commit_result() {
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -495,6 +507,9 @@ async fn run__when_execute_and_commit_fails_during_reconcile_then_does_not_produ
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
     let txpool = MockTransactionPool::no_tx_updates();
     let p2p_port = generate_p2p_port();
     let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
@@ -687,6 +702,9 @@ async fn consensus_service__run__will_include_sequential_predefined_blocks_befor
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::empty()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
@@ -755,6 +773,9 @@ async fn consensus_service__run__will_insert_predefined_blocks_in_correct_order(
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::empty()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
@@ -836,6 +857,9 @@ async fn consensus_service__run__will_not_produce_blocks_without_ready_signal() 
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::empty()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);
@@ -884,6 +908,9 @@ async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
     block_importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::empty()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
     let mut rng = StdRng::seed_from_u64(0);
     let tx = make_tx(&mut rng);
     let TxPoolContext { txpool, .. } = MockTransactionPool::new_with_txs(vec![tx]);

@@ -232,6 +232,10 @@ pub fn init_sub_services(
                 leader_lock.max_attempts,
                 leader_lock.stream_max_len,
             )
+            .map(|adapter| {
+                adapter
+                    .with_quorum_disruption_budget(leader_lock.quorum_disruption_budget)
+            })
         })
         .transpose()?;
 

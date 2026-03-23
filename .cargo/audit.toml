@@ -6,4 +6,5 @@ ignore = [
     "RUSTSEC-2026-0006", # handled in master
     "RUSTSEC-2026-0020", # wasmtime advisory, pending upgrade
     "RUSTSEC-2026-0021", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0049", # temporary CI ignore; fix in master
 ]
