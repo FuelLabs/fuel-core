@@ -440,7 +440,7 @@ impl RedisLeaderLeaseAdapter {
             {
                 let current = epoch.unwrap_or(0);
                 if max_new > current {
-                    tracing::info!(
+                    tracing::debug!(
                         old_epoch = current,
                         new_epoch = max_new,
                         "Adopted higher epoch from lock expansion"
