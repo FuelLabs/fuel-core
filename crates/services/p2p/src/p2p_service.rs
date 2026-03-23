@@ -79,14 +79,8 @@ use libp2p::{
 };
 use rand::seq::IteratorRandom;
 use std::{
-    collections::{
-        HashMap,
-        VecDeque,
-    },
-    time::{
-        Duration,
-        Instant,
-    },
+    collections::HashMap,
+    time::Duration,
 };
 use tokio::sync::broadcast;
 use tracing::{
@@ -99,7 +93,6 @@ mod tests;
 
 /// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
-const MAX_SEEN_GOSSIP_MESSAGES: usize = 10_000;
 
 fn message_acceptance_label(acceptance: &MessageAcceptance) -> &'static str {
     match acceptance {
@@ -107,24 +100,6 @@ fn message_acceptance_label(acceptance: &MessageAcceptance) -> &'static str {
         MessageAcceptance::Reject => "reject",
         MessageAcceptance::Ignore => "ignore",
     }
-}
-
-#[derive(Debug)]
-struct SeenGossipMessage {
-    first_seen_at: Instant,
-    topic_hash: TopicHash,
-    payload_len_bytes: usize,
-    first_seen_peer_id: PeerId,
-    report_count_for_message: u32,
-}
-
-#[derive(Debug)]
-struct SeenGossipMessageReportContext {
-    report_age_ms: u64,
-    topic_hash: TopicHash,
-    payload_len_bytes: usize,
-    first_seen_peer_id: PeerId,
-    report_count_for_message: u32,
 }
 
 impl Punisher for Swarm<FuelBehaviour> {
@@ -176,10 +151,6 @@ pub struct FuelP2PService {
 
     /// Holds peers' information, and manages existing connections
     peer_manager: PeerManager,
-
-    /// Recently seen gossipsub messages for report-age diagnostics.
-    seen_gossip_messages: HashMap<String, SeenGossipMessage>,
-    seen_gossip_message_order: VecDeque<String>,
 }
 
 #[derive(Debug)]
@@ -342,8 +313,6 @@ impl FuelP2PService {
                 connection_state_writer,
                 usize::try_from(config.max_discovery_peers_connected)?,
             ),
-            seen_gossip_messages: HashMap::default(),
-            seen_gossip_message_order: VecDeque::default(),
         })
     }
 
@@ -397,63 +366,6 @@ impl FuelP2PService {
         if let Some(registry) = self.libp2p_metrics_registry.as_ref() {
             self.update_metrics(|| registry.record(event));
         }
-    }
-
-    fn remember_seen_gossip_message(
-        &mut self,
-        message_id: &MessageId,
-        propagation_source: &PeerId,
-        topic_hash: TopicHash,
-        payload_len_bytes: usize,
-    ) {
-        let key = message_id.to_string();
-        if self.seen_gossip_messages.contains_key(&key) {
-            return;
-        }
-
-        self.seen_gossip_messages.insert(
-            key.clone(),
-            SeenGossipMessage {
-                first_seen_at: Instant::now(),
-                topic_hash,
-                payload_len_bytes,
-                first_seen_peer_id: *propagation_source,
-                report_count_for_message: 0,
-            },
-        );
-        self.seen_gossip_message_order.push_back(key);
-
-        while self.seen_gossip_messages.len() > MAX_SEEN_GOSSIP_MESSAGES {
-            if let Some(oldest_key) = self.seen_gossip_message_order.pop_front() {
-                self.seen_gossip_messages.remove(&oldest_key);
-            } else {
-                break;
-            }
-        }
-    }
-
-    fn seen_gossip_message_report_context(
-        &mut self,
-        message_id: &MessageId,
-    ) -> Option<SeenGossipMessageReportContext> {
-        let key = message_id.to_string();
-        self.seen_gossip_messages.get_mut(&key).map(|message| {
-            message.report_count_for_message =
-                message.report_count_for_message.saturating_add(1);
-
-            SeenGossipMessageReportContext {
-                report_age_ms: message
-                    .first_seen_at
-                    .elapsed()
-                    .as_millis()
-                    .try_into()
-                    .unwrap_or(u64::MAX),
-                topic_hash: message.topic_hash.clone(),
-                payload_len_bytes: message.payload_len_bytes,
-                first_seen_peer_id: message.first_seen_peer_id,
-                report_count_for_message: message.report_count_for_message,
-            }
-        })
     }
 
     #[cfg(feature = "test-helpers")]
@@ -585,7 +497,6 @@ impl FuelP2PService {
         payload_len_bytes: Option<usize>,
         decode_error: Option<String>,
     ) {
-        let seen_message_context = self.seen_gossip_message_report_context(msg_id);
         let original_acceptance_label = message_acceptance_label(&acceptance);
         let is_reserved_peer = self.peer_manager.is_reserved(&propagation_source);
 
@@ -597,26 +508,6 @@ impl FuelP2PService {
         }
         let final_acceptance_label = message_acceptance_label(&acceptance);
 
-        let (
-            seen_in_local_cache,
-            report_age_ms,
-            seen_topic_hash,
-            seen_payload_len_bytes,
-            first_seen_peer_id,
-            report_count_for_message,
-        ) = if let Some(context) = seen_message_context {
-            (
-                true,
-                Some(context.report_age_ms),
-                Some(context.topic_hash),
-                Some(context.payload_len_bytes),
-                Some(context.first_seen_peer_id),
-                context.report_count_for_message,
-            )
-        } else {
-            (false, None, None, None, None, 0)
-        };
-
         let context = MessageValidationContext {
             report_origin,
             original_acceptance_label,
@@ -626,12 +517,6 @@ impl FuelP2PService {
             topic_hash,
             payload_len_bytes,
             decode_error,
-            seen_in_local_cache,
-            report_age_ms,
-            seen_topic_hash,
-            seen_payload_len_bytes,
-            first_seen_peer_id,
-            report_count_for_message,
         };
 
         if let Some(gossip_score) = self
@@ -759,12 +644,6 @@ impl FuelP2PService {
                 message,
                 message_id,
             } => {
-                self.remember_seen_gossip_message(
-                    &message_id,
-                    &propagation_source,
-                    message.topic.clone(),
-                    message.data.len(),
-                );
                 let correct_topic = self.get_topic_tag(&message.topic)?;
                 match self.gossipsub_codec.decode(&message.data, correct_topic) {
                     Ok(decoded_message) => Some(FuelP2PEvent::GossipsubMessage {
