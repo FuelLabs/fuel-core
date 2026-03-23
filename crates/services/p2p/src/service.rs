@@ -88,10 +88,6 @@ use libp2p::{
     request_response::InboundRequestId,
 };
 use std::{
-    collections::{
-        HashMap,
-        VecDeque,
-    },
     fmt::Debug,
     future::Future,
     ops::Range,
@@ -120,7 +116,6 @@ pub mod broadcast_tests;
 pub mod task_tests;
 
 const CHANNEL_SIZE: usize = 1024 * 10;
-const MAX_PENDING_GOSSIP_REPORT_TIMERS: usize = 20_000;
 
 pub type Service<V, T> = ServiceRunner<UninitializedTask<V, SharedState, T>>;
 
@@ -472,8 +467,6 @@ pub struct Task<P, V, B, T> {
     heartbeat_peer_reputation_config: HeartbeatPeerReputationConfig,
     // cached view
     cached_view: Arc<CachedView>,
-    pending_gossip_report_timers: HashMap<Vec<u8>, Instant>,
-    pending_gossip_report_order: VecDeque<Vec<u8>>,
 }
 
 impl<P, V, B, T> Task<P, V, B, T>
@@ -481,39 +474,6 @@ where
     P: TaskP2PService,
     B: Broadcast,
 {
-    fn remember_gossip_message_for_report_timing(&mut self, message_id: &[u8]) {
-        if self.pending_gossip_report_timers.contains_key(message_id) {
-            return;
-        }
-
-        let key = message_id.to_vec();
-        self.pending_gossip_report_timers
-            .insert(key.clone(), Instant::now());
-        self.pending_gossip_report_order.push_back(key);
-
-        while self.pending_gossip_report_timers.len() > MAX_PENDING_GOSSIP_REPORT_TIMERS {
-            if let Some(oldest) = self.pending_gossip_report_order.pop_front() {
-                self.pending_gossip_report_timers.remove(&oldest);
-            } else {
-                break;
-            }
-        }
-    }
-
-    fn take_gossip_report_age_ms(&mut self, message_id: &[u8]) -> Option<u64> {
-        let key = message_id.to_vec();
-        self.pending_gossip_report_order.retain(|id| id != &key);
-        self.pending_gossip_report_timers
-            .remove(&key)
-            .map(|started_at| {
-                started_at
-                    .elapsed()
-                    .as_millis()
-                    .try_into()
-                    .unwrap_or(u64::MAX)
-            })
-    }
-
     pub(crate) fn broadcast_gossip_message(
         &mut self,
         message: GossipsubMessage,
@@ -521,7 +481,6 @@ where
         peer_id: PeerId,
     ) {
         let message_id = message_id.0;
-        self.remember_gossip_message_for_report_timing(&message_id);
 
         match message {
             GossipsubMessage::NewTx(transaction) => {
@@ -966,8 +925,6 @@ where
                     .unwrap_or(1_535),
                 metrics,
             )),
-            pending_gossip_report_timers: HashMap::default(),
-            pending_gossip_report_order: VecDeque::default(),
         };
         Ok(task)
     }
@@ -1052,15 +1009,6 @@ where
                         self.p2p_service.send_request_msg(Some(from_peer), request_msg, channel).expect("We always have a peer here, so send has a target");
                     }
                     Some(TaskRequest::RespondWithGossipsubMessageReport((message, acceptance))) => {
-                        let external_report_age_ms = self.take_gossip_report_age_ms(&message.message_id);
-                        tracing::debug!(
-                            target: "fuel-p2p",
-                            message_id = ?message.message_id,
-                            reporting_peer = ?message.peer_id,
-                            acceptance = ?acceptance,
-                            external_report_age_ms = ?external_report_age_ms,
-                            "Processing external gossipsub validation report"
-                        );
                         let res = self.p2p_service.report_message(message, acceptance);
                         if let Err(err) = res {
                             return TaskNextAction::ErrorContinue(err)
