@@ -18,6 +18,7 @@ pub enum Module {
     GasPrice,
     TxStatusManager,
     Compression,
+    PoA,
 }
 
 /// Configuration for disabling metrics.

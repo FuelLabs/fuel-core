@@ -557,6 +557,17 @@ where
         }
     }
 
+    /// Returns the error retry delay based on the trigger's block time.
+    /// Uses the block production interval instead of a hardcoded 1s
+    /// so that followers can retry lease acquisition sooner.
+    fn error_retry_delay(&self) -> Duration {
+        match self.trigger {
+            Trigger::Interval { block_time } => block_time,
+            Trigger::Open { period } => period,
+            _ => Duration::from_secs(1),
+        }
+    }
+
     async fn handle_normal_block_production(
         &mut self,
         deadline: Instant,
@@ -564,8 +575,16 @@ where
         match self.produce_next_block(deadline).await {
             Ok(()) => TaskNextAction::Continue,
             Err(err) => {
-                // Wait some time in case of error to avoid spamming retry block production
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                // Release the lease on production failure so followers can
+                // acquire it faster instead of waiting for TTL expiry.
+                if let Err(release_err) = self.reconciliation_port.release().await {
+                    tracing::warn!(
+                        "Failed to release lease after production error: {release_err}"
+                    );
+                }
+                // Wait before retrying to avoid spamming, but use the
+                // block_time interval rather than a hardcoded 1s delay.
+                tokio::time::sleep(self.error_retry_delay()).await;
                 TaskNextAction::ErrorContinue(err)
             }
         }
@@ -575,6 +594,17 @@ where
         &mut self,
         deadline: Instant,
     ) -> anyhow::Result<TaskNextAction> {
+        // Sync last_height with the DB to avoid stale reconciliation.
+        // P2P block imports advance the DB height independently of the
+        // SyncTask, which can lag. Using a stale next_height causes
+        // unreconciled_blocks to return blocks the DB already has,
+        // leading to IncorrectBlockHeight errors.
+        if let Ok(Some(db_height)) = self.block_importer.latest_block_height()
+            && db_height > self.last_height
+        {
+            self.last_height = db_height;
+        }
+
         match self
             .reconciliation_port
             .leader_state(self.next_height())
@@ -591,9 +621,36 @@ where
                 for block in blocks {
                     let block_height = *block.entity.header().height();
                     let block_time = block.entity.header().time();
-                    self.block_importer.execute_and_commit(block).await?;
-                    self.last_height = block_height;
-                    self.last_timestamp = block_time;
+
+                    // Skip blocks the DB already has (can happen when
+                    // P2P imports race with reconciliation).
+                    if block_height <= self.last_height {
+                        continue;
+                    }
+
+                    match self.block_importer.execute_and_commit(block).await {
+                        Ok(()) => {
+                            self.last_height = block_height;
+                            self.last_timestamp = block_time;
+                        }
+                        Err(err) => {
+                            // Re-sync from the DB and skip — the block
+                            // may have been imported via P2P between our
+                            // latest_block_height check and now. Stream
+                            // cursors are always restored by the adapter,
+                            // so these entries remain re-readable.
+                            tracing::warn!(
+                                "Reconciliation import failed at height \
+                                 {block_height}: {err}. Re-syncing from DB."
+                            );
+                            if let Ok(Some(db_height)) =
+                                self.block_importer.latest_block_height()
+                                && db_height > self.last_height
+                            {
+                                self.last_height = db_height;
+                            }
+                        }
+                    }
                 }
                 Ok(TaskNextAction::Continue)
             }
