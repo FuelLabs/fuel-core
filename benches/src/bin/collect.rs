@@ -357,6 +357,18 @@ impl Display for State {
     }
 }
 
+/// Minimum slot size (bytes) included in the linear regression for `swrd` and
+/// `srdd` groups.  Very small slots (< 32 bytes) exhibit disproportionate
+/// overhead and skew the per-byte slope.
+const MIN_SLOT_SIZE_BYTES: u64 = 32;
+
+/// Returns `true` if the data point should be excluded from the regression for
+/// the given group.  Only `swrd_*` and `srdd_*` groups are affected.
+fn skip_small_slot(group_name: &str, slot_size: u64) -> bool {
+    (group_name.starts_with("swrd") || group_name.starts_with("srdd"))
+        && slot_size < MIN_SLOT_SIZE_BYTES
+}
+
 /// Maps each dynamic-storage benchmark group name to the corresponding
 /// `GasCostsValuesV7` field name.  Only the "primary" variants appear here;
 /// the counter-part groups (e.g. `swrd_cold`, `sclr_cold`, `spld_*`) are
@@ -665,6 +677,7 @@ impl State {
                     .filter_map(|sample| {
                         Some((ids.remove(sample)?, throughput.get(sample).copied()?))
                     })
+                    .filter(|(_, t)| !skip_small_slot(name, *t))
                     .map(|(mean, t)| (t, map_to_ratio(baseline, mean)))
                     .collect::<Vec<_>>();
                 samples.sort_unstable_by_key(|(_, mean)| *mean);
