@@ -4,6 +4,7 @@ use crate::{
     error::Error,
     local_runner::LocalRunner,
     ports::{
+        BlockReconciliationWritePort,
         BlockVerifier,
         DatabaseTransaction,
         ImporterDatabase,
@@ -35,6 +36,7 @@ use fuel_core_types::{
     services::{
         block_importer::{
             ImportResult,
+            Source,
             UncommittedResult,
         },
         executor::{
@@ -89,7 +91,7 @@ enum Commands {
     },
 }
 
-struct ImporterInner<D, E, V> {
+struct ImporterInner<D, E, V, W> {
     database: D,
     executor: E,
     verifier: V,
@@ -98,6 +100,18 @@ struct ImporterInner<D, E, V> {
     commands: mpsc::UnboundedReceiver<Commands>,
     /// Enables prometheus metrics for this fuel-service
     metrics: bool,
+    block_reconciliation_write_port: W,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct NoopBlockReconciliationWritePort;
+
+#[cfg(test)]
+impl BlockReconciliationWritePort for NoopBlockReconciliationWritePort {
+    fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 pub struct Importer {
@@ -129,17 +143,19 @@ impl Drop for Importer {
 }
 
 impl Importer {
-    pub fn new<D, E, V>(
+    pub fn new<D, E, V, W>(
         chain_id: ChainId,
         config: Config,
         database: D,
         executor: E,
         verifier: V,
+        block_reconciliation_write_port: W,
     ) -> Self
     where
         D: ImporterDatabase + Transactional + 'static,
         E: Validator + 'static,
         V: BlockVerifier + 'static,
+        W: BlockReconciliationWritePort + Send + Sync + 'static,
     {
         // We use semaphore as a back pressure mechanism instead of a `broadcast`
         // channel because we want to prevent committing to the database results
@@ -156,6 +172,7 @@ impl Importer {
             commands: receiver,
             broadcast: broadcast.clone(),
             metrics: config.metrics,
+            block_reconciliation_write_port,
         };
 
         if config.metrics {
@@ -191,6 +208,7 @@ impl Importer {
             database,
             executor,
             verifier,
+            NoopBlockReconciliationWritePort,
         )
     }
 
@@ -246,7 +264,7 @@ impl Importer {
                 "The previous block processing \
                     was not finished for {TIMEOUT} seconds."
             );
-            return Err(Error::PreviousBlockProcessingNotFinished)
+            return Err(Error::PreviousBlockProcessingNotFinished);
         };
         let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
@@ -298,11 +316,12 @@ impl Importer {
     }
 }
 
-impl<D, E, V> ImporterInner<D, E, V>
+impl<D, E, V, W> ImporterInner<D, E, V, W>
 where
     D: ImporterDatabase + Transactional,
     E: Send + Sync,
     V: Send + Sync,
+    W: BlockReconciliationWritePort,
 {
     /// The method commits the result of the block execution attaching the consensus data.
     /// It expects that the `UncommittedResult` contains the result of the block
@@ -375,7 +394,13 @@ where
             return Err(Error::InvalidDatabaseStateAfterExecution(
                 expected_block_root,
                 actual_block_root,
-            ))
+            ));
+        }
+
+        if result.source == Source::Local {
+            self.block_reconciliation_write_port
+                .publish_produced_block(&result.sealed_block)
+                .map_err(Error::FailedBlockReconciliationWrite)?;
         }
 
         let changes = db_after_execution.into_changes();
@@ -484,11 +509,12 @@ struct PrepareImportResult {
     block_changes: Changes,
 }
 
-impl<IDatabase, E, V> ImporterInner<IDatabase, E, V>
+impl<IDatabase, E, V, W> ImporterInner<IDatabase, E, V, W>
 where
     IDatabase: ImporterDatabase + Transactional,
     E: Validator,
     V: BlockVerifier,
+    W: BlockReconciliationWritePort,
 {
     async fn run(&mut self) {
         let local_runner = LocalRunner::new().expect("Failed to create the local runner");
@@ -614,14 +640,14 @@ where
 
         let result_of_verification = verifier.verify_block_fields(consensus, block);
         if let Err(err) = result_of_verification {
-            return Err(Error::FailedVerification(err))
+            return Err(Error::FailedVerification(err));
         }
 
         // The current code has a separate function X to process `StateConfig`.
         // It is not possible to execute it via `Executor`.
         // Maybe we need consider to move the function X here, if that possible.
         if let Consensus::Genesis(_) = consensus {
-            return Err(Error::ExecuteGenesis)
+            return Err(Error::ExecuteGenesis);
         }
 
         let (ValidationResult { tx_status, events }, changes) = executor
@@ -633,7 +659,7 @@ where
         if actual_block_id != sealed_block_id {
             // It should not be possible because, during validation, we don't touch the block.
             // But while we pass it by value, let's check it.
-            return Err(Error::BlockIdMismatch(sealed_block_id, actual_block_id))
+            return Err(Error::BlockIdMismatch(sealed_block_id, actual_block_id));
         }
 
         let result = VerifyAndExecutionResult {
@@ -671,7 +697,7 @@ impl Importer {
                 "The previous block processing \
                      was not finished for {TIMEOUT} seconds."
             );
-            return Err(Error::PreviousBlockProcessingNotFinished)
+            return Err(Error::PreviousBlockProcessingNotFinished);
         };
         let permit = permit.map_err(Error::ActiveBlockResultsSemaphoreClosed)?;
 
@@ -731,13 +757,13 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
             // Because the genesis block is not committed, it should return `None`.
             // If we find the latest height, something is wrong with the state of the database.
             if found {
-                return Err(Error::InvalidUnderlyingDatabaseGenesisState)
+                return Err(Error::InvalidUnderlyingDatabaseGenesisState);
             }
             actual_next_height
         }
         Consensus::PoA(_) => {
             if actual_next_height == BlockHeight::from(0u32) {
-                return Err(Error::ZeroNonGenericHeight)
+                return Err(Error::ZeroNonGenericHeight);
             }
 
             let last_db_height = database
@@ -760,13 +786,13 @@ fn create_block_changes<D: ImporterDatabase + Transactional>(
         return Err(Error::IncorrectBlockHeight(
             expected_next_height,
             actual_next_height,
-        ))
+        ));
     }
 
     let mut transaction = database.storage_transaction(Changes::new());
 
     if !transaction.store_new_block(chain_id, sealed_block)? {
-        return Err(Error::NotUnique(actual_next_height))
+        return Err(Error::NotUnique(actual_next_height));
     }
 
     Ok(transaction.into_changes())

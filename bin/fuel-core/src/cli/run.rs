@@ -463,9 +463,6 @@ impl Command {
                     .echo_delegation_interval,
             };
 
-        #[cfg(feature = "rpc")]
-        let rpc_config = rpc_args.map(|args| args.into_config());
-
         let leader_lock = poa_trigger.leader_lock()?;
         let trigger: Trigger = poa_trigger.into();
 
@@ -793,8 +790,6 @@ impl Command {
                 status_cache_ttl: status_cache_ttl.into(),
                 metrics: metrics.is_enabled(Module::TxStatusManager),
             },
-            #[cfg(feature = "rpc")]
-            rpc_config,
         };
         Ok(config)
     }

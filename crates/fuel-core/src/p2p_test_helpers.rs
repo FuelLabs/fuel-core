@@ -92,8 +92,6 @@ pub struct CustomizeConfig {
     max_functional_peers_connected: Option<u32>,
     max_discovery_peers_connected: Option<u32>,
     subscribe_to_transactions: Option<bool>,
-    #[cfg(feature = "rpc")]
-    rpc_config: Option<fuel_core_block_aggregator_api::service::Config>,
 }
 
 impl CustomizeConfig {
@@ -103,8 +101,6 @@ impl CustomizeConfig {
             max_functional_peers_connected: None,
             max_discovery_peers_connected: None,
             subscribe_to_transactions: None,
-            #[cfg(feature = "rpc")]
-            rpc_config: None,
         }
     }
 
@@ -502,10 +498,6 @@ pub fn make_config(
     node_config.p2p = Config::local_node().p2p;
     node_config.utxo_validation = true;
     node_config.name = name.clone();
-    #[cfg(feature = "rpc")]
-    {
-        node_config.rpc_config = config_overrides.rpc_config;
-    }
 
     if let Some(min_gas_price) = config_overrides.min_exec_gas_price {
         node_config.gas_price_config.min_exec_gas_price = min_gas_price;

@@ -1,5 +1,41 @@
 #![allow(clippy::let_unit_value)]
 
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
+
+use fuel_core_gas_price_service::v1::{
+    algorithm::AlgorithmV1,
+    da_source_service::block_committer_costs::{
+        BlockCommitterDaBlockCosts,
+        BlockCommitterHttpApi,
+    },
+    metadata::V1AlgorithmConfig,
+    service::SharedData,
+    uninitialized_task::new_gas_price_service_v1,
+};
+
+use fuel_core_poa::Trigger;
+use fuel_core_storage::{
+    self,
+    transactional::AtomicView,
+};
+#[cfg(feature = "relayer")]
+use fuel_core_types::blockchain::primitives::DaBlockHeight;
+use fuel_core_types::signer::SignMode;
+
+use fuel_core_compression_service::service::new_service as new_compression_service;
+
+#[cfg(feature = "relayer")]
+use crate::relayer::Config as RelayerConfig;
+
+#[cfg(feature = "p2p")]
+use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
+    key_generator::Ed25519KeyGenerator,
+    trigger::TimeBasedTrigger,
+    tx_receiver::PreconfirmationsReceiver,
+};
+
 use super::{
     DbType,
     adapters::{
@@ -13,16 +49,6 @@ use super::{
     },
     config::DaCompressionMode,
     genesis::create_genesis_block,
-};
-#[cfg(feature = "rpc")]
-use crate::database::database_description::on_chain::OnChain;
-#[cfg(feature = "relayer")]
-use crate::relayer::Config as RelayerConfig;
-#[cfg(feature = "p2p")]
-use crate::service::adapters::consensus_module::poa::pre_confirmation_signature::{
-    key_generator::Ed25519KeyGenerator,
-    trigger::TimeBasedTrigger,
-    tx_receiver::PreconfirmationsReceiver,
 };
 use crate::{
     combined_database::CombinedDatabase,
@@ -52,9 +78,12 @@ use crate::{
             TxPoolAdapter,
             UniversalGasPriceProvider,
             VerifierAdapter,
+            block_importer::BlockReconciliationWriteAdapter,
             chain_state_info_provider,
             consensus_module::poa::{
                 InDirectoryPredefinedBlocks,
+                NoopReconciliationAdapter,
+                ReconciliationAdapter,
                 RedisLeaderLeaseAdapter,
             },
             fuel_gas_price_provider::FuelGasPriceProvider,
@@ -65,46 +94,6 @@ use crate::{
         },
     },
 };
-use fuel_core_compression_service::service::new_service as new_compression_service;
-use fuel_core_gas_price_service::v1::{
-    algorithm::AlgorithmV1,
-    da_source_service::block_committer_costs::{
-        BlockCommitterDaBlockCosts,
-        BlockCommitterHttpApi,
-    },
-    metadata::V1AlgorithmConfig,
-    service::SharedData,
-    uninitialized_task::new_gas_price_service_v1,
-};
-use fuel_core_poa::Trigger;
-use fuel_core_storage::{
-    self,
-    transactional::AtomicView,
-};
-#[cfg(feature = "relayer")]
-use fuel_core_types::blockchain::primitives::DaBlockHeight;
-use fuel_core_types::signer::SignMode;
-#[cfg(feature = "rpc")]
-use rpc::*;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
-#[cfg(feature = "rpc")]
-mod rpc {
-    pub use crate::{
-        database::database_description::block_aggregator::BlockAggregatorDatabase,
-        service::adapters::rpc::ReceiptSource,
-    };
-    pub use fuel_core_block_aggregator_api::{
-        blocks::old_block_source::{
-            OldBlocksSource,
-            convertor_adapter::ProtobufBlockConverter,
-        },
-        service::UninitializedTask,
-    };
-    pub use fuel_core_services::ServiceRunner;
-    pub use fuel_core_types::fuel_types::BlockHeight;
-}
 
 pub type PoAService = fuel_core_poa::Service<
     BlockProducerAdapter,
@@ -113,7 +102,7 @@ pub type PoAService = fuel_core_poa::Service<
     InDirectoryPredefinedBlocks,
     SystemTime,
     ReadySignal,
-    RedisLeaderLeaseAdapter,
+    ReconciliationAdapter,
 >;
 #[cfg(feature = "p2p")]
 pub type P2PService = fuel_core_p2p::service::Service<Database, TxPoolAdapter>;
@@ -229,12 +218,38 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     );
 
+    let redis_reconciliation_adapter = config
+        .leader_lock
+        .as_ref()
+        .map(|leader_lock| {
+            RedisLeaderLeaseAdapter::new(
+                leader_lock.redis_urls.clone(),
+                leader_lock.lease_key.clone(),
+                leader_lock.lease_ttl,
+                leader_lock.node_timeout,
+                leader_lock.retry_delay,
+                leader_lock.max_retry_delay_offset,
+                leader_lock.max_attempts,
+                leader_lock.stream_max_len,
+            )
+            .map(|adapter| {
+                adapter
+                    .with_quorum_disruption_budget(leader_lock.quorum_disruption_budget)
+            })
+        })
+        .transpose()?;
+
     let importer_adapter = BlockImporterAdapter::new(
         chain_id,
         config.block_importer.clone(),
         database.on_chain().clone(),
         executor.clone(),
         verifier.clone(),
+        redis_reconciliation_adapter
+            .as_ref()
+            .cloned()
+            .map(BlockReconciliationWriteAdapter::Redis)
+            .unwrap_or_else(|| BlockReconciliationWriteAdapter::Noop(Default::default())),
     );
 
     let chain_state_info_provider_service = chain_state_info_provider::new_service(
@@ -393,21 +408,13 @@ pub fn init_sub_services(
 
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
-            let leader_lease_port = config
-                .leader_lock
+            let reconciliation_port = redis_reconciliation_adapter
                 .as_ref()
-                .map(|leader_lock| {
-                    RedisLeaderLeaseAdapter::new(
-                        leader_lock.redis_urls.clone(),
-                        leader_lock.lease_key.clone(),
-                        leader_lock.lease_ttl,
-                        leader_lock.node_timeout,
-                        leader_lock.retry_delay,
-                        leader_lock.max_retry_delay_offset,
-                        leader_lock.max_attempts,
-                    )
-                })
-                .transpose()?;
+                .cloned()
+                .map(ReconciliationAdapter::Redis)
+                .unwrap_or_else(|| {
+                    ReconciliationAdapter::Noop(NoopReconciliationAdapter)
+                });
 
             Ok(fuel_core_poa::new_service(
                 &last_block_header,
@@ -420,7 +427,7 @@ pub fn init_sub_services(
                 predefined_blocks,
                 SystemTime,
                 block_production_ready_signal,
-                leader_lease_port,
+                reconciliation_port,
             ))
         })
         .transpose()?;
@@ -496,18 +503,6 @@ pub fn init_sub_services(
         chain_name,
     };
 
-    #[cfg(feature = "rpc")]
-    let block_aggregator_rpc = if let Some(config) = config.rpc_config.as_ref() {
-        Some(init_rpc_server(
-            config,
-            &database,
-            &importer_adapter,
-            genesis_block_height,
-        )?)
-    } else {
-        None
-    };
-
     let graph_ql = fuel_core_graphql_api::api_service::new_service(
         *genesis_block.header().height(),
         graphql_config,
@@ -542,7 +537,7 @@ pub fn init_sub_services(
         compression: compression_service.as_ref().map(|c| c.shared.clone()),
         gas_price_service: gas_price_service_v1.shared.clone(),
         #[cfg(feature = "rpc")]
-        block_aggregator_rpc: block_aggregator_rpc.as_ref().map(|s| s.shared.clone()),
+        block_aggregator_rpc: None,
     };
 
     #[allow(unused_mut)]
@@ -574,10 +569,6 @@ pub fn init_sub_services(
     services.push(Box::new(graph_ql));
     services.push(Box::new(graphql_worker));
     services.push(Box::new(tx_status_manager));
-    #[cfg(feature = "rpc")]
-    if let Some(block_aggregator_rpc) = block_aggregator_rpc {
-        services.push(Box::new(block_aggregator_rpc));
-    }
 
     if let Some(compression_service) = compression_service {
         services.push(Box::new(compression_service));
@@ -589,35 +580,4 @@ pub fn init_sub_services(
     }
 
     Ok((services, shared))
-}
-
-#[allow(clippy::type_complexity)]
-#[cfg(feature = "rpc")]
-fn init_rpc_server(
-    config: &fuel_core_block_aggregator_api::service::Config,
-    database: &CombinedDatabase,
-    importer_adapter: &BlockImporterAdapter,
-    genesis_height: BlockHeight,
-) -> anyhow::Result<
-    ServiceRunner<
-        UninitializedTask<
-            OldBlocksSource<ProtobufBlockConverter, Database<OnChain>, ReceiptSource>,
-            Database<BlockAggregatorDatabase>,
-            Database<BlockAggregatorDatabase>,
-        >,
-    >,
-> {
-    let receipts = ReceiptSource::new(database.off_chain().clone());
-    let serializer = ProtobufBlockConverter;
-    let onchain_db = database.on_chain().clone();
-    let importer = importer_adapter.events_shared_result();
-    fuel_core_block_aggregator_api::service::new_service(
-        database.block_aggregation_storage().clone(),
-        serializer,
-        onchain_db,
-        receipts,
-        importer,
-        config.clone(),
-        genesis_height,
-    )
 }
