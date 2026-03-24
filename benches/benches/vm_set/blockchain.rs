@@ -154,18 +154,18 @@ impl BenchDb {
         })
     }
 
+    /// Note that this one doesn't use [`crate::utils::get_state_size`].
     fn override_slots(
         &mut self,
         contract_id: &ContractId,
+        slot_count: usize,
         slot_size: usize,
     ) -> anyhow::Result<()> {
-        let state_size = crate::utils::get_state_size();
-
         let mut storage_key = primitive_types::U256::zero();
         let mut key_bytes = Bytes32::zeroed();
         self.db.init_contract_state(
             contract_id,
-            (0..(state_size.checked_div(slot_size as u64).unwrap_or(1) + 1)).map(|_| {
+            (0..slot_count).map(|_| {
                 storage_key.to_big_endian(key_bytes.as_mut());
                 storage_key.increase().unwrap();
                 (key_bytes, vec![0; slot_size])
@@ -693,6 +693,7 @@ pub fn run(c: &mut Criterion) {
 
     // dynamic storage
     let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
+    const SLOT_COUNT: usize = 10_000_000;
 
     #[allow(clippy::type_complexity)]
     static FILLED_CACHE_SLOTS: OnceLock<
@@ -753,7 +754,7 @@ pub fn run(c: &mut Criterion) {
             let mut sclr = c.benchmark_group(format!("sclr_{caching}"));
             for i in linear_short.clone() {
                 // We double use slot count as slot size. I hope it's going to be fine.
-                db.override_slots(&contract, i as usize)
+                db.override_slots(&contract, SLOT_COUNT, i as usize)
                     .expect("Unable to override contract storage");
 
                 let start_key = Bytes32::zeroed();
@@ -787,7 +788,7 @@ pub fn run(c: &mut Criterion) {
         {
             let mut srdd = c.benchmark_group(format!("srdd_{caching}"));
             for i in linear_short.clone() {
-                db.override_slots(&contract, i as usize)
+                db.override_slots(&contract, SLOT_COUNT, i as usize)
                     .expect("Unable to override contract storage");
 
                 let start_key = Bytes32::zeroed();
@@ -822,7 +823,7 @@ pub fn run(c: &mut Criterion) {
         {
             let mut swrd = c.benchmark_group(format!("swrd_{caching}"));
             for i in linear_short.clone() {
-                db.override_slots(&contract, i as usize)
+                db.override_slots(&contract, SLOT_COUNT, i as usize)
                     .expect("Unable to override contract storage");
 
                 let start_key = Bytes32::zeroed();
@@ -857,7 +858,7 @@ pub fn run(c: &mut Criterion) {
         {
             let mut spld = c.benchmark_group(format!("spld_{caching}"));
             for i in linear_short.clone() {
-                db.override_slots(&contract, i as usize)
+                db.override_slots(&contract, SLOT_COUNT, i as usize)
                     .expect("Unable to override contract storage");
 
                 let start_key = Bytes32::zeroed();
