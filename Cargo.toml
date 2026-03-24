@@ -131,7 +131,7 @@ fuel-core-types = { version = "0.47.1", path = "./crates/types", default-feature
 fuel-core-upgradable-executor = { version = "0.47.1", path = "./crates/services/upgradable-executor" }
 fuel-core-wasm-executor = { version = "0.47.1", path = "./crates/services/upgradable-executor/wasm-executor", default-features = false }
 fuel-gas-price-algorithm = { version = "0.47.1", path = "crates/fuel-gas-price-algorithm" }
-fuel-vm-private = { version = "0.66.0", package = "fuel-vm", default-features = false }
+fuel-vm-private = { version = "0.66.2", package = "fuel-vm", default-features = false }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
 hyper = { version = "0.14" }
@@ -190,6 +190,3 @@ lto = "fat"
 # To speedup iterations between compilation.
 #lto = "thin"
 panic = "unwind"
-
-[patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "dento/diff-storage-cache-fix" }

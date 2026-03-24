@@ -4191,22 +4191,24 @@ dependencies = [
 
 [[package]]
 name = "fuel-asm"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4de530041f89d892ef861a2a7691dea97b608bf94e30d87ce372e0e47fd2fbdd"
 dependencies = [
  "bitflags 2.11.0",
- "fuel-types 0.66.1",
+ "fuel-types 0.66.2",
  "serde",
  "strum 0.24.1",
 ]
 
 [[package]]
 name = "fuel-compression"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8af9196621074cb0573dc694a40965b6c9b6e38369a0bbd321bf92d02fef5581"
 dependencies = [
- "fuel-derive 0.66.1",
- "fuel-types 0.66.1",
+ "fuel-derive 0.66.2",
+ "fuel-types 0.66.2",
  "serde",
 ]
 
@@ -4862,7 +4864,7 @@ dependencies = [
  "enum-iterator",
  "fuel-core-storage",
  "fuel-core-types 0.47.1",
- "fuel-vm 0.66.1",
+ "fuel-vm 0.66.2",
  "impl-tools",
  "itertools 0.14.0",
  "mockall",
@@ -5051,7 +5053,7 @@ dependencies = [
  "ed25519",
  "ed25519-dalek",
  "educe",
- "fuel-vm 0.66.1",
+ "fuel-vm 0.66.2",
  "k256",
  "parking_lot",
  "postcard",
@@ -5115,15 +5117,16 @@ dependencies = [
 
 [[package]]
 name = "fuel-crypto"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9b69cb29fca29be6d88160a830dbbaf1372c5c08d55773e95220a2ca26d45f6"
 dependencies = [
  "base64ct",
  "coins-bip32",
  "coins-bip39",
  "ecdsa 0.16.9",
  "ed25519-dalek",
- "fuel-types 0.66.1",
+ "fuel-types 0.66.2",
  "k256",
  "p256 0.13.2",
  "rand 0.8.5",
@@ -5147,8 +5150,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-derive"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94182cc1ec80fc88b2ed4654b0a5d1947ad536ea121738d681532b73b491d010"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5184,12 +5188,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f375b4576259d3b8c199ed3899c2dc4d882807b1e2d1f1a11adfd8a82eba8582"
 dependencies = [
  "derive_more 0.99.20",
  "digest 0.10.7",
- "fuel-storage 0.66.1",
+ "fuel-storage 0.66.2",
  "hashbrown 0.13.2",
  "hex",
  "serde",
@@ -5216,8 +5221,9 @@ checksum = "4c1b711f28553ddc5f3546711bd220e144ce4c1af7d9e9a1f70b2f20d9f5b791"
 
 [[package]]
 name = "fuel-storage"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae6958d391942b4ed8a27fde3a534ffb89f18817627d2372e6ccf8d6a222a5cc"
 
 [[package]]
 name = "fuel-tx"
@@ -5243,17 +5249,18 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1acf8360bb831bffae239a859726266be4e5802b96c5b3e32b3e4da89913f32"
 dependencies = [
  "bitflags 2.11.0",
  "derive_more 1.0.0",
  "educe",
- "fuel-asm 0.66.1",
+ "fuel-asm 0.66.2",
  "fuel-compression",
- "fuel-crypto 0.66.1",
- "fuel-merkle 0.66.1",
- "fuel-types 0.66.1",
+ "fuel-crypto 0.66.2",
+ "fuel-merkle 0.66.2",
+ "fuel-types 0.66.2",
  "hashbrown 0.14.5",
  "itertools 0.10.5",
  "postcard",
@@ -5276,11 +5283,12 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b491fc90b920ce2c2cef056f6b6b8c6c5de60983e9abf56933032b6032d26e97"
 dependencies = [
  "educe",
- "fuel-derive 0.66.1",
+ "fuel-derive 0.66.2",
  "hex",
  "rand 0.8.5",
  "serde",
@@ -5319,8 +5327,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.66.1"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=dento%2Fdiff-storage-cache-fix#fc2a5abee11244b1d512235889761bed08d7e34f"
+version = "0.66.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faee5257b6bc735eea831da4b74757f23579ec9cbdc7434c64dc5e14846aca44"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5329,13 +5338,13 @@ dependencies = [
  "derive_more 0.99.20",
  "educe",
  "ethnum",
- "fuel-asm 0.66.1",
+ "fuel-asm 0.66.2",
  "fuel-compression",
- "fuel-crypto 0.66.1",
- "fuel-merkle 0.66.1",
- "fuel-storage 0.66.1",
- "fuel-tx 0.66.1",
- "fuel-types 0.66.1",
+ "fuel-crypto 0.66.2",
+ "fuel-merkle 0.66.2",
+ "fuel-storage 0.66.2",
+ "fuel-tx 0.66.2",
+ "fuel-types 0.66.2",
  "hashbrown 0.14.5",
  "itertools 0.10.5",
  "libm",
