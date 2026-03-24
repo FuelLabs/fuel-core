@@ -160,6 +160,7 @@ rayon = "1.10.0"
 reqwest = { version = "0.13", default-features = false, features = [
     "rustls",
     "cookies",
+    "json",
 ] }
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
