@@ -693,7 +693,7 @@ pub fn run(c: &mut Criterion) {
 
     // dynamic storage
     let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
-    const SLOT_COUNT: usize = 10_000_000;
+    const SLOT_COUNT: usize = 1_000_000;
 
     #[allow(clippy::type_complexity)]
     static FILLED_CACHE_SLOTS: OnceLock<
