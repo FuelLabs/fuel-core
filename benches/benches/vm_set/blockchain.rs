@@ -693,7 +693,7 @@ pub fn run(c: &mut Criterion) {
 
     // dynamic storage
     let mut db = BenchDb::new(&contract).expect("Unable to fill contract storage");
-    const SLOT_COUNT: usize = 100_000;
+    const SLOT_COUNT: usize = 10_000;
 
     #[allow(clippy::type_complexity)]
     static FILLED_CACHE_SLOTS: OnceLock<
@@ -704,7 +704,7 @@ pub fn run(c: &mut Criterion) {
         FILLED_CACHE_SLOTS.get_or_init(|| {
             let mut map = BTreeMap::new();
             // A realistic number of slots for an adversarial state access scenario
-            for i in 1..=10_000u64 {
+            for i in 1..=SLOT_COUNT {
                 let mut key = Bytes32::zeroed();
                 key.as_mut()[..8].copy_from_slice(&i.to_be_bytes());
                 map.insert((VmBench::CONTRACT, key), Some(vec![0u8; 32]));
