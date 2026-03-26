@@ -715,7 +715,8 @@ mod dry_run {
             .unwrap();
 
         // Then
-        let guard = producer.executor.captured.lock().unwrap();
+        let executor = producer.executor.lock().await;
+        let guard = executor.captured.lock().unwrap();
         let produced_version = guard
             .as_ref()
             .unwrap()
@@ -755,7 +756,8 @@ mod dry_run {
             .unwrap();
 
         // Then
-        let guard = producer.executor.captured.lock().unwrap();
+        let executor = producer.executor.lock().await;
+        let guard = executor.captured.lock().unwrap();
         let produced_version = guard
             .as_ref()
             .unwrap()
@@ -793,7 +795,8 @@ mod dry_run {
             .unwrap();
 
         // Then
-        let guard = producer.executor.captured.lock().unwrap();
+        let executor = producer.executor.lock().await;
+        let guard = executor.captured.lock().unwrap();
         let produced_version = guard
             .as_ref()
             .unwrap()
@@ -832,7 +835,8 @@ mod dry_run {
             .unwrap();
 
         // Then
-        let guard = producer.executor.captured.lock().unwrap();
+        let executor = producer.executor.lock().await;
+        let guard = executor.captured.lock().unwrap();
         let produced_version = guard
             .as_ref()
             .unwrap()

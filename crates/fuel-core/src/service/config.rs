@@ -404,9 +404,7 @@ pub struct ParallelExecutorConfig {
 }
 
 #[cfg(feature = "parallel-executor")]
-#[derive(
-    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
-)]
+#[derive(Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, ValueEnum)]
 #[strum(serialize_all = "kebab_case")]
 pub enum ParallelExecutorWorkerCountPolicy {
     StaticMax,
@@ -420,9 +418,7 @@ impl Default for ParallelExecutorWorkerCountPolicy {
     }
 }
 
-#[derive(
-    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
-)]
+#[derive(Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, ValueEnum)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,

@@ -32,6 +32,18 @@ pub mod parallel_executor_metrics;
 pub mod tx_status_manager_metrics;
 pub mod txpool_metrics;
 
+pub use self::parallel_executor_metrics::{
+    record_batch_execute,
+    record_batch_prepare,
+    record_batch_total,
+    record_execution_time,
+    record_scheduler_run_time,
+    set_block_height,
+    set_max_workers_used,
+    set_number_of_transactions,
+    set_total_gas_used,
+};
+
 static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
 
 pub fn global_registry() -> &'static GlobalRegistry {

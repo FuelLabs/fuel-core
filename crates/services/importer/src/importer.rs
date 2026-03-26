@@ -387,7 +387,7 @@ where
         for item in iterator.iter_all::<FuelBlockMerkleMetadata>(None) {
             let (key, _) = item?;
             if let DenseMetadataKey::Latest = key {
-                return Err(Error::InvalidDatabaseStateAfterExecution)
+                return Err(Error::InvalidDatabaseStateAfterExecution(None, None))
             }
         }
 

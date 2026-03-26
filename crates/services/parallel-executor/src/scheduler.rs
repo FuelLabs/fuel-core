@@ -36,7 +36,7 @@ use fuel_core_executor::{
         RelayerPort,
     },
 };
-use fuel_core_metrics::parallel_executor_metrics;
+use ::fuel_core_metrics as parallel_executor_metrics;
 use fuel_core_storage::{
     Error as StorageError,
     column::Column,
