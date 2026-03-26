@@ -182,7 +182,7 @@ where
                 deadline,
             )
             .await?;
-        tracing::warn!(
+        tracing::debug!(
             "Scheduler finished with {} transactions, {} events, and {} skipped transactions",
             scheduler_result.transactions.len(),
             scheduler_result.events.len(),
@@ -330,7 +330,7 @@ where
             view,
             executor,
         )?;
-        tracing::warn!(
+        tracing::debug!(
             "Produced mint transaction with {} gas and {} size",
             execution_data.used_gas,
             execution_data.used_size
@@ -349,7 +349,7 @@ where
             });
 
         match &res {
-            Ok(_) => tracing::warn!("Block generated successfully"),
+            Ok(_) => tracing::debug!("Block generated successfully"),
             Err(e) => tracing::warn!("Failed to generate block: {}", e),
         }
         let block = res?;
