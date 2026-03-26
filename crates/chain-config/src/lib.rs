@@ -5,6 +5,9 @@
 
 extern crate alloc;
 
+#[cfg(test)]
+use fuel_core_chain_config as _;
+
 pub mod config;
 pub mod fee_collection_contract;
 mod genesis;

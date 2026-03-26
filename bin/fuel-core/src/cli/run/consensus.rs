@@ -1,10 +1,15 @@
+#![allow(non_snake_case)]
 //! Clap configuration related to consensus parameters
 
+use anyhow::anyhow;
 use clap::{
     ArgGroup,
     ValueEnum,
 };
-use fuel_core::service::config::Trigger as PoATrigger;
+use fuel_core::service::config::{
+    RedisLeaderLockConfig,
+    Trigger as PoATrigger,
+};
 use humantime::Duration;
 
 #[derive(Debug, Clone, clap::Args)]
@@ -15,6 +20,40 @@ pub struct PoATriggerArgs {
     interval: Interval,
     #[clap(flatten)]
     open: Open,
+    #[clap(flatten)]
+    leader_lock: LeaderLock,
+}
+
+impl PoATriggerArgs {
+    pub fn leader_lock(&self) -> anyhow::Result<Option<RedisLeaderLockConfig>> {
+        let LeaderLock {
+            enabled,
+            redis_urls,
+            lease_key,
+            lease_ttl,
+            node_timeout,
+            retry_delay,
+            max_retry_delay_offset,
+            max_attempts,
+        } = self.leader_lock.clone();
+        if enabled {
+            Ok(Some(RedisLeaderLockConfig {
+                redis_urls: redis_urls
+                    .ok_or(anyhow!("`redis_urls` is required when `enabled` is true"))?,
+                lease_key: lease_key
+                    .ok_or(anyhow!("`lease_key` is required when `enabled` is true"))?,
+                lease_ttl: lease_ttl
+                    .ok_or(anyhow!("`lease_ttl` is required when `enabled` is true"))?
+                    .into(),
+                node_timeout: node_timeout.into(),
+                retry_delay: retry_delay.into(),
+                max_retry_delay_offset: max_retry_delay_offset.into(),
+                max_attempts,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 // Convert from arg struct to PoATrigger enum
@@ -84,6 +123,44 @@ struct Open {
     pub period: Option<Duration>,
 }
 
+#[derive(Debug, Clone, clap::Args)]
+struct LeaderLock {
+    /// Enable distributed leader lock for PoA producers.
+    #[clap(
+        long = "poa-leader-lock",
+        env,
+        default_value_t = false,
+        requires_all = ["redis_urls", "lease_key", "lease_ttl"]
+    )]
+    enabled: bool,
+    /// Redis URLs used for distributed leader locking across producers.
+    /// Multiple values can be provided by repeating the arg.
+    #[clap(long = "poa-leader-lock-redis-url", env, num_args = 1..)]
+    redis_urls: Option<Vec<String>>,
+    /// Redis key used to store the active leader lease.
+    #[clap(long = "poa-leader-lock-key", env)]
+    lease_key: Option<String>,
+    /// Redis lease TTL for the leader lock.
+    #[clap(long = "poa-leader-lock-ttl", env)]
+    lease_ttl: Option<Duration>,
+    /// Timeout per Redis node operation.
+    #[clap(long = "poa-leader-lock-node-timeout", env, default_value = "100ms")]
+    node_timeout: Duration,
+    /// Base delay between Redlock retries.
+    #[clap(long = "poa-leader-lock-retry-delay", env, default_value = "200ms")]
+    retry_delay: Duration,
+    /// Maximum random offset added to each retry delay.
+    #[clap(
+        long = "poa-leader-lock-max-retry-delay-offset",
+        env,
+        default_value = "100ms"
+    )]
+    max_retry_delay_offset: Duration,
+    /// Maximum number of acquire attempts per can_produce_block call.
+    #[clap(long = "poa-leader-lock-max-attempts", env, default_value_t = 3)]
+    max_attempts: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,5 +185,50 @@ mod tests {
         Command::try_parse_from(args)
             .map_err(|_| ())
             .map(|c| c.trigger.into())
+    }
+
+    #[test]
+    fn leader_lock__defaults_to_none() {
+        let command = Command::try_parse_from([""]).unwrap();
+        assert!(command.trigger.clone().leader_lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn leader_lock__when_all_args_set_then_some() {
+        let command = Command::try_parse_from([
+            "",
+            "--poa-leader-lock",
+            "--poa-leader-lock-redis-url",
+            "redis://127.0.0.1:6379/",
+            "redis://127.0.0.1:6380/",
+            "--poa-leader-lock-key",
+            "poa:leader:lock",
+            "--poa-leader-lock-ttl",
+            "2s",
+        ])
+        .unwrap();
+        let leader_lock = command.trigger.clone().leader_lock().unwrap().unwrap();
+        assert_eq!(
+            leader_lock.redis_urls,
+            vec![
+                "redis://127.0.0.1:6379/".to_string(),
+                "redis://127.0.0.1:6380/".to_string()
+            ]
+        );
+        assert_eq!(leader_lock.lease_key, "poa:leader:lock");
+        assert_eq!(leader_lock.lease_ttl, StdDuration::from_secs(2));
+        assert_eq!(leader_lock.node_timeout, StdDuration::from_millis(100));
+        assert_eq!(leader_lock.retry_delay, StdDuration::from_millis(200));
+        assert_eq!(
+            leader_lock.max_retry_delay_offset,
+            StdDuration::from_millis(100)
+        );
+        assert_eq!(leader_lock.max_attempts, 3);
+    }
+
+    #[test]
+    fn leader_lock__when_enabled_without_required_fields_then_parse_error() {
+        let result = Command::try_parse_from(["", "--poa-leader-lock"]);
+        assert!(result.is_err());
     }
 }

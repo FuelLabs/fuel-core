@@ -140,7 +140,7 @@ pub enum RequestError {
 
 #[derive(Debug, Error)]
 pub enum ResponseError {
-    /// This is the raw error from [`libp2p-request-response`]
+    /// This is the raw error from `libp2p-request-response`.
     #[error("P2P outbound error {0}")]
     P2P(OutboundFailure),
     /// The peer responded with an invalid response type

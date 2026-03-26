@@ -61,18 +61,13 @@ where
 }
 
 /// A enum for iterating across the database
-#[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq, Default)]
 pub enum IterDirection {
     /// Iterate forward
+    #[default]
     Forward,
     /// Iterate backward
     Reverse,
-}
-
-impl Default for IterDirection {
-    fn default() -> Self {
-        Self::Forward
-    }
 }
 
 /// A trait for iterating over the storage of [`KeyValueInspect`].
