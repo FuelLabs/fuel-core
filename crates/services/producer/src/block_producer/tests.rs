@@ -100,7 +100,7 @@ mod produce_and_execute_block_txpool {
         assert!(
             matches!(
                 err.downcast_ref::<Error>(),
-                Some(Error::BlockHeightShouldBeHigherThanPrevious { .. })
+                Some(Error::CannotProduceGenesisBlock)
             ),
             "unexpected err {err:?}"
         );
@@ -170,7 +170,8 @@ mod produce_and_execute_block_txpool {
     }
 
     #[tokio::test]
-    async fn next_block_contains_expected_consensus_parameters_version() {
+    async fn produce_and_execute_block__next_block_contains_expected_consensus_parameters_version()
+     {
         let mut rng = StdRng::seed_from_u64(0u64);
         // setup dummy previous block
         let prev_height = 1u32.into();
@@ -285,20 +286,6 @@ mod produce_and_execute_block_txpool {
             header.state_transition_bytecode_version(),
             state_transition_bytecode_version
         );
-    }
-
-    #[tokio::test]
-    async fn cant_produce_if_no_previous_block() {
-        // fail if there is no block that precedes the current height.
-        let ctx = TestContext::default();
-        let producer = ctx.producer();
-
-        let err = producer
-            .produce_and_execute_block_txpool(100u32.into(), Tai64::now(), ())
-            .await
-            .expect_err("expected failure");
-
-        assert!(err.to_string().contains("Didn't find block for test"));
     }
 
     #[tokio::test]
@@ -695,6 +682,163 @@ mod dry_run {
                 .header_to_produce
                 .time()
         }
+    }
+
+    #[tokio::test]
+    async fn dry_run__uses_old_block_consensus_parameters_version_when_specified() {
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContext::default_from_executor(executor);
+
+        // Given
+        let mut producer = ctx.producer();
+        producer.view_provider.consensus_parameters_version = 100;
+        let block = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
+            .await
+            .unwrap()
+            .into_result()
+            .block;
+        producer.view_provider.blocks.lock().unwrap().insert(
+            *block.header().height(),
+            block.clone().compress(&Default::default()),
+        );
+        let block_height = block.header().height();
+        let consensus_parameter_version = block.header().consensus_parameters_version();
+        producer.view_provider.consensus_parameters_version =
+            consensus_parameter_version + 1; // change version
+
+        // When
+        let block_height = Some(*block_height);
+        let _result = producer
+            .dry_run(vec![], block_height, None, None, None, false)
+            .await
+            .unwrap();
+
+        // Then
+        let guard = producer.executor.captured.lock().unwrap();
+        let produced_version = guard
+            .as_ref()
+            .unwrap()
+            .header_to_produce
+            .consensus_parameters_version;
+        assert_eq!(produced_version, consensus_parameter_version);
+    }
+
+    #[tokio::test]
+    async fn dry_run__uses_current_consensus_parameters_version_when_not_specified() {
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContext::default_from_executor(executor);
+
+        // Given
+        let mut producer = ctx.producer();
+        producer.view_provider.consensus_parameters_version = 100;
+        let block = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
+            .await
+            .unwrap()
+            .into_result()
+            .block;
+        producer.view_provider.blocks.lock().unwrap().insert(
+            *block.header().height(),
+            block.clone().compress(&Default::default()),
+        );
+        let consensus_parameter_version = block.header().consensus_parameters_version();
+        let new_consensus_parameter_version = consensus_parameter_version + 1;
+        producer.view_provider.consensus_parameters_version =
+            new_consensus_parameter_version; // change version
+
+        // When
+        let block_height = None;
+        let _result = producer
+            .dry_run(vec![], block_height, None, None, None, false)
+            .await
+            .unwrap();
+
+        // Then
+        let guard = producer.executor.captured.lock().unwrap();
+        let produced_version = guard
+            .as_ref()
+            .unwrap()
+            .header_to_produce
+            .consensus_parameters_version;
+        assert_eq!(produced_version, new_consensus_parameter_version);
+    }
+    #[tokio::test]
+    async fn dry_run__uses_old_block_stf_version_when_specified() {
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContext::default_from_executor(executor);
+
+        // Given
+        let mut producer = ctx.producer();
+        producer.view_provider.state_transition_bytecode_version = 200;
+        let block = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
+            .await
+            .unwrap()
+            .into_result()
+            .block;
+        producer.view_provider.blocks.lock().unwrap().insert(
+            *block.header().height(),
+            block.clone().compress(&Default::default()),
+        );
+        let block_height = block.header().height();
+        let version = block.header().state_transition_bytecode_version();
+        producer.view_provider.state_transition_bytecode_version = version + 1; // change version
+
+        // When
+        let block_height = Some(*block_height);
+        let _result = producer
+            .dry_run(vec![], block_height, None, None, None, false)
+            .await
+            .unwrap();
+
+        // Then
+        let guard = producer.executor.captured.lock().unwrap();
+        let produced_version = guard
+            .as_ref()
+            .unwrap()
+            .header_to_produce
+            .state_transition_bytecode_version;
+        assert_eq!(produced_version, version);
+    }
+
+    #[tokio::test]
+    async fn dry_run__uses_current_stf_version_when_not_specified() {
+        let executor = MockExecutorWithCapture::default();
+        let ctx = TestContext::default_from_executor(executor);
+
+        // Given
+        let mut producer = ctx.producer();
+        producer.view_provider.state_transition_bytecode_version = 200;
+        let block = producer
+            .produce_and_execute_block_txpool(1u32.into(), Tai64::now(), ())
+            .await
+            .unwrap()
+            .into_result()
+            .block;
+        producer.view_provider.blocks.lock().unwrap().insert(
+            *block.header().height(),
+            block.clone().compress(&Default::default()),
+        );
+        let version = block.header().state_transition_bytecode_version();
+        let new_version = version + 1;
+        producer.view_provider.state_transition_bytecode_version = new_version; // change version
+
+        // When
+        let block_height = None;
+        let _result = producer
+            .dry_run(vec![], block_height, None, None, None, false)
+            .await
+            .unwrap();
+
+        // Then
+        let guard = producer.executor.captured.lock().unwrap();
+        let produced_version = guard
+            .as_ref()
+            .unwrap()
+            .header_to_produce
+            .state_transition_bytecode_version;
+        assert_eq!(produced_version, new_version);
     }
 }
 

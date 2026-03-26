@@ -28,7 +28,7 @@ use std::{
 use strum_macros::{
     Display,
     EnumString,
-    EnumVariantNames,
+    VariantNames,
 };
 
 #[cfg(feature = "parallel-executor")]
@@ -61,6 +61,17 @@ use std::net::{
 };
 
 #[derive(Clone, Debug)]
+pub struct RedisLeaderLockConfig {
+    pub redis_urls: Vec<String>,
+    pub lease_key: String,
+    pub lease_ttl: Duration,
+    pub node_timeout: Duration,
+    pub retry_delay: Duration,
+    pub max_retry_delay_offset: Duration,
+    pub max_attempts: u32,
+}
+
+#[derive(Clone, Debug)]
 pub struct Config {
     pub graphql_config: GraphQLConfig,
     pub combined_db_config: CombinedDatabaseConfig,
@@ -81,6 +92,7 @@ pub struct Config {
     pub allow_syscall: bool,
     pub executor: ExecutorConfig,
     pub block_production: Trigger,
+    pub leader_lock: Option<RedisLeaderLockConfig>,
     pub predefined_blocks_path: Option<PathBuf>,
     pub txpool: TxPoolConfig,
     pub tx_status_manager: TxStatusManagerConfig,
@@ -248,6 +260,7 @@ impl Config {
             },
             snapshot_reader,
             block_production: Trigger::Instant,
+            leader_lock: None,
             predefined_blocks_path: None,
             txpool: TxPoolConfig {
                 utxo_validation,
@@ -359,7 +372,7 @@ impl From<&Config> for fuel_core_poa::pre_confirmation_signature_service::config
 }
 
 #[derive(
-    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames, ValueEnum,
+    Clone, Copy, Debug, Display, Eq, PartialEq, EnumString, VariantNames, ValueEnum,
 )]
 #[strum(serialize_all = "kebab_case")]
 pub enum ExecutorMode {

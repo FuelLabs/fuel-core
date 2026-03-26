@@ -37,10 +37,6 @@ use fuel_core::{
         },
         genesis::NotifyCancel,
     },
-    state::rocks_db::{
-        ColumnsPolicy,
-        DatabaseConfig,
-    },
     tx_status_manager::config::Config as TxStatusManagerConfig,
     txpool::config::{
         BlackList,
@@ -54,6 +50,12 @@ use fuel_core::{
         fuel_vm::SecretKey,
         secrecy::Secret,
     },
+};
+
+#[cfg(feature = "rocksdb")]
+use fuel_core::state::rocks_db::{
+    ColumnsPolicy,
+    DatabaseConfig,
 };
 
 use fuel_core_chain_config::{
@@ -73,6 +75,7 @@ use pyroscope_pprofrs::{
     PprofConfig,
     pprof_backend,
 };
+#[cfg(feature = "rocksdb")]
 use rlimit::{
     Resource,
     getrlimit,
@@ -467,6 +470,7 @@ impl Command {
         #[cfg(feature = "rpc")]
         let rpc_config = rpc_args.map(|args| args.into_config());
 
+        let leader_lock = poa_trigger.leader_lock()?;
         let trigger: Trigger = poa_trigger.into();
 
         if trigger != Trigger::Never {
@@ -754,6 +758,7 @@ impl Command {
             allow_syscall,
             utxo_validation,
             block_production: trigger,
+            leader_lock,
             predefined_blocks_path,
             txpool: TxPoolConfig {
                 max_txs_chain_count: tx_max_chain_count,
