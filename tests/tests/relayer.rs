@@ -1,12 +1,14 @@
-use clap::Parser;
-use ethers::{
-    providers::Middleware,
-    types::{
-        Log,
-        SyncingStatus,
-        U256,
-    },
+use alloy_primitives::{
+    IntoLogData,
+    U256,
 };
+use alloy_rpc_types_eth::{
+    BlockId,
+    BlockNumberOrTag,
+    Log,
+    SyncStatus,
+};
+use clap::Parser;
 use fuel_core::{
     chain_config::Randomize,
     coins_query::CoinsQueryError::{
@@ -42,13 +44,10 @@ use fuel_core_client::client::{
     },
 };
 use fuel_core_poa::service::Mode;
+use fuel_core_provider::test_helpers::provider::MockProvider;
 use fuel_core_relayer::{
     ports::Transactional,
-    test_helpers::{
-        EvtToLog,
-        LogTestHelper,
-        middleware::MockMiddleware,
-    },
+    test_helpers::LogTestHelper,
 };
 use fuel_core_storage::{
     StorageAsMut,
@@ -65,7 +64,6 @@ use fuel_core_types::{
         Nonce,
     },
 };
-use fuel_types::Bytes20;
 use hyper::{
     Body,
     Request,
@@ -113,7 +111,7 @@ async fn relayer_can_download_logs() {
     let mut config = Config::local_node();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
     let message = |nonce, block_number: u64| {
         make_message_event(
@@ -133,7 +131,7 @@ async fn relayer_can_download_logs() {
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    eth_node.update_data(|data| data.best_block.header.number = 200);
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
@@ -180,7 +178,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     // setup a real spendable message
@@ -203,7 +201,7 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    eth_node.update_data(|data| data.best_block.header.number = 200);
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
@@ -313,7 +311,7 @@ async fn can_restart_node_with_relayer_data() {
     let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     // setup a real spendable message
@@ -336,7 +334,7 @@ async fn can_restart_node_with_relayer_data() {
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    eth_node.update_data(|data| data.best_block.header.number = 200);
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
@@ -397,29 +395,40 @@ async fn can_restart_node_with_relayer_data() {
 fn make_message_event(
     nonce: Nonce,
     block_number: u64,
-    contract_address: Bytes20,
+    contract_address: alloy_primitives::Address,
     sender: Option<[u8; 32]>,
     recipient: Option<[u8; 32]>,
     amount: Option<u64>,
     data: Option<Vec<u8>>,
     log_index: u64,
 ) -> Log {
-    let message = fuel_core_relayer::bridge::MessageSentFilter {
-        nonce: U256::from_big_endian(nonce.as_ref()),
-        sender: sender.unwrap_or_default(),
-        recipient: recipient.unwrap_or_default(),
+    let message = fuel_core_relayer::bridge::MessageSent {
+        nonce: U256::from_be_slice(nonce.as_slice()),
+        sender: sender
+            .map(|v| alloy_primitives::FixedBytes::from_slice(&v))
+            .unwrap_or_default(),
+        recipient: recipient
+            .map(|v| alloy_primitives::FixedBytes::from_slice(&v))
+            .unwrap_or_default(),
         amount: amount.unwrap_or_default(),
         data: data.map(Into::into).unwrap_or_default(),
     };
-    let mut log = message.into_log();
-    log.address =
-        fuel_core_relayer::test_helpers::convert_to_address(contract_address.as_slice());
-    log.block_number = Some(block_number.into());
-    log.log_index = Some(log_index.into());
-    log
+    Log {
+        inner: alloy_primitives::Log {
+            address: contract_address,
+            data: message.into_log_data(),
+        },
+        block_hash: None,
+        block_number: Some(block_number),
+        block_timestamp: None,
+        transaction_hash: None,
+        transaction_index: None,
+        log_index: Some(log_index),
+        removed: false,
+    }
 }
 
-async fn spawn_eth_node(eth_node: Arc<MockMiddleware>) -> EthNodeHandle {
+async fn spawn_eth_node(eth_node: Arc<MockProvider>) -> EthNodeHandle {
     // Construct our SocketAddr to listen on...
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, 0));
 
@@ -460,8 +469,9 @@ pub(crate) struct EthNodeHandle {
     pub(crate) address: SocketAddr,
 }
 
+use alloy_provider::Provider;
 async fn handle(
-    mock: Arc<MockMiddleware>,
+    mock: Arc<MockProvider>,
     req: Request<Body>,
 ) -> Result<Response<Body>, Infallible> {
     let body = hyper::body::to_bytes(req).await.unwrap();
@@ -475,16 +485,19 @@ async fn handle(
     let method = o.get("method").unwrap().as_str().unwrap();
     let r = match method {
         "eth_getBlockByNumber" => {
-            let r = mock.get_block(id).await.unwrap().unwrap();
+            let r = mock
+                .get_block(BlockId::Number(BlockNumberOrTag::Number(id)))
+                .await
+                .unwrap();
             json!({ "id": id, "jsonrpc": "2.0", "result": r })
         }
         "eth_syncing" => {
             let r = mock.syncing().await.unwrap();
             match r {
-                SyncingStatus::IsFalse => {
+                alloy_rpc_types_eth::SyncStatus::None => {
                     json!({ "id": id, "jsonrpc": "2.0", "result": false })
                 }
-                SyncingStatus::IsSyncing(status) => {
+                SyncStatus::Info(status) => {
                     json!({ "id": id, "jsonrpc": "2.0", "result": {
                         "starting_block": status.starting_block,
                         "current_block": status.current_block,
@@ -523,7 +536,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     let mut config = Config::local_node();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
     const TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -556,7 +569,7 @@ async fn balances_and_coins_to_spend_never_return_retryable_messages() {
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
+    eth_node.update_data(|data| data.best_block.header.number = 200);
     let eth_node = Arc::new(eth_node);
     let eth_node_handle = spawn_eth_node(eth_node).await;
 
@@ -729,7 +742,7 @@ async fn relayer_db_can_be_rewound() {
     let mut config = config_with_fee();
     config.relayer = Some(relayer::Config::default());
     let relayer_config = config.relayer.as_mut().expect("Expected relayer config");
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
     let contract_address = relayer_config.eth_v2_listening_contracts[0];
 
     let logs: Vec<_> = (1..=num_da_blocks)
@@ -747,7 +760,7 @@ async fn relayer_db_can_be_rewound() {
         })
         .collect();
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
-    eth_node.update_data(|data| data.best_block.number = Some(num_da_blocks.into()));
+    eth_node.update_data(|data| data.best_block.header.number = num_da_blocks.into());
 
     let eth_node_handle = spawn_eth_node(Arc::new(eth_node)).await;
 
@@ -829,7 +842,7 @@ async fn relayer_db_can_be_rewound() {
 fn setup_messages(
     messages: &[MessageKind],
     recipient: &Address,
-    contract_address: &Bytes20,
+    contract_address: &alloy_primitives::Address,
 ) -> Vec<Log> {
     const SENDER: Address = Address::zeroed();
 

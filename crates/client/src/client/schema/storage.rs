@@ -20,7 +20,7 @@ pub struct ContractStorageSlots {
     pub contract_storage_slots: StorageSlot,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractStorageSlotsArgs {
     /// The ID of the contract.
     pub contract_id: ContractId,
@@ -37,7 +37,7 @@ pub struct ContractSlotValues {
     pub contract_slot_values: Vec<StorageSlot>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractSlotValuesArgs {
     pub contract_id: ContractId,
     pub block_height: Option<U32>,
@@ -68,7 +68,7 @@ pub struct ContractStorageBalances {
     pub contract_storage_balances: ContractBalance,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractStorageBalancesArgs {
     /// The ID of the contract.
     pub contract_id: ContractId,
@@ -85,7 +85,7 @@ pub struct ContractBalanceValues {
     pub contract_balance_values: Vec<ContractBalance>,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct ContractBalanceValuesArgs {
     pub contract_id: ContractId,
     pub block_height: Option<U32>,

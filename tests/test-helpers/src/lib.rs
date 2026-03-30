@@ -37,6 +37,8 @@ pub mod counter_contract;
 pub mod fuel_core_driver;
 pub mod mint_contract;
 
+pub mod client_ext;
+
 pub fn predicate() -> Vec<u8> {
     vec![op::ret(1)].into_iter().collect::<Vec<u8>>()
 }

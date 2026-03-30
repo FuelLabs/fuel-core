@@ -591,8 +591,6 @@ mod test {
         StorageAsMut,
         tables::Messages,
     };
-    #[allow(unused_imports)]
-    use std::sync::Arc;
 
     impl<Column> Modifiable for InMemoryStorage<Column> {
         fn commit_changes(&mut self, changes: Changes) -> StorageResult<()> {

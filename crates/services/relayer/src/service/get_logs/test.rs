@@ -1,5 +1,22 @@
 #![allow(clippy::arithmetic_side_effects)]
-use ethers_core::types::U256;
+use super::*;
+use crate::{
+    abi::bridge::{
+        MessageSent,
+        Transaction,
+    },
+    service::state::EthSyncGap,
+    test_helpers::page_sizer::IdentityPageSizer,
+};
+use alloy_primitives::{
+    IntoLogData,
+    U256,
+};
+use alloy_provider::transport::TransportError;
+use fuel_core_provider::test_helpers::provider::{
+    MockProvider,
+    TriggerType,
+};
 use std::{
     ops::RangeInclusive,
     sync::atomic::{
@@ -7,25 +24,7 @@ use std::{
         AtomicUsize,
     },
 };
-
-use crate::{
-    abi::bridge::{
-        MessageSentFilter,
-        TransactionFilter,
-    },
-    service::state::EthSyncGap,
-    test_helpers::{
-        EvtToLog,
-        middleware::{
-            MockMiddleware,
-            TriggerType,
-        },
-        page_sizer::IdentityPageSizer,
-    },
-};
 use test_case::test_case;
-
-use super::*;
 
 fn messages_n(n: u64, nonce_offset: u64) -> Vec<Log> {
     messages(nonce_offset..=n + nonce_offset, 0..=n, 0..=0)
@@ -44,19 +43,28 @@ fn messages(
         .collect()
 }
 
-fn message(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> Log {
-    let message = MessageSentFilter {
-        nonce: U256::from_dec_str(nonce.to_string().as_str())
-            .expect("Should convert into U256"),
-        ..Default::default()
+fn message(nonce: u64, block_number: u64, contract_address: u32, log_index: u64) -> Log {
+    let message = MessageSent {
+        sender: Default::default(),
+        recipient: Default::default(),
+        nonce: U256::from(nonce),
+        amount: 0,
+        data: Default::default(),
     };
-    let mut log = message.into_log();
-    log.address = crate::test_helpers::convert_to_address(
-        u32_to_contract(contract_address).as_slice(),
-    );
-    log.block_number = Some(block_number.into());
-    log.log_index = Some(index.into());
-    log
+    let log_data = message.to_log_data();
+    Log {
+        inner: alloy_primitives::Log {
+            address: u32_to_contract(contract_address),
+            data: log_data.clone(),
+        },
+        block_hash: None,
+        block_number: Some(block_number),
+        block_timestamp: None,
+        transaction_hash: None,
+        transaction_index: None,
+        log_index: Some(log_index),
+        removed: false,
+    }
 }
 
 fn transactions(
@@ -73,25 +81,32 @@ fn transactions(
 }
 
 fn transaction(nonce: u64, block_number: u64, contract_address: u32, index: u64) -> Log {
-    let transaction = TransactionFilter {
-        nonce: U256::from_dec_str(nonce.to_string().as_str())
-            .expect("Should convert into U256"),
-        ..Default::default()
+    let transaction = Transaction {
+        nonce: U256::from(nonce),
+        max_gas: Default::default(),
+        canonically_serialized_tx: Default::default(),
     };
-    let mut log = transaction.into_log();
-    log.address = crate::test_helpers::convert_to_address(
-        u32_to_contract(contract_address).as_slice(),
-    );
-    log.block_number = Some(block_number.into());
-    log.log_index = Some(index.into());
-    log
+    let log_data = transaction.to_log_data();
+    Log {
+        inner: alloy_primitives::Log {
+            address: u32_to_contract(contract_address),
+            data: log_data.clone(),
+        },
+        block_hash: None,
+        block_number: Some(block_number),
+        block_timestamp: None,
+        transaction_hash: None,
+        transaction_index: None,
+        log_index: Some(index),
+        removed: false,
+    }
 }
 
-fn contracts(c: &[u32]) -> Vec<Bytes20> {
+fn contracts(c: &[u32]) -> Vec<alloy_primitives::Address> {
     c.iter().copied().map(u32_to_contract).collect()
 }
 
-fn u32_to_contract(n: u32) -> Bytes20 {
+fn u32_to_contract(n: u32) -> alloy_primitives::Address {
     let address: [u8; 20] = n
         .to_ne_bytes()
         .into_iter()
@@ -106,7 +121,7 @@ fn u32_to_contract(n: u32) -> Bytes20 {
 #[derive(Clone, Debug)]
 struct Input {
     eth_gap: RangeInclusive<u64>,
-    c: Vec<Bytes20>,
+    c: Vec<alloy_primitives::Address>,
     m: Vec<Log>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -173,11 +188,11 @@ async fn can_paginate_logs(input: Input) -> Expected {
         c: contracts,
         m: logs,
     } = input;
-    let eth_node = MockMiddleware::default();
+    let eth_node = MockProvider::default();
 
     eth_node.update_data(|data| {
         data.logs_batch = vec![logs];
-        data.best_block.number = Some((*eth_gap.end()).into());
+        data.best_block.header.number = *eth_gap.end();
     });
     let count = std::sync::Arc::new(AtomicUsize::new(0));
     let num_calls = count.clone();
@@ -220,13 +235,13 @@ async fn can_paginate_logs(input: Input) -> Expected {
 #[test_case(vec![
     Ok((1, 7, messages_n(3, 0))),
     Ok((8, 19, messages_n(1, 4))),
-    Err(ProviderError::CustomError("".to_string()))
+    Err(TransportError::NullResp)
     ] => 19 ; "Still adds height when error"
 )]
 #[tokio::test]
 #[allow(clippy::type_complexity)]
 async fn test_da_height_updates(
-    stream: Vec<Result<(u64, u64, Vec<Log>), ProviderError>>,
+    stream: Vec<Result<(u64, u64, Vec<Log>), TransportError>>,
 ) -> u64 {
     let mut mock_db = crate::mock_db::MockDb::default();
 

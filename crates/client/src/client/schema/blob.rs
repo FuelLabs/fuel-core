@@ -4,7 +4,7 @@ use crate::client::schema::{
     schema,
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BlobByIdArgs {
     pub id: BlobId,
 }

@@ -95,19 +95,14 @@ async fn dry_run__storage_read_replay__returns_counter_state() {
 
     for (height, expected_value) in [
         (None, 2), // latest
-        (Some(block_height_deployed), 0),
-        (Some(block_height_incr_1), 1),
-        (Some(block_height_incr_2), 2),
+        (block_height_deployed.succ(), 0),
+        (block_height_incr_1.succ(), 1),
+        (block_height_incr_2.succ(), 2),
     ] {
         // when
         let tx = counter_contract::increment_tx(&mut rng, contract_id);
         let (statuses, storage_reads) = client
-            .dry_run_opt_record_storage_reads(
-                &[tx],
-                None,
-                None,
-                height.map(|h| h.succ().unwrap()),
-            )
+            .dry_run_opt_record_storage_reads(&[tx], None, None, height)
             .await
             .unwrap();
 

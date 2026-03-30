@@ -9,10 +9,7 @@ use fuel_core_types::{
     services::{
         block_importer::SharedImportResult,
         p2p::GossipsubMessageInfo,
-        transaction_status::{
-            PreConfirmationStatus,
-            statuses,
-        },
+        transaction_status::PreConfirmationStatus,
         txpool::ArcPoolTx,
     },
 };
@@ -518,9 +515,7 @@ where
     fn remove_expired_transactions(&mut self, tx_ids: Vec<TxId>) {
         self.pool.remove_transactions_and_dependents(
             tx_ids,
-            statuses::SqueezedOut {
-                reason: Error::Removed(crate::error::RemovedReason::Ttl).to_string(),
-            },
+            Error::Removed(crate::error::RemovedReason::Ttl),
         );
     }
 

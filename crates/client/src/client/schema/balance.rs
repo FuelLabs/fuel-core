@@ -10,7 +10,7 @@ use crate::client::{
     },
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BalanceArgs {
     pub owner: Address,
     pub asset_id: AssetId,
@@ -34,7 +34,7 @@ pub struct BalanceFilterInput {
     pub owner: Address,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BalancesConnectionArgs {
     /// Filter coins based on a filter
     filter: BalanceFilterInput,

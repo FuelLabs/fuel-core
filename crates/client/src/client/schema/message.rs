@@ -31,7 +31,7 @@ pub struct Message {
     pub da_height: U64,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct NonceArgs {
     pub nonce: Nonce,
 }
@@ -86,7 +86,7 @@ pub struct MessageEdge {
     pub node: Message,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct OwnedMessagesConnectionArgs {
     /// Filter messages based on an owner
     pub owner: Option<Address>,
@@ -152,7 +152,7 @@ pub struct MessageProof {
     pub data: HexString,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct MessageProofArgs {
     /// Transaction id that contains the output message.
     pub transaction_id: TransactionId,
@@ -178,7 +178,7 @@ pub struct MessageStatusQuery {
     pub message_status: MessageStatus,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct MessageStatusArgs {
     /// Nonce of the output message that requires a proof.
     pub nonce: Nonce,

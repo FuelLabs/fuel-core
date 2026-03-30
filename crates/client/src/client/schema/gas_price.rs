@@ -23,7 +23,7 @@ pub struct EstimateGasPrice {
     pub gas_price: U64,
 }
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct BlockHorizonArgs {
     pub block_horizon: Option<U32>,
 }

@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
+cynic = { workspace = true }
 fuel-core = { path = "../../crates/fuel-core", default-features = false, features = [
   "test-helpers",
 ] }
@@ -27,6 +28,8 @@ fuel-core-storage = { path = "../../crates/storage", features = [
   "test-helpers",
 ] }
 fuel-core-trace = { path = "../../crates/trace" }
+
+fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
 fuel-core-txpool = { path = "../../crates/services/txpool_v2", features = [
   "test-helpers",
 ] }
@@ -38,3 +41,4 @@ reqwest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tempfile = { workspace = true }
+async-trait = {workspace = true}

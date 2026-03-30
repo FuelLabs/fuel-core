@@ -830,13 +830,15 @@ where
             db_config,
         )?;
 
-        backup_engine.create_new_backup(&db.db).map_err(|e| {
-            DatabaseError::BackupError(anyhow::anyhow!(
-                "Couldn't create new backup for path `{}`: {}",
-                backup_dir.as_ref().display(),
-                e
-            ))
-        })?;
+        backup_engine
+            .create_new_backup_flush(&db.db, true)
+            .map_err(|e| {
+                DatabaseError::BackupError(anyhow::anyhow!(
+                    "Couldn't create new backup for path `{}`: {}",
+                    backup_dir.as_ref().display(),
+                    e
+                ))
+            })?;
 
         Ok(())
     }

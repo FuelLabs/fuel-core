@@ -51,6 +51,8 @@ use std::{
     time::{
         Duration,
         Instant,
+        SystemTime,
+        UNIX_EPOCH,
     },
 };
 
@@ -118,6 +120,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
 
     // when
     // let all producers become leader, including the final single producer
+    let mut iteration = 0usize;
     while !active_producers.is_empty() {
         let (mut leader, followers) =
             find_leader_and_followers(active_producers, LEADER_ELECTION_TIMEOUT).await;
@@ -141,6 +144,7 @@ async fn leader_lock__three_producers__leadership_handoffs_are_exclusive() {
         tokio::time::sleep(handoff_settle_delay).await;
 
         active_producers = followers;
+        iteration += 1;
     }
 }
 
@@ -492,9 +496,10 @@ async fn find_leader_and_followers(
             .enumerate()
             .map(|(index, node)| async move {
                 wait_for_local_block(node).await;
-                index
-            })
-            .collect::<FuturesUnordered<_>>();
+            wait_for_local_block(node, Some(index)).await;
+            index
+        })
+        .collect::<FuturesUnordered<_>>();
 
         match tokio::time::timeout(timeout, async { waiters.next().await }).await {
             Ok(Some(index)) => {
@@ -647,10 +652,21 @@ async fn wait_for_local_block(node: &Node) {
     let mut stream = node.node.shared.block_importer.block_stream();
     let mut saw_first_block = false;
     while let Some(block) = stream.next().await {
+        let height = *block.block_header.height();
         let is_local = block.is_locally_produced();
         if !saw_first_block {
+            eprintln!(
+                "ts_ms={}, wait_for_local_block(waiter={:?}), first_block_seen=true",
+                unix_time_ms(),
+                waiter_index
+            );
             saw_first_block = true;
         }
+        eprintln!(
+            "ts_ms={}, wait_for_local_block(waiter={:?}): height={height}, is_local={is_local}",
+            unix_time_ms(),
+            waiter_index
+        );
         if is_local {
             return;
         }
@@ -819,6 +835,7 @@ fn spawn_redis_server(port: u16) -> std::io::Result<Child> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
+        .expect("redis-server must be installed for this test")
 }
 
 fn wait_for_redis_ready(port: u16, child: &mut Child) -> Result<(), String> {

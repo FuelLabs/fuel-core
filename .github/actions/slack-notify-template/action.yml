@@ -1,0 +1,25 @@
+name: Notify Slack on Failure
+description: Sends notification to Slack if job fails
+
+inputs:
+  github_token:
+    description: Github Token Secret
+    required: true
+  slack_webhook:
+    description: Slack webhook URL
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Notify if Job Fails
+      uses: ravsamhq/notify-slack-action@v2
+      with:
+        status: ${{ job.status }}
+        token: ${{ inputs.github_token }}
+        notification_title: '{workflow} has {status_message}'
+        message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+        footer: ''
+        notify_when: failure
+      env:
+        SLACK_WEBHOOK_URL: ${{ inputs.slack_webhook }}

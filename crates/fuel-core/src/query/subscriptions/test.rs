@@ -68,6 +68,7 @@ fn failure_during_block_production() -> TransactionStatus {
 fn squeezed() -> TransactionStatus {
     TransactionStatus::squeezed_out(
         fuel_core_txpool::error::Error::Removed(RemovedReason::Ttl).to_string(),
+        Default::default(),
     )
 }
 

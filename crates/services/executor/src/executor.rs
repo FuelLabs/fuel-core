@@ -186,7 +186,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use fuel_core_types::fuel_vm::interpreter::Memory;
+use fuel_core_types::{
+    fuel_vm::interpreter::Memory,
+    services::preconfirmation::SqueezedOut,
+};
 
 /// The maximum amount of transactions that can be included in a block,
 /// excluding the mint transaction.
@@ -819,6 +822,7 @@ where
                     ));
                     continue;
                 }
+                let tx_index = data.tx_count;
                 match self.execute_transaction_and_commit(
                     block,
                     storage_tx,
@@ -842,16 +846,17 @@ where
                                 tx_id,
                                 &latest_executed_tx.result,
                                 *block.header.height(),
-                                data.tx_count,
+                                tx_index,
                             );
                         statuses.push(preconfirmation_status);
                     }
                     Err(err) => {
                         statuses.push(Preconfirmation {
                             tx_id,
-                            status: PreconfirmationStatus::SqueezedOut {
-                                reason: err.to_string(),
-                            },
+                            status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                                err.to_string(),
+                                tx_id,
+                            )),
                         });
                         data.skipped_transactions.push((tx_id, err));
                     }

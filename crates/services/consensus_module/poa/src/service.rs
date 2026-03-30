@@ -140,6 +140,7 @@ pub struct MainTask<B, I, S, PB, C, RS, RP> {
     /// Deadline clock, used by the triggers
     sync_task_handle: ServiceRunner<SyncTask>,
     production_timeout: Duration,
+    leader_lease_port: Option<LP>,
     /// externally controlled start of block production
     block_production_ready_signal: BlockProductionReadySignal<RS>,
     reconciliation_port: RP,
@@ -211,6 +212,7 @@ where
             sync_task_handle,
             clock,
             production_timeout,
+            leader_lease_port,
             block_production_ready_signal,
             reconciliation_port,
         }
@@ -655,6 +657,29 @@ where
                 Ok(TaskNextAction::Continue)
             }
         }
+    }
+
+    async fn handle_triggered_block_production(
+        &mut self,
+        deadline: Instant,
+    ) -> TaskNextAction {
+        match self.can_produce_next_block().await {
+            Ok(true) => self.handle_normal_block_production(deadline).await,
+            Ok(false) => {
+                sleep_until(deadline).await;
+                TaskNextAction::Continue
+            }
+            Err(err) => TaskNextAction::ErrorContinue(err),
+        }
+    }
+
+    async fn can_produce_next_block(&self) -> anyhow::Result<bool> {
+        let Some(leader_lease_port) = &self.leader_lease_port else {
+            return Ok(true);
+        };
+        leader_lease_port
+            .can_produce_block(self.next_height())
+            .await
     }
 }
 

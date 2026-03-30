@@ -54,6 +54,7 @@ use fuel_core_types::{
         preconfirmation::{
             Preconfirmation,
             PreconfirmationStatus,
+            SqueezedOut,
         },
         transaction_status::{
             PreConfirmationStatus,
@@ -254,9 +255,10 @@ impl TxStatusManager for PreconfirmationSender {
         {
             let preconfirmation = Preconfirmation {
                 tx_id,
-                status: PreconfirmationStatus::SqueezedOut {
-                    reason: status.reason.clone(),
-                },
+                status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                    status.reason().to_string(),
+                    tx_id,
+                )),
             };
             permit.send(vec![preconfirmation]);
         }
@@ -279,9 +281,10 @@ impl TxStatusManager for PreconfirmationSender {
                 .iter()
                 .map(|(tx_id, status)| Preconfirmation {
                     tx_id: *tx_id,
-                    status: PreconfirmationStatus::SqueezedOut {
-                        reason: status.reason.clone(),
-                    },
+                    status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                        status.reason().to_string(),
+                        *tx_id,
+                    )),
                 })
                 .collect();
             permit.send(preconfirmations);

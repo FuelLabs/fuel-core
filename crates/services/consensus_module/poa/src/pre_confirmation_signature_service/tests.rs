@@ -15,7 +15,10 @@ use fuel_core_types::{
         TxId,
     },
     fuel_types::BlockHeight,
-    services::preconfirmation::PreconfirmationStatus,
+    services::preconfirmation::{
+        PreconfirmationStatus,
+        SqueezedOut,
+    },
 };
 use std::time::Duration;
 
@@ -466,15 +469,17 @@ async fn run__received_tx_will_be_broadcast_with_current_delegate_key_signature(
     let txs = vec![
         Preconfirmation {
             tx_id: TxId::zeroed(),
-            status: PreconfirmationStatus::SqueezedOut {
-                reason: "foo".into(),
-            },
+            status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                "foo".into(),
+                TxId::zeroed(),
+            )),
         },
         Preconfirmation {
             tx_id: TxId::zeroed(),
-            status: PreconfirmationStatus::SqueezedOut {
-                reason: "bar".into(),
-            },
+            status: PreconfirmationStatus::SqueezedOut(SqueezedOut::new(
+                "bar".into(),
+                TxId::zeroed(),
+            )),
         },
     ];
     tokio::task::spawn(async move {

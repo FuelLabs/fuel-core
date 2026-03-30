@@ -6,7 +6,7 @@ use crate::client::schema::{
     schema,
 };
 
-#[derive(cynic::QueryVariables, Debug)]
+#[derive(cynic::QueryVariables, Debug, Clone)]
 pub struct AssetInfoArg {
     pub id: AssetId,
 }

@@ -80,12 +80,15 @@ pub mod fuel_gas_price_provider;
 pub mod gas_price_adapters;
 pub mod graphql_api;
 pub mod import_result_provider;
+
 #[cfg(feature = "p2p")]
 pub mod p2p;
 pub mod producer;
 pub mod ready_signal;
 #[cfg(feature = "relayer")]
 pub mod relayer;
+#[cfg(feature = "rpc")]
+pub mod rpc;
 #[cfg(feature = "shared-sequencer")]
 pub mod shared_sequencer;
 #[cfg(feature = "p2p")]
