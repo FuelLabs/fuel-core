@@ -176,20 +176,20 @@ pub fn default_gas_costs() -> GasCostsValues {
             gas_per_unit: 96693,
         },
         storage_read_cold: DependentCost::LightOperation {
-            base: 1108,
-            units_per_gas: 90,
+            base: 733,
+            units_per_gas: 31,
         },
         storage_read_hot: DependentCost::LightOperation {
-            base: 17,
-            units_per_gas: 49,
+            base: 28,
+            units_per_gas: 33,
         },
         storage_write: DependentCost::LightOperation {
-            base: 95,
-            units_per_gas: 200,
+            base: 138,
+            units_per_gas: 126,
         },
         storage_clear: DependentCost::HeavyOperation {
-            base: 34,
-            gas_per_unit: 31,
+            base: 45,
+            gas_per_unit: 45,
         },
         contract_root: DependentCost::LightOperation {
             base: 36,
