@@ -463,6 +463,9 @@ impl Command {
                     .echo_delegation_interval,
             };
 
+        #[cfg(feature = "rpc")]
+        let rpc_config = rpc_args.map(|args| args.into_config());
+
         let leader_lock = poa_trigger.leader_lock()?;
         let trigger: Trigger = poa_trigger.into();
 
