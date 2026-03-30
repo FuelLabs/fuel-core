@@ -420,9 +420,9 @@ fn sanity_check_storage_costs(costs: &Costs) {
     if let (Some(cold), Some(hot)) = (costs.0.get("swrd_cold"), costs.0.get("swrd_hot")) {
         let cold_cpu = cost_per_unit(cold);
         let hot_cpu = cost_per_unit(hot);
-        if cold_cpu <= hot_cpu {
+        if cold_cpu < hot_cpu {
             eprintln!(
-                "Warning: swrd_cold ({cold_cpu:.3} gas/unit) is not more expensive \
+                "Warning: swrd_cold ({cold_cpu:.3} gas/unit) is cheaper \
                  than swrd_hot ({hot_cpu:.3} gas/unit). Expected cold >= hot."
             );
         }
