@@ -199,7 +199,7 @@ pub fn default_gas_costs() -> GasCostsValues {
             base: 284,
             gas_per_unit: 143,
         },
-        new_storage_per_byte: 1,
+        new_storage_per_byte: 63,
         retd: DependentCost::LightOperation {
             base: 347,
             units_per_gas: 3,
