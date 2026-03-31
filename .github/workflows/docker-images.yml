@@ -8,10 +8,6 @@ on:
   release:
     types: [ published ]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   GIT_BRANCH: ${{ github.head_ref || github.ref_name }}
   GIT_REPO_OWNER: ${{ github.repository_owner }}
@@ -28,7 +24,7 @@ env:
   SEGMENT_DOWNLOAD_TIMEOUT_MINS: 2
 
 jobs:
-  publish-docker-images:
+  publish-docker-image:
     runs-on: warp-ubuntu-latest-x64-2x
     permissions:
       contents: read
@@ -41,9 +37,6 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v6
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Log in to the ghcr.io registry
         uses: docker/login-action@v3
@@ -79,7 +72,6 @@ jobs:
             ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}
           tags: |
             type=sha
-            type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
             type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
@@ -90,12 +82,12 @@ jobs:
         uses: Warpbuilds/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           file: deployment/Dockerfile
+          profile-name: "fuel-core-builder" # manually set up in WarpBuild
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          profile-name: 'fuel-core-builder'
-          platforms: linux/amd64,linux/arm64
 
       - name: Inspect image
         run: |
@@ -104,7 +96,7 @@ jobs:
   # duplicate of publish-docker-image, but with profiling features enabled
   # this is split into a separate action since it takes longer to build
   publish-docker-image-profiling:
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: warp-ubuntu-latest-x64-16x
     permissions:
       contents: read
       packages: write
@@ -115,7 +107,7 @@ jobs:
           echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -133,14 +125,14 @@ jobs:
           registry-type: public
 
       - name: Log in to the ghcr.io registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v1
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to the docker.io registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v2
         with:
           username: fuellabs
           password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
@@ -154,30 +146,51 @@ jobs:
             ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-debug
           tags: |
             type=sha
-            type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
             type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build & Publish Docker image
+      - name: Setup Rust build cache
+        id: cache
+        uses: WarpBuilds/cache@v1
+        with:
+          path: |
+            home-cargo-bin
+            home-cargo-registry-index
+            home-cargo-registry-cache
+            home-cargo-git-db
+            target
+          key: publish-docker-image-profiling-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Inject cache into docker
+        uses: reproducible-containers/buildkit-cache-dance@v3.1.2
+        with:
+          cache-map: |
+            {
+              "home-cargo-bin": "/usr/local/cargo/bin",
+              "home-cargo-registry-index": "/usr/local/cargo/registry/index",
+              "home-cargo-registry-cache": "/usr/local/cargo/registry/cache",
+              "home-cargo-git-db": "/usr/local/cargo/git/db",
+              "target": "/build/target"
+            }
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
+
+      - name: Build & push Docker image
         id: build
-        uses: Warpbuilds/build-push-action@v6
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: deployment/Dockerfile
+          build-args: "DEBUG_SYMBOLS=true"
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          profile-name: 'fuel-core-profiling-builder'
-          platforms: linux/amd64,linux/arm64
-          build-args: "DEBUG_SYMBOLS=true"
-
+          cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest
+          cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-debug:latest,mode=max,image-manifest=true,oci-mediatypes=true
 
   publish-e2e-client-docker-image:
-    needs:
-      - publish-docker-images
-    runs-on: warp-ubuntu-latest-x64-2x
+    runs-on: warp-ubuntu-latest-x64-4x
     permissions:
       contents: read
       packages: write
@@ -188,7 +201,7 @@ jobs:
           echo "REGISTRY_URL=${REGISTRY@L}/${GIT_REPO@L}" >>${GITHUB_ENV}
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -206,14 +219,14 @@ jobs:
           registry-type: public
 
       - name: Log in to the ghcr.io registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v1
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to the docker.io registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v2
         with:
           username: fuellabs
           password: ${{ secrets.DOCKER_IO_READ_ONLY_TOKEN }}
@@ -227,30 +240,54 @@ jobs:
             ${{ steps.login-ecr-public.outputs.registry }}/${{ env.AWS_ECR_ORG }}/${{ env.GIT_REPO_NAME }}-e2e-client
           tags: |
             type=sha
-            type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{raw}}
             type=raw,value=sha-{{sha}}-{{date 'YYYYMMDDhhmmss'}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      - name: Setup Rust build cache
+        id: cache
+        uses: WarpBuilds/cache@v1
+        with:
+          path: |
+            home-cargo-bin
+            home-cargo-registry-index
+            home-cargo-registry-cache
+            home-cargo-git-db
+            target
+          key: publish-e2e-client-docker-image-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Inject cache into docker
+        uses: reproducible-containers/buildkit-cache-dance@v3.1.2
+        with:
+          cache-map: |
+            {
+              "home-cargo-bin": "/usr/local/cargo/bin",
+              "home-cargo-registry-index": "/usr/local/cargo/registry/index",
+              "home-cargo-registry-cache": "/usr/local/cargo/registry/cache",
+              "home-cargo-git-db": "/usr/local/cargo/git/db",
+              "target": "/build/target"
+            }
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
+
       - name: Build & push Docker image
         id: build
-        uses: Warpbuilds/build-push-action@v6
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: deployment/e2e-client.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          profile-name: 'fuel-core-builder'
-          platforms: linux/amd64
+          cache-from: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest
+          cache-to: type=registry,ref=${{ env.REGISTRY_URL }}-build-cache-e2e:latest,mode=max,image-manifest=true,oci-mediatypes=true
 
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
     if: startsWith(github.head_ref, 'preview/')
     needs:
-      - publish-docker-images
-    runs-on: warp-ubuntu-latest-x64-2x
+      - publish-docker-image
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - name: Set Environment Variables
         run: |
