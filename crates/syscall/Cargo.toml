@@ -4,13 +4,7 @@ categories = ["cryptography::cryptocurrencies"]
 description = "Fuel core syscall support"
 edition = { workspace = true }
 homepage = { workspace = true }
-keywords = [
-    "blockchain",
-    "cryptocurrencies",
-    "fuel-client",
-    "fuel-core",
-    "syscall",
-]
+keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core", "syscall"]
 license = { workspace = true }
 name = "fuel-core-syscall"
 repository = { workspace = true }

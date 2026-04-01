@@ -1055,7 +1055,7 @@ where
                         let _ = self.broadcast.block_height_broadcast(block_height_data);
                     }
                     Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
-                        tracing::info!("Received gossip message from peer {:?}", peer_id);
+                        tracing::debug!("Received gossip message from peer {:?}", peer_id);
                         self.broadcast_gossip_message(message, message_id, peer_id);
                     },
                     Some(FuelP2PEvent::InboundRequestMessage { request_message, request_id }) => {

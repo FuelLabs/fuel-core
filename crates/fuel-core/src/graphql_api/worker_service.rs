@@ -633,17 +633,19 @@ where
         };
 
         let mut target_chain_height = on_chain_database.latest_height()?;
-        // Process all blocks that were imported before the service started.
-        // The block importer may produce some blocks on start-up during the
-        // genesis stage or the recovery process. In this case, we need to
-        // process these blocks because, without them,
-        // our block height will be less than on the chain database.
+        // First, deterministically catch up from the off-chain tip to the
+        // current on-chain tip.
+        sync_databases(&mut task, target_chain_height, &block_importer)?;
+
+        // Then observe all blocks that are already available from the live
+        // importer stream at startup and update the target height only.
         while let Some(Some(block)) = task.block_importer.next().now_or_never() {
+            if Some(*block.sealed_block.entity.header().height()) <= target_chain_height {
+                continue;
+            }
             target_chain_height = Some(*block.sealed_block.entity.header().height());
             task.process_block(block)?;
         }
-
-        sync_databases(&mut task, target_chain_height, &block_importer)?;
 
         Ok(task)
     }

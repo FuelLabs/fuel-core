@@ -25,9 +25,10 @@ expression: json
         }
       },
       "script_params": {
-        "V1": {
+        "V2": {
           "max_script_length": 1048576,
-          "max_script_data_length": 1048576
+          "max_script_data_length": 1048576,
+          "max_storage_slot_length": 1048576
         }
       },
       "contract_params": {
@@ -44,7 +45,7 @@ expression: json
       },
       "chain_id": 0,
       "gas_costs": {
-        "V6": {
+        "V7": {
           "add": 1,
           "addi": 1,
           "and": 1,
@@ -107,11 +108,9 @@ expression: json
           "slli": 1,
           "srl": 1,
           "srli": 1,
-          "srw": 12,
           "sub": 1,
           "subi": 1,
           "sw": 1,
-          "sww": 67,
           "time": 1,
           "tr": 105,
           "tro": 60,
@@ -252,34 +251,40 @@ expression: json
               "units_per_gas": 214
             }
           },
-          "scwq": {
-            "LightOperation": {
-              "base": 13,
-              "units_per_gas": 5
-            }
-          },
           "smo": {
             "LightOperation": {
               "base": 209,
               "units_per_gas": 55
             }
           },
-          "srwq": {
-            "LightOperation": {
-              "base": 47,
-              "units_per_gas": 5
-            }
-          },
-          "swwq": {
-            "LightOperation": {
-              "base": 44,
-              "units_per_gas": 5
-            }
-          },
           "epar": {
             "HeavyOperation": {
               "base": 69000,
               "gas_per_unit": 52000
+            }
+          },
+          "storage_read_cold": {
+            "LightOperation": {
+              "base": 100,
+              "units_per_gas": 123
+            }
+          },
+          "storage_read_hot": {
+            "LightOperation": {
+              "base": 10,
+              "units_per_gas": 123
+            }
+          },
+          "storage_write": {
+            "LightOperation": {
+              "base": 10,
+              "units_per_gas": 1234
+            }
+          },
+          "storage_clear": {
+            "LightOperation": {
+              "base": 10,
+              "units_per_gas": 4
             }
           },
           "contract_root": {
@@ -309,7 +314,7 @@ expression: json
       "privileged_address": "0000000000000000000000000000000000000000000000000000000000000000"
     }
   },
-  "genesis_state_transition_version": 32,
+  "genesis_state_transition_version": 33,
   "consensus": {
     "PoAV2": {
       "genesis_signing_key": "22ec92c3105c942a6640bdc4e4907286ec4728e8cfc0d8ac59aad4d8e1ccaefb",

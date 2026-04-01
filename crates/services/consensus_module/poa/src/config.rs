@@ -15,7 +15,7 @@ pub struct Config {
     pub chain_id: ChainId,
 }
 
-#[cfg(feature = "test-helpers")]
+#[cfg(any(test, feature = "test-helpers"))]
 impl Default for Config {
     fn default() -> Self {
         Config {

@@ -48,10 +48,12 @@ use fuel_core_types::{
     tai64::Tai64,
 };
 use fuel_vm_private::{
-    fuel_storage::StorageWrite,
+    fuel_storage::{
+        StorageReadError,
+        StorageWrite,
+    },
     storage::{
         BlobData,
-        ContractsStateData,
         UploadedBytecodes,
     },
 };
@@ -189,13 +191,22 @@ impl<D, M: Mappable> StorageRead<M> for VmStorage<D>
 where
     D: StorageRead<M, Error = StorageError>,
 {
-    fn read(
+    fn read_exact(
         &self,
         key: &M::Key,
         offset: usize,
         buf: &mut [u8],
-    ) -> Result<bool, Self::Error> {
-        StorageRead::<M>::read(&self.database, key, offset, buf)
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        StorageRead::<M>::read_exact(&self.database, key, offset, buf)
+    }
+
+    fn read_zerofill(
+        &self,
+        key: &M::Key,
+        offset: usize,
+        buf: &mut [u8],
+    ) -> Result<Result<usize, StorageReadError>, Self::Error> {
+        StorageRead::<M>::read_zerofill(&self.database, key, offset, buf)
     }
 
     fn read_alloc(
@@ -336,77 +347,12 @@ where
         )
     }
 
-    fn contract_state_range(
-        &self,
-        contract_id: &ContractId,
-        start_key: &Bytes32,
-        range: usize,
-    ) -> Result<Vec<Option<Cow<'_, ContractsStateData>>>, Self::DataError> {
-        use crate::StorageAsRef;
-
-        let mut key = U256::from_big_endian(start_key.as_ref());
-        let mut state_key = Bytes32::zeroed();
-
-        let mut results = Vec::new();
-        for i in 0..range {
-            if i != 0 {
-                key.increase()?;
-            }
-            key.to_big_endian(state_key.as_mut());
-            let multikey = ContractsStateKey::new(contract_id, &state_key);
-            results.push(self.database.storage::<ContractsState>().get(&multikey)?);
-        }
-        Ok(results)
-    }
-
-    fn contract_state_insert_range<'a, I>(
-        &mut self,
-        contract_id: &ContractId,
-        start_key: &Bytes32,
-        values: I,
-    ) -> Result<usize, Self::DataError>
-    where
-        I: Iterator<Item = &'a [u8]>,
-    {
-        let values: Vec<_> = values.collect();
-        let mut current_key = U256::from_big_endian(start_key.as_ref());
-
-        // verify key is in range
-        current_key
-            .checked_add(U256::from(values.len().saturating_sub(1)))
-            .ok_or_else(|| anyhow!("range op exceeded available keyspace"))?;
-
-        let mut key_bytes = Bytes32::zeroed();
-        let mut found_unset = 0u32;
-        for (idx, value) in values.iter().enumerate() {
-            if idx != 0 {
-                current_key.increase()?;
-            }
-            current_key.to_big_endian(key_bytes.as_mut());
-
-            let option = self
-                .database
-                .storage::<ContractsState>()
-                .replace(&(contract_id, &key_bytes).into(), value)?;
-
-            if option.is_none() {
-                found_unset = found_unset
-                    .checked_add(1)
-                    .expect("We've checked it above via `values.len()`");
-            }
-        }
-
-        Ok(found_unset as usize)
-    }
-
     fn contract_state_remove_range(
         &mut self,
         contract_id: &ContractId,
         start_key: &Bytes32,
         range: usize,
-    ) -> Result<Option<()>, Self::DataError> {
-        let mut found_unset = false;
-
+    ) -> Result<(), Self::DataError> {
         let mut current_key = U256::from_big_endian(start_key.as_ref());
 
         let mut key_bytes = Bytes32::zeroed();
@@ -416,15 +362,12 @@ where
             }
             current_key.to_big_endian(key_bytes.as_mut());
 
-            let option = self
-                .database
+            self.database
                 .storage::<ContractsState>()
-                .take(&(contract_id, &key_bytes).into())?;
-
-            found_unset |= option.is_none();
+                .remove(&(contract_id, &key_bytes).into())?;
         }
 
-        if found_unset { Ok(None) } else { Ok(Some(())) }
+        Ok(())
     }
 }
 

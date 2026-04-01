@@ -26,6 +26,5 @@ tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
-fuel-core-services = { path = ".", features = ["sync-processor"] }
 futures = { workspace = true }
 mockall = { workspace = true }
