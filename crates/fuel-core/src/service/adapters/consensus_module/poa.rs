@@ -852,37 +852,7 @@ impl RedisLeaderLeaseAdapter {
             return Ok(Some(block));
         }
 
-        tracing::info!(
-            "Repairing sub-quorum block at height {current_height} \
-             (found on {count}/{} nodes)",
-            blocks_by_node.len()
-        );
-        match self.repair_sub_quorum_block(&block, count) {
-            Ok(true) => {
-                tracing::info!(
-                    "Repair succeeded — block at height {current_height} \
-                     now has quorum"
-                );
-                Ok(Some(block))
-            }
-            Ok(false) => {
-                tracing::warn!(
-                    "Repair failed to reach quorum at height \
-                     {current_height} — will retry next round"
-                );
-                Err(anyhow!(
-                    "Backlog unresolved at height {current_height}: \
-                     repair failed to reach quorum"
-                ))
-            }
-            Err(e) => {
-                tracing::warn!("Repair error at height {current_height}: {e}");
-                Err(anyhow!(
-                    "Backlog unresolved at height {current_height}: \
-                     repair error: {e}"
-                ))
-            }
-        }
+        self.repair_sub_quorum_block(current_height, block, count, blocks_by_node.len())
     }
 
     fn select_height_winner(
@@ -1022,9 +992,15 @@ impl RedisLeaderLeaseAdapter {
     /// - The total (pre_existing + newly written) must reach quorum
     fn repair_sub_quorum_block(
         &self,
-        block: &SealedBlock,
+        current_height: u32,
+        block: SealedBlock,
         pre_existing_count: usize,
-    ) -> anyhow::Result<bool> {
+        node_count: usize,
+    ) -> anyhow::Result<Option<SealedBlock>> {
+        tracing::info!(
+            "Repairing sub-quorum block at height {current_height} \
+             (found on {pre_existing_count}/{node_count} nodes)"
+        );
         let epoch = match *self
             .current_epoch_token
             .lock()
@@ -1037,7 +1013,7 @@ impl RedisLeaderLeaseAdapter {
                 ));
             }
         };
-        let block_data = postcard::to_allocvec(block)?;
+        let block_data = postcard::to_allocvec(&block)?;
         // Start from the pre-existing count (nodes already confirmed to
         // have this specific block during reconciliation). Only count
         // newly Written nodes — HeightExists means the node has *some*
@@ -1045,7 +1021,7 @@ impl RedisLeaderLeaseAdapter {
         // a competing leader's partial write.
         let mut total_with_block = pre_existing_count;
         for redis_node in &self.redis_nodes {
-            match self.publish_block_on_node(redis_node, epoch, block, &block_data) {
+            match self.publish_block_on_node(redis_node, epoch, &block, &block_data) {
                 Ok(WriteBlockResult::Written) => {
                     total_with_block = total_with_block.saturating_add(1);
                 }
@@ -1068,10 +1044,22 @@ impl RedisLeaderLeaseAdapter {
         let reached_quorum = self.quorum_reached(total_with_block);
         if reached_quorum {
             poa_metrics().repair_success_total.inc();
+            tracing::info!(
+                "Repair succeeded — block at height {current_height} \
+                 now has quorum"
+            );
+            Ok(Some(block))
         } else {
             poa_metrics().repair_failure_total.inc();
+            tracing::warn!(
+                "Repair failed to reach quorum at height \
+                 {current_height} — will retry next round"
+            );
+            Err(anyhow!(
+                "Backlog unresolved at height {current_height}: \
+                 repair failed to reach quorum"
+            ))
         }
-        Ok(reached_quorum)
     }
 }
 
