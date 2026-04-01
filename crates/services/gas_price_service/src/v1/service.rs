@@ -184,11 +184,28 @@ where
         self.sync_notifier
             .send(crate::sync_state::SyncState::NotSynced)
             .ok();
-        tracing::debug!("Received L2 block result: {:?}", l2_block_res);
+        match &l2_block_res {
+            Ok(BlockInfo::GenesisBlock) => {
+                tracing::debug!("Received genesis L2 block for gas price update");
+            }
+            Ok(BlockInfo::Block {
+                height,
+                gas_price,
+                ..
+            }) => {
+                tracing::debug!(
+                    %height,
+                    %gas_price,
+                    "Received L2 block for gas price update"
+                );
+            }
+            Err(err) => {
+                tracing::debug!(error = ?err, "Failed to fetch L2 block for gas price update");
+            }
+        }
         let block = l2_block_res?;
 
         self.update_latest_gas_price(&block);
-        tracing::debug!("Updating gas price algorithm");
         self.apply_block_info_to_gas_algorithm(block).await?;
 
         self.notify_da_source_service_l2_block(block);
@@ -201,10 +218,13 @@ where
     }
 
     fn notify_da_source_service_l2_block(&self, block: BlockInfo) {
-        tracing::debug!("Notifying the Da source service of the latest L2 block");
         match block {
             BlockInfo::GenesisBlock => {}
             BlockInfo::Block { height, .. } => {
+                tracing::debug!(
+                    %height,
+                    "Notifying the DA source service about the latest L2 block"
+                );
                 self.latest_l2_block.store(height, Ordering::Release);
             }
         }
@@ -294,7 +314,14 @@ where
         };
 
         for da_block_costs in &self.da_block_costs_buffer {
-            tracing::debug!("Updating DA block costs: {:?}", da_block_costs);
+            tracing::debug!(
+                bundle_id = da_block_costs.bundle_id,
+                l2_block_range_start = *da_block_costs.l2_blocks.start(),
+                l2_block_range_end = *da_block_costs.l2_blocks.end(),
+                bundle_size_bytes = da_block_costs.bundle_size_bytes,
+                blob_cost_wei = da_block_costs.blob_cost_wei,
+                "Applying buffered DA block costs to the gas price updater"
+            );
             let l2_blocks = da_block_costs.l2_blocks.clone();
             let end = *l2_blocks.end();
             self.algorithm_updater.update_da_record_data(
@@ -307,7 +334,10 @@ where
         }
 
         if let Some(recorded_height) = new_recorded_height {
-            tracing::debug!("Updating recorded height to {:?}", recorded_height);
+            tracing::debug!(
+                recorded_height = *recorded_height,
+                "Persisting latest recorded DA height"
+            );
             storage_tx
                 .set_recorded_height(recorded_height)
                 .map_err(|err| anyhow!(err))?;
@@ -324,15 +354,20 @@ where
         )?;
 
         let metadata = self.algorithm_updater.clone().into();
-        tracing::debug!("Setting metadata: {:?}", metadata);
+        tracing::debug!("Persisting gas price updater metadata");
         storage_tx
             .set_metadata(&metadata)
             .map_err(|err| anyhow!(err))?;
         AtomicStorage::commit_transaction(storage_tx)?;
         let new_algo = self.algorithm_updater.algorithm();
-        tracing::debug!("Updating gas price: {}", &new_algo.calculate());
-        self.shared_algo.update(new_algo);
         let best_recorded_height = new_recorded_height.or(old_recorded_height);
+        tracing::debug!(
+            l2_block_height = height,
+            next_gas_price = new_algo.calculate(),
+            recorded_height = best_recorded_height.map(|height| *height),
+            "Updated shared gas price algorithm"
+        );
+        self.shared_algo.update(new_algo);
         Self::record_metrics(&metadata, gas_price, best_recorded_height);
         // Clear the buffer after committing changes
         self.da_block_costs_buffer.clear();
@@ -487,14 +522,20 @@ where
                 TaskNextAction::Stop
             }
             l2_block_res = self.l2_block_source.get_l2_block() => {
-                tracing::debug!("Received L2 block result: {:?}", l2_block_res);
                 let res = self.commit_block_data_to_algorithm(l2_block_res).await;
                 TaskNextAction::always_continue(res)
             }
             da_block_costs_res = self.da_source_channel.recv() => {
-                tracing::debug!("Received DA block costs: {:?}", da_block_costs_res);
                 match da_block_costs_res {
                     Ok(da_block_costs) => {
+                        tracing::debug!(
+                            bundle_id = da_block_costs.bundle_id,
+                            l2_block_range_start = *da_block_costs.l2_blocks.start(),
+                            l2_block_range_end = *da_block_costs.l2_blocks.end(),
+                            bundle_size_bytes = da_block_costs.bundle_size_bytes,
+                            blob_cost_wei = da_block_costs.blob_cost_wei,
+                            "Buffered DA block costs for gas price update"
+                        );
                         self.da_block_costs_buffer.push(da_block_costs);
                         TaskNextAction::Continue
                     },
