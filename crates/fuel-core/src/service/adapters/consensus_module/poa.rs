@@ -131,9 +131,10 @@ impl Clone for RedisNode {
 /// identify the true block producer of any given block. This is done by iterating over each epochs
 /// and finding the highest epoch with a quorum of blocks produced.
 pub struct RedisLeaderLeaseAdapter {
+    /// list of all redis nodes to connect to
     redis_nodes: Vec<RedisNode>,
+    /// number of nodes for which a lock needs to be held to consider the producer legitimate
     quorum: usize,
-    quorum_disruption_budget: u32,
     lease_key: String,
     epoch_key: String,
     block_stream_key: String,
@@ -154,7 +155,6 @@ impl Clone for RedisLeaderLeaseAdapter {
         Self {
             redis_nodes: self.redis_nodes.clone(),
             quorum: self.quorum,
-            quorum_disruption_budget: self.quorum_disruption_budget,
             lease_key: self.lease_key.clone(),
             epoch_key: self.epoch_key.clone(),
             block_stream_key: self.block_stream_key.clone(),
@@ -200,6 +200,7 @@ impl RedisLeaderLeaseAdapter {
     pub fn new(
         redis_urls: Vec<String>,
         lease_key: String,
+        quorum_disruption_budget: u32,
         lease_ttl: Duration,
         node_timeout: Duration,
         retry_delay: Duration,
@@ -221,7 +222,6 @@ impl RedisLeaderLeaseAdapter {
                 "At least one redis url is required for leader lock"
             ));
         }
-        let quorum_disruption_budget = 0u32;
         let quorum = Self::calculate_quorum(redis_nodes.len(), quorum_disruption_budget);
         let lease_ttl_millis = u64::try_from(lease_ttl.as_millis())?;
         let retry_delay_millis = u64::try_from(retry_delay.as_millis())?;
@@ -238,7 +238,6 @@ impl RedisLeaderLeaseAdapter {
         Ok(Self {
             redis_nodes,
             quorum,
-            quorum_disruption_budget,
             lease_key,
             epoch_key,
             block_stream_key,
@@ -253,16 +252,6 @@ impl RedisLeaderLeaseAdapter {
             max_attempts,
             stream_max_len,
         })
-    }
-
-    pub fn with_quorum_disruption_budget(
-        mut self,
-        quorum_disruption_budget: u32,
-    ) -> Self {
-        self.quorum_disruption_budget = quorum_disruption_budget;
-        self.quorum =
-            Self::calculate_quorum(self.redis_nodes.len(), quorum_disruption_budget);
-        self
     }
 
     async fn multiplexed_connection(
@@ -1431,6 +1420,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -1485,6 +1475,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -1727,6 +1718,7 @@ mod tests {
                 redis_c.redis_url(),
             ],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -1884,6 +1876,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             redis_urls.clone(),
             lease_key.clone(),
+            0,
             Duration::from_millis(500),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -1932,6 +1925,7 @@ mod tests {
         let first_adapter = RedisLeaderLeaseAdapter::new(
             redis_urls.clone(),
             lease_key.clone(),
+            0,
             Duration::from_millis(300),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -1943,6 +1937,7 @@ mod tests {
         let second_adapter = RedisLeaderLeaseAdapter::new(
             redis_urls.clone(),
             lease_key.clone(),
+            0,
             Duration::from_millis(300),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2102,6 +2097,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             redis_urls.clone(),
             lease_key.clone(),
+            0,
             Duration::from_millis(700),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2205,6 +2201,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2245,6 +2242,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2306,6 +2304,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2573,6 +2572,7 @@ mod tests {
         RedisLeaderLeaseAdapter::new(
             redis_urls,
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
