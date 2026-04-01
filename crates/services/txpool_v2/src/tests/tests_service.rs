@@ -65,6 +65,14 @@ async fn test_find() {
         .unwrap();
 
     universe.await_expected_tx_statuses_submitted(ids).await;
+    service
+        .shared
+        .assert_integrity(vec![
+            tx1.id(&Default::default()),
+            tx2.id(&Default::default()),
+        ])
+        .await
+        .unwrap();
 
     // When
     let out = service
@@ -82,6 +90,17 @@ async fn test_find() {
     let id = out[0].as_ref().unwrap().tx().id();
     assert_eq!(id, tx1.id(&Default::default()), "Found tx id match{out:?}");
     assert!(out[1].is_none(), "Tx3 should not be found:{out:?}");
+
+    service.stop_and_await().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_service_assert_integrity_handles_empty_pool() {
+    let universe = TestPoolUniverse::default();
+    let service = universe.build_service(None, None);
+    service.start_and_await().await.unwrap();
+
+    service.shared.assert_integrity(vec![]).await.unwrap();
 
     service.stop_and_await().await.unwrap();
 }
