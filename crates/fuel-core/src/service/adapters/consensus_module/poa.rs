@@ -169,6 +169,9 @@ pub enum ReconciliationAdapter {
     Noop(NoopReconciliationAdapter),
 }
 
+type BlocksByEpoch = HashMap<u64, SealedBlock>;
+type BlocksByHeight = HashMap<u32, BlocksByEpoch>;
+
 impl RedisLeaderLeaseAdapter {
     fn calculate_quorum(redis_nodes_len: usize, quorum_disruption_budget: u32) -> usize {
         let majority = redis_nodes_len
@@ -712,17 +715,20 @@ impl RedisLeaderLeaseAdapter {
         if !self.should_reconcile_from_stream(next_height).await? {
             return Ok(Vec::new());
         }
-        let mut reconciled = Vec::new();
-        let max_reconcile_blocks_per_round =
-            usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
-        let next_height_u32 = u32::from(next_height);
+        let blocks_by_node = self.read_backlog(next_height).await?;
+        self.update_backlog_metrics(&blocks_by_node, next_height);
+        self.reconcile_contiguous_heights(blocks_by_node, next_height)
+    }
+
+    async fn read_backlog(
+        &self,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<Vec<BlocksByHeight>> {
+        let max_blocks = usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
+        let next_height = u32::from(next_height);
         let read_results =
             futures::future::join_all(self.redis_nodes.iter().map(|redis_node| {
-                self.read_stream_entries_on_node(
-                    redis_node,
-                    next_height_u32,
-                    max_reconcile_blocks_per_round,
-                )
+                self.read_stream_entries_on_node(redis_node, next_height, max_blocks)
             }))
             .await;
 
@@ -747,138 +753,62 @@ impl RedisLeaderLeaseAdapter {
             ));
         }
 
-        let blocks_by_node = successful_reads
+        Ok(successful_reads
             .into_iter()
-            .map(|entries| {
-                entries.into_iter().fold(
-                    HashMap::<u32, HashMap<u64, SealedBlock>>::new(),
-                    |mut blocks_by_height, (height, epoch, block)| {
-                        blocks_by_height
-                            .entry(height)
-                            .or_default()
-                            .insert(epoch, block);
-                        blocks_by_height
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
+            .map(Self::group_entries_by_height)
+            .collect())
+    }
 
-        // Compute stream trim headroom: min stream height - local committed height
+    fn group_entries_by_height(entries: Vec<(u32, u64, SealedBlock)>) -> BlocksByHeight {
+        entries.into_iter().fold(
+            HashMap::new(),
+            |mut blocks_by_height, (height, epoch, block)| {
+                blocks_by_height
+                    .entry(height)
+                    .or_default()
+                    .insert(epoch, block);
+                blocks_by_height
+            },
+        )
+    }
+
+    fn update_backlog_metrics(
+        &self,
+        blocks_by_node: &[BlocksByHeight],
+        next_height: BlockHeight,
+    ) {
         let min_stream_height = blocks_by_node
             .iter()
             .flat_map(|blocks_by_height| blocks_by_height.keys().copied())
             .min();
-        if let Some(min_h) = min_stream_height {
+        if let Some(min_height) = min_stream_height {
             let local_committed = i64::from(u32::from(next_height).saturating_sub(1));
-            let headroom = i64::from(min_h).saturating_sub(local_committed);
+            let headroom = i64::from(min_height).saturating_sub(local_committed);
             poa_metrics().stream_trim_headroom.set(headroom);
         }
+    }
 
+    fn reconcile_contiguous_heights(
+        &self,
+        blocks_by_node: Vec<BlocksByHeight>,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<Vec<SealedBlock>> {
+        let mut reconciled = Vec::new();
         let mut current_height = u32::from(next_height);
+        let max_blocks = usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
 
-        for _ in 0..max_reconcile_blocks_per_round {
-            let nodes_with_height = blocks_by_node
-                .iter()
-                .filter(|blocks_by_height| blocks_by_height.contains_key(&current_height))
-                .count();
-
-            tracing::debug!(
-                "unreconciled_blocks: height={current_height} nodes_with_height={nodes_with_height}/{}",
-                blocks_by_node.len()
-            );
-
-            if nodes_with_height == 0 {
-                if reconciled.is_empty() {
+        for _ in 0..max_blocks {
+            match self.reconcile_height(&blocks_by_node, current_height) {
+                Ok(Some(block)) => reconciled.push(block),
+                Ok(None) if reconciled.is_empty() => {
                     return Err(anyhow!(
                         "Backlog unresolved at height {current_height}: \
                          stream indicates backlog but no entries found at next height"
                     ));
                 }
-                break;
-            }
-
-            let votes = blocks_by_node
-                .iter()
-                .filter_map(|blocks_by_height| blocks_by_height.get(&current_height))
-                .flat_map(|blocks_by_epoch| blocks_by_epoch.iter())
-                .fold(
-                    HashMap::<(u64, BlockId), (usize, SealedBlock)>::new(),
-                    |mut votes, (epoch, block)| {
-                        let vote_key = (*epoch, block.entity.id());
-                        match votes.get_mut(&vote_key) {
-                            Some((count, _)) => {
-                                *count = count.saturating_add(1);
-                            }
-                            None => {
-                                votes.insert(vote_key, (1, block.clone()));
-                            }
-                        }
-                        votes
-                    },
-                );
-
-            let winner = votes
-                .into_iter()
-                .max_by_key(|((epoch, _), _)| *epoch)
-                .map(|(_, (count, block))| (count, block));
-
-            if let Some((count, block)) = winner {
-                if self.quorum_reached(count) {
-                    // Block already has quorum — reconcile it directly
-                    reconciled.push(block);
-                } else {
-                    // Sub-quorum block: repropose to all nodes to reach quorum.
-                    // This repairs orphaned partial writes from failed leaders.
-                    // HEIGHT_EXISTS on nodes that already have the block returns
-                    // Ok(false), and nodes missing it accept the write.
-                    tracing::info!(
-                        "Repairing sub-quorum block at height {current_height} \
-                         (found on {count}/{} nodes)",
-                        blocks_by_node.len()
-                    );
-                    match self.repair_sub_quorum_block(&block, count) {
-                        Ok(true) => {
-                            tracing::info!(
-                                "Repair succeeded — block at height {current_height} \
-                                 now has quorum"
-                            );
-                            reconciled.push(block);
-                        }
-                        Ok(false) => {
-                            tracing::warn!(
-                                "Repair failed to reach quorum at height \
-                                 {current_height} — will retry next round"
-                            );
-                            if reconciled.is_empty() {
-                                return Err(anyhow!(
-                                    "Backlog unresolved at height {current_height}: \
-                                     repair failed to reach quorum"
-                                ));
-                            }
-                            break;
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Repair error at height {current_height}: {e}"
-                            );
-                            if reconciled.is_empty() {
-                                return Err(anyhow!(
-                                    "Backlog unresolved at height {current_height}: \
-                                     repair error: {e}"
-                                ));
-                            }
-                            break;
-                        }
-                    }
-                }
-            } else {
-                if reconciled.is_empty() {
-                    return Err(anyhow!(
-                        "Backlog unresolved at height {current_height}: \
-                         no winning block candidate"
-                    ));
-                }
-                break;
+                Ok(None) => break,
+                Err(err) if reconciled.is_empty() => return Err(err),
+                Err(_) => break,
             }
 
             let Some(next) = current_height.checked_add(1) else {
@@ -888,6 +818,100 @@ impl RedisLeaderLeaseAdapter {
         }
 
         Ok(reconciled)
+    }
+
+    fn reconcile_height(
+        &self,
+        blocks_by_node: &[BlocksByHeight],
+        current_height: u32,
+    ) -> anyhow::Result<Option<SealedBlock>> {
+        let nodes_with_height = blocks_by_node
+            .iter()
+            .filter(|blocks_by_height| blocks_by_height.contains_key(&current_height))
+            .count();
+
+        tracing::debug!(
+            "unreconciled_blocks: height={current_height} nodes_with_height={nodes_with_height}/{}",
+            blocks_by_node.len()
+        );
+
+        if nodes_with_height == 0 {
+            return Ok(None);
+        }
+
+        let Some((count, block)) =
+            self.select_height_winner(blocks_by_node, current_height)
+        else {
+            return Err(anyhow!(
+                "Backlog unresolved at height {current_height}: \
+                 no winning block candidate"
+            ));
+        };
+
+        if self.quorum_reached(count) {
+            return Ok(Some(block));
+        }
+
+        tracing::info!(
+            "Repairing sub-quorum block at height {current_height} \
+             (found on {count}/{} nodes)",
+            blocks_by_node.len()
+        );
+        match self.repair_sub_quorum_block(&block, count) {
+            Ok(true) => {
+                tracing::info!(
+                    "Repair succeeded — block at height {current_height} \
+                     now has quorum"
+                );
+                Ok(Some(block))
+            }
+            Ok(false) => {
+                tracing::warn!(
+                    "Repair failed to reach quorum at height \
+                     {current_height} — will retry next round"
+                );
+                Err(anyhow!(
+                    "Backlog unresolved at height {current_height}: \
+                     repair failed to reach quorum"
+                ))
+            }
+            Err(e) => {
+                tracing::warn!("Repair error at height {current_height}: {e}");
+                Err(anyhow!(
+                    "Backlog unresolved at height {current_height}: \
+                     repair error: {e}"
+                ))
+            }
+        }
+    }
+
+    fn select_height_winner(
+        &self,
+        blocks_by_node: &[BlocksByHeight],
+        current_height: u32,
+    ) -> Option<(usize, SealedBlock)> {
+        blocks_by_node
+            .iter()
+            .filter_map(|blocks_by_height| blocks_by_height.get(&current_height))
+            .flat_map(|blocks_by_epoch| blocks_by_epoch.iter())
+            .fold(
+                HashMap::<(u64, BlockId), (usize, SealedBlock)>::new(),
+                |mut votes, (epoch, block)| {
+                    let vote_key = (*epoch, block.entity.id());
+                    match votes.get_mut(&vote_key) {
+                        Some((count, _)) => {
+                            *count = count.saturating_add(1);
+                        }
+                        None => {
+                            votes.insert(vote_key, (1, block.clone()));
+                        }
+                    }
+                    votes
+                },
+            )
+            .into_iter()
+            .max_by_key(|((epoch, _), _)| *epoch)
+            .map(|(_, (count, block))| (count, block))
     }
 
     async fn can_produce_block(&self) -> anyhow::Result<bool> {
