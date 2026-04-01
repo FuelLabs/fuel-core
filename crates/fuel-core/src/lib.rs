@@ -3,6 +3,8 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+#[cfg(test)]
+use fuel_core as _;
 use futures::{
     StreamExt,
     stream::FuturesUnordered,

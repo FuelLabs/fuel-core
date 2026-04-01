@@ -1,0 +1,40 @@
+# curl https://policy-bot.fuel.network/api/validate -XPUT -T .policy.yml
+# policy for this repo
+approval_defaults:
+  options:
+    allow_non_author_contributor: true
+
+policy:
+  approval:
+    - and:
+      - the em team approved a sensitive file change
+      - or:
+        - the em team has approved
+        - a client engineer has approved
+  disapproval:
+    # any disapproval from EMs will prevent merge until resolved
+    requires:
+      teams:
+        - "FuelLabs/engineering-managers"
+
+approval_rules:
+  - name: the em team approved a sensitive file change
+    requires:
+      count: 1
+      teams:
+        - "FuelLabs/engineering-managers"
+    if:
+      changed_files:
+        paths:
+          - "^\\.bulldozer\\.yml$"
+          - "^\\.policy\\.yml$"
+  - name: the em team has approved
+    requires:
+      count: 1
+      teams:
+        - "FuelLabs/engineering-managers"
+  - name: a client engineer has approved
+    requires:
+      count: 1
+      teams:
+        - "FuelLabs/client"

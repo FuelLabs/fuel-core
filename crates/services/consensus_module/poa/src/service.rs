@@ -18,8 +18,10 @@ use crate::{
         BlockImporter,
         BlockProducer,
         BlockProductionReadySignal,
+        BlockReconciliationReadPort,
         BlockSigner,
         GetTime,
+        LeaderState,
         P2pPort,
         PredefinedBlocks,
         TransactionPool,
@@ -66,7 +68,8 @@ use fuel_core_types::{
 use serde::Serialize;
 use tokio::time::sleep_until;
 
-pub type Service<B, I, S, PB, C, RS> = ServiceRunner<MainTask<B, I, S, PB, C, RS>>;
+pub type Service<B, I, S, PB, C, RS, RP> =
+    ServiceRunner<MainTask<B, I, S, PB, C, RS, RP>>;
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -121,7 +124,7 @@ pub(crate) enum RequestType {
     Trigger,
 }
 
-pub struct MainTask<B, I, S, PB, C, RS> {
+pub struct MainTask<B, I, S, PB, C, RS, RP> {
     signer: Arc<S>,
     block_producer: B,
     block_importer: I,
@@ -139,14 +142,16 @@ pub struct MainTask<B, I, S, PB, C, RS> {
     production_timeout: Duration,
     /// externally controlled start of block production
     block_production_ready_signal: BlockProductionReadySignal<RS>,
+    reconciliation_port: RP,
 }
 
-impl<B, I, S, PB, C, RS> MainTask<B, I, S, PB, C, RS>
+impl<B, I, S, PB, C, RS, RP> MainTask<B, I, S, PB, C, RS, RP>
 where
     I: BlockImporter,
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
+    RP: BlockReconciliationReadPort,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort, T: TransactionPool>(
@@ -160,6 +165,7 @@ where
         predefined_blocks: PB,
         clock: C,
         block_production_ready_signal: RS,
+        reconciliation_port: RP,
     ) -> Self {
         let new_txs_watcher = txpool.new_txs_watcher();
         let (request_sender, request_receiver) = mpsc::channel(1024);
@@ -206,6 +212,7 @@ where
             clock,
             production_timeout,
             block_production_ready_signal,
+            reconciliation_port,
         }
     }
 
@@ -266,7 +273,7 @@ where
     }
 }
 
-impl<B, I, S, PB, C, RS> MainTask<B, I, S, PB, C, RS>
+impl<B, I, S, PB, C, RS, RP> MainTask<B, I, S, PB, C, RS, RP>
 where
     B: BlockProducer,
     I: BlockImporter,
@@ -274,6 +281,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
+    RP: BlockReconciliationReadPort,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -549,6 +557,17 @@ where
         }
     }
 
+    /// Returns the error retry delay based on the trigger's block time.
+    /// Uses the block production interval instead of a hardcoded 1s
+    /// so that followers can retry lease acquisition sooner.
+    fn error_retry_delay(&self) -> Duration {
+        match self.trigger {
+            Trigger::Interval { block_time } => block_time,
+            Trigger::Open { period } => period,
+            _ => Duration::from_secs(1),
+        }
+    }
+
     async fn handle_normal_block_production(
         &mut self,
         deadline: Instant,
@@ -556,9 +575,84 @@ where
         match self.produce_next_block(deadline).await {
             Ok(()) => TaskNextAction::Continue,
             Err(err) => {
-                // Wait some time in case of error to avoid spamming retry block production
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                // Release the lease on production failure so followers can
+                // acquire it faster instead of waiting for TTL expiry.
+                if let Err(release_err) = self.reconciliation_port.release().await {
+                    tracing::warn!(
+                        "Failed to release lease after production error: {release_err}"
+                    );
+                }
+                // Wait before retrying to avoid spamming, but use the
+                // block_time interval rather than a hardcoded 1s delay.
+                tokio::time::sleep(self.error_retry_delay()).await;
                 TaskNextAction::ErrorContinue(err)
+            }
+        }
+    }
+
+    async fn try_to_produce_block(
+        &mut self,
+        deadline: Instant,
+    ) -> anyhow::Result<TaskNextAction> {
+        // Sync last_height with the DB to avoid stale reconciliation.
+        // P2P block imports advance the DB height independently of the
+        // SyncTask, which can lag. Using a stale next_height causes
+        // unreconciled_blocks to return blocks the DB already has,
+        // leading to IncorrectBlockHeight errors.
+        if let Ok(Some(db_height)) = self.block_importer.latest_block_height()
+            && db_height > self.last_height
+        {
+            self.last_height = db_height;
+        }
+
+        match self
+            .reconciliation_port
+            .leader_state(self.next_height())
+            .await?
+        {
+            LeaderState::ReconciledFollower => {
+                sleep_until(deadline).await;
+                Ok(TaskNextAction::Continue)
+            }
+            LeaderState::ReconciledLeader => {
+                Ok(self.handle_normal_block_production(deadline).await)
+            }
+            LeaderState::UnreconciledBlocks(blocks) => {
+                for block in blocks {
+                    let block_height = *block.entity.header().height();
+                    let block_time = block.entity.header().time();
+
+                    // Skip blocks the DB already has (can happen when
+                    // P2P imports race with reconciliation).
+                    if block_height <= self.last_height {
+                        continue;
+                    }
+
+                    match self.block_importer.execute_and_commit(block).await {
+                        Ok(()) => {
+                            self.last_height = block_height;
+                            self.last_timestamp = block_time;
+                        }
+                        Err(err) => {
+                            // Re-sync from the DB and skip — the block
+                            // may have been imported via P2P between our
+                            // latest_block_height check and now. Stream
+                            // cursors are always restored by the adapter,
+                            // so these entries remain re-readable.
+                            tracing::warn!(
+                                "Reconciliation import failed at height \
+                                 {block_height}: {err}. Re-syncing from DB."
+                            );
+                            if let Ok(Some(db_height)) =
+                                self.block_importer.latest_block_height()
+                                && db_height > self.last_height
+                            {
+                                self.last_height = db_height;
+                            }
+                        }
+                    }
+                }
+                Ok(TaskNextAction::Continue)
             }
         }
     }
@@ -571,7 +665,7 @@ struct PredefinedBlockWithSkippedTransactions {
 }
 
 #[async_trait::async_trait]
-impl<B, I, S, PB, C, RS> RunnableService for MainTask<B, I, S, PB, C, RS>
+impl<B, I, S, PB, C, RS, RP> RunnableService for MainTask<B, I, S, PB, C, RS, RP>
 where
     Self: RunnableTask,
     RS: WaitForReadySignal,
@@ -579,7 +673,7 @@ where
     const NAME: &'static str = "PoA";
 
     type SharedData = SharedState;
-    type Task = MainTask<B, I, S, PB, C, RS>;
+    type Task = MainTask<B, I, S, PB, C, RS, RP>;
     type TaskParams = ();
 
     fn shared_data(&self) -> Self::SharedData {
@@ -607,7 +701,7 @@ where
     }
 }
 
-impl<B, I, S, PB, C, RS> RunnableTask for MainTask<B, I, S, PB, C, RS>
+impl<B, I, S, PB, C, RS, RP> RunnableTask for MainTask<B, I, S, PB, C, RS, RP>
 where
     B: BlockProducer,
     I: BlockImporter,
@@ -615,6 +709,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
+    RP: BlockReconciliationReadPort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -622,14 +717,18 @@ where
             _ = watcher.while_started() => {
                 return TaskNextAction::Stop
             }
-            _ = self.block_production_ready_signal.wait_for_ready_signal() => {}
+            _ = self.block_production_ready_signal.wait_for_ready_signal() => {
+                tracing::debug!("Block production is ready");
+            }
         }
 
         if let Some(action) = self.ensure_synced(watcher).await {
+            tracing::debug!("Synced, stopping PoA task");
             return action;
         }
 
         if let Some(action) = self.maybe_produce_predefined_block().await {
+            tracing::debug!("Predefined block produced, stopping PoA task");
             return action;
         }
 
@@ -675,20 +774,29 @@ where
                 self.handle_requested_production(request).await
             }
             deadline = next_block_production => {
-                self.handle_normal_block_production(deadline).await
+                tracing::debug!("Next block production deadline: {:?}", deadline);
+                match self.try_to_produce_block(deadline).await {
+                    Ok(action) => action,
+                    Err(err) => TaskNextAction::ErrorContinue(err),
+                }
             }
         }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
         tracing::info!("PoA MainTask shutting down");
+        if let Err(err) = self.reconciliation_port.release().await {
+            tracing::warn!(
+                "Failed to release reconciliation state during shutdown: {err}"
+            );
+        }
         self.sync_task_handle.stop_and_await().await?;
         Ok(())
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn new_service<T, B, I, P, S, PB, C, RS>(
+pub fn new_service<T, B, I, P, S, PB, C, RS, RP>(
     last_block: &BlockHeader,
     config: Config,
     txpool: T,
@@ -699,7 +807,8 @@ pub fn new_service<T, B, I, P, S, PB, C, RS>(
     predefined_blocks: PB,
     clock: C,
     block_production_ready_signal: RS,
-) -> Service<B, I, S, PB, C, RS>
+    reconciliation_port: RP,
+) -> Service<B, I, S, PB, C, RS, RP>
 where
     T: TransactionPool + 'static,
     B: BlockProducer + 'static,
@@ -709,6 +818,7 @@ where
     P: P2pPort,
     C: GetTime,
     RS: WaitForReadySignal,
+    RP: BlockReconciliationReadPort + 'static,
 {
     Service::new(MainTask::new(
         last_block,
@@ -721,6 +831,7 @@ where
         predefined_blocks,
         clock,
         block_production_ready_signal,
+        reconciliation_port,
     ))
 }
 

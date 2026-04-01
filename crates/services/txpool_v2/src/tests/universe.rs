@@ -586,11 +586,12 @@ impl TestPoolUniverse {
         const TIMEOUT: Duration = Duration::from_secs(3);
         const POLL_TIMEOUT: Duration = Duration::from_millis(5);
 
-        let mut values = Vec::with_capacity(tx_ids.len());
-        let start_time = std::time::Instant::now();
+        let expected_count = tx_ids.len();
+        let mut received_ids = BTreeSet::new();
+        let mut idle_start = std::time::Instant::now();
 
-        while values.len() < tx_ids.len() {
-            if start_time.elapsed() > TIMEOUT {
+        while received_ids.len() < expected_count {
+            if idle_start.elapsed() > TIMEOUT {
                 return Err(TxStatusWaitError::Timeout);
             }
 
@@ -601,7 +602,9 @@ impl TestPoolUniverse {
             .await
             {
                 Ok(Some((tx_id, tx_status))) if predicate(tx_id, &tx_status) => {
-                    values.push(tx_id);
+                    if received_ids.insert(tx_id) {
+                        idle_start = std::time::Instant::now();
+                    }
                 }
                 Ok(Some(_)) => {
                     // Ignore statuses other than the ones handled by the predicate
@@ -617,7 +620,7 @@ impl TestPoolUniverse {
         }
 
         let expected: BTreeSet<_> = tx_ids.iter().collect();
-        let actual: BTreeSet<_> = values.iter().collect();
+        let actual: BTreeSet<_> = received_ids.iter().collect();
         assert_eq!(expected, actual, "should receive correct ids");
 
         Ok(())

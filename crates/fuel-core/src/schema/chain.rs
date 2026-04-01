@@ -59,6 +59,7 @@ pub enum ContractParametersVersion {
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
 pub enum ScriptParametersVersion {
     V1,
+    V2,
 }
 
 #[derive(Clone, Copy, Debug, Enum, Eq, PartialEq)]
@@ -227,6 +228,7 @@ impl ScriptParameters {
     async fn version(&self) -> ScriptParametersVersion {
         match self.0 {
             fuel_tx::ScriptParameters::V1(_) => ScriptParametersVersion::V1,
+            fuel_tx::ScriptParameters::V2(_) => ScriptParametersVersion::V2,
         }
     }
 
@@ -236,6 +238,10 @@ impl ScriptParameters {
 
     async fn max_script_data_length(&self) -> U64 {
         self.0.max_script_data_length().into()
+    }
+
+    async fn max_storage_slot_length(&self) -> U64 {
+        self.0.max_storage_slot_length().into()
     }
 }
 
@@ -282,7 +288,8 @@ impl GasCosts {
             | GasCostsValues::V3(_)
             | GasCostsValues::V4(_)
             | GasCostsValues::V5(_)
-            | GasCostsValues::V6(_) => GasCostsVersion::V1,
+            | GasCostsValues::V6(_)
+            | GasCostsValues::V7(_) => GasCostsVersion::V1,
         }
     }
 
@@ -546,8 +553,8 @@ impl GasCosts {
         self.0.srli().into()
     }
 
-    async fn srw(&self) -> U64 {
-        self.0.srw().into()
+    async fn srw(&self) -> Option<U64> {
+        self.0.srw().ok().map(Into::into)
     }
 
     async fn sub(&self) -> U64 {
@@ -562,8 +569,8 @@ impl GasCosts {
         self.0.sw().into()
     }
 
-    async fn sww(&self) -> U64 {
-        self.0.sww().into()
+    async fn sww(&self) -> Option<U64> {
+        self.0.sww().ok().map(Into::into)
     }
 
     async fn time(&self) -> U64 {
@@ -726,24 +733,42 @@ impl GasCosts {
         self.0.s256().into()
     }
 
-    async fn scwq(&self) -> DependentCost {
-        self.0.scwq().into()
+    async fn scwq(&self) -> Option<DependentCost> {
+        self.0.scwq().ok().map(Into::into)
     }
 
     async fn smo(&self) -> DependentCost {
         self.0.smo().into()
     }
 
-    async fn srwq(&self) -> DependentCost {
-        self.0.srwq().into()
+    async fn srwq(&self) -> Option<DependentCost> {
+        self.0.srwq().ok().map(Into::into)
     }
 
-    async fn swwq(&self) -> DependentCost {
-        self.0.swwq().into()
+    async fn swwq(&self) -> Option<DependentCost> {
+        self.0.swwq().ok().map(Into::into)
     }
 
     async fn epar(&self) -> Option<DependentCost> {
         self.0.epar().ok().map(Into::into)
+    }
+
+    // Storage micro-ops
+
+    async fn storage_read_cold(&self) -> Option<DependentCost> {
+        self.0.storage_read_cold().ok().map(Into::into)
+    }
+
+    async fn storage_read_hot(&self) -> Option<DependentCost> {
+        self.0.storage_read_hot().ok().map(Into::into)
+    }
+
+    async fn storage_write(&self) -> Option<DependentCost> {
+        self.0.storage_write().ok().map(Into::into)
+    }
+
+    async fn storage_clear(&self) -> Option<DependentCost> {
+        self.0.storage_clear().ok().map(Into::into)
     }
 
     // Non-opcode prices

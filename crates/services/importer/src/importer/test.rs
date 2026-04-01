@@ -1,7 +1,10 @@
+#![allow(non_snake_case)]
+
 use crate::{
     Importer,
     importer::Error,
     ports::{
+        BlockReconciliationWritePort,
         ImporterDatabase,
         MockBlockVerifier,
         MockDatabaseTransaction,
@@ -40,6 +43,10 @@ use fuel_core_types::{
         },
     },
 };
+use std::sync::{
+    Arc,
+    Mutex,
+};
 use test_case::test_case;
 use tokio::sync::{
     TryAcquireError,
@@ -66,6 +73,44 @@ mockall::mock! {
             &mut self,
             changes: StorageChanges,
         ) -> StorageResult<()>;
+    }
+}
+
+#[derive(Clone)]
+struct FakeBlockReconciliationWriter {
+    publish_result: Result<(), String>,
+    published_blocks: Arc<Mutex<Vec<SealedBlock>>>,
+}
+
+impl Default for FakeBlockReconciliationWriter {
+    fn default() -> Self {
+        Self {
+            publish_result: Ok(()),
+            published_blocks: Arc::new(Mutex::new(vec![])),
+        }
+    }
+}
+
+impl FakeBlockReconciliationWriter {
+    fn with_error(error: impl Into<String>) -> Self {
+        Self {
+            publish_result: Err(error.into()),
+            ..Default::default()
+        }
+    }
+
+    fn published_blocks(&self) -> Vec<SealedBlock> {
+        self.published_blocks.lock().unwrap().clone()
+    }
+}
+
+impl BlockReconciliationWritePort for FakeBlockReconciliationWriter {
+    fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
+        self.published_blocks.lock().unwrap().push(block.clone());
+        self.publish_result
+            .as_ref()
+            .map_err(|error| anyhow!(error.clone()))?;
+        Ok(())
     }
 }
 
@@ -439,6 +484,101 @@ async fn execute_and_commit_fail_when_locked() {
         importer.execute_and_commit(Default::default()).await,
         Err(Error::Semaphore(TryAcquireError::NoPermits))
     );
+}
+
+#[tokio::test]
+async fn commit_result__when_source_is_local_then_publishes_to_reconciliation_writer() {
+    // given
+    let sealed_block = poa_block(1);
+    let mut database = underlying_db(ok(Some(0)), 1)();
+    database
+        .expect_storage_transaction()
+        .returning(move |_| db_transaction(ok(Some(0)), ok(true))());
+    let writer = FakeBlockReconciliationWriter::default();
+    let writer_state = writer.clone();
+    let importer = Importer::new(
+        Default::default(),
+        Default::default(),
+        database,
+        executor(ex_result),
+        verifier(ok(())),
+        writer,
+    );
+    let expected_published_block = sealed_block.clone();
+    let uncommitted_result = UncommittedResult::new(
+        ImportResult::new_from_local(sealed_block, vec![], vec![]),
+        Default::default(),
+    );
+
+    // when
+    let result = importer.commit_result(uncommitted_result).await;
+
+    // then
+    assert!(result.is_ok());
+    assert_eq!(
+        writer_state.published_blocks(),
+        vec![expected_published_block]
+    );
+}
+
+#[tokio::test]
+async fn execute_and_commit__when_source_is_network_then_does_not_publish_to_reconciliation_writer()
+ {
+    // given
+    let sealed_block = poa_block(1);
+    let mut database = underlying_db(ok(Some(0)), 1)();
+    database
+        .expect_storage_transaction()
+        .returning(move |_| db_transaction(ok(Some(0)), ok(true))());
+    let writer = FakeBlockReconciliationWriter::default();
+    let writer_state = writer.clone();
+    let importer = Importer::new(
+        Default::default(),
+        Default::default(),
+        database,
+        executor(ex_result),
+        verifier(ok(())),
+        writer,
+    );
+
+    // when
+    let result = importer.execute_and_commit(sealed_block).await;
+
+    // then
+    assert!(result.is_ok());
+    assert_eq!(writer_state.published_blocks(), Vec::<SealedBlock>::new());
+}
+
+#[tokio::test]
+async fn commit_result__when_publish_to_reconciliation_writer_fails_then_returns_error() {
+    // given
+    let sealed_block = poa_block(1);
+    let mut database = underlying_db(ok(Some(0)), 0)();
+    database
+        .expect_storage_transaction()
+        .returning(move |_| db_transaction(ok(Some(0)), ok(true))());
+    let writer = FakeBlockReconciliationWriter::with_error("publish failure");
+    let importer = Importer::new(
+        Default::default(),
+        Default::default(),
+        database,
+        executor(ex_result),
+        verifier(ok(())),
+        writer,
+    );
+    let uncommitted_result = UncommittedResult::new(
+        ImportResult::new_from_local(sealed_block, vec![], vec![]),
+        Default::default(),
+    );
+
+    // when
+    let result = importer.commit_result(uncommitted_result).await;
+
+    // then
+    assert!(matches!(
+        result,
+        Err(Error::FailedBlockReconciliationWrite(_))
+    ));
 }
 
 #[test]

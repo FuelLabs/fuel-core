@@ -11,7 +11,7 @@ env:
   AWS_ROLE_ARN: arn:aws:iam::024848458133:role/github_oidc_FuelLabs_fuel-core
   AWS_ECR_ORG: fuellabs
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.90.0
+  RUST_VERSION: 1.93.0
   RUST_VERSION_FMT: nightly-2023-10-29
   RUST_VERSION_COV: nightly-2024-06-05
   RUSTFLAGS: -D warnings
@@ -21,11 +21,11 @@ env:
 jobs:
   publish-codecov:
     name: Publish code coverage report on GitHub pages branch
-    runs-on: buildjet-4vcpu-ubuntu-2204
+    runs-on: warp-ubuntu-latest-x64-4x
     permissions: # Write access to push changes to pages
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install latest Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -39,7 +39,7 @@ jobs:
         run: cargo  +${{ env.RUST_VERSION_COV }} llvm-cov --all-features --html --branch
 
       - name: Checkout the repo again for pushing pages revision
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: 'codecov-pages'
           path: 'pages-branch'

@@ -284,7 +284,7 @@ impl ConnectionHandler for HeartbeatHandler {
     }
 }
 
-/// Represents state of the Oubound stream
+/// Represents state of the Outbound stream
 enum OutboundState {
     NegotiatingStream,
     Idle(Stream),
