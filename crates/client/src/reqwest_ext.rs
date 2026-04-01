@@ -32,10 +32,7 @@ pub struct ExtensionsRequest {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct ExtensionsResponse {
     pub required_fuel_block_height: Option<BlockHeight>,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_block_height_option"
-    )]
+    #[serde(default, deserialize_with = "deserialize_block_height_option")]
     pub current_fuel_block_height: Option<BlockHeight>,
     pub fuel_block_height_precondition_failed: Option<bool>,
     pub current_stf_version: Option<StateTransitionBytecodeVersion>,
