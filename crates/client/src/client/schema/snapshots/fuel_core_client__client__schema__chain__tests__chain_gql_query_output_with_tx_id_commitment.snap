@@ -63,6 +63,7 @@ query ChainQuery {
         version
         maxScriptLength
         maxScriptDataLength
+        maxStorageSlotLength
       }
       contractParams {
         version
@@ -433,6 +434,50 @@ query ChainQuery {
           }
         }
         epar {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        storageReadCold {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        storageReadHot {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        storageWrite {
+          __typename
+          ... on LightOperation {
+            base
+            unitsPerGas
+          }
+          ... on HeavyOperation {
+            base
+            gasPerUnit
+          }
+        }
+        storageClear {
           __typename
           ... on LightOperation {
             base

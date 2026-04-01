@@ -5,5 +5,5 @@ extend-ignore-identifiers-re = [
     "Tro",
     "typ",
     "aloc",
-    "ALOC",
+    "ALOC"
 ]

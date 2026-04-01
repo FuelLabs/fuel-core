@@ -35,6 +35,8 @@ impl PoATriggerArgs {
             retry_delay,
             max_retry_delay_offset,
             max_attempts,
+            stream_max_len,
+            quorum_disruption_budget,
         } = self.leader_lock.clone();
         if enabled {
             Ok(Some(RedisLeaderLockConfig {
@@ -49,6 +51,8 @@ impl PoATriggerArgs {
                 retry_delay: retry_delay.into(),
                 max_retry_delay_offset: max_retry_delay_offset.into(),
                 max_attempts,
+                stream_max_len,
+                quorum_disruption_budget,
             }))
         } else {
             Ok(None)
@@ -159,6 +163,17 @@ struct LeaderLock {
     /// Maximum number of acquire attempts per can_produce_block call.
     #[clap(long = "poa-leader-lock-max-attempts", env, default_value_t = 3)]
     max_attempts: u32,
+    /// Maximum approximate number of entries retained in the Redis block stream.
+    #[clap(long = "poa-leader-lock-stream-max-len", env, default_value_t = 1000)]
+    stream_max_len: u32,
+    /// Extra quorum threshold above majority.
+    /// Effective quorum is floor(N/2) + 1 + disruption_budget, capped at N.
+    #[clap(
+        long = "poa-leader-lock-quorum-disruption-budget",
+        env,
+        default_value_t = 0
+    )]
+    quorum_disruption_budget: u32,
 }
 
 #[cfg(test)]
@@ -224,11 +239,32 @@ mod tests {
             StdDuration::from_millis(100)
         );
         assert_eq!(leader_lock.max_attempts, 3);
+        assert_eq!(leader_lock.stream_max_len, 1000);
+        assert_eq!(leader_lock.quorum_disruption_budget, 0);
     }
 
     #[test]
     fn leader_lock__when_enabled_without_required_fields_then_parse_error() {
         let result = Command::try_parse_from(["", "--poa-leader-lock"]);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn leader_lock__when_disruption_budget_is_set_then_config_uses_value() {
+        let command = Command::try_parse_from([
+            "",
+            "--poa-leader-lock",
+            "--poa-leader-lock-redis-url",
+            "redis://127.0.0.1:6379/",
+            "--poa-leader-lock-key",
+            "poa:leader:lock",
+            "--poa-leader-lock-ttl",
+            "2s",
+            "--poa-leader-lock-quorum-disruption-budget",
+            "2",
+        ])
+        .unwrap();
+        let leader_lock = command.trigger.clone().leader_lock().unwrap().unwrap();
+        assert_eq!(leader_lock.quorum_disruption_budget, 2);
     }
 }

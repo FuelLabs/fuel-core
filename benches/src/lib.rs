@@ -107,6 +107,15 @@ pub struct PrepareCall {
     pub rd: RegId,
 }
 
+type PreInstructionHook = fn(
+    &mut Interpreter<
+        MemoryInstance,
+        VmStorage<StorageTransaction<GenesisDatabase>>,
+        Script,
+    >,
+    &str,
+);
+
 pub struct VmBench {
     pub params: ConsensusParameters,
     pub gas_price: Word,
@@ -122,6 +131,7 @@ pub struct VmBench {
     pub witnesses: Vec<Witness>,
     pub db: Option<VmStorage<StorageTransaction<GenesisDatabase>>>,
     pub instruction: Instruction,
+    pub pre_instruction_hook: Option<PreInstructionHook>,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
@@ -138,6 +148,7 @@ pub struct VmBenchPrepared {
         Script,
     >,
     pub instruction: Instruction,
+    pub pre_instruction_hook: Option<PreInstructionHook>,
     pub diff: diff::Diff<diff::InitialVmState>,
 }
 
@@ -177,6 +188,7 @@ impl VmBench {
             witnesses: vec![],
             db: None,
             instruction,
+            pre_instruction_hook: None,
             prepare_call: None,
             dummy_contract: None,
             contract_code: None,
@@ -361,6 +373,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_pre_instruction_hook(mut self, hook: PreInstructionHook) -> Self {
+        self.pre_instruction_hook = Some(hook);
+        self
+    }
+
     pub fn prepare(self) -> anyhow::Result<VmBenchPrepared> {
         self.try_into()
     }
@@ -385,6 +402,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             witnesses,
             db,
             instruction,
+            pre_instruction_hook,
             prepare_call,
             dummy_contract,
             contract_code,
@@ -563,6 +581,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         Ok(Self {
             vm,
             instruction,
+            pre_instruction_hook,
             diff,
         })
     }
