@@ -60,7 +60,7 @@ rustup target add wasm32-unknown-unknown
 ```
 
 
-## Running a Ignition node
+## Running an Ignition node
 
 If you want to participate in the Ignition network with your own node you can launch it following these simple commands.
 
@@ -75,9 +75,9 @@ Clone the `fuel-core` repository :
 git clone https://github.com/FuelLabs/fuel-core.git
 ```
 
-Go to the latest release tag for ignition on the `fuel-core` repository :
+Go to the release tag that matches the current Fuel Ignition version listed above:
 ```
-git checkout v0.45.1
+git checkout v0.47.1
 ```
 
 Build your node binary:
