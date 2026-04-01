@@ -492,11 +492,7 @@ where
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(self.clock.now(), block_header);
         if last_height > self.last_height {
-            self.record_block_progress(
-                last_height,
-                last_timestamp,
-                last_block_created,
-            );
+            self.record_block_progress(last_height, last_timestamp, last_block_created);
         }
     }
 
