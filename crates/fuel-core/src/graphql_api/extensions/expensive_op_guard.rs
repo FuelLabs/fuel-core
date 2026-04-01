@@ -103,17 +103,16 @@ impl Extension for ExpensiveOpGuard {
             self.semaphore.available_permits(),
         );
 
-        match is_expensive {
-            true => {
-                self.expensive_execution(
-                    ctx,
-                    operation_name,
-                    next,
-                    expensive_root_field_count,
-                )
-                .await
-            }
-            false => next.run(ctx, operation_name).await,
+        if is_expensive {
+            self.expensive_execution(
+                ctx,
+                operation_name,
+                next,
+                expensive_root_field_count,
+            )
+            .await
+        } else {
+            next.run(ctx, operation_name).await
         }
     }
 }
@@ -146,7 +145,7 @@ impl ExpensiveOpGuard {
         let out = tokio::time::timeout(self.timeout, fut).await;
         tracing::warn!(
             "finished executing in {:?}ns, success: {:?}",
-            starting_time.elapsed().as_nanos(),
+            starting_time.elapsed(),
             out.is_ok(),
         );
 
