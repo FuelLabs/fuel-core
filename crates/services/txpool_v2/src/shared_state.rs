@@ -137,6 +137,23 @@ impl SharedState {
             .map_err(|_| Error::ServiceCommunicationFailed)
     }
 
+    #[cfg(test)]
+    pub async fn assert_integrity(&self, expected_tx_ids: Vec<TxId>) -> Result<(), Error> {
+        let (response_channel, result_receiver) = oneshot::channel();
+
+        self.request_read_sender
+            .send(PoolReadRequest::AssertIntegrity {
+                expected_tx_ids,
+                response_channel,
+            })
+            .await
+            .map_err(|_| Error::ServiceCommunicationFailed)?;
+
+        result_receiver
+            .await
+            .map_err(|_| Error::ServiceCommunicationFailed)
+    }
+
     /// Get a notifier that is notified when new executable transactions are added to the pool.
     pub fn get_new_executable_txs_notifier(&self) -> watch::Receiver<()> {
         self.new_executable_txs_notifier.subscribe()
