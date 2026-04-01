@@ -118,6 +118,18 @@ impl Clone for RedisNode {
     }
 }
 
+/// Uses a set of Redis servers to take ownership of fencing tokens for each epoch and publish
+/// block data.
+///
+/// In steady state, a single block producer should be able to hold the lock indefinitely. If that
+/// producer is shut down, it will release the token and allow another producer to take over.
+///
+/// The code however is designed to be fault tolerant. If a producer fails to release the lock,
+/// there is a TTL on the lock that will allow another producer to take over.
+///
+/// If different producers claim locks on each Redis server, nodes can deterministically
+/// identify the true block producer of any given block. This is done by iterating over each epochs
+/// and finding the highest epoch with a quorum of blocks produced.
 pub struct RedisLeaderLeaseAdapter {
     redis_nodes: Vec<RedisNode>,
     quorum: usize,
