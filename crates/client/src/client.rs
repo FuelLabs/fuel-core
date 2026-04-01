@@ -413,7 +413,14 @@ impl FuelClient {
         }
         let urls = urls
             .iter()
-            .map(|url| Url::parse(url.as_ref()))
+            .map(|url| {
+                let reference = url.as_ref();
+                if !reference.starts_with("http") {
+                    Url::parse(&format!("http://{reference}"))
+                } else {
+                    Url::parse(reference)
+                }
+            })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             transport: FailoverTransport::new(urls)?,

@@ -20,7 +20,6 @@ use std::{
     time::Duration,
 };
 use tempfile::TempDir;
-// Used for writing assertions // Run programs
 
 // Use Jemalloc
 #[global_allocator]
