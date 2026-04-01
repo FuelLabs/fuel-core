@@ -139,7 +139,7 @@ impl SetExtensionsResponse for BTreeMap<String, Value> {
 }
 
 fn block_to_trimmed_string(block_height: BlockHeight) -> String {
-    let mut block_height_str = u32::from(block_height).to_string();
+    let mut block_height_str = block_height.to_string();
 
     // trim leading zeros
     let cut = block_height_str

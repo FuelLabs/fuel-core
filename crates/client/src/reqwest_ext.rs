@@ -21,6 +21,7 @@ use std::{
     future::Future,
     marker::PhantomData,
     pin::Pin,
+    str::FromStr,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -76,13 +77,8 @@ where
     match value {
         None => Ok(None),
         Some(value) => {
-            let parsed = value.parse::<u32>().map_err(|_| {
-                de::Error::invalid_value(
-                    de::Unexpected::Str(&value),
-                    &"a numeric block height string",
-                )
-            })?;
-            Ok(Some(BlockHeight::new(parsed)))
+            let height = BlockHeight::from_str(&value).map_err(de::Error::custom)?;
+            Ok(Some(height))
         }
     }
 }
