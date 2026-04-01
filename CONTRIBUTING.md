@@ -30,6 +30,8 @@ See the [README.md](README.md#system-requirements) for platform specific setup s
 git clone https://github.com/FuelLabs/fuel-core
 ```
 
+If you are new to the codebase, see the [repository structure guide](docs/repository-structure.md) for a quick map of the top-level directories and workspace members.
+
 ### Configuring your Rust toolchain
 
 `rustup` is the official toolchain manager for Rust.
