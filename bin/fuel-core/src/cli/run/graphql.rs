@@ -2,7 +2,24 @@
 
 use std::net;
 
-use fuel_core::fuel_core_graphql_api::DEFAULT_QUERY_COSTS;
+use fuel_core::fuel_core_graphql_api::{
+    DEFAULT_API_REQUEST_TIMEOUT,
+    DEFAULT_ASSEMBLE_TX_DRY_RUN_LIMIT,
+    DEFAULT_ASSEMBLE_TX_ESTIMATE_PREDICATES_LIMIT,
+    DEFAULT_BLOCK_SUBSCRIPTIONS_QUEUE,
+    DEFAULT_DATABASE_BATCH_SIZE,
+    DEFAULT_MAX_CONCURRENT_QUERIES,
+    DEFAULT_MAX_QUERIES_COMPLEXITY,
+    DEFAULT_MAX_QUERIES_DEPTH,
+    DEFAULT_MAX_QUERIES_DIRECTIVES,
+    DEFAULT_MAX_QUERIES_RECURSIVE_DEPTH,
+    DEFAULT_MAX_QUERIES_RESOLVER_RECURSIVE_DEPTH,
+    DEFAULT_QUERY_COSTS,
+    DEFAULT_QUERY_LOG_THRESHOLD_TIME,
+    DEFAULT_REQUEST_BODY_BYTES_LIMIT,
+    DEFAULT_REQUIRED_FUEL_BLOCK_HEIGHT_TIMEOUT,
+    DEFAULT_REQUIRED_FUEL_BLOCK_HEIGHT_TOLERANCE,
+};
 
 #[derive(Debug, Clone, clap::Args)]
 pub struct GraphQLArgs {
@@ -19,67 +36,103 @@ pub struct GraphQLArgs {
     pub graphql_number_of_threads: usize,
 
     /// The size of the batch fetched from the database by GraphQL service.
-    #[clap(long = "graphql-database-batch-size", default_value = "100", env)]
+    #[clap(
+        long = "graphql-database-batch-size",
+        default_value_t = DEFAULT_DATABASE_BATCH_SIZE,
+        env
+    )]
     pub database_batch_size: usize,
 
     /// The size of the queue for block subscriptions.
-    #[clap(long = "block-subscription-queue", default_value = "100", env)]
+    #[clap(
+        long = "block-subscription-queue",
+        default_value_t = DEFAULT_BLOCK_SUBSCRIPTIONS_QUEUE,
+        env
+    )]
     pub block_subscriptions_queue: usize,
 
     /// The max depth of GraphQL queries.
-    #[clap(long = "graphql-max-depth", default_value = "16", env)]
+    #[clap(long = "graphql-max-depth", default_value_t = DEFAULT_MAX_QUERIES_DEPTH, env)]
     pub graphql_max_depth: usize,
 
     /// The max complexity of GraphQL queries.
-    #[clap(long = "graphql-max-complexity", default_value = "80000", env)]
+    #[clap(
+        long = "graphql-max-complexity",
+        default_value_t = DEFAULT_MAX_QUERIES_COMPLEXITY,
+        env
+    )]
     pub graphql_max_complexity: usize,
 
     /// The max recursive depth of GraphQL queries.
-    #[clap(long = "graphql-max-recursive-depth", default_value = "24", env)]
+    #[clap(
+        long = "graphql-max-recursive-depth",
+        default_value_t = DEFAULT_MAX_QUERIES_RECURSIVE_DEPTH,
+        env
+    )]
     pub graphql_max_recursive_depth: usize,
 
     /// The max resolver recursive depth of GraphQL queries.
     #[clap(
         long = "graphql-max-resolver-recursive-depth",
-        default_value = "1",
+        default_value_t = DEFAULT_MAX_QUERIES_RESOLVER_RECURSIVE_DEPTH,
         env
     )]
     pub max_queries_resolver_recursive_depth: usize,
 
     /// The max number of directives in the query.
-    #[clap(long = "graphql-max-directives", default_value = "10", env)]
+    #[clap(
+        long = "graphql-max-directives",
+        default_value_t = DEFAULT_MAX_QUERIES_DIRECTIVES,
+        env
+    )]
     pub max_queries_directives: usize,
 
     /// The max number of concurrent queries.
-    #[clap(long = "graphql-max-concurrent-queries", default_value = "1024", env)]
+    #[clap(
+        long = "graphql-max-concurrent-queries",
+        default_value_t = DEFAULT_MAX_CONCURRENT_QUERIES,
+        env
+    )]
     pub graphql_max_concurrent_queries: usize,
 
     /// The max body limit of the GraphQL query.
     #[clap(
         long = "graphql-request-body-bytes-limit",
-        default_value = "1048576",
+        default_value_t = DEFAULT_REQUEST_BODY_BYTES_LIMIT,
         env
     )]
     pub graphql_request_body_bytes_limit: usize,
 
     /// Time to wait after submitting a query before debug info will be logged about query.
-    #[clap(long = "query-log-threshold-time", default_value = "2s", env)]
+    #[clap(
+        long = "query-log-threshold-time",
+        default_value_t = humantime::Duration::from(DEFAULT_QUERY_LOG_THRESHOLD_TIME),
+        env
+    )]
     pub query_log_threshold_time: humantime::Duration,
 
     /// Timeout before drop the request.
-    #[clap(long = "api-request-timeout", default_value = "30s", env)]
+    #[clap(
+        long = "api-request-timeout",
+        default_value_t = humantime::Duration::from(DEFAULT_API_REQUEST_TIMEOUT),
+        env
+    )]
     pub api_request_timeout: humantime::Duration,
 
     /// The max number how many times script can be executed
     /// during `assemble_tx` GraphQL request.
-    #[clap(long = "assemble-tx-dry-run-limit", default_value = "3", env)]
+    #[clap(
+        long = "assemble-tx-dry-run-limit",
+        default_value_t = DEFAULT_ASSEMBLE_TX_DRY_RUN_LIMIT,
+        env
+    )]
     pub assemble_tx_dry_run_limit: usize,
 
     /// The max number how many times predicate can be estimated
     /// during `assemble_tx` GraphQL request.
     #[clap(
         long = "assemble-tx-estimate-predicates-limit",
-        default_value = "10",
+        default_value_t = DEFAULT_ASSEMBLE_TX_ESTIMATE_PREDICATES_LIMIT,
         env
     )]
     pub assemble_tx_estimate_predicates_limit: usize,
@@ -89,7 +142,7 @@ pub struct GraphQLArgs {
     /// this tolerance.
     #[clap(
         long = "graphql-required-block-height-tolerance",
-        default_value = "10",
+        default_value_t = DEFAULT_REQUIRED_FUEL_BLOCK_HEIGHT_TOLERANCE,
         env
     )]
     pub required_fuel_block_height_tolerance: u32,
@@ -98,7 +151,9 @@ pub struct GraphQLArgs {
     /// of a graphql request.
     #[clap(
         long = "graphql-required-block-height-min-timeout-seconds",
-        default_value = "30s",
+        default_value_t = humantime::Duration::from(
+            DEFAULT_REQUIRED_FUEL_BLOCK_HEIGHT_TIMEOUT
+        ),
         env
     )]
     pub required_fuel_block_height_timeout: humantime::Duration,
@@ -276,4 +331,73 @@ pub struct QueryCosts {
         env
     )]
     pub da_compressed_block_read: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[derive(Debug, Parser)]
+    struct Command {
+        #[clap(flatten)]
+        graphql: GraphQLArgs,
+    }
+
+    #[test]
+    fn default_args_match_shared_graphql_defaults() {
+        let args = Command::try_parse_from([""]).unwrap().graphql;
+
+        assert_eq!(args.database_batch_size, DEFAULT_DATABASE_BATCH_SIZE);
+        assert_eq!(
+            args.block_subscriptions_queue,
+            DEFAULT_BLOCK_SUBSCRIPTIONS_QUEUE
+        );
+        assert_eq!(args.graphql_max_depth, DEFAULT_MAX_QUERIES_DEPTH);
+        assert_eq!(
+            args.graphql_max_complexity,
+            DEFAULT_MAX_QUERIES_COMPLEXITY
+        );
+        assert_eq!(
+            args.graphql_max_recursive_depth,
+            DEFAULT_MAX_QUERIES_RECURSIVE_DEPTH
+        );
+        assert_eq!(
+            args.max_queries_resolver_recursive_depth,
+            DEFAULT_MAX_QUERIES_RESOLVER_RECURSIVE_DEPTH
+        );
+        assert_eq!(args.max_queries_directives, DEFAULT_MAX_QUERIES_DIRECTIVES);
+        assert_eq!(
+            args.graphql_max_concurrent_queries,
+            DEFAULT_MAX_CONCURRENT_QUERIES
+        );
+        assert_eq!(
+            args.graphql_request_body_bytes_limit,
+            DEFAULT_REQUEST_BODY_BYTES_LIMIT
+        );
+        assert_eq!(
+            std::time::Duration::from(args.query_log_threshold_time),
+            DEFAULT_QUERY_LOG_THRESHOLD_TIME
+        );
+        assert_eq!(
+            std::time::Duration::from(args.api_request_timeout),
+            DEFAULT_API_REQUEST_TIMEOUT
+        );
+        assert_eq!(
+            args.assemble_tx_dry_run_limit,
+            DEFAULT_ASSEMBLE_TX_DRY_RUN_LIMIT
+        );
+        assert_eq!(
+            args.assemble_tx_estimate_predicates_limit,
+            DEFAULT_ASSEMBLE_TX_ESTIMATE_PREDICATES_LIMIT
+        );
+        assert_eq!(
+            args.required_fuel_block_height_tolerance,
+            DEFAULT_REQUIRED_FUEL_BLOCK_HEIGHT_TOLERANCE
+        );
+        assert_eq!(
+            std::time::Duration::from(args.required_fuel_block_height_timeout),
+            DEFAULT_REQUIRED_FUEL_BLOCK_HEIGHT_TIMEOUT
+        );
+    }
 }
