@@ -255,8 +255,8 @@ impl GasCosts {
         self.0.srli()
     }
 
-    pub fn srw(&self) -> Word {
-        self.0.srw()
+    pub fn srw(&self) -> Option<Word> {
+        self.0.srw().ok()
     }
 
     pub fn sub(&self) -> Word {
@@ -271,8 +271,8 @@ impl GasCosts {
         self.0.sw()
     }
 
-    pub fn sww(&self) -> Word {
-        self.0.sww()
+    pub fn sww(&self) -> Option<Word> {
+        self.0.sww().ok()
     }
 
     pub fn time(&self) -> Word {
@@ -422,20 +422,20 @@ impl GasCosts {
         self.0.s256().into()
     }
 
-    pub fn scwq(&self) -> DependentCost {
-        self.0.scwq().into()
+    pub fn scwq(&self) -> Option<DependentCost> {
+        self.0.scwq().ok().map(Into::into)
     }
 
     pub fn smo(&self) -> DependentCost {
         self.0.smo().into()
     }
 
-    pub fn srwq(&self) -> DependentCost {
-        self.0.srwq().into()
+    pub fn srwq(&self) -> Option<DependentCost> {
+        self.0.srwq().ok().map(Into::into)
     }
 
-    pub fn swwq(&self) -> DependentCost {
-        self.0.swwq().into()
+    pub fn swwq(&self) -> Option<DependentCost> {
+        self.0.swwq().ok().map(Into::into)
     }
 
     pub fn contract_root(&self) -> DependentCost {

@@ -5,6 +5,7 @@ use fuel_core_storage::{
 };
 use fuel_core_types::{
     blockchain::{
+        SealedBlock,
         block::Block,
         consensus::Consensus,
         header::BlockHeader,
@@ -64,8 +65,12 @@ pub trait BlockImporter: Send + Sync {
         &self,
         result: UncommittedImportResult<Changes>,
     ) -> anyhow::Result<()>;
+    async fn execute_and_commit(&self, block: SealedBlock) -> anyhow::Result<()>;
 
     fn block_stream(&self) -> BoxStream<BlockImportInfo>;
+
+    /// Returns the latest committed block height from the database.
+    fn latest_block_height(&self) -> anyhow::Result<Option<BlockHeight>>;
 }
 
 #[async_trait::async_trait]
@@ -111,10 +116,20 @@ pub trait SyncPort: Send + Sync {
     async fn sync_with_peers(&mut self) -> anyhow::Result<()>;
 }
 
+#[derive(Clone, Debug)]
+pub enum LeaderState {
+    UnreconciledBlocks(Vec<SealedBlock>),
+    ReconciledLeader,
+    ReconciledFollower,
+}
+
 #[async_trait::async_trait]
-pub trait LeaderLeasePort: Send + Sync {
-    async fn can_produce_block(&self, height: BlockHeight) -> anyhow::Result<bool>;
-    async fn release_lease(&self) -> anyhow::Result<()>;
+#[cfg_attr(test, mockall::automock)]
+pub trait BlockReconciliationReadPort: Send + Sync {
+    async fn leader_state(&self, next_height: BlockHeight)
+    -> anyhow::Result<LeaderState>;
+
+    async fn release(&self) -> anyhow::Result<()>;
 }
 
 pub trait PredefinedBlocks: Send + Sync {

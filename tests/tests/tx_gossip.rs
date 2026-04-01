@@ -101,7 +101,19 @@ async fn test_tx_gossiping() {
         .await
         .expect("Should await transaction notification in time");
 
-    let response = client_two.transaction(&tx_id).await.unwrap();
+    // The subscription event may fire slightly before the transaction is
+    // committed to the validator's storage, so retry until it appears.
+    let response = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let r = client_two.transaction(&tx_id).await.unwrap();
+            if r.is_some() {
+                return r;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    })
+    .await
+    .expect("Transaction should be visible on validator within timeout");
     assert!(response.is_some());
 }
 

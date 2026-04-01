@@ -114,7 +114,6 @@ enum BlockVersion {
 	V1
 }
 
-
 """
 Breakpoint, defined as a tuple of contract ID and relative PC offset inside it
 """
@@ -390,7 +389,6 @@ enum FeeParametersVersion {
 	V1
 }
 
-
 type GasCosts {
 	version: GasCostsVersion!
 	add: U64!
@@ -458,11 +456,11 @@ type GasCosts {
 	slli: U64!
 	srl: U64!
 	srli: U64!
-	srw: U64!
+	srw: U64
 	sub: U64!
 	subi: U64!
 	sw: U64!
-	sww: U64!
+	sww: U64
 	time: U64!
 	tr: U64!
 	tro: U64!
@@ -503,11 +501,15 @@ type GasCosts {
 	meq: DependentCost!
 	retd: DependentCost!
 	s256: DependentCost!
-	scwq: DependentCost!
+	scwq: DependentCost
 	smo: DependentCost!
-	srwq: DependentCost!
-	swwq: DependentCost!
+	srwq: DependentCost
+	swwq: DependentCost
 	epar: DependentCost
+	storageReadCold: DependentCost
+	storageReadHot: DependentCost
+	storageWrite: DependentCost
+	storageClear: DependentCost
 	contractRoot: DependentCost!
 	stateRoot: DependentCost!
 	vmInitialization: DependentCost!
@@ -617,7 +619,6 @@ type HeavyOperation {
 
 scalar HexString
 
-
 type IndexationFlags {
 	"""
 	Is balances indexation enabled
@@ -666,7 +667,6 @@ type InputMessage {
 	predicate: HexString!
 	predicateData: HexString!
 }
-
 
 type LatestGasPrice {
 	gasPrice: U64!
@@ -1271,10 +1271,12 @@ type ScriptParameters {
 	version: ScriptParametersVersion!
 	maxScriptLength: U64!
 	maxScriptDataLength: U64!
+	maxStorageSlotLength: U64!
 }
 
 enum ScriptParametersVersion {
 	V1
+	V2
 }
 
 scalar Signature
@@ -1322,7 +1324,6 @@ type StorageSlot {
 	key: Bytes32!
 	value: HexString!
 }
-
 
 scalar SubId
 
@@ -1523,9 +1524,21 @@ type VariableOutput {
 	assetId: AssetId!
 }
 
+"""
+Marks an element of a GraphQL schema as no longer supported.
+"""
 directive @deprecated(reason: String = "No longer supported") on FIELD_DEFINITION | ARGUMENT_DEFINITION | INPUT_FIELD_DEFINITION | ENUM_VALUE
+"""
+Directs the executor to include this field or fragment only when the `if` argument is true.
+"""
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+"""
+Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)
+"""
 directive @oneOf on INPUT_OBJECT
+"""
+Directs the executor to skip this field or fragment when the `if` argument is true.
+"""
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 schema {
 	query: Query

@@ -76,6 +76,9 @@ async fn can_manually_produce_block(
     importer
         .expect_block_stream()
         .returning(|| Box::pin(tokio_stream::pending()));
+    importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
 
     let mut producer = MockBlockProducer::default();
     producer

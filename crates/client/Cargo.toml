@@ -48,9 +48,7 @@ fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 futures = { workspace = true, optional = true }
 hex = { workspace = true }
 # Included to enable webpki in the eventsource client
-hyper-rustls = { version = "0.24", features = [
-    "webpki-tokio",
-], optional = true }
+hyper-rustls = { version = "0.24", features = ["webpki-tokio"], optional = true }
 itertools = { workspace = true }
 postcard = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
@@ -69,9 +67,5 @@ schemafy_lib = { version = "0.5" }
 serde_json = { version = "1.0", features = ["raw_value"] }
 
 [dev-dependencies]
-fuel-core-types = { workspace = true, features = [
-    "serde",
-    "std",
-    "test-helpers",
-] }
+fuel-core-types = { workspace = true, features = ["serde", "std", "test-helpers"] }
 insta = { workspace = true }
