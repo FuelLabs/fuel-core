@@ -131,23 +131,36 @@ impl Clone for RedisNode {
 /// identify the true block producer of any given block. This is done by iterating over each epochs
 /// and finding the highest epoch with a quorum of blocks produced.
 pub struct RedisLeaderLeaseAdapter {
-    /// list of all redis nodes to connect to
+    /// Redis nodes that participate in leader election and block reconciliation
     redis_nodes: Vec<RedisNode>,
-    /// number of nodes for which a lock needs to be held to consider the producer legitimate
+    /// Minimum number of Redis nodes that must agree for ownership or writes to be accepted
     quorum: usize,
+    /// Redis key that stores the current lease owner id with a TTL
     lease_key: String,
+    /// Redis key that stores the monotonically increasing fencing token
     epoch_key: String,
+    /// Redis stream key that stores published blocks for reconciliation
     block_stream_key: String,
-    lease_owner_token: String,
-    drop_release_guard: std::sync::Arc<()>,
+    /// Unique id for this adapter instance, written into the lease key when it acquires leadership
+    lease_owner_id: String,
+    /// Locally cached fencing token currently used for block writes.
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
+    /// Lease TTL applied to the Redis lease key and renewed on successful writes.
     lease_ttl_millis: u64,
+    /// Safety margin subtracted from the nominal TTL when evaluating remaining lease validity.
     lease_drift_millis: u64,
+    /// Timeout used for individual Redis node operations.
     node_timeout: Duration,
-    retry_delay_millis: u64,
-    max_retry_delay_offset_millis: u64,
-    max_attempts: usize,
+    /// Approximate upper bound for the Redis block stream and per-round reconciliation reads.
     stream_max_len: u32,
+    /// Base delay before retrying lease acquisition after a failed attempt.
+    retry_delay_millis: u64,
+    /// Random jitter added to the retry delay to reduce election collisions.
+    max_retry_delay_offset_millis: u64,
+    /// Maximum number of lease acquisition attempts per election round.
+    max_attempts: usize,
+    /// Ensures only the last live clone attempts lease release during drop.
+    drop_release_guard: std::sync::Arc<()>,
 }
 
 impl Clone for RedisLeaderLeaseAdapter {
@@ -158,16 +171,16 @@ impl Clone for RedisLeaderLeaseAdapter {
             lease_key: self.lease_key.clone(),
             epoch_key: self.epoch_key.clone(),
             block_stream_key: self.block_stream_key.clone(),
-            lease_owner_token: self.lease_owner_token.clone(),
-            drop_release_guard: self.drop_release_guard.clone(),
+            lease_owner_id: self.lease_owner_id.clone(),
             current_epoch_token: self.current_epoch_token.clone(),
             lease_ttl_millis: self.lease_ttl_millis,
             lease_drift_millis: self.lease_drift_millis,
             node_timeout: self.node_timeout,
+            stream_max_len: self.stream_max_len,
             retry_delay_millis: self.retry_delay_millis,
             max_retry_delay_offset_millis: self.max_retry_delay_offset_millis,
             max_attempts: self.max_attempts,
-            stream_max_len: self.stream_max_len,
+            drop_release_guard: self.drop_release_guard.clone(),
         }
     }
 }
@@ -228,7 +241,7 @@ impl RedisLeaderLeaseAdapter {
         let max_retry_delay_offset_millis =
             u64::try_from(max_retry_delay_offset.as_millis())?;
         let max_attempts = usize::try_from(max_attempts)?.max(1);
-        let lease_owner_token = uuid::Uuid::new_v4().to_string();
+        let lease_owner_id = uuid::Uuid::new_v4().to_string();
         let epoch_key = format!("{lease_key}:epoch:token");
         let block_stream_key = format!("{lease_key}:block:stream");
         let lease_drift_millis = lease_ttl_millis
@@ -241,16 +254,16 @@ impl RedisLeaderLeaseAdapter {
             lease_key,
             epoch_key,
             block_stream_key,
-            lease_owner_token,
-            drop_release_guard: std::sync::Arc::new(()),
+            lease_owner_id,
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
             lease_ttl_millis,
             lease_drift_millis,
             node_timeout,
+            stream_max_len,
             retry_delay_millis,
             max_retry_delay_offset_millis,
             max_attempts,
-            stream_max_len,
+            drop_release_guard: std::sync::Arc::new(()),
         })
     }
 
@@ -293,7 +306,7 @@ impl RedisLeaderLeaseAdapter {
             self.node_timeout,
             redis::Script::new(CHECK_LEASE_OWNER_SCRIPT)
                 .key(&self.lease_key)
-                .arg(&self.lease_owner_token)
+                .arg(&self.lease_owner_id)
                 .invoke_async::<i32>(&mut connection),
         )
         .await;
@@ -323,7 +336,7 @@ impl RedisLeaderLeaseAdapter {
             redis::Script::new(PROMOTE_LEADER_SCRIPT)
                 .key(&self.lease_key)
                 .key(&self.epoch_key)
-                .arg(&self.lease_owner_token)
+                .arg(&self.lease_owner_id)
                 .arg(self.lease_ttl_millis)
                 .invoke_async::<u64>(&mut connection),
         )
@@ -353,7 +366,7 @@ impl RedisLeaderLeaseAdapter {
             self.node_timeout,
             redis::Script::new(RELEASE_LOCK_SCRIPT)
                 .key(&self.lease_key)
-                .arg(&self.lease_owner_token)
+                .arg(&self.lease_owner_id)
                 .invoke_async::<i32>(&mut connection),
         )
         .await;
@@ -521,7 +534,7 @@ impl RedisLeaderLeaseAdapter {
     async fn release_lease_on_client(
         redis_client: redis::Client,
         lease_key: String,
-        lease_owner_token: String,
+        lease_owner_id: String,
         node_timeout: Duration,
     ) {
         let connection = timeout(
@@ -538,7 +551,7 @@ impl RedisLeaderLeaseAdapter {
             node_timeout,
             redis::Script::new(RELEASE_LOCK_SCRIPT)
                 .key(lease_key)
-                .arg(lease_owner_token)
+                .arg(lease_owner_id)
                 .invoke_async::<i32>(&mut connection),
         )
         .await;
@@ -547,7 +560,7 @@ impl RedisLeaderLeaseAdapter {
     async fn release_lease_on_clients(
         redis_clients: Vec<redis::Client>,
         lease_key: String,
-        lease_owner_token: String,
+        lease_owner_id: String,
         node_timeout: Duration,
     ) {
         let _ =
@@ -555,7 +568,7 @@ impl RedisLeaderLeaseAdapter {
                 Self::release_lease_on_client(
                     redis_client,
                     lease_key.clone(),
-                    lease_owner_token.clone(),
+                    lease_owner_id.clone(),
                     node_timeout,
                 )
             }))
@@ -565,7 +578,7 @@ impl RedisLeaderLeaseAdapter {
     fn release_lease_on_clients_sync(
         redis_clients: Vec<redis::Client>,
         lease_key: String,
-        lease_owner_token: String,
+        lease_owner_id: String,
     ) {
         redis_clients.into_iter().for_each(|redis_client| {
             let Ok(mut connection) = redis_client.get_connection() else {
@@ -573,7 +586,7 @@ impl RedisLeaderLeaseAdapter {
             };
             let _ = redis::Script::new(RELEASE_LOCK_SCRIPT)
                 .key(&lease_key)
-                .arg(&lease_owner_token)
+                .arg(&lease_owner_id)
                 .invoke::<i32>(&mut connection);
         });
     }
@@ -942,7 +955,7 @@ impl RedisLeaderLeaseAdapter {
             .key(&self.epoch_key)
             .key(&self.lease_key)
             .arg(epoch)
-            .arg(&self.lease_owner_token)
+            .arg(&self.lease_owner_id)
             .arg(block_height)
             .arg(block_data)
             .arg(self.lease_ttl_millis)
@@ -1179,7 +1192,7 @@ impl Drop for RedisLeaderLeaseAdapter {
                 Self::release_lease_on_clients(
                     redis_clients,
                     self.lease_key.clone(),
-                    self.lease_owner_token.clone(),
+                    self.lease_owner_id.clone(),
                     self.node_timeout,
                 ),
             );
@@ -1194,7 +1207,7 @@ impl Drop for RedisLeaderLeaseAdapter {
         Self::release_lease_on_clients_sync(
             redis_clients,
             self.lease_key.clone(),
-            self.lease_owner_token.clone(),
+            self.lease_owner_id.clone(),
         );
     }
 }
@@ -1841,7 +1854,7 @@ mod tests {
             "Adapter should acquire lease"
         );
         let adapter_clone = adapter.clone();
-        let owner_token = adapter.lease_owner_token.clone();
+        let owner_id = adapter.lease_owner_id.clone();
 
         // when
         drop(adapter_clone);
@@ -1852,7 +1865,7 @@ mod tests {
             .iter()
             .filter(|redis_url| {
                 read_lease_owner(redis_url, &lease_key).as_deref()
-                    == Some(owner_token.as_str())
+                    == Some(owner_id.as_str())
             })
             .count();
         assert!(
@@ -1895,7 +1908,7 @@ mod tests {
             .iter()
             .filter(|redis_url| {
                 read_lease_owner(redis_url, &lease_key).as_deref()
-                    == Some(adapter.lease_owner_token.as_str())
+                    == Some(adapter.lease_owner_id.as_str())
             })
             .count();
 
@@ -1962,7 +1975,7 @@ mod tests {
             .iter()
             .filter(|redis_url| {
                 read_lease_owner(redis_url, &lease_key).as_deref()
-                    == Some(second_adapter.lease_owner_token.as_str())
+                    == Some(second_adapter.lease_owner_id.as_str())
             })
             .count();
 
@@ -2123,7 +2136,7 @@ mod tests {
             .iter()
             .filter(|redis_url| {
                 read_lease_owner(redis_url, &lease_key).as_deref()
-                    == Some(adapter.lease_owner_token.as_str())
+                    == Some(adapter.lease_owner_id.as_str())
             })
             .count();
 
@@ -2855,7 +2868,7 @@ mod tests {
             let mut conn = client.get_connection().expect("conn");
             let _: () = redis::cmd("SET")
                 .arg(&lease_key)
-                .arg(&candidate_b.lease_owner_token)
+                .arg(&candidate_b.lease_owner_id)
                 .arg("PX")
                 .arg(5000u64)
                 .query(&mut conn)
@@ -2874,11 +2887,11 @@ mod tests {
 
         // Verify A owns nodes A,B but NOT node C
         let owns_a = read_lease_owner(&redis_a.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+            == Some(adapter_a.lease_owner_id.clone());
         let owns_b = read_lease_owner(&redis_b.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+            == Some(adapter_a.lease_owner_id.clone());
         let owns_c = read_lease_owner(&redis_c.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+            == Some(adapter_a.lease_owner_id.clone());
         assert!(owns_a && owns_b, "A should own nodes A and B");
         assert!(!owns_c, "A should NOT own node C (held by B)");
 
@@ -2898,7 +2911,7 @@ mod tests {
 
         // then — A should now own node C too
         let owns_c_after = read_lease_owner(&redis_c.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+            == Some(adapter_a.lease_owner_id.clone());
         assert!(owns_c_after, "Lock expansion should have acquired node C");
 
         // Verify writes now go to all 3 nodes
@@ -2943,7 +2956,7 @@ mod tests {
             // Simulate B's promote_leader.lua on node C: SET NX + INCR
             let _: () = redis::cmd("SET")
                 .arg(&lease_key)
-                .arg(&candidate_b.lease_owner_token)
+                .arg(&candidate_b.lease_owner_id)
                 .arg("PX")
                 .arg(5000u64)
                 .query(&mut conn)
