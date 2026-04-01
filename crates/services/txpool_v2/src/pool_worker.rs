@@ -19,6 +19,8 @@ use std::{
     sync::Arc,
     time::SystemTime,
 };
+#[cfg(test)]
+use std::collections::HashSet;
 use tokio::{
     sync::{
         broadcast,
@@ -229,6 +231,11 @@ pub(super) enum PoolReadRequest {
         max_txs: usize,
         response_channel: oneshot::Sender<Vec<TxId>>,
     },
+    #[cfg(test)]
+    AssertIntegrity {
+        expected_tx_ids: Vec<TxId>,
+        response_channel: oneshot::Sender<()>,
+    },
 }
 
 #[allow(clippy::upper_case_acronyms)]
@@ -339,6 +346,13 @@ where
                             response_channel,
                         } => {
                             self.get_non_existing_txs(tx_ids, response_channel);
+                        }
+                        #[cfg(test)]
+                        PoolReadRequest::AssertIntegrity {
+                            expected_tx_ids,
+                            response_channel,
+                        } => {
+                            self.assert_integrity(expected_tx_ids, response_channel);
                         }
                     }
                 }
@@ -596,6 +610,19 @@ where
             .collect();
         if response_channel.send(non_existing_txs).is_err() {
             tracing::error!("Failed to send non existing txs");
+        }
+    }
+
+    #[cfg(test)]
+    fn assert_integrity(
+        &mut self,
+        expected_tx_ids: Vec<TxId>,
+        response_channel: oneshot::Sender<()>,
+    ) {
+        self.pool
+            .assert_integrity(expected_tx_ids.into_iter().collect::<HashSet<_>>());
+        if response_channel.send(()).is_err() {
+            tracing::error!("Failed to send assert_integrity result");
         }
     }
 
