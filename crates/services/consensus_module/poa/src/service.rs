@@ -492,10 +492,23 @@ where
         let (last_height, last_timestamp, last_block_created) =
             Self::extract_block_info(self.clock.now(), block_header);
         if last_height > self.last_height {
-            self.last_height = last_height;
-            self.last_timestamp = last_timestamp;
-            self.last_block_created = last_block_created;
+            self.record_block_progress(
+                last_height,
+                last_timestamp,
+                last_block_created,
+            );
         }
+    }
+
+    fn record_block_progress(
+        &mut self,
+        height: BlockHeight,
+        timestamp: Tai64,
+        created_at: Instant,
+    ) {
+        self.last_height = height;
+        self.last_timestamp = timestamp;
+        self.last_block_created = created_at;
     }
 
     async fn ensure_synced(
@@ -612,6 +625,7 @@ where
         {
             LeaderState::ReconciledFollower => {
                 sleep_until(deadline).await;
+                self.last_block_created = deadline;
                 Ok(TaskNextAction::Continue)
             }
             LeaderState::ReconciledLeader => {
@@ -630,8 +644,11 @@ where
 
                     match self.block_importer.execute_and_commit(block).await {
                         Ok(()) => {
-                            self.last_height = block_height;
-                            self.last_timestamp = block_time;
+                            self.record_block_progress(
+                                block_height,
+                                block_time,
+                                deadline,
+                            );
                         }
                         Err(err) => {
                             // Re-sync from the DB and skip — the block
