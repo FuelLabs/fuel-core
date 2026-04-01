@@ -29,9 +29,7 @@ fault-proving = [
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 enum-iterator = { workspace = true }
-fuel-core-chain-config = { workspace = true, features = [
-  "test-helpers",
-], optional = true }
+fuel-core-chain-config = { workspace = true, features = ["test-helpers"], optional = true }
 fuel-core-compression = { workspace = true }
 fuel-core-metrics = { workspace = true }
 fuel-core-services = { workspace = true }

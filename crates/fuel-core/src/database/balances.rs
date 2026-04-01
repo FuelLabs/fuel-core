@@ -61,7 +61,7 @@ where
     ) -> Result<(), StorageError> {
         balances
             .into_iter()
-            .group_by(|s| *s.key.contract_id())
+            .chunk_by(|s| *s.key.contract_id())
             .into_iter()
             .try_for_each(|(contract_id, entries)| {
                 self.init_contract_balances(

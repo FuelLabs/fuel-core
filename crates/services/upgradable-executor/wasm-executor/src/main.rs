@@ -13,12 +13,13 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use crate as fuel_core_wasm_executor;
-use crate::utils::{
-    InputDeserializationType,
-    WasmDeserializationBlockTypes,
-    convert_to_v1_execution_result,
-};
+#[cfg(feature = "std")]
+use fuel_core_types_v0 as _;
+#[cfg(test)]
+use proptest as _;
+use serde as _;
+use serde_json as _;
+
 use fuel_core_executor::executor::ExecutionInstance;
 use fuel_core_types::{
     blockchain::block::Block,
@@ -28,18 +29,19 @@ use fuel_core_types::{
         executor::Error as ExecutorError,
     },
 };
-use fuel_core_wasm_executor::{
-    relayer::WasmRelayer,
-    storage::WasmStorage,
-    tx_source::WasmTxSource,
-    utils::{
-        ReturnType,
-        pack_ptr_and_len,
-    },
+use fuel_core_wasm_executor::utils::{
+    InputDeserializationType,
+    ReturnType,
+    WasmDeserializationBlockTypes,
+    convert_to_v1_execution_result,
+    pack_ptr_and_len,
 };
 use futures::FutureExt;
 use new_tx_waiter::NewTxWaiter;
 use preconfirmation_sender::PreconfirmationSender;
+use relayer::WasmRelayer;
+use storage::WasmStorage;
+use tx_source::WasmTxSource;
 
 mod ext;
 mod new_tx_waiter;
@@ -47,7 +49,6 @@ mod preconfirmation_sender;
 mod relayer;
 mod storage;
 mod tx_source;
-pub mod utils;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn execute(input_len: u32) -> u64 {

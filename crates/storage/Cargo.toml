@@ -4,13 +4,7 @@ categories = ["cryptography::cryptocurrencies"]
 description = "Storage types and primitives used by Fuel core protocol."
 edition = { workspace = true }
 homepage = { workspace = true }
-keywords = [
-    "blockchain",
-    "cryptocurrencies",
-    "fuel-client",
-    "fuel-core",
-    "fuel-storage",
-]
+keywords = ["blockchain", "cryptocurrencies", "fuel-client", "fuel-core", "fuel-storage"]
 license = { workspace = true }
 name = "fuel-core-storage"
 repository = { workspace = true }
@@ -28,9 +22,7 @@ fault-proving = ["fuel-core-types/fault-proving"]
 anyhow = { workspace = true }
 derive_more = { workspace = true }
 enum-iterator = { workspace = true }
-fuel-core-types = { workspace = true, default-features = false, features = [
-  "serde",
-] }
+fuel-core-types = { workspace = true, default-features = false, features = ["serde"] }
 fuel-vm-private = { workspace = true, default-features = false }
 impl-tools = "0.10.3"
 itertools = { workspace = true, features = ["use_alloc"] }
@@ -46,9 +38,5 @@ strum_macros = { workspace = true }
 
 [dev-dependencies]
 fuel-core-storage = { path = ".", features = ["test-helpers"] }
-fuel-core-types = { workspace = true, default-features = false, features = [
-  "serde",
-  "random",
-  "test-helpers",
-] }
+fuel-core-types = { workspace = true, default-features = false, features = ["serde", "random", "test-helpers"] }
 test-case = { workspace = true }

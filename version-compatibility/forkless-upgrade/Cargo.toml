@@ -14,17 +14,17 @@ hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
-# pin to prevent compilation error from 1.13.6
-yamux = "=0.13.5"
+cynic = { version = "=3.12.0" }
 
 # Neutral deps
-fuel-core = { path = "../../crates/fuel-core", features = ["test-helpers"] }
+fuel-core = { path = "../../crates/fuel-core", default-features = false, features = ["test-helpers"] }
 fuel-core-trace = { path = "../../crates/trace" }
 fuel-crypto = { version = "0.63.0" }
 fuel-tx = { version = "0.63.0", features = ["random"] }
 
 # Latest fuel-core
-latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", features = [
+latest-fuel-core-bin = { path = "../../bin/fuel-core", package = "fuel-core-bin", default-features = false, features = [
+  "relayer",
   "parquet",
   "p2p",
 ] }

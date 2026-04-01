@@ -21,9 +21,10 @@
         }
       },
       "script_params": {
-        "V1": {
+        "V2": {
           "max_script_length": 102400,
-          "max_script_data_length": 102400
+          "max_script_data_length": 102400,
+          "max_storage_slot_length": 1048576
         }
       },
       "contract_params": {
@@ -40,261 +41,265 @@
       },
       "chain_id": 0,
       "gas_costs": {
-        "V6": {
-          "add": 2,
-          "addi": 2,
+        "V7": {
+          "add": 1,
+          "addi": 1,
           "and": 2,
-          "andi": 2,
-          "bal": 598,
+          "andi": 1,
+          "bal": 429,
           "bhei": 2,
-          "bhsh": 132,
-          "burn": 1228,
+          "bhsh": 89,
+          "burn": 867,
           "cb": 2,
-          "cfsi": 2,
-          "div": 2,
-          "divi": 2,
-          "eck1": 3424,
-          "ecr1": 45146,
-          "eq": 2,
+          "cfsi": 1,
+          "div": 1,
+          "divi": 1,
+          "eck1": 2381,
+          "ecr1": 31208,
+          "eq": 1,
           "exp": 2,
           "expi": 2,
-          "flag": 2,
-          "gm": 2,
+          "flag": 1,
+          "gm": 1,
           "gt": 2,
           "gtf": 3,
-          "ji": 2,
+          "ji": 1,
           "jmp": 2,
           "jne": 2,
-          "jnei": 2,
-          "jnzi": 2,
-          "jmpf": 2,
-          "jmpb": 2,
-          "jnzf": 2,
-          "jnzb": 2,
-          "jnef": 2,
-          "jneb": 2,
-          "lb": 2,
-          "log": 182,
-          "lt": 2,
-          "lw": 2,
-          "mint": 1886,
+          "jnei": 1,
+          "jnzi": 1,
+          "jmpf": 1,
+          "jmpb": 1,
+          "jnzf": 1,
+          "jnzb": 1,
+          "jnef": 1,
+          "jneb": 1,
+          "lb": 1,
+          "log": 123,
+          "lt": 1,
+          "lw": 1,
+          "mint": 1159,
           "mlog": 2,
           "mod": 2,
-          "modi": 2,
-          "move": 2,
-          "movi": 2,
-          "mroo": 5,
-          "mul": 2,
-          "muli": 2,
-          "mldv": 4,
-          "niop": 2,
+          "modi": 1,
+          "move": 1,
+          "movi": 1,
+          "mroo": 4,
+          "mul": 1,
+          "muli": 1,
+          "mldv": 3,
+          "niop": 1,
           "noop": 1,
-          "not": 2,
-          "or": 2,
-          "ori": 2,
-          "poph": 5,
-          "popl": 5,
-          "pshh": 5,
-          "pshl": 5,
-          "ret_contract": 105,
-          "rvrt_contract": 98,
+          "not": 1,
+          "or": 1,
+          "ori": 1,
+          "poph": 3,
+          "popl": 3,
+          "pshh": 3,
+          "pshl": 3,
+          "ret_contract": 64,
+          "rvrt_contract": 65,
           "sb": 2,
           "sll": 2,
-          "slli": 2,
+          "slli": 1,
           "srl": 2,
-          "srli": 2,
-          "srw": 503,
+          "srli": 1,
           "sub": 2,
-          "subi": 2,
+          "subi": 1,
           "sw": 2,
-          "sww": 510,
-          "time": 62,
-          "tr": 1642,
-          "tro": 1339,
-          "wdcm": 3,
-          "wqcm": 3,
+          "time": 2,
+          "tr": 891,
+          "tro": 914,
+          "wdcm": 2,
+          "wqcm": 2,
           "wdop": 3,
-          "wqop": 4,
-          "wdml": 4,
-          "wqml": 4,
-          "wddv": 5,
-          "wqdv": 7,
-          "wdmd": 11,
-          "wqmd": 18,
-          "wdam": 10,
-          "wqam": 12,
-          "wdmm": 11,
-          "wqmm": 11,
-          "xor": 2,
-          "xori": 2,
-          "ecop": 12911,
+          "wqop": 3,
+          "wdml": 3,
+          "wqml": 3,
+          "wddv": 4,
+          "wqdv": 5,
+          "wdmd": 8,
+          "wqmd": 13,
+          "wdam": 7,
+          "wqam": 9,
+          "wdmm": 8,
+          "wqmm": 8,
+          "xor": 1,
+          "xori": 1,
+          "ecop": 8976,
           "aloc": {
             "LightOperation": {
               "base": 2,
-              "units_per_gas": 300
+              "units_per_gas": 435
             }
           },
           "bsiz": {
             "LightOperation": {
-              "base": 41,
-              "units_per_gas": 279
+              "base": 30,
+              "units_per_gas": 373
             }
           },
           "bldd": {
             "LightOperation": {
-              "base": 60,
-              "units_per_gas": 96
+              "base": 47,
+              "units_per_gas": 87
             }
           },
           "cfe": {
             "LightOperation": {
               "base": 2,
-              "units_per_gas": 287
+              "units_per_gas": 416
             }
           },
           "cfei": {
             "LightOperation": {
               "base": 2,
-              "units_per_gas": 459
+              "units_per_gas": 654
             }
           },
           "call": {
             "LightOperation": {
-              "base": 1244,
-              "units_per_gas": 43
+              "base": 780,
+              "units_per_gas": 65
             }
           },
           "ccp": {
             "LightOperation": {
-              "base": 108,
-              "units_per_gas": 102
+              "base": 48,
+              "units_per_gas": 88
             }
           },
           "croo": {
             "LightOperation": {
-              "base": 136,
-              "units_per_gas": 2
+              "base": 96,
+              "units_per_gas": 3
             }
           },
           "csiz": {
             "LightOperation": {
-              "base": 46,
-              "units_per_gas": 274
+              "base": 29,
+              "units_per_gas": 372
             }
           },
           "ed19": {
             "LightOperation": {
-              "base": 7430,
-              "units_per_gas": 3
+              "base": 5238,
+              "units_per_gas": 4
             }
           },
           "k256": {
             "LightOperation": {
-              "base": 319,
-              "units_per_gas": 3
+              "base": 30,
+              "units_per_gas": 4
             }
           },
           "ldc": {
             "LightOperation": {
-              "base": 125,
-              "units_per_gas": 92
+              "base": 48,
+              "units_per_gas": 88
             }
           },
           "logd": {
             "LightOperation": {
-              "base": 642,
-              "units_per_gas": 2
+              "base": 442,
+              "units_per_gas": 3
             }
           },
           "mcl": {
             "LightOperation": {
-              "base": 3,
-              "units_per_gas": 625
+              "base": 2,
+              "units_per_gas": 888
             }
           },
           "mcli": {
             "LightOperation": {
-              "base": 3,
-              "units_per_gas": 625
+              "base": 2,
+              "units_per_gas": 888
             }
           },
           "mcp": {
             "LightOperation": {
-              "base": 4,
-              "units_per_gas": 493
+              "base": 3,
+              "units_per_gas": 740
             }
           },
           "mcpi": {
             "LightOperation": {
-              "base": 5,
-              "units_per_gas": 819
+              "base": 4,
+              "units_per_gas": 1023
             }
           },
           "meq": {
             "LightOperation": {
-              "base": 3,
-              "units_per_gas": 608
+              "base": 2,
+              "units_per_gas": 871
             }
           },
           "retd_contract": {
             "LightOperation": {
-              "base": 514,
-              "units_per_gas": 2
+              "base": 347,
+              "units_per_gas": 3
             }
           },
           "s256": {
             "LightOperation": {
-              "base": 52,
-              "units_per_gas": 2
-            }
-          },
-          "scwq": {
-            "HeavyOperation": {
-              "base": 507,
-              "gas_per_unit": 515
+              "base": 36,
+              "units_per_gas": 3
             }
           },
           "smo": {
             "LightOperation": {
-              "base": 4955,
-              "units_per_gas": 2
-            }
-          },
-          "srwq": {
-            "HeavyOperation": {
-              "base": 520,
-              "gas_per_unit": 522
-            }
-          },
-          "swwq": {
-            "HeavyOperation": {
-              "base": 507,
-              "gas_per_unit": 525
+              "base": 3438,
+              "units_per_gas": 3
             }
           },
           "epar": {
             "HeavyOperation": {
-              "base": 188912,
-              "gas_per_unit": 138413
+              "base": 132324,
+              "gas_per_unit": 96693
+            }
+          },
+          "storage_read_cold": {
+            "LightOperation": {
+              "base": 733,
+              "units_per_gas": 31
+            }
+          },
+          "storage_read_hot": {
+            "LightOperation": {
+              "base": 28,
+              "units_per_gas": 33
+            }
+          },
+          "storage_write": {
+            "LightOperation": {
+              "base": 138,
+              "units_per_gas": 126
+            }
+          },
+          "storage_clear": {
+            "HeavyOperation": {
+              "base": 45,
+              "gas_per_unit": 45
             }
           },
           "contract_root": {
             "LightOperation": {
-              "base": 53,
-              "units_per_gas": 1
+              "base": 36,
+              "units_per_gas": 2
             }
           },
           "state_root": {
             "HeavyOperation": {
-              "base": 414,
-              "gas_per_unit": 209
+              "base": 284,
+              "gas_per_unit": 143
             }
           },
           "new_storage_per_byte": 63,
           "vm_initialization": {
             "LightOperation": {
-              "base": 6928,
-              "units_per_gas": 27
+              "base": 4846,
+              "units_per_gas": 39
             }
           }
         }
@@ -305,7 +310,7 @@
       "privileged_address": "9f0e19d6c2a6283a3222426ab2630d35516b1799b503f37b02105bebe1b8a3e9"
     }
   },
-  "genesis_state_transition_version": 32,
+  "genesis_state_transition_version": 33,
   "consensus": {
     "PoAV2": {
       "genesis_signing_key": "e0a9fcde1b73f545252e01b30b50819eb9547d07531fa3df0385c5695736634d",
