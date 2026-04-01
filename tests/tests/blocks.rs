@@ -58,7 +58,6 @@ use std::{
     time::Duration,
 };
 use test_helpers::{
-    client_ext::ClientExt,
     make_tx,
     send_graph_ql_query,
 };
@@ -400,12 +399,6 @@ mod full_block {
             tx::OpaqueTransaction,
         },
     };
-    use fuel_core_executor::executor::max_tx_count;
-    use fuel_core_txpool::config::{
-        HeavyWorkConfig,
-        PoolLimits,
-    };
-    use fuel_core_types::fuel_types::BlockHeight;
     use rand::prelude::StdRng;
 
     #[derive(cynic::QueryFragment, Debug)]

@@ -34,12 +34,14 @@ not_leader_lock = []
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 aws-config = { workspace = true, features = [
     "behavior-version-latest",
 ], optional = true }
 aws-sdk-kms = { workspace = true, optional = true }
 aws-sdk-s3 = { workspace = true }
 clap = { workspace = true }
+cynic = { workspace = true }
 
 fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["p2p", "relayer", "wasm-executor", "test-helpers", "backup"] }
 fuel-core-benches = { path = "../benches" }

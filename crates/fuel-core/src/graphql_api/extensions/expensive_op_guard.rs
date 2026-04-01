@@ -125,10 +125,7 @@ impl ExpensiveOpGuard {
         next: NextExecute<'_>,
         expensive_root_field_count: usize,
     ) -> Response {
-        let permit_count = match u32::try_from(expensive_root_field_count) {
-            Ok(count) => count,
-            Err(_) => u32::MAX,
-        };
+        let permit_count = u32::try_from(expensive_root_field_count).unwrap_or(u32::MAX);
 
         // Concurrency gate (bulkhead)
         let permit = match self.semaphore.clone().try_acquire_many_owned(permit_count) {
