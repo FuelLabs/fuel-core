@@ -2,7 +2,7 @@ use clap::Parser;
 use fuel_core_types::fuel_tx::{
     ConsensusParameters,
     GasCosts,
-    consensus_parameters::gas::GasCostsValuesV6,
+    consensus_parameters::gas::GasCostsValuesV7,
 };
 use serde::{
     Deserialize,
@@ -357,6 +357,114 @@ impl Display for State {
     }
 }
 
+/// Minimum slot size (bytes) included in the linear regression for `swrd` and
+/// `srdd` groups.  Very small slots (< 32 bytes) exhibit disproportionate
+/// overhead and skew the per-byte slope.
+const MIN_SLOT_SIZE_BYTES: u64 = 32;
+
+/// Returns `true` if the data point should be excluded from the regression for
+/// the given group.  Only `swrd_*` and `srdd_*` groups are affected.
+fn skip_small_slot(group_name: &str, slot_size: u64) -> bool {
+    (group_name.starts_with("swrd") || group_name.starts_with("srdd"))
+        && slot_size < MIN_SLOT_SIZE_BYTES
+}
+
+/// Maps each dynamic-storage benchmark group name to the corresponding
+/// `GasCostsValuesV7` field name.  Only the "primary" variants appear here;
+/// the counter-part groups (e.g. `swrd_cold`, `sclr_cold`, `spld_*`) are
+/// used only for sanity checks and are listed in `SANITY_ONLY_GROUPS`.
+const STORAGE_BENCH_REMAPS: &[(&str, &str)] = &[
+    ("srdd_hot", "storage_read_hot"),
+    ("srdd_cold", "storage_read_cold"),
+    ("swrd_hot", "storage_write"),
+    ("sclr_hot", "storage_clear"),
+];
+
+/// Benchmark groups whose results are checked for sanity but are not emitted
+/// as standalone gas-cost fields.
+const SANITY_ONLY_GROUPS: &[&str] = &["swrd_cold", "sclr_cold", "spld_hot", "spld_cold"];
+
+/// Returns a comparable "gas per unit" value for a cost entry.
+/// Higher means more expensive.
+fn cost_per_unit(cost: &Cost) -> f64 {
+    match cost {
+        Cost::Dependent(DependentCost::LightOperation { units_per_gas, .. }) => {
+            1.0 / (*units_per_gas).max(1) as f64
+        }
+        Cost::Dependent(DependentCost::HeavyOperation { gas_per_unit, .. }) => {
+            *gas_per_unit as f64
+        }
+        Cost::Relative(r) => *r as f64,
+    }
+}
+
+/// Runs plausibility checks on the raw (pre-rename) storage cost entries and
+/// prints warnings to stderr for any relationships that look wrong.
+fn sanity_check_storage_costs(costs: &Costs) {
+    // Cold reads must cost more than hot reads (cold goes to backing storage,
+    // hot is an in-memory BTreeMap lookup).
+    if let (Some(cold), Some(hot)) = (costs.0.get("srdd_cold"), costs.0.get("srdd_hot")) {
+        let cold_cpu = cost_per_unit(cold);
+        let hot_cpu = cost_per_unit(hot);
+        if cold_cpu <= hot_cpu {
+            eprintln!(
+                "Warning: storage_read_cold ({cold_cpu:.3} gas/unit) is not more \
+                 expensive than storage_read_hot ({hot_cpu:.3} gas/unit). \
+                 Expected cold > hot."
+            );
+        }
+    }
+
+    // Cold writes include a DB read for the old slot length; hot writes read
+    // from cache. Cold should therefore be at least as expensive as hot.
+    if let (Some(cold), Some(hot)) = (costs.0.get("swrd_cold"), costs.0.get("swrd_hot")) {
+        let cold_cpu = cost_per_unit(cold);
+        let hot_cpu = cost_per_unit(hot);
+        if cold_cpu < hot_cpu {
+            eprintln!(
+                "Warning: swrd_cold ({cold_cpu:.3} gas/unit) is cheaper \
+                 than swrd_hot ({hot_cpu:.3} gas/unit). Expected cold >= hot."
+            );
+        }
+    }
+
+    // `sclr` reads are always hot, so costs should be within ~2× of each other.
+    if let (Some(cold), Some(hot)) = (costs.0.get("sclr_cold"), costs.0.get("sclr_hot")) {
+        let cold_cpu = cost_per_unit(cold);
+        let hot_cpu = cost_per_unit(hot);
+        let ratio = cold_cpu / hot_cpu.max(1e-9);
+        if !(0.5..=2.0).contains(&ratio) {
+            eprintln!(
+                "Warning: sclr_cold ({cold_cpu:.3} gas/unit) differs from \
+                 sclr_hot ({hot_cpu:.3} gas/unit) by {ratio:.2}×. \
+                 storage_clear should be largely cache-independent."
+            );
+        }
+    }
+
+    // `spld` is a single-slot read and should agree with `srdd` per unit
+    // (both exercise the same storage_read_slot path).
+    for (spld_name, srdd_name, label) in [
+        ("spld_hot", "srdd_hot", "hot"),
+        ("spld_cold", "srdd_cold", "cold"),
+    ] {
+        if let (Some(spld_cost), Some(srdd_cost)) =
+            (costs.0.get(spld_name), costs.0.get(srdd_name))
+        {
+            let spld_cpu = cost_per_unit(spld_cost);
+            let srdd_cpu = cost_per_unit(srdd_cost);
+            let ratio = spld_cpu / srdd_cpu.max(1e-9);
+            if !(0.33..=3.0).contains(&ratio) {
+                eprintln!(
+                    "Warning: {spld_name} ({spld_cpu:.3} gas/unit) differs from \
+                     {srdd_name} ({srdd_cpu:.3} gas/unit) by {ratio:.2}×. \
+                     Both measure single-slot {label} reads."
+                );
+            }
+        }
+    }
+}
+
 const TEMPLATE: [&str; 5] = [
     r##"use super::*;
 "##,
@@ -365,7 +473,7 @@ pub const GIT: &str = ""#,
     r#"";"#,
     r##"
 pub fn default_gas_costs() -> GasCostsValues {
-    GasCostsValuesV6 {"##,
+    GasCostsValuesV7 {"##,
     r##"    }.into()
 }
 "##,
@@ -491,7 +599,7 @@ impl State {
         )
     }
 
-    fn to_gas_costs(&self) -> GasCostsValuesV6 {
+    fn to_gas_costs(&self) -> GasCostsValuesV7 {
         serde_yaml::from_value(self.to_yaml()).unwrap()
     }
 
@@ -512,7 +620,24 @@ impl State {
 
     fn into_costs(self) -> Costs {
         let (state, costs) = self.into_dependent_costs();
-        state.into_relative_costs(costs)
+        let mut costs = state.into_relative_costs(costs);
+
+        // Warn about implausible hot/cold relationships before we rename.
+        sanity_check_storage_costs(&costs);
+
+        // Rename bench group names to the GasCostsValuesV7 field names.
+        for (bench_name, cost_name) in STORAGE_BENCH_REMAPS {
+            if let Some(cost) = costs.0.remove(*bench_name) {
+                costs.0.insert(cost_name.to_string(), cost);
+            }
+        }
+
+        // Drop groups that served only as sanity-check inputs.
+        for name in SANITY_ONLY_GROUPS {
+            costs.0.remove(*name);
+        }
+
+        costs
     }
 
     fn get_baseline(&self) -> u64 {
@@ -552,6 +677,7 @@ impl State {
                     .filter_map(|sample| {
                         Some((ids.remove(sample)?, throughput.get(sample).copied()?))
                     })
+                    .filter(|(_, t)| !skip_small_slot(name, *t))
                     .map(|(mean, t)| (t, map_to_ratio(baseline, mean)))
                     .collect::<Vec<_>>();
                 samples.sort_unstable_by_key(|(_, mean)| *mean);
