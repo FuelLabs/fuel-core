@@ -218,13 +218,14 @@ docker build -t fuel-core . -f deployment/Dockerfile
 
 # Delete Docker Image
 docker image rm fuel-core
-
-# Create Kubernetes Volume, Deployment & Service
-kubectl create -f deployment/fuel-core.yml
-
-# Delete Kubernetes Volume, Deployment & Service
-kubectl delete -f deployment/fuel-core.yml
 ```
+
+The repository currently ships container build assets under [`deployment/`](deployment/),
+but it does not include a checked-in `deployment/fuel-core.yml` Kubernetes manifest.
+
+For the repository-local container assets, see [`deployment/README.md`](deployment/README.md).
+For Kubernetes-oriented node operator guidance, see the Fuel docs:
+<https://docs.fuel.network/docs/node-operator/fuel-ignition/mainnet-node/>.
 
 ## GraphQL service
 
