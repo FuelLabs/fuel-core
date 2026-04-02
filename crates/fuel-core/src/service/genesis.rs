@@ -208,6 +208,7 @@ pub async fn execute_and_commit_genesis_block(
     config: &Config,
     db: &CombinedDatabase,
 ) -> anyhow::Result<()> {
+    use crate::service::adapters::block_importer::NoopBlockReconciliationWriteAdapter;
     use fuel_core_importer::ports::{
         MockBlockVerifier,
         MockValidator,
@@ -224,6 +225,7 @@ pub async fn execute_and_commit_genesis_block(
         db.on_chain().clone(),
         MockValidator::default(),
         MockBlockVerifier::default(),
+        NoopBlockReconciliationWriteAdapter,
     );
     let (result, changes) = result.into();
     let new_result =

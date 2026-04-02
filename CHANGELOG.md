@@ -6,6 +6,45 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.48.0]
+
+### Breaking
+- [3105](https://github.com/FuelLabs/fuel-core/pull/3105): Only the first RPC Url is now used to create a provider in relayer server; others are ignored.
+- [3141](https://github.com/FuelLabs/fuel-core/pull/3141): Fix the index of the transaction inside the pre-confirmation during native block production.
+- [3217](https://github.com/FuelLabs/fuel-core/pull/3217): Bump dependencies and the rust version to 1.93.0
+
+### Added
+- [3100](https://github.com/FuelLabs/fuel-core/pull/3100): Add protobuf api for querying the block aggregator
+- [3101](https://github.com/FuelLabs/fuel-core/pull/3101): Integrate new block aggregation RPC into Fuel Core
+- [3106](https://github.com/FuelLabs/fuel-core/pull/3106): Add adapter for storing blocks on AWS S3 bucket
+- [3115](https://github.com/FuelLabs/fuel-core/pull/3115): Add quorum provider.
+- [3116](https://github.com/FuelLabs/fuel-core/pull/3116): Complete coverage of proto block types to cover all cases
+- [3127](https://github.com/FuelLabs/fuel-core/pull/3127): - Introduced `FailoverTransport`, a resilient transport layer that retries GraphQL queries across multiple endpoints.
+- [3131](https://github.com/FuelLabs/fuel-core/pull/3131): Integrated the backup tool into fuel-core as a `archive` subcommand.
+- [3155](https://github.com/FuelLabs/fuel-core/pull/3155): Add integration tests for preconfirmation transaction indices to verify correct indexing for single and multiple transactions in a block.
+- [3156](https://github.com/FuelLabs/fuel-core/pull/3156): Add comprehensive integration tests for FuelClient failover functionality covering both GraphQL queries and subscriptions.
+
+### Changed
+- [3105](https://github.com/FuelLabs/fuel-core/pull/3105): Migrated relayer service and related tests from ethers-rs to alloy-rs.
+- [3133](https://github.com/FuelLabs/fuel-core/pull/3133): Include `tx_id` into `SqueezedOut` reason to simplify debugging.
+- [3134](https://github.com/FuelLabs/fuel-core/pull/3134): `stage` and `data` fields made public in `DataSource` struct.
+- [3138](https://github.com/FuelLabs/fuel-core/pull/3138): Migrate CI from BuildJet to WarpBuild runners, update GitHub Actions to latest versions, and use pre-built binaries for cargo-nextest and cargo-audit.
+- [3182](https://github.com/FuelLabs/fuel-core/pull/3182): Updated fuel-vm to 0.66 and added benchmark for the new instructions
+- [3203](https://github.com/FuelLabs/fuel-core/pull/3203): Add lease port for PoA adapter to allow multiple producers to be live but only one leader.
+- [3225](https://github.com/FuelLabs/fuel-core/pull/3225): PoA quorum and HA failover fixes: Redis leader lease adapter improvements, write_block.lua HEIGHT_EXISTS check, sub-quorum block repair, Prometheus metrics, and chaos test harness.
+
+### Fixed
+- [3112](https://github.com/FuelLabs/fuel-core/pull/3112): Use Protobuf types in serialization rather than opaque bytes
+- [3124](https://github.com/FuelLabs/fuel-core/pull/3124): Using Debian Bookworm as the runtime base image for Docker builds. This is the same base image as the Rust builder images. Keeping the images in-sync will help prevent runtime dependency mismatch issues.
+- [3128](https://github.com/FuelLabs/fuel-core/pull/3128): Better signal handling (SIGABRT, SIGQUIT, SIGHUP).
+- [3148](https://github.com/FuelLabs/fuel-core/pull/3148): Add `aloc` to ignored words, to fix typo errors in CI.
+- [3150](https://github.com/FuelLabs/fuel-core/pull/3150): Ignore rustsec advisories `RUSTSEC-2025-0118`
+- [3159](https://github.com/FuelLabs/fuel-core/pull/3159): Fix `FuelClient::with_urls` to normalize URLs with `/v1/graphql` path, matching the behavior of `FuelClient::new`.
+- [3172](https://github.com/FuelLabs/fuel-core/pull/3172): Validate TxPool transactions against next block height instead of current block height.
+- [3174](https://github.com/FuelLabs/fuel-core/pull/3174): Fix dry_run to get the consensus parameter version of the old block instead of current version
+- [3193](https://github.com/FuelLabs/fuel-core/pull/3193): Add new error type, fix error text
+- [3195](https://github.com/FuelLabs/fuel-core/pull/3195): Upgrade Wasmtime to fix RUSTSEC
+
 ## [Version 0.47.1]
 
 ### Fixed

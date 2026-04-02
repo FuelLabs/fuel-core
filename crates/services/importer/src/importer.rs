@@ -4,6 +4,7 @@ use crate::{
     error::Error,
     local_runner::LocalRunner,
     ports::{
+        BlockReconciliationWritePort,
         BlockVerifier,
         DatabaseTransaction,
         ImporterDatabase,
@@ -41,6 +42,7 @@ use fuel_core_types::{
     services::{
         block_importer::{
             ImportResult,
+            Source,
             UncommittedResult,
         },
         executor::{
@@ -108,7 +110,7 @@ impl std::fmt::Debug for Commands {
     }
 }
 
-struct ImporterInner<D, E, V> {
+struct ImporterInner<D, E, V, W> {
     database: D,
     executor: E,
     verifier: V,
@@ -117,6 +119,18 @@ struct ImporterInner<D, E, V> {
     commands: mpsc::UnboundedReceiver<Commands>,
     /// Enables prometheus metrics for this fuel-service
     metrics: bool,
+    block_reconciliation_write_port: W,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct NoopBlockReconciliationWritePort;
+
+#[cfg(test)]
+impl BlockReconciliationWritePort for NoopBlockReconciliationWritePort {
+    fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 pub struct Importer {
@@ -148,17 +162,19 @@ impl Drop for Importer {
 }
 
 impl Importer {
-    pub fn new<D, E, V>(
+    pub fn new<D, E, V, W>(
         chain_id: ChainId,
         config: Config,
         database: D,
         executor: E,
         verifier: V,
+        block_reconciliation_write_port: W,
     ) -> Self
     where
         D: ImporterDatabase + Transactional + 'static,
         E: Validator + 'static,
         V: BlockVerifier + 'static,
+        W: BlockReconciliationWritePort + Send + Sync + 'static,
     {
         // We use semaphore as a back pressure mechanism instead of a `broadcast`
         // channel because we want to prevent committing to the database results
@@ -175,6 +191,7 @@ impl Importer {
             commands: receiver,
             broadcast: broadcast.clone(),
             metrics: config.metrics,
+            block_reconciliation_write_port,
         };
 
         if config.metrics {
@@ -210,6 +227,7 @@ impl Importer {
             database,
             executor,
             verifier,
+            NoopBlockReconciliationWritePort,
         )
     }
 
@@ -317,11 +335,12 @@ impl Importer {
     }
 }
 
-impl<D, E, V> ImporterInner<D, E, V>
+impl<D, E, V, W> ImporterInner<D, E, V, W>
 where
     D: ImporterDatabase + Transactional,
     E: Send + Sync,
     V: Send + Sync,
+    W: BlockReconciliationWritePort,
 {
     /// The method commits the result of the block execution attaching the consensus data.
     /// It expects that the `UncommittedResult` contains the result of the block
@@ -390,6 +409,14 @@ where
                 return Err(Error::InvalidDatabaseStateAfterExecution(None, None))
             }
         }
+
+        if result.source == Source::Local {
+            self.block_reconciliation_write_port
+                .publish_produced_block(&result.sealed_block)
+                .map_err(Error::FailedBlockReconciliationWrite)?;
+        }
+
+        let changes = db_after_execution.into_changes();
 
         #[cfg(feature = "test-helpers")]
         let changes_clone = changes.clone();
@@ -507,11 +534,12 @@ struct PrepareImportResult {
     block_changes: StorageChanges,
 }
 
-impl<IDatabase, E, V> ImporterInner<IDatabase, E, V>
+impl<IDatabase, E, V, W> ImporterInner<IDatabase, E, V, W>
 where
     IDatabase: ImporterDatabase + Transactional,
     E: Validator,
     V: BlockVerifier,
+    W: BlockReconciliationWritePort,
 {
     async fn run(&mut self) {
         let local_runner = LocalRunner::new().expect("Failed to create the local runner");

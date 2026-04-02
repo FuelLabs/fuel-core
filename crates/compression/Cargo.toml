@@ -30,11 +30,7 @@ u32-tx-count = ["fuel-core-types/u32-tx-pointer"]
 [dependencies]
 anyhow = { workspace = true }
 enum_dispatch = { workspace = true }
-fuel-core-types = { workspace = true, features = [
-    "alloc",
-    "serde",
-    "da-compression",
-] }
+fuel-core-types = { workspace = true, features = ["alloc", "serde", "da-compression"] }
 paste = { workspace = true }
 rand = { workspace = true, optional = true }
 serde = { version = "1.0", features = ["derive"] }

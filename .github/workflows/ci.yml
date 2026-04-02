@@ -225,7 +225,7 @@ jobs:
         run: cargo test -p fuel-core-tests --features aws-kms -- kms
 
   leader-lock-integration-tests:
-    name: Leader Lock Integration Tests (w/Redis)
+    name: Leader Lock Tests (w/Redis)
     needs:
       - lint-toml-files
       - prevent-openssl
@@ -235,6 +235,7 @@ jobs:
     timeout-minutes: 45
     env:
       RUSTFLAGS: -D warnings
+      REDIS_VERSION: 8.6.0
     steps:
       - uses: actions/checkout@v6
       - name: Install Rust
@@ -244,7 +245,13 @@ jobs:
       - name: Install Redis
         run: |
           sudo apt-get update
-          sudo apt-get install -y redis-server
+          sudo apt-get install -y build-essential tcl curl ca-certificates
+          curl -fsSL "https://download.redis.io/releases/redis-${REDIS_VERSION}.tar.gz" -o /tmp/redis.tar.gz
+          tar -xzf /tmp/redis.tar.gz -C /tmp
+          cd "/tmp/redis-${REDIS_VERSION}"
+          make -j"$(nproc)"
+          sudo make install
+          redis-server --version
       - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
@@ -252,13 +259,28 @@ jobs:
           cache-on-failure: true
       - name: Start Redis
         run: |
-          redis-server --daemonize yes
-          redis-cli ping
+          redis-server \
+            --port 6379 \
+            --bind 127.0.0.1 \
+            --save "" \
+            --appendonly no \
+            --daemonize yes \
+            --pidfile /tmp/redis-ci.pid \
+            --dir /tmp
+          for _ in $(seq 1 20); do
+            if redis-cli -h 127.0.0.1 -p 6379 ping | grep -q PONG; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          echo "Redis failed to start"
+          exit 1
       - name: Run leader lock integration tests
         run: |
           echo "REDIS_URL=${REDIS_URL:-redis://127.0.0.1:6379} REDIS_DB=${REDIS_DB:-0} LEADER_LOCK_KEY_PREFIX=${LEADER_LOCK_KEY_PREFIX:-<unset>}"
           env | sort | grep -Ei 'REDIS|LEADER|LOCK|FUEL' || true
           (timeout 90s redis-cli MONITOR | stdbuf -oL grep -E 'SELECT|SET|PEXPIRE|DEL|leader|lock' || true) &
+          cargo test --package fuel-core --lib service::adapters::consensus_module::poa::tests:: --features leader_lock -- --test-threads=1 --nocapture
           cargo test --package fuel-core-tests --test integration_tests leader_lock --features leader_lock -- --test-threads=1 --nocapture
 
   verifications-complete:
@@ -450,6 +472,7 @@ jobs:
           asset_path: ./${{ env.ZIP_FILE_NAME }}
           asset_name: ${{ env.ZIP_FILE_NAME }}
           asset_content_type: application/gzip
+
   cargo-audit:
     runs-on: ubuntu-latest
     continue-on-error: true

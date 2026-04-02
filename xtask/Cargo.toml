@@ -13,6 +13,4 @@ u32-tx-count = ["fuel-core/u32-tx-count"]
 
 [dependencies]
 clap = { workspace = true, features = ["env", "derive"] }
-fuel-core = { path = "../crates/fuel-core", default-features = false, features = [
-    "test-helpers",
-] }
+fuel-core = { path = "../crates/fuel-core", default-features = false, features = ["test-helpers"] }

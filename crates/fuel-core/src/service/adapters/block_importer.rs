@@ -12,6 +12,7 @@ use crate::{
         BlockImporterAdapter,
         ExecutorAdapter,
         VerifierAdapter,
+        consensus_module::poa::RedisLeaderLeaseAdapter,
     },
 };
 use fuel_core_importer::{
@@ -58,6 +59,12 @@ use fuel_core_types::{
 use itertools::Itertools;
 use std::sync::Arc;
 
+#[allow(clippy::large_enum_variant)]
+pub enum BlockReconciliationWriteAdapter {
+    Redis(RedisLeaderLeaseAdapter),
+    Noop(NoopBlockReconciliationWriteAdapter),
+}
+
 impl BlockImporterAdapter {
     #[cfg(not(feature = "parallel-executor"))]
     pub fn new(
@@ -66,10 +73,20 @@ impl BlockImporterAdapter {
         database: Database,
         executor: ExecutorAdapter,
         verifier: VerifierAdapter,
+        block_reconciliation_write_adapter: BlockReconciliationWriteAdapter,
     ) -> Self {
-        let importer = Importer::new(chain_id, config, database, executor, verifier);
+        let database_for_height = database.clone();
+        let importer = Importer::new(
+            chain_id,
+            config,
+            database,
+            executor,
+            verifier,
+            block_reconciliation_write_adapter,
+        );
         Self {
             block_importer: Arc::new(importer),
+            database: database_for_height,
         }
     }
 
@@ -104,6 +121,32 @@ impl BlockVerifier for VerifierAdapter {
         block: &Block,
     ) -> anyhow::Result<()> {
         self.block_verifier.verify_block_fields(consensus, block)
+    }
+}
+
+#[derive(Default)]
+pub struct NoopBlockReconciliationWriteAdapter;
+
+impl fuel_core_importer::ports::BlockReconciliationWritePort
+    for BlockReconciliationWriteAdapter
+{
+    fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
+        match self {
+            Self::Redis(adapter) => {
+                fuel_core_importer::ports::BlockReconciliationWritePort::publish_produced_block(adapter, block)
+            }
+            Self::Noop(adapter) => {
+                fuel_core_importer::ports::BlockReconciliationWritePort::publish_produced_block(adapter, block)
+            }
+        }
+    }
+}
+
+impl fuel_core_importer::ports::BlockReconciliationWritePort
+    for NoopBlockReconciliationWriteAdapter
+{
+    fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
+        Ok(())
     }
 }
 
