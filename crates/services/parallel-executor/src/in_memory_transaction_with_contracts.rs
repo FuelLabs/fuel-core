@@ -175,39 +175,6 @@ where
         }
     }
 
-    fn read(
-        &self,
-        key: &[u8],
-        column: Self::Column,
-        offset: usize,
-        buf: &mut [u8],
-    ) -> StorageResult<bool> {
-        if let Some(operation) = self.get_from_changes(key, column) {
-            match operation {
-                WriteOperation::Insert(value) => {
-                    let bytes_len = value.as_ref().len();
-                    let start = offset;
-                    let buf_len = buf.len();
-                    let end = offset.saturating_add(buf.len());
-
-                    if end > bytes_len {
-                        return Err(anyhow::anyhow!(
-                            "Offset `{offset}` + buf_len `{buf_len}` read until {end} which is out of bounds `{bytes_len}` for key `{:?}`",
-                            key
-                        )
-                            .into());
-                    }
-
-                    let starting_from_offset = &value.as_ref()[start..end];
-                    buf[..].copy_from_slice(starting_from_offset);
-                    Ok(true)
-                }
-                WriteOperation::Remove => Ok(false),
-            }
-        } else {
-            self.storage.read(key, column, offset, buf)
-        }
-    }
 }
 
 impl<S> KeyValueMutate for InMemoryTransactionWithContracts<S>

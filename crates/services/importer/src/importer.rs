@@ -416,8 +416,6 @@ where
                 .map_err(Error::FailedBlockReconciliationWrite)?;
         }
 
-        let changes = db_after_execution.into_changes();
-
         #[cfg(feature = "test-helpers")]
         let changes_clone = changes.clone();
 

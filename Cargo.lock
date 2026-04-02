@@ -4769,7 +4769,6 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.48.0",
- "fuel-core-upgradable-executor",
  "futures",
  "fxhash",
  "parking_lot",

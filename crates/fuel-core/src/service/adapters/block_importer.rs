@@ -98,10 +98,20 @@ impl BlockImporterAdapter {
         #[cfg(not(feature = "no-parallel-executor"))] executor: ParallelExecutorAdapter,
         #[cfg(feature = "no-parallel-executor")] executor: ExecutorAdapter,
         verifier: VerifierAdapter,
+        block_reconciliation_write_adapter: BlockReconciliationWriteAdapter,
     ) -> Self {
-        let importer = Importer::new(chain_id, config, database, executor, verifier);
+        let database_for_height = database.clone();
+        let importer = Importer::new(
+            chain_id,
+            config,
+            database,
+            executor,
+            verifier,
+            block_reconciliation_write_adapter,
+        );
         Self {
             block_importer: Arc::new(importer),
+            database: database_for_height,
         }
     }
 
