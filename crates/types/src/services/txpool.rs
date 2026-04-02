@@ -38,13 +38,18 @@ pub type ArcPoolTx = Arc<PoolTransaction>;
 /// Metadata for the transaction pool.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Metadata {
-    version: ConsensusParametersVersion,
-    size: Option<usize>,
-    max_gas_price: Word,
+    /// The version of the consensus parameters used to create the transaction.
+    pub version: ConsensusParametersVersion,
+    /// The size of the transaction in bytes.
+    pub size: Option<usize>,
+    /// The maximum gas price for the transaction.
+    pub max_gas_price: Word,
+    /// The maximum amount of gas that the transaction can consume.
     #[cfg(feature = "test-helpers")]
-    max_gas: Option<Word>,
+    pub max_gas: Option<Word>,
+    /// The transaction ID.
     #[cfg(feature = "test-helpers")]
-    tx_id: Option<TxId>,
+    pub tx_id: Option<TxId>,
 }
 
 impl Metadata {

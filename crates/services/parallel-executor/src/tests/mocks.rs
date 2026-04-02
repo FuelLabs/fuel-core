@@ -1,3 +1,23 @@
+use crate::ports::{
+    Filter,
+    TransactionFiltered,
+    TransactionSourceExecutableTransactions,
+    TransactionsSource,
+};
+use fuel_core_executor::ports::{
+    MaybeCheckedTransaction,
+    PreconfirmationSenderPort,
+    RelayerPort,
+};
+use fuel_core_types::{
+    blockchain::primitives::DaBlockHeight,
+    fuel_tx::{
+        ConsensusParameters,
+        Transaction,
+    },
+    fuel_vm::checked_transaction::IntoChecked,
+    services::preconfirmation::Preconfirmation,
+};
 use std::{
     collections::VecDeque,
     sync::{
@@ -5,35 +25,14 @@ use std::{
         Mutex,
     },
 };
-
-use fuel_core_executor::ports::RelayerPort;
-use fuel_core_types::{
-    blockchain::primitives::DaBlockHeight,
-    fuel_tx::{
-        ConsensusParameters,
-        Transaction,
-    },
-    fuel_vm::checked_transaction::{
-        CheckedTransaction,
-        IntoChecked,
-    },
-};
-
-use crate::ports::{
-    Filter,
-    TransactionFiltered,
-    TransactionSourceExecutableTransactions,
-    TransactionsSource,
-};
+use tokio::sync::watch;
 
 #[derive(Debug, Clone)]
 pub struct MockRelayer;
-
 impl RelayerPort for MockRelayer {
     fn enabled(&self) -> bool {
         true
     }
-
     fn get_events(
         &self,
         _da_height: &DaBlockHeight,
@@ -41,7 +40,6 @@ impl RelayerPort for MockRelayer {
         Ok(vec![])
     }
 }
-
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct PoolRequestParams {
@@ -50,19 +48,16 @@ pub struct PoolRequestParams {
     pub block_transaction_size_limit: u64,
     pub filter: Filter,
 }
-
 pub struct MockTransactionsSource {
     response_queue: Arc<Mutex<VecDeque<MockTxPoolResponse>>>,
 }
-
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MockTxPoolResponse {
-    pub transactions: Vec<CheckedTransaction>,
+    pub transactions: Vec<MaybeCheckedTransaction>,
     pub filtered: TransactionFiltered,
     pub filter: Option<Filter>,
     pub gas_limit_lt: Option<u64>,
 }
-
 impl MockTxPoolResponse {
     pub fn new(transactions: &[&Transaction], filtered: TransactionFiltered) -> Self {
         Self {
@@ -72,7 +67,6 @@ impl MockTxPoolResponse {
             gas_limit_lt: None,
         }
     }
-
     pub fn assert_filter(self, filter: Filter) -> Self {
         Self {
             transactions: self.transactions,
@@ -81,7 +75,6 @@ impl MockTxPoolResponse {
             gas_limit_lt: self.gas_limit_lt,
         }
     }
-
     pub fn assert_gas_limit_lt(self, gas_limit: u64) -> Self {
         Self {
             transactions: self.transactions,
@@ -91,11 +84,9 @@ impl MockTxPoolResponse {
         }
     }
 }
-
 pub struct MockTxPool {
     response_queue: Arc<Mutex<VecDeque<MockTxPoolResponse>>>,
 }
-
 impl MockTxPool {
     pub fn push_response(&self, response: MockTxPoolResponse) {
         let response_queue = self.response_queue.clone();
@@ -103,7 +94,6 @@ impl MockTxPool {
         response_queue.push_back(response);
     }
 }
-
 impl MockTransactionsSource {
     pub fn new() -> (Self, MockTxPool) {
         let response_queue = Arc::new(Mutex::new(VecDeque::new()));
@@ -115,48 +105,49 @@ impl MockTransactionsSource {
         )
     }
 }
-
 impl TransactionsSource for MockTransactionsSource {
-    fn get_executable_transactions(
-        &mut self,
+    async fn get_executable_transactions(
+        &self,
         gas_limit: u64,
-        tx_count_limit: u16,
-        _block_transaction_size_limit: u32,
+        tx_count_limit: u32,
+        _block_transaction_size_limit: u64,
         filter: Filter,
-    ) -> TransactionSourceExecutableTransactions {
-        loop {
-            let mut response_queue = self.response_queue.lock().expect("Mutex poisoned");
-            if let Some(response) = response_queue.pop_front() {
-                assert!(response.transactions.len() <= tx_count_limit as usize);
-                if let Some(expected_filter) = &response.filter {
-                    assert_eq!(expected_filter, &filter);
-                }
-                if let Some(expected_gas_limit) = &response.gas_limit_lt {
-                    assert!(
-                        expected_gas_limit >= &gas_limit,
-                        "Expected gas limit to be less than or equal to {}, but got {}",
-                        expected_gas_limit,
-                        gas_limit,
-                    );
-                }
-                return TransactionSourceExecutableTransactions {
-                    transactions: response.transactions,
-                    filtered: response.filtered,
-                    filter: response.filter.unwrap_or(filter),
-                };
-            } else {
-                continue;
+    ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
+        let mut response_queue = self.response_queue.lock().expect("Mutex poisoned");
+        if let Some(response) = response_queue.pop_front() {
+            assert!(response.transactions.len() <= tx_count_limit as usize);
+            if let Some(expected_filter) = &response.filter {
+                assert_eq!(expected_filter, &filter);
             }
+            if let Some(expected_gas_limit) = &response.gas_limit_lt {
+                assert!(
+                    expected_gas_limit >= &gas_limit,
+                    "Expected gas limit to be less than or equal to {}, but got {}",
+                    expected_gas_limit,
+                    gas_limit,
+                );
+            }
+            Ok(TransactionSourceExecutableTransactions {
+                transactions: response.transactions,
+                filtered: response.filtered,
+                filter: response.filter.unwrap_or(filter),
+            })
+        } else {
+            Ok(TransactionSourceExecutableTransactions {
+                transactions: vec![],
+                filtered: TransactionFiltered::NotFiltered,
+                filter,
+            })
         }
     }
 
-    fn get_new_transactions_notifier(&mut self) -> tokio::sync::Notify {
+    fn get_new_transactions_notifier(&self) -> watch::Receiver<()> {
         // This is a mock implementation, so we return a dummy Notify instance
-        tokio::sync::Notify::new()
+        let (_, rx) = watch::channel(());
+        rx
     }
 }
-
-fn into_checked_txs(txs: &[&Transaction]) -> Vec<CheckedTransaction> {
+fn into_checked_txs(txs: &[&Transaction]) -> Vec<MaybeCheckedTransaction> {
     txs.iter()
         .map(|&tx| {
             tx.clone()
@@ -164,5 +155,20 @@ fn into_checked_txs(txs: &[&Transaction]) -> Vec<CheckedTransaction> {
                 .unwrap()
                 .into()
         })
+        .map(|tx| MaybeCheckedTransaction::CheckedTransaction(tx, 0))
         .collect()
+}
+#[derive(Clone, Debug)]
+pub struct MockPreconfirmationSender;
+
+impl PreconfirmationSenderPort for MockPreconfirmationSender {
+    fn send(
+        &self,
+        _preconfirmations: Vec<Preconfirmation>,
+    ) -> impl Future<Output = ()> + Send {
+        futures::future::ready(())
+    }
+    fn try_send(&self, preconfirmations: Vec<Preconfirmation>) -> Vec<Preconfirmation> {
+        preconfirmations
+    }
 }

@@ -1,7 +1,4 @@
-use fuel_core_storage::{
-    Error as StorageError,
-    MerkleRoot,
-};
+use fuel_core_storage::Error as StorageError;
 use fuel_core_types::{
     blockchain::primitives::BlockId,
     fuel_types::BlockHeight,

@@ -91,8 +91,12 @@ impl<'a, CS> CompressionContext<'a, CS> {
                     _ => {}
                 }
             }
+            #[cfg(not(feature = "u32-tx-count"))]
             let tx_index = u16::try_from(tx_index)
                 .map_err(|_| anyhow::anyhow!("Transaction index exceeds u16 limit"))?;
+            #[cfg(feature = "u32-tx-count")]
+            let tx_index = u32::try_from(tx_index)
+                .map_err(|_| anyhow::anyhow!("Transaction index exceeds u32 limit"))?;
             let tx_id = tx.id(&chain_id);
             for (index, output) in tx.outputs().iter().enumerate() {
                 let index = u16::try_from(index)

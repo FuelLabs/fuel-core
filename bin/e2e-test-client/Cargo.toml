@@ -13,7 +13,7 @@ name = "fuel-core-e2e-client"
 publish = false
 
 [features]
-default = []
+default = ["fuel-core/no-parallel-executor"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

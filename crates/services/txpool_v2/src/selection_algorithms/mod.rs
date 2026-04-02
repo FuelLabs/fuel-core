@@ -9,6 +9,7 @@ use crate::storage::{
 
 pub mod ratio_tip_gas;
 
+#[derive(Debug)]
 /// Constraints that the selection algorithm has to respect.
 pub struct Constraints {
     /// Minimum gas price that all transaction must support.
@@ -16,9 +17,12 @@ pub struct Constraints {
     /// Maximum limit of gas that all selected transaction shouldn't exceed.
     pub max_gas: u64,
     /// Maximum number of transactions that can be selected.
+    #[cfg(feature = "u32-tx-count")]
+    pub maximum_txs: u32,
+    #[cfg(not(feature = "u32-tx-count"))]
     pub maximum_txs: u16,
     /// Maximum size of the block.
-    pub maximum_block_size: u32,
+    pub maximum_block_size: u64,
     /// List of excluded contracts.
     pub excluded_contracts: HashSet<ContractId>,
 }
@@ -32,7 +36,7 @@ pub trait SelectionAlgorithm {
     /// Given the constraints, the selection algorithm has to return the best list of transactions to include in a block.
     fn gather_best_txs(
         &mut self,
-        constraints: Constraints,
+        constraints: &Constraints,
         storage: &mut Self::Storage,
     ) -> RemovedTransactions;
 

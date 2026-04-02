@@ -1,4 +1,7 @@
-use fuel_core_executor::executor::ExecutionOptions;
+use fuel_core_executor::executor::{
+    ExecutionOptions,
+    ExecutionOptionsDeserialized,
+};
 use fuel_core_storage::transactional::Changes;
 use fuel_core_types::{
     blockchain::block::Block,
@@ -60,7 +63,7 @@ pub enum InputSerializationType<'a> {
 pub enum InputDeserializationType {
     V1 {
         block: WasmDeserializationBlockTypes<()>,
-        options: ExecutionOptions,
+        options: ExecutionOptionsDeserialized,
     },
 }
 

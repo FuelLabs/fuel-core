@@ -3,16 +3,12 @@
 .terraform
 *.tfstate*
 *.terraform.lock.hcl*
-.vscode
 .zed
 .envrc
 .direnv
 .cov
 lcov.info
 version-compatibility/Cargo.lock
-benches/benches-outputs/Cargo.lock
-benches/benches-outputs/src/test_gas_costs_output.rs
-.idea
 .env
 node_modules/
 package-lock.json
@@ -21,4 +17,12 @@ bin/fuel-core/chainspec/local-testnet/state_transition_bytecode.wasm
 .DS_Store
 .fueldb/
 
-local-testnet/
+# benches
+local-testnet
+benches/benches-outputs/Cargo.lock
+benches/benches-outputs/src/test_gas_costs_output.rs
+
+# IDE
+.idea
+.vscode
+

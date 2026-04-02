@@ -21,6 +21,7 @@ random = ["dep:rand", "fuel-vm-private/random"]
 test-helpers = ["random", "fuel-vm-private/test-helpers", "dep:proptest"]
 aws-kms = ["dep:aws-sdk-kms"]
 fault-proving = []
+u32-tx-pointer = ["fuel-vm-private/u32-tx-pointer"]
 
 [dependencies]
 anyhow = { workspace = true }

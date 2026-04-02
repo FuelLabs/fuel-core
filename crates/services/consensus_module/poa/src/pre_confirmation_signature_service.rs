@@ -231,7 +231,7 @@ where
     Parent: ParentSignature,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
-        tracing::debug!("Running pre-confirmation task");
+        tracing::warn!("Running pre-confirmation task");
         tokio::select! {
             _ = watcher.while_started() => {
                 TaskNextAction::Stop

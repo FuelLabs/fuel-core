@@ -8,6 +8,15 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+parallel-executor = [
+  "fuel-core-bin/parallel-executor"
+]
+
+p2p = [
+  "fuel-core-bin/p2p",
+]
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
@@ -15,7 +24,7 @@ cynic = { workspace = true }
 fuel-core = { path = "../../crates/fuel-core", default-features = false, features = [
   "test-helpers",
 ] }
-fuel-core-bin = { path = "../../bin/fuel-core", features = ["parquet", "p2p"] }
+fuel-core-bin = { path = "../../bin/fuel-core", features = ["parquet"] }
 fuel-core-client = { path = "../../crates/client", features = ["test-helpers"] }
 fuel-core-p2p = { path = "../../crates/services/p2p", features = [
   "test-helpers",
@@ -29,7 +38,7 @@ fuel-core-storage = { path = "../../crates/storage", features = [
 ] }
 fuel-core-trace = { path = "../../crates/trace" }
 
-fuel-core-executor = { workspace = true, features = ["limited-tx-count"] }
+fuel-core-executor = { workspace = true }
 fuel-core-txpool = { path = "../../crates/services/txpool_v2", features = [
   "test-helpers",
 ] }

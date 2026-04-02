@@ -137,7 +137,8 @@ where
         &mut self,
         owner: &Address,
         block_height: BlockHeight,
-        tx_idx: u16,
+        #[cfg(not(feature = "u32-tx-count"))] tx_idx: u16,
+        #[cfg(feature = "u32-tx-count")] tx_idx: u32,
         tx_id: &Bytes32,
     ) -> StorageResult<()> {
         self.storage::<OwnedTransactions>().insert(

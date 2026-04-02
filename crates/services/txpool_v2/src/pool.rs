@@ -377,7 +377,7 @@ where
     /// based on the constraints given in the configuration and the selection algorithm used.
     pub fn extract_transactions_for_block(
         &mut self,
-        constraints: Constraints,
+        constraints: &Constraints,
     ) -> Vec<ArcPoolTx> {
         let metrics = self.config.metrics;
         let maybe_start = metrics.then(std::time::Instant::now);

@@ -63,8 +63,9 @@ trait CallerHelper {
         &mut self,
         source: Arc<Source>,
         gas_limit: u64,
-        tx_number_limit: u16,
-        block_transaction_size_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] tx_number_limit: u16,
+        #[cfg(feature = "u32-tx-count")] tx_number_limit: u32,
+        block_transaction_size_limit: u64,
     ) -> anyhow::Result<u32>
     where
         Source: TransactionsSource;
@@ -83,8 +84,9 @@ impl CallerHelper for Caller<'_, ExecutionState> {
         &mut self,
         source: Arc<Source>,
         gas_limit: u64,
-        tx_number_limit: u16,
-        block_transaction_size_limit: u32,
+        #[cfg(feature = "u32-tx-count")] tx_number_limit: u32,
+        #[cfg(not(feature = "u32-tx-count"))] tx_number_limit: u16,
+        block_transaction_size_limit: u64,
     ) -> anyhow::Result<u32>
     where
         Source: TransactionsSource,
@@ -241,7 +243,11 @@ impl Instance<Created> {
                 return Ok(0);
             };
 
-            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
+            #[cfg(not(feature = "u32-tx-count"))]
+            let tx_number_limit = u16::MAX;
+            #[cfg(feature = "u32-tx-count")]
+            let tx_number_limit = u32::MAX;
+            caller.peek_next_txs_bytes(source, gas_limit, tx_number_limit, u64::MAX)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -254,12 +260,13 @@ impl Instance<Created> {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             gas_limit: u64,
                             tx_number_limit: u32,
-                            block_transaction_size_limit: u32|
+                            block_transaction_size_limit: u64|
               -> anyhow::Result<u32> {
             let Some(source) = source.clone() else {
                 return Ok(0);
             };
 
+            #[cfg(not(feature = "u32-tx-count"))]
             let tx_number_limit = u16::try_from(tx_number_limit).map_err(|e| {
                 anyhow::anyhow!("The number of transactions is more than `u16::MAX`: {e}")
             })?;

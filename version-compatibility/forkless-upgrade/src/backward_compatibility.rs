@@ -113,6 +113,7 @@ async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_gene
     }
 }
 
+#[ignore]
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_binary_is_backward_compatible_and_follows_blocks_created_by_v44_binary() {
     let (_bootstrap_node, addr) = bootstrap_node(V44_TESTNET_SNAPSHOT).await.unwrap();

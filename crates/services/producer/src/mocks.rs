@@ -11,7 +11,7 @@ use fuel_core_storage::{
     not_found,
     transactional::{
         AtomicView,
-        Changes,
+        StorageChanges,
     },
 };
 use fuel_core_types::{
@@ -132,7 +132,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutor {
         &self,
         component: Components<Vec<Transaction>>,
         _: (),
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let block = arc_pool_tx_comp_to_block(&component);
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
@@ -160,7 +160,7 @@ impl BlockProducer<Vec<Transaction>> for FailingMockExecutor {
         &self,
         component: Components<Vec<Transaction>>,
         _: (),
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         match err.take() {
@@ -192,7 +192,7 @@ impl BlockProducer<Vec<Transaction>> for MockExecutorWithCapture {
         &self,
         component: Components<Vec<Transaction>>,
         _: (),
-    ) -> ExecutorResult<UncommittedResult<Changes>> {
+    ) -> ExecutorResult<UncommittedResult<StorageChanges>> {
         let block = arc_pool_tx_comp_to_block(&component);
         *self.captured.lock().unwrap() = Some(component);
         Ok(UncommittedResult::new(

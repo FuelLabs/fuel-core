@@ -42,7 +42,7 @@ use fuel_core_services::{
     TaskNextAction,
     stream::BoxFuture,
 };
-use fuel_core_storage::transactional::Changes;
+use fuel_core_storage::transactional::StorageChanges;
 use fuel_core_types::{
     blockchain::{
         SealedBlock,
@@ -290,7 +290,7 @@ where
         block_time: Tai64,
         source: TransactionsSource,
         deadline: Instant,
-    ) -> anyhow::Result<UncommittedExecutionResult<Changes>> {
+    ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>> {
         let future = self
             .block_producer
             .produce_and_execute_block(height, block_time, source, deadline);
@@ -339,12 +339,13 @@ where
         };
         match block_production.mode {
             Mode::Blocks { number_of_blocks } => {
+                tracing::info!("Manual block production started");
                 for _ in 0..number_of_blocks {
                     self.produce_block(
                         self.next_height(),
                         block_time,
                         TransactionsSource::TxPool,
-                        Instant::now(),
+                        Instant::now() + Duration::from_secs(1),
                     )
                     .await?;
                     block_time = self.next_time(RequestType::Manual)?;
@@ -387,7 +388,7 @@ where
                 tx_status,
                 events,
             },
-            changes,
+            storage_changes,
         ) = self
             .signal_produce_block(height, block_time, source, deadline)
             .await?
@@ -414,7 +415,7 @@ where
         self.block_importer
             .commit_result(Uncommitted::new(
                 ImportResult::new_from_local(block, tx_status, events),
-                changes,
+                storage_changes,
             ))
             .await?;
 
@@ -447,7 +448,7 @@ where
                 tx_status,
                 events,
             },
-            changes,
+            storage_changes,
         ) = self
             .block_producer
             .produce_predefined_block(predefined_block)
@@ -472,11 +473,13 @@ where
             entity: block,
             consensus: seal,
         };
+
+        // Dedup
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
                 ImportResult::new_from_local(sealed_block.clone(), tx_status, events),
-                changes,
+                storage_changes,
             ))
             .await?;
 
