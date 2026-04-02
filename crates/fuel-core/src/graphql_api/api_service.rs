@@ -44,6 +44,7 @@ use axum::{
     extract::{
         DefaultBodyLimit,
         Extension,
+        Query,
     },
     http::{
         HeaderValue,
@@ -77,6 +78,7 @@ use futures::Stream;
 use hyper::rt::Executor;
 use serde_json::json;
 use std::{
+    collections::HashMap,
     future::Future,
     net::{
         SocketAddr,
@@ -324,7 +326,14 @@ where
     let graphql_subscription_endpoint = "/v1/graphql-sub";
 
     let graphql_playground =
-        || render_graphql_playground(graphql_endpoint, graphql_subscription_endpoint);
+        |Query(params): Query<HashMap<String, String>>| {
+            let token = params.get("token").cloned();
+            render_graphql_playground(
+                graphql_endpoint,
+                graphql_subscription_endpoint,
+                token,
+            )
+        };
 
     let router = Router::new()
         .route("/v1/playground", get(graphql_playground))
@@ -373,43 +382,68 @@ where
     ))
 }
 
-/// Single initialization of the GraphQL playground HTML.
-/// This is because the rendering and replacing is expensive
+/// Single initialization of the GraphQL playground HTML (no-token version).
+/// This is because the rendering and replacing is expensive.
 static GRAPHQL_PLAYGROUND_HTML: OnceLock<Arc<String>> = OnceLock::new();
+
+fn build_playground_html(
+    endpoint: &str,
+    subscription_endpoint: &str,
+    token: Option<&str>,
+) -> String {
+    let mut builder = GraphiQLSource::build()
+        .endpoint(endpoint)
+        .subscription_endpoint(subscription_endpoint)
+        .title("Fuel Graphql Playground");
+
+    if let Some(t) = token {
+        builder = builder.header("Authorization", &format!("Bearer {}", t));
+    }
+
+    let raw_html = builder.finish();
+
+    // this may not be necessary in the future,
+    // but we need it to patch: https://github.com/async-graphql/async-graphql/issues/1703
+    let raw_html = raw_html.replace(
+        "https://unpkg.com/graphiql/graphiql.min.js",
+        "https://unpkg.com/graphiql@3/graphiql.min.js",
+    );
+    raw_html.replace(
+        "https://unpkg.com/graphiql/graphiql.min.css",
+        "https://unpkg.com/graphiql@3/graphiql.min.css",
+    )
+}
 
 fn _render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
-) -> impl IntoResponse + Send + Sync {
-    let html = GRAPHQL_PLAYGROUND_HTML.get_or_init(|| {
-        let raw_html = GraphiQLSource::build()
-            .endpoint(endpoint)
-            .subscription_endpoint(subscription_endpoint)
-            .title("Fuel Graphql Playground")
-            .finish();
-
-        // this may not be necessary in the future,
-        // but we need it to patch: https://github.com/async-graphql/async-graphql/issues/1703
-        let raw_html = raw_html.replace(
-            "https://unpkg.com/graphiql/graphiql.min.js",
-            "https://unpkg.com/graphiql@3/graphiql.min.js",
-        );
-        let raw_html = raw_html.replace(
-            "https://unpkg.com/graphiql/graphiql.min.css",
-            "https://unpkg.com/graphiql@3/graphiql.min.css",
-        );
-
-        Arc::new(raw_html)
-    });
-
-    Html(html.as_str())
+    token: Option<String>,
+) -> Html<String> {
+    match token {
+        None => {
+            // Use cached static HTML for the common no-token case.
+            let html = GRAPHQL_PLAYGROUND_HTML.get_or_init(|| {
+                Arc::new(build_playground_html(endpoint, subscription_endpoint, None))
+            });
+            Html(html.as_ref().clone())
+        }
+        Some(ref t) => {
+            // Build fresh HTML with the Authorization header injected.
+            Html(build_playground_html(
+                endpoint,
+                subscription_endpoint,
+                Some(t.as_str()),
+            ))
+        }
+    }
 }
 
 async fn render_graphql_playground(
     endpoint: &str,
     subscription_endpoint: &str,
+    token: Option<String>,
 ) -> impl IntoResponse + Send + Sync {
-    _render_graphql_playground(endpoint, subscription_endpoint)
+    _render_graphql_playground(endpoint, subscription_endpoint, token)
 }
 
 async fn health() -> Json<serde_json::Value> {
