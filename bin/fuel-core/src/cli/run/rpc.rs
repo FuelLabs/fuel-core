@@ -65,7 +65,8 @@ pub enum StorageMethod {
 
 impl RpcArgs {
     pub fn into_config(self) -> fuel_core_block_aggregator_api::service::Config {
-        let public_headers = parse_public_http_headers(&self.rpc_public_block_http_headers);
+        let public_headers =
+            parse_public_http_headers(&self.rpc_public_block_http_headers);
         let storage_method = match self.rpc_storage_method {
             StorageMethod::Local => {
                 fuel_core_block_aggregator_api::service::StorageMethod::Local

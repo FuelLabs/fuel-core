@@ -140,20 +140,21 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
     let mut api = MockBlocksAggregatorApi::default();
 
     // Given
-    let expected: Vec<(BlockHeight, RemoteS3Response)> = [(BlockHeight::new(1), "1"), (BlockHeight::new(2), "2")]
-        .iter()
-        .map(|(height, key)| {
-            let bucket = "test-bucket".to_string();
-            let key = key.to_string();
-            let res = RemoteS3Response {
-                bucket,
-                key,
-                requester_pays: false,
-                aws_endpoint: None,
-            };
-            (*height, res)
-        })
-        .collect();
+    let expected: Vec<(BlockHeight, RemoteS3Response)> =
+        [(BlockHeight::new(1), "1"), (BlockHeight::new(2), "2")]
+            .iter()
+            .map(|(height, key)| {
+                let bucket = "test-bucket".to_string();
+                let key = key.to_string();
+                let res = RemoteS3Response {
+                    bucket,
+                    key,
+                    requester_pays: false,
+                    aws_endpoint: None,
+                };
+                (*height, res)
+            })
+            .collect();
     let list: Vec<_> = expected
         .iter()
         .map(|(h, s)| (*h, RemoteBlockPayload::S3(s.clone())))

@@ -1798,7 +1798,8 @@ impl FuelClient {
                     let maybe_aws_client = maybe_aws_client.clone();
                     let resp =
                         res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
-                    Self::convert_block_response(resp, maybe_aws_client, http_client).await
+                    Self::convert_block_response(resp, maybe_aws_client, http_client)
+                        .await
                 }
             });
         Ok(stream)
@@ -1845,24 +1846,26 @@ impl FuelClient {
                         )
                         .await?;
 
-                        let block_bytes = remote_block_body::decode_body_by_content_encoding(
-                            body.as_ref(),
-                            content_encoding.as_deref(),
-                        )?;
+                        let block_bytes =
+                            remote_block_body::decode_body_by_content_encoding(
+                                body.as_ref(),
+                                content_encoding.as_deref(),
+                            )?;
                         Self::decode_remote_protobuf_block(&block_bytes)
                     }
                     Some(Location::Http(http)) => {
                         let (body, content_encoding) =
                             Self::get_block_from_http(&http_client, &http).await?;
-                        let block_bytes = remote_block_body::decode_body_by_content_encoding(
-                            body.as_ref(),
-                            content_encoding.as_deref(),
-                        )?;
+                        let block_bytes =
+                            remote_block_body::decode_body_by_content_encoding(
+                                body.as_ref(),
+                                content_encoding.as_deref(),
+                            )?;
                         Self::decode_remote_protobuf_block(&block_bytes)
                     }
-                    None => Err(io::Error::other(
-                        "Remote block response missing location",
-                    )),
+                    None => {
+                        Err(io::Error::other("Remote block response missing location"))
+                    }
                 }
             }
         }
@@ -1871,10 +1874,8 @@ impl FuelClient {
     fn decode_remote_protobuf_block(
         block_bytes: &[u8],
     ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
-        let block =
-            ProtoBlock::decode(block_bytes).map_err(|e| {
-                io::Error::other(format!("Failed to decode block: {e}"))
-            })?;
+        let block = ProtoBlock::decode(block_bytes)
+            .map_err(|e| io::Error::other(format!("Failed to decode block: {e}")))?;
         fuel_block_from_protobuf(block).map_err(|e| {
             io::Error::other(format!(
                 "Failed to convert RPC block to internal block: {e:?}"
@@ -1890,10 +1891,9 @@ impl FuelClient {
         for (k, v) in &http.headers {
             req = req.header(k, v);
         }
-        let res = req
-            .send()
-            .await
-            .map_err(|e| io::Error::other(format!("HTTP fetch for block object failed: {e}")))?;
+        let res = req.send().await.map_err(|e| {
+            io::Error::other(format!("HTTP fetch for block object failed: {e}"))
+        })?;
         if !res.status().is_success() {
             return Err(io::Error::other(format!(
                 "HTTP {} when fetching block object",
@@ -1933,7 +1933,8 @@ impl FuelClient {
         let obj = req.send().await.map_err(|e| {
             io::Error::other(format!("Failed to get object from S3: {e:?}"))
         })?;
-        let content_encoding = obj.content_encoding().map(std::string::ToString::to_string);
+        let content_encoding =
+            obj.content_encoding().map(std::string::ToString::to_string);
         let bytes = obj
             .body
             .collect()
@@ -1997,7 +1998,8 @@ impl FuelClient {
                     let maybe_aws_client = maybe_aws_client.clone();
                     let resp =
                         res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
-                    Self::convert_block_response(resp, maybe_aws_client, http_client).await
+                    Self::convert_block_response(resp, maybe_aws_client, http_client)
+                        .await
                 }
             });
         Ok(stream)
@@ -2027,7 +2029,8 @@ mod remote_block_body {
         body: &[u8],
         content_encoding: Option<&str>,
     ) -> std::io::Result<Vec<u8>> {
-        let Some(header) = content_encoding.map(str::trim).filter(|s| !s.is_empty()) else {
+        let Some(header) = content_encoding.map(str::trim).filter(|s| !s.is_empty())
+        else {
             return Ok(body.to_vec());
         };
         let tokens: Vec<&str> = header

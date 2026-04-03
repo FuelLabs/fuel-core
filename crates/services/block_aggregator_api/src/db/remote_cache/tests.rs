@@ -76,7 +76,8 @@ async fn get_block_range__happy_path() {
         .insert(&(), &Mode::new_s3(end))
         .unwrap();
 
-    let adapter = RemoteBlocksProvider::new(aws_bucket.clone(), false, None, None, storage);
+    let adapter =
+        RemoteBlocksProvider::new(aws_bucket.clone(), false, None, None, storage);
 
     // when
     let addresses = adapter.get_block_range(start, end).unwrap();
