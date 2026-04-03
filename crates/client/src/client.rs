@@ -1899,32 +1899,27 @@ impl FuelClient {
             return Ok(body.to_vec());
         }
         let mut data = body.to_vec();
-        for token in tokens.iter().rev() {
-            if token.eq_ignore_ascii_case("identity") {
+        for &token in tokens.iter().rev() {
+            let lower = token.trim().to_ascii_lowercase();
+            if lower.is_empty() || lower == "identity" {
                 continue;
             }
-            data = Self::decode_one_content_encoding_layer(&data, token)?;
+            data = Self::decode_one_content_encoding_layer(&data, &lower)?;
         }
         Ok(data)
     }
 
     fn decode_one_content_encoding_layer(
         data: &[u8],
-        token: &str,
+        token_lower: &str,
     ) -> io::Result<Vec<u8>> {
-        let t = token.trim();
-        if t.is_empty() || t.eq_ignore_ascii_case("identity") {
-            return Ok(data.to_vec());
+        match token_lower {
+            "gzip" | "x-gzip" => Self::gunzip_remote_block_bytes(data),
+            "deflate" => Self::inflate_deflate_remote_block_bytes(data),
+            _ => Err(io::Error::other(format!(
+                "unsupported Content-Encoding: {token_lower}"
+            ))),
         }
-        if t.eq_ignore_ascii_case("gzip") || t.eq_ignore_ascii_case("x-gzip") {
-            return Self::gunzip_remote_block_bytes(data);
-        }
-        if t.eq_ignore_ascii_case("deflate") {
-            return Self::inflate_deflate_remote_block_bytes(data);
-        }
-        Err(io::Error::other(format!(
-            "unsupported Content-Encoding: {token}"
-        )))
     }
 
     fn gunzip_remote_block_bytes(data: &[u8]) -> io::Result<Vec<u8>> {
