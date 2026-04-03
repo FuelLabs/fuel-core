@@ -180,7 +180,6 @@ mod rpc_deps {
         default_provider::credentials::DefaultCredentialsChain,
     };
     pub use aws_sdk_s3::Client as AWSClient;
-    pub use flate2::read::GzDecoder;
     pub use fuel_core_block_aggregator_api::{
         blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
         protobuf_types::{
@@ -190,6 +189,7 @@ mod rpc_deps {
             BlockResponse,
             NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
             RemoteBlockResponse,
+            RemoteHttpEndpoint,
             RemoteS3Bucket,
             block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
             block_response::Payload,
@@ -197,15 +197,26 @@ mod rpc_deps {
         },
     };
     pub use prost::Message;
-    pub use std::{
-        collections::HashMap,
-        io::Read,
-    };
+    pub use std::collections::HashMap;
     pub use tokio::sync::RwLock;
     pub use tonic::transport::Channel;
 }
 #[cfg(feature = "rpc")]
 use rpc_deps::*;
+
+/// `reqwest::Client` used only for fetching block bytes over HTTP(S). Automatic response
+/// decompression is disabled so `Content-Encoding` matches the raw body and
+/// [`remote_block_body::decode_body_by_content_encoding`] can decode deterministically.
+#[cfg(feature = "rpc")]
+fn remote_block_object_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .no_gzip()
+        .no_brotli()
+        .no_deflate()
+        .no_zstd()
+        .build()
+        .expect("reqwest ClientBuilder for remote block fetches should succeed")
+}
 
 pub mod pagination;
 pub mod schema;
@@ -287,6 +298,9 @@ pub struct FuelClient {
     rpc_client: Option<ProtoBlockAggregatorClient<Channel>>,
     #[cfg(feature = "rpc")]
     aws_client: AWSClientManager,
+    /// Shared HTTP client for remote block fetches (connection pool reuse).
+    #[cfg(feature = "rpc")]
+    http_client: reqwest::Client,
 }
 
 #[cfg(feature = "rpc")]
@@ -355,6 +369,8 @@ impl FromStr for FuelClient {
             rpc_client: None,
             #[cfg(feature = "rpc")]
             aws_client: AWSClientManager::new(),
+            #[cfg(feature = "rpc")]
+            http_client: remote_block_object_http_client(),
         })
     }
 }
@@ -424,6 +440,8 @@ impl FuelClient {
             rpc_client: None,
             #[cfg(feature = "rpc")]
             aws_client: AWSClientManager::new(),
+            #[cfg(feature = "rpc")]
+            http_client: remote_block_object_http_client(),
         })
     }
 
@@ -1775,11 +1793,12 @@ impl FuelClient {
             .into_inner()
             .then(|res| {
                 let maybe_aws_client = self.aws_client.clone();
+                let http_client = self.http_client.clone();
                 async move {
                     let maybe_aws_client = maybe_aws_client.clone();
                     let resp =
                         res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
-                    Self::convert_block_response(resp, maybe_aws_client).await
+                    Self::convert_block_response(resp, maybe_aws_client, http_client).await
                 }
             });
         Ok(stream)
@@ -1788,6 +1807,7 @@ impl FuelClient {
     async fn convert_block_response(
         resp: BlockResponse,
         s3_client: AWSClientManager,
+        http_client: reqwest::Client,
     ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
         let payload = resp
             .payload
@@ -1816,7 +1836,7 @@ impl FuelClient {
                             endpoint,
                             requester_pays,
                         } = s3;
-                        let zipped_bytes = Self::get_block_from_s3_bucket(
+                        let (body, content_encoding) = Self::get_block_from_s3_bucket(
                             s3_client,
                             &endpoint,
                             &bucket,
@@ -1825,31 +1845,80 @@ impl FuelClient {
                         )
                         .await?;
 
-                        let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
-                        let block =
-                            ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
-                                io::Error::other(format!("Failed to decode block: {e}"))
-                            })?;
-                        let (block, receipts) =
-                            fuel_block_from_protobuf(block).map_err(|e| {
-                                io::Error::other(format!(
-                                    "Failed to convert RPC block to internal block: {e:?}"
-                                ))
-                            })?;
-                        Ok((block, receipts))
+                        let block_bytes = remote_block_body::decode_body_by_content_encoding(
+                            body.as_ref(),
+                            content_encoding.as_deref(),
+                        )?;
+                        Self::decode_remote_protobuf_block(&block_bytes)
                     }
-                    _ => Err(io::Error::other("Remote blocks are not supported yet")),
+                    Some(Location::Http(http)) => {
+                        let (body, content_encoding) =
+                            Self::get_block_from_http(&http_client, &http).await?;
+                        let block_bytes = remote_block_body::decode_body_by_content_encoding(
+                            body.as_ref(),
+                            content_encoding.as_deref(),
+                        )?;
+                        Self::decode_remote_protobuf_block(&block_bytes)
+                    }
+                    None => Err(io::Error::other(
+                        "Remote block response missing location",
+                    )),
                 }
             }
         }
     }
+
+    fn decode_remote_protobuf_block(
+        block_bytes: &[u8],
+    ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
+        let block =
+            ProtoBlock::decode(block_bytes).map_err(|e| {
+                io::Error::other(format!("Failed to decode block: {e}"))
+            })?;
+        fuel_block_from_protobuf(block).map_err(|e| {
+            io::Error::other(format!(
+                "Failed to convert RPC block to internal block: {e:?}"
+            ))
+        })
+    }
+
+    async fn get_block_from_http(
+        client: &reqwest::Client,
+        http: &RemoteHttpEndpoint,
+    ) -> io::Result<(prost::bytes::Bytes, Option<String>)> {
+        let mut req = client.get(http.endpoint.clone());
+        for (k, v) in &http.headers {
+            req = req.header(k, v);
+        }
+        let res = req
+            .send()
+            .await
+            .map_err(|e| io::Error::other(format!("HTTP fetch for block object failed: {e}")))?;
+        if !res.status().is_success() {
+            return Err(io::Error::other(format!(
+                "HTTP {} when fetching block object",
+                res.status()
+            )));
+        }
+        let content_encoding = res
+            .headers()
+            .get(reqwest::header::CONTENT_ENCODING)
+            .and_then(|v| v.to_str().ok())
+            .map(std::string::ToString::to_string);
+        let bytes = res
+            .bytes()
+            .await
+            .map_err(|e| io::Error::other(format!("Reading block object body: {e}")))?;
+        Ok((bytes, content_encoding))
+    }
+
     async fn get_block_from_s3_bucket(
         s3_client: AWSClientManager,
         url: &Option<String>,
         bucket: &str,
         key: &str,
         requester_pays: bool,
-    ) -> io::Result<prost::bytes::Bytes> {
+    ) -> io::Result<(prost::bytes::Bytes, Option<String>)> {
         use aws_sdk_s3::types::RequestPayer;
         tracing::debug!("getting block from bucket: {} with key {}", bucket, key);
         let mut req = s3_client
@@ -1864,6 +1933,7 @@ impl FuelClient {
         let obj = req.send().await.map_err(|e| {
             io::Error::other(format!("Failed to get object from S3: {e:?}"))
         })?;
+        let content_encoding = obj.content_encoding().map(std::string::ToString::to_string);
         let bytes = obj
             .body
             .collect()
@@ -1872,7 +1942,7 @@ impl FuelClient {
                 io::Error::other(format!("Failed to get object from S3: {e:?}"))
             })?
             .into_bytes();
-        Ok(bytes)
+        Ok((bytes, content_encoding))
     }
 
     async fn new_aws_client(url: &Option<String>) -> AWSClient {
@@ -1886,13 +1956,6 @@ impl FuelClient {
         let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
         let config = builder.force_path_style(true).build();
         AWSClient::from_conf(config)
-    }
-
-    fn unzip_bytes(bytes: &[u8]) -> io::Result<Vec<u8>> {
-        let mut decoder = GzDecoder::new(bytes);
-        let mut output = Vec::new();
-        decoder.read_to_end(&mut output).map_err(io::Error::other)?;
-        Ok(output)
     }
 
     /// Used to get the synced height of the block aggregator,
@@ -1929,14 +1992,124 @@ impl FuelClient {
             .into_inner()
             .then(|res| {
                 let maybe_aws_client = self.aws_client.clone();
+                let http_client = self.http_client.clone();
                 async move {
                     let maybe_aws_client = maybe_aws_client.clone();
                     let resp =
                         res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
-                    Self::convert_block_response(resp, maybe_aws_client).await
+                    Self::convert_block_response(resp, maybe_aws_client, http_client).await
                 }
             });
         Ok(stream)
+    }
+}
+
+/// Decode remote block object bytes using `Content-Encoding` metadata (RFC 9110).
+///
+/// Used for HTTP GET responses (`Content-Encoding` header) and for S3 `GetObject` responses
+/// (`content_encoding` on the object). `FuelClient`'s HTTP client disables reqwest automatic
+/// decompression so body bytes and headers stay consistent.
+#[cfg(feature = "rpc")]
+mod remote_block_body {
+    use flate2::read::{
+        GzDecoder,
+        ZlibDecoder,
+    };
+    use std::io::{
+        Cursor,
+        Read,
+    };
+
+    /// Decodes the object body using a `Content-Encoding` value from HTTP headers or S3 object
+    /// metadata. Missing or empty means identity (raw protobuf bytes). Codings are listed in
+    /// application order; this reverses to decode from the outermost coding inward (RFC 9110).
+    pub fn decode_body_by_content_encoding(
+        body: &[u8],
+        content_encoding: Option<&str>,
+    ) -> std::io::Result<Vec<u8>> {
+        let Some(header) = content_encoding.map(str::trim).filter(|s| !s.is_empty()) else {
+            return Ok(body.to_vec());
+        };
+        let tokens: Vec<&str> = header
+            .split(',')
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .collect();
+        if tokens.is_empty() {
+            return Ok(body.to_vec());
+        }
+        let mut data = body.to_vec();
+        for token in tokens.iter().rev() {
+            if token.eq_ignore_ascii_case("identity") {
+                continue;
+            }
+            data = decode_one_layer(&data, token)?;
+        }
+        Ok(data)
+    }
+
+    fn decode_one_layer(data: &[u8], token: &str) -> std::io::Result<Vec<u8>> {
+        let t = token.trim();
+        if t.is_empty() || t.eq_ignore_ascii_case("identity") {
+            return Ok(data.to_vec());
+        }
+        if t.eq_ignore_ascii_case("gzip") || t.eq_ignore_ascii_case("x-gzip") {
+            return gunzip(data);
+        }
+        if t.eq_ignore_ascii_case("deflate") {
+            let mut decoder = ZlibDecoder::new(Cursor::new(data));
+            let mut output = Vec::new();
+            decoder
+                .read_to_end(&mut output)
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            return Ok(output);
+        }
+        Err(std::io::Error::other(format!(
+            "unsupported Content-Encoding: {token}"
+        )))
+    }
+
+    fn gunzip(data: &[u8]) -> std::io::Result<Vec<u8>> {
+        let mut decoder = GzDecoder::new(data);
+        let mut output = Vec::new();
+        decoder
+            .read_to_end(&mut output)
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        Ok(output)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::decode_body_by_content_encoding;
+        use flate2::{
+            Compression,
+            write::GzEncoder,
+        };
+        use std::io::Write;
+
+        #[test]
+        fn no_header_is_identity() {
+            let raw = b"payload";
+            let out = decode_body_by_content_encoding(raw, None).unwrap();
+            assert_eq!(out, raw);
+        }
+
+        #[test]
+        fn identity_header_passes_through() {
+            let raw = b"payload";
+            let out = decode_body_by_content_encoding(raw, Some("identity")).unwrap();
+            assert_eq!(out, raw);
+        }
+
+        #[test]
+        fn gzip_header_decompresses() {
+            let raw = b"protobuf-bytes";
+            let mut enc = GzEncoder::new(Vec::new(), Compression::default());
+            enc.write_all(raw).unwrap();
+            let gz = enc.finish().unwrap();
+            let out = decode_body_by_content_encoding(&gz, Some("gzip")).unwrap();
+            assert_eq!(out, raw);
+        }
     }
 }
 

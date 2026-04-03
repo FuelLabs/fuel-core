@@ -1,6 +1,9 @@
 use super::*;
 use crate::{
-    block_range_response::RemoteS3Response,
+    block_range_response::{
+        RemoteBlockPayload,
+        RemoteS3Response,
+    },
     blocks::old_block_source::{
         BlockConverter,
         convertor_adapter::ProtobufBlockConverter,
@@ -73,14 +76,14 @@ async fn get_block_range__happy_path() {
         .insert(&(), &Mode::new_s3(end))
         .unwrap();
 
-    let adapter = RemoteBlocksProvider::new(aws_bucket.clone(), false, None, storage);
+    let adapter = RemoteBlocksProvider::new(aws_bucket.clone(), false, None, None, storage);
 
     // when
     let addresses = adapter.get_block_range(start, end).unwrap();
 
     // then
     let actual = match addresses {
-        BlockRangeResponse::S3(stream) => stream.collect::<Vec<_>>().await,
+        BlockRangeResponse::Remote(stream) => stream.collect::<Vec<_>>().await,
         _ => {
             panic!("Expected remote response, got literal");
         }
@@ -94,10 +97,22 @@ async fn get_block_range__happy_path() {
                 requester_pays: false,
                 aws_endpoint: None,
             };
-            (BlockHeight::new(height), res)
+            (BlockHeight::new(height), RemoteBlockPayload::S3(res))
         })
         .collect::<Vec<_>>();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn public_http_object_url__joins_base_and_key() {
+    assert_eq!(
+        public_http_object_url("https://cdn.example/blocks", "aa/bb/cc/dd"),
+        "https://cdn.example/blocks/aa/bb/cc/dd"
+    );
+    assert_eq!(
+        public_http_object_url("https://cdn.example/blocks/", "/aa/bb/cc/dd"),
+        "https://cdn.example/blocks/aa/bb/cc/dd"
+    );
 }
 
 #[tokio::test]

@@ -47,6 +47,8 @@ async fn get_block_height__can_get_value_from_rpc() {
         bucket: "test-bucket".to_string(),
         endpoint_url: Some(endpoint_url),
         requester_pays: false,
+        public_block_http_url: None,
+        public_block_http_headers: Default::default(),
     };
     let config = Config::local_node_with_rpc_and_storage_method(storage_method);
 
@@ -136,6 +138,8 @@ async fn get_block_range__can_get_from_remote_s3_bucket() {
         bucket: "test-bucket".to_string(),
         endpoint_url: Some(endpoint_url),
         requester_pays: false,
+        public_block_http_url: None,
+        public_block_http_headers: Default::default(),
     };
     let config = Config::local_node_with_rpc_and_storage_method(storage_method);
     let srv = FuelService::from_database(Database::default(), config.clone())
@@ -199,6 +203,8 @@ async fn get_block_height__no_publish__can_get_value_from_rpc() {
         bucket: "test-bucket".to_string(),
         endpoint_url: Some(endpoint_url),
         requester_pays: false,
+        public_block_http_url: None,
+        public_block_http_headers: Default::default(),
     };
     let config = Config::local_node_with_rpc_and_storage_method(storage_method);
 
@@ -242,6 +248,8 @@ async fn submit_and_await_commit__no_publish__does_not_publish_to_s3_bucket() {
         bucket: "test-bucket".to_string(),
         endpoint_url: Some(endpoint_url),
         requester_pays: false,
+        public_block_http_url: None,
+        public_block_http_headers: Default::default(),
     };
     let config = Config::local_node_with_rpc_and_storage_method(storage_method);
     let srv = FuelService::from_database(Database::default(), config.clone())

@@ -7,6 +7,7 @@ use crate::{
     },
     block_range_response::{
         BlockRangeResponse,
+        RemoteBlockPayload,
         RemoteS3Response,
     },
     blocks::old_block_source::{
@@ -139,7 +140,7 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
     let mut api = MockBlocksAggregatorApi::default();
 
     // Given
-    let list: Vec<_> = [(BlockHeight::new(1), "1"), (BlockHeight::new(2), "2")]
+    let expected: Vec<(BlockHeight, RemoteS3Response)> = [(BlockHeight::new(1), "1"), (BlockHeight::new(2), "2")]
         .iter()
         .map(|(height, key)| {
             let bucket = "test-bucket".to_string();
@@ -153,11 +154,14 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
             (*height, res)
         })
         .collect();
-    let expected = list.clone();
+    let list: Vec<_> = expected
+        .iter()
+        .map(|(h, s)| (*h, RemoteBlockPayload::S3(s.clone())))
+        .collect();
     api.expect_get_block_range()
         .times(1)
         .returning(move |_: u32, _: u32| {
-            let response = BlockRangeResponse::S3(
+            let response = BlockRangeResponse::Remote(
                 futures::stream::iter(list.clone().into_iter()).boxed(),
             );
             Ok(response)

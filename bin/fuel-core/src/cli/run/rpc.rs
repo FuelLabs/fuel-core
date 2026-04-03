@@ -3,7 +3,20 @@ use clap::{
     ValueEnum,
 };
 use fuel_core_types::fuel_types::BlockHeight;
-use std::net;
+use std::{
+    collections::HashMap,
+    net,
+};
+
+fn parse_public_http_headers(entries: &[String]) -> HashMap<String, String> {
+    entries
+        .iter()
+        .filter_map(|e| {
+            e.split_once('=')
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, Args)]
 pub struct RpcArgs {
@@ -29,6 +42,15 @@ pub struct RpcArgs {
     #[clap(long = "rpc-s3-requester-pays", env, default_value = "false")]
     pub rpc_s3_requester_pays: bool,
 
+    /// Public HTTP(S) base URL for block objects (e.g. CDN in front of the S3 bucket). When set,
+    /// gRPC returns `RemoteHttpEndpoint` URLs (`{base}/{s3-key}`) instead of `RemoteS3Bucket`; uploads still use S3.
+    #[clap(long = "rpc-public-block-http-url", env)]
+    pub rpc_public_block_http_url: Option<String>,
+
+    /// Optional extra HTTP headers for clients fetching blocks from `--rpc-public-block-http-url` (format `NAME=value`, repeatable).
+    #[clap(long = "rpc-public-block-http-header", env, value_name = "NAME=value")]
+    pub rpc_public_block_http_headers: Vec<String>,
+
     #[clap(long = "rpc-api_buffer_size", default_value = "1000", env)]
     pub rpc_api_buffer_size: usize,
 }
@@ -43,6 +65,7 @@ pub enum StorageMethod {
 
 impl RpcArgs {
     pub fn into_config(self) -> fuel_core_block_aggregator_api::service::Config {
+        let public_headers = parse_public_http_headers(&self.rpc_public_block_http_headers);
         let storage_method = match self.rpc_storage_method {
             StorageMethod::Local => {
                 fuel_core_block_aggregator_api::service::StorageMethod::Local
@@ -54,6 +77,8 @@ impl RpcArgs {
                         .expect("storage_method=s3 requires --bucket"),
                     endpoint_url: self.rpc_endpoint_url,
                     requester_pays: self.rpc_s3_requester_pays,
+                    public_block_http_url: self.rpc_public_block_http_url,
+                    public_block_http_headers: public_headers.clone(),
                 }
             }
             StorageMethod::S3NoPublish => {
@@ -63,6 +88,8 @@ impl RpcArgs {
                         .expect("storage_method=s3-no-publish requires --bucket"),
                     endpoint_url: self.rpc_endpoint_url,
                     requester_pays: self.rpc_s3_requester_pays,
+                    public_block_http_url: self.rpc_public_block_http_url,
+                    public_block_http_headers: public_headers,
                 }
             }
         };
