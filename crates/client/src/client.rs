@@ -180,6 +180,10 @@ mod rpc_deps {
         default_provider::credentials::DefaultCredentialsChain,
     };
     pub use aws_sdk_s3::Client as AWSClient;
+    pub use flate2::read::{
+        GzDecoder,
+        ZlibDecoder,
+    };
     pub use fuel_core_block_aggregator_api::{
         blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
         protobuf_types::{
@@ -197,7 +201,13 @@ mod rpc_deps {
         },
     };
     pub use prost::Message;
-    pub use std::collections::HashMap;
+    pub use std::{
+        collections::HashMap,
+        io::{
+            Cursor,
+            Read,
+        },
+    };
     pub use tokio::sync::RwLock;
     pub use tonic::transport::Channel;
 }
@@ -205,8 +215,8 @@ mod rpc_deps {
 use rpc_deps::*;
 
 /// `reqwest::Client` used only for fetching block bytes over HTTP(S). Automatic response
-/// decompression is disabled so `Content-Encoding` matches the raw body and
-/// [`remote_block_body::decode_body_by_content_encoding`] can decode deterministically.
+/// decompression is disabled so `Content-Encoding` matches the raw body and manual decoding in
+/// `FuelClient` stays consistent.
 #[cfg(feature = "rpc")]
 fn remote_block_object_http_client() -> reqwest::Client {
     reqwest::Client::builder()
@@ -1846,21 +1856,19 @@ impl FuelClient {
                         )
                         .await?;
 
-                        let block_bytes =
-                            remote_block_body::decode_body_by_content_encoding(
-                                body.as_ref(),
-                                content_encoding.as_deref(),
-                            )?;
+                        let block_bytes = Self::decode_remote_block_object_body(
+                            body.as_ref(),
+                            content_encoding.as_deref(),
+                        )?;
                         Self::decode_remote_protobuf_block(&block_bytes)
                     }
                     Some(Location::Http(http)) => {
                         let (body, content_encoding) =
                             Self::get_block_from_http(&http_client, &http).await?;
-                        let block_bytes =
-                            remote_block_body::decode_body_by_content_encoding(
-                                body.as_ref(),
-                                content_encoding.as_deref(),
-                            )?;
+                        let block_bytes = Self::decode_remote_block_object_body(
+                            body.as_ref(),
+                            content_encoding.as_deref(),
+                        )?;
                         Self::decode_remote_protobuf_block(&block_bytes)
                     }
                     None => {
@@ -1869,6 +1877,79 @@ impl FuelClient {
                 }
             }
         }
+    }
+
+    /// Decodes the object body using a `Content-Encoding` value from HTTP headers or S3 object
+    /// metadata. Missing or empty means identity (raw protobuf bytes). Codings are listed in
+    /// application order; this reverses to decode from the outermost coding inward (RFC 9110).
+    fn decode_remote_block_object_body(
+        body: &[u8],
+        content_encoding: Option<&str>,
+    ) -> io::Result<Vec<u8>> {
+        Self::decode_body_by_content_encoding(body, content_encoding)
+    }
+
+    fn decode_body_by_content_encoding(
+        body: &[u8],
+        content_encoding: Option<&str>,
+    ) -> io::Result<Vec<u8>> {
+        let Some(header) = content_encoding.map(str::trim).filter(|s| !s.is_empty())
+        else {
+            return Ok(body.to_vec());
+        };
+        let tokens: Vec<&str> = header
+            .split(',')
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .collect();
+        if tokens.is_empty() {
+            return Ok(body.to_vec());
+        }
+        let mut data = body.to_vec();
+        for token in tokens.iter().rev() {
+            if token.eq_ignore_ascii_case("identity") {
+                continue;
+            }
+            data = Self::decode_one_content_encoding_layer(&data, token)?;
+        }
+        Ok(data)
+    }
+
+    fn decode_one_content_encoding_layer(
+        data: &[u8],
+        token: &str,
+    ) -> io::Result<Vec<u8>> {
+        let t = token.trim();
+        if t.is_empty() || t.eq_ignore_ascii_case("identity") {
+            return Ok(data.to_vec());
+        }
+        if t.eq_ignore_ascii_case("gzip") || t.eq_ignore_ascii_case("x-gzip") {
+            return Self::gunzip_remote_block_bytes(data);
+        }
+        if t.eq_ignore_ascii_case("deflate") {
+            return Self::inflate_deflate_remote_block_bytes(data);
+        }
+        Err(io::Error::other(format!(
+            "unsupported Content-Encoding: {token}"
+        )))
+    }
+
+    fn gunzip_remote_block_bytes(data: &[u8]) -> io::Result<Vec<u8>> {
+        let mut decoder = GzDecoder::new(data);
+        let mut output = Vec::new();
+        decoder
+            .read_to_end(&mut output)
+            .map_err(|e| io::Error::other(e.to_string()))?;
+        Ok(output)
+    }
+
+    fn inflate_deflate_remote_block_bytes(data: &[u8]) -> io::Result<Vec<u8>> {
+        let mut decoder = ZlibDecoder::new(Cursor::new(data));
+        let mut output = Vec::new();
+        decoder
+            .read_to_end(&mut output)
+            .map_err(|e| io::Error::other(e.to_string()))?;
+        Ok(output)
     }
 
     fn decode_remote_protobuf_block(
@@ -2006,116 +2087,6 @@ impl FuelClient {
     }
 }
 
-/// Decode remote block object bytes using `Content-Encoding` metadata (RFC 9110).
-///
-/// Used for HTTP GET responses (`Content-Encoding` header) and for S3 `GetObject` responses
-/// (`content_encoding` on the object). `FuelClient`'s HTTP client disables reqwest automatic
-/// decompression so body bytes and headers stay consistent.
-#[cfg(feature = "rpc")]
-mod remote_block_body {
-    use flate2::read::{
-        GzDecoder,
-        ZlibDecoder,
-    };
-    use std::io::{
-        Cursor,
-        Read,
-    };
-
-    /// Decodes the object body using a `Content-Encoding` value from HTTP headers or S3 object
-    /// metadata. Missing or empty means identity (raw protobuf bytes). Codings are listed in
-    /// application order; this reverses to decode from the outermost coding inward (RFC 9110).
-    pub fn decode_body_by_content_encoding(
-        body: &[u8],
-        content_encoding: Option<&str>,
-    ) -> std::io::Result<Vec<u8>> {
-        let Some(header) = content_encoding.map(str::trim).filter(|s| !s.is_empty())
-        else {
-            return Ok(body.to_vec());
-        };
-        let tokens: Vec<&str> = header
-            .split(',')
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .collect();
-        if tokens.is_empty() {
-            return Ok(body.to_vec());
-        }
-        let mut data = body.to_vec();
-        for token in tokens.iter().rev() {
-            if token.eq_ignore_ascii_case("identity") {
-                continue;
-            }
-            data = decode_one_layer(&data, token)?;
-        }
-        Ok(data)
-    }
-
-    fn decode_one_layer(data: &[u8], token: &str) -> std::io::Result<Vec<u8>> {
-        let t = token.trim();
-        if t.is_empty() || t.eq_ignore_ascii_case("identity") {
-            return Ok(data.to_vec());
-        }
-        if t.eq_ignore_ascii_case("gzip") || t.eq_ignore_ascii_case("x-gzip") {
-            return gunzip(data);
-        }
-        if t.eq_ignore_ascii_case("deflate") {
-            let mut decoder = ZlibDecoder::new(Cursor::new(data));
-            let mut output = Vec::new();
-            decoder
-                .read_to_end(&mut output)
-                .map_err(|e| std::io::Error::other(e.to_string()))?;
-            return Ok(output);
-        }
-        Err(std::io::Error::other(format!(
-            "unsupported Content-Encoding: {token}"
-        )))
-    }
-
-    fn gunzip(data: &[u8]) -> std::io::Result<Vec<u8>> {
-        let mut decoder = GzDecoder::new(data);
-        let mut output = Vec::new();
-        decoder
-            .read_to_end(&mut output)
-            .map_err(|e| std::io::Error::other(e.to_string()))?;
-        Ok(output)
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::decode_body_by_content_encoding;
-        use flate2::{
-            Compression,
-            write::GzEncoder,
-        };
-        use std::io::Write;
-
-        #[test]
-        fn no_header_is_identity() {
-            let raw = b"payload";
-            let out = decode_body_by_content_encoding(raw, None).unwrap();
-            assert_eq!(out, raw);
-        }
-
-        #[test]
-        fn identity_header_passes_through() {
-            let raw = b"payload";
-            let out = decode_body_by_content_encoding(raw, Some("identity")).unwrap();
-            assert_eq!(out, raw);
-        }
-
-        #[test]
-        fn gzip_header_decompresses() {
-            let raw = b"protobuf-bytes";
-            let mut enc = GzEncoder::new(Vec::new(), Compression::default());
-            enc.write_all(raw).unwrap();
-            let gz = enc.finish().unwrap();
-            let out = decode_body_by_content_encoding(&gz, Some("gzip")).unwrap();
-            assert_eq!(out, raw);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2180,5 +2151,41 @@ mod tests {
             client_new.get_default_url().as_str(),
             client_with_urls.get_default_url().as_str()
         );
+    }
+
+    #[cfg(feature = "rpc")]
+    mod remote_block_object_decode_tests {
+        use super::FuelClient;
+        use flate2::{
+            Compression,
+            write::GzEncoder,
+        };
+        use std::io::Write;
+
+        #[test]
+        fn no_header_is_identity() {
+            let raw = b"payload";
+            let out = FuelClient::decode_remote_block_object_body(raw, None).unwrap();
+            assert_eq!(out, raw);
+        }
+
+        #[test]
+        fn identity_header_passes_through() {
+            let raw = b"payload";
+            let out = FuelClient::decode_remote_block_object_body(raw, Some("identity"))
+                .unwrap();
+            assert_eq!(out, raw);
+        }
+
+        #[test]
+        fn gzip_header_decompresses() {
+            let raw = b"protobuf-bytes";
+            let mut enc = GzEncoder::new(Vec::new(), Compression::default());
+            enc.write_all(raw).unwrap();
+            let gz = enc.finish().unwrap();
+            let out =
+                FuelClient::decode_remote_block_object_body(&gz, Some("gzip")).unwrap();
+            assert_eq!(out, raw);
+        }
     }
 }
