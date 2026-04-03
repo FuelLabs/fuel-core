@@ -7,8 +7,8 @@ FizzBee model-checking specifications for the high-availability sequencer protoc
 | File | Description |
 |------|-------------|
 | `sequencer_ha_v2.fizz` | **Current** — Adversarial model with HEIGHT_EXISTS, de-atomized commits, per-sequencer local_db, and sub-quorum repair |
-| `sequencer_ha.fizz` | **Historical** — Original model that passed verification but missed two critical bugs (see [POST_MORTEM.md](POST_MORTEM.md)) |
-| `POST_MORTEM.md` | Analysis of six abstraction flaws in the original model |
+
+Historical v1 artifacts are referenced below for comparison, but they are not included in this directory anymore.
 
 ## What v2 Verifies
 
@@ -107,7 +107,5 @@ Re-run — the `NoFork` assertion should produce a counterexample (zombie leader
 ```
 docs/poa/formal/
 ├── sequencer_ha_v2.fizz   # Current adversarial FizzBee specification
-├── sequencer_ha.fizz      # Historical v1 specification (flawed)
-├── POST_MORTEM.md         # Analysis of v1's abstraction errors
 └── README.md              # This file
 ```
