@@ -1856,7 +1856,7 @@ impl FuelClient {
                         )
                         .await?;
 
-                        let block_bytes = Self::decode_remote_block_object_body(
+                        let block_bytes = Self::decode_body_by_content_encoding(
                             body.as_ref(),
                             content_encoding.as_deref(),
                         )?;
@@ -1865,7 +1865,7 @@ impl FuelClient {
                     Some(Location::Http(http)) => {
                         let (body, content_encoding) =
                             Self::get_block_from_http(&http_client, &http).await?;
-                        let block_bytes = Self::decode_remote_block_object_body(
+                        let block_bytes = Self::decode_body_by_content_encoding(
                             body.as_ref(),
                             content_encoding.as_deref(),
                         )?;
@@ -1882,13 +1882,6 @@ impl FuelClient {
     /// Decodes the object body using a `Content-Encoding` value from HTTP headers or S3 object
     /// metadata. Missing or empty means identity (raw protobuf bytes). Codings are listed in
     /// application order; this reverses to decode from the outermost coding inward (RFC 9110).
-    fn decode_remote_block_object_body(
-        body: &[u8],
-        content_encoding: Option<&str>,
-    ) -> io::Result<Vec<u8>> {
-        Self::decode_body_by_content_encoding(body, content_encoding)
-    }
-
     fn decode_body_by_content_encoding(
         body: &[u8],
         content_encoding: Option<&str>,
@@ -2165,14 +2158,14 @@ mod tests {
         #[test]
         fn no_header_is_identity() {
             let raw = b"payload";
-            let out = FuelClient::decode_remote_block_object_body(raw, None).unwrap();
+            let out = FuelClient::decode_body_by_content_encoding(raw, None).unwrap();
             assert_eq!(out, raw);
         }
 
         #[test]
         fn identity_header_passes_through() {
             let raw = b"payload";
-            let out = FuelClient::decode_remote_block_object_body(raw, Some("identity"))
+            let out = FuelClient::decode_body_by_content_encoding(raw, Some("identity"))
                 .unwrap();
             assert_eq!(out, raw);
         }
@@ -2184,7 +2177,7 @@ mod tests {
             enc.write_all(raw).unwrap();
             let gz = enc.finish().unwrap();
             let out =
-                FuelClient::decode_remote_block_object_body(&gz, Some("gzip")).unwrap();
+                FuelClient::decode_body_by_content_encoding(&gz, Some("gzip")).unwrap();
             assert_eq!(out, raw);
         }
     }
