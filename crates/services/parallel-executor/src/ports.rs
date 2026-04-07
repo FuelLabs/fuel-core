@@ -28,6 +28,8 @@ impl Filter {
 pub struct TransactionSourceExecutableTransactions {
     /// The transactions that can be executed
     pub transactions: Vec<MaybeCheckedTransaction>,
+    /// Anchor contracts selected by the tx pool while building this batch
+    pub anchor_contract_ids: Vec<ContractId>,
     /// Indicates whether some transactions were filtered out based on the filter
     pub filtered: TransactionFiltered,
     /// The filter used to fetch these transactions

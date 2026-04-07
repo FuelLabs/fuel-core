@@ -20,6 +20,7 @@ regex = "1"
 strum = { workspace = true }
 strum_macros = { workspace = true }
 tracing = { workspace = true }
+fuel-core-types = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

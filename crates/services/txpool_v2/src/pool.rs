@@ -375,10 +375,10 @@ where
     /// Extract transactions for a block.
     /// Returns a list of transactions that were selected for the block
     /// based on the constraints given in the configuration and the selection algorithm used.
-    pub fn extract_transactions_for_block(
+    pub fn extract_transactions_for_block_with_anchors(
         &mut self,
         constraints: &Constraints,
-    ) -> Vec<ArcPoolTx> {
+    ) -> (Vec<ArcPoolTx>, Vec<fuel_core_types::fuel_tx::ContractId>) {
         let metrics = self.config.metrics;
         let maybe_start = metrics.then(std::time::Instant::now);
         let select_start = Instant::now();
@@ -388,6 +388,7 @@ where
         let best_txs = self
             .selection_algorithm
             .gather_best_txs(constraints, &mut self.storage);
+        let selected_anchors = self.selection_algorithm.last_selection_anchors().to_vec();
         let select_elapsed = select_start.elapsed();
 
         if let Some(start) = maybe_start {
@@ -426,11 +427,12 @@ where
             tx_count_after,
             executable_after,
             selected_count = txs.len(),
+            selected_anchor_count = selected_anchors.len(),
             select_time_us = select_elapsed.as_micros(),
             "txpool_v2 selection summary"
         );
 
-        txs
+        (txs, selected_anchors)
     }
 
     pub fn get(&self, tx_id: &TxId) -> Option<&StorageData> {

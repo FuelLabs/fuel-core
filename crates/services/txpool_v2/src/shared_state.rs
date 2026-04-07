@@ -93,7 +93,7 @@ impl SharedState {
         loop {
             let result = select_transactions_receiver.try_recv();
             match result {
-                Ok((txs, _)) => {
+                Ok((txs, _, _)) => {
                     return Ok(txs);
                 }
                 Err(TryRecvError::Empty) => continue,
@@ -107,7 +107,7 @@ impl SharedState {
     pub async fn extract_transactions_for_block_async(
         &self,
         constraints: Constraints,
-    ) -> Result<(Vec<ArcPoolTx>, HashSet<ContractId>), Error> {
+    ) -> Result<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>), Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender

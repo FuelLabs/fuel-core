@@ -55,6 +55,9 @@ pub trait SelectionAlgorithm {
     /// Get less worth transactions iterator
     fn get_less_worth_txs(&self) -> impl Iterator<Item = &Self::StorageIndex>;
 
+    /// Returns the anchor contracts chosen during the most recent selection call.
+    fn last_selection_anchors(&self) -> &[ContractId];
+
     /// Inform the selection algorithm that a transaction was removed from the pool.
     fn on_removed_transaction(&mut self, storage_entry: &StorageData);
 }

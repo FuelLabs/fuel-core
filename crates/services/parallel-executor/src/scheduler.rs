@@ -435,6 +435,15 @@ where
         let mut execution_time_recorded = false;
         let mut nb_batch_created = 0;
         let mut nb_transactions: u32 = l1_execution_data.tx_count;
+        let mut non_empty_batch_tx_counts = self.config.metrics.then(Vec::new);
+        let mut non_empty_batch_allocated_gas = self.config.metrics.then(Vec::new);
+        let mut non_empty_batch_used_gas = self.config.metrics.then(Vec::new);
+        let mut non_empty_batch_anchors = self.config.metrics.then(Vec::new);
+        let batch_metrics_block_height = self
+            .config
+            .metrics
+            .then(parallel_executor_metrics::next_debug_batch_metrics_block_height)
+            .unwrap_or(0);
         let initial_gas_per_worker = self
             .consensus_parameters
             .block_gas_limit()
@@ -462,7 +471,7 @@ where
                 // so we await them here.
                 let batch_prepare_start = Instant::now();
                 let selection_worker_count = self.selection_worker_count();
-                let mut batch = self
+                let (mut batch, anchor_contract_ids) = self
                     .ask_new_transactions_batch(
                         tx_source,
                         now,
@@ -491,6 +500,20 @@ where
 
                 let batch_len = batch.number_of_transactions;
                 if self.config.metrics {
+                    if let Some(batch_tx_counts) = non_empty_batch_tx_counts.as_mut() {
+                        batch_tx_counts.push(batch_len);
+                    }
+                    if let Some(batch_allocated_gas) =
+                        non_empty_batch_allocated_gas.as_mut()
+                    {
+                        batch_allocated_gas.push(batch.gas);
+                    }
+                    if let Some(batch_used_gas) = non_empty_batch_used_gas.as_mut() {
+                        batch_used_gas.push(0);
+                    }
+                    if let Some(batch_anchors) = non_empty_batch_anchors.as_mut() {
+                        batch_anchors.push(anchor_contract_ids);
+                    }
                     parallel_executor_metrics::record_batch_prepare(
                         batch_prepare_duration,
                         batch_len,
@@ -567,6 +590,15 @@ where
                                 }
 
                                 if self.config.metrics {
+                                    if let Some(batch_used_gas) =
+                                        non_empty_batch_used_gas.as_mut()
+                                    {
+                                        if let Some(slot) = batch_used_gas
+                                            .get_mut(res.batch_id)
+                                        {
+                                            *slot = res.used_gas;
+                                        }
+                                    }
                                     if let Some(batch_preparations) =
                                         self.batch_preparations.as_mut()
                                     {
@@ -628,6 +660,22 @@ where
                     .as_ref()
                     .map(|counters| counters.max.load(Ordering::Relaxed))
                     .unwrap_or(0),
+            );
+            parallel_executor_metrics::set_non_empty_batch_transactions(
+                batch_metrics_block_height,
+                non_empty_batch_tx_counts.as_deref().unwrap_or(&[]),
+            );
+            parallel_executor_metrics::set_non_empty_batch_allocated_gas(
+                batch_metrics_block_height,
+                non_empty_batch_allocated_gas.as_deref().unwrap_or(&[]),
+            );
+            parallel_executor_metrics::set_non_empty_batch_used_gas(
+                batch_metrics_block_height,
+                non_empty_batch_used_gas.as_deref().unwrap_or(&[]),
+            );
+            parallel_executor_metrics::set_batch_anchor_contracts(
+                batch_metrics_block_height,
+                non_empty_batch_anchors.as_deref().unwrap_or(&[]),
             );
             if let Some(counters) = self.worker_counters.as_ref() {
                 counters.reset();
@@ -731,7 +779,7 @@ where
         start_execution_time: Instant,
         initial_gas_per_core: u64,
         selection_worker_count: usize,
-    ) -> Result<PreparedBatch, SchedulerError>
+    ) -> Result<(PreparedBatch, Vec<ContractId>), SchedulerError>
     where
         TxSource: TransactionsSource,
     {
@@ -779,6 +827,7 @@ where
             })?;
         self.current_executing_contracts =
             executable_transactions.filter.excluded_contract_ids;
+        let anchor_contract_ids = executable_transactions.anchor_contract_ids;
 
         let prepared_batch = prepare_transactions_batch(
             &self.consensus_parameters,
@@ -794,7 +843,7 @@ where
             instant.elapsed(),
             prepared_batch.number_of_transactions
         );
-        Ok(prepared_batch)
+        Ok((prepared_batch, anchor_contract_ids))
     }
 
     fn selection_worker_count(&self) -> usize {

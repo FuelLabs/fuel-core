@@ -210,7 +210,8 @@ pub(super) enum PoolInsertRequest {
 pub(super) enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
-        transactions: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>)>,
+        transactions:
+            oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>)>,
     },
 }
 
@@ -499,7 +500,7 @@ where
     fn extract_block_transactions(
         &mut self,
         constraints: Constraints,
-        blocks: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>)>,
+        blocks: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>)>,
     ) {
         tracing::warn!(
             max_gas = constraints.max_gas,
@@ -513,12 +514,17 @@ where
                 .number_of_executable_transactions(),
             "txpool_v2 extract_block_transactions start"
         );
-        let txs = self.pool.extract_transactions_for_block(&constraints);
+        let (txs, selected_anchors) =
+            self.pool.extract_transactions_for_block_with_anchors(&constraints);
         tracing::warn!(
             result_size = txs.len(),
+            selected_anchor_count = selected_anchors.len(),
             "txpool_v2 extract_block_transactions result"
         );
-        if blocks.send((txs, constraints.excluded_contracts)).is_err() {
+        if blocks
+            .send((txs, constraints.excluded_contracts, selected_anchors))
+            .is_err()
+        {
             tracing::error!("Failed to send block transactions");
         }
     }

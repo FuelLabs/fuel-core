@@ -5,10 +5,13 @@ use crate::{
     },
     global_registry,
 };
+use fuel_core_types::fuel_tx::ContractId;
 use prometheus_client::metrics::{
+    family::Family,
     gauge::Gauge,
     histogram::Histogram,
 };
+use prometheus_client::encoding::EncodeLabelSet;
 use std::{
     sync::{
         OnceLock,
@@ -25,6 +28,11 @@ pub struct ParallelExecutorMetrics {
     pub total_gas_used: Gauge,
     pub block_height: Gauge,
     pub max_workers_used: Gauge,
+    pub non_empty_batches: Gauge,
+    pub non_empty_batch_transactions: Family<BatchMetricLabel, Gauge>,
+    pub non_empty_batch_allocated_gas: Family<BatchMetricLabel, Gauge>,
+    pub non_empty_batch_used_gas: Family<BatchMetricLabel, Gauge>,
+    pub batch_anchor_contracts: Family<BatchAnchorLabel, Gauge>,
     pub block_production_time_seconds: Gauge<f64, AtomicU64>,
     pub scheduler_run_time_seconds: Gauge<f64, AtomicU64>,
     pub batch_prepare_ms: Histogram,
@@ -36,6 +44,20 @@ pub struct ParallelExecutorMetrics {
     pub batch_total_ms: Histogram,
     pub batch_total_us_per_tx: Histogram,
     pub batch_total_ns_per_kgas: Histogram,
+    debug_batch_metrics_block_height: AtomicU64,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct BatchMetricLabel {
+    pub block_height: u64,
+    pub batch_index: u64,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
+pub struct BatchAnchorLabel {
+    pub block_height: u64,
+    pub batch_index: u64,
+    pub contract_id: String,
 }
 
 impl Default for ParallelExecutorMetrics {
@@ -45,6 +67,11 @@ impl Default for ParallelExecutorMetrics {
         let total_gas_used = Gauge::default();
         let block_height = Gauge::default();
         let max_workers_used = Gauge::default();
+        let non_empty_batches = Gauge::default();
+        let non_empty_batch_transactions = Family::default();
+        let non_empty_batch_allocated_gas = Family::default();
+        let non_empty_batch_used_gas = Family::default();
+        let batch_anchor_contracts = Family::default();
         let block_production_time_seconds = Gauge::default();
         let scheduler_run_time_seconds = Gauge::default();
         let batch_prepare_ms =
@@ -75,6 +102,11 @@ impl Default for ParallelExecutorMetrics {
             total_gas_used,
             block_height,
             max_workers_used,
+            non_empty_batches,
+            non_empty_batch_transactions,
+            non_empty_batch_allocated_gas,
+            non_empty_batch_used_gas,
+            batch_anchor_contracts,
             block_production_time_seconds,
             scheduler_run_time_seconds,
             batch_prepare_ms,
@@ -86,6 +118,7 @@ impl Default for ParallelExecutorMetrics {
             batch_total_ms,
             batch_total_us_per_tx,
             batch_total_ns_per_kgas,
+            debug_batch_metrics_block_height: AtomicU64::new(0),
         };
 
         let mut registry = global_registry().registry.lock();
@@ -113,6 +146,31 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_max_workers_used",
             "Maximum number of workers used concurrently by the parallel executor per block",
             metrics.max_workers_used.clone(),
+        );
+        registry.register(
+            "parallel_executor_non_empty_batches",
+            "Number of non-empty transaction batches created by the parallel executor per block",
+            metrics.non_empty_batches.clone(),
+        );
+        registry.register(
+            "parallel_executor_non_empty_batch_transactions",
+            "Exact transaction counts for each non-empty batch keyed by synthetic block_height and batch_index",
+            metrics.non_empty_batch_transactions.clone(),
+        );
+        registry.register(
+            "parallel_executor_non_empty_batch_allocated_gas",
+            "Allocated gas for each non-empty batch keyed by synthetic block_height and batch_index",
+            metrics.non_empty_batch_allocated_gas.clone(),
+        );
+        registry.register(
+            "parallel_executor_non_empty_batch_used_gas",
+            "Used gas for each non-empty batch keyed by synthetic block_height and batch_index",
+            metrics.non_empty_batch_used_gas.clone(),
+        );
+        registry.register(
+            "parallel_executor_batch_anchor_contract",
+            "Anchor contract ids chosen for each non-empty batch keyed by synthetic block_height and batch_index",
+            metrics.batch_anchor_contracts.clone(),
         );
         registry.register(
             "parallel_executor_block_production_time_seconds",
@@ -204,6 +262,79 @@ pub fn set_max_workers_used(max_workers_used: u32) {
     parallel_executor_metrics()
         .max_workers_used
         .set(max_workers_used as i64);
+}
+
+pub fn next_debug_batch_metrics_block_height() -> u64 {
+    // TODO: Replace this synthetic block id with a real block/run identifier before merge.
+    parallel_executor_metrics()
+        .debug_batch_metrics_block_height
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        .saturating_add(1)
+}
+
+pub fn set_non_empty_batch_transactions(
+    block_height: u64,
+    batch_tx_counts: &[u32],
+) {
+    let metrics = parallel_executor_metrics();
+    metrics
+        .non_empty_batches
+        .set(i64::try_from(batch_tx_counts.len()).unwrap_or(i64::MAX));
+
+    for (batch_index, tx_count) in batch_tx_counts.iter().enumerate() {
+        metrics
+            .non_empty_batch_transactions
+            .get_or_create(&BatchMetricLabel {
+                block_height,
+                batch_index: u64::try_from(batch_index).unwrap_or(u64::MAX),
+            })
+            .set(i64::from(*tx_count));
+    }
+}
+
+pub fn set_non_empty_batch_allocated_gas(block_height: u64, batch_gas: &[u64]) {
+    let metrics = parallel_executor_metrics();
+    for (batch_index, gas) in batch_gas.iter().enumerate() {
+        metrics
+            .non_empty_batch_allocated_gas
+            .get_or_create(&BatchMetricLabel {
+                block_height,
+                batch_index: u64::try_from(batch_index).unwrap_or(u64::MAX),
+            })
+            .set(i64::try_from(*gas).unwrap_or(i64::MAX));
+    }
+}
+
+pub fn set_non_empty_batch_used_gas(block_height: u64, batch_gas: &[u64]) {
+    let metrics = parallel_executor_metrics();
+    for (batch_index, gas) in batch_gas.iter().enumerate() {
+        metrics
+            .non_empty_batch_used_gas
+            .get_or_create(&BatchMetricLabel {
+                block_height,
+                batch_index: u64::try_from(batch_index).unwrap_or(u64::MAX),
+            })
+            .set(i64::try_from(*gas).unwrap_or(i64::MAX));
+    }
+}
+
+pub fn set_batch_anchor_contracts(
+    block_height: u64,
+    batch_anchor_contracts: &[Vec<ContractId>],
+) {
+    let metrics = parallel_executor_metrics();
+    for (batch_index, anchors) in batch_anchor_contracts.iter().enumerate() {
+        for contract_id in anchors {
+            metrics
+                .batch_anchor_contracts
+                .get_or_create(&BatchAnchorLabel {
+                    block_height,
+                    batch_index: u64::try_from(batch_index).unwrap_or(u64::MAX),
+                    contract_id: contract_id.to_string(),
+                })
+                .set(1);
+        }
+    }
 }
 
 pub fn record_block_production_time(duration: Duration) {

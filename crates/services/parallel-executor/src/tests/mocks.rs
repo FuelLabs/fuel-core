@@ -147,12 +147,14 @@ impl TransactionsSource for MockTransactionsSource {
             }
             Ok(TransactionSourceExecutableTransactions {
                 transactions: response.transactions,
+                anchor_contract_ids: vec![],
                 filtered: response.filtered,
                 filter: response.filter.unwrap_or(filter),
             })
         } else {
             Ok(TransactionSourceExecutableTransactions {
                 transactions: vec![],
+                anchor_contract_ids: vec![],
                 filtered: TransactionFiltered::NotFiltered,
                 filter,
             })

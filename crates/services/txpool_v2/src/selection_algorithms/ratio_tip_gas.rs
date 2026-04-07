@@ -164,6 +164,7 @@ where
         HashMap<ContractId, BTreeMap<Reverse<Key>, S::StorageIndex>>,
     new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     eagerly_include_tx_dependency_graphs: bool,
+    last_selection_anchors: Vec<ContractId>,
 }
 
 impl<S> RatioTipGasSelection<S>
@@ -179,6 +180,16 @@ where
             executable_transactions_by_contract: HashMap::new(),
             new_executable_txs_notifier,
             eagerly_include_tx_dependency_graphs,
+            last_selection_anchors: Vec::new(),
+        }
+    }
+
+    fn push_selected_anchor(
+        selected_anchors: &mut Vec<ContractId>,
+        contract_id: ContractId,
+    ) {
+        if !selected_anchors.contains(&contract_id) {
+            selected_anchors.push(contract_id);
         }
     }
 
@@ -581,6 +592,7 @@ where
         storage: &mut S,
     ) -> RemovedTransactions {
         let mut result = Vec::new();
+        let mut selected_anchors = Vec::new();
         let execution_worker_count = constraints.execution_worker_count.max(1);
         let batch_graphs_count = Self::batch_graphs_count(
             self.number_of_executable_transactions(),
@@ -622,6 +634,9 @@ where
         } else {
             None
         };
+        if let Some(anchor_contract) = anchor_contract_id {
+            Self::push_selected_anchor(&mut selected_anchors, anchor_contract);
+        }
 
         loop {
             if budget.has_capacity() {
@@ -629,6 +644,7 @@ where
                     .as_ref()
                     .and_then(|state| state.locked_anchor);
                 if let Some(locked_anchor) = locked_anchor {
+                    Self::push_selected_anchor(&mut selected_anchors, locked_anchor);
                     let filled_from_locked_anchor = self.fill_from_anchor_contract_set(
                         constraints,
                         storage,
@@ -656,6 +672,10 @@ where
                 let filled_from_anchor = anchor_contract_id
                     .filter(|_| prioritized_queue.len() < batch_graphs_count)
                     .map(|anchor_contract| {
+                        Self::push_selected_anchor(
+                            &mut selected_anchors,
+                            anchor_contract,
+                        );
                         self.fill_from_anchor_contract_set(
                             constraints,
                             storage,
@@ -745,6 +765,8 @@ where
             self.new_executable_txs_notifier.send_replace(());
         }
 
+        self.last_selection_anchors = selected_anchors;
+
         tracing::warn!(
             batch_graphs_count,
             execution_worker_count,
@@ -788,6 +810,10 @@ where
         self.executable_transactions_sorted_tip_gas_ratio
             .values()
             .rev()
+    }
+
+    fn last_selection_anchors(&self) -> &[ContractId] {
+        &self.last_selection_anchors
     }
 
     fn on_removed_transaction(&mut self, storage_entry: &StorageData) {

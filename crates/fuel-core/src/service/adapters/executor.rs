@@ -80,7 +80,7 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
         selection_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
-        let (transactions, excluded_contract_ids) = self
+        let (transactions, excluded_contract_ids, anchor_contract_ids) = self
             .tx_pool
             .extract_transactions_for_block_async(Constraints {
                 minimal_gas_price: self.minimum_gas_price,
@@ -101,6 +101,7 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
             .collect();
         Ok(TransactionSourceExecutableTransactions {
             transactions,
+            anchor_contract_ids,
             filtered: TransactionFiltered::Filtered,
             filter: Filter {
                 excluded_contract_ids,
