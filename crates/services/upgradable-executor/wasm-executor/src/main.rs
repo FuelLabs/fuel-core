@@ -13,12 +13,6 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
-use crate as fuel_core_wasm_executor;
-use crate::utils::{
-    InputDeserializationType,
-    WasmDeserializationBlockTypes,
-    convert_to_v1_execution_result,
-};
 use fuel_core_executor::executor::{
     ExecutionInstance,
     ExecutionOptions,

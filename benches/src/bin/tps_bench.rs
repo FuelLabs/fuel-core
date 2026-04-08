@@ -1,11 +1,15 @@
 // Define arguments
 
-use fuel_core::service::config::Trigger;
+use fuel_core::service::config::{
+    ExecutorMode,
+    Trigger,
+};
 use fuel_core_chain_config::{
     ChainConfig,
     CoinConfig,
     SnapshotMetadata,
 };
+use fuel_core_metrics::encode_metrics;
 use fuel_core_storage::transactional::AtomicView;
 use fuel_core_types::{
     blockchain::transaction::TransactionExt,
@@ -54,7 +58,7 @@ use test_helpers::builder::{
     TestSetupBuilder,
 };
 
-const PATH_SNAPSHOT: &str = "/Users/green/fuel/fuel-core-2/benches/local-testnet";
+const PATH_SNAPSHOT: &str = "./local-testnet";
 
 fn checked_parameters() -> CheckPredicateParams {
     let metadata = SnapshotMetadata::read(PATH_SNAPSHOT).unwrap();
@@ -70,6 +74,16 @@ struct Args {
     pub number_of_cores: usize,
     #[clap(short = 't', long, default_value = "150000")]
     pub number_of_transactions: u64,
+    #[clap(long, default_value = "0")]
+    pub txpool_verification_threads: usize,
+    #[clap(long, default_value = "0")]
+    pub txpool_verification_queue_size: usize,
+    #[clap(long, default_value = "0")]
+    pub txpool_p2p_sync_threads: usize,
+    #[clap(long, default_value = "0")]
+    pub txpool_p2p_sync_queue_size: usize,
+    #[clap(long, default_value = "0")]
+    pub executor_parallel_worker_count: usize,
 }
 
 fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
@@ -135,6 +149,9 @@ fn generate_transactions(nb_txs: u64, rng: &mut StdRng) -> Vec<Transaction> {
 }
 
 fn main() {
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::WARN)
+        .try_init();
     let args = Args::parse();
     let mut rng = StdRng::seed_from_u64(2322u64);
 
@@ -200,9 +217,29 @@ fn main() {
             Some(tx.max_gas(&chain_conf.consensus_parameters).unwrap())
         })
         .sum();
-    test_builder.gas_limit = Some(gas_limit * 4);
+    test_builder.gas_limit = Some(gas_limit);
     test_builder.block_size_limit = Some(u64::MAX);
     test_builder.number_threads_pool_verif = args.number_of_cores;
+    if args.txpool_verification_threads != 0 {
+        test_builder.txpool_verification_threads = args.txpool_verification_threads;
+    }
+    if args.txpool_verification_queue_size != 0 {
+        test_builder.txpool_verification_queue_size = args.txpool_verification_queue_size;
+    }
+    if args.txpool_p2p_sync_threads != 0 {
+        test_builder.txpool_p2p_sync_threads = args.txpool_p2p_sync_threads;
+    }
+    if args.txpool_p2p_sync_queue_size != 0 {
+        test_builder.txpool_p2p_sync_queue_size = args.txpool_p2p_sync_queue_size;
+    }
+    if args.executor_parallel_worker_count != 0 {
+        test_builder.executor_parallel_worker_count = args.executor_parallel_worker_count;
+    }
+    #[cfg(feature = "parallel-executor")]
+    {
+        test_builder.executor_mode = ExecutorMode::Parallel;
+        test_builder.executor_metrics = true;
+    }
     test_builder.max_txs = transactions.len();
     // spin up node
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -241,9 +278,18 @@ fn main() {
                 .unwrap()
                 .unwrap();
             assert_eq!(block.entity.transactions().len(), transactions.len() + 1);
+            println!("transaction count: {}", block.entity.transactions().len());
             block
         }
     });
+
+    if let Ok(metrics) = encode_metrics() {
+        for line in metrics.lines().filter(|line| {
+            line.starts_with("parallel_executor_") && !line.starts_with('#')
+        }) {
+            println!("metrics: {line}");
+        }
+    }
 
     // rt.block_on(async move {
     //     test_builder.set_chain_config(chain_conf.clone());

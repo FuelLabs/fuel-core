@@ -345,6 +345,7 @@ where
                         self.next_height(),
                         block_time,
                         TransactionsSource::TxPool,
+                        // TODO: Don't hardcode deadline
                         Instant::now() + Duration::from_secs(1),
                     )
                     .await?;

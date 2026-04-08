@@ -25,6 +25,8 @@ pub struct Constraints {
     pub maximum_block_size: u64,
     /// List of excluded contracts.
     pub excluded_contracts: HashSet<ContractId>,
+    /// Number of execution workers available for the block.
+    pub execution_worker_count: usize,
 }
 
 /// The selection algorithm is responsible for selecting the best transactions to include in a block.
@@ -52,6 +54,9 @@ pub trait SelectionAlgorithm {
 
     /// Get less worth transactions iterator
     fn get_less_worth_txs(&self) -> impl Iterator<Item = &Self::StorageIndex>;
+
+    /// Returns the anchor contracts chosen during the most recent selection call.
+    fn last_selection_anchors(&self) -> &[ContractId];
 
     /// Inform the selection algorithm that a transaction was removed from the pool.
     fn on_removed_transaction(&mut self, storage_entry: &StorageData);

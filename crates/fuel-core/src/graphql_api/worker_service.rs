@@ -162,6 +162,7 @@ where
     D: ports::worker::OffChainDatabase,
 {
     fn process_block(&mut self, result: SharedImportResult) -> anyhow::Result<()> {
+        let instant = tokio::time::Instant::now();
         let block = &result.sealed_block.entity;
         let mut transaction = self.database.transaction();
         // save the status for every transaction using the finalized block id
@@ -170,12 +171,21 @@ where
             self.asset_metadata_indexation_enabled,
             &mut transaction,
         )?;
+        tracing::warn!(
+            "persist_transaction_status elapsed time: {:?}",
+            instant.elapsed()
+        );
 
         // save the associated owner for each transaction in the block
         index_tx_owners_for_block(block, &mut transaction, &self.chain_id)?;
+        tracing::warn!(
+            "index_tx_owners_for_block elapsed time: {:?}",
+            instant.elapsed()
+        );
 
         // save the transaction related information
         process_transactions(block.transactions().iter(), &mut transaction)?;
+        tracing::warn!("process_transactions elapsed time: {:?}", instant.elapsed());
 
         let height = block.header().height();
         let block_id = block.id();
@@ -186,6 +196,7 @@ where
         let total_tx_count = transaction
             .increase_tx_count(block.transactions().len() as u64)
             .unwrap_or_default();
+        tracing::warn!("increase_tx_count elapsed time: {:?}", instant.elapsed());
 
         process_executor_events(
             result.events.iter().map(Cow::Borrowed),
@@ -194,8 +205,13 @@ where
             self.coins_to_spend_indexation_enabled,
             &self.base_asset_id,
         )?;
+        tracing::warn!(
+            "process_executor_events elapsed time: {:?}",
+            instant.elapsed()
+        );
 
         transaction.commit()?;
+        tracing::warn!("transaction.commit elapsed time: {:?}", instant.elapsed());
 
         for status in result.tx_status.iter() {
             let tx_id = status.id;
@@ -205,6 +221,11 @@ where
                 .send_complete(tx_id, height, status.into());
         }
 
+        tracing::warn!(
+            "process_block elapsed time: {:?} for block: {:?}",
+            instant.elapsed(),
+            height
+        );
         // Notify subscribers and update last seen block height
         self.shared_state
             .block_height_subscription_handler

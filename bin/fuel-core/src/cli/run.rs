@@ -32,6 +32,7 @@ use fuel_core::{
         RelayerConsensusConfig,
         config::{
             DaCompressionMode,
+            ExecutorConfig,
             Trigger,
         },
         genesis::NotifyCancel,
@@ -65,10 +66,7 @@ use fuel_core_metrics::config::{
     DisableConfig,
     Module,
 };
-use fuel_core_types::{
-    blockchain::header::StateTransitionBytecodeVersion,
-    signer::SignMode,
-};
+use fuel_core_types::signer::SignMode;
 use pyroscope::{
     PyroscopeAgent,
     pyroscope::PyroscopeAgentRunning,
@@ -104,9 +102,6 @@ use fuel_core::state::historical_rocksdb::StateRewindPolicy;
 
 use crate::cli::run::gas_price::GasPriceArgs;
 use fuel_core::service::config::GasPriceConfig;
-#[cfg(feature = "parallel-executor")]
-use std::num::NonZeroUsize;
-
 #[cfg(feature = "p2p")]
 mod p2p;
 
@@ -117,6 +112,7 @@ mod rpc;
 mod shared_sequencer;
 
 mod consensus;
+mod executor;
 mod gas_price;
 mod graphql;
 #[cfg(feature = "p2p")]
@@ -126,6 +122,10 @@ mod profiling;
 mod relayer;
 mod tx_pool;
 mod tx_status_manager;
+
+use crate::cli::run::executor::ExecutorArgs;
+#[cfg(feature = "parallel-executor")]
+use fuel_core::service::config::ParallelExecutorConfig;
 
 /// Run the Fuel client node locally.
 #[derive(Debug, Clone, Parser)]
@@ -229,13 +229,8 @@ pub struct Command {
     pub utxo_validation: bool,
 
     /// Overrides the version of the native executor.
-    #[arg(long = "native-executor-version", env)]
-    pub native_executor_version: Option<StateTransitionBytecodeVersion>,
-
-    /// Number of cores to use for the parallel executor.
-    #[cfg(feature = "parallel-executor")]
-    #[arg(long = "executor-number-of-cores", env, default_value = "1")]
-    pub executor_number_of_cores: NonZeroUsize,
+    #[clap(flatten)]
+    pub executor: ExecutorArgs,
 
     /// All the configurations for the gas price service.
     #[clap(flatten)]
@@ -363,9 +358,7 @@ impl Command {
             allow_syscall,
             expensive_subscriptions,
             utxo_validation,
-            native_executor_version,
-            #[cfg(feature = "parallel-executor")]
-            executor_number_of_cores,
+            executor,
             gas_price,
             consensus_key,
             #[cfg(feature = "aws-kms")]
@@ -417,6 +410,17 @@ impl Command {
         if allow_syscall && !debug {
             anyhow::bail!("`--allow-syscall` is only allowed in debug mode");
         }
+
+        let ExecutorArgs {
+            executor_mode,
+            native_executor_version,
+            #[cfg(feature = "parallel-executor")]
+            executor_number_of_cores,
+            #[cfg(feature = "parallel-executor")]
+            executor_metrics,
+            #[cfg(feature = "parallel-executor")]
+            executor_worker_count_policy,
+        } = executor;
 
         let enabled_metrics = metrics.list_of_enabled();
 
@@ -740,12 +744,19 @@ impl Command {
             debug,
             historical_execution,
             expensive_subscriptions,
-            native_executor_version,
+            executor: ExecutorConfig {
+                mode: executor_mode,
+                native_executor_version,
+                #[cfg(feature = "parallel-executor")]
+                parallel: ParallelExecutorConfig {
+                    worker_count: executor_number_of_cores,
+                    worker_count_policy: executor_worker_count_policy,
+                    metrics: executor_metrics,
+                },
+            },
             continue_on_error,
             allow_syscall,
             utxo_validation,
-            #[cfg(feature = "parallel-executor")]
-            executor_number_of_cores,
             block_production: trigger,
             leader_lock,
             predefined_blocks_path,
@@ -762,6 +773,7 @@ impl Command {
                 pending_pool_tx_ttl: tx_pending_pool_ttl.into(),
                 max_pending_pool_size_percentage: tx_pending_pool_size_percentage,
                 metrics: metrics.is_enabled(Module::TxPool),
+                eagerly_include_tx_dependency_graphs: false,
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,

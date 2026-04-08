@@ -1,5 +1,8 @@
 #[cfg(feature = "parallel-executor")]
-use crate::service::adapters::ParallelExecutorAdapter;
+use crate::service::adapters::{
+    ParallelExecutorAdapter,
+    ParallelExecutorAdapterInner,
+};
 use crate::{
     database::{
         Database,
@@ -95,10 +98,20 @@ impl BlockImporterAdapter {
         #[cfg(not(feature = "no-parallel-executor"))] executor: ParallelExecutorAdapter,
         #[cfg(feature = "no-parallel-executor")] executor: ExecutorAdapter,
         verifier: VerifierAdapter,
+        block_reconciliation_write_adapter: BlockReconciliationWriteAdapter,
     ) -> Self {
-        let importer = Importer::new(chain_id, config, database, executor, verifier);
+        let database_for_height = database.clone();
+        let importer = Importer::new(
+            chain_id,
+            config,
+            database,
+            executor,
+            verifier,
+            block_reconciliation_write_adapter,
+        );
         Self {
             block_importer: Arc::new(importer),
+            database: database_for_height,
         }
     }
 
@@ -175,9 +188,16 @@ impl Validator for ExecutorAdapter {
 impl Validator for ParallelExecutorAdapter {
     fn validate(
         &self,
-        _block: &Block,
+        block: &Block,
     ) -> ExecutorResult<UncommittedValidationResult<Changes>> {
-        todo!("Implement me please")
+        match &self.inner {
+            ParallelExecutorAdapterInner::Parallel { .. } => {
+                todo!("Implement me please")
+            }
+            ParallelExecutorAdapterInner::Native(native) => {
+                native.executor.validate(block)
+            }
+        }
     }
 }
 
@@ -203,9 +223,22 @@ impl WasmChecker for ExecutorAdapter {
 impl WasmChecker for ParallelExecutorAdapter {
     fn validate_uploaded_wasm(
         &self,
-        _wasm_root: &Bytes32,
+        wasm_root: &Bytes32,
     ) -> Result<(), WasmValidityError> {
-        unimplemented!("no validation yet")
+        match &self.inner {
+            ParallelExecutorAdapterInner::Parallel { .. } => {
+                unimplemented!("no validation yet")
+            }
+            ParallelExecutorAdapterInner::Native(native) => native
+                .executor
+                .validate_uploaded_wasm(wasm_root)
+                .map_err(|err| match err {
+                    fuel_core_upgradable_executor::error::UpgradableError::InvalidWasm(_) => {
+                        WasmValidityError::NotValid
+                    }
+                    _ => WasmValidityError::NotFound,
+                }),
+        }
     }
 }
 

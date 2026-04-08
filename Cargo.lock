@@ -4338,6 +4338,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-chain-config",
  "fuel-core-database",
+ "fuel-core-metrics",
  "fuel-core-services",
  "fuel-core-storage",
  "fuel-core-sync",
@@ -4713,6 +4714,7 @@ dependencies = [
 name = "fuel-core-metrics"
 version = "0.48.0"
 dependencies = [
+ "fuel-core-types 0.48.0",
  "once_cell",
  "parking_lot",
  "pin-project-lite",
@@ -4762,12 +4764,12 @@ name = "fuel-core-parallel-executor"
 version = "0.48.0"
 dependencies = [
  "anyhow",
- "derive_more 0.99.20",
+ "derive_more 2.1.1",
  "fuel-core-executor",
+ "fuel-core-metrics",
  "fuel-core-storage",
  "fuel-core-trace",
  "fuel-core-types 0.48.0",
- "fuel-core-upgradable-executor",
  "futures",
  "fxhash",
  "parking_lot",

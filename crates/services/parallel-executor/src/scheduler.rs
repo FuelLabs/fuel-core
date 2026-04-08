@@ -1,11 +1,8 @@
-use std::{
-    collections::HashSet,
-    sync::Arc,
-    time::Duration,
-};
-
 use crate::{
-    config::Config,
+    config::{
+        Config,
+        WorkerCountPolicy,
+    },
     in_memory_transaction_with_contracts::InMemoryTransactionWithContracts,
     l1_execution_data::L1ExecutionData,
     memory::MemoryPool,
@@ -39,6 +36,7 @@ use fuel_core_executor::{
         RelayerPort,
     },
 };
+use ::fuel_core_metrics as parallel_executor_metrics;
 use fuel_core_storage::{
     Error as StorageError,
     column::Column,
@@ -82,6 +80,20 @@ use fuel_core_types::{
 };
 use futures::future::Either;
 use fxhash::FxHashMap;
+use std::{
+    collections::{
+        HashMap,
+        HashSet,
+    },
+    sync::{
+        Arc,
+        atomic::{
+            AtomicU32,
+            Ordering,
+        },
+    },
+    time::Duration,
+};
 use tokio::{
     runtime::Runtime,
     time::Instant,
@@ -125,6 +137,8 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     blob_transactions: Vec<MaybeCheckedTransaction>,
     /// Current scheduler state
     state: SchedulerState,
+    /// Batch preparation stats keyed by batch id
+    batch_preparations: Option<HashMap<usize, BatchPreparationStats>>,
     /// Total maximum of transactions left
     tx_left: u32,
     /// Total maximum of byte size left
@@ -135,6 +149,8 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     deadline: Instant,
     /// Gas used by blob transactions
     blob_gas: u64,
+    /// Counters for tracking worker concurrency when metrics are enabled
+    worker_counters: Option<WorkerCounters>,
 }
 
 struct WorkSessionExecutionResult {
@@ -176,6 +192,15 @@ struct WorkSessionExecutionResult {
     used_size: u32,
     /// coinbase
     coinbase: u64,
+    /// Execution time for this batch
+    execution_duration: Duration,
+}
+
+#[derive(Clone, Copy)]
+struct BatchPreparationStats {
+    duration: Duration,
+    tx_count: u32,
+    gas: u64,
 }
 
 #[derive(Default)]
@@ -294,6 +319,41 @@ pub(crate) struct PreparedBatch {
     pub number_of_transactions: u32,
 }
 
+#[derive(Clone)]
+struct WorkerCounters {
+    current: Arc<AtomicU32>,
+    max: Arc<AtomicU32>,
+}
+
+impl WorkerCounters {
+    fn new() -> Self {
+        Self {
+            current: Arc::new(AtomicU32::new(0)),
+            max: Arc::new(AtomicU32::new(0)),
+        }
+    }
+
+    fn record_started(&self) {
+        let current = self.current.fetch_add(1, Ordering::Relaxed) + 1;
+        self.max.fetch_max(current, Ordering::Relaxed);
+    }
+
+    fn reset(&self) {
+        self.current.store(0, Ordering::Relaxed);
+        self.max.store(0, Ordering::Relaxed);
+    }
+}
+
+struct WorkerCountGuard {
+    current: Arc<AtomicU32>,
+}
+
+impl Drop for WorkerCountGuard {
+    fn drop(&mut self) {
+        self.current.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 pub struct BlockConstraints {
     pub block_gas_limit: u64,
     pub total_execution_time: Duration,
@@ -313,6 +373,8 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
         consensus_parameters: ConsensusParameters,
         deadline: Instant,
     ) -> Result<Self, SchedulerError> {
+        let batch_preparations = config.metrics.then(HashMap::new);
+        let worker_counters = config.metrics.then(WorkerCounters::new);
         Ok(Self {
             header_to_produce: components.header_to_produce,
             coinbase_recipient: components.coinbase_recipient,
@@ -324,7 +386,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             tx_left: u32::MAX,
             tx_size_left: consensus_parameters.block_transaction_size_limit(),
             gas_left: consensus_parameters.block_gas_limit(),
-            worker_pool: WorkerPool::new(config.number_of_cores.get()),
+            worker_pool: WorkerPool::new(config.worker_count.get()),
             memory_pool,
             config,
             current_execution_tasks: FuturesUnordered::new(),
@@ -336,6 +398,8 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             consensus_parameters,
             blob_gas: 0,
             deadline,
+            batch_preparations,
+            worker_counters,
         })
     }
 }
@@ -356,6 +420,7 @@ where
     where
         TxSource: TransactionsSource,
     {
+        let instant = Instant::now();
         let view = self.storage.latest_view()?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
@@ -367,12 +432,22 @@ where
         let mut new_tx_notifier = tx_source.get_new_transactions_notifier();
         let now = Instant::now();
         let deadline = self.deadline;
+        let mut execution_time_recorded = false;
         let mut nb_batch_created = 0;
         let mut nb_transactions: u32 = l1_execution_data.tx_count;
+        let mut non_empty_batch_tx_counts = self.config.metrics.then(Vec::new);
+        let mut non_empty_batch_allocated_gas = self.config.metrics.then(Vec::new);
+        let mut non_empty_batch_used_gas = self.config.metrics.then(Vec::new);
+        let mut non_empty_batch_anchors = self.config.metrics.then(Vec::new);
+        let batch_metrics_block_height = self
+            .config
+            .metrics
+            .then(parallel_executor_metrics::next_debug_batch_metrics_block_height)
+            .unwrap_or(0);
         let initial_gas_per_worker = self
             .consensus_parameters
             .block_gas_limit()
-            .checked_div(self.config.number_of_cores.get() as u64)
+            .checked_div(self.config.worker_count.get() as u64)
             .ok_or(SchedulerError::InternalError(
                 "Invalid block gas limit".to_string(),
             ))?
@@ -380,7 +455,9 @@ where
             .ok_or(SchedulerError::InternalError(
                 "L1 transactions consumed all the gas".to_string(),
             ))?;
+        let mut total_gas: u64 = 0;
 
+        tracing::warn!("scheduler starting run loop at {:?}", instant.elapsed());
         'outer: loop {
             let tx_notifier = if new_tx_notifier.has_changed().is_ok() {
                 Either::Left(new_tx_notifier.changed())
@@ -392,9 +469,22 @@ where
             if self.is_worker_idling() {
                 // If we requested transactions, we shouldn't drop them,
                 // so we await them here.
-                let mut batch = self
-                    .ask_new_transactions_batch(tx_source, now, initial_gas_per_worker)
+                let batch_prepare_start = Instant::now();
+                let selection_worker_count = self.selection_worker_count();
+                let (mut batch, anchor_contract_ids) = self
+                    .ask_new_transactions_batch(
+                        tx_source,
+                        now,
+                        initial_gas_per_worker,
+                        selection_worker_count,
+                    )
                     .await?;
+                let batch_prepare_duration = batch_prepare_start.elapsed();
+                tracing::warn!(
+                    "new batch id {:?} prepared at: {:?}",
+                    nb_batch_created,
+                    instant.elapsed()
+                );
 
                 let blob_transactions = core::mem::take(&mut batch.blob_transactions);
                 self.blob_transactions.extend(blob_transactions.into_iter());
@@ -409,6 +499,38 @@ where
                 }
 
                 let batch_len = batch.number_of_transactions;
+                if self.config.metrics {
+                    if let Some(batch_tx_counts) = non_empty_batch_tx_counts.as_mut() {
+                        batch_tx_counts.push(batch_len);
+                    }
+                    if let Some(batch_allocated_gas) =
+                        non_empty_batch_allocated_gas.as_mut()
+                    {
+                        batch_allocated_gas.push(batch.gas);
+                    }
+                    if let Some(batch_used_gas) = non_empty_batch_used_gas.as_mut() {
+                        batch_used_gas.push(0);
+                    }
+                    if let Some(batch_anchors) = non_empty_batch_anchors.as_mut() {
+                        batch_anchors.push(anchor_contract_ids);
+                    }
+                    parallel_executor_metrics::record_batch_prepare(
+                        batch_prepare_duration,
+                        batch_len,
+                        batch.gas,
+                    );
+                    if let Some(batch_preparations) = self.batch_preparations.as_mut() {
+                        batch_preparations.insert(
+                            nb_batch_created,
+                            BatchPreparationStats {
+                                duration: batch_prepare_duration,
+                                tx_count: batch_len,
+                                gas: batch.gas,
+                            },
+                        );
+                    }
+                    total_gas = total_gas.saturating_add(batch.gas);
+                }
 
                 self.execute_batch(
                     batch,
@@ -424,29 +546,86 @@ where
                     ),
                 )?;
             } else if self.current_execution_tasks.is_empty() {
+                let waiting = Instant::now();
                 tokio::select! {
                     _ = tx_notifier => {
                         self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     _ = tokio::time::sleep_until(deadline) => {
+                        if !execution_time_recorded {
+                            let execution_time = instant
+                                .elapsed()
+                                .saturating_sub(waiting.elapsed());
+                            parallel_executor_metrics::record_execution_time(execution_time);
+                            execution_time_recorded = true;
+                        }
+                        tracing::warn!("******");
+                        tracing::warn!("waited until deadline for {:?}, total elapsed: {:?}", waiting.elapsed(), instant.elapsed());
                         break 'outer;
                     }
                 }
             } else {
+                tracing::warn!("Waiting for workers to finish");
                 tokio::select! {
                     _ = tx_notifier => {
+                        tracing::warn!("New transactions received");
                         self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     result = self.current_execution_tasks.select_next_some() => {
+                        tracing::warn!("Worker finished at {:?}", instant.elapsed());
                         match result {
                             Ok(res) => {
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
+                                    if self.config.metrics {
+                                        if let Some(batch_preparations) =
+                                            self.batch_preparations.as_mut()
+                                        {
+                                            batch_preparations.remove(&res.batch_id);
+                                        }
+                                    }
                                     drop(res.worker_id);
                                     self.sequential_fallback(res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used).await?;
                                     continue;
                                 }
 
+                                if self.config.metrics {
+                                    if let Some(batch_used_gas) =
+                                        non_empty_batch_used_gas.as_mut()
+                                    {
+                                        if let Some(slot) = batch_used_gas
+                                            .get_mut(res.batch_id)
+                                        {
+                                            *slot = res.used_gas;
+                                        }
+                                    }
+                                    if let Some(batch_preparations) =
+                                        self.batch_preparations.as_mut()
+                                    {
+                                        if let Some(prep) =
+                                            batch_preparations.remove(&res.batch_id)
+                                        {
+                                            let gas_for_norm =
+                                                if res.used_gas > 0 {
+                                                    res.used_gas
+                                                } else {
+                                                    prep.gas
+                                                };
+                                            parallel_executor_metrics::record_batch_execute(
+                                                res.execution_duration,
+                                                prep.tx_count,
+                                                gas_for_norm,
+                                            );
+                                            parallel_executor_metrics::record_batch_total(
+                                                prep.duration.saturating_add(
+                                                    res.execution_duration,
+                                                ),
+                                                prep.tx_count,
+                                                gas_for_norm,
+                                            );
+                                        }
+                                    }
+                                }
                                 self.register_execution_result(res);
                             }
                             _ => {
@@ -457,20 +636,71 @@ where
                         }
                     }
                     _ = tokio::time::sleep_until(deadline) => {
+                        tracing::warn!("timeout waiting on workers");
                         break 'outer;
                     }
                 }
             }
         }
 
-        self.wait_all_execution_tasks().await?;
+        tracing::warn!("******");
+        tracing::warn!("waiting for execution tasks: {:?}", instant.elapsed());
+        let exceeded_deadline = self.wait_all_execution_tasks().await?;
+        tracing::warn!("execution tasks done: {:?}", instant.elapsed());
+        if self.config.metrics {
+            if exceeded_deadline && !execution_time_recorded {
+                parallel_executor_metrics::record_execution_time(instant.elapsed());
+            }
+            parallel_executor_metrics::set_number_of_transactions(nb_transactions);
+            parallel_executor_metrics::set_total_gas_used(total_gas);
+            let block_height = u32::from(*self.header_to_produce.height());
+            parallel_executor_metrics::set_block_height(block_height);
+            parallel_executor_metrics::set_max_workers_used(
+                self.worker_counters
+                    .as_ref()
+                    .map(|counters| counters.max.load(Ordering::Relaxed))
+                    .unwrap_or(0),
+            );
+            parallel_executor_metrics::set_non_empty_batch_transactions(
+                batch_metrics_block_height,
+                non_empty_batch_tx_counts.as_deref().unwrap_or(&[]),
+            );
+            parallel_executor_metrics::set_non_empty_batch_allocated_gas(
+                batch_metrics_block_height,
+                non_empty_batch_allocated_gas.as_deref().unwrap_or(&[]),
+            );
+            parallel_executor_metrics::set_non_empty_batch_used_gas(
+                batch_metrics_block_height,
+                non_empty_batch_used_gas.as_deref().unwrap_or(&[]),
+            );
+            parallel_executor_metrics::set_batch_anchor_contracts(
+                batch_metrics_block_height,
+                non_empty_batch_anchors.as_deref().unwrap_or(&[]),
+            );
+            if let Some(counters) = self.worker_counters.as_ref() {
+                counters.reset();
+            }
+        }
 
-        let mut res = self.verify_coherency_and_merge_results(
+        // let mut res = self.verify_coherency_and_merge_results(
+        //     nb_batch_created,
+        //     l1_execution_data,
+        //     storage_with_da.clone(),
+        // )?;
+
+        let result = self.verify_coherency_and_merge_results(
             nb_batch_created,
             l1_execution_data,
             storage_with_da.clone(),
-        )?;
+        );
 
+        if result.is_err() {
+            tracing::warn!("coherency result: {:?}", result);
+        }
+
+        let mut res = result?;
+
+        tracing::warn!("scheduler done: {:?}", instant.elapsed());
         if !self.blob_transactions.is_empty() {
             let mut tx = StorageTransaction::transaction(
                 storage_with_da.clone(),
@@ -484,11 +714,14 @@ where
                     return Err(SchedulerError::StorageError(e));
                 }
             }
+            tracing::warn!("committed changes: {:?}", instant.elapsed());
             res.changes = StorageChanges::Changes(Default::default());
 
             let (blob_execution_data, blob_txs) =
                 self.execute_blob_transactions(tx, nb_transactions).await?;
+            tracing::warn!("blob execution done: {:?}", instant.elapsed());
             res.add_blob_execution_data(blob_execution_data, blob_txs);
+            tracing::warn!("blob execution data added: {:?}", instant.elapsed());
         }
 
         // TODO: Avoid cloning the DA changes
@@ -503,6 +736,11 @@ where
             }
         }
 
+        let execution_time = instant.elapsed();
+        tracing::warn!("Scheduler `run` execution time: {:?}", execution_time);
+        if self.config.metrics {
+            parallel_executor_metrics::record_scheduler_run_time(execution_time);
+        }
         Ok(res)
     }
 
@@ -540,10 +778,12 @@ where
         tx_source: &TxSource,
         start_execution_time: Instant,
         initial_gas_per_core: u64,
-    ) -> Result<PreparedBatch, SchedulerError>
+        selection_worker_count: usize,
+    ) -> Result<(PreparedBatch, Vec<ContractId>), SchedulerError>
     where
         TxSource: TransactionsSource,
     {
+        let instant = Instant::now();
         let total_execution_time = self
             .deadline
             .checked_duration_since(start_execution_time)
@@ -571,6 +811,7 @@ where
                 current_gas,
                 self.tx_left,
                 self.tx_size_left,
+                selection_worker_count,
                 Filter {
                     excluded_contract_ids: std::mem::take(
                         &mut self.current_executing_contracts,
@@ -586,6 +827,7 @@ where
             })?;
         self.current_executing_contracts =
             executable_transactions.filter.excluded_contract_ids;
+        let anchor_contract_ids = executable_transactions.anchor_contract_ids;
 
         let prepared_batch = prepare_transactions_batch(
             &self.consensus_parameters,
@@ -596,7 +838,19 @@ where
             prepared_batch.total_size,
             prepared_batch.gas,
         )?;
-        Ok(prepared_batch)
+        tracing::warn!(
+            "new batch prepared in: {:?}, for {:?} txs",
+            instant.elapsed(),
+            prepared_batch.number_of_transactions
+        );
+        Ok((prepared_batch, anchor_contract_ids))
+    }
+
+    fn selection_worker_count(&self) -> usize {
+        match self.config.worker_count_policy {
+            WorkerCountPolicy::StaticMax => self.config.worker_count.get(),
+            WorkerCountPolicy::DynamicIdle => self.worker_pool.available_workers(),
+        }
     }
 
     fn execute_batch(
@@ -612,6 +866,7 @@ where
                 .ok_or(SchedulerError::InternalError(
                     "No available workers".to_string(),
                 ))?;
+        let worker_counters = self.worker_counters.clone();
 
         let mut changes_per_contract = Vec::with_capacity(batch.contracts_used.len());
 
@@ -629,8 +884,15 @@ where
         let mut memory = self.memory_pool.take_raw();
 
         let future = {
+            let instant = Instant::now();
             let storage_with_da = storage_with_da.clone();
             async move {
+                let _worker_guard = worker_counters.as_ref().map(|counters| {
+                    counters.record_started();
+                    WorkerCountGuard {
+                        current: counters.current.clone(),
+                    }
+                });
                 let changes_per_contract: FxHashMap<ContractId, Changes> =
                     changes_per_contract.into_iter().collect();
                 let memory_tx = InMemoryTransactionWithContracts::new(
@@ -678,6 +940,13 @@ where
                 let (changes, changes_per_contract) =
                     storage_tx.into_storage().into_changes();
 
+                let batch_duration = instant.elapsed();
+                tracing::warn!(
+                    "batch {:?} duration: {:?} with {:?} txs",
+                    batch_id,
+                    batch_duration,
+                    transactions.len()
+                );
                 Ok(WorkSessionExecutionResult {
                     worker_id,
                     batch_id,
@@ -696,6 +965,7 @@ where
                     gas_diff: batch.gas.saturating_sub(execution_data.used_gas),
                     used_size: execution_data.used_size,
                     coinbase: execution_data.coinbase,
+                    execution_duration: batch_duration,
                 })
             }
         };
@@ -738,7 +1008,8 @@ where
         );
     }
 
-    async fn wait_all_execution_tasks(&mut self) -> Result<(), SchedulerError> {
+    // returns `true` if exceeded deadline
+    async fn wait_all_execution_tasks(&mut self) -> Result<bool, SchedulerError> {
         // We have reached the deadline
         // We need to merge the states of all the workers
         while !self.current_execution_tasks.is_empty() {
@@ -786,6 +1057,7 @@ where
         }
 
         let now = Instant::now();
+        let mut exceeded_deadline = false;
         if now > self.deadline {
             tracing::warn!(
                 "Execution time exceeded the limit by: {}ms",
@@ -793,8 +1065,9 @@ where
                     .expect("Checked above; qed")
                     .as_millis()
             );
+            exceeded_deadline = true;
         }
-        Ok(())
+        Ok(exceeded_deadline)
     }
 
     fn verify_coherency_and_merge_results(

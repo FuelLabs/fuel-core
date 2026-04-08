@@ -28,9 +28,27 @@ pub mod gas_price_metrics;
 pub mod graphql_metrics;
 pub mod importer;
 pub mod p2p_metrics;
+pub mod parallel_executor_metrics;
 pub mod poa_metrics;
 pub mod tx_status_manager_metrics;
 pub mod txpool_metrics;
+
+pub use self::parallel_executor_metrics::{
+    next_debug_batch_metrics_block_height,
+    record_batch_execute,
+    record_batch_prepare,
+    record_batch_total,
+    record_execution_time,
+    record_scheduler_run_time,
+    set_batch_anchor_contracts,
+    set_block_height,
+    set_max_workers_used,
+    set_non_empty_batch_allocated_gas,
+    set_non_empty_batch_transactions,
+    set_non_empty_batch_used_gas,
+    set_number_of_transactions,
+    set_total_gas_used,
+};
 
 static GLOBAL_REGISTER: OnceLock<GlobalRegistry> = OnceLock::new();
 

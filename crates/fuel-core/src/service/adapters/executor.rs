@@ -57,6 +57,7 @@ impl fuel_core_executor::ports::TransactionsSource for TransactionsSource {
                 maximum_txs: transactions_limit,
                 maximum_block_size: block_transaction_size_limit,
                 excluded_contracts: HashSet::default(),
+                execution_worker_count: 1,
             })
             .unwrap_or_default()
             .into_iter()
@@ -76,9 +77,10 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
         gas_limit: u64,
         tx_count_limit: u32,
         block_transaction_size_limit: u64,
+        selection_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
-        let (transactions, excluded_contract_ids) = self
+        let (transactions, excluded_contract_ids, anchor_contract_ids) = self
             .tx_pool
             .extract_transactions_for_block_async(Constraints {
                 minimal_gas_price: self.minimum_gas_price,
@@ -86,6 +88,7 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
                 maximum_txs: tx_count_limit,
                 maximum_block_size: block_transaction_size_limit,
                 excluded_contracts: filter.excluded_contract_ids,
+                execution_worker_count: selection_worker_count,
             })
             .await
             .map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -98,6 +101,7 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
             .collect();
         Ok(TransactionSourceExecutableTransactions {
             transactions,
+            anchor_contract_ids,
             filtered: TransactionFiltered::Filtered,
             filter: Filter {
                 excluded_contract_ids,

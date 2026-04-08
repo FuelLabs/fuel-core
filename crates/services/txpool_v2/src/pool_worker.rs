@@ -10,6 +10,7 @@ use crate::{
         TxPoolPersistentStorage,
         TxStatusManager as TxStatusManagerTrait,
     },
+    selection_algorithms::SelectionAlgorithm,
     service::{
         TxInfo,
         TxPool,
@@ -209,7 +210,8 @@ pub(super) enum PoolInsertRequest {
 pub(super) enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
-        transactions: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>)>,
+        transactions:
+            oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>)>,
     },
 }
 
@@ -423,6 +425,12 @@ where
                 }
                 let resolved_txs =
                     self.pending_pool.new_known_tx(tx.utxo_ids_with_outputs());
+                // tracing::warn!(
+                //     result = "ok",
+                //     pending_pool_txs = self.pending_pool.current_txs,
+                //     resolved_txs = resolved_txs.len(),
+                //     "txpool_v2 insert"
+                // );
 
                 for (tx, source) in resolved_txs {
                     if let Err(e) = self
@@ -437,6 +445,12 @@ where
                 }
             }
             Err(InsertionErrorType::MissingInputs(missing_inputs)) => {
+                tracing::warn!(
+                    result = "missing_inputs",
+                    pending_pool_txs = self.pending_pool.current_txs,
+                    resolved_txs = 0,
+                    "txpool_v2 insert"
+                );
                 if missing_inputs.is_empty() {
                     debug_assert!(false, "Missing inputs should not be empty");
                 } else if !self.has_enough_space_in_pools(&tx) {
@@ -463,6 +477,12 @@ where
                 }
             }
             Err(InsertionErrorType::Error(error)) => {
+                tracing::warn!(
+                    result = "error",
+                    pending_pool_txs = self.pending_pool.current_txs,
+                    resolved_txs = 0,
+                    "txpool_v2 insert"
+                );
                 if let Err(e) =
                     self.notification_sender
                         .try_send(PoolNotification::ErrorInsertion {
@@ -480,10 +500,31 @@ where
     fn extract_block_transactions(
         &mut self,
         constraints: Constraints,
-        blocks: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>)>,
+        blocks: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>)>,
     ) {
-        let txs = self.pool.extract_transactions_for_block(&constraints);
-        if blocks.send((txs, constraints.excluded_contracts)).is_err() {
+        tracing::warn!(
+            max_gas = constraints.max_gas,
+            max_txs = constraints.maximum_txs,
+            max_block_size = constraints.maximum_block_size,
+            excluded_contracts = constraints.excluded_contracts.len(),
+            tx_count = self.pool.tx_count(),
+            executable_count = self
+                .pool
+                .selection_algorithm
+                .number_of_executable_transactions(),
+            "txpool_v2 extract_block_transactions start"
+        );
+        let (txs, selected_anchors) =
+            self.pool.extract_transactions_for_block_with_anchors(&constraints);
+        tracing::warn!(
+            result_size = txs.len(),
+            selected_anchor_count = selected_anchors.len(),
+            "txpool_v2 extract_block_transactions result"
+        );
+        if blocks
+            .send((txs, constraints.excluded_contracts, selected_anchors))
+            .is_err()
+        {
             tracing::error!("Failed to send block transactions");
         }
     }

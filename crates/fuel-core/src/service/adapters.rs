@@ -415,11 +415,19 @@ impl ExecutorAdapter {
 
 #[cfg(feature = "parallel-executor")]
 #[derive(Clone)]
+pub(crate) enum ParallelExecutorAdapterInner {
+    Parallel {
+        executor: Arc<
+            Mutex<ParallelExecutor<Database, Database<Relayer>, PreconfirmationSender>>,
+        >,
+    },
+    Native(ExecutorAdapter),
+}
+
+#[cfg(feature = "parallel-executor")]
+#[derive(Clone)]
 pub struct ParallelExecutorAdapter {
-    pub executor:
-        Arc<Mutex<ParallelExecutor<Database, Database<Relayer>, PreconfirmationSender>>>,
-    pub new_txs_watcher: watch::Receiver<()>,
-    pub preconfirmation_sender: PreconfirmationSender,
+    pub(crate) inner: ParallelExecutorAdapterInner,
 }
 
 #[cfg(feature = "parallel-executor")]
@@ -428,7 +436,6 @@ impl ParallelExecutorAdapter {
         database: Database,
         relayer_database: Database<Relayer>,
         config: fuel_core_parallel_executor::config::Config,
-        new_txs_watcher: watch::Receiver<()>,
         preconfirmation_sender: PreconfirmationSender,
     ) -> anyhow::Result<Self> {
         let executor = ParallelExecutor::new(
@@ -438,10 +445,16 @@ impl ParallelExecutorAdapter {
             config,
         )?;
         Ok(Self {
-            executor: Arc::new(Mutex::new(executor)),
-            new_txs_watcher,
-            preconfirmation_sender,
+            inner: ParallelExecutorAdapterInner::Parallel {
+                executor: Arc::new(Mutex::new(executor)),
+            },
         })
+    }
+
+    pub fn from_native(executor: ExecutorAdapter) -> Self {
+        Self {
+            inner: ParallelExecutorAdapterInner::Native(executor),
+        }
     }
 }
 
