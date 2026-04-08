@@ -425,12 +425,6 @@ where
                 }
                 let resolved_txs =
                     self.pending_pool.new_known_tx(tx.utxo_ids_with_outputs());
-                // tracing::warn!(
-                //     result = "ok",
-                //     pending_pool_txs = self.pending_pool.current_txs,
-                //     resolved_txs = resolved_txs.len(),
-                //     "txpool_v2 insert"
-                // );
 
                 for (tx, source) in resolved_txs {
                     if let Err(e) = self

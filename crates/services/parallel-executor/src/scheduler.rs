@@ -682,12 +682,6 @@ where
             }
         }
 
-        // let mut res = self.verify_coherency_and_merge_results(
-        //     nb_batch_created,
-        //     l1_execution_data,
-        //     storage_with_da.clone(),
-        // )?;
-
         let result = self.verify_coherency_and_merge_results(
             nb_batch_created,
             l1_execution_data,

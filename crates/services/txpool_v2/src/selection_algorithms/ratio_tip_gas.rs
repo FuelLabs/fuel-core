@@ -798,12 +798,6 @@ where
             storage_id,
             &Self::collect_contract_inputs(store_entry),
         );
-        // tracing::warn!(
-        //     executable_set_size = self
-        //         .executable_transactions_sorted_tip_gas_ratio
-        //         .len(),
-        //     "txpool_v2 executable added"
-        // );
     }
 
     fn get_less_worth_txs(&self) -> impl Iterator<Item = &Self::StorageIndex> {
@@ -822,12 +816,6 @@ where
             key,
             &Self::collect_contract_inputs(storage_entry),
         );
-        // tracing::warn!(
-        //     executable_set_size = self
-        //         .executable_transactions_sorted_tip_gas_ratio
-        //         .len(),
-        //     "txpool_v2 executable removed"
-        // );
     }
 
     fn number_of_executable_transactions(&self) -> usize {
