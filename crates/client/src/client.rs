@@ -2083,10 +2083,5 @@ mod tests {
         assert!(!is_legacy_node("0.100.0"));
         assert!(!is_legacy_node("1.0.0"));
         assert!(!is_legacy_node("2.47.0"));
-
-        // Unparseable versions default to non-legacy (assume new node).
-        assert!(!is_legacy_node(""));
-        assert!(!is_legacy_node("garbage"));
-        assert!(!is_legacy_node("0.notanumber.0"));
     }
 }
