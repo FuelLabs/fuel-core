@@ -1124,7 +1124,14 @@ mod tests {
     fn chain_gql_legacy_query_output() {
         use cynic::QueryBuilder;
         let operation = ChainQueryLegacy::build(());
-        insta::assert_snapshot!("chain_gql_legacy_query_output", operation.query);
+
+        let snapshot_name = if cfg!(feature = "fault-proving") {
+            "chain_gql_legacy_query_output_with_tx_id_commitment"
+        } else {
+            "chain_gql_legacy_query_output"
+        };
+
+        insta::assert_snapshot!(snapshot_name, operation.query);
 
         // Belt-and-suspenders: assert the offending fields are absent so a reviewer
         // doesn't need to scan the whole snapshot by hand.

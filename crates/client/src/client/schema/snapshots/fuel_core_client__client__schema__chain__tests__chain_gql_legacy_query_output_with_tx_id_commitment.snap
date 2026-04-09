@@ -24,6 +24,7 @@ query ChainQueryLegacy {
         prevRoot
         time
         applicationHash
+        txIdCommitment
       }
       consensus {
         __typename
