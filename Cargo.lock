@@ -12064,6 +12064,7 @@ version = "43.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22632b187e1b0716f1b9ac57ad29013bed33175fcb19e10bb6896126f82fac67"
 dependencies = [
+ "anyhow",
  "hashbrown 0.16.1",
  "libm",
  "serde",
