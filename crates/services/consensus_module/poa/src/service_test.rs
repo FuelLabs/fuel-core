@@ -992,15 +992,13 @@ async fn main_task__reconciliation_import_does_not_deadlock_leader() {
         .expect_execute_and_commit()
         .returning(move |block| {
             let header = block.entity.header().clone();
-            let _ = sender_for_import
-                .try_send(BlockImportInfo::new_from_network(header));
+            let _ = sender_for_import.try_send(BlockImportInfo::new_from_network(header));
             Ok(())
         });
 
     // The block_stream feeds the SyncTask — wrap the mpsc receiver.
     // Use Option+Mutex to allow moving out of the FnMut closure.
-    let receiver_cell =
-        Arc::new(StdMutex::new(Some(block_import_receiver)));
+    let receiver_cell = Arc::new(StdMutex::new(Some(block_import_receiver)));
     block_importer.expect_block_stream().returning(move || {
         let rx = receiver_cell
             .lock()

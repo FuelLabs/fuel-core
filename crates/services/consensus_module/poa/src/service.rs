@@ -186,8 +186,7 @@ where
             ..
         } = config;
 
-        let reconciliation_watermark =
-            Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let reconciliation_watermark = Arc::new(std::sync::atomic::AtomicU32::new(0));
 
         let sync_task = SyncTask::new(
             peer_connections_stream,

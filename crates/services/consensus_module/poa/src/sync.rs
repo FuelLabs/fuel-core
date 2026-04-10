@@ -623,12 +623,11 @@ mod tests {
     /// the SyncTask to NotSynced, which deadlocks the leader's
     /// `ensure_synced()` call.
     #[tokio::test]
-    async fn sync_task__network_block_at_reconciliation_height_causes_not_synced_without_watermark(
-    ) {
+    async fn sync_task__network_block_at_reconciliation_height_causes_not_synced_without_watermark()
+     {
         // given: a SyncTask that starts in Synced state (min_peers=0, time=ZERO)
         let connections_stream = MockStream::<usize>::new(vec![]).into_boxed();
-        let block_stream =
-            MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
 
         let (tx, shutdown) =
             tokio::sync::watch::channel(fuel_core_services::State::Started);
@@ -655,12 +654,10 @@ mod tests {
         // when: a Source::Network block arrives at height 6 (> current height 5)
         // This is what happens when reconciliation imports a block via
         // execute_and_commit, which always uses ImportResult::new_from_network
-        let network_block_stream = MockStream::new(vec![BlockHeader::new_block(
-            6u32.into(),
-            Tai64::now(),
-        )])
-        .map(BlockImportInfo::new_from_network)
-        .into_boxed();
+        let network_block_stream =
+            MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
         sync_task.block_stream = network_block_stream;
 
         let _ = sync_task.run(&mut watcher).await;
@@ -684,8 +681,7 @@ mod tests {
     async fn sync_task__network_block_within_watermark_stays_synced() {
         // given: a SyncTask in Synced state with watermark set to height 6
         let connections_stream = MockStream::<usize>::new(vec![]).into_boxed();
-        let block_stream =
-            MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
 
         let (tx, shutdown) =
             tokio::sync::watch::channel(fuel_core_services::State::Started);
@@ -708,12 +704,10 @@ mod tests {
         ));
 
         // when: a Source::Network block at height 6 (within watermark)
-        let network_block_stream = MockStream::new(vec![BlockHeader::new_block(
-            6u32.into(),
-            Tai64::now(),
-        )])
-        .map(BlockImportInfo::new_from_network)
-        .into_boxed();
+        let network_block_stream =
+            MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
         sync_task.block_stream = network_block_stream;
 
         let _ = sync_task.run(&mut watcher).await;
@@ -725,12 +719,10 @@ mod tests {
         );
 
         // when: a Source::Network block at height 7 (ABOVE watermark)
-        let network_block_stream = MockStream::new(vec![BlockHeader::new_block(
-            7u32.into(),
-            Tai64::now(),
-        )])
-        .map(BlockImportInfo::new_from_network)
-        .into_boxed();
+        let network_block_stream =
+            MockStream::new(vec![BlockHeader::new_block(7u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
         sync_task.block_stream = network_block_stream;
 
         let _ = sync_task.run(&mut watcher).await;
