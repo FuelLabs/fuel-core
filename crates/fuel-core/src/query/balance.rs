@@ -1,7 +1,4 @@
-use std::{
-    cmp::Ordering,
-    collections::HashMap,
-};
+use std::collections::HashMap;
 
 use crate::{
     database::database_description::IndexationKind,
@@ -121,13 +118,7 @@ impl ReadView {
                     })
                     .collect::<Vec<_>>();
 
-                balances.sort_by(|l, r| {
-                    if l.asset_id < r.asset_id {
-                        Ordering::Less
-                    } else {
-                        Ordering::Greater
-                    }
-                });
+                balances.sort_by(|l, r| l.asset_id.cmp(&r.asset_id));
 
                 if direction == IterDirection::Reverse {
                     balances.reverse();
