@@ -46,12 +46,17 @@ use crate::tests::{
 fn make_block_import(
     height: u32,
     tx_ids: &[fuel_core_types::fuel_tx::TxId],
-) -> Arc<dyn std::ops::Deref<Target = fuel_core_types::services::block_importer::ImportResult> + Send + Sync>
-{
+) -> Arc<
+    dyn std::ops::Deref<Target = fuel_core_types::services::block_importer::ImportResult>
+        + Send
+        + Sync,
+> {
     let sealed_block = Sealed {
         entity: {
             let mut block = Block::default();
-            block.header_mut().set_block_height(BlockHeight::new(height));
+            block
+                .header_mut()
+                .set_block_height(BlockHeight::new(height));
             block
         },
         consensus: Default::default(),
@@ -122,8 +127,10 @@ async fn preconfirmed_tx_can_be_reinserted_after_rollback() {
     let tx = universe.build_script_transaction(None, None, 10);
     let tx_id = tx.id(&Default::default());
 
-    let service =
-        universe.build_service(None, Some(MockImporter::with_block_provider(block_receiver)));
+    let service = universe.build_service(
+        None,
+        Some(MockImporter::with_block_provider(block_receiver)),
+    );
     service.start_and_await().await.unwrap();
 
     // Insert and wait for submitted status.
@@ -139,18 +146,14 @@ async fn preconfirmed_tx_can_be_reinserted_after_rollback() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     // The tx should not be in the pool any more (committed).
-    let found = service
-        .shared
-        .find(vec![tx_id])
-        .await
-        .unwrap();
-    assert!(found[0].is_none(), "tx should have been committed out of pool");
+    let found = service.shared.find(vec![tx_id]).await.unwrap();
+    assert!(
+        found[0].is_none(),
+        "tx should have been committed out of pool"
+    );
 
     // When — import an empty block at height 1 (no tx T).
-    block_sender
-        .send(make_block_import(1, &[]))
-        .await
-        .unwrap();
+    block_sender.send(make_block_import(1, &[])).await.unwrap();
 
     // Give the worker time to process the block.
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
@@ -177,12 +180,13 @@ async fn dependents_of_preconfirmed_tx_removed_on_rollback() {
     // tx_parent is the tx that will be preconfirmed but not included.
     // It produces output_a (a coin).
     let (output_a, unset_input_a) = universe.create_output_and_input();
-    let tx_parent =
-        universe.build_script_transaction(None, Some(vec![output_a]), 1);
+    let tx_parent = universe.build_script_transaction(None, Some(vec![output_a]), 1);
     let tx_parent_id = tx_parent.id(&Default::default());
 
-    let service =
-        universe.build_service(None, Some(MockImporter::with_block_provider(block_receiver)));
+    let service = universe.build_service(
+        None,
+        Some(MockImporter::with_block_provider(block_receiver)),
+    );
     service.start_and_await().await.unwrap();
 
     // Simulate receiving a preconfirmation for tx_parent (which the sentry may
@@ -196,8 +200,7 @@ async fn dependents_of_preconfirmed_tx_removed_on_rollback() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     // Now insert tx_child that spends output_a (utxo from tx_parent).
-    let input_a =
-        unset_input_a.into_input(UtxoId::new(tx_parent_id, 0));
+    let input_a = unset_input_a.into_input(UtxoId::new(tx_parent_id, 0));
     let tx_child = universe.build_script_transaction(Some(vec![input_a]), None, 2);
     let tx_child_id = tx_child.id(&Default::default());
 
@@ -211,10 +214,7 @@ async fn dependents_of_preconfirmed_tx_removed_on_rollback() {
     assert!(found[0].is_some(), "tx_child should be in pool");
 
     // When — import a block at height 1 that does NOT contain tx_parent.
-    block_sender
-        .send(make_block_import(1, &[]))
-        .await
-        .unwrap();
+    block_sender.send(make_block_import(1, &[])).await.unwrap();
 
     // Then — tx_child depends on a now-stale preconfirmed output; it must be
     // squeezed out.
@@ -244,8 +244,10 @@ async fn preconfirmed_tx_committed_normally_when_in_canonical_block() {
     let tx = universe.build_script_transaction(None, None, 10);
     let tx_id = tx.id(&Default::default());
 
-    let service =
-        universe.build_service(None, Some(MockImporter::with_block_provider(block_receiver)));
+    let service = universe.build_service(
+        None,
+        Some(MockImporter::with_block_provider(block_receiver)),
+    );
     service.start_and_await().await.unwrap();
 
     service.shared.insert(tx.clone()).await.unwrap();
@@ -269,7 +271,10 @@ async fn preconfirmed_tx_committed_normally_when_in_canonical_block() {
     // Then — tx must not reappear in the pool; re-inserting it should fail
     // because its inputs are now permanently spent (committed in the block).
     let found = service.shared.find(vec![tx_id]).await.unwrap();
-    assert!(found[0].is_none(), "tx should not be in pool after block commit");
+    assert!(
+        found[0].is_none(),
+        "tx should not be in pool after block commit"
+    );
 
     service.stop_and_await().await.unwrap();
 }
@@ -283,12 +288,13 @@ async fn stale_preconfs_at_older_height_cleaned_up_by_later_block() {
     let mut universe = TestPoolUniverse::default();
 
     let (output_a, unset_input_a) = universe.create_output_and_input();
-    let tx_parent =
-        universe.build_script_transaction(None, Some(vec![output_a]), 1);
+    let tx_parent = universe.build_script_transaction(None, Some(vec![output_a]), 1);
     let tx_parent_id = tx_parent.id(&Default::default());
 
-    let service =
-        universe.build_service(None, Some(MockImporter::with_block_provider(block_receiver)));
+    let service = universe.build_service(
+        None,
+        Some(MockImporter::with_block_provider(block_receiver)),
+    );
     service.start_and_await().await.unwrap();
 
     // Preconfirmation at height 1 (but the block producer crashes).
@@ -300,8 +306,7 @@ async fn stale_preconfs_at_older_height_cleaned_up_by_later_block() {
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     // Insert a dependent tx while the preconf outputs are "live".
-    let input_a =
-        unset_input_a.into_input(UtxoId::new(tx_parent_id, 0));
+    let input_a = unset_input_a.into_input(UtxoId::new(tx_parent_id, 0));
     let tx_child = universe.build_script_transaction(Some(vec![input_a]), None, 2);
     let tx_child_id = tx_child.id(&Default::default());
 
@@ -312,10 +317,7 @@ async fn stale_preconfs_at_older_height_cleaned_up_by_later_block() {
 
     // When — a block at height 2 arrives (skipping height 1). The preconf for
     // height 1 was never resolved, so it must be rolled back.
-    block_sender
-        .send(make_block_import(2, &[]))
-        .await
-        .unwrap();
+    block_sender.send(make_block_import(2, &[])).await.unwrap();
 
     // Then — tx_child (which depended on the stale preconf output) is removed.
     universe

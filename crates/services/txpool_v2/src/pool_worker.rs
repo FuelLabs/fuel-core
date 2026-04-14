@@ -501,9 +501,8 @@ where
             .map(|tx_status| tx_status.id)
             .collect();
 
-        self.pool.process_committed_transactions(
-            confirmed_tx_ids.iter().copied(),
-        );
+        self.pool
+            .process_committed_transactions(confirmed_tx_ids.iter().copied());
 
         block_result.tx_status.iter().for_each(|tx_status| {
             self.pool
