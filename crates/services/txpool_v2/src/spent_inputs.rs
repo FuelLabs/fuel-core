@@ -27,6 +27,9 @@ pub struct SpentInputs {
     /// transaction spent it. Later, this information can be used to unspent
     /// or fully spend the input.
     spender_of_inputs: HashMap<TxId, Vec<InputKey>>,
+    /// Inputs permanently spent during preconfirmation processing, saved so
+    /// they can be rolled back if the preconfirmation turns out to be stale.
+    tentative_spent: HashMap<TxId, Vec<InputKey>>,
 }
 
 impl SpentInputs {
@@ -34,6 +37,7 @@ impl SpentInputs {
         Self {
             spent_inputs: LruCache::new(capacity),
             spender_of_inputs: HashMap::new(),
+            tentative_spent: HashMap::new(),
         }
     }
 
@@ -113,6 +117,43 @@ impl SpentInputs {
 
     pub fn is_spent_tx(&self, tx: &TxId) -> bool {
         self.spent_inputs.contains(&InputKey::Tx(*tx))
+    }
+
+    /// Record inputs that were permanently spent during preconfirmation processing.
+    /// The saved keys can later be rolled back via [`unspend_preconfirmed`].
+    pub fn record_tentative_spend(&mut self, tx_id: TxId, inputs: &[Input]) {
+        let keys: Vec<InputKey> = inputs
+            .iter()
+            .filter_map(|input| {
+                if input.is_coin() {
+                    input.utxo_id().cloned().map(InputKey::Utxo)
+                } else if input.is_message() {
+                    input.nonce().cloned().map(InputKey::Message)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.tentative_spent.insert(tx_id, keys);
+    }
+
+    /// Remove the tentative-spend record for a confirmed transaction, preventing
+    /// a spurious rollback. Called when the preconfirmed tx is included in the
+    /// canonical block.
+    pub fn confirm_tentative_spend(&mut self, tx_id: &TxId) {
+        self.tentative_spent.remove(tx_id);
+    }
+
+    /// Removes the tx entry and any individually-tracked UTXO/message inputs
+    /// from spent inputs, allowing the same inputs to be re-used.
+    /// Used when rolling back a stale preconfirmation.
+    pub fn unspend_preconfirmed(&mut self, tx_id: TxId) {
+        self.spent_inputs.pop(&InputKey::Tx(tx_id));
+        if let Some(saved_keys) = self.tentative_spent.remove(&tx_id) {
+            for key in saved_keys {
+                self.spent_inputs.pop(&key);
+            }
+        }
     }
 }
 

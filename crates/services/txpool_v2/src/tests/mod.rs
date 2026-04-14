@@ -5,6 +5,7 @@ mod stability_test;
 mod tests_p2p;
 mod tests_pending_pool;
 mod tests_pool;
+mod tests_preconf_rollback;
 mod tests_service;
 mod tx_status_manager_integration;
 mod universe;

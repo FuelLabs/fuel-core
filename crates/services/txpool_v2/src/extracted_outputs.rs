@@ -49,7 +49,13 @@ impl ExtractedOutputs {
         for (utxo_id, output) in outputs {
             match output {
                 Output::ContractCreated { contract_id, .. } => {
-                    self.contract_created.insert(*contract_id, *utxo_id.tx_id());
+                    let tx_id = *utxo_id.tx_id();
+                    self.contract_created.insert(*contract_id, tx_id);
+                    // Track the reverse mapping so cleanup via new_executed_transaction works.
+                    self.contract_created_by_tx
+                        .entry(tx_id)
+                        .or_default()
+                        .push(*contract_id);
                 }
                 Output::Coin {
                     to,
