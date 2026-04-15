@@ -94,6 +94,7 @@ impl PoolWorkerInterface {
         tx_pool: TxPool<TxStatusManager>,
         view_provider: Arc<dyn AtomicView<LatestView = View>>,
         limits: &ServiceChannelLimits,
+        initial_block_height: BlockHeight,
     ) -> Self
     where
         View: TxPoolPersistentStorage,
@@ -138,6 +139,7 @@ impl PoolWorkerInterface {
                     pool: tx_pool,
                     view_provider,
                     tentative_preconfs: BTreeMap::new(),
+                    current_canonical_height: initial_block_height,
                 };
 
                 tokio_runtime.block_on(async {
@@ -276,6 +278,10 @@ pub(super) struct PoolWorker<View, TxStatusManager> {
     /// Used to roll back stale preconfirmations when the canonical block at
     /// that height does not include those transactions.
     tentative_preconfs: BTreeMap<BlockHeight, HashSet<TxId>>,
+    /// The height of the last canonical block imported by this node.
+    /// Used to discard late preconfirmations whose tentative block height
+    /// is already at or below the canonical tip.
+    current_canonical_height: BlockHeight,
 }
 
 impl<View, TxStatusManager> PoolWorker<View, TxStatusManager>
@@ -494,6 +500,7 @@ where
 
     fn process_block(&mut self, block_result: SharedImportResult) {
         let block_height = *block_result.sealed_block.entity.header().height();
+        self.current_canonical_height = self.current_canonical_height.max(block_height);
 
         let confirmed_tx_ids: HashSet<TxId> = block_result
             .tx_status
@@ -570,6 +577,29 @@ where
         tx_id: TxId,
         status: PreConfirmationStatus,
     ) {
+        // Reject late preconfirmations whose tentative block height is already
+        // at or below the node's current canonical tip.  Applying them would
+        // temporarily mark inputs as spent and admit dependents against outputs
+        // that may not be in any canonical block, creating a stale-acceptance
+        // window that is only unwound on the next block import.
+        let preconf_height = match &status {
+            PreConfirmationStatus::Success(s) => Some(s.tx_pointer.block_height()),
+            PreConfirmationStatus::Failure(s) => Some(s.tx_pointer.block_height()),
+            PreConfirmationStatus::SqueezedOut(_) => None,
+        };
+        if let Some(h) = preconf_height
+            && h <= self.current_canonical_height
+        {
+            tracing::debug!(
+                "Ignoring late preconfirmation for tx {} at height {} \
+                 (current canonical height {})",
+                tx_id,
+                h,
+                self.current_canonical_height,
+            );
+            return;
+        }
+
         let (outputs, block_height) = match &status {
             PreConfirmationStatus::Success(status) => {
                 self.pool.process_preconfirmed_committed_transaction(tx_id);

@@ -94,6 +94,21 @@ impl SpentInputs {
         }
     }
 
+    /// Transitions the inputs recorded by [`maybe_spend_inputs`] from the
+    /// `spender_of_inputs` map directly into `tentative_spent`, without
+    /// touching the live `spent_inputs` LRU cache.
+    ///
+    /// Call this **before** [`spend_inputs_by_tx_id`] when a preconfirmation
+    /// arrives for a tx that was already extracted for local block production
+    /// (i.e. absent from pool storage).  This preserves the input keys for a
+    /// potential rollback via [`unspend_preconfirmed`] before
+    /// [`spend_inputs_by_tx_id`] drains `spender_of_inputs`.
+    pub fn move_spender_to_tentative(&mut self, tx_id: TxId) {
+        if let Some(keys) = self.spender_of_inputs.get(&tx_id) {
+            self.tentative_spent.insert(tx_id, keys.clone());
+        }
+    }
+
     /// If transaction is skipped during the block production, this functions
     /// can be used to unspend inputs, allowing other transactions to spend them.
     pub fn unspend_inputs(&mut self, tx_id: TxId) {

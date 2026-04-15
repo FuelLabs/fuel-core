@@ -1,5 +1,3 @@
-//! Tests for preconfirmation rollback (issue #3098).
-//!
 //! When a block producer emits preconfirmations and then crashes or produces a
 //! different block at the same height, the sentry/RPC mempool must purge the
 //! stale preconfirmation state on the next canonical block import.
@@ -12,12 +10,16 @@ use fuel_core_types::{
         consensus::Sealed,
     },
     fuel_tx::{
+        Contract,
         Output,
         TxPointer,
         UniqueIdentifier,
         UtxoId,
     },
-    fuel_types::BlockHeight,
+    fuel_types::{
+        BlockHeight,
+        ContractId,
+    },
     services::{
         block_importer::ImportResult,
         executor::{
@@ -33,14 +35,16 @@ use fuel_core_types::{
 
 use fuel_core_services::Service as ServiceTrait;
 
-use crate::tests::{
-    mocks::MockImporter,
-    universe::TestPoolUniverse,
+use crate::{
+    Constraints,
+    tests::{
+        mocks::MockImporter,
+        universe::{
+            TestPoolUniverse,
+            create_contract_input,
+        },
+    },
 };
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 /// Build a canonical block sealed at `height` that contains `tx_ids`.
 fn make_block_import(
@@ -95,6 +99,31 @@ fn make_preconf_success(
     )
 }
 
+/// Build a `PreConfirmationStatus::Success` whose resolved outputs include a
+/// `ContractCreated` entry, so that `extracted_outputs.contract_exists(contract_id)`
+/// becomes true after the preconfirmation is processed.
+fn make_preconf_with_contract_created(
+    tx_id: fuel_core_types::fuel_tx::TxId,
+    block_height: u32,
+    contract_id: ContractId,
+) -> PreConfirmationStatus {
+    let utxo_id = UtxoId::new(tx_id, 0);
+    let output = Output::ContractCreated {
+        contract_id,
+        state_root: Contract::default_state_root(),
+    };
+    PreConfirmationStatus::Success(
+        statuses::PreConfirmationSuccess {
+            tx_pointer: TxPointer::new(BlockHeight::new(block_height), 0),
+            total_gas: 0,
+            total_fee: 0,
+            receipts: None,
+            resolved_outputs: Some(vec![(utxo_id, output)]),
+        }
+        .into(),
+    )
+}
+
 /// Build a `PreConfirmationStatus::Success` with no resolved outputs.
 fn make_preconf_success_no_outputs(
     _tx_id: fuel_core_types::fuel_tx::TxId,
@@ -112,13 +141,9 @@ fn make_preconf_success_no_outputs(
     )
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 /// After a preconfirmation arrives for tx T at height H, and then a canonical
 /// block at height H is imported *without* T, the tx should no longer be
-/// marked as "spent" — i.e. it can be re-inserted into the pool.
+/// marked as "spent" i.e. it can be re-inserted into the pool.
 #[tokio::test]
 async fn preconfirmed_tx_can_be_reinserted_after_rollback() {
     // Given
@@ -279,6 +304,71 @@ async fn preconfirmed_tx_committed_normally_when_in_canonical_block() {
     service.stop_and_await().await.unwrap();
 }
 
+/// Regression test for the "extracted-first" rollback bug.
+///
+/// Sequence:
+///   1. Tx T is inserted and then extracted for local block production.
+///      `maybe_spend_inputs` records T's coin inputs in `spender_of_inputs`.
+///   2. A preconfirmation for T arrives.  Because T was already removed from
+///      `tx_id_to_storage_id`, `process_preconfirmed_committed_transaction`
+///      takes the `else` branch and must still save T's inputs into
+///      `tentative_spent` so they can be rolled back later.
+///   3. The canonical block omits T → `rollback_preconfirmed_transaction` must
+///      clear those coin-input keys from `spent_inputs`.
+///   4. Re-inserting T must succeed (inputs no longer marked spent).
+#[tokio::test]
+async fn extracted_tx_inputs_freed_after_preconf_rollback() {
+    // Given
+    let (block_sender, block_receiver) = tokio::sync::mpsc::channel(10);
+    let mut universe = TestPoolUniverse::default();
+    let tx = universe.build_script_transaction(None, None, 10);
+    let tx_id = tx.id(&Default::default());
+
+    let service = universe.build_service(
+        None,
+        Some(MockImporter::with_block_provider(block_receiver)),
+    );
+    service.start_and_await().await.unwrap();
+
+    // Insert and wait for the tx to be accepted.
+    service.shared.insert(tx.clone()).await.unwrap();
+    universe
+        .await_expected_tx_statuses_submitted(vec![tx_id])
+        .await;
+
+    // Extract the tx (simulating local block production).
+    // This calls `maybe_spend_inputs` and removes the tx from storage.
+    let extracted = service
+        .shared
+        .extract_transactions_for_block(Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u16::MAX,
+            maximum_block_size: u32::MAX,
+            excluded_contracts: Default::default(),
+        })
+        .unwrap();
+    assert_eq!(extracted.len(), 1, "expected exactly one extracted tx");
+
+    // Preconfirmation arrives for the already-extracted tx.
+    universe.send_preconfirmation(tx_id, make_preconf_success_no_outputs(tx_id, 1));
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // When — import an empty canonical block at height 1 (tx is absent).
+    block_sender.send(make_block_import(1, &[])).await.unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Then — coin inputs must have been freed; re-inserting T must succeed.
+    service.shared.insert(tx.clone()).await.unwrap();
+    universe
+        .await_expected_tx_statuses_submitted(vec![tx_id])
+        .await;
+
+    service.stop_and_await().await.unwrap();
+}
+
 /// Stale preconfirmations at an older height are cleaned up when a later
 /// block is imported, even if the heights don't match exactly.
 #[tokio::test]
@@ -329,6 +419,147 @@ async fn stale_preconfs_at_older_height_cleaned_up_by_later_block() {
         })
         .await
         .unwrap();
+
+    service.stop_and_await().await.unwrap();
+}
+
+/// A late preconfirmation arriving after the referenced canonical block has
+/// already been imported must be silently discarded.
+///
+/// Sequence:
+///   1. Node imports canonical block at height H (tx T is absent from it).
+///   2. T is inserted into the pool.
+///   3. A delayed preconfirmation for T arrives claiming height H.
+///   4. Because H <= current_canonical_height the preconfirmation is ignored:
+///      T must remain in the pool (not committed out) and spent_inputs must
+///      not be mutated.
+#[tokio::test]
+async fn late_preconf_below_canonical_height_is_ignored() {
+    // Given
+    let (block_sender, block_receiver) = tokio::sync::mpsc::channel(10);
+    let mut universe = TestPoolUniverse::default();
+    let tx = universe.build_script_transaction(None, None, 10);
+    let tx_id = tx.id(&Default::default());
+
+    let service = universe.build_service(
+        None,
+        Some(MockImporter::with_block_provider(block_receiver)),
+    );
+    service.start_and_await().await.unwrap();
+
+    // Import a canonical block at height 1 that does NOT include the tx.
+    // After this the node's canonical height is 1.
+    block_sender.send(make_block_import(1, &[])).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Insert T after the block is imported.
+    service.shared.insert(tx.clone()).await.unwrap();
+    universe
+        .await_expected_tx_statuses_submitted(vec![tx_id])
+        .await;
+
+    // When — a delayed preconfirmation for T arrives at height 1
+    // (already at or below the canonical tip).
+    universe.send_preconfirmation(tx_id, make_preconf_success_no_outputs(tx_id, 1));
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Then — the preconfirmation must be ignored.
+    // If it were applied, `process_preconfirmed_committed_transaction` would
+    // remove T from the pool.  T must still be present.
+    let found = service.shared.find(vec![tx_id]).await.unwrap();
+    assert!(
+        found[0].is_some(),
+        "tx should still be in pool — late preconfirmation must have been ignored"
+    );
+
+    service.stop_and_await().await.unwrap();
+}
+
+/// Regression test: a pool tx admitted via a preconfirmed contract creation must
+/// be evicted when the canonical block omits the contract-creating preconfirmation.
+///
+/// Sequence:
+///   1. Preconfirmation for tx P arrives carrying `Output::ContractCreated { C }`.
+///      `extracted_outputs` now reports `contract_exists(C) == true`.
+///   2. Tx D with `Input::Contract(C)` is inserted into the pool.
+///      It passes validation because `extracted_outputs.contract_exists(C)`.
+///      D has no graph dependency on any in-pool creator of C.
+///   3. An empty canonical block is imported at height 1 (P is absent).
+///      Rollback clears C from `extracted_outputs`.
+///   4. D must be squeezed out — it was only valid because of the now-stale
+///      preconfirmed contract creation.
+#[tokio::test]
+async fn contract_dependent_tx_removed_on_preconf_rollback() {
+    // Given
+    let (block_sender, block_receiver) = tokio::sync::mpsc::channel(10);
+    let mut universe = TestPoolUniverse::default();
+
+    // Compute the contract id that P will advertise as created.
+    // P is never inserted into the pool — it arrives only via preconfirmation.
+    let contract_code = vec![1u8, 2, 3];
+    let contract: fuel_core_types::fuel_tx::Contract = contract_code.into();
+    let contract_id = fuel_core_types::fuel_tx::Contract::id(
+        &Default::default(),
+        &contract.root(),
+        &Default::default(),
+    );
+    let p_tx_id = fuel_core_types::fuel_tx::TxId::from([0xABu8; 32]);
+
+    let service = universe.build_service(
+        None,
+        Some(MockImporter::with_block_provider(block_receiver)),
+    );
+    service.start_and_await().await.unwrap();
+
+    // Preconfirmation for P arrives (with ContractCreated output).
+    universe.send_preconfirmation(
+        p_tx_id,
+        make_preconf_with_contract_created(p_tx_id, 1, contract_id),
+    );
+
+    // Give the worker time to register the preconfirmed contract in extracted_outputs.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Insert D which uses the preconfirmed contract as an input.
+    // The mock DB has no record of this contract, so admission relies solely on
+    // extracted_outputs.contract_exists(contract_id).
+    // A script tx with Input::Contract at index 0 also needs Output::Contract(0).
+    let contract_input = create_contract_input(p_tx_id, 0, contract_id);
+    let contract_output = Output::contract(0, Default::default(), Default::default());
+    let tx_d = universe.build_script_transaction(
+        Some(vec![contract_input]),
+        Some(vec![contract_output]),
+        5,
+    );
+    let tx_d_id = tx_d.id(&Default::default());
+
+    service.shared.insert(tx_d).await.unwrap();
+    universe
+        .await_expected_tx_statuses_submitted(vec![tx_d_id])
+        .await;
+
+    let found = service.shared.find(vec![tx_d_id]).await.unwrap();
+    assert!(found[0].is_some(), "tx_d should be in the pool");
+
+    // When — import an empty canonical block at height 1 (P was never included).
+    block_sender.send(make_block_import(1, &[])).await.unwrap();
+
+    // Then — D must be squeezed out because the contract it relied on never landed.
+    universe
+        .await_expected_tx_statuses(vec![tx_d_id], |_, status| {
+            matches!(
+                status,
+                fuel_core_types::services::transaction_status::TransactionStatus::SqueezedOut(_)
+            )
+        })
+        .await
+        .unwrap();
+
+    let found = service.shared.find(vec![tx_d_id]).await.unwrap();
+    assert!(
+        found[0].is_none(),
+        "tx_d should have been removed from the pool"
+    );
 
     service.stop_and_await().await.unwrap();
 }

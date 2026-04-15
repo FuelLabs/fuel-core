@@ -137,6 +137,16 @@ impl ExtractedOutputs {
         self.new_executed_transaction(tx_id);
     }
 
+    /// Returns the contract IDs created by `tx_id`, if any.
+    /// Call this **before** [`new_skipped_transaction`] / [`new_executed_transaction`]
+    /// if the caller needs the list for cleanup.
+    pub fn contracts_created_by(&self, tx_id: &TxId) -> &[ContractId] {
+        self.contract_created_by_tx
+            .get(tx_id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
     pub fn new_executed_transaction(&mut self, tx_id: &TxId) {
         let contract_ids = self.contract_created_by_tx.remove(tx_id);
         if let Some(contract_ids) = contract_ids {
