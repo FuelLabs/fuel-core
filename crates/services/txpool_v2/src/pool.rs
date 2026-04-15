@@ -442,11 +442,9 @@ where
             let dependents: Vec<S::StorageIndex> =
                 self.storage.get_direct_dependents(storage_id).collect();
             let Some(transaction) = self.storage.remove_transaction(storage_id) else {
+                // Invariant violation. Panic in tests, log in production.
                 debug_assert!(false, "Storage data not found for the transaction");
-                tracing::warn!(
-                    "Storage data not found for the transaction during \
-                     `process_preconfirmed_committed_transaction`."
-                );
+                tracing::warn!("Storage data not found for the transaction.");
                 return;
             };
             self.extracted_outputs
@@ -489,10 +487,9 @@ where
                     self.storage.get_direct_dependents(storage_id).collect();
                 let Some(transaction) = self.storage.remove_transaction(storage_id)
                 else {
+                    // Invariant violation. Panic in tests, log in production.
                     debug_assert!(false, "Storage data not found for the transaction");
-                    tracing::warn!(
-                        "Storage data not found for the transaction during `remove_transaction`."
-                    );
+                    tracing::warn!("Storage data not found for the transaction during.");
                     continue;
                 };
                 self.extracted_outputs
@@ -512,14 +509,12 @@ where
         let mut new_executable_transaction = false;
         for promote in transactions_to_promote {
             let Some(storage_data) = self.storage.get(&promote) else {
+                // Invariant violation. Panic in tests, log in production.
                 debug_assert!(
                     false,
                     "Dependent storage data not found for the transaction"
                 );
-                tracing::warn!(
-                    "Dependent storage data not found for \
-                            the transaction during `remove_transaction`."
-                );
+                tracing::warn!("Dependent storage data not found for the transaction.");
                 continue;
             };
 
@@ -619,13 +614,13 @@ where
             debug_assert!(!self.storage.has_dependencies(storage_id));
 
             let Some(storage_data) = self.storage.get(storage_id) else {
+                // Invariant violation. Panic in tests, log in production.
                 debug_assert!(
                     false,
                     "Storage data not found for one of the less worth transactions"
                 );
                 tracing::warn!(
-                    "Storage data not found for one of the less \
-                    worth transactions during `find_free_space`."
+                    "Storage data not found for one of the less worth transactions"
                 );
                 continue;
             };

@@ -81,6 +81,7 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
         self.messages_spenders.is_empty()
             && self.coins_spenders.is_empty()
             && self.contracts_creators.is_empty()
+            && self.contract_users.is_empty()
             && self.blobs_users.is_empty()
     }
 
@@ -93,6 +94,7 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
         let mut message_spenders = HashMap::new();
         let mut coins_spenders = BTreeMap::new();
         let mut contracts_creators = HashMap::new();
+        let mut contract_users: HashMap<ContractId, Vec<TxId>> = HashMap::new();
         let mut blobs_users = HashMap::new();
         for tx in expected_txs {
             if let PoolTransaction::Blob(checked_tx, _) = tx.deref() {
@@ -115,7 +117,12 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
                     }) => {
                         message_spenders.insert(*nonce, tx.id());
                     }
-                    Input::Contract { .. } => {}
+                    Input::Contract(ContractInput { contract_id, .. }) => {
+                        contract_users
+                            .entry(*contract_id)
+                            .or_default()
+                            .push(tx.id());
+                    }
                 }
             }
             for output in tx.outputs() {
@@ -156,6 +163,26 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
             contracts_creators.is_empty(),
             "Some contract creators are missing from the collision manager: {:?}",
             contracts_creators
+        );
+        for (contract_id, users) in &self.contract_users {
+            let expected = contract_users.remove(contract_id).unwrap_or_else(|| panic!(
+                "A contract ({}) user list is present on the collision manager that shouldn't be there.",
+                contract_id
+            ));
+            let mut actual_sorted = users.clone();
+            actual_sorted.sort();
+            let mut expected_sorted = expected;
+            expected_sorted.sort();
+            assert_eq!(
+                actual_sorted, expected_sorted,
+                "contract_users mismatch for contract {}",
+                contract_id
+            );
+        }
+        assert!(
+            contract_users.is_empty(),
+            "Some contract users are missing from the collision manager: {:?}",
+            contract_users
         );
     }
 }
