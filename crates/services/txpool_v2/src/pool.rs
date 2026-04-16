@@ -426,6 +426,55 @@ where
         self.tx_id_to_storage_id.keys()
     }
 
+    /// Process a preconfirmed transaction as committed while recording its spent
+    /// inputs so they can be rolled back later if the transaction is not
+    /// included in the canonical block.
+    pub fn process_preconfirmed_committed_transaction(&mut self, tx_id: TxId) {
+        // If the tx was already extracted for local block production it is no
+        // longer in `tx_id_to_storage_id`, so the branch below that calls
+        // `record_tentative_spend` will be skipped.  Preserve the input keys
+        // now, before `spend_inputs_by_tx_id` drains `spender_of_inputs[T]`.
+        if !self.tx_id_to_storage_id.contains_key(&tx_id) {
+            self.spent_inputs.move_spender_to_tentative(tx_id);
+        }
+        self.spent_inputs.spend_inputs_by_tx_id(tx_id);
+        if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
+            let dependents: Vec<S::StorageIndex> =
+                self.storage.get_direct_dependents(storage_id).collect();
+            let Some(transaction) = self.storage.remove_transaction(storage_id) else {
+                // Invariant violation. Panic in tests, log in production.
+                debug_assert!(false, "Storage data not found for the transaction");
+                tracing::warn!("Storage data not found for the transaction.");
+                return;
+            };
+            self.extracted_outputs
+                .new_extracted_transaction(&transaction.transaction);
+            // Save the inputs before spending them permanently, so we can roll
+            // them back if the canonical block omits this transaction.
+            self.spent_inputs
+                .record_tentative_spend(tx_id, transaction.transaction.inputs());
+            self.spent_inputs
+                .spend_inputs(tx_id, transaction.transaction.inputs());
+            self.update_components_and_caches_on_removal(iter::once(&transaction));
+
+            let mut new_executable_transaction = false;
+            for dependent in dependents {
+                if !self.storage.has_dependencies(&dependent)
+                    && let Some(storage_data) = self.storage.get(&dependent)
+                {
+                    self.selection_algorithm
+                        .new_executable_transaction(dependent, storage_data);
+                    new_executable_transaction = true;
+                }
+            }
+            if new_executable_transaction {
+                self.new_executable_txs_notifier.send_replace(());
+            }
+        }
+
+        self.update_stats();
+    }
+
     /// Process committed transactions:
     /// - Remove transaction but keep its dependents and the dependents become executables.
     /// - Notify about possible new executable transactions.
@@ -438,10 +487,9 @@ where
                     self.storage.get_direct_dependents(storage_id).collect();
                 let Some(transaction) = self.storage.remove_transaction(storage_id)
                 else {
+                    // Invariant violation. Panic in tests, log in production.
                     debug_assert!(false, "Storage data not found for the transaction");
-                    tracing::warn!(
-                        "Storage data not found for the transaction during `remove_transaction`."
-                    );
+                    tracing::warn!("Storage data not found for the transaction during.");
                     continue;
                 };
                 self.extracted_outputs
@@ -461,14 +509,12 @@ where
         let mut new_executable_transaction = false;
         for promote in transactions_to_promote {
             let Some(storage_data) = self.storage.get(&promote) else {
+                // Invariant violation. Panic in tests, log in production.
                 debug_assert!(
                     false,
                     "Dependent storage data not found for the transaction"
                 );
-                tracing::warn!(
-                    "Dependent storage data not found for \
-                            the transaction during `remove_transaction`."
-                );
+                tracing::warn!("Dependent storage data not found for the transaction.");
                 continue;
             };
 
@@ -568,13 +614,13 @@ where
             debug_assert!(!self.storage.has_dependencies(storage_id));
 
             let Some(storage_data) = self.storage.get(storage_id) else {
+                // Invariant violation. Panic in tests, log in production.
                 debug_assert!(
                     false,
                     "Storage data not found for one of the less worth transactions"
                 );
                 tracing::warn!(
-                    "Storage data not found for one of the less \
-                    worth transactions during `find_free_space`."
+                    "Storage data not found for one of the less worth transactions"
                 );
                 continue;
             };
@@ -673,6 +719,87 @@ where
                             Error::SkippedTransaction(format!(
                                 "Parent transaction with id: {tx_id}, was removed because of: {reason}"
                             )).to_string(), dependent_tx_id);
+                        (dependent_tx_id, tx_status)
+                    })
+                    .collect();
+                if !removed_txs.is_empty() {
+                    self.tx_status_manager.squeezed_out_txs(removed_txs);
+                }
+            }
+        }
+
+        self.update_stats();
+    }
+
+    /// Rollback a preconfirmed transaction that was not included in the canonical block.
+    ///
+    /// This clears the preconfirmation-derived outputs and removes any pool transactions
+    /// that depend on those outputs, since those inputs no longer exist on-chain.
+    pub fn rollback_preconfirmed_transaction(&mut self, tx_id: TxId) {
+        // Capture contracts created by this preconfirmation BEFORE clearing
+        // extracted_outputs, so we can evict any pool txs that were admitted
+        // only because of the now-stale temporary contract existence.
+        let created_contracts: Vec<_> =
+            self.extracted_outputs.contracts_created_by(&tx_id).to_vec();
+
+        // Remove preconfirmed outputs so dependents can't use them.
+        self.extracted_outputs.new_skipped_transaction(&tx_id);
+        // Allow the transaction itself to be re-submitted.
+        self.spent_inputs.unspend_preconfirmed(tx_id);
+
+        let reason = format!(
+            "Preconfirmed parent transaction {tx_id} was not included in the canonical block"
+        );
+
+        // Remove any pool transactions that used the preconfirmed coin outputs as inputs.
+        let coin_dependents = self.collision_manager.get_coins_spenders(&tx_id);
+        if !coin_dependents.is_empty() {
+            for dependent in coin_dependents {
+                let removed = self
+                    .storage
+                    .remove_transaction_and_dependents_subtree(dependent);
+                self.update_components_and_caches_on_removal(removed.iter());
+                let removed_txs: Vec<_> = removed
+                    .into_iter()
+                    .map(|data| {
+                        let dependent_tx_id = data.transaction.id();
+                        let tx_status =
+                            statuses::SqueezedOut::new(reason.clone(), dependent_tx_id);
+                        (dependent_tx_id, tx_status)
+                    })
+                    .collect();
+                if !removed_txs.is_empty() {
+                    self.tx_status_manager.squeezed_out_txs(removed_txs);
+                }
+            }
+        }
+
+        // Remove any pool transactions that used a preconfirmed contract creation
+        // as an input and were admitted only via `extracted_outputs` (no in-pool
+        // graph dependency).  Skip eviction when the contract is still available
+        // through an independent in-pool creator.
+        for contract_id in created_contracts {
+            if self
+                .collision_manager
+                .contract_created_in_pool(&contract_id)
+            {
+                continue;
+            }
+            let user_tx_ids = self.collision_manager.get_contract_users(&contract_id);
+            for user_tx_id in user_tx_ids {
+                let Some(&storage_id) = self.tx_id_to_storage_id.get(&user_tx_id) else {
+                    continue;
+                };
+                let removed = self
+                    .storage
+                    .remove_transaction_and_dependents_subtree(storage_id);
+                self.update_components_and_caches_on_removal(removed.iter());
+                let removed_txs: Vec<_> = removed
+                    .into_iter()
+                    .map(|data| {
+                        let dependent_tx_id = data.transaction.id();
+                        let tx_status =
+                            statuses::SqueezedOut::new(reason.clone(), dependent_tx_id);
                         (dependent_tx_id, tx_status)
                     })
                     .collect();
