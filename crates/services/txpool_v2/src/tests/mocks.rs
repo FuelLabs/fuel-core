@@ -114,6 +114,11 @@ impl MockTxStatusManager {
             tx,
         }
     }
+
+    /// Send a preconfirmation update to the pool worker.
+    pub fn send_preconfirmation(&self, tx_id: TxId, status: PreConfirmationStatus) {
+        let _ = self.tx_preconfirmations_update_sender.send((tx_id, status));
+    }
 }
 
 impl ports::TxStatusManager for MockTxStatusManager {
