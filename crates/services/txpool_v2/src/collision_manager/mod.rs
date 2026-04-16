@@ -8,6 +8,8 @@ use fuel_core_types::{
 };
 use std::collections::HashMap;
 
+use fuel_core_types::fuel_tx::ContractId;
+
 use crate::storage::StorageData;
 
 pub mod basic;
@@ -26,6 +28,16 @@ pub trait CollisionManager {
 
     /// Get spenders of coins UTXO created by a transaction ID.
     fn get_coins_spenders(&self, tx_creator_id: &TxId) -> Vec<Self::StorageIndex>;
+
+    /// Get the IDs of pool transactions that have `Input::Contract(contract_id)`.
+    /// Used during preconfirmation rollback to evict pool txs that were admitted
+    /// only because a preconfirmed tx temporarily created the contract.
+    fn get_contract_users(&self, contract_id: &ContractId) -> Vec<TxId>;
+
+    /// Returns true if a currently in-pool transaction creates `contract_id`.
+    /// Used during rollback to skip eviction when the contract is still available
+    /// via a pool tx (independent of the rolled-back preconfirmation).
+    fn contract_created_in_pool(&self, contract_id: &ContractId) -> bool;
 
     /// Inform the collision manager that a transaction was stored.
     fn on_stored_transaction(

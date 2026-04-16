@@ -61,6 +61,9 @@ mod spent_inputs;
 mod tests;
 #[cfg(test)]
 fuel_core_trace::enable_tracing!();
+// Needed to activate the `test-helpers` feature flag for integration tests.
+#[cfg(test)]
+use fuel_core_txpool as _;
 
 use fuel_core_types::fuel_asm::Word;
 pub use pool::TxPoolStats;
