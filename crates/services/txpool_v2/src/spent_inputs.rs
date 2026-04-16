@@ -27,6 +27,9 @@ pub struct SpentInputs {
     /// transaction spent it. Later, this information can be used to unspent
     /// or fully spend the input.
     spender_of_inputs: HashMap<TxId, Vec<InputKey>>,
+    /// Inputs permanently spent during preconfirmation processing, saved so
+    /// they can be rolled back if the preconfirmation turns out to be stale.
+    tentative_spent: HashMap<TxId, Vec<InputKey>>,
 }
 
 impl SpentInputs {
@@ -34,6 +37,7 @@ impl SpentInputs {
         Self {
             spent_inputs: LruCache::new(capacity),
             spender_of_inputs: HashMap::new(),
+            tentative_spent: HashMap::new(),
         }
     }
 
@@ -90,6 +94,21 @@ impl SpentInputs {
         }
     }
 
+    /// Transitions the inputs recorded by [`maybe_spend_inputs`] from the
+    /// `spender_of_inputs` map directly into `tentative_spent`, without
+    /// touching the live `spent_inputs` LRU cache.
+    ///
+    /// Call this **before** [`spend_inputs_by_tx_id`] when a preconfirmation
+    /// arrives for a tx that was already extracted for local block production
+    /// (i.e. absent from pool storage).  This preserves the input keys for a
+    /// potential rollback via [`unspend_preconfirmed`] before
+    /// [`spend_inputs_by_tx_id`] drains `spender_of_inputs`.
+    pub fn move_spender_to_tentative(&mut self, tx_id: TxId) {
+        if let Some(keys) = self.spender_of_inputs.get(&tx_id) {
+            self.tentative_spent.insert(tx_id, keys.clone());
+        }
+    }
+
     /// If transaction is skipped during the block production, this functions
     /// can be used to unspend inputs, allowing other transactions to spend them.
     pub fn unspend_inputs(&mut self, tx_id: TxId) {
@@ -113,6 +132,43 @@ impl SpentInputs {
 
     pub fn is_spent_tx(&self, tx: &TxId) -> bool {
         self.spent_inputs.contains(&InputKey::Tx(*tx))
+    }
+
+    /// Record inputs that were permanently spent during preconfirmation processing.
+    /// The saved keys can later be rolled back via [`unspend_preconfirmed`].
+    pub fn record_tentative_spend(&mut self, tx_id: TxId, inputs: &[Input]) {
+        let keys: Vec<InputKey> = inputs
+            .iter()
+            .filter_map(|input| {
+                if input.is_coin() {
+                    input.utxo_id().cloned().map(InputKey::Utxo)
+                } else if input.is_message() {
+                    input.nonce().cloned().map(InputKey::Message)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.tentative_spent.insert(tx_id, keys);
+    }
+
+    /// Remove the tentative-spend record for a confirmed transaction, preventing
+    /// a spurious rollback. Called when the preconfirmed tx is included in the
+    /// canonical block.
+    pub fn confirm_tentative_spend(&mut self, tx_id: &TxId) {
+        self.tentative_spent.remove(tx_id);
+    }
+
+    /// Removes the tx entry and any individually-tracked UTXO/message inputs
+    /// from spent inputs, allowing the same inputs to be re-used.
+    /// Used when rolling back a stale preconfirmation.
+    pub fn unspend_preconfirmed(&mut self, tx_id: TxId) {
+        self.spent_inputs.pop(&InputKey::Tx(tx_id));
+        if let Some(saved_keys) = self.tentative_spent.remove(&tx_id) {
+            for key in saved_keys {
+                self.spent_inputs.pop(&key);
+            }
+        }
     }
 }
 

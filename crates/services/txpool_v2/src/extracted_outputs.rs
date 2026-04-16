@@ -49,7 +49,13 @@ impl ExtractedOutputs {
         for (utxo_id, output) in outputs {
             match output {
                 Output::ContractCreated { contract_id, .. } => {
-                    self.contract_created.insert(*contract_id, *utxo_id.tx_id());
+                    let tx_id = *utxo_id.tx_id();
+                    self.contract_created.insert(*contract_id, tx_id);
+                    // Track the reverse mapping so cleanup via new_executed_transaction works.
+                    self.contract_created_by_tx
+                        .entry(tx_id)
+                        .or_default()
+                        .push(*contract_id);
                 }
                 Output::Coin {
                     to,
@@ -129,6 +135,16 @@ impl ExtractedOutputs {
 
     pub fn new_skipped_transaction(&mut self, tx_id: &TxId) {
         self.new_executed_transaction(tx_id);
+    }
+
+    /// Returns the contract IDs created by `tx_id`, if any.
+    /// Call this **before** [`new_skipped_transaction`] / [`new_executed_transaction`]
+    /// if the caller needs the list for cleanup.
+    pub fn contracts_created_by(&self, tx_id: &TxId) -> &[ContractId] {
+        self.contract_created_by_tx
+            .get(tx_id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
     }
 
     pub fn new_executed_transaction(&mut self, tx_id: &TxId) {

@@ -21,6 +21,7 @@ use fuel_core_types::{
                 CoinPredicate,
                 CoinSigned,
             },
+            contract::Contract as ContractInput,
             message::{
                 MessageCoinPredicate,
                 MessageCoinSigned,
@@ -57,6 +58,9 @@ pub struct BasicCollisionManager<StorageIndex> {
     coins_spenders: BTreeMap<UtxoId, StorageIndex>,
     /// Contract -> Transaction that currently create the contract
     contracts_creators: HashMap<ContractId, StorageIndex>,
+    /// Contract -> Transactions (by TxId) that currently use the contract as an input.
+    /// Symmetric to `contracts_creators`; used to evict dependents during rollback.
+    contract_users: HashMap<ContractId, Vec<TxId>>,
     /// Blob -> Transaction that currently create the blob
     blobs_users: HashMap<BlobId, StorageIndex>,
 }
@@ -67,6 +71,7 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
             messages_spenders: HashMap::new(),
             coins_spenders: BTreeMap::new(),
             contracts_creators: HashMap::new(),
+            contract_users: HashMap::new(),
             blobs_users: HashMap::new(),
         }
     }
@@ -76,6 +81,7 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
         self.messages_spenders.is_empty()
             && self.coins_spenders.is_empty()
             && self.contracts_creators.is_empty()
+            && self.contract_users.is_empty()
             && self.blobs_users.is_empty()
     }
 
@@ -88,6 +94,7 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
         let mut message_spenders = HashMap::new();
         let mut coins_spenders = BTreeMap::new();
         let mut contracts_creators = HashMap::new();
+        let mut contract_users: HashMap<ContractId, Vec<TxId>> = HashMap::new();
         let mut blobs_users = HashMap::new();
         for tx in expected_txs {
             if let PoolTransaction::Blob(checked_tx, _) = tx.deref() {
@@ -110,7 +117,12 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
                     }) => {
                         message_spenders.insert(*nonce, tx.id());
                     }
-                    Input::Contract { .. } => {}
+                    Input::Contract(ContractInput { contract_id, .. }) => {
+                        contract_users
+                            .entry(*contract_id)
+                            .or_default()
+                            .push(tx.id());
+                    }
                 }
             }
             for output in tx.outputs() {
@@ -152,6 +164,26 @@ impl<StorageIndex> BasicCollisionManager<StorageIndex> {
             "Some contract creators are missing from the collision manager: {:?}",
             contracts_creators
         );
+        for (contract_id, users) in &self.contract_users {
+            let expected = contract_users.remove(contract_id).unwrap_or_else(|| panic!(
+                "A contract ({}) user list is present on the collision manager that shouldn't be there.",
+                contract_id
+            ));
+            let mut actual_sorted = users.clone();
+            actual_sorted.sort();
+            let mut expected_sorted = expected;
+            expected_sorted.sort();
+            assert_eq!(
+                actual_sorted, expected_sorted,
+                "contract_users mismatch for contract {}",
+                contract_id
+            );
+        }
+        assert!(
+            contract_users.is_empty(),
+            "Some contract users are missing from the collision manager: {:?}",
+            contract_users
+        );
     }
 }
 
@@ -172,6 +204,17 @@ where
             .range(UtxoId::new(*tx_creator_id, 0)..UtxoId::new(*tx_creator_id, u16::MAX))
             .map(|(_, storage_id)| *storage_id)
             .collect()
+    }
+
+    fn get_contract_users(&self, contract_id: &ContractId) -> Vec<TxId> {
+        self.contract_users
+            .get(contract_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn contract_created_in_pool(&self, contract_id: &ContractId) -> bool {
+        self.contracts_creators.contains_key(contract_id)
     }
 
     fn find_collisions(
@@ -248,6 +291,7 @@ where
             let blob_id = checked_tx.transaction().blob_id();
             self.blobs_users.insert(*blob_id, storage_id);
         }
+        let tx_id = store_entry.transaction.id();
         for input in store_entry.transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
@@ -262,7 +306,12 @@ where
                     // insert message
                     self.messages_spenders.insert(*nonce, storage_id);
                 }
-                _ => {}
+                Input::Contract(ContractInput { contract_id, .. }) => {
+                    self.contract_users
+                        .entry(*contract_id)
+                        .or_default()
+                        .push(tx_id);
+                }
             }
         }
         for output in store_entry.transaction.outputs().iter() {
@@ -284,6 +333,7 @@ where
             let blob_id = checked_tx.transaction().blob_id();
             self.blobs_users.remove(blob_id);
         }
+        let tx_id = transaction.id();
         for input in transaction.inputs() {
             match input {
                 Input::CoinSigned(CoinSigned { utxo_id, .. })
@@ -298,7 +348,14 @@ where
                     // remove message
                     self.messages_spenders.remove(nonce);
                 }
-                _ => {}
+                Input::Contract(ContractInput { contract_id, .. }) => {
+                    if let Some(users) = self.contract_users.get_mut(contract_id) {
+                        users.retain(|id| id != &tx_id);
+                        if users.is_empty() {
+                            self.contract_users.remove(contract_id);
+                        }
+                    }
+                }
             }
         }
         for output in transaction.outputs().iter() {

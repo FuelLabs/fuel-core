@@ -4297,6 +4297,7 @@ dependencies = [
  "fuel-core-storage",
  "fuel-core-syscall",
  "fuel-core-trace",
+ "fuel-core-txpool",
  "fuel-core-types 0.47.3",
  "futures",
  "lru 0.13.0",
