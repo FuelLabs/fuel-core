@@ -39,15 +39,27 @@ end
 --    the new leader to fail on the orphan's node, but it can still reach
 --    quorum on the remaining nodes. If the orphan blocks quorum entirely,
 --    the leader must reconcile via the read path instead.
+local posted_height = tonumber(ARGV[3])
 local existing = redis.call("XREVRANGE", KEYS[1], "+", "-")
+local stop_scan = false
 for _, entry in ipairs(existing) do
     local fields = entry[2]
     for i = 1, #fields, 2 do
-        if fields[i] == "height" and fields[i + 1] == ARGV[3] then
-            return redis.error_reply(
-                "HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream"
-            )
+        if fields[i] == "height" then
+            local entry_height = tonumber(fields[i + 1])
+            if entry_height == posted_height then
+                return redis.error_reply(
+                    "HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream"
+                )
+            end
+            if entry_height ~= nil and entry_height < posted_height then
+                stop_scan = true
+                break
+            end
         end
+    end
+    if stop_scan then
+        break
     end
 end
 
