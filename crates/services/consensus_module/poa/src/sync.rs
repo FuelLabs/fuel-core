@@ -1,5 +1,11 @@
 use std::{
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{
+            AtomicU32,
+            Ordering,
+        },
+    },
     time::Duration,
 };
 
@@ -52,6 +58,10 @@ pub struct SyncTask {
     state_receiver: watch::Receiver<SyncState>,
     inner_state: InnerSyncState,
     timer: Option<tokio::time::Interval>,
+    /// Blocks at heights <= this watermark were imported via reconciliation
+    /// by the leader and should not trigger Synced → NotSynced transitions.
+    /// Set by MainTask via `fetch_max`, monotonically increasing, never cleared.
+    reconciliation_watermark: Arc<AtomicU32>,
 }
 
 impl SyncTask {
@@ -61,6 +71,7 @@ impl SyncTask {
         time_until_synced: Duration,
         block_stream: BoxStream<BlockImportInfo>,
         block_header: &BlockHeader,
+        reconciliation_watermark: Arc<AtomicU32>,
     ) -> Self {
         let inner_state = InnerSyncState::from_config(
             min_connected_reserved_peers,
@@ -92,6 +103,7 @@ impl SyncTask {
             state_receiver,
             inner_state,
             timer,
+            reconciliation_watermark,
         }
     }
 
@@ -184,7 +196,11 @@ impl RunnableTask for SyncTask {
                         self.restart_timer();
                     }
                     InnerSyncState::Synced { block_header, has_sufficient_peers } if new_block_height > block_header.height() => {
-                        if block_info.is_locally_produced() {
+                        let watermark = self.reconciliation_watermark.load(Ordering::Acquire);
+                        let is_reconciliation = watermark > 0
+                            && u32::from(*new_block_height) <= watermark;
+
+                        if block_info.is_locally_produced() || is_reconciliation {
                             self.inner_state = InnerSyncState::Synced {
                                 block_header: block_info.block_header.clone(),
                                 has_sufficient_peers: *has_sufficient_peers
@@ -278,6 +294,7 @@ impl InnerSyncState {
 }
 
 #[allow(clippy::arithmetic_side_effects)]
+#[allow(non_snake_case)]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,6 +376,7 @@ mod tests {
             time_until_synced,
             block_stream,
             &Default::default(),
+            Arc::new(AtomicU32::new(0)),
         );
 
         (sync_task, watcher, tx)
@@ -597,5 +615,125 @@ mod tests {
             }
         ));
         matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_));
+    }
+
+    /// Reproduces the deadlock root cause: a network-sourced block (from
+    /// reconciliation via `execute_and_commit`) arrives while the SyncTask
+    /// is in Synced state. Without the watermark fix, this transitions
+    /// the SyncTask to NotSynced, which deadlocks the leader's
+    /// `ensure_synced()` call.
+    #[tokio::test]
+    async fn sync_task__network_block_at_reconciliation_height_causes_not_synced_without_watermark()
+     {
+        // given: a SyncTask that starts in Synced state (min_peers=0, time=ZERO)
+        let connections_stream = MockStream::<usize>::new(vec![]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+
+        // Watermark is 0 (not set) — simulates the pre-fix state
+        let watermark = Arc::new(AtomicU32::new(0));
+
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            0, // min_connected_reserved_peers
+            Duration::ZERO,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            watermark,
+        );
+
+        // Verify we start in Synced state
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "SyncTask should start Synced with min_peers=0 and time_until_synced=ZERO"
+        );
+
+        // when: a Source::Network block arrives at height 6 (> current height 5)
+        // This is what happens when reconciliation imports a block via
+        // execute_and_commit, which always uses ImportResult::new_from_network
+        let network_block_stream =
+            MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
+        sync_task.block_stream = network_block_stream;
+
+        let _ = sync_task.run(&mut watcher).await;
+
+        // then: SyncTask transitions to NotSynced — THIS IS THE BUG
+        // The leader's ensure_synced() will now block forever because
+        // it can't produce locally-produced blocks while blocked.
+        assert_eq!(
+            SyncState::NotSynced,
+            *sync_task.state_receiver.borrow(),
+            "Without watermark fix, a network-sourced reconciliation block \
+             causes NotSynced — this deadlocks the leader"
+        );
+
+        drop(tx);
+    }
+
+    /// Verifies the watermark fix: when the reconciliation watermark covers
+    /// the block height, a network-sourced block should NOT trigger NotSynced.
+    #[tokio::test]
+    async fn sync_task__network_block_within_watermark_stays_synced() {
+        // given: a SyncTask in Synced state with watermark set to height 6
+        let connections_stream = MockStream::<usize>::new(vec![]).into_boxed();
+        let block_stream = MockStream::<BlockImportInfo>::new(vec![]).into_boxed();
+
+        let (tx, shutdown) =
+            tokio::sync::watch::channel(fuel_core_services::State::Started);
+        let mut watcher: StateWatcher = shutdown.into();
+
+        let watermark = Arc::new(AtomicU32::new(6));
+
+        let mut sync_task = SyncTask::new(
+            connections_stream,
+            0,
+            Duration::ZERO,
+            block_stream,
+            &BlockHeader::new_block(5u32.into(), Tai64::now()),
+            watermark,
+        );
+
+        assert!(matches!(
+            *sync_task.state_receiver.borrow(),
+            SyncState::Synced(_)
+        ));
+
+        // when: a Source::Network block at height 6 (within watermark)
+        let network_block_stream =
+            MockStream::new(vec![BlockHeader::new_block(6u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
+        sync_task.block_stream = network_block_stream;
+
+        let _ = sync_task.run(&mut watcher).await;
+
+        // then: should stay Synced because watermark covers height 6
+        assert!(
+            matches!(*sync_task.state_receiver.borrow(), SyncState::Synced(_)),
+            "With watermark=6, a network block at height 6 should NOT trigger NotSynced"
+        );
+
+        // when: a Source::Network block at height 7 (ABOVE watermark)
+        let network_block_stream =
+            MockStream::new(vec![BlockHeader::new_block(7u32.into(), Tai64::now())])
+                .map(BlockImportInfo::new_from_network)
+                .into_boxed();
+        sync_task.block_stream = network_block_stream;
+
+        let _ = sync_task.run(&mut watcher).await;
+
+        // then: should transition to NotSynced (watermark doesn't protect above its value)
+        assert_eq!(
+            SyncState::NotSynced,
+            *sync_task.state_receiver.borrow(),
+            "A network block above the watermark should still trigger NotSynced"
+        );
+
+        drop(tx);
     }
 }
