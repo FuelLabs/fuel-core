@@ -139,6 +139,7 @@ impl PoolWorkerInterface {
                     pool: tx_pool,
                     view_provider,
                     tentative_preconfs: BTreeMap::new(),
+                    tentative_preconf_pool_txs: BTreeMap::new(),
                     current_canonical_height: initial_block_height,
                 };
 
@@ -278,6 +279,11 @@ pub(super) struct PoolWorker<View, TxStatusManager> {
     /// Used to roll back stale preconfirmations when the canonical block at
     /// that height does not include those transactions.
     tentative_preconfs: BTreeMap<BlockHeight, HashSet<TxId>>,
+    /// Pool transactions that were removed from the pool when their
+    /// preconfirmation arrived and need deferred `contract_users` cleanup.
+    /// Keyed by the tentative block height so cleanup can be applied after
+    /// rollback reconciliation for each height in `process_block`.
+    tentative_preconf_pool_txs: BTreeMap<BlockHeight, Vec<ArcPoolTx>>,
     /// The height of the last canonical block imported by this node.
     /// Used to discard late preconfirmations whose tentative block height
     /// is already at or below the canonical tip.
@@ -508,7 +514,10 @@ where
             .map(|tx_status| tx_status.id)
             .collect();
 
-        self.pool
+        // Collect pool transactions removed by block commitment so we can
+        // clean up their `contract_users` entries *after* rollback (see below).
+        let committed_pool_txs = self
+            .pool
             .process_committed_transactions(confirmed_tx_ids.iter().copied());
 
         block_result.tx_status.iter().for_each(|tx_status| {
@@ -546,6 +555,21 @@ where
                     }
                 }
             }
+            // Now that rollback for this height is complete, clean up the
+            // `contract_users` entries for preconfirmed txs that were committed
+            // (removed from pool) when their preconfirmation arrived.  Deferring
+            // until here ensures rollback could still observe those entries.
+            if let Some(deferred_txs) = self.tentative_preconf_pool_txs.remove(&height) {
+                for tx in &deferred_txs {
+                    self.pool.remove_from_contract_users(tx);
+                }
+            }
+        }
+
+        // Clean up `contract_users` for pool txs committed directly by the
+        // canonical block (deferred from process_committed_transactions above).
+        for tx in &committed_pool_txs {
+            self.pool.remove_from_contract_users(tx);
         }
 
         let resolved_txs = self.pending_pool.new_known_txs(
@@ -602,8 +626,15 @@ where
 
         let (outputs, block_height) = match &status {
             PreConfirmationStatus::Success(status) => {
-                self.pool.process_preconfirmed_committed_transaction(tx_id);
+                let pool_tx =
+                    self.pool.process_preconfirmed_committed_transaction(tx_id);
                 let height = status.tx_pointer.block_height();
+                if let Some(tx) = pool_tx {
+                    self.tentative_preconf_pool_txs
+                        .entry(height)
+                        .or_default()
+                        .push(tx);
+                }
                 if let Some(outputs) = &status.resolved_outputs {
                     (outputs, Some(height))
                 } else {
@@ -616,8 +647,15 @@ where
                 }
             }
             PreConfirmationStatus::Failure(status) => {
-                self.pool.process_preconfirmed_committed_transaction(tx_id);
+                let pool_tx =
+                    self.pool.process_preconfirmed_committed_transaction(tx_id);
                 let height = status.tx_pointer.block_height();
+                if let Some(tx) = pool_tx {
+                    self.tentative_preconf_pool_txs
+                        .entry(height)
+                        .or_default()
+                        .push(tx);
+                }
                 if let Some(outputs) = &status.resolved_outputs {
                     (outputs, Some(height))
                 } else {

@@ -429,7 +429,13 @@ where
     /// Process a preconfirmed transaction as committed while recording its spent
     /// inputs so they can be rolled back later if the transaction is not
     /// included in the canonical block.
-    pub fn process_preconfirmed_committed_transaction(&mut self, tx_id: TxId) {
+    ///
+    /// Returns the pool transaction if it was present in the pool (so that the
+    /// caller can defer the `contract_users` cleanup until after rollback).
+    pub fn process_preconfirmed_committed_transaction(
+        &mut self,
+        tx_id: TxId,
+    ) -> Option<ArcPoolTx> {
         // If the tx was already extracted for local block production it is no
         // longer in `tx_id_to_storage_id`, so the branch below that calls
         // `record_tentative_spend` will be skipped.  Preserve the input keys
@@ -445,7 +451,7 @@ where
                 // Invariant violation. Panic in tests, log in production.
                 debug_assert!(false, "Storage data not found for the transaction");
                 tracing::warn!("Storage data not found for the transaction.");
-                return;
+                return None;
             };
             self.extracted_outputs
                 .new_extracted_transaction(&transaction.transaction);
@@ -455,7 +461,8 @@ where
                 .record_tentative_spend(tx_id, transaction.transaction.inputs());
             self.spent_inputs
                 .spend_inputs(tx_id, transaction.transaction.inputs());
-            self.update_components_and_caches_on_removal(iter::once(&transaction));
+            let pool_tx = transaction.transaction.clone();
+            self.update_components_and_caches_on_committed(iter::once(&transaction));
 
             let mut new_executable_transaction = false;
             for dependent in dependents {
@@ -470,16 +477,28 @@ where
             if new_executable_transaction {
                 self.new_executable_txs_notifier.send_replace(());
             }
+
+            self.update_stats();
+            return Some(pool_tx);
         }
 
         self.update_stats();
+        None
     }
 
     /// Process committed transactions:
     /// - Remove transaction but keep its dependents and the dependents become executables.
     /// - Notify about possible new executable transactions.
-    pub fn process_committed_transactions(&mut self, tx_ids: impl Iterator<Item = TxId>) {
+    ///
+    /// Returns the pool transactions that were actually present in the pool (and
+    /// thus removed).  The caller must invoke `remove_from_contract_users` for
+    /// each returned transaction once all preconfirmation rollback is complete.
+    pub fn process_committed_transactions(
+        &mut self,
+        tx_ids: impl Iterator<Item = TxId>,
+    ) -> Vec<ArcPoolTx> {
         let mut transactions_to_promote = vec![];
+        let mut committed_pool_txs = vec![];
         for tx_id in tx_ids {
             self.spent_inputs.spend_inputs_by_tx_id(tx_id);
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
@@ -496,7 +515,8 @@ where
                     .new_extracted_transaction(&transaction.transaction);
                 self.spent_inputs
                     .spend_inputs(tx_id, transaction.transaction.inputs());
-                self.update_components_and_caches_on_removal(iter::once(&transaction));
+                committed_pool_txs.push(transaction.transaction.clone());
+                self.update_components_and_caches_on_committed(iter::once(&transaction));
 
                 for dependent in dependents {
                     if !self.storage.has_dependencies(&dependent) {
@@ -528,6 +548,7 @@ where
         }
 
         self.update_stats();
+        committed_pool_txs
     }
 
     /// Check if the pool has enough space to store a transaction.
@@ -846,6 +867,34 @@ where
                 .on_removed_transaction(storage_entry);
         }
         self.register_transaction_counts();
+    }
+
+    /// Like `update_components_and_caches_on_removal` but uses
+    /// `on_committed_transaction`, which intentionally skips the `contract_users`
+    /// cleanup.  Callers must invoke `remove_from_contract_users` for each
+    /// committed transaction once all preconfirmation rollback is complete.
+    fn update_components_and_caches_on_committed<'a>(
+        &mut self,
+        removed_transactions: impl Iterator<Item = &'a StorageData>,
+    ) {
+        for storage_entry in removed_transactions {
+            let tx = &storage_entry.transaction;
+            self.current_gas = self.current_gas.saturating_sub(tx.max_gas());
+            self.current_bytes_size = self
+                .current_bytes_size
+                .saturating_sub(tx.metered_bytes_size());
+            self.tx_id_to_storage_id.remove(&tx.id());
+            self.collision_manager.on_committed_transaction(tx);
+            self.selection_algorithm
+                .on_removed_transaction(storage_entry);
+        }
+        self.register_transaction_counts();
+    }
+
+    /// Remove `transaction` from the `contract_users` index.  Call this for
+    /// every committed transaction after preconfirmation rollback is complete.
+    pub fn remove_from_contract_users(&mut self, transaction: &PoolTransaction) {
+        self.collision_manager.remove_from_contract_users(transaction);
     }
 
     #[cfg(test)]
