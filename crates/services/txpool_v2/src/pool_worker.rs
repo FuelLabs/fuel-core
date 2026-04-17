@@ -626,8 +626,7 @@ where
 
         let (outputs, block_height) = match &status {
             PreConfirmationStatus::Success(status) => {
-                let pool_tx =
-                    self.pool.process_preconfirmed_committed_transaction(tx_id);
+                let pool_tx = self.pool.process_preconfirmed_committed_transaction(tx_id);
                 let height = status.tx_pointer.block_height();
                 if let Some(tx) = pool_tx {
                     self.tentative_preconf_pool_txs
@@ -647,8 +646,7 @@ where
                 }
             }
             PreConfirmationStatus::Failure(status) => {
-                let pool_tx =
-                    self.pool.process_preconfirmed_committed_transaction(tx_id);
+                let pool_tx = self.pool.process_preconfirmed_committed_transaction(tx_id);
                 let height = status.tx_pointer.block_height();
                 if let Some(tx) = pool_tx {
                     self.tentative_preconf_pool_txs

@@ -894,7 +894,8 @@ where
     /// Remove `transaction` from the `contract_users` index.  Call this for
     /// every committed transaction after preconfirmation rollback is complete.
     pub fn remove_from_contract_users(&mut self, transaction: &PoolTransaction) {
-        self.collision_manager.remove_from_contract_users(transaction);
+        self.collision_manager
+            .remove_from_contract_users(transaction);
     }
 
     #[cfg(test)]
