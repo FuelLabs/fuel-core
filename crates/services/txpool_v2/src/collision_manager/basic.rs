@@ -372,12 +372,12 @@ where
     fn remove_from_contract_users(&mut self, transaction: &PoolTransaction) {
         let tx_id = transaction.id();
         for input in transaction.inputs() {
-            if let Input::Contract(ContractInput { contract_id, .. }) = input {
-                if let Some(users) = self.contract_users.get_mut(contract_id) {
-                    users.retain(|id| id != &tx_id);
-                    if users.is_empty() {
-                        self.contract_users.remove(contract_id);
-                    }
+            if let Input::Contract(ContractInput { contract_id, .. }) = input
+                && let Some(users) = self.contract_users.get_mut(contract_id)
+            {
+                users.retain(|id| id != &tx_id);
+                if users.is_empty() {
+                    self.contract_users.remove(contract_id);
                 }
             }
         }
