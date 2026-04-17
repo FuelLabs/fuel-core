@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.47.4]
+
+### Changed
+- [3138](https://github.com/FuelLabs/fuel-core/pull/3138): Migrate CI from BuildJet to WarpBuild runners, update GitHub Actions to latest versions, and use pre-built binaries for cargo-nextest and cargo-audit.
+- [3203](https://github.com/FuelLabs/fuel-core/pull/3203): Add lease port for PoA adapter to allow multiple producers to be live but only one leader.
+- [3225](https://github.com/FuelLabs/fuel-core/pull/3225): PoA quorum and HA failover fixes: Redis leader lease adapter improvements, write_block.lua HEIGHT_EXISTS check, sub-quorum block repair, Prometheus metrics, and chaos test harness.
+
+### Fixed
+- [3124](https://github.com/FuelLabs/fuel-core/pull/3124): Using Debian Bookworm as the runtime base image for Docker builds. This is the same base image as the Rust builder images. Keeping the images in-sync will help prevent runtime dependency mismatch issues.
+- [3264](https://github.com/FuelLabs/fuel-core/pull/3264): Rollback stale preconfirmations in the mempool when the canonical block at that height omits the preconfirmed transactions, restoring spent inputs and removing dependent transactions.
+
 ## [Version 0.47.1]
 
 ### Fixed
