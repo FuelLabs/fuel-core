@@ -991,6 +991,33 @@ impl RedisLeaderLeaseAdapter {
         }
     }
 
+    fn publish_block_on_all_nodes(
+        &self,
+        epoch: u64,
+        block: &SealedBlock,
+        block_data: &[u8],
+    ) -> Vec<anyhow::Result<WriteBlockResult>> {
+        std::thread::scope(|scope| {
+            let handles = self
+                .redis_nodes
+                .iter()
+                .map(|redis_node| {
+                    scope.spawn(move || {
+                        self.publish_block_on_node(redis_node, epoch, block, block_data)
+                    })
+                })
+                .collect::<Vec<_>>();
+
+            handles
+                .into_iter()
+                .map(|handle| match handle.join() {
+                    Ok(result) => result,
+                    Err(_) => Err(anyhow!("Redis publish worker panicked")),
+                })
+                .collect()
+        })
+    }
+
     /// Repropose a sub-quorum block to all Redis nodes to reach quorum.
     /// Called during reconciliation when a block exists on some nodes but
     /// below quorum — possibly from a leader that published and committed
@@ -1029,8 +1056,8 @@ impl RedisLeaderLeaseAdapter {
         // block at this height, but it might be a different block from
         // a competing leader's partial write.
         let mut total_with_block = pre_existing_count;
-        for redis_node in &self.redis_nodes {
-            match self.publish_block_on_node(redis_node, epoch, block, &block_data) {
+        for result in self.publish_block_on_all_nodes(epoch, block, &block_data) {
+            match result {
                 Ok(WriteBlockResult::Written) => {
                     total_with_block = total_with_block.saturating_add(1);
                 }
@@ -1220,16 +1247,14 @@ impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
         };
         let block_data = postcard::to_allocvec(block)?;
         let successes = self
-            .redis_nodes
-            .iter()
-            .map(|redis_node| {
-                match self.publish_block_on_node(redis_node, epoch, block, &block_data) {
-                    Ok(WriteBlockResult::Written) => true,
-                    Ok(_) => false,
-                    Err(err) => {
-                        tracing::debug!("Redis publish on node failed: {err}");
-                        false
-                    }
+            .publish_block_on_all_nodes(epoch, block, &block_data)
+            .into_iter()
+            .map(|result| match result {
+                Ok(WriteBlockResult::Written) => true,
+                Ok(_) => false,
+                Err(err) => {
+                    tracing::debug!("Redis publish on node failed: {err}");
+                    false
                 }
             })
             .filter(|success| *success)
