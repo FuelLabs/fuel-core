@@ -7,4 +7,17 @@ ignore = [
     "RUSTSEC-2026-0020", # wasmtime advisory, pending upgrade
     "RUSTSEC-2026-0021", # wasmtime advisory, pending upgrade
     "RUSTSEC-2026-0049", # temporary CI ignore; fix in master
+    "RUSTSEC-2026-0085", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0086", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0087", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0088", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0089", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0091", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0092", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0093", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0094", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0095", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0096", # wasmtime advisory, pending upgrade
+    "RUSTSEC-2026-0098", # rustls-webpki via legacy transitive dependencies
+    "RUSTSEC-2026-0099", # rustls-webpki via legacy transitive dependencies
 ]

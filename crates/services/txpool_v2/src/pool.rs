@@ -779,8 +779,9 @@ where
                     .into_iter()
                     .map(|data| {
                         let dependent_tx_id = data.transaction.id();
-                        let tx_status =
-                            statuses::SqueezedOut::new(reason.clone(), dependent_tx_id);
+                        let tx_status = statuses::SqueezedOut {
+                            reason: reason.clone(),
+                        };
                         (dependent_tx_id, tx_status)
                     })
                     .collect();
@@ -814,8 +815,9 @@ where
                     .into_iter()
                     .map(|data| {
                         let dependent_tx_id = data.transaction.id();
-                        let tx_status =
-                            statuses::SqueezedOut::new(reason.clone(), dependent_tx_id);
+                        let tx_status = statuses::SqueezedOut {
+                            reason: reason.clone(),
+                        };
                         (dependent_tx_id, tx_status)
                     })
                     .collect();
