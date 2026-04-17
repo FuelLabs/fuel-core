@@ -244,7 +244,7 @@ async fn dependents_of_preconfirmed_tx_removed_on_rollback() {
     // Then — tx_child depends on a now-stale preconfirmed output; it must be
     // squeezed out.
     universe
-        .await_expected_tx_statuses(vec![tx_child_id], |_, status| {
+        .await_expected_tx_statuses(vec![tx_child_id], |status| {
             matches!(
                 status,
                 fuel_core_types::services::transaction_status::TransactionStatus::SqueezedOut(_)
@@ -411,7 +411,7 @@ async fn stale_preconfs_at_older_height_cleaned_up_by_later_block() {
 
     // Then — tx_child (which depended on the stale preconf output) is removed.
     universe
-        .await_expected_tx_statuses(vec![tx_child_id], |_, status| {
+        .await_expected_tx_statuses(vec![tx_child_id], |status| {
             matches!(
                 status,
                 fuel_core_types::services::transaction_status::TransactionStatus::SqueezedOut(_)
@@ -546,7 +546,7 @@ async fn contract_dependent_tx_removed_on_preconf_rollback() {
 
     // Then — D must be squeezed out because the contract it relied on never landed.
     universe
-        .await_expected_tx_statuses(vec![tx_d_id], |_, status| {
+        .await_expected_tx_statuses(vec![tx_d_id], |status| {
             matches!(
                 status,
                 fuel_core_types::services::transaction_status::TransactionStatus::SqueezedOut(_)
