@@ -1249,14 +1249,12 @@ impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
         let successes = self
             .publish_block_on_all_nodes(epoch, block, &block_data)
             .into_iter()
-            .map(|result| {
-                match result {
-                    Ok(WriteBlockResult::Written) => true,
-                    Ok(_) => false,
-                    Err(err) => {
-                        tracing::debug!("Redis publish on node failed: {err}");
-                        false
-                    }
+            .map(|result| match result {
+                Ok(WriteBlockResult::Written) => true,
+                Ok(_) => false,
+                Err(err) => {
+                    tracing::debug!("Redis publish on node failed: {err}");
+                    false
                 }
             })
             .filter(|success| *success)
