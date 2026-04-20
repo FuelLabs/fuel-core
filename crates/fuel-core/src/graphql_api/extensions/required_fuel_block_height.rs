@@ -105,20 +105,35 @@ impl ExtensionFactory for RequiredFuelBlockHeightExtension {
     }
 }
 
-fn get_required_height(request: &Request) -> Option<BlockHeight> {
+fn get_required_height(request: &Request) -> ServerResult<Option<BlockHeight>> {
     let required_fuel_block_height = request.extensions.get(REQUIRED_FUEL_BLOCK_HEIGHT);
 
     if let Some(ConstValue::Number(required_fuel_block_height)) =
         required_fuel_block_height
-        && let Some(required_fuel_block_height) = required_fuel_block_height.as_u64()
     {
-        let required_fuel_block_height: u32 =
-            required_fuel_block_height.try_into().unwrap_or(u32::MAX);
-        let required_block_height: BlockHeight = required_fuel_block_height.into();
-
-        return Some(required_block_height)
+        if let Some(required_fuel_block_height) = required_fuel_block_height.as_u64() {
+            let required_fuel_block_height: u32 =
+                required_fuel_block_height.try_into().map_err(|_| {
+                    ServerError::new(
+                        format!(
+                            "The required fuel block height value {} exceeds the maximum \
+                            allowed block height of {}",
+                            required_fuel_block_height,
+                            u32::MAX
+                        ),
+                        None,
+                    )
+                })?;
+            let required_block_height: BlockHeight = required_fuel_block_height.into();
+            return Ok(Some(required_block_height));
+        } else {
+            return Err(ServerError::new(
+                "The required fuel block height must be a non-negative integer value",
+                None,
+            ));
+        }
     }
-    None
+    Ok(None)
 }
 
 #[async_trait::async_trait]
@@ -129,7 +144,7 @@ impl Extension for RequiredFuelBlockHeightInner {
         request: Request,
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
-        let required_height = get_required_height(&request);
+        let required_height = get_required_height(&request)?;
 
         let request = next.run(ctx, request).await?;
 
