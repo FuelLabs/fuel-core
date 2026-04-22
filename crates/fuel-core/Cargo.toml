@@ -97,7 +97,7 @@ num_cpus = { version = "1.16.0", optional = true }
 parking_lot = { workspace = true }
 postcard = { workspace = true }
 rand = { workspace = true }
-redis = { version = "1", features = ["tokio-comp"] }
+redis = { version = "1.2", features = ["tokio-comp"] }
 rocksdb = { version = "0.21", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",

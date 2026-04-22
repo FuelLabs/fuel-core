@@ -33,6 +33,9 @@ use std::sync::Arc;
 
 pub mod poa;
 
+#[cfg(test)]
+mod hang_repro_test;
+
 impl VerifierAdapter {
     pub fn new(
         genesis_block: &CompressedBlock,

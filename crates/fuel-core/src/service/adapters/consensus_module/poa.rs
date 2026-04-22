@@ -937,30 +937,143 @@ impl RedisLeaderLeaseAdapter {
         }
     }
 
-    fn publish_block_on_node(
+    fn publish_block_on_all_nodes(
         &self,
-        redis_node: &RedisNode,
         epoch: u64,
         block: &SealedBlock,
         block_data: &[u8],
-    ) -> anyhow::Result<WriteBlockResult> {
-        let mut connection = redis_node
-            .redis_client
-            .get_connection_with_timeout(self.node_timeout)?;
-        connection.set_read_timeout(Some(self.node_timeout))?;
-        connection.set_write_timeout(Some(self.node_timeout))?;
+    ) -> Vec<anyhow::Result<WriteBlockResult>> {
+        // Detached `std::thread::spawn` (not scoped) lets us return as soon
+        // as `Written` quorum is reached without waiting for slow nodes.
+        // Stragglers — including any thread blocked inside the sync `redis`
+        // client — are abandoned: they will exit when their syscall returns
+        // (e.g. when the peer recovers, or when SO_RCVTIMEO fires inside
+        // `invoke_write_block_script`'s set_read_timeout/set_write_timeout
+        // window). Their result is discarded via the dropped channel.
+        //
+        // This is the class-of-failure fix for the 2026-04-22 mainnet hang
+        // where a half-alive ElastiCache node stalled one thread inside the
+        // pre-1.2 `redis::Client::get_connection_with_timeout` handshake,
+        // which combined with the previous `std::thread::scope` to wedge
+        // every block publish forever. The redis crate upgrade to 1.2 also
+        // closes that specific upstream bug; the short-circuit here protects
+        // against any future single-node hang that survives per-syscall
+        // timeouts.
+        let n = self.redis_nodes.len();
+        let block_data: std::sync::Arc<[u8]> = block_data.into();
         let block_height = u32::from(*block.entity.header().height());
+        let block_stream_key: std::sync::Arc<str> = self.block_stream_key.as_str().into();
+        let epoch_key: std::sync::Arc<str> = self.epoch_key.as_str().into();
+        let lease_key: std::sync::Arc<str> = self.lease_key.as_str().into();
+        let lease_owner_token: std::sync::Arc<str> =
+            self.lease_owner_token.as_str().into();
+        let lease_ttl_millis = self.lease_ttl_millis;
+        let stream_max_len = self.stream_max_len;
+        let node_timeout = self.node_timeout;
+
+        let (tx, rx) =
+            std::sync::mpsc::channel::<(usize, anyhow::Result<WriteBlockResult>)>();
+
+        for (idx, redis_node) in self.redis_nodes.iter().enumerate() {
+            let client = redis_node.redis_client.clone();
+            let tx = tx.clone();
+            let block_data = block_data.clone();
+            let block_stream_key = block_stream_key.clone();
+            let epoch_key = epoch_key.clone();
+            let lease_key = lease_key.clone();
+            let lease_owner_token = lease_owner_token.clone();
+            std::thread::spawn(move || {
+                let result = Self::invoke_write_block_script(
+                    &client,
+                    node_timeout,
+                    &block_stream_key,
+                    &epoch_key,
+                    &lease_key,
+                    epoch,
+                    &lease_owner_token,
+                    block_height,
+                    &block_data,
+                    lease_ttl_millis,
+                    stream_max_len,
+                );
+                // Send may fail if the receiver was dropped because we
+                // already short-circuited on quorum — that's intentional.
+                let _ = tx.send((idx, result));
+            });
+        }
+        // Drop our local sender so `rx.recv` returns `Err` once every spawned
+        // thread has either sent or dropped its sender.
+        drop(tx);
+
+        let mut results: Vec<Option<anyhow::Result<WriteBlockResult>>> =
+            (0..n).map(|_| None).collect();
+        let mut written_count = 0usize;
+        let mut received = 0usize;
+
+        while received < n {
+            let Ok((idx, result)) = rx.recv() else {
+                // All senders dropped (every thread either reported or
+                // panicked). Stop draining and fill remaining slots below.
+                break;
+            };
+            if matches!(result, Ok(WriteBlockResult::Written)) {
+                written_count = written_count.saturating_add(1);
+            }
+            results[idx] = Some(result);
+            received = received.saturating_add(1);
+
+            if self.quorum_reached(written_count) {
+                // Quorum reached. Return immediately; any threads still
+                // running are abandoned. Their later `tx.send` will fail
+                // silently because we drop the receiver below.
+                break;
+            }
+        }
+
+        results
+            .into_iter()
+            .map(|r| {
+                r.unwrap_or_else(|| {
+                    Err(anyhow!(
+                        "publish abandoned: quorum reached before this \
+                         node responded"
+                    ))
+                })
+            })
+            .collect()
+    }
+
+    /// `'static` helper that runs `write_block.lua` against a single node.
+    /// Free function (no `&self`) so detached threads spawned by
+    /// `publish_block_on_all_nodes` can run it without borrowing the adapter.
+    #[allow(clippy::too_many_arguments)]
+    fn invoke_write_block_script(
+        redis_client: &redis::Client,
+        node_timeout: Duration,
+        block_stream_key: &str,
+        epoch_key: &str,
+        lease_key: &str,
+        epoch: u64,
+        lease_owner_token: &str,
+        block_height: u32,
+        block_data: &[u8],
+        lease_ttl_millis: u64,
+        stream_max_len: u32,
+    ) -> anyhow::Result<WriteBlockResult> {
+        let mut connection = redis_client.get_connection_with_timeout(node_timeout)?;
+        connection.set_read_timeout(Some(node_timeout))?;
+        connection.set_write_timeout(Some(node_timeout))?;
         let lua_start = std::time::Instant::now();
         let write_result = redis::Script::new(WRITE_BLOCK_SCRIPT)
-            .key(&self.block_stream_key)
-            .key(&self.epoch_key)
-            .key(&self.lease_key)
+            .key(block_stream_key)
+            .key(epoch_key)
+            .key(lease_key)
             .arg(epoch)
-            .arg(&self.lease_owner_token)
+            .arg(lease_owner_token)
             .arg(block_height)
             .arg(block_data)
-            .arg(self.lease_ttl_millis)
-            .arg(self.stream_max_len)
+            .arg(lease_ttl_millis)
+            .arg(stream_max_len)
             .invoke::<String>(&mut connection);
         poa_metrics()
             .write_block_duration_s
@@ -991,33 +1104,6 @@ impl RedisLeaderLeaseAdapter {
         }
     }
 
-    fn publish_block_on_all_nodes(
-        &self,
-        epoch: u64,
-        block: &SealedBlock,
-        block_data: &[u8],
-    ) -> Vec<anyhow::Result<WriteBlockResult>> {
-        std::thread::scope(|scope| {
-            let handles = self
-                .redis_nodes
-                .iter()
-                .map(|redis_node| {
-                    scope.spawn(move || {
-                        self.publish_block_on_node(redis_node, epoch, block, block_data)
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            handles
-                .into_iter()
-                .map(|handle| match handle.join() {
-                    Ok(result) => result,
-                    Err(_) => Err(anyhow!("Redis publish worker panicked")),
-                })
-                .collect()
-        })
-    }
-
     /// Repropose a sub-quorum block to all Redis nodes to reach quorum.
     /// Called during reconciliation when a block exists on some nodes but
     /// below quorum — possibly from a leader that published and committed
@@ -1026,7 +1112,7 @@ impl RedisLeaderLeaseAdapter {
     /// `pre_existing_count` is the number of nodes already confirmed to
     /// have this specific block during the reconciliation read phase.
     ///
-    /// Uses `publish_block_on_node` which runs `write_block.lua`:
+    /// Uses `publish_block_on_all_nodes` which runs `write_block.lua`:
     /// - Written: node accepted the block (counted toward quorum)
     /// - HEIGHT_EXISTS: node has *some* block at this height — may be a
     ///   different block from a competing partial write, so NOT counted
