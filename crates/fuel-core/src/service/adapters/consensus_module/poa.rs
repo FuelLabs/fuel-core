@@ -1503,6 +1503,7 @@ mod tests {
     use fuel_core_poa::ports::BlockReconciliationReadPort;
     use fuel_core_types::blockchain::consensus::Consensus;
     use std::{
+        io::Read as _,
         net::{
             SocketAddrV4,
             TcpListener,
@@ -1513,8 +1514,12 @@ mod tests {
             Command,
             Stdio,
         },
+        sync::mpsc,
         thread,
-        time::Duration,
+        time::{
+            Duration,
+            Instant,
+        },
     };
 
     #[tokio::test(flavor = "multi_thread")]
@@ -2608,6 +2613,171 @@ mod tests {
             unreconciled[0].entity.header().time(),
             block_a.entity.header().time(),
             "Reconciliation should return block_a (the only entry in the stream)"
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // Regression tests for the 2026-04-22 mainnet hang.
+    //
+    // On v0.47.4 the deployed binary linked `redis 0.27.x`. That release of
+    // `redis::Client::get_connection_with_timeout` only applied the timeout
+    // to the TCP connect step; the post-connect handshake pipeline
+    // (`CLIENT SETINFO LIB-NAME`, `CLIENT SETINFO LIB-VER`) ran without any
+    // socket-level read/write timeout. A peer that accepted TCP but stopped
+    // responding caused the call to hang indefinitely. Combined with the
+    // previous `std::thread::scope`-based `publish_block_on_all_nodes`, one
+    // stuck per-node thread wedged every block publish forever and halted
+    // block production on mainnet for ~22 minutes.
+    //
+    // The fix in this PR has two parts:
+    //   1. Bump `redis` to 1.2. Upstream's `connect()` now sets read/write
+    //      timeouts on the socket BEFORE running the handshake pipeline and
+    //      clears them afterward.
+    //   2. Replace `std::thread::scope` in `publish_block_on_all_nodes`
+    //      with detached `std::thread::spawn` workers reporting into an
+    //      mpsc channel, returning as soon as `Written` quorum is reached.
+    //      Stragglers are abandoned.
+    //
+    // The first test below targets (1) directly: raw library call against a
+    // half-alive peer must now be bounded.
+    //
+    // The second test targets (2) at the adapter level: with 3 healthy
+    // redis-server processes + 1 half-alive TCP listener (4 nodes, quorum =
+    // 3), `publish_produced_block` must complete within a tight wall-clock
+    // deadline. On pre-fix code this call hangs forever because the scoped
+    // thread for the half-alive node never exits; on the fixed code the
+    // publish returns as soon as the 3 healthy nodes acknowledge.
+    // ---------------------------------------------------------------------
+
+    /// Accepts TCP connections and drains incoming bytes into a buffer
+    /// without ever writing a single byte back. Emulates an ElastiCache /
+    /// Valkey node in the "half-alive" recovery state observed on 2026-04-22.
+    fn spawn_halflive_redis_listener() -> u16 {
+        let listener =
+            TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
+                .expect("bind ephemeral port");
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            for incoming in listener.incoming() {
+                let Ok(mut stream) = incoming else {
+                    continue;
+                };
+                thread::spawn(move || {
+                    let mut buf = [0u8; 4096];
+                    while let Ok(n) = stream.read(&mut buf) {
+                        if n == 0 {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+        port
+    }
+
+    /// Library-level regression guard for the upstream `redis 0.27.x` bug.
+    /// On that version this test would hang indefinitely and the process
+    /// would need to be killed. On `redis >= 1.2` the call returns an `Err`
+    /// within roughly `2 * node_timeout` (one timeout per handshake
+    /// pipeline command: `CLIENT SETINFO LIB-NAME`, `CLIENT SETINFO LIB-VER`).
+    #[test]
+    fn redis_get_connection_with_timeout__is_bounded_against_halflive_peer() {
+        const NODE_TIMEOUT: Duration = Duration::from_secs(1);
+        const MAX_WAIT: Duration = Duration::from_secs(5);
+
+        let port = spawn_halflive_redis_listener();
+        let url = format!("redis://127.0.0.1:{port}/");
+        let client = redis::Client::open(url).expect("client open");
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let start = Instant::now();
+            let result = client.get_connection_with_timeout(NODE_TIMEOUT);
+            let _ = tx.send((start.elapsed(), result.is_ok()));
+        });
+
+        match rx.recv_timeout(MAX_WAIT) {
+            Ok((elapsed, ok)) => {
+                assert!(
+                    !ok,
+                    "expected err against a half-alive peer, got Ok after \
+                     {elapsed:?}",
+                );
+                assert!(
+                    elapsed <= MAX_WAIT,
+                    "call took {elapsed:?}, expected to be bounded under \
+                     {MAX_WAIT:?}",
+                );
+            }
+            Err(_) => {
+                panic!(
+                    "REGRESSION: get_connection_with_timeout did not \
+                     return within {MAX_WAIT:?} against a half-alive \
+                     peer. The redis-crate upstream bug from 0.27.x has \
+                     reappeared.",
+                );
+            }
+        }
+    }
+
+    /// Adapter-level regression test for the block-production hang. With 3
+    /// healthy redis nodes and 1 half-alive TCP listener (4 nodes total,
+    /// quorum = 3), `publish_produced_block` must complete within a
+    /// wall-clock deadline much smaller than "forever".
+    ///
+    /// On the pre-fix code (`std::thread::scope` waiting for all 4 handles
+    /// to join) this call hangs until the process is killed. On the fixed
+    /// code the detached threads report via an mpsc channel and
+    /// `publish_block_on_all_nodes` returns as soon as the 3 healthy nodes
+    /// acknowledge `Written`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_produced_block__returns_within_bound_when_one_node_is_half_alive() {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:halflive-publish".to_string();
+        let urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+            format!("redis://127.0.0.1:{halflive_port}/"),
+        ];
+        let adapter = new_test_adapter(urls, lease_key);
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "should acquire quorum from 3 healthy nodes out of 4",
+        );
+
+        // when — publish is sync; offload to a blocking thread so we can
+        // enforce a wall-clock deadline via tokio::time::timeout. Without
+        // the fix this task never completes.
+        let block = poa_block_at_time(1, 111);
+        let publish_adapter = adapter.clone();
+        let start = Instant::now();
+        let publish = tokio::task::spawn_blocking(move || {
+            publish_adapter.publish_produced_block(&block)
+        });
+        let deadline = Duration::from_secs(5);
+        let result = tokio::time::timeout(deadline, publish)
+            .await
+            .expect(
+                "publish_produced_block must return within the deadline — \
+                 on the pre-fix code it hangs forever against a half-alive \
+                 peer",
+            )
+            .expect("spawn_blocking should not panic");
+        let elapsed = start.elapsed();
+
+        // then
+        result.expect("publish should succeed: 3/4 healthy nodes is quorum");
+        assert!(
+            elapsed < deadline,
+            "publish took {elapsed:?}, expected well under {deadline:?}",
         );
     }
 
