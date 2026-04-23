@@ -14,8 +14,7 @@ use fuel_core_metrics::poa_metrics::poa_metrics;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
-        BlockReconciliationReadPort,
-        BlockReconciliationWritePort,
+        BlockReconciliationPort,
         LeaderState,
         P2pPort,
         PredefinedBlocks,
@@ -1187,7 +1186,7 @@ impl PoAAdapter {
 }
 
 #[async_trait::async_trait]
-impl BlockReconciliationReadPort for NoopReconciliationAdapter {
+impl BlockReconciliationPort for NoopReconciliationAdapter {
     async fn leader_state(
         &self,
         _next_height: BlockHeight,
@@ -1198,10 +1197,14 @@ impl BlockReconciliationReadPort for NoopReconciliationAdapter {
     async fn release(&self) -> anyhow::Result<()> {
         Ok(())
     }
+
+    async fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
-impl BlockReconciliationReadPort for RedisLeaderLeaseAdapter {
+impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
     async fn leader_state(
         &self,
         next_height: BlockHeight,
@@ -1234,67 +1237,7 @@ impl BlockReconciliationReadPort for RedisLeaderLeaseAdapter {
     async fn release(&self) -> anyhow::Result<()> {
         self.release_if_owner().await
     }
-}
 
-#[async_trait::async_trait]
-impl BlockReconciliationReadPort for ReconciliationAdapter {
-    async fn leader_state(
-        &self,
-        next_height: BlockHeight,
-    ) -> anyhow::Result<LeaderState> {
-        match self {
-            Self::Redis(adapter) => adapter.leader_state(next_height).await,
-            Self::Noop(adapter) => adapter.leader_state(next_height).await,
-        }
-    }
-
-    async fn release(&self) -> anyhow::Result<()> {
-        match self {
-            Self::Redis(adapter) => adapter.release().await,
-            Self::Noop(adapter) => adapter.release().await,
-        }
-    }
-}
-
-impl Drop for RedisLeaderLeaseAdapter {
-    fn drop(&mut self) {
-        if std::sync::Arc::strong_count(&self.drop_release_guard) != 1 {
-            return;
-        }
-
-        let redis_clients = self
-            .redis_nodes
-            .iter()
-            .map(|redis_node| redis_node.redis_client.clone())
-            .collect::<Vec<_>>();
-        if let Ok(runtime_handle) = tokio::runtime::Handle::try_current() {
-            let release_future = timeout(
-                Duration::from_millis(100),
-                Self::release_lease_on_clients(
-                    redis_clients,
-                    self.lease_key.clone(),
-                    self.lease_owner_token.clone(),
-                    self.node_timeout,
-                ),
-            );
-            drop(runtime_handle.spawn(async move {
-                if release_future.await.is_err() {
-                    error!("Failed to release leader lease: timeout");
-                }
-            }));
-            return;
-        }
-
-        Self::release_lease_on_clients_sync(
-            redis_clients,
-            self.lease_key.clone(),
-            self.lease_owner_token.clone(),
-        );
-    }
-}
-
-#[async_trait::async_trait]
-impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
     async fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
         let epoch = match *self
             .current_epoch_token
@@ -1343,19 +1286,66 @@ impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
 }
 
 #[async_trait::async_trait]
-impl BlockReconciliationWritePort for NoopReconciliationAdapter {
-    async fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
-        Ok(())
+impl BlockReconciliationPort for ReconciliationAdapter {
+    async fn leader_state(
+        &self,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<LeaderState> {
+        match self {
+            Self::Redis(adapter) => adapter.leader_state(next_height).await,
+            Self::Noop(adapter) => adapter.leader_state(next_height).await,
+        }
     }
-}
 
-#[async_trait::async_trait]
-impl BlockReconciliationWritePort for ReconciliationAdapter {
+    async fn release(&self) -> anyhow::Result<()> {
+        match self {
+            Self::Redis(adapter) => adapter.release().await,
+            Self::Noop(adapter) => adapter.release().await,
+        }
+    }
+
     async fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
         match self {
             Self::Redis(adapter) => adapter.publish_produced_block(block).await,
             Self::Noop(adapter) => adapter.publish_produced_block(block).await,
         }
+    }
+}
+
+impl Drop for RedisLeaderLeaseAdapter {
+    fn drop(&mut self) {
+        if std::sync::Arc::strong_count(&self.drop_release_guard) != 1 {
+            return;
+        }
+
+        let redis_clients = self
+            .redis_nodes
+            .iter()
+            .map(|redis_node| redis_node.redis_client.clone())
+            .collect::<Vec<_>>();
+        if let Ok(runtime_handle) = tokio::runtime::Handle::try_current() {
+            let release_future = timeout(
+                Duration::from_millis(100),
+                Self::release_lease_on_clients(
+                    redis_clients,
+                    self.lease_key.clone(),
+                    self.lease_owner_token.clone(),
+                    self.node_timeout,
+                ),
+            );
+            drop(runtime_handle.spawn(async move {
+                if release_future.await.is_err() {
+                    error!("Failed to release leader lease: timeout");
+                }
+            }));
+            return;
+        }
+
+        Self::release_lease_on_clients_sync(
+            redis_clients,
+            self.lease_key.clone(),
+            self.lease_owner_token.clone(),
+        );
     }
 }
 
@@ -1503,10 +1493,7 @@ impl BlockImporter for BlockImporterAdapter {
 #[allow(non_snake_case)]
 mod tests {
     use super::*;
-    use fuel_core_poa::ports::{
-        BlockReconciliationReadPort,
-        BlockReconciliationWritePort,
-    };
+    use fuel_core_poa::ports::BlockReconciliationPort;
     use fuel_core_types::blockchain::consensus::Consensus;
     use std::{
         io::Read as _,
