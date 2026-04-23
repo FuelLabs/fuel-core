@@ -132,6 +132,16 @@ pub trait BlockReconciliationReadPort: Send + Sync {
     async fn release(&self) -> anyhow::Result<()>;
 }
 
+/// Publishes a locally-produced block to the leader-lock backend (e.g.
+/// Redis) so other authorities can reconcile it. Called by PoA just
+/// before committing the block to the local database — the commit only
+/// proceeds if the publish reaches quorum.
+#[async_trait::async_trait]
+#[cfg_attr(test, mockall::automock)]
+pub trait BlockReconciliationWritePort: Send + Sync {
+    async fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()>;
+}
+
 pub trait PredefinedBlocks: Send + Sync {
     fn get_block(&self, height: &BlockHeight) -> anyhow::Result<Option<Block>>;
 }

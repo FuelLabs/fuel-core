@@ -9,6 +9,7 @@ use crate::{
     ports::{
         BlockProducer,
         BlockReconciliationReadPort,
+        BlockReconciliationWritePort,
         BlockSigner,
         GetTime,
         InMemoryPredefinedBlocks,
@@ -323,6 +324,16 @@ impl BlockReconciliationReadPort for FakeReconciliationPort {
 
     async fn release(&self) -> anyhow::Result<()> {
         self.release_called.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl BlockReconciliationWritePort for FakeReconciliationPort {
+    async fn publish_produced_block(
+        &self,
+        _block: &fuel_core_types::blockchain::SealedBlock,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }
