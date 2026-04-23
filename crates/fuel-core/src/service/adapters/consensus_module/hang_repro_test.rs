@@ -33,8 +33,6 @@
 //!   cargo test -p fuel-core --lib \
 //!     service::adapters::consensus_module::hang_repro_test -- --nocapture
 
-#![cfg(test)]
-
 use std::{
     io::Read,
     net::{
