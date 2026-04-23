@@ -104,14 +104,19 @@ const READ_LATEST_STREAM_ENTRY_SCRIPT: &str = include_str!(concat!(
 
 struct RedisNode {
     redis_client: redis::Client,
-    cached_connection: Mutex<Option<redis::aio::MultiplexedConnection>>,
+    /// Cached per-node multiplexed async connection. Wrapped in `Arc` so
+    /// clones of `RedisLeaderLeaseAdapter` share the cache — the
+    /// background tasks spawned by `publish_block_on_all_nodes` each hold
+    /// their own adapter clone and must reuse the same connection cache
+    /// instead of opening a fresh socket per publish.
+    cached_connection: std::sync::Arc<Mutex<Option<redis::aio::MultiplexedConnection>>>,
 }
 
 impl Clone for RedisNode {
     fn clone(&self) -> Self {
         Self {
             redis_client: self.redis_client.clone(),
-            cached_connection: Mutex::new(None),
+            cached_connection: self.cached_connection.clone(),
         }
     }
 }
@@ -195,7 +200,7 @@ impl RedisLeaderLeaseAdapter {
             .map(|redis_url| {
                 redis::Client::open(redis_url).map(|redis_client| RedisNode {
                     redis_client,
-                    cached_connection: Mutex::new(None),
+                    cached_connection: std::sync::Arc::new(Mutex::new(None)),
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -935,50 +940,73 @@ impl RedisLeaderLeaseAdapter {
         }
     }
 
-    /// Publish `block` to all Redis nodes in parallel using the async
-    /// client over each node's cached multiplexed connection. Returns as
-    /// soon as `Written` quorum is reached; remaining per-node futures
-    /// are dropped, which cleanly cancels their in-flight RESP exchange.
+    /// Publish `block` to every Redis node in parallel and return as soon
+    /// as `Written` quorum is reached. Each per-node publish runs in its
+    /// own `tokio::spawn`ed task so it completes in the background even
+    /// after we short-circuit — we trade a bit of background work per
+    /// publish for maximum durability: every reachable node gets a real
+    /// write attempt, bounded by `node_timeout`, instead of the call
+    /// being cancelled mid-RESP when the parent drops a `FuturesUnordered`.
+    ///
+    /// Background tasks are bounded: each is bounded by `node_timeout`,
+    /// they share the adapter state via `Arc` and the block payload via
+    /// `Arc<SealedBlock>` / `Arc<[u8]>` (no per-task clone), and they're
+    /// cooperative tokio tasks rather than OS threads.
     async fn publish_block_on_all_nodes(
         &self,
         epoch: u64,
         block: &SealedBlock,
         block_data: &[u8],
     ) -> Vec<anyhow::Result<WriteBlockResult>> {
-        use futures::stream::FuturesUnordered;
-
         let n = self.redis_nodes.len();
         let mut results: Vec<Option<anyhow::Result<WriteBlockResult>>> =
             (0..n).map(|_| None).collect();
         let mut written_count = 0usize;
 
-        let mut pending: FuturesUnordered<_> = self
-            .redis_nodes
-            .iter()
-            .enumerate()
-            .map(|(idx, node)| async move {
-                (
-                    idx,
-                    self.publish_block_on_node(node, epoch, block, block_data)
-                        .await,
-                )
-            })
-            .collect();
+        // Share the block payload across spawned tasks via `Arc` so we
+        // clone it once rather than once per node.
+        let block: std::sync::Arc<SealedBlock> = std::sync::Arc::new(block.clone());
+        let block_data: std::sync::Arc<[u8]> = block_data.into();
 
-        while let Some((idx, result)) = futures::StreamExt::next(&mut pending).await {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(
+            usize,
+            anyhow::Result<WriteBlockResult>,
+        )>();
+        for idx in 0..n {
+            let adapter = self.clone();
+            let tx = tx.clone();
+            let block = block.clone();
+            let block_data = block_data.clone();
+            tokio::spawn(async move {
+                let node = &adapter.redis_nodes[idx];
+                let result = adapter
+                    .publish_block_on_node(node, epoch, &block, &block_data)
+                    .await;
+                // Ignored if the receiver was dropped after quorum — the
+                // write attempt still executed against the node.
+                let _ = tx.send((idx, result));
+            });
+        }
+        // Drop the parent sender so `rx.recv` returns `None` once every
+        // spawned task has reported (each task owns its own cloned
+        // sender; the channel stays open until the last task's sender
+        // drops when its closure returns).
+        drop(tx);
+
+        while let Some((idx, result)) = rx.recv().await {
             if matches!(result, Ok(WriteBlockResult::Written)) {
                 written_count = written_count.saturating_add(1);
             }
             results[idx] = Some(result);
             if self.quorum_reached(written_count) {
-                // Drop the remaining futures — they're cooperative, so
-                // dropping cancels each in-flight `invoke_async` and
-                // closes their send half on the multiplexed connection
-                // without leaking OS threads.
+                // Short-circuit: stop draining, but leave the remaining
+                // tasks running. They will each complete their write
+                // attempt; when `rx` drops below, their subsequent sends
+                // become no-ops, but the publish has landed on the node.
                 break;
             }
         }
-        drop(pending);
+        drop(rx);
 
         results
             .into_iter()
@@ -986,7 +1014,7 @@ impl RedisLeaderLeaseAdapter {
                 r.unwrap_or_else(|| {
                     Err(anyhow!(
                         "publish abandoned: quorum reached before this \
-                         node responded"
+                         node responded (background task still running)"
                     ))
                 })
             })
