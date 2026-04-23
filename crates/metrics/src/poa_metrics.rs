@@ -24,6 +24,13 @@ pub struct PoAMetrics {
     /// Large positive = stream has old blocks not yet trimmed.
     /// Near zero = XTRIM may remove blocks the follower hasn't synced.
     pub stream_trim_headroom: Gauge,
+    /// Background per-node publish tasks currently in flight (incremented
+    /// when the task is spawned, decremented when its closure exits).
+    /// Steady-state should be near zero; sustained values into the
+    /// hundreds indicate per-node publishes are not exiting and should
+    /// be investigated (likely a regression in the per-call timeout or
+    /// a connection/protocol stall not covered by `node_timeout`).
+    pub outstanding_publish_tasks: Gauge,
     /// Successful write_block.lua per-node invocations.
     pub write_block_success_total: Counter,
     /// write_block.lua rejections due to HEIGHT_EXISTS.
@@ -60,6 +67,7 @@ impl Default for PoAMetrics {
         let is_leader = Gauge::default();
         let epoch_max_drift = Gauge::default();
         let stream_trim_headroom = Gauge::default();
+        let outstanding_publish_tasks = Gauge::default();
         let write_block_success_total = Counter::default();
         let write_block_height_exists_total = Counter::default();
         let write_block_fencing_error_total = Counter::default();
@@ -98,6 +106,11 @@ impl Default for PoAMetrics {
             "poa_stream_trim_headroom",
             "Min height in Redis stream minus max committed local height",
             stream_trim_headroom.clone(),
+        );
+        registry.register(
+            "poa_outstanding_publish_tasks",
+            "Background per-node publish tasks currently in flight",
+            outstanding_publish_tasks.clone(),
         );
         // Counter names omit `_total` — prometheus-client adds it automatically.
         registry.register(
@@ -170,6 +183,7 @@ impl Default for PoAMetrics {
             is_leader,
             epoch_max_drift,
             stream_trim_headroom,
+            outstanding_publish_tasks,
             write_block_success_total,
             write_block_height_exists_total,
             write_block_fencing_error_total,

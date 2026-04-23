@@ -988,7 +988,13 @@ impl RedisLeaderLeaseAdapter {
             let tx = tx.clone();
             let block = block.clone();
             let block_data = block_data.clone();
+            // Increment the gauge synchronously here (before the task
+            // is queued) and move the guard into the closure so it
+            // decrements whether the task completes normally, panics,
+            // or is cancelled mid-await.
+            let task_guard = OutstandingPublishTaskGuard::new();
             tokio::spawn(async move {
+                let _task_guard = task_guard;
                 let node = &adapter.redis_nodes[idx];
                 let result = adapter
                     .publish_block_on_node(node, epoch, &block, &block_data)
@@ -1166,6 +1172,27 @@ impl RedisLeaderLeaseAdapter {
             poa_metrics().repair_failure_total.inc();
         }
         Ok(reached_quorum)
+    }
+}
+
+/// RAII guard that increments `poa_outstanding_publish_tasks` on
+/// construction and decrements on drop. Constructed in the parent of
+/// `publish_block_on_all_nodes` (so the gauge counts the task from the
+/// instant it is queued) and moved into the spawn closure (so the
+/// decrement runs whether the task completes normally, panics inside
+/// the closure, or is cancelled mid-await).
+struct OutstandingPublishTaskGuard;
+
+impl OutstandingPublishTaskGuard {
+    fn new() -> Self {
+        poa_metrics().outstanding_publish_tasks.inc();
+        Self
+    }
+}
+
+impl Drop for OutstandingPublishTaskGuard {
+    fn drop(&mut self) {
+        poa_metrics().outstanding_publish_tasks.dec();
     }
 }
 
@@ -2012,6 +2039,61 @@ mod tests {
         assert!(
             release_result.is_ok(),
             "Release should be idempotent for adapters that do not own quorum lease"
+        );
+    }
+
+    /// Verifies that `poa_outstanding_publish_tasks` increments while
+    /// background per-node publish tasks are running (after quorum
+    /// short-circuit) and decrements back to baseline once they exit.
+    /// A sustained non-zero gauge in production would indicate a
+    /// regression in the per-call timeout — this test is the smallest
+    /// reproducible signal that the inc/dec wiring is correct.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_produced_block__outstanding_tasks_metric_drains_to_baseline() {
+        // given — 3 healthy + 1 half-alive listener
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:outstanding-tasks-metric".to_string();
+        let urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+            format!("redis://127.0.0.1:{halflive_port}/"),
+        ];
+        let adapter = new_test_adapter(urls, lease_key);
+        adapter
+            .acquire_lease_if_free()
+            .await
+            .expect("acquire should succeed");
+
+        let baseline = poa_metrics().outstanding_publish_tasks.get();
+
+        // when — publish returns once 3 healthy nodes ack; the 4th
+        // (half-alive) background task is still running
+        let block = poa_block_at_time(1, 111);
+        adapter
+            .publish_produced_block(&block)
+            .await
+            .expect("publish should succeed");
+        let in_flight = poa_metrics().outstanding_publish_tasks.get();
+
+        // then — at least one task is still running right after publish
+        assert!(
+            in_flight > baseline,
+            "expected outstanding tasks > baseline right after quorum \
+             short-circuit; baseline={baseline}, in_flight={in_flight}",
+        );
+
+        // give the half-alive node's background task time to time out
+        // (node_timeout in `new_test_adapter` is 100ms)
+        sleep(Duration::from_millis(500)).await;
+        let after_drain = poa_metrics().outstanding_publish_tasks.get();
+        assert_eq!(
+            after_drain, baseline,
+            "outstanding tasks should drain back to baseline after \
+             background tasks exit",
         );
     }
 
@@ -3501,6 +3583,7 @@ mod tests {
             "poa_is_leader",
             "poa_epoch_max_drift",
             "poa_stream_trim_headroom",
+            "poa_outstanding_publish_tasks",
             "poa_write_block_success_total",
             "poa_write_block_height_exists_total",
             "poa_write_block_fencing_error_total",
