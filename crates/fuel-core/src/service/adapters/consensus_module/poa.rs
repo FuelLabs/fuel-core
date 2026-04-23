@@ -128,7 +128,13 @@ pub struct RedisLeaderLeaseAdapter {
     epoch_key: String,
     block_stream_key: String,
     lease_owner_token: String,
-    drop_release_guard: std::sync::Arc<()>,
+    /// `Some(Arc::new(()))` on logical adapter clones — the strong count
+    /// gates the lease-release path in `Drop` (only the last clone
+    /// triggers release). `None` on adapter clones spawned into short-
+    /// lived background tasks (see `publish_block_on_all_nodes`) so they
+    /// don't extend that count and delay release after the owning
+    /// adapter is dropped.
+    drop_release_guard: Option<std::sync::Arc<()>>,
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
     lease_ttl_millis: u64,
     lease_drift_millis: u64,
@@ -230,7 +236,7 @@ impl RedisLeaderLeaseAdapter {
             epoch_key,
             block_stream_key,
             lease_owner_token,
-            drop_release_guard: std::sync::Arc::new(()),
+            drop_release_guard: Some(std::sync::Arc::new(())),
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
             lease_ttl_millis,
             lease_drift_millis,
@@ -972,7 +978,13 @@ impl RedisLeaderLeaseAdapter {
             anyhow::Result<WriteBlockResult>,
         )>();
         for idx in 0..n {
-            let adapter = self.clone();
+            // Clone the adapter for the spawned task, but null out the
+            // drop guard so this clone doesn't pin the logical adapter
+            // lifetime. Without this, a lingering background task after
+            // quorum short-circuit would keep `Arc::strong_count(...) > 1`
+            // and the owning adapter's `Drop` would skip lease release.
+            let mut adapter = self.clone();
+            adapter.drop_release_guard = None;
             let tx = tx.clone();
             let block = block.clone();
             let block_data = block_data.clone();
@@ -1314,7 +1326,13 @@ impl BlockReconciliationPort for ReconciliationAdapter {
 
 impl Drop for RedisLeaderLeaseAdapter {
     fn drop(&mut self) {
-        if std::sync::Arc::strong_count(&self.drop_release_guard) != 1 {
+        // Task-spawned clones (see `publish_block_on_all_nodes`) carry
+        // `None` here so they don't extend the logical adapter's
+        // lifetime — their drop must not trigger a lease release.
+        let Some(guard) = &self.drop_release_guard else {
+            return;
+        };
+        if std::sync::Arc::strong_count(guard) != 1 {
             return;
         }
 
@@ -1994,6 +2012,75 @@ mod tests {
         assert!(
             release_result.is_ok(),
             "Release should be idempotent for adapters that do not own quorum lease"
+        );
+    }
+
+    /// Regression test: after `publish_produced_block` short-circuits on
+    /// quorum, lingering background tasks (spawned by
+    /// `publish_block_on_all_nodes` for the slow nodes) used to clone
+    /// the entire adapter — including `drop_release_guard`. The strong
+    /// count on that guard would stay > 1 until the background tasks
+    /// finished, so dropping the owning adapter would skip the lease
+    /// release path until the slow nodes timed out.
+    ///
+    /// Spawned-task clones now carry `drop_release_guard = None`, so
+    /// dropping the owning adapter immediately after a publish triggers
+    /// release within a small window — well under `node_timeout` even
+    /// when one node is half-alive and its background task is still
+    /// running.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn drop__after_publish_releases_lease_promptly_despite_inflight_background_tasks()
+     {
+        // given — 3 real redis + 1 half-alive listener (quorum = 3)
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:drop-after-publish".to_string();
+        let healthy_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let mut all_urls = healthy_urls.clone();
+        all_urls.push(format!("redis://127.0.0.1:{halflive_port}/"));
+        let adapter = new_test_adapter(all_urls, lease_key.clone());
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "should acquire quorum from 3 healthy nodes out of 4",
+        );
+        let owner_token = adapter.lease_owner_token.clone();
+
+        // when — publish (returns once 3 healthy nodes ack; the 4th
+        // half-alive node's publish task is still running in the
+        // background) and immediately drop the adapter
+        let block = poa_block_at_time(1, 111);
+        adapter
+            .publish_produced_block(&block)
+            .await
+            .expect("publish should succeed: 3/4 healthy is quorum");
+        drop(adapter);
+
+        // then — give the release-on-drop a brief window (well under
+        // `node_timeout` so the half-alive background task is provably
+        // still in flight) and verify the lease is gone on the healthy
+        // quorum
+        sleep(Duration::from_millis(150)).await;
+        let still_owned = healthy_urls
+            .iter()
+            .filter(|redis_url| {
+                read_lease_owner(redis_url, &lease_key).as_deref()
+                    == Some(owner_token.as_str())
+            })
+            .count();
+        assert_eq!(
+            still_owned, 0,
+            "lease should be released on all 3 healthy nodes within \
+             the wait window even with a half-alive node's background \
+             publish task still running",
         );
     }
 
