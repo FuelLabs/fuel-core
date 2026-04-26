@@ -3,6 +3,7 @@ use crate::{
     tests_helper::{
         GenesisFuelCoreDriver,
         IGNITION_TESTNET_SNAPSHOT,
+        IGNITION_V21_TESTNET_SNAPSHOT,
         LatestFuelCoreDriver,
         POA_SECRET_KEY,
         V44_TESTNET_SNAPSHOT,
@@ -105,6 +106,55 @@ async fn latest_binary_serves_consensus_parameters_to_v44_client() {
     let latest_node = LatestFuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"])
         .await
         .unwrap();
+    let v44_client =
+        Version44Client::from(latest_node.node.shared.graph_ql.bound_address);
+    let new_consensus_parameters = latest_node
+        .client
+        .consensus_parameters(0)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // when
+    let old_consensus_parameters = match v44_client.consensus_parameters(0).await {
+        Ok(Some(params)) => params,
+        Ok(None) => panic!("v44 client returned no consensus parameters at version 0"),
+        Err(error) => {
+            panic!("v44 client failed to decode consensus parameters: {error:?}")
+        }
+    };
+
+    // then
+    assert!(matches!(
+        new_consensus_parameters,
+        latest_fuel_core_type::fuel_tx::ConsensusParameters::V2(_)
+    ));
+
+    assert_shared_values_match(&old_consensus_parameters, &new_consensus_parameters);
+
+    assert_eq!(
+        old_consensus_parameters.block_transaction_size_limit(),
+        u64::MAX
+    );
+    assert_ne!(
+        new_consensus_parameters.block_transaction_size_limit(),
+        u64::MAX
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn latest_binary_serves_ignition_snapshot_consensus_parameters_to_v44_client()
+ {
+    // given
+    let latest_node = LatestFuelCoreDriver::spawn(&[
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--snapshot",
+        IGNITION_V21_TESTNET_SNAPSHOT,
+    ])
+    .await
+    .unwrap();
     let v44_client =
         Version44Client::from(latest_node.node.shared.graph_ql.bound_address);
     let new_consensus_parameters = latest_node
