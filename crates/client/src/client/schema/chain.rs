@@ -26,9 +26,7 @@ fn convert_tx_params_to_latest_supported(
     // Intentionally no `_` arm. If a new local supported version is added,
     // update this helper instead of silently defaulting to an older variant.
     #[allow(dead_code)]
-    fn assert_latest_supported_coverage(
-        value: fuel_core_types::fuel_tx::TxParameters,
-    ) {
+    fn assert_latest_supported_coverage(value: fuel_core_types::fuel_tx::TxParameters) {
         match value {
             fuel_core_types::fuel_tx::TxParameters::V1(_) => {}
         }
@@ -118,9 +116,7 @@ fn convert_fee_params_to_latest_supported(
     // Intentionally no `_` arm. If a new local supported version is added,
     // update this helper instead of silently defaulting to an older variant.
     #[allow(dead_code)]
-    fn assert_latest_supported_coverage(
-        value: fuel_core_types::fuel_tx::FeeParameters,
-    ) {
+    fn assert_latest_supported_coverage(value: fuel_core_types::fuel_tx::FeeParameters) {
         match value {
             fuel_core_types::fuel_tx::FeeParameters::V1(_) => {}
         }
@@ -285,10 +281,7 @@ impl TryFrom<PredicateParameters> for fuel_core_types::fuel_tx::PredicateParamet
                 Ok(convert_predicate_params_to_latest_supported(params))
             }
             PredicateParametersVersion::Unknown => {
-                warn_consensus_parameter_downgrade(
-                    "PredicateParametersVersion",
-                    "V1",
-                );
+                warn_consensus_parameter_downgrade("PredicateParametersVersion", "V1");
                 Ok(convert_predicate_params_to_latest_supported(params))
             }
         }
@@ -325,7 +318,9 @@ impl TryFrom<ScriptParameters> for fuel_core_types::fuel_tx::ScriptParameters {
                 }
                 .into(),
             ),
-            ScriptParametersVersion::V2 => Ok(convert_script_params_to_latest_supported(params)),
+            ScriptParametersVersion::V2 => {
+                Ok(convert_script_params_to_latest_supported(params))
+            }
             ScriptParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("ScriptParametersVersion", "V2");
                 Ok(convert_script_params_to_latest_supported(params))
@@ -359,10 +354,7 @@ impl TryFrom<ContractParameters> for fuel_core_types::fuel_tx::ContractParameter
                 Ok(convert_contract_params_to_latest_supported(params))
             }
             ContractParametersVersion::Unknown => {
-                warn_consensus_parameter_downgrade(
-                    "ContractParametersVersion",
-                    "V1",
-                );
+                warn_consensus_parameter_downgrade("ContractParametersVersion", "V1");
                 Ok(convert_contract_params_to_latest_supported(params))
             }
         }
@@ -390,7 +382,9 @@ impl TryFrom<FeeParameters> for fuel_core_types::fuel_tx::FeeParameters {
 
     fn try_from(params: FeeParameters) -> Result<Self, Self::Error> {
         match params.version {
-            FeeParametersVersion::V1 => Ok(convert_fee_params_to_latest_supported(params)),
+            FeeParametersVersion::V1 => {
+                Ok(convert_fee_params_to_latest_supported(params))
+            }
             FeeParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("FeeParametersVersion", "V1");
                 Ok(convert_fee_params_to_latest_supported(params))
@@ -558,13 +552,20 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
             value: fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues,
         ) {
             match value {
-                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V1(_) => {}
-                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V2(_) => {}
-                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V3(_) => {}
-                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V4(_) => {}
-                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V5(_) => {}
-                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V6(_) => {}
-                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V7(_) => {}
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V1(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V2(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V3(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V4(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V5(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V6(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V7(_) => {
+                }
             }
         }
 
@@ -900,10 +901,7 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
                 convert_consensus_params_to_latest_supported(params)
             }
             ConsensusParametersVersion::Unknown => {
-                warn_consensus_parameter_downgrade(
-                    "ConsensusParametersVersion",
-                    "V1",
-                );
+                warn_consensus_parameter_downgrade("ConsensusParametersVersion", "V1");
                 convert_consensus_params_to_latest_supported(params)
             }
         }
@@ -1245,10 +1243,7 @@ impl TryFrom<ConsensusParametersLegacy>
                 convert_legacy_consensus_params_to_latest_supported(params)
             }
             ConsensusParametersVersion::Unknown => {
-                warn_consensus_parameter_downgrade(
-                    "ConsensusParametersVersion",
-                    "V1",
-                );
+                warn_consensus_parameter_downgrade("ConsensusParametersVersion", "V1");
                 convert_legacy_consensus_params_to_latest_supported(params)
             }
         }
@@ -1533,12 +1528,11 @@ mod tests {
 
     #[test]
     fn unknown_consensus_versions_degrade_to_supported_v2_shape() {
-        let params =
-            sample_consensus_parameters(
-                ConsensusParametersVersion::Unknown,
-                ScriptParametersVersion::Unknown,
-                GasCostsVersion::Unknown,
-            );
+        let params = sample_consensus_parameters(
+            ConsensusParametersVersion::Unknown,
+            ScriptParametersVersion::Unknown,
+            GasCostsVersion::Unknown,
+        );
 
         let converted: fuel_core_types::fuel_tx::ConsensusParameters =
             params.try_into().expect("unknown versions should degrade");
