@@ -20,6 +20,20 @@ fn warn_consensus_parameter_downgrade(
     );
 }
 
+fn convert_tx_params_to_v1(
+    params: TxParameters,
+) -> fuel_core_types::fuel_tx::TxParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::TxParametersV1 {
+        max_inputs: params.max_inputs.into(),
+        max_outputs: params.max_outputs.into(),
+        max_witnesses: params.max_witnesses.into(),
+        max_gas_per_tx: params.max_gas_per_tx.into(),
+        max_size: params.max_size.into(),
+        max_bytecode_subsections: params.max_bytecode_subsections.into(),
+    }
+    .into()
+}
+
 fn convert_tx_params_to_latest_supported(
     params: TxParameters,
 ) -> fuel_core_types::fuel_tx::TxParameters {
@@ -32,13 +46,17 @@ fn convert_tx_params_to_latest_supported(
         }
     }
 
-    fuel_core_types::fuel_tx::consensus_parameters::TxParametersV1 {
-        max_inputs: params.max_inputs.into(),
-        max_outputs: params.max_outputs.into(),
-        max_witnesses: params.max_witnesses.into(),
-        max_gas_per_tx: params.max_gas_per_tx.into(),
-        max_size: params.max_size.into(),
-        max_bytecode_subsections: params.max_bytecode_subsections.into(),
+    convert_tx_params_to_v1(params)
+}
+
+fn convert_predicate_params_to_v1(
+    params: PredicateParameters,
+) -> fuel_core_types::fuel_tx::PredicateParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::PredicateParametersV1 {
+        max_predicate_length: params.max_predicate_length.into(),
+        max_predicate_data_length: params.max_predicate_data_length.into(),
+        max_message_data_length: params.max_message_data_length.into(),
+        max_gas_per_predicate: params.max_gas_per_predicate.into(),
     }
     .into()
 }
@@ -57,11 +75,36 @@ fn convert_predicate_params_to_latest_supported(
         }
     }
 
-    fuel_core_types::fuel_tx::consensus_parameters::PredicateParametersV1 {
-        max_predicate_length: params.max_predicate_length.into(),
-        max_predicate_data_length: params.max_predicate_data_length.into(),
-        max_message_data_length: params.max_message_data_length.into(),
-        max_gas_per_predicate: params.max_gas_per_predicate.into(),
+    convert_predicate_params_to_v1(params)
+}
+
+fn convert_script_params_to_v1(
+    params: ScriptParameters,
+) -> fuel_core_types::fuel_tx::ScriptParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV1 {
+        max_script_length: params.max_script_length.into(),
+        max_script_data_length: params.max_script_data_length.into(),
+    }
+    .into()
+}
+
+fn convert_script_params_to_v2(
+    params: ScriptParameters,
+) -> fuel_core_types::fuel_tx::ScriptParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV2 {
+        max_script_length: params.max_script_length.into(),
+        max_script_data_length: params.max_script_data_length.into(),
+        max_storage_slot_length: params.max_storage_slot_length.into(),
+    }
+    .into()
+}
+
+fn convert_legacy_script_params_to_v1(
+    params: ScriptParametersLegacy,
+) -> fuel_core_types::fuel_tx::ScriptParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV1 {
+        max_script_length: params.max_script_length.into(),
+        max_script_data_length: params.max_script_data_length.into(),
     }
     .into()
 }
@@ -81,10 +124,15 @@ fn convert_script_params_to_latest_supported(
         }
     }
 
-    fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV2 {
-        max_script_length: params.max_script_length.into(),
-        max_script_data_length: params.max_script_data_length.into(),
-        max_storage_slot_length: params.max_storage_slot_length.into(),
+    convert_script_params_to_v2(params)
+}
+
+fn convert_contract_params_to_v1(
+    params: ContractParameters,
+) -> fuel_core_types::fuel_tx::ContractParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::ContractParametersV1 {
+        contract_max_size: params.contract_max_size.into(),
+        max_storage_slots: params.max_storage_slots.into(),
     }
     .into()
 }
@@ -103,9 +151,15 @@ fn convert_contract_params_to_latest_supported(
         }
     }
 
-    fuel_core_types::fuel_tx::consensus_parameters::ContractParametersV1 {
-        contract_max_size: params.contract_max_size.into(),
-        max_storage_slots: params.max_storage_slots.into(),
+    convert_contract_params_to_v1(params)
+}
+
+fn convert_fee_params_to_v1(
+    params: FeeParameters,
+) -> fuel_core_types::fuel_tx::FeeParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::FeeParametersV1 {
+        gas_price_factor: params.gas_price_factor.into(),
+        gas_per_byte: params.gas_per_byte.into(),
     }
     .into()
 }
@@ -122,11 +176,28 @@ fn convert_fee_params_to_latest_supported(
         }
     }
 
-    fuel_core_types::fuel_tx::consensus_parameters::FeeParametersV1 {
-        gas_price_factor: params.gas_price_factor.into(),
-        gas_per_byte: params.gas_per_byte.into(),
-    }
-    .into()
+    convert_fee_params_to_v1(params)
+}
+
+fn convert_consensus_params_to_v2(
+    params: ConsensusParameters,
+) -> Result<fuel_core_types::fuel_tx::ConsensusParameters, ConversionError> {
+    Ok(
+        fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
+            tx_params: params.tx_params.try_into()?,
+            predicate_params: params.predicate_params.try_into()?,
+            script_params: params.script_params.try_into()?,
+            contract_params: params.contract_params.try_into()?,
+            fee_params: params.fee_params.try_into()?,
+            base_asset_id: params.base_asset_id.into(),
+            block_gas_limit: params.block_gas_limit.into(),
+            block_transaction_size_limit: params.block_transaction_size_limit.into(),
+            chain_id: params.chain_id.0.into(),
+            gas_costs: params.gas_costs.try_into()?,
+            privileged_address: params.privileged_address.into(),
+        }
+        .into(),
+    )
 }
 
 fn convert_consensus_params_to_latest_supported(
@@ -144,6 +215,12 @@ fn convert_consensus_params_to_latest_supported(
         }
     }
 
+    convert_consensus_params_to_v2(params)
+}
+
+fn convert_legacy_consensus_params_to_v2(
+    params: ConsensusParametersLegacy,
+) -> Result<fuel_core_types::fuel_tx::ConsensusParameters, ConversionError> {
     Ok(
         fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
             tx_params: params.tx_params.try_into()?,
@@ -177,22 +254,7 @@ fn convert_legacy_consensus_params_to_latest_supported(
         }
     }
 
-    Ok(
-        fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
-            tx_params: params.tx_params.try_into()?,
-            predicate_params: params.predicate_params.try_into()?,
-            script_params: params.script_params.try_into()?,
-            contract_params: params.contract_params.try_into()?,
-            fee_params: params.fee_params.try_into()?,
-            base_asset_id: params.base_asset_id.into(),
-            block_gas_limit: params.block_gas_limit.into(),
-            block_transaction_size_limit: params.block_transaction_size_limit.into(),
-            chain_id: params.chain_id.0.into(),
-            gas_costs: params.gas_costs.try_into()?,
-            privileged_address: params.privileged_address.into(),
-        }
-        .into(),
-    )
+    convert_legacy_consensus_params_to_v2(params)
 }
 
 #[derive(cynic::QueryFragment, Clone, Debug)]
@@ -245,7 +307,7 @@ impl TryFrom<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
 
     fn try_from(params: TxParameters) -> Result<Self, Self::Error> {
         match params.version {
-            TxParametersVersion::V1 => Ok(convert_tx_params_to_latest_supported(params)),
+            TxParametersVersion::V1 => Ok(convert_tx_params_to_v1(params)),
             TxParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("TxParametersVersion", "V1");
                 Ok(convert_tx_params_to_latest_supported(params))
@@ -277,9 +339,7 @@ impl TryFrom<PredicateParameters> for fuel_core_types::fuel_tx::PredicateParamet
 
     fn try_from(params: PredicateParameters) -> Result<Self, Self::Error> {
         match params.version {
-            PredicateParametersVersion::V1 => {
-                Ok(convert_predicate_params_to_latest_supported(params))
-            }
+            PredicateParametersVersion::V1 => Ok(convert_predicate_params_to_v1(params)),
             PredicateParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("PredicateParametersVersion", "V1");
                 Ok(convert_predicate_params_to_latest_supported(params))
@@ -311,16 +371,8 @@ impl TryFrom<ScriptParameters> for fuel_core_types::fuel_tx::ScriptParameters {
 
     fn try_from(params: ScriptParameters) -> Result<Self, Self::Error> {
         match params.version {
-            ScriptParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV1 {
-                    max_script_length: params.max_script_length.into(),
-                    max_script_data_length: params.max_script_data_length.into(),
-                }
-                .into(),
-            ),
-            ScriptParametersVersion::V2 => {
-                Ok(convert_script_params_to_latest_supported(params))
-            }
+            ScriptParametersVersion::V1 => Ok(convert_script_params_to_v1(params)),
+            ScriptParametersVersion::V2 => Ok(convert_script_params_to_v2(params)),
             ScriptParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("ScriptParametersVersion", "V2");
                 Ok(convert_script_params_to_latest_supported(params))
@@ -350,9 +402,7 @@ impl TryFrom<ContractParameters> for fuel_core_types::fuel_tx::ContractParameter
 
     fn try_from(params: ContractParameters) -> Result<Self, Self::Error> {
         match params.version {
-            ContractParametersVersion::V1 => {
-                Ok(convert_contract_params_to_latest_supported(params))
-            }
+            ContractParametersVersion::V1 => Ok(convert_contract_params_to_v1(params)),
             ContractParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("ContractParametersVersion", "V1");
                 Ok(convert_contract_params_to_latest_supported(params))
@@ -382,9 +432,7 @@ impl TryFrom<FeeParameters> for fuel_core_types::fuel_tx::FeeParameters {
 
     fn try_from(params: FeeParameters) -> Result<Self, Self::Error> {
         match params.version {
-            FeeParametersVersion::V1 => {
-                Ok(convert_fee_params_to_latest_supported(params))
-            }
+            FeeParametersVersion::V1 => Ok(convert_fee_params_to_v1(params)),
             FeeParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("FeeParametersVersion", "V1");
                 Ok(convert_fee_params_to_latest_supported(params))
@@ -897,9 +945,7 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
 
     fn try_from(params: ConsensusParameters) -> Result<Self, Self::Error> {
         match params.version {
-            ConsensusParametersVersion::V1 => {
-                convert_consensus_params_to_latest_supported(params)
-            }
+            ConsensusParametersVersion::V1 => convert_consensus_params_to_v2(params),
             ConsensusParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("ConsensusParametersVersion", "V1");
                 convert_consensus_params_to_latest_supported(params)
@@ -927,13 +973,7 @@ impl TryFrom<ScriptParametersLegacy> for fuel_core_types::fuel_tx::ScriptParamet
             warn_consensus_parameter_downgrade("ScriptParametersVersion", "V1");
         }
         // Pre-0.48.0 nodes only expose ScriptParameters V1 (no max_storage_slot_length).
-        Ok(
-            fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV1 {
-                max_script_length: params.max_script_length.into(),
-                max_script_data_length: params.max_script_data_length.into(),
-            }
-            .into(),
-        )
+        Ok(convert_legacy_script_params_to_v1(params))
     }
 }
 
@@ -1240,7 +1280,7 @@ impl TryFrom<ConsensusParametersLegacy>
     fn try_from(params: ConsensusParametersLegacy) -> Result<Self, Self::Error> {
         match params.version {
             ConsensusParametersVersion::V1 => {
-                convert_legacy_consensus_params_to_latest_supported(params)
+                convert_legacy_consensus_params_to_v2(params)
             }
             ConsensusParametersVersion::Unknown => {
                 warn_consensus_parameter_downgrade("ConsensusParametersVersion", "V1");
