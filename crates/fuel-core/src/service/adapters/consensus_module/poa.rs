@@ -445,22 +445,8 @@ impl RedisLeaderLeaseAdapter {
                     .map(|op| async move { op.promote_leader().await }),
             )
             .await;
-            let max_new = results
-                .into_iter()
-                .filter_map(|result| result.ok().flatten())
-                .max();
-            if let Some(max_new) = max_new
-                && let Ok(mut epoch) = current_epoch_token.lock()
-            {
-                let current = epoch.unwrap_or(0);
-                if max_new > current {
-                    tracing::debug!(
-                        old_epoch = current,
-                        new_epoch = max_new,
-                        "Adopted higher epoch from lock expansion"
-                    );
-                    *epoch = Some(max_new);
-                }
+            for token in results.into_iter().filter_map(|r| r.ok().flatten()) {
+                Self::fold_epoch_max(&current_epoch_token, token);
             }
         });
     }
