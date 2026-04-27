@@ -414,14 +414,20 @@ impl RedisLeaderLeaseAdapter {
         }
         let current_epoch_token = std::sync::Arc::clone(&self.current_epoch_token);
         tokio::spawn(async move {
-            let mut max_new: Option<u64> = None;
-            for op in candidates {
-                if let Ok(Some(token)) = op.promote_leader().await
-                    && Some(token) > max_new
-                {
-                    max_new = Some(token);
-                }
-            }
+            // Promote against all non-owner candidates in parallel so
+            // a single unreachable node doesn't serialize the rest
+            // behind its node_timeout. Each promote_leader is already
+            // individually bounded.
+            let results = futures::future::join_all(
+                candidates
+                    .into_iter()
+                    .map(|op| async move { op.promote_leader().await }),
+            )
+            .await;
+            let max_new = results
+                .into_iter()
+                .filter_map(|result| result.ok().flatten())
+                .max();
             if let Some(max_new) = max_new
                 && let Ok(mut epoch) = current_epoch_token.lock()
             {
@@ -3417,6 +3423,24 @@ mod tests {
             .expect("lease owner get should succeed")
     }
 
+    /// Polls `predicate` until it returns true or `deadline` elapses,
+    /// sleeping briefly between checks. Returns whether the predicate
+    /// was observed true. Used in tests where a fire-and-forget
+    /// background task is expected to update Redis state and the
+    /// observation must not race the spawn.
+    async fn wait_for<F: FnMut() -> bool>(deadline: Duration, mut predicate: F) -> bool {
+        let start = Instant::now();
+        loop {
+            if predicate() {
+                return true;
+            }
+            if start.elapsed() >= deadline {
+                return false;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+    }
+
     fn clear_lease_on_nodes(redis_urls: &[String], lease_key: &str) {
         redis_urls.iter().for_each(|redis_url| {
             let redis_client = redis::Client::open(redis_url.as_str())
@@ -3673,9 +3697,14 @@ mod tests {
             .expect("quorum check should succeed");
         assert!(has_quorum, "A should still have quorum");
 
-        // then — A should now own node C too
-        let owns_c_after = read_lease_owner(&redis_c.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+        // then — A should eventually own node C too. Expansion runs
+        // in a detached background task, so poll briefly for it to
+        // land instead of asserting on a single immediate read.
+        let owns_c_after = wait_for(Duration::from_secs(2), || {
+            read_lease_owner(&redis_c.redis_url(), &lease_key)
+                == Some(adapter_a.lease_owner_token.clone())
+        })
+        .await;
         assert!(owns_c_after, "Lock expansion should have acquired node C");
 
         // Verify writes now go to all 3 nodes
