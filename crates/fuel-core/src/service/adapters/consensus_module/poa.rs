@@ -327,6 +327,27 @@ impl RedisLeaderLeaseAdapter {
         success_count >= self.quorum
     }
 
+    /// Atomically max-CAS an epoch token into the shared cell and bump
+    /// the `leader_epoch` gauge if the value moves up. Used by both the
+    /// caller of `acquire_lease_if_free` and by background per-node
+    /// promotion tasks that continue running after the parent's quorum
+    /// short-circuit, so a late-promoted node's higher epoch is never
+    /// lost. Lock poisoning is treated as a no-op (matches the
+    /// `spawn_expand_to_non_owners` pattern); a poisoned lock means a
+    /// previous holder panicked and a subsequent write would surface
+    /// the inconsistency anyway.
+    fn fold_epoch_max(epoch_cell: &std::sync::Mutex<Option<u64>>, candidate: u64) {
+        let Ok(mut current) = epoch_cell.lock() else {
+            return;
+        };
+        if Some(candidate) > *current {
+            *current = Some(candidate);
+            poa_metrics()
+                .leader_epoch
+                .set(i64::try_from(candidate).unwrap_or(i64::MAX));
+        }
+    }
+
     fn calculate_remaining_validity_millis(&self, elapsed_millis: u64) -> u64 {
         self.lease_ttl_millis
             .saturating_sub(elapsed_millis.saturating_add(self.lease_drift_millis))
@@ -453,9 +474,11 @@ impl RedisLeaderLeaseAdapter {
             // Spawn promotion attempts on every node and drain via mpsc.
             // Short-circuit as soon as quorum is acquired and the lease
             // still has positive remaining validity. Tokens from nodes
-            // that haven't reported yet land in background tasks — they
-            // extend write coverage on those nodes but don't block the
-            // caller.
+            // that respond AFTER short-circuit are still folded into
+            // `current_epoch_token` via max-CAS inside each spawned
+            // task — see `fold_epoch_max`. So a late-promoted node with
+            // a higher (drift) epoch contributes its token even though
+            // the parent has stopped reading from the channel.
             let (tx, mut rx) =
                 tokio::sync::mpsc::unbounded_channel::<anyhow::Result<Option<u64>>>();
             for idx in 0..n {
@@ -463,8 +486,12 @@ impl RedisLeaderLeaseAdapter {
                     continue;
                 };
                 let tx = tx.clone();
+                let epoch_cell = std::sync::Arc::clone(&self.current_epoch_token);
                 tokio::spawn(async move {
                     let result = op.promote_leader().await;
+                    if let Ok(Some(token)) = &result {
+                        Self::fold_epoch_max(&epoch_cell, *token);
+                    }
                     let _ = tx.send(result);
                 });
             }
@@ -492,9 +519,9 @@ impl RedisLeaderLeaseAdapter {
                     break;
                 }
             }
-            // Drop the receiver so the still-running tasks' sends are no-ops
-            // (they'll continue to attempt the promotion against their nodes
-            // for write-coverage extension, bounded by node_timeout).
+            // Drop the receiver so the still-running tasks' sends are no-ops.
+            // Their epoch contributions are not lost — each task max-CASes
+            // into `current_epoch_token` directly before returning.
             drop(rx);
 
             if acquired {
@@ -510,14 +537,7 @@ impl RedisLeaderLeaseAdapter {
                     );
                 }
                 if let Some(max_token) = promoted_tokens.into_iter().max() {
-                    let mut current_epoch_token = self
-                        .current_epoch_token
-                        .lock()
-                        .map_err(|e| anyhow!("epoch token lock poisoned: {}", e))?;
-                    *current_epoch_token = Some(max_token);
-                    poa_metrics()
-                        .leader_epoch
-                        .set(i64::try_from(max_token).unwrap_or(i64::MAX));
+                    Self::fold_epoch_max(&self.current_epoch_token, max_token);
                 }
                 poa_metrics().promotion_success_total.inc();
                 poa_metrics()
@@ -3068,6 +3088,98 @@ mod tests {
         assert!(
             elapsed < deadline,
             "acquire took {elapsed:?}, expected well under {deadline:?}",
+        );
+    }
+
+    /// Regression for the quorum-short-circuit + late-token-folding
+    /// contract. With pre-drifted epochs across nodes (simulating
+    /// election-storm history), `acquire_lease_if_free` may
+    /// short-circuit on the first quorum of received tokens — and the
+    /// drifted-high node may be among the late responders. The
+    /// background spawned task must still fold its higher token into
+    /// `current_epoch_token` via max-CAS, so subsequent writes can
+    /// heal lagging nodes upward instead of FENCING_ERRORing forever.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn acquire_lease_if_free__folds_late_higher_epoch_into_current_epoch_token() {
+        // given — 3 redis nodes with node C pre-drifted to epoch 100
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:late-token-fold".to_string();
+        let epoch_key = format!("{lease_key}:epoch:token");
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        set_epoch(&redis_c.redis_url(), &epoch_key, 100);
+        let adapter = new_test_adapter(redis_urls, lease_key);
+
+        // when
+        let acquired = adapter
+            .acquire_lease_if_free()
+            .await
+            .expect("acquire should succeed");
+        assert!(acquired, "should acquire quorum");
+
+        // then — current_epoch_token must reflect node C's promoted
+        // value (100 + 1 = 101) regardless of whether C was among the
+        // first quorum responders or arrived after the short-circuit.
+        let folded = wait_for(Duration::from_secs(2), || {
+            adapter
+                .current_epoch_token
+                .lock()
+                .expect("lock")
+                .is_some_and(|epoch| epoch >= 101)
+        })
+        .await;
+        assert!(
+            folded,
+            "current_epoch_token should fold node C's drifted-high \
+             token (>=101) even if C responded after the quorum \
+             short-circuit; observed {:?}",
+            adapter.current_epoch_token.lock().expect("lock"),
+        );
+    }
+
+    /// Unit-level guard for `fold_epoch_max`: under heavy concurrent
+    /// contention the cell must reach the global maximum and never
+    /// regress to a smaller value. Together with the integration test
+    /// above this pins down the contract that backs the late-token
+    /// folding in `acquire_lease_if_free`.
+    #[test]
+    fn fold_epoch_max__monotonic_max_under_concurrent_writers() {
+        let cell = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let writers = 8usize;
+        let per_writer = 200u64;
+        let mut handles = Vec::with_capacity(writers);
+        for w in 0..writers {
+            let cell = std::sync::Arc::clone(&cell);
+            let base = (w as u64).saturating_mul(per_writer);
+            handles.push(std::thread::spawn(move || {
+                // Interleave ascending and descending values to force
+                // racy max-CAS attempts in both directions.
+                for i in 0..per_writer {
+                    RedisLeaderLeaseAdapter::fold_epoch_max(
+                        &cell,
+                        base.saturating_add(i),
+                    );
+                    RedisLeaderLeaseAdapter::fold_epoch_max(
+                        &cell,
+                        base.saturating_add(per_writer.saturating_sub(i)),
+                    );
+                }
+            }));
+        }
+        for h in handles {
+            h.join().expect("worker join");
+        }
+        let final_value = cell.lock().expect("lock").expect("set");
+        let expected_max = (writers as u64).saturating_mul(per_writer);
+        assert_eq!(
+            final_value, expected_max,
+            "fold_epoch_max must converge on the global max across \
+             concurrent writers",
         );
     }
 
