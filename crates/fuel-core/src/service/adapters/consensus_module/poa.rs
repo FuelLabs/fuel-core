@@ -982,6 +982,7 @@ impl RedisLeaderLeaseAdapter {
             usize,
             anyhow::Result<WriteBlockResult>,
         )>();
+        #[allow(clippy::needless_range_loop)]
         for idx in 0..n {
             let Some(child) = self.new_child(idx) else {
                 results[idx] = Some(Err(anyhow!(
