@@ -104,10 +104,8 @@ const READ_LATEST_STREAM_ENTRY_SCRIPT: &str = include_str!(concat!(
 struct RedisNode {
     redis_client: redis::Client,
     /// Cached per-node multiplexed async connection. Wrapped in `Arc` so
-    /// clones of `RedisLeaderLeaseAdapter` share the cache — the
-    /// background tasks spawned by `publish_block_on_all_nodes` each hold
-    /// their own adapter clone and must reuse the same connection cache
-    /// instead of opening a fresh socket per publish.
+    /// background publish handles can share the cache instead of opening
+    /// a fresh socket per publish.
     cached_connection: std::sync::Arc<Mutex<Option<redis::aio::MultiplexedConnection>>>,
 }
 
@@ -128,13 +126,6 @@ pub struct RedisLeaderLeaseAdapter {
     epoch_key: String,
     block_stream_key: String,
     lease_owner_token: String,
-    /// `Some(Arc::new(()))` on logical adapter clones — the strong count
-    /// gates the lease-release path in `Drop` (only the last clone
-    /// triggers release). `None` on adapter clones spawned into short-
-    /// lived background tasks (see `publish_block_on_all_nodes`) so they
-    /// don't extend that count and delay release after the owning
-    /// adapter is dropped.
-    drop_release_guard: Option<std::sync::Arc<()>>,
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
     lease_ttl_millis: u64,
     lease_drift_millis: u64,
@@ -145,27 +136,15 @@ pub struct RedisLeaderLeaseAdapter {
     stream_max_len: u32,
 }
 
-impl Clone for RedisLeaderLeaseAdapter {
-    fn clone(&self) -> Self {
-        Self {
-            redis_nodes: self.redis_nodes.clone(),
-            quorum: self.quorum,
-            quorum_disruption_budget: self.quorum_disruption_budget,
-            lease_key: self.lease_key.clone(),
-            epoch_key: self.epoch_key.clone(),
-            block_stream_key: self.block_stream_key.clone(),
-            lease_owner_token: self.lease_owner_token.clone(),
-            drop_release_guard: self.drop_release_guard.clone(),
-            current_epoch_token: self.current_epoch_token.clone(),
-            lease_ttl_millis: self.lease_ttl_millis,
-            lease_drift_millis: self.lease_drift_millis,
-            node_timeout: self.node_timeout,
-            retry_delay_millis: self.retry_delay_millis,
-            max_retry_delay_offset_millis: self.max_retry_delay_offset_millis,
-            max_attempts: self.max_attempts,
-            stream_max_len: self.stream_max_len,
-        }
-    }
+struct RedisPublishChild {
+    redis_nodes: Vec<RedisNode>,
+    lease_key: String,
+    epoch_key: String,
+    block_stream_key: String,
+    lease_owner_token: String,
+    lease_ttl_millis: u64,
+    node_timeout: Duration,
+    stream_max_len: u32,
 }
 
 #[derive(Default, Clone)]
@@ -236,7 +215,6 @@ impl RedisLeaderLeaseAdapter {
             epoch_key,
             block_stream_key,
             lease_owner_token,
-            drop_release_guard: Some(std::sync::Arc::new(())),
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
             lease_ttl_millis,
             lease_drift_millis,
@@ -258,9 +236,22 @@ impl RedisLeaderLeaseAdapter {
         self
     }
 
-    async fn multiplexed_connection(
-        &self,
+    fn publish_child(&self) -> RedisPublishChild {
+        RedisPublishChild {
+            redis_nodes: self.redis_nodes.clone(),
+            lease_key: self.lease_key.clone(),
+            epoch_key: self.epoch_key.clone(),
+            block_stream_key: self.block_stream_key.clone(),
+            lease_owner_token: self.lease_owner_token.clone(),
+            lease_ttl_millis: self.lease_ttl_millis,
+            node_timeout: self.node_timeout,
+            stream_max_len: self.stream_max_len,
+        }
+    }
+
+    async fn multiplexed_connection_for(
         redis_node: &RedisNode,
+        node_timeout: Duration,
     ) -> anyhow::Result<redis::aio::MultiplexedConnection> {
         if let Some(connection) =
             redis_node.cached_connection.lock().await.as_ref().cloned()
@@ -269,7 +260,7 @@ impl RedisLeaderLeaseAdapter {
         }
 
         let new_connection = timeout(
-            self.node_timeout,
+            node_timeout,
             redis_node.redis_client.get_multiplexed_async_connection(),
         )
         .await
@@ -282,10 +273,21 @@ impl RedisLeaderLeaseAdapter {
         Ok(new_connection)
     }
 
-    async fn clear_cached_connection(&self, redis_node: &RedisNode) {
+    async fn clear_cached_connection_for(redis_node: &RedisNode) {
         let mut cached_connection = redis_node.cached_connection.lock().await;
         *cached_connection = None;
         poa_metrics().connection_reset_total.inc();
+    }
+
+    async fn multiplexed_connection(
+        &self,
+        redis_node: &RedisNode,
+    ) -> anyhow::Result<redis::aio::MultiplexedConnection> {
+        Self::multiplexed_connection_for(redis_node, self.node_timeout).await
+    }
+
+    async fn clear_cached_connection(&self, redis_node: &RedisNode) {
+        Self::clear_cached_connection_for(redis_node).await;
     }
 
     async fn check_lease_owner_on_node(&self, redis_node: &RedisNode) -> bool {
@@ -978,13 +980,7 @@ impl RedisLeaderLeaseAdapter {
             anyhow::Result<WriteBlockResult>,
         )>();
         for idx in 0..n {
-            // Clone the adapter for the spawned task, but null out the
-            // drop guard so this clone doesn't pin the logical adapter
-            // lifetime. Without this, a lingering background task after
-            // quorum short-circuit would keep `Arc::strong_count(...) > 1`
-            // and the owning adapter's `Drop` would skip lease release.
-            let mut adapter = self.clone();
-            adapter.drop_release_guard = None;
+            let child = self.publish_child();
             let tx = tx.clone();
             let block = block.clone();
             let block_data = block_data.clone();
@@ -995,8 +991,8 @@ impl RedisLeaderLeaseAdapter {
             let task_guard = OutstandingPublishTaskGuard::new();
             tokio::spawn(async move {
                 let _task_guard = task_guard;
-                let node = &adapter.redis_nodes[idx];
-                let result = adapter
+                let node = &child.redis_nodes[idx];
+                let result = child
                     .publish_block_on_node(node, epoch, &block, &block_data)
                     .await;
                 // Ignored if the receiver was dropped after quorum — the
@@ -1036,71 +1032,6 @@ impl RedisLeaderLeaseAdapter {
                 })
             })
             .collect()
-    }
-
-    /// Run `write_block.lua` against a single node using the cached
-    /// multiplexed async connection. Bounded by `node_timeout`.
-    async fn publish_block_on_node(
-        &self,
-        redis_node: &RedisNode,
-        epoch: u64,
-        block: &SealedBlock,
-        block_data: &[u8],
-    ) -> anyhow::Result<WriteBlockResult> {
-        let mut connection = self.multiplexed_connection(redis_node).await?;
-        let block_height = u32::from(*block.entity.header().height());
-        let lua_start = std::time::Instant::now();
-        let write_result = tokio::time::timeout(
-            self.node_timeout,
-            redis::Script::new(WRITE_BLOCK_SCRIPT)
-                .key(&self.block_stream_key)
-                .key(&self.epoch_key)
-                .key(&self.lease_key)
-                .arg(epoch)
-                .arg(&self.lease_owner_token)
-                .arg(block_height)
-                .arg(block_data)
-                .arg(self.lease_ttl_millis)
-                .arg(self.stream_max_len)
-                .invoke_async::<String>(&mut connection),
-        )
-        .await;
-        poa_metrics()
-            .write_block_duration_s
-            .observe(lua_start.elapsed().as_secs_f64());
-        match write_result {
-            Ok(Ok(_)) => {
-                poa_metrics().write_block_success_total.inc();
-                Ok(WriteBlockResult::Written)
-            }
-            Ok(Err(err)) if err.to_string().contains("HEIGHT_EXISTS:") => {
-                poa_metrics().write_block_height_exists_total.inc();
-                tracing::debug!(
-                    "write_block: height already exists (height={block_height})"
-                );
-                Ok(WriteBlockResult::HeightExists)
-            }
-            Ok(Err(err)) if err.to_string().contains("FENCING_ERROR:") => {
-                poa_metrics().write_block_fencing_error_total.inc();
-                tracing::warn!(
-                    "write_block: fencing rejected (height={block_height}): {err}"
-                );
-                Ok(WriteBlockResult::FencingRejected)
-            }
-            Ok(Err(err)) => {
-                poa_metrics().write_block_error_total.inc();
-                self.clear_cached_connection(redis_node).await;
-                Err(err.into())
-            }
-            Err(_) => {
-                poa_metrics().write_block_error_total.inc();
-                self.clear_cached_connection(redis_node).await;
-                Err(anyhow!(
-                    "write_block timed out after {:?}",
-                    self.node_timeout
-                ))
-            }
-        }
     }
 
     /// Repropose a sub-quorum block to all Redis nodes to reach quorum.
@@ -1172,6 +1103,75 @@ impl RedisLeaderLeaseAdapter {
             poa_metrics().repair_failure_total.inc();
         }
         Ok(reached_quorum)
+    }
+}
+
+impl RedisPublishChild {
+    async fn publish_block_on_node(
+        &self,
+        redis_node: &RedisNode,
+        epoch: u64,
+        block: &SealedBlock,
+        block_data: &[u8],
+    ) -> anyhow::Result<WriteBlockResult> {
+        let mut connection = RedisLeaderLeaseAdapter::multiplexed_connection_for(
+            redis_node,
+            self.node_timeout,
+        )
+        .await?;
+        let block_height = u32::from(*block.entity.header().height());
+        let lua_start = std::time::Instant::now();
+        let write_result = tokio::time::timeout(
+            self.node_timeout,
+            redis::Script::new(WRITE_BLOCK_SCRIPT)
+                .key(&self.block_stream_key)
+                .key(&self.epoch_key)
+                .key(&self.lease_key)
+                .arg(epoch)
+                .arg(&self.lease_owner_token)
+                .arg(block_height)
+                .arg(block_data)
+                .arg(self.lease_ttl_millis)
+                .arg(self.stream_max_len)
+                .invoke_async::<String>(&mut connection),
+        )
+        .await;
+        poa_metrics()
+            .write_block_duration_s
+            .observe(lua_start.elapsed().as_secs_f64());
+        match write_result {
+            Ok(Ok(_)) => {
+                poa_metrics().write_block_success_total.inc();
+                Ok(WriteBlockResult::Written)
+            }
+            Ok(Err(err)) if err.to_string().contains("HEIGHT_EXISTS:") => {
+                poa_metrics().write_block_height_exists_total.inc();
+                tracing::debug!(
+                    "write_block: height already exists (height={block_height})"
+                );
+                Ok(WriteBlockResult::HeightExists)
+            }
+            Ok(Err(err)) if err.to_string().contains("FENCING_ERROR:") => {
+                poa_metrics().write_block_fencing_error_total.inc();
+                tracing::warn!(
+                    "write_block: fencing rejected (height={block_height}): {err}"
+                );
+                Ok(WriteBlockResult::FencingRejected)
+            }
+            Ok(Err(err)) => {
+                poa_metrics().write_block_error_total.inc();
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(redis_node).await;
+                Err(err.into())
+            }
+            Err(_) => {
+                poa_metrics().write_block_error_total.inc();
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(redis_node).await;
+                Err(anyhow!(
+                    "write_block timed out after {:?}",
+                    self.node_timeout
+                ))
+            }
+        }
     }
 }
 
@@ -1353,16 +1353,6 @@ impl BlockReconciliationPort for ReconciliationAdapter {
 
 impl Drop for RedisLeaderLeaseAdapter {
     fn drop(&mut self) {
-        // Task-spawned clones (see `publish_block_on_all_nodes`) carry
-        // `None` here so they don't extend the logical adapter's
-        // lifetime — their drop must not trigger a lease release.
-        let Some(guard) = &self.drop_release_guard else {
-            return;
-        };
-        if std::sync::Arc::strong_count(guard) != 1 {
-            return;
-        }
-
         let redis_clients = self
             .redis_nodes
             .iter()
@@ -2098,14 +2088,10 @@ mod tests {
     }
 
     /// Regression test: after `publish_produced_block` short-circuits on
-    /// quorum, lingering background tasks (spawned by
-    /// `publish_block_on_all_nodes` for the slow nodes) used to clone
-    /// the entire adapter — including `drop_release_guard`. The strong
-    /// count on that guard would stay > 1 until the background tasks
-    /// finished, so dropping the owning adapter would skip the lease
-    /// release path until the slow nodes timed out.
+    /// quorum, lingering background publish tasks for slow nodes must not
+    /// delay the owning adapter's release-on-drop path.
     ///
-    /// Spawned-task clones now carry `drop_release_guard = None`, so
+    /// Spawned publish work now runs through a dedicated child handle, so
     /// dropping the owning adapter immediately after a publish triggers
     /// release within a small window — well under `node_timeout` even
     /// when one node is half-alive and its background task is still
@@ -2167,12 +2153,12 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn drop__when_non_last_clone_is_dropped_then_does_not_release_shared_lease() {
+    async fn drop__when_publish_child_is_dropped_then_parent_lease_is_unchanged() {
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
-        let lease_key = "poa:test:drop-non-last-clone".to_string();
+        let lease_key = "poa:test:drop-publish-child".to_string();
         let redis_urls = vec![
             redis_a.redis_url(),
             redis_b.redis_url(),
@@ -2186,11 +2172,11 @@ mod tests {
                 .expect("acquire should succeed"),
             "Adapter should acquire lease"
         );
-        let adapter_clone = adapter.clone();
         let owner_token = adapter.lease_owner_token.clone();
+        let child = adapter.publish_child();
 
         // when
-        drop(adapter_clone);
+        drop(child);
         sleep(Duration::from_millis(50)).await;
 
         // then
@@ -2203,7 +2189,7 @@ mod tests {
             .count();
         assert!(
             owners >= 2,
-            "Dropping a non-last clone must not release quorum lease ownership"
+            "Dropping a publish child must not release quorum lease ownership"
         );
     }
 

@@ -231,7 +231,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     );
 
-    let redis_reconciliation_adapter = config
+    let mut redis_reconciliation_adapter = config
         .leader_lock
         .as_ref()
         .map(|leader_lock| {
@@ -417,8 +417,7 @@ pub fn init_sub_services(
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
             let reconciliation_port = redis_reconciliation_adapter
-                .as_ref()
-                .cloned()
+                .take()
                 .map(ReconciliationAdapter::Redis)
                 .unwrap_or_else(|| {
                     ReconciliationAdapter::Noop(NoopReconciliationAdapter)
