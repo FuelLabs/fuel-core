@@ -102,6 +102,8 @@ fn requires_v2_consensus_parameters(look_ahead: &Lookahead<'_>) -> bool {
         .field("scriptParams")
         .field("maxStorageSlotLength")
         .exists();
+    let consensus_params_require_v2 =
+        look_ahead.field("blockTransactionSizeLimit").exists();
     let gas_costs_require_v2 = [
         "storageReadCold",
         "storageReadHot",
@@ -111,7 +113,7 @@ fn requires_v2_consensus_parameters(look_ahead: &Lookahead<'_>) -> bool {
     .into_iter()
     .any(|field| look_ahead.field("gasCosts").field(field).exists());
 
-    script_params_require_v2 || gas_costs_require_v2
+    consensus_params_require_v2 || script_params_require_v2 || gas_costs_require_v2
 }
 
 #[allow(unused)]
@@ -1075,6 +1077,24 @@ impl ChainQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        graphql_api::{
+            Config,
+            ServiceConfig,
+            ports::MockChainStateProvider,
+        },
+        schema::build_schema,
+    };
+    use async_graphql::Request;
+    use fuel_tx::consensus_parameters::ConsensusParametersV2;
+    use std::{
+        net::{
+            IpAddr,
+            Ipv4Addr,
+            SocketAddr,
+        },
+        time::Duration,
+    };
 
     #[test]
     fn gas_costs_downgrade_to_v6_fills_legacy_only_fields() {
@@ -1092,5 +1112,79 @@ mod tests {
         assert_eq!(values.scwq, DependentCost::free());
         assert_eq!(values.srwq, DependentCost::free());
         assert_eq!(values.swwq, DependentCost::free());
+    }
+
+    #[tokio::test]
+    async fn v047_shape_query_keeps_block_transaction_size_limit() {
+        const BLOCK_TRANSACTION_SIZE_LIMIT: u64 = 1_234_567;
+
+        let mut params = ConsensusParametersV2::standard();
+        params.block_transaction_size_limit = BLOCK_TRANSACTION_SIZE_LIMIT;
+
+        let mut mocked_provider = MockChainStateProvider::default();
+        mocked_provider
+            .expect_current_consensus_params()
+            .return_const(Arc::new(params.into()));
+
+        let config = Config {
+            config: ServiceConfig {
+                addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                number_of_threads: 1,
+                database_batch_size: 1,
+                block_subscriptions_queue: 1,
+                max_queries_depth: 16,
+                max_queries_complexity: 10_000,
+                max_queries_recursive_depth: 32,
+                max_queries_resolver_recursive_depth: 32,
+                max_queries_directives: 16,
+                max_concurrent_queries: 16,
+                request_body_bytes_limit: 1024 * 1024,
+                required_fuel_block_height_tolerance: 0,
+                required_fuel_block_height_timeout: Duration::from_secs(1),
+                query_log_threshold_time: Duration::from_secs(1),
+                api_request_timeout: Duration::from_secs(1),
+                assemble_tx_dry_run_limit: 1,
+                assemble_tx_estimate_predicates_limit: 1,
+                costs: Default::default(),
+            },
+            utxo_validation: false,
+            debug: false,
+            allow_syscall: false,
+            historical_execution: false,
+            expensive_subscriptions: false,
+            max_tx: 1,
+            max_gas: 1,
+            max_size: 1,
+            max_txpool_dependency_chain_length: 1,
+            chain_name: "test".into(),
+        };
+
+        let schema = build_schema()
+            .data(config)
+            .data(Box::new(mocked_provider)
+                as crate::graphql_api::api_service::ChainInfoProvider)
+            .finish();
+
+        let response = schema
+            .execute(Request::new(
+                "{ chain { consensusParameters { blockTransactionSizeLimit } } }",
+            ))
+            .await;
+
+        assert!(
+            response.errors.is_empty(),
+            "unexpected GraphQL errors: {:?}",
+            response.errors
+        );
+        assert_eq!(
+            response.data.into_json().unwrap(),
+            serde_json::json!({
+                "chain": {
+                    "consensusParameters": {
+                        "blockTransactionSizeLimit": BLOCK_TRANSACTION_SIZE_LIMIT.to_string()
+                    }
+                }
+            })
+        );
     }
 }
