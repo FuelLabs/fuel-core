@@ -260,6 +260,8 @@ impl Clone for ConsistencyPolicy {
 struct ChainStateInfo {
     current_stf_version: Arc<Mutex<Option<StateTransitionBytecodeVersion>>>,
     current_consensus_parameters_version: Arc<Mutex<Option<ConsensusParametersVersion>>>,
+    /// Cached node version string (e.g. "0.47.3"). Populated on first use.
+    node_version: Arc<Mutex<Option<String>>>,
 }
 
 impl Clone for ChainStateInfo {
@@ -273,6 +275,9 @@ impl Clone for ChainStateInfo {
                     .lock()
                     .ok()
                     .and_then(|v| *v),
+            )),
+            node_version: Arc::new(Mutex::new(
+                self.node_version.lock().ok().and_then(|v| v.clone()),
             )),
         }
     }
@@ -369,6 +374,22 @@ where
             .parse()
             .unwrap()
     }
+}
+
+/// Returns `true` when the node version predates v0.48.0, which introduced
+/// `maxStorageSlotLength` on `ScriptParameters` and the storage gas-cost fields.
+/// Falls back to `false` (i.e. assume new node) if the version string cannot be parsed.
+fn is_legacy_node(version: &str) -> bool {
+    let mut parts = version.splitn(3, '.');
+    let major: u64 = match parts.next().and_then(|s| s.parse().ok()) {
+        Some(v) => v,
+        None => return false,
+    };
+    let minor: u64 = match parts.next().and_then(|s| s.parse().ok()) {
+        Some(v) => v,
+        None => return false,
+    };
+    major == 0 && minor < 48
 }
 
 pub fn from_strings_errors_to_std_error(errors: Vec<String>) -> io::Error {
@@ -531,6 +552,27 @@ impl FuelClient {
         }
     }
 
+    /// Fetch the connected node's version string, caching it after the first call.
+    /// Uses a minimal query fragment that is safe for all node versions.
+    async fn ensure_node_version(&self) -> io::Result<String> {
+        {
+            let lock = self
+                .chain_state_info
+                .node_version
+                .lock()
+                .map_err(|_| io::Error::other("Mutex poisoned"))?;
+            if let Some(v) = lock.as_ref() {
+                return Ok(v.clone());
+            }
+        }
+        let query = schema::node_info::QueryNodeVersionInfo::build(());
+        let version = self.query(query).await?.node_info.node_version;
+        if let Ok(mut lock) = self.chain_state_info.node_version.lock() {
+            *lock = Some(version.clone());
+        }
+        Ok(version)
+    }
+
     /// Send the GraphQL query to the client.
     pub async fn query<ResponseData, Vars>(
         &self,
@@ -635,28 +677,49 @@ impl FuelClient {
     }
 
     pub async fn chain_info(&self) -> io::Result<types::ChainInfo> {
-        let query = schema::chain::ChainQuery::build(());
-        self.query(query).await.and_then(|r| {
-            let result = r.chain.try_into()?;
-            Ok(result)
-        })
+        let node_version = self.ensure_node_version().await?;
+        if is_legacy_node(&node_version) {
+            let query = schema::chain::ChainQueryLegacy::build(());
+            self.query(query).await.and_then(|r| {
+                let result = r.chain.try_into()?;
+                Ok(result)
+            })
+        } else {
+            let query = schema::chain::ChainQuery::build(());
+            self.query(query).await.and_then(|r| {
+                let result = r.chain.try_into()?;
+                Ok(result)
+            })
+        }
     }
 
     pub async fn consensus_parameters(
         &self,
         version: i32,
     ) -> io::Result<Option<ConsensusParameters>> {
+        let node_version = self.ensure_node_version().await?;
         let args = schema::upgrades::ConsensusParametersByVersionArgs { version };
-        let query = schema::upgrades::ConsensusParametersByVersionQuery::build(args);
 
-        let result = self
-            .query(query)
-            .await?
-            .consensus_parameters
-            .map(TryInto::try_into)
-            .transpose()?;
-
-        Ok(result)
+        if is_legacy_node(&node_version) {
+            let query =
+                schema::upgrades::ConsensusParametersByVersionQueryLegacy::build(args);
+            let result = self
+                .query(query)
+                .await?
+                .consensus_parameters
+                .map(TryInto::try_into)
+                .transpose()?;
+            Ok(result)
+        } else {
+            let query = schema::upgrades::ConsensusParametersByVersionQuery::build(args);
+            let result = self
+                .query(query)
+                .await?
+                .consensus_parameters
+                .map(TryInto::try_into)
+                .transpose()?;
+            Ok(result)
+        }
     }
 
     pub async fn state_transition_byte_code_by_version(
@@ -2004,5 +2067,21 @@ mod tests {
             client_new.get_default_url().as_str(),
             client_with_urls.get_default_url().as_str()
         );
+    }
+
+    #[test]
+    fn is_legacy_node_version_detection() {
+        // Pre-0.48.0 nodes require the legacy query path.
+        assert!(is_legacy_node("0.47.3"));
+        assert!(is_legacy_node("0.47.0"));
+        assert!(is_legacy_node("0.1.0"));
+        assert!(is_legacy_node("0.0.1"));
+
+        // 0.48.0 and above use the standard query path.
+        assert!(!is_legacy_node("0.48.0"));
+        assert!(!is_legacy_node("0.49.0"));
+        assert!(!is_legacy_node("0.100.0"));
+        assert!(!is_legacy_node("1.0.0"));
+        assert!(!is_legacy_node("2.47.0"));
     }
 }

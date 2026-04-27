@@ -236,12 +236,14 @@ impl Instance<Created> {
     {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             gas_limit: u64|
-              -> anyhow::Result<u32> {
+              -> wasmtime::Result<u32> {
             let Some(source) = source.clone() else {
                 return Ok(0);
             };
 
-            caller.peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
+            caller
+                .peek_next_txs_bytes(source, gas_limit, u16::MAX, u32::MAX)
+                .map_err(wasmtime::Error::from_anyhow)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -255,21 +257,25 @@ impl Instance<Created> {
                             gas_limit: u64,
                             tx_number_limit: u32,
                             block_transaction_size_limit: u32|
-              -> anyhow::Result<u32> {
+              -> wasmtime::Result<u32> {
             let Some(source) = source.clone() else {
                 return Ok(0);
             };
 
             let tx_number_limit = u16::try_from(tx_number_limit).map_err(|e| {
-                anyhow::anyhow!("The number of transactions is more than `u16::MAX`: {e}")
+                wasmtime::format_err!(
+                    "The number of transactions is more than `u16::MAX`: {e}"
+                )
             })?;
 
-            caller.peek_next_txs_bytes(
-                source,
-                gas_limit,
-                tx_number_limit,
-                block_transaction_size_limit,
-            )
+            caller
+                .peek_next_txs_bytes(
+                    source,
+                    gas_limit,
+                    tx_number_limit,
+                    block_transaction_size_limit,
+                )
+                .map_err(wasmtime::Error::from_anyhow)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -279,7 +285,7 @@ impl Instance<Created> {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             output_ptr: u32,
                             output_size: u32|
-              -> anyhow::Result<()> {
+              -> wasmtime::Result<()> {
             let encoded = caller
                 .data_mut()
                 .next_transactions
@@ -287,7 +293,9 @@ impl Instance<Created> {
                 .and_then(|vector| vector.pop())
                 .unwrap_or_default();
 
-            caller.write(output_ptr, &encoded)
+            caller
+                .write(output_ptr, &encoded)
+                .map_err(wasmtime::Error::from_anyhow)
         };
 
         Func::wrap(&mut self.store, closure)
@@ -326,9 +334,9 @@ impl Instance<Source> {
                             key_ptr: u32,
                             key_len: u32,
                             column: u32|
-              -> anyhow::Result<u64> {
+              -> wasmtime::Result<u64> {
             let column = fuel_core_storage::column::Column::try_from(column)
-                .map_err(|e| anyhow::anyhow!("Unknown column: {}", e))?;
+                .map_err(|e| wasmtime::format_err!("Unknown column: {}", e))?;
 
             let (ptr, len) = (key_ptr as usize, key_len as usize);
             let memory = caller
@@ -340,7 +348,7 @@ impl Instance<Source> {
             match storage.size_of_value(key, column) {
                 Ok(value) => {
                     let size = u32::try_from(value.unwrap_or_default()).map_err(|e| {
-                        anyhow::anyhow!(
+                        wasmtime::format_err!(
                         "The size of the value is more than `u32::MAX`. We support only wasm32: {}",
                         e
                     )
@@ -365,9 +373,9 @@ impl Instance<Source> {
                             column: u32,
                             out_ptr: u32,
                             out_len: u32|
-              -> anyhow::Result<u32> {
+              -> wasmtime::Result<u32> {
             let column = fuel_core_storage::column::Column::try_from(column)
-                .map_err(|e| anyhow::anyhow!("Unknown column: {}", e))?;
+                .map_err(|e| wasmtime::format_err!("Unknown column: {}", e))?;
             let (ptr, len) = (key_ptr as usize, key_len as usize);
             let memory = caller
                 .data()
@@ -377,16 +385,18 @@ impl Instance<Source> {
             let key = &memory.data(&caller)[ptr..ptr.saturating_add(len)];
             match storage.get(key, column) {
                 Ok(value) => {
-                    let value = value.ok_or(anyhow::anyhow!("\
+                    let value = value.ok_or(wasmtime::format_err!("\
                         The WASM executor should call `get` only after `storage_size_of_value`."))?;
 
                     if value.len() != out_len as usize {
-                        return Err(anyhow::anyhow!(
+                        return Err(wasmtime::format_err!(
                             "The provided buffer size is not equal to the value size."
                         ));
                     }
 
-                    caller.write(out_ptr, &value)?;
+                    caller
+                        .write(out_ptr, &value)
+                        .map_err(wasmtime::Error::from_anyhow)?;
                     Ok(0)
                 }
                 _ => Ok(1),
@@ -440,14 +450,14 @@ impl Instance<Storage> {
     {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             da_block_height: u64|
-              -> anyhow::Result<u64> {
+              -> wasmtime::Result<u64> {
             let da_block_height: DaBlockHeight = da_block_height.into();
 
             if let Some(encoded_events) =
                 caller.data().relayer_events.get(&da_block_height)
             {
                 let encoded_size = u32::try_from(encoded_events.len()).map_err(|e| {
-                    anyhow::anyhow!(
+                    wasmtime::format_err!(
                         "The size of encoded events is more than `u32::MAX`. We support only wasm32: {}",
                         e
                     )
@@ -459,10 +469,10 @@ impl Instance<Storage> {
                 match events {
                     Ok(events) => {
                         let encoded_events = postcard::to_allocvec(&events)
-                            .map_err(|e| anyhow::anyhow!(e))?;
+                            .map_err(|e| wasmtime::format_err!(e))?;
                         let encoded_size =
                             u32::try_from(encoded_events.len()).map_err(|e| {
-                                anyhow::anyhow!(
+                                wasmtime::format_err!(
                                 "The size of encoded events is more than `u32::MAX`. We support only wasm32: {}",
                                 e
                             )
@@ -486,18 +496,20 @@ impl Instance<Storage> {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             da_block_height: u64,
                             out_ptr: u32|
-              -> anyhow::Result<()> {
+              -> wasmtime::Result<()> {
             let da_block_height: DaBlockHeight = da_block_height.into();
             let encoded_events = caller
                 .data()
                 .relayer_events
                 .get(&da_block_height)
-                .ok_or(anyhow::anyhow!(
+                .ok_or(wasmtime::format_err!(
                     "The `relayer_size_of_events` should be called before `relayer_get_events`"
                 ))?
                 .clone();
 
-            caller.write(out_ptr, encoded_events.as_ref())?;
+            caller
+                .write(out_ptr, encoded_events.as_ref())
+                .map_err(wasmtime::Error::from_anyhow)?;
             Ok(())
         };
 
@@ -581,14 +593,16 @@ impl Instance<Relayer> {
         let closure = move |mut caller: Caller<'_, ExecutionState>,
                             out_ptr: u32,
                             out_len: u32|
-              -> anyhow::Result<()> {
+              -> wasmtime::Result<()> {
             if out_len != encoded_input_size {
-                return Err(anyhow::anyhow!(
+                return Err(wasmtime::format_err!(
                     "The provided buffer size is not equal to the encoded input size."
                 ));
             }
 
-            caller.write(out_ptr, &encoded_input)
+            caller
+                .write(out_ptr, &encoded_input)
+                .map_err(wasmtime::Error::from_anyhow)
         };
 
         Func::wrap(&mut self.store, closure)
