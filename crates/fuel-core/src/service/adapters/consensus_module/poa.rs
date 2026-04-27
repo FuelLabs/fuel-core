@@ -137,7 +137,7 @@ pub struct RedisLeaderLeaseAdapter {
 }
 
 struct RedisPublishChild {
-    redis_nodes: Vec<RedisNode>,
+    redis_node: RedisNode,
     lease_key: String,
     epoch_key: String,
     block_stream_key: String,
@@ -236,17 +236,20 @@ impl RedisLeaderLeaseAdapter {
         self
     }
 
-    fn publish_child(&self) -> RedisPublishChild {
-        RedisPublishChild {
-            redis_nodes: self.redis_nodes.clone(),
-            lease_key: self.lease_key.clone(),
-            epoch_key: self.epoch_key.clone(),
-            block_stream_key: self.block_stream_key.clone(),
-            lease_owner_token: self.lease_owner_token.clone(),
-            lease_ttl_millis: self.lease_ttl_millis,
-            node_timeout: self.node_timeout,
-            stream_max_len: self.stream_max_len,
-        }
+    fn new_child(&self, idx: usize) -> Option<RedisPublishChild> {
+        self.redis_nodes
+            .get(idx)
+            .cloned()
+            .map(|redis_node| RedisPublishChild {
+                redis_node,
+                lease_key: self.lease_key.clone(),
+                epoch_key: self.epoch_key.clone(),
+                block_stream_key: self.block_stream_key.clone(),
+                lease_owner_token: self.lease_owner_token.clone(),
+                lease_ttl_millis: self.lease_ttl_millis,
+                node_timeout: self.node_timeout,
+                stream_max_len: self.stream_max_len,
+            })
     }
 
     async fn multiplexed_connection_for(
@@ -980,7 +983,12 @@ impl RedisLeaderLeaseAdapter {
             anyhow::Result<WriteBlockResult>,
         )>();
         for idx in 0..n {
-            let child = self.publish_child();
+            let Some(child) = self.new_child(idx) else {
+                results[idx] = Some(Err(anyhow!(
+                    "publish setup failed: missing redis node at index {idx}"
+                )));
+                continue;
+            };
             let tx = tx.clone();
             let block = block.clone();
             let block_data = block_data.clone();
@@ -991,9 +999,8 @@ impl RedisLeaderLeaseAdapter {
             let task_guard = OutstandingPublishTaskGuard::new();
             tokio::spawn(async move {
                 let _task_guard = task_guard;
-                let node = &child.redis_nodes[idx];
                 let result = child
-                    .publish_block_on_node(node, epoch, &block, &block_data)
+                    .publish_block_on_node(epoch, &block, &block_data)
                     .await;
                 // Ignored if the receiver was dropped after quorum — the
                 // write attempt still executed against the node.
@@ -1109,13 +1116,12 @@ impl RedisLeaderLeaseAdapter {
 impl RedisPublishChild {
     async fn publish_block_on_node(
         &self,
-        redis_node: &RedisNode,
         epoch: u64,
         block: &SealedBlock,
         block_data: &[u8],
     ) -> anyhow::Result<WriteBlockResult> {
         let mut connection = RedisLeaderLeaseAdapter::multiplexed_connection_for(
-            redis_node,
+            &self.redis_node,
             self.node_timeout,
         )
         .await?;
@@ -1160,12 +1166,14 @@ impl RedisPublishChild {
             }
             Ok(Err(err)) => {
                 poa_metrics().write_block_error_total.inc();
-                RedisLeaderLeaseAdapter::clear_cached_connection_for(redis_node).await;
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
                 Err(err.into())
             }
             Err(_) => {
                 poa_metrics().write_block_error_total.inc();
-                RedisLeaderLeaseAdapter::clear_cached_connection_for(redis_node).await;
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
                 Err(anyhow!(
                     "write_block timed out after {:?}",
                     self.node_timeout
@@ -2173,7 +2181,9 @@ mod tests {
             "Adapter should acquire lease"
         );
         let owner_token = adapter.lease_owner_token.clone();
-        let child = adapter.publish_child();
+        let child = adapter
+            .new_child(0)
+            .expect("child should exist for first redis node");
 
         // when
         drop(child);
