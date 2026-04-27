@@ -134,7 +134,7 @@ async fn latest_binary_serves_consensus_parameters_to_v44_client() {
 
     assert_eq!(
         old_consensus_parameters.block_transaction_size_limit(),
-        u64::MAX
+        new_consensus_parameters.block_transaction_size_limit()
     );
     assert_ne!(
         new_consensus_parameters.block_transaction_size_limit(),
@@ -183,7 +183,7 @@ async fn latest_binary_serves_ignition_snapshot_consensus_parameters_to_v44_clie
 
     assert_eq!(
         old_consensus_parameters.block_transaction_size_limit(),
-        u64::MAX
+        new_consensus_parameters.block_transaction_size_limit()
     );
     assert_ne!(
         new_consensus_parameters.block_transaction_size_limit(),

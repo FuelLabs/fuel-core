@@ -102,8 +102,6 @@ fn requires_v2_consensus_parameters(look_ahead: &Lookahead<'_>) -> bool {
         .field("scriptParams")
         .field("maxStorageSlotLength")
         .exists();
-    let consensus_params_require_v2 =
-        look_ahead.field("blockTransactionSizeLimit").exists();
     let gas_costs_require_v2 = [
         "storageReadCold",
         "storageReadHot",
@@ -113,7 +111,7 @@ fn requires_v2_consensus_parameters(look_ahead: &Lookahead<'_>) -> bool {
     .into_iter()
     .any(|field| look_ahead.field("gasCosts").field(field).exists());
 
-    consensus_params_require_v2 || script_params_require_v2 || gas_costs_require_v2
+    script_params_require_v2 || gas_costs_require_v2
 }
 
 #[allow(unused)]
@@ -278,7 +276,7 @@ pub(crate) fn consensus_params_for_selection(
     match params.as_ref() {
         fuel_tx::ConsensusParameters::V1(_) => params,
         fuel_tx::ConsensusParameters::V2(params) => Arc::new(
-            fuel_tx::consensus_parameters::ConsensusParametersV1 {
+            fuel_tx::consensus_parameters::ConsensusParametersV2 {
                 tx_params: params.tx_params,
                 predicate_params: params.predicate_params,
                 script_params: script_params_as_v1(params.script_params),
@@ -288,6 +286,7 @@ pub(crate) fn consensus_params_for_selection(
                 gas_costs: gas_costs_as_v6(params.gas_costs.clone()),
                 base_asset_id: params.base_asset_id,
                 block_gas_limit: params.block_gas_limit,
+                block_transaction_size_limit: params.block_transaction_size_limit,
                 privileged_address: params.privileged_address,
             }
             .into(),
