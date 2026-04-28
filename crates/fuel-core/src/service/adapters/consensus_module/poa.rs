@@ -140,7 +140,7 @@ pub struct RedisLeaderLeaseAdapter {
 /// Per-node operation context. Carried by spawned tokio tasks so they
 /// don't need a clone of the full adapter — covers publish, lease-owner
 /// check, lease promotion, and stream reads.
-struct RedisNodeOp {
+struct PerNodeAdapter {
     redis_node: RedisNode,
     lease_key: String,
     epoch_key: String,
@@ -240,11 +240,11 @@ impl RedisLeaderLeaseAdapter {
         self
     }
 
-    fn new_node_op(&self, idx: usize) -> Option<RedisNodeOp> {
+    fn per_node_adapter(&self, idx: usize) -> Option<PerNodeAdapter> {
         self.redis_nodes
             .get(idx)
             .cloned()
-            .map(|redis_node| RedisNodeOp {
+            .map(|redis_node| PerNodeAdapter {
                 redis_node,
                 lease_key: self.lease_key.clone(),
                 epoch_key: self.epoch_key.clone(),
@@ -333,7 +333,7 @@ impl RedisLeaderLeaseAdapter {
     /// promotion tasks that continue running after the parent's quorum
     /// short-circuit, so a late-promoted node's higher epoch is never
     /// lost. Lock poisoning is treated as a no-op (matches the
-    /// `spawn_expand_to_non_owners` pattern); a poisoned lock means a
+    /// `spawn_acquire_lease_on_unowned_nodes` pattern); a poisoned lock means a
     /// previous holder panicked and a subsequent write would surface
     /// the inconsistency anyway.
     fn fold_epoch_max(epoch_cell: &std::sync::Mutex<Option<u64>>, candidate: u64) {
@@ -389,7 +389,7 @@ impl RedisLeaderLeaseAdapter {
         let n = self.redis_nodes.len();
         let mut checks = FuturesUnordered::new();
         for idx in 0..n {
-            let Some(op) = self.new_node_op(idx) else {
+            let Some(op) = self.per_node_adapter(idx) else {
                 continue;
             };
             checks.push(async move { (idx, op.check_lease_owner().await) });
@@ -409,7 +409,7 @@ impl RedisLeaderLeaseAdapter {
                     // we did not (yet) confirm as owner. Runs as a
                     // detached background task so a slow node can't
                     // pin the caller.
-                    self.spawn_expand_to_non_owners(&confirmed_owner);
+                    self.spawn_acquire_lease_on_unowned_nodes(&confirmed_owner);
                     return Ok(true);
                 }
             }
@@ -423,12 +423,12 @@ impl RedisLeaderLeaseAdapter {
     /// `write_block.lua` uses a consistent epoch across owned nodes.
     /// Runs as a fire-and-forget background task so the calling
     /// `has_lease_owner_quorum` can short-circuit on quorum.
-    fn spawn_expand_to_non_owners(&self, confirmed_owner: &[bool]) {
-        let candidates: Vec<RedisNodeOp> = confirmed_owner
+    fn spawn_acquire_lease_on_unowned_nodes(&self, confirmed_owner: &[bool]) {
+        let candidates: Vec<PerNodeAdapter> = confirmed_owner
             .iter()
             .enumerate()
             .filter(|(_, owned)| !**owned)
-            .filter_map(|(idx, _)| self.new_node_op(idx))
+            .filter_map(|(idx, _)| self.per_node_adapter(idx))
             .collect();
         if candidates.is_empty() {
             return;
@@ -468,7 +468,7 @@ impl RedisLeaderLeaseAdapter {
             let (tx, mut rx) =
                 tokio::sync::mpsc::unbounded_channel::<anyhow::Result<Option<u64>>>();
             for idx in 0..n {
-                let Some(op) = self.new_node_op(idx) else {
+                let Some(op) = self.per_node_adapter(idx) else {
                     continue;
                 };
                 let tx = tx.clone();
@@ -625,7 +625,7 @@ impl RedisLeaderLeaseAdapter {
         let n = self.redis_nodes.len();
         let mut reads = FuturesUnordered::new();
         for idx in 0..n {
-            let Some(op) = self.new_node_op(idx) else {
+            let Some(op) = self.per_node_adapter(idx) else {
                 continue;
             };
             reads.push(async move { op.read_latest_stream_entry().await });
@@ -984,7 +984,7 @@ impl RedisLeaderLeaseAdapter {
         )>();
         #[allow(clippy::needless_range_loop)]
         for idx in 0..n {
-            let Some(child) = self.new_node_op(idx) else {
+            let Some(per_node) = self.per_node_adapter(idx) else {
                 results[idx] = Some(Err(anyhow!(
                     "publish setup failed: missing redis node at index {idx}"
                 )));
@@ -1000,7 +1000,7 @@ impl RedisLeaderLeaseAdapter {
             let task_guard = OutstandingPublishTaskGuard::new();
             tokio::spawn(async move {
                 let _task_guard = task_guard;
-                let result = child
+                let result = per_node
                     .publish_block_on_node(epoch, &block, &block_data)
                     .await;
                 // Ignored if the receiver was dropped after quorum — the
@@ -1114,7 +1114,7 @@ impl RedisLeaderLeaseAdapter {
     }
 }
 
-impl RedisNodeOp {
+impl PerNodeAdapter {
     async fn publish_block_on_node(
         &self,
         epoch: u64,
@@ -2206,11 +2206,11 @@ mod tests {
     /// quorum, lingering background publish tasks for slow nodes must not
     /// delay the owning adapter's release-on-drop path.
     ///
-    /// Spawned publish work now runs through a dedicated child handle, so
-    /// dropping the owning adapter immediately after a publish triggers
-    /// release within a small window — well under `node_timeout` even
-    /// when one node is half-alive and its background task is still
-    /// running.
+    /// Spawned publish work now runs through a dedicated `PerNodeAdapter`
+    /// handle, so dropping the owning adapter immediately after a
+    /// publish triggers release within a small window — well under
+    /// `node_timeout` even when one node is half-alive and its
+    /// background task is still running.
     #[tokio::test(flavor = "multi_thread")]
     async fn drop__after_publish_releases_lease_promptly_despite_inflight_background_tasks()
      {
@@ -2268,12 +2268,12 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn drop__when_publish_child_is_dropped_then_parent_lease_is_unchanged() {
+    async fn drop__when_per_node_adapter_is_dropped_then_parent_lease_is_unchanged() {
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
-        let lease_key = "poa:test:drop-publish-child".to_string();
+        let lease_key = "poa:test:drop-per-node-adapter".to_string();
         let redis_urls = vec![
             redis_a.redis_url(),
             redis_b.redis_url(),
@@ -2288,12 +2288,12 @@ mod tests {
             "Adapter should acquire lease"
         );
         let owner_token = adapter.lease_owner_token.clone();
-        let child = adapter
-            .new_node_op(0)
-            .expect("child should exist for first redis node");
+        let per_node = adapter
+            .per_node_adapter(0)
+            .expect("per-node adapter should exist for first redis node");
 
         // when
-        drop(child);
+        drop(per_node);
         sleep(Duration::from_millis(50)).await;
 
         // then
@@ -2306,7 +2306,7 @@ mod tests {
             .count();
         assert!(
             owners >= 2,
-            "Dropping a publish child must not release quorum lease ownership"
+            "Dropping a per-node adapter must not release quorum lease ownership"
         );
     }
 
