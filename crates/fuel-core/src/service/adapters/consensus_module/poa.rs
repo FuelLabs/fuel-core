@@ -609,14 +609,18 @@ impl RedisLeaderLeaseAdapter {
         &self,
         next_height: BlockHeight,
     ) -> anyhow::Result<bool> {
-        // Pure read across all nodes via FuturesUnordered. Short-circuit
-        // ONLY on a positive backlog signal: any node reporting a height
-        // >= next_height means we must reconcile. The "no backlog"
-        // conclusion requires waiting for all responses — otherwise a
-        // race between empty-stream nodes and an orphan-holding node
-        // could cause us to miss a sub-quorum orphan that needs repair.
-        // Each per-node read is bounded by `node_timeout`, so the worst
-        // case is ~node_timeout for a no-backlog cycle.
+        // Pure read across all nodes via FuturesUnordered.
+        //
+        // - Backlog short-circuit: return Ok(true) as soon as we have
+        //   BOTH (a) at least one node reporting height >= next_height
+        //   AND (b) a quorum of successful responses. The quorum gate
+        //   matches the old `join_all + Err on degraded quorum`
+        //   contract — a single reachable node can't drag the cluster
+        //   into reconciliation when the majority is unreachable.
+        // - "No backlog" conclusion: requires all responses, otherwise
+        //   a race between empty-stream nodes and an orphan-holding
+        //   node could cause us to miss a sub-quorum orphan that needs
+        //   repair. Bounded by `node_timeout` per node.
         let next_height = u32::from(next_height);
         let n = self.redis_nodes.len();
         let mut reads = FuturesUnordered::new();
@@ -629,12 +633,12 @@ impl RedisLeaderLeaseAdapter {
 
         let mut successful_reads = 0usize;
         let mut failed_count = 0usize;
+        let mut backlog_seen = false;
         while let Some(result) = reads.next().await {
             match result {
                 Ok(Some((latest_height, _))) => {
                     if latest_height >= next_height {
-                        drop(reads);
-                        return Ok(true);
+                        backlog_seen = true;
                     }
                     successful_reads = successful_reads.saturating_add(1);
                 }
@@ -645,6 +649,10 @@ impl RedisLeaderLeaseAdapter {
                     tracing::warn!("Redis latest stream read failed: {e}");
                     failed_count = failed_count.saturating_add(1);
                 }
+            }
+            if backlog_seen && self.quorum_reached(successful_reads) {
+                drop(reads);
+                return Ok(true);
             }
         }
         if self.quorum_reached(successful_reads) {
