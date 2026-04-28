@@ -3092,7 +3092,7 @@ mod tests {
     /// drifted-high node may be among the late responders. The
     /// background spawned task must still fold its higher token into
     /// `current_epoch_token` via max-CAS, so subsequent writes can
-    /// heal lagging nodes upward instead of FENCING_ERRORing forever.
+    /// heal lagging nodes upward instead of FENCING_ERROR-ing forever.
     #[tokio::test(flavor = "multi_thread")]
     async fn acquire_lease_if_free__folds_late_higher_epoch_into_current_epoch_token() {
         // given — 3 redis nodes with node C pre-drifted to epoch 100
