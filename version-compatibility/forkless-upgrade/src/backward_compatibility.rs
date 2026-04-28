@@ -3,6 +3,7 @@ use crate::{
     tests_helper::{
         GenesisFuelCoreDriver,
         IGNITION_TESTNET_SNAPSHOT,
+        IGNITION_V21_TESTNET_SNAPSHOT,
         LatestFuelCoreDriver,
         POA_SECRET_KEY,
         V44_TESTNET_SNAPSHOT,
@@ -24,8 +25,171 @@ use libp2p::{
     identity::secp256k1::Keypair as SecpKeypair,
 };
 use std::time::Duration;
+use version_44_fuel_core_client::client::FuelClient as Version44Client;
 
 const BLOCK_INCLUSION_TIMEOUT: Duration = Duration::from_secs(360);
+
+fn shared_tx_params_match(
+    old: &version_44_fuel_core_type::fuel_tx::TxParameters,
+    new: &latest_fuel_core_type::fuel_tx::TxParameters,
+) {
+    assert_eq!(old.max_inputs(), new.max_inputs());
+    assert_eq!(old.max_outputs(), new.max_outputs());
+    assert_eq!(old.max_witnesses(), new.max_witnesses());
+    assert_eq!(old.max_gas_per_tx(), new.max_gas_per_tx());
+    assert_eq!(old.max_size(), new.max_size());
+    assert_eq!(
+        old.max_bytecode_subsections(),
+        new.max_bytecode_subsections()
+    );
+}
+
+fn shared_predicate_params_match(
+    old: &version_44_fuel_core_type::fuel_tx::PredicateParameters,
+    new: &latest_fuel_core_type::fuel_tx::PredicateParameters,
+) {
+    assert_eq!(old.max_predicate_length(), new.max_predicate_length());
+    assert_eq!(
+        old.max_predicate_data_length(),
+        new.max_predicate_data_length()
+    );
+    assert_eq!(old.max_message_data_length(), new.max_message_data_length());
+    assert_eq!(old.max_gas_per_predicate(), new.max_gas_per_predicate());
+}
+
+fn shared_script_params_match(
+    old: &version_44_fuel_core_type::fuel_tx::ScriptParameters,
+    new: &latest_fuel_core_type::fuel_tx::ScriptParameters,
+) {
+    assert_eq!(old.max_script_length(), new.max_script_length());
+    assert_eq!(old.max_script_data_length(), new.max_script_data_length());
+}
+
+fn shared_contract_params_match(
+    old: &version_44_fuel_core_type::fuel_tx::ContractParameters,
+    new: &latest_fuel_core_type::fuel_tx::ContractParameters,
+) {
+    assert_eq!(old.contract_max_size(), new.contract_max_size());
+    assert_eq!(old.max_storage_slots(), new.max_storage_slots());
+}
+
+fn shared_fee_params_match(
+    old: &version_44_fuel_core_type::fuel_tx::FeeParameters,
+    new: &latest_fuel_core_type::fuel_tx::FeeParameters,
+) {
+    assert_eq!(old.gas_price_factor(), new.gas_price_factor());
+    assert_eq!(old.gas_per_byte(), new.gas_per_byte());
+}
+
+fn assert_shared_values_match(
+    old: &version_44_fuel_core_type::fuel_tx::ConsensusParameters,
+    new: &latest_fuel_core_type::fuel_tx::ConsensusParameters,
+) {
+    assert_eq!(old.base_asset_id().as_ref(), new.base_asset_id().as_ref());
+    assert_eq!(old.block_gas_limit(), new.block_gas_limit());
+    assert_eq!(old.chain_id().to_bytes(), new.chain_id().to_bytes());
+    assert_eq!(
+        old.privileged_address().as_ref(),
+        new.privileged_address().as_ref()
+    );
+
+    shared_tx_params_match(old.tx_params(), new.tx_params());
+    shared_predicate_params_match(old.predicate_params(), new.predicate_params());
+    shared_script_params_match(old.script_params(), new.script_params());
+    shared_contract_params_match(old.contract_params(), new.contract_params());
+    shared_fee_params_match(old.fee_params(), new.fee_params());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn latest_binary_serves_consensus_parameters_to_v44_client() {
+    // given
+    let latest_node = LatestFuelCoreDriver::spawn(&["--debug", "--poa-instant", "true"])
+        .await
+        .unwrap();
+    let v44_client =
+        Version44Client::from(latest_node.node.shared.graph_ql.bound_address);
+    let new_consensus_parameters = latest_node
+        .client
+        .consensus_parameters(0)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // when
+    let old_consensus_parameters = match v44_client.consensus_parameters(0).await {
+        Ok(Some(params)) => params,
+        Ok(None) => panic!("v44 client returned no consensus parameters at version 0"),
+        Err(error) => {
+            panic!("v44 client failed to decode consensus parameters: {error:?}")
+        }
+    };
+
+    // then
+    assert!(matches!(
+        new_consensus_parameters,
+        latest_fuel_core_type::fuel_tx::ConsensusParameters::V2(_)
+    ));
+
+    assert_shared_values_match(&old_consensus_parameters, &new_consensus_parameters);
+
+    assert_eq!(
+        old_consensus_parameters.block_transaction_size_limit(),
+        new_consensus_parameters.block_transaction_size_limit()
+    );
+    assert_ne!(
+        new_consensus_parameters.block_transaction_size_limit(),
+        u64::MAX
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn latest_binary_serves_ignition_snapshot_consensus_parameters_to_v44_client()
+ {
+    // given
+    let latest_node = LatestFuelCoreDriver::spawn(&[
+        "--debug",
+        "--poa-instant",
+        "true",
+        "--snapshot",
+        IGNITION_V21_TESTNET_SNAPSHOT,
+    ])
+    .await
+    .unwrap();
+    let v44_client =
+        Version44Client::from(latest_node.node.shared.graph_ql.bound_address);
+    let new_consensus_parameters = latest_node
+        .client
+        .consensus_parameters(0)
+        .await
+        .unwrap()
+        .unwrap();
+
+    // when
+    let old_consensus_parameters = match v44_client.consensus_parameters(0).await {
+        Ok(Some(params)) => params,
+        Ok(None) => panic!("v44 client returned no consensus parameters at version 0"),
+        Err(error) => {
+            panic!("v44 client failed to decode consensus parameters: {error:?}")
+        }
+    };
+
+    // then
+    assert!(matches!(
+        new_consensus_parameters,
+        latest_fuel_core_type::fuel_tx::ConsensusParameters::V2(_)
+    ));
+
+    assert_shared_values_match(&old_consensus_parameters, &new_consensus_parameters);
+
+    assert_eq!(
+        old_consensus_parameters.block_transaction_size_limit(),
+        new_consensus_parameters.block_transaction_size_limit()
+    );
+    assert_ne!(
+        new_consensus_parameters.block_transaction_size_limit(),
+        u64::MAX
+    );
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn latest_binary_is_backward_compatible_and_can_load_testnet_config() {

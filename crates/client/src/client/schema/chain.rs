@@ -9,6 +9,254 @@ use crate::client::schema::{
     schema,
 };
 
+fn warn_consensus_parameter_downgrade(
+    component: &'static str,
+    supported_version: &'static str,
+) {
+    tracing::warn!(
+        component,
+        supported_version,
+        "Unsupported future consensus-parameter version received; degrading to newest supported version"
+    );
+}
+
+fn convert_tx_params_to_v1(
+    params: TxParameters,
+) -> fuel_core_types::fuel_tx::TxParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::TxParametersV1 {
+        max_inputs: params.max_inputs.into(),
+        max_outputs: params.max_outputs.into(),
+        max_witnesses: params.max_witnesses.into(),
+        max_gas_per_tx: params.max_gas_per_tx.into(),
+        max_size: params.max_size.into(),
+        max_bytecode_subsections: params.max_bytecode_subsections.into(),
+    }
+    .into()
+}
+
+fn convert_tx_params_to_latest_supported(
+    params: TxParameters,
+) -> fuel_core_types::fuel_tx::TxParameters {
+    // Intentionally no `_` arm. If a new local supported version is added,
+    // update this helper instead of silently defaulting to an older variant.
+    #[allow(dead_code)]
+    fn assert_latest_supported_coverage(value: fuel_core_types::fuel_tx::TxParameters) {
+        match value {
+            fuel_core_types::fuel_tx::TxParameters::V1(_) => {}
+        }
+    }
+
+    convert_tx_params_to_v1(params)
+}
+
+fn convert_predicate_params_to_v1(
+    params: PredicateParameters,
+) -> fuel_core_types::fuel_tx::PredicateParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::PredicateParametersV1 {
+        max_predicate_length: params.max_predicate_length.into(),
+        max_predicate_data_length: params.max_predicate_data_length.into(),
+        max_message_data_length: params.max_message_data_length.into(),
+        max_gas_per_predicate: params.max_gas_per_predicate.into(),
+    }
+    .into()
+}
+
+fn convert_predicate_params_to_latest_supported(
+    params: PredicateParameters,
+) -> fuel_core_types::fuel_tx::PredicateParameters {
+    // Intentionally no `_` arm. If a new local supported version is added,
+    // update this helper instead of silently defaulting to an older variant.
+    #[allow(dead_code)]
+    fn assert_latest_supported_coverage(
+        value: fuel_core_types::fuel_tx::PredicateParameters,
+    ) {
+        match value {
+            fuel_core_types::fuel_tx::PredicateParameters::V1(_) => {}
+        }
+    }
+
+    convert_predicate_params_to_v1(params)
+}
+
+fn convert_script_params_to_v1(
+    params: ScriptParameters,
+) -> fuel_core_types::fuel_tx::ScriptParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV1 {
+        max_script_length: params.max_script_length.into(),
+        max_script_data_length: params.max_script_data_length.into(),
+    }
+    .into()
+}
+
+fn convert_script_params_to_v2(
+    params: ScriptParameters,
+) -> fuel_core_types::fuel_tx::ScriptParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV2 {
+        max_script_length: params.max_script_length.into(),
+        max_script_data_length: params.max_script_data_length.into(),
+        max_storage_slot_length: params.max_storage_slot_length.into(),
+    }
+    .into()
+}
+
+fn convert_legacy_script_params_to_v1(
+    params: ScriptParametersLegacy,
+) -> fuel_core_types::fuel_tx::ScriptParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV1 {
+        max_script_length: params.max_script_length.into(),
+        max_script_data_length: params.max_script_data_length.into(),
+    }
+    .into()
+}
+
+fn convert_script_params_to_latest_supported(
+    params: ScriptParameters,
+) -> fuel_core_types::fuel_tx::ScriptParameters {
+    // Intentionally no `_` arm. If a new local supported version is added,
+    // update this helper instead of silently defaulting to an older variant.
+    #[allow(dead_code)]
+    fn assert_latest_supported_coverage(
+        value: fuel_core_types::fuel_tx::ScriptParameters,
+    ) {
+        match value {
+            fuel_core_types::fuel_tx::ScriptParameters::V1(_) => {}
+            fuel_core_types::fuel_tx::ScriptParameters::V2(_) => {}
+        }
+    }
+
+    convert_script_params_to_v2(params)
+}
+
+fn convert_contract_params_to_v1(
+    params: ContractParameters,
+) -> fuel_core_types::fuel_tx::ContractParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::ContractParametersV1 {
+        contract_max_size: params.contract_max_size.into(),
+        max_storage_slots: params.max_storage_slots.into(),
+    }
+    .into()
+}
+
+fn convert_contract_params_to_latest_supported(
+    params: ContractParameters,
+) -> fuel_core_types::fuel_tx::ContractParameters {
+    // Intentionally no `_` arm. If a new local supported version is added,
+    // update this helper instead of silently defaulting to an older variant.
+    #[allow(dead_code)]
+    fn assert_latest_supported_coverage(
+        value: fuel_core_types::fuel_tx::ContractParameters,
+    ) {
+        match value {
+            fuel_core_types::fuel_tx::ContractParameters::V1(_) => {}
+        }
+    }
+
+    convert_contract_params_to_v1(params)
+}
+
+fn convert_fee_params_to_v1(
+    params: FeeParameters,
+) -> fuel_core_types::fuel_tx::FeeParameters {
+    fuel_core_types::fuel_tx::consensus_parameters::FeeParametersV1 {
+        gas_price_factor: params.gas_price_factor.into(),
+        gas_per_byte: params.gas_per_byte.into(),
+    }
+    .into()
+}
+
+fn convert_fee_params_to_latest_supported(
+    params: FeeParameters,
+) -> fuel_core_types::fuel_tx::FeeParameters {
+    // Intentionally no `_` arm. If a new local supported version is added,
+    // update this helper instead of silently defaulting to an older variant.
+    #[allow(dead_code)]
+    fn assert_latest_supported_coverage(value: fuel_core_types::fuel_tx::FeeParameters) {
+        match value {
+            fuel_core_types::fuel_tx::FeeParameters::V1(_) => {}
+        }
+    }
+
+    convert_fee_params_to_v1(params)
+}
+
+fn convert_consensus_params_to_v2(
+    params: ConsensusParameters,
+) -> Result<fuel_core_types::fuel_tx::ConsensusParameters, ConversionError> {
+    Ok(
+        fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
+            tx_params: params.tx_params.try_into()?,
+            predicate_params: params.predicate_params.try_into()?,
+            script_params: params.script_params.try_into()?,
+            contract_params: params.contract_params.try_into()?,
+            fee_params: params.fee_params.try_into()?,
+            base_asset_id: params.base_asset_id.into(),
+            block_gas_limit: params.block_gas_limit.into(),
+            block_transaction_size_limit: params.block_transaction_size_limit.into(),
+            chain_id: params.chain_id.0.into(),
+            gas_costs: params.gas_costs.try_into()?,
+            privileged_address: params.privileged_address.into(),
+        }
+        .into(),
+    )
+}
+
+fn convert_consensus_params_to_latest_supported(
+    params: ConsensusParameters,
+) -> Result<fuel_core_types::fuel_tx::ConsensusParameters, ConversionError> {
+    // Intentionally no `_` arm. If a new local supported version is added,
+    // update this helper instead of silently defaulting to an older variant.
+    #[allow(dead_code)]
+    fn assert_latest_supported_coverage(
+        value: fuel_core_types::fuel_tx::ConsensusParameters,
+    ) {
+        match value {
+            fuel_core_types::fuel_tx::ConsensusParameters::V1(_) => {}
+            fuel_core_types::fuel_tx::ConsensusParameters::V2(_) => {}
+        }
+    }
+
+    convert_consensus_params_to_v2(params)
+}
+
+fn convert_legacy_consensus_params_to_v2(
+    params: ConsensusParametersLegacy,
+) -> Result<fuel_core_types::fuel_tx::ConsensusParameters, ConversionError> {
+    Ok(
+        fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
+            tx_params: params.tx_params.try_into()?,
+            predicate_params: params.predicate_params.try_into()?,
+            script_params: params.script_params.try_into()?,
+            contract_params: params.contract_params.try_into()?,
+            fee_params: params.fee_params.try_into()?,
+            base_asset_id: params.base_asset_id.into(),
+            block_gas_limit: params.block_gas_limit.into(),
+            block_transaction_size_limit: params.block_transaction_size_limit.into(),
+            chain_id: params.chain_id.0.into(),
+            gas_costs: params.gas_costs.try_into()?,
+            privileged_address: params.privileged_address.into(),
+        }
+        .into(),
+    )
+}
+
+fn convert_legacy_consensus_params_to_latest_supported(
+    params: ConsensusParametersLegacy,
+) -> Result<fuel_core_types::fuel_tx::ConsensusParameters, ConversionError> {
+    // Intentionally no `_` arm. If a new local supported version is added,
+    // update this helper instead of silently defaulting to an older variant.
+    #[allow(dead_code)]
+    fn assert_latest_supported_coverage(
+        value: fuel_core_types::fuel_tx::ConsensusParameters,
+    ) {
+        match value {
+            fuel_core_types::fuel_tx::ConsensusParameters::V1(_) => {}
+            fuel_core_types::fuel_tx::ConsensusParameters::V2(_) => {}
+        }
+    }
+
+    convert_legacy_consensus_params_to_v2(params)
+}
+
 #[derive(cynic::QueryFragment, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ConsensusParameters {
@@ -59,18 +307,11 @@ impl TryFrom<TxParameters> for fuel_core_types::fuel_tx::TxParameters {
 
     fn try_from(params: TxParameters) -> Result<Self, Self::Error> {
         match params.version {
-            TxParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::TxParametersV1 {
-                    max_inputs: params.max_inputs.into(),
-                    max_outputs: params.max_outputs.into(),
-                    max_witnesses: params.max_witnesses.into(),
-                    max_gas_per_tx: params.max_gas_per_tx.into(),
-                    max_size: params.max_size.into(),
-                    max_bytecode_subsections: params.max_bytecode_subsections.into(),
-                }
-                .into(),
-            ),
-            _ => Err(ConversionError::UnknownVariant("TxParametersVersion")),
+            TxParametersVersion::V1 => Ok(convert_tx_params_to_v1(params)),
+            TxParametersVersion::Unknown => {
+                warn_consensus_parameter_downgrade("TxParametersVersion", "V1");
+                Ok(convert_tx_params_to_latest_supported(params))
+            }
         }
     }
 }
@@ -98,18 +339,11 @@ impl TryFrom<PredicateParameters> for fuel_core_types::fuel_tx::PredicateParamet
 
     fn try_from(params: PredicateParameters) -> Result<Self, Self::Error> {
         match params.version {
-            PredicateParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::PredicateParametersV1 {
-                    max_predicate_length: params.max_predicate_length.into(),
-                    max_predicate_data_length: params.max_predicate_data_length.into(),
-                    max_message_data_length: params.max_message_data_length.into(),
-                    max_gas_per_predicate: params.max_gas_per_predicate.into(),
-                }
-                .into(),
-            ),
-            _ => Err(ConversionError::UnknownVariant(
-                "PredicateParametersVersion",
-            )),
+            PredicateParametersVersion::V1 => Ok(convert_predicate_params_to_v1(params)),
+            PredicateParametersVersion::Unknown => {
+                warn_consensus_parameter_downgrade("PredicateParametersVersion", "V1");
+                Ok(convert_predicate_params_to_latest_supported(params))
+            }
         }
     }
 }
@@ -137,22 +371,12 @@ impl TryFrom<ScriptParameters> for fuel_core_types::fuel_tx::ScriptParameters {
 
     fn try_from(params: ScriptParameters) -> Result<Self, Self::Error> {
         match params.version {
-            ScriptParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV1 {
-                    max_script_length: params.max_script_length.into(),
-                    max_script_data_length: params.max_script_data_length.into(),
-                }
-                .into(),
-            ),
-            ScriptParametersVersion::V2 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV2 {
-                    max_script_length: params.max_script_length.into(),
-                    max_script_data_length: params.max_script_data_length.into(),
-                    max_storage_slot_length: params.max_storage_slot_length.into(),
-                }
-                .into(),
-            ),
-            _ => Err(ConversionError::UnknownVariant("ScriptParametersVersion")),
+            ScriptParametersVersion::V1 => Ok(convert_script_params_to_v1(params)),
+            ScriptParametersVersion::V2 => Ok(convert_script_params_to_v2(params)),
+            ScriptParametersVersion::Unknown => {
+                warn_consensus_parameter_downgrade("ScriptParametersVersion", "V2");
+                Ok(convert_script_params_to_latest_supported(params))
+            }
         }
     }
 }
@@ -178,14 +402,11 @@ impl TryFrom<ContractParameters> for fuel_core_types::fuel_tx::ContractParameter
 
     fn try_from(params: ContractParameters) -> Result<Self, Self::Error> {
         match params.version {
-            ContractParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ContractParametersV1 {
-                    contract_max_size: params.contract_max_size.into(),
-                    max_storage_slots: params.max_storage_slots.into(),
-                }
-                .into(),
-            ),
-            _ => Err(ConversionError::UnknownVariant("ContractParametersVersion")),
+            ContractParametersVersion::V1 => Ok(convert_contract_params_to_v1(params)),
+            ContractParametersVersion::Unknown => {
+                warn_consensus_parameter_downgrade("ContractParametersVersion", "V1");
+                Ok(convert_contract_params_to_latest_supported(params))
+            }
         }
     }
 }
@@ -211,14 +432,11 @@ impl TryFrom<FeeParameters> for fuel_core_types::fuel_tx::FeeParameters {
 
     fn try_from(params: FeeParameters) -> Result<Self, Self::Error> {
         match params.version {
-            FeeParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::FeeParametersV1 {
-                    gas_price_factor: params.gas_price_factor.into(),
-                    gas_per_byte: params.gas_per_byte.into(),
-                }
-                .into(),
-            ),
-            _ => Err(ConversionError::UnknownVariant("FeeParametersVersion")),
+            FeeParametersVersion::V1 => Ok(convert_fee_params_to_v1(params)),
+            FeeParametersVersion::Unknown => {
+                warn_consensus_parameter_downgrade("FeeParametersVersion", "V1");
+                Ok(convert_fee_params_to_latest_supported(params))
+            }
         }
     }
 }
@@ -374,6 +592,30 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                 GasCostsValuesV7,
             },
         };
+
+        // Intentionally no `_` arm. If a new local supported version is added,
+        // update this conversion instead of silently defaulting to an older variant.
+        #[allow(dead_code)]
+        fn assert_latest_supported_coverage(
+            value: fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues,
+        ) {
+            match value {
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V1(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V2(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V3(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V4(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V5(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V6(_) => {
+                }
+                fuel_core_types::fuel_tx::consensus_parameters::GasCostsValues::V7(_) => {
+                }
+            }
+        }
 
         match value.version {
             GasCostsVersion::V1 => {
@@ -663,7 +905,14 @@ impl TryFrom<GasCosts> for fuel_core_types::fuel_tx::GasCosts {
                     ))
                 }
             }
-            _ => Err(ConversionError::UnknownVariant("GasCostsVersion")),
+            GasCostsVersion::Unknown => {
+                warn_consensus_parameter_downgrade("GasCostsVersion", "V1");
+                GasCosts {
+                    version: GasCostsVersion::V1,
+                    ..value
+                }
+                .try_into()
+            }
         }
     }
 }
@@ -696,27 +945,11 @@ impl TryFrom<ConsensusParameters> for fuel_core_types::fuel_tx::ConsensusParamet
 
     fn try_from(params: ConsensusParameters) -> Result<Self, Self::Error> {
         match params.version {
-            ConsensusParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
-                    tx_params: params.tx_params.try_into()?,
-                    predicate_params: params.predicate_params.try_into()?,
-                    script_params: params.script_params.try_into()?,
-                    contract_params: params.contract_params.try_into()?,
-                    fee_params: params.fee_params.try_into()?,
-                    base_asset_id: params.base_asset_id.into(),
-                    block_gas_limit: params.block_gas_limit.into(),
-                    block_transaction_size_limit: params
-                        .block_transaction_size_limit
-                        .into(),
-                    chain_id: params.chain_id.0.into(),
-                    gas_costs: params.gas_costs.try_into()?,
-                    privileged_address: params.privileged_address.into(),
-                }
-                .into(),
-            ),
-            _ => Err(ConversionError::UnknownVariant(
-                "ConsensusParametersVersion",
-            )),
+            ConsensusParametersVersion::V1 => convert_consensus_params_to_v2(params),
+            ConsensusParametersVersion::Unknown => {
+                warn_consensus_parameter_downgrade("ConsensusParametersVersion", "V1");
+                convert_consensus_params_to_latest_supported(params)
+            }
         }
     }
 }
@@ -736,14 +969,11 @@ impl TryFrom<ScriptParametersLegacy> for fuel_core_types::fuel_tx::ScriptParamet
     type Error = ConversionError;
 
     fn try_from(params: ScriptParametersLegacy) -> Result<Self, Self::Error> {
+        if matches!(params.version, ScriptParametersVersion::Unknown) {
+            warn_consensus_parameter_downgrade("ScriptParametersVersion", "V1");
+        }
         // Pre-0.48.0 nodes only expose ScriptParameters V1 (no max_storage_slot_length).
-        Ok(
-            fuel_core_types::fuel_tx::consensus_parameters::ScriptParametersV1 {
-                max_script_length: params.max_script_length.into(),
-                max_script_data_length: params.max_script_data_length.into(),
-            }
-            .into(),
-        )
+        Ok(convert_legacy_script_params_to_v1(params))
     }
 }
 
@@ -1007,7 +1237,14 @@ impl TryFrom<GasCostsLegacy> for fuel_core_types::fuel_tx::GasCosts {
                 }
                 .into(),
             )),
-            _ => Err(ConversionError::UnknownVariant("GasCostsVersion")),
+            GasCostsVersion::Unknown => {
+                warn_consensus_parameter_downgrade("GasCostsVersion", "V1");
+                GasCostsLegacy {
+                    version: GasCostsVersion::V1,
+                    ..value
+                }
+                .try_into()
+            }
         }
     }
 }
@@ -1042,27 +1279,13 @@ impl TryFrom<ConsensusParametersLegacy>
 
     fn try_from(params: ConsensusParametersLegacy) -> Result<Self, Self::Error> {
         match params.version {
-            ConsensusParametersVersion::V1 => Ok(
-                fuel_core_types::fuel_tx::consensus_parameters::ConsensusParametersV2 {
-                    tx_params: params.tx_params.try_into()?,
-                    predicate_params: params.predicate_params.try_into()?,
-                    script_params: params.script_params.try_into()?,
-                    contract_params: params.contract_params.try_into()?,
-                    fee_params: params.fee_params.try_into()?,
-                    base_asset_id: params.base_asset_id.into(),
-                    block_gas_limit: params.block_gas_limit.into(),
-                    block_transaction_size_limit: params
-                        .block_transaction_size_limit
-                        .into(),
-                    chain_id: params.chain_id.0.into(),
-                    gas_costs: params.gas_costs.try_into()?,
-                    privileged_address: params.privileged_address.into(),
-                }
-                .into(),
-            ),
-            _ => Err(ConversionError::UnknownVariant(
-                "ConsensusParametersVersion",
-            )),
+            ConsensusParametersVersion::V1 => {
+                convert_legacy_consensus_params_to_v2(params)
+            }
+            ConsensusParametersVersion::Unknown => {
+                warn_consensus_parameter_downgrade("ConsensusParametersVersion", "V1");
+                convert_legacy_consensus_params_to_latest_supported(params)
+            }
         }
     }
 }
@@ -1102,6 +1325,192 @@ pub struct ChainQueryLegacy {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_types::fuel_tx::consensus_parameters::{
+        GasCostsValues,
+        ScriptParameters as SupportedScriptParameters,
+    };
+
+    fn sample_dependent_cost() -> DependentCost {
+        DependentCost::LightOperation(LightOperation {
+            base: 1u64.into(),
+            units_per_gas: 1u64.into(),
+        })
+    }
+
+    fn sample_gas_costs(version: GasCostsVersion) -> GasCosts {
+        GasCosts {
+            version,
+            add: 1u64.into(),
+            addi: 1u64.into(),
+            and: 1u64.into(),
+            andi: 1u64.into(),
+            bal: 1u64.into(),
+            bhei: 1u64.into(),
+            bhsh: 1u64.into(),
+            burn: 1u64.into(),
+            cb: 1u64.into(),
+            cfsi: 1u64.into(),
+            div: 1u64.into(),
+            divi: 1u64.into(),
+            eck1: 1u64.into(),
+            ecr1: 1u64.into(),
+            ed19: 1u64.into(),
+            eq: 1u64.into(),
+            exp: 1u64.into(),
+            expi: 1u64.into(),
+            flag: 1u64.into(),
+            gm: 1u64.into(),
+            gt: 1u64.into(),
+            gtf: 1u64.into(),
+            ji: 1u64.into(),
+            jmp: 1u64.into(),
+            jne: 1u64.into(),
+            jnei: 1u64.into(),
+            jnzi: 1u64.into(),
+            jmpf: 1u64.into(),
+            jmpb: 1u64.into(),
+            jnzf: 1u64.into(),
+            jnzb: 1u64.into(),
+            jnef: 1u64.into(),
+            jneb: 1u64.into(),
+            lb: 1u64.into(),
+            log: 1u64.into(),
+            lt: 1u64.into(),
+            lw: 1u64.into(),
+            mint: 1u64.into(),
+            mlog: 1u64.into(),
+            mod_op: 1u64.into(),
+            modi: 1u64.into(),
+            move_op: 1u64.into(),
+            movi: 1u64.into(),
+            mroo: 1u64.into(),
+            mul: 1u64.into(),
+            muli: 1u64.into(),
+            mldv: 1u64.into(),
+            niop: Some(1u64.into()),
+            noop: 1u64.into(),
+            not: 1u64.into(),
+            or: 1u64.into(),
+            ori: 1u64.into(),
+            poph: 1u64.into(),
+            popl: 1u64.into(),
+            pshh: 1u64.into(),
+            pshl: 1u64.into(),
+            ret: 1u64.into(),
+            rvrt: 1u64.into(),
+            sb: 1u64.into(),
+            sll: 1u64.into(),
+            slli: 1u64.into(),
+            srl: 1u64.into(),
+            srli: 1u64.into(),
+            srw: Some(1u64.into()),
+            sub: 1u64.into(),
+            subi: 1u64.into(),
+            sw: 1u64.into(),
+            sww: Some(1u64.into()),
+            time: 1u64.into(),
+            tr: 1u64.into(),
+            tro: 1u64.into(),
+            wdcm: 1u64.into(),
+            wqcm: 1u64.into(),
+            wdop: 1u64.into(),
+            wqop: 1u64.into(),
+            wdml: 1u64.into(),
+            wqml: 1u64.into(),
+            wddv: 1u64.into(),
+            wqdv: 1u64.into(),
+            wdmd: 1u64.into(),
+            wqmd: 1u64.into(),
+            wdam: 1u64.into(),
+            wqam: 1u64.into(),
+            wdmm: 1u64.into(),
+            wqmm: 1u64.into(),
+            xor: 1u64.into(),
+            xori: 1u64.into(),
+            ecop: Some(1u64.into()),
+            aloc_dependent_cost: sample_dependent_cost(),
+            bsiz: Some(sample_dependent_cost()),
+            bldd: Some(sample_dependent_cost()),
+            cfe: sample_dependent_cost(),
+            cfei_dependent_cost: sample_dependent_cost(),
+            call: sample_dependent_cost(),
+            ccp: sample_dependent_cost(),
+            croo: sample_dependent_cost(),
+            csiz: sample_dependent_cost(),
+            ed19_dependent_cost: sample_dependent_cost(),
+            k256: sample_dependent_cost(),
+            ldc: sample_dependent_cost(),
+            logd: sample_dependent_cost(),
+            mcl: sample_dependent_cost(),
+            mcli: sample_dependent_cost(),
+            mcp: sample_dependent_cost(),
+            mcpi: sample_dependent_cost(),
+            meq: sample_dependent_cost(),
+            retd: sample_dependent_cost(),
+            s256: sample_dependent_cost(),
+            scwq: Some(sample_dependent_cost()),
+            smo: sample_dependent_cost(),
+            srwq: Some(sample_dependent_cost()),
+            swwq: Some(sample_dependent_cost()),
+            epar: Some(sample_dependent_cost()),
+            storage_read_cold: Some(sample_dependent_cost()),
+            storage_read_hot: Some(sample_dependent_cost()),
+            storage_write: Some(sample_dependent_cost()),
+            storage_clear: Some(sample_dependent_cost()),
+            contract_root: sample_dependent_cost(),
+            state_root: sample_dependent_cost(),
+            vm_initialization: sample_dependent_cost(),
+            new_storage_per_byte: 1u64.into(),
+        }
+    }
+
+    fn sample_consensus_parameters(
+        version: ConsensusParametersVersion,
+        script_version: ScriptParametersVersion,
+        gas_costs_version: GasCostsVersion,
+    ) -> ConsensusParameters {
+        ConsensusParameters {
+            version,
+            tx_params: TxParameters {
+                version: TxParametersVersion::Unknown,
+                max_inputs: 1u16.into(),
+                max_outputs: 2u16.into(),
+                max_witnesses: 3u32.into(),
+                max_gas_per_tx: 4u64.into(),
+                max_size: 5u64.into(),
+                max_bytecode_subsections: 6u16.into(),
+            },
+            predicate_params: PredicateParameters {
+                version: PredicateParametersVersion::Unknown,
+                max_predicate_length: 7u64.into(),
+                max_predicate_data_length: 8u64.into(),
+                max_message_data_length: 9u64.into(),
+                max_gas_per_predicate: 10u64.into(),
+            },
+            script_params: ScriptParameters {
+                version: script_version,
+                max_script_length: 11u64.into(),
+                max_script_data_length: 12u64.into(),
+                max_storage_slot_length: 13u64.into(),
+            },
+            contract_params: ContractParameters {
+                version: ContractParametersVersion::Unknown,
+                contract_max_size: 14u64.into(),
+                max_storage_slots: 15u64.into(),
+            },
+            fee_params: FeeParameters {
+                version: FeeParametersVersion::Unknown,
+                gas_price_factor: 16u64.into(),
+                gas_per_byte: 17u64.into(),
+            },
+            base_asset_id: fuel_core_types::fuel_types::AssetId::zeroed().into(),
+            block_gas_limit: 18u64.into(),
+            block_transaction_size_limit: 19u64.into(),
+            chain_id: 20u64.into(),
+            gas_costs: sample_gas_costs(gas_costs_version),
+            privileged_address: fuel_core_types::fuel_types::Address::zeroed().into(),
+        }
+    }
 
     #[test]
     fn chain_gql_query_output() {
@@ -1155,5 +1564,159 @@ mod tests {
             !operation.query.contains("storageClear"),
             "legacy query must not request storageClear"
         );
+    }
+
+    #[test]
+    fn unknown_consensus_versions_degrade_to_supported_v2_shape() {
+        let params = sample_consensus_parameters(
+            ConsensusParametersVersion::Unknown,
+            ScriptParametersVersion::Unknown,
+            GasCostsVersion::Unknown,
+        );
+
+        let converted: fuel_core_types::fuel_tx::ConsensusParameters =
+            params.try_into().expect("unknown versions should degrade");
+
+        match converted {
+            fuel_core_types::fuel_tx::ConsensusParameters::V2(params) => {
+                assert_eq!(params.block_transaction_size_limit, 19);
+                match params.script_params {
+                    SupportedScriptParameters::V2(script) => {
+                        assert_eq!(script.max_storage_slot_length, 13);
+                    }
+                    other => panic!("expected ScriptParameters::V2, got {other:?}"),
+                }
+                assert!(matches!(&*params.gas_costs, GasCostsValues::V7(_)));
+            }
+            other => panic!("expected ConsensusParameters::V2, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unknown_legacy_gas_costs_version_degrades_to_v6() {
+        let converted: fuel_core_types::fuel_tx::GasCosts = GasCostsLegacy {
+            version: GasCostsVersion::Unknown,
+            add: 1u64.into(),
+            addi: 1u64.into(),
+            and: 1u64.into(),
+            andi: 1u64.into(),
+            bal: 1u64.into(),
+            bhei: 1u64.into(),
+            bhsh: 1u64.into(),
+            burn: 1u64.into(),
+            cb: 1u64.into(),
+            cfsi: 1u64.into(),
+            div: 1u64.into(),
+            divi: 1u64.into(),
+            eck1: 1u64.into(),
+            ecr1: 1u64.into(),
+            ed19: 1u64.into(),
+            eq: 1u64.into(),
+            exp: 1u64.into(),
+            expi: 1u64.into(),
+            flag: 1u64.into(),
+            gm: 1u64.into(),
+            gt: 1u64.into(),
+            gtf: 1u64.into(),
+            ji: 1u64.into(),
+            jmp: 1u64.into(),
+            jne: 1u64.into(),
+            jnei: 1u64.into(),
+            jnzi: 1u64.into(),
+            jmpf: 1u64.into(),
+            jmpb: 1u64.into(),
+            jnzf: 1u64.into(),
+            jnzb: 1u64.into(),
+            jnef: 1u64.into(),
+            jneb: 1u64.into(),
+            lb: 1u64.into(),
+            log: 1u64.into(),
+            lt: 1u64.into(),
+            lw: 1u64.into(),
+            mint: 1u64.into(),
+            mlog: 1u64.into(),
+            mod_op: 1u64.into(),
+            modi: 1u64.into(),
+            move_op: 1u64.into(),
+            movi: 1u64.into(),
+            mroo: 1u64.into(),
+            mul: 1u64.into(),
+            muli: 1u64.into(),
+            mldv: 1u64.into(),
+            niop: Some(1u64.into()),
+            noop: 1u64.into(),
+            not: 1u64.into(),
+            or: 1u64.into(),
+            ori: 1u64.into(),
+            poph: 1u64.into(),
+            popl: 1u64.into(),
+            pshh: 1u64.into(),
+            pshl: 1u64.into(),
+            ret: 1u64.into(),
+            rvrt: 1u64.into(),
+            sb: 1u64.into(),
+            sll: 1u64.into(),
+            slli: 1u64.into(),
+            srl: 1u64.into(),
+            srli: 1u64.into(),
+            srw: Some(1u64.into()),
+            sub: 1u64.into(),
+            subi: 1u64.into(),
+            sw: 1u64.into(),
+            sww: Some(1u64.into()),
+            time: 1u64.into(),
+            tr: 1u64.into(),
+            tro: 1u64.into(),
+            wdcm: 1u64.into(),
+            wqcm: 1u64.into(),
+            wdop: 1u64.into(),
+            wqop: 1u64.into(),
+            wdml: 1u64.into(),
+            wqml: 1u64.into(),
+            wddv: 1u64.into(),
+            wqdv: 1u64.into(),
+            wdmd: 1u64.into(),
+            wqmd: 1u64.into(),
+            wdam: 1u64.into(),
+            wqam: 1u64.into(),
+            wdmm: 1u64.into(),
+            wqmm: 1u64.into(),
+            xor: 1u64.into(),
+            xori: 1u64.into(),
+            ecop: Some(1u64.into()),
+            aloc_dependent_cost: sample_dependent_cost(),
+            bsiz: Some(sample_dependent_cost()),
+            bldd: Some(sample_dependent_cost()),
+            cfe: sample_dependent_cost(),
+            cfei_dependent_cost: sample_dependent_cost(),
+            call: sample_dependent_cost(),
+            ccp: sample_dependent_cost(),
+            croo: sample_dependent_cost(),
+            csiz: sample_dependent_cost(),
+            ed19_dependent_cost: sample_dependent_cost(),
+            k256: sample_dependent_cost(),
+            ldc: sample_dependent_cost(),
+            logd: sample_dependent_cost(),
+            mcl: sample_dependent_cost(),
+            mcli: sample_dependent_cost(),
+            mcp: sample_dependent_cost(),
+            mcpi: sample_dependent_cost(),
+            meq: sample_dependent_cost(),
+            retd: sample_dependent_cost(),
+            s256: sample_dependent_cost(),
+            scwq: Some(sample_dependent_cost()),
+            smo: sample_dependent_cost(),
+            srwq: Some(sample_dependent_cost()),
+            swwq: Some(sample_dependent_cost()),
+            epar: Some(sample_dependent_cost()),
+            contract_root: sample_dependent_cost(),
+            state_root: sample_dependent_cost(),
+            vm_initialization: sample_dependent_cost(),
+            new_storage_per_byte: 1u64.into(),
+        }
+        .try_into()
+        .expect("unknown gas costs version should degrade");
+
+        assert!(matches!(&*converted, GasCostsValues::V6(_)));
     }
 }
