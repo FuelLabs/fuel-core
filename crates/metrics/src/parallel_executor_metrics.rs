@@ -28,6 +28,10 @@ pub struct ParallelExecutorMetrics {
     pub total_gas_used: Gauge,
     pub block_height: Gauge,
     pub max_workers_used: Gauge,
+    pub hot_contracts_tracked: Gauge,
+    pub complex_txs_classified: Gauge,
+    pub complex_txs_selected: Gauge,
+    pub complex_txs_remaining: Gauge,
     pub non_empty_batches: Gauge,
     pub non_empty_batch_transactions: Family<BatchMetricLabel, Gauge>,
     pub non_empty_batch_allocated_gas: Family<BatchMetricLabel, Gauge>,
@@ -67,6 +71,10 @@ impl Default for ParallelExecutorMetrics {
         let total_gas_used = Gauge::default();
         let block_height = Gauge::default();
         let max_workers_used = Gauge::default();
+        let hot_contracts_tracked = Gauge::default();
+        let complex_txs_classified = Gauge::default();
+        let complex_txs_selected = Gauge::default();
+        let complex_txs_remaining = Gauge::default();
         let non_empty_batches = Gauge::default();
         let non_empty_batch_transactions = Family::default();
         let non_empty_batch_allocated_gas = Family::default();
@@ -102,6 +110,10 @@ impl Default for ParallelExecutorMetrics {
             total_gas_used,
             block_height,
             max_workers_used,
+            hot_contracts_tracked,
+            complex_txs_classified,
+            complex_txs_selected,
+            complex_txs_remaining,
             non_empty_batches,
             non_empty_batch_transactions,
             non_empty_batch_allocated_gas,
@@ -146,6 +158,26 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_max_workers_used",
             "Maximum number of workers used concurrently by the parallel executor per block",
             metrics.max_workers_used.clone(),
+        );
+        registry.register(
+            "parallel_executor_hot_contracts_tracked",
+            "Number of distinct hot anchor contracts currently tracked in the hot contract cache",
+            metrics.hot_contracts_tracked.clone(),
+        );
+        registry.register(
+            "parallel_executor_complex_txs_classified",
+            "Number of transactions classified as complex during the latest tx selection pass",
+            metrics.complex_txs_classified.clone(),
+        );
+        registry.register(
+            "parallel_executor_complex_txs_selected",
+            "Number of deferred complex transactions selected into the latest complex-only pass",
+            metrics.complex_txs_selected.clone(),
+        );
+        registry.register(
+            "parallel_executor_complex_txs_remaining",
+            "Number of deferred complex transactions remaining after the latest tx selection pass",
+            metrics.complex_txs_remaining.clone(),
         );
         registry.register(
             "parallel_executor_non_empty_batches",
@@ -262,6 +294,30 @@ pub fn set_max_workers_used(max_workers_used: u32) {
     parallel_executor_metrics()
         .max_workers_used
         .set(max_workers_used as i64);
+}
+
+pub fn set_hot_contracts_tracked(count: usize) {
+    parallel_executor_metrics()
+        .hot_contracts_tracked
+        .set(i64::try_from(count).unwrap_or(i64::MAX));
+}
+
+pub fn set_complex_txs_classified(count: usize) {
+    parallel_executor_metrics()
+        .complex_txs_classified
+        .set(i64::try_from(count).unwrap_or(i64::MAX));
+}
+
+pub fn set_complex_txs_selected(count: usize) {
+    parallel_executor_metrics()
+        .complex_txs_selected
+        .set(i64::try_from(count).unwrap_or(i64::MAX));
+}
+
+pub fn set_complex_txs_remaining(count: usize) {
+    parallel_executor_metrics()
+        .complex_txs_remaining
+        .set(i64::try_from(count).unwrap_or(i64::MAX));
 }
 
 pub fn next_debug_batch_metrics_block_height() -> u64 {

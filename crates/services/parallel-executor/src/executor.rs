@@ -188,6 +188,18 @@ where
                 deadline,
             )
             .await?;
+        if !scheduler_result.skipped_txs.is_empty() {
+            let skipped = scheduler_result
+                .skipped_txs
+                .iter()
+                .map(|(tx_id, error)| format!("{tx_id}: {error}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            eprintln!(
+                "parallel executor skipped {} tx(s): {skipped}",
+                scheduler_result.skipped_txs.len()
+            );
+        }
         tracing::warn!(
             "Scheduler finished with {} transactions, {} events, and {} skipped transactions",
             scheduler_result.transactions.len(),

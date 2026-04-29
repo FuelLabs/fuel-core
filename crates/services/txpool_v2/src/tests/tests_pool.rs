@@ -286,6 +286,86 @@ fn insert__tx_with_dependency_on_invalid_utxo_type() {
 }
 
 #[test]
+fn extract_transactions_for_block__revisits_deferred_complex_txs_in_same_block() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    let contract_a = ContractId::from([1u8; 32]);
+    let contract_b = ContractId::from([2u8; 32]);
+
+    let simple_a = universe.build_script_transaction(
+        Some(vec![create_contract_input(Default::default(), 0, contract_a)]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let simple_b = universe.build_script_transaction(
+        Some(vec![create_contract_input(Default::default(), 0, contract_b)]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let complex_ab_1 = universe.build_script_transaction(
+        Some(vec![
+            create_contract_input(Default::default(), 0, contract_a),
+            create_contract_input(Default::default(), 1, contract_b),
+        ]),
+        Some(vec![
+            Output::contract(0, Default::default(), Default::default()),
+            Output::contract(1, Default::default(), Default::default()),
+        ]),
+        20,
+    );
+    let complex_ab_2 = universe.build_script_transaction(
+        Some(vec![
+            create_contract_input(Default::default(), 0, contract_a),
+            create_contract_input(Default::default(), 1, contract_b),
+        ]),
+        Some(vec![
+            Output::contract(0, Default::default(), Default::default()),
+            Output::contract(1, Default::default(), Default::default()),
+        ]),
+        20,
+    );
+
+    let simple_a = universe.verify_and_insert(simple_a).unwrap();
+    let simple_b = universe.verify_and_insert(simple_b).unwrap();
+    let complex_ab_1 = universe.verify_and_insert(complex_ab_1).unwrap();
+    let complex_ab_2 = universe.verify_and_insert(complex_ab_2).unwrap();
+
+    let pool = universe.get_pool();
+    let (selected, _) = pool.write().extract_transactions_for_block_with_anchors(
+        &Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: 10,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: HashSet::new(),
+            execution_worker_count: 13,
+        },
+    );
+
+    let selected_ids = selected.iter().map(|tx| tx.id()).collect::<HashSet<_>>();
+    let expected_ids = [
+        simple_a.id(),
+        simple_b.id(),
+        complex_ab_1.id(),
+        complex_ab_2.id(),
+    ]
+    .into_iter()
+    .collect::<HashSet<_>>();
+
+    assert_eq!(selected_ids, expected_ids);
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
 fn insert__already_known_tx_returns_error() {
     let mut universe = TestPoolUniverse::default().config(Config {
         utxo_validation: false,
