@@ -36,6 +36,7 @@ fuel-core-sync = { path = "./../crates/services/sync", features = ["benchmarking
 fuel-core-trace = { path = "./../crates/trace" }
 fuel-core-types = { path = "./../crates/types", features = ["test-helpers"] }
 futures = { workspace = true }
+hashbrown = "0.14"
 hex = "0.4.3"
 itertools = { workspace = true }
 num_enum = { workspace = true }
