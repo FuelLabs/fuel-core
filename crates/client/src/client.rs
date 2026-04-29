@@ -2239,7 +2239,7 @@ mod tests {
             assert_eq!(out, raw);
         }
     }
-  
+
     #[test]
     fn is_legacy_node_version_detection() {
         // Pre-0.48.0 nodes require the legacy query path.
