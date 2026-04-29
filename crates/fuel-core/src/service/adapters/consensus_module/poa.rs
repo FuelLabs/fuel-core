@@ -2511,15 +2511,23 @@ mod tests {
         // when
         let publish_result = adapter.publish_produced_block(&block).await;
 
-        // then
+        // then — publish_produced_block returns once quorum acks.
+        // Node A's per-node task may still be running in the
+        // background; poll for its self-heal write to land before
+        // asserting the epoch was bumped.
         assert!(
             publish_result.is_ok(),
             "Publish should still succeed on quorum"
         );
+        let healed = wait_for(Duration::from_secs(2), || {
+            read_epoch(&redis_a.redis_url(), &epoch_key) == leader_epoch
+        })
+        .await;
         let healed_epoch = read_epoch(&redis_a.redis_url(), &epoch_key);
-        assert_eq!(
-            healed_epoch, leader_epoch,
-            "First successful write should heal lagging epoch"
+        assert!(
+            healed,
+            "First successful write should heal lagging epoch on node A \
+             (observed {healed_epoch}, expected {leader_epoch})",
         );
     }
 
