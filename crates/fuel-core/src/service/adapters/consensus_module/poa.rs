@@ -3889,15 +3889,27 @@ mod tests {
                 .await
                 .expect("acquire should succeed"),
         );
+
+        // A's epoch should be max across all 3 nodes:
+        //   Node C had epoch=1 from B's INCR; A's promote INCR'd it to 2
+        //   Nodes A,B were at 0; A's promote INCR'd them to 1
+        // A takes max(1, 1, 2) = 2.
+        // `acquire_lease_if_free` short-circuits on quorum and folds
+        // late-arriving tokens into `current_epoch_token` from background
+        // tasks (see fold_epoch_max). Poll briefly so the assertion
+        // doesn't race the fold from node C's late response.
+        let folded = wait_for(Duration::from_secs(2), || {
+            adapter_a
+                .current_epoch_token
+                .lock()
+                .expect("lock")
+                .is_some_and(|epoch| epoch > epoch_c_before)
+        })
+        .await;
         let epoch_a = (*adapter_a.current_epoch_token.lock().expect("lock"))
             .expect("epoch should be set");
-
-        // A's epoch should be max across all 3 nodes
-        // Node C had epoch=1 from B's INCR, then A's promote INCR'd it to 2
-        // Nodes A,B were at 0, A's promote INCR'd them to 1
-        // A takes max(1, 1, 2) = 2
         assert!(
-            epoch_a > epoch_c_before,
+            folded,
             "Leader's epoch ({epoch_a}) should be > node C's pre-acquisition epoch ({epoch_c_before})"
         );
 
