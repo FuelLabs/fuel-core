@@ -3610,11 +3610,24 @@ mod tests {
             .await
             .expect("publish should succeed on all 3 nodes");
 
-        // Verify block exists on all 3 nodes
+        // Verify block exists on all 3 nodes. `publish_produced_block`
+        // returns once a quorum acks; the third per-node task runs in
+        // a detached background tokio task, so poll briefly for the
+        // last node to land before asserting.
         let stream_key = format!("{lease_key}:block:stream");
-        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_c.redis_url(), &stream_key), 1);
+        let urls = [
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let all_have_block = wait_for(Duration::from_secs(2), || {
+            urls.iter().all(|url| stream_len(url, &stream_key) == 1)
+        })
+        .await;
+        assert!(
+            all_have_block,
+            "block should land on all 3 nodes once background publish tasks drain",
+        );
 
         // Simulate A releasing lease
         adapter_a.release().await.expect("release should succeed");
@@ -3818,19 +3831,30 @@ mod tests {
         .await;
         assert!(owns_c_after, "Lock expansion should have acquired node C");
 
-        // Verify writes now go to all 3 nodes
+        // Verify writes now go to all 3 nodes. `publish_produced_block`
+        // returns once a quorum acks; the third per-node task runs in
+        // a detached background tokio task, so poll briefly for the
+        // last node to land before asserting.
         let block = poa_block_at_time(1, 100);
         adapter_a
             .publish_produced_block(&block)
             .await
             .expect("publish should succeed");
 
-        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
-        assert_eq!(
-            stream_len(&redis_c.redis_url(), &stream_key),
-            1,
-            "Block should be written to expanded node C"
+        let urls_for_check = [
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let landed = wait_for(Duration::from_secs(2), || {
+            urls_for_check
+                .iter()
+                .all(|url| stream_len(url, &stream_key) == 1)
+        })
+        .await;
+        assert!(
+            landed,
+            "Block should be written to all 3 nodes (including expanded node C)",
         );
     }
 
@@ -3909,16 +3933,31 @@ mod tests {
             "Leader's epoch ({epoch_a}) should be > node C's pre-acquisition epoch ({epoch_c_before})"
         );
 
-        // Verify writes succeed on ALL nodes with the adopted epoch
+        // Verify writes succeed on ALL nodes with the adopted epoch.
+        // `publish_produced_block` returns once a quorum acks; the
+        // third per-node task runs in a detached background tokio
+        // task, so poll briefly for the last node to land.
         let block = poa_block_at_time(1, 100);
         adapter_a
             .publish_produced_block(&block)
             .await
             .expect("publish should succeed on all 3 nodes");
 
-        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_c.redis_url(), &stream_key), 1);
+        let urls_for_check = [
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let landed = wait_for(Duration::from_secs(2), || {
+            urls_for_check
+                .iter()
+                .all(|url| stream_len(url, &stream_key) == 1)
+        })
+        .await;
+        assert!(
+            landed,
+            "Block should land on all 3 nodes once background publish tasks drain",
+        );
     }
 
     /// Exercises promotion, block write, fencing rejection, repair, and
