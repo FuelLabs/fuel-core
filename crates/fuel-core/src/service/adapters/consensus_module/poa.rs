@@ -922,32 +922,28 @@ impl RedisLeaderLeaseAdapter {
 
     async fn release_if_owner(&self) -> anyhow::Result<()> {
         tracing::debug!("Releasing Redis leader lock");
-        if !self.has_lease_owner_quorum().await? {
-            let mut current_epoch_token = self
-                .current_epoch_token
-                .lock()
-                .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
-            *current_epoch_token = None;
-            return Ok(());
-        }
-
-        let releases = futures::future::join_all(
+        // RELEASE_LOCK_SCRIPT is a per-node CAS-DEL — it only removes
+        // the lease key when the stored owner matches our token, so
+        // calling it on every node is safe regardless of whether we
+        // currently hold quorum. We deliberately do NOT call
+        // `has_lease_owner_quorum` here: that would spawn the
+        // `spawn_acquire_lease_on_unowned_nodes` extension as a
+        // detached task, which can race our own DELs and resurrect
+        // the lease on a node we are simultaneously releasing
+        // (observed as "Lost lock during repair" / FENCING_ERROR
+        // when the next leader's writes hit the resurrected entry).
+        let _ = futures::future::join_all(
             self.redis_nodes
                 .iter()
                 .map(|redis_node| self.release_lease_on_node(redis_node)),
         )
         .await;
-        let released_count = releases.into_iter().filter(|released| *released).count();
-        if self.quorum_reached(released_count) {
-            let mut current_epoch_token = self
-                .current_epoch_token
-                .lock()
-                .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
-            *current_epoch_token = None;
-            Ok(())
-        } else {
-            Err(anyhow!("Failed to release lease on quorum"))
-        }
+        let mut current_epoch_token = self
+            .current_epoch_token
+            .lock()
+            .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
+        *current_epoch_token = None;
+        Ok(())
     }
 
     /// Publish `block` to every Redis node in parallel and return as soon
