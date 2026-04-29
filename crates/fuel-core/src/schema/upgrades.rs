@@ -6,7 +6,10 @@ use crate::{
     },
     schema::{
         ReadViewProvider,
-        chain::ConsensusParameters,
+        chain::{
+            ConsensusParameters,
+            consensus_params_for_selection,
+        },
         scalars::HexString,
     },
 };
@@ -39,7 +42,10 @@ impl UpgradeQuery {
             .data_unchecked::<ChainInfoProvider>()
             .consensus_params_at_version(&version)?;
 
-        Ok(ConsensusParameters(params))
+        Ok(ConsensusParameters(consensus_params_for_selection(
+            params,
+            &ctx.look_ahead(),
+        )))
     }
 
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
