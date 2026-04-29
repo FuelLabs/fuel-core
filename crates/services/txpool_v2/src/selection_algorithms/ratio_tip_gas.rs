@@ -13,6 +13,7 @@ use std::{
     time::SystemTime,
 };
 
+use fuel_core_metrics::parallel_executor_metrics;
 use fuel_core_types::fuel_tx::{
     ContractId,
     Input,
@@ -92,6 +93,7 @@ struct SkipCounters {
     too_big_tx: usize,
     less_price: usize,
     excluded_contracts: usize,
+    complex: usize,
 }
 
 struct SelectionBudget {
@@ -107,6 +109,14 @@ struct AnchorState {
     current_anchor_gas: u64,
     locked_anchor: Option<ContractId>,
 }
+
+struct DeferredComplexTx<StorageIndex> {
+    storage_id: StorageIndex,
+    contracts: Vec<ContractId>,
+}
+
+const HOT_CONTRACT_LRU_SIZE: usize = 20;
+const COMPLEX_HOT_CONTRACT_THRESHOLD: usize = 2;
 
 impl AnchorState {
     fn new(threshold_pct: u8) -> Self {
@@ -162,8 +172,11 @@ where
     executable_transactions_sorted_tip_gas_ratio: BTreeMap<Reverse<Key>, S::StorageIndex>,
     executable_transactions_by_contract:
         HashMap<ContractId, BTreeMap<Reverse<Key>, S::StorageIndex>>,
+    deferred_complex_transactions:
+        BTreeMap<Reverse<Key>, DeferredComplexTx<S::StorageIndex>>,
     new_executable_txs_notifier: tokio::sync::watch::Sender<()>,
     eagerly_include_tx_dependency_graphs: bool,
+    hot_contract_lru: VecDeque<ContractId>,
     last_selection_anchors: Vec<ContractId>,
 }
 
@@ -178,8 +191,10 @@ where
         Self {
             executable_transactions_sorted_tip_gas_ratio: BTreeMap::new(),
             executable_transactions_by_contract: HashMap::new(),
+            deferred_complex_transactions: BTreeMap::new(),
             new_executable_txs_notifier,
             eagerly_include_tx_dependency_graphs,
+            hot_contract_lru: VecDeque::with_capacity(HOT_CONTRACT_LRU_SIZE),
             last_selection_anchors: Vec::new(),
         }
     }
@@ -285,8 +300,151 @@ where
             / execution_worker_count
     }
 
+    fn should_try_complex_batch(constraints: &Constraints) -> bool {
+        constraints.excluded_contracts.is_empty()
+    }
+
+    fn classify_as_complex(&self, stored_transaction: &StorageData) -> bool {
+        self.count_hot_contract_inputs(stored_transaction)
+            >= COMPLEX_HOT_CONTRACT_THRESHOLD
+    }
+
+    fn count_hot_contract_inputs(&self, stored_transaction: &StorageData) -> usize {
+        Self::collect_contract_inputs(stored_transaction)
+            .into_iter()
+            .filter(|contract_id| self.hot_contract_lru.contains(contract_id))
+            .count()
+    }
+
+    fn remember_hot_contracts(&mut self, contract_ids: &[ContractId]) {
+        contract_ids
+            .iter()
+            .copied()
+            .for_each(|contract_id| self.remember_hot_contract(contract_id));
+    }
+
+    fn remember_hot_contract(&mut self, contract_id: ContractId) {
+        self.hot_contract_lru.retain(|id| *id != contract_id);
+        self.hot_contract_lru.push_back(contract_id);
+        while self.hot_contract_lru.len() > HOT_CONTRACT_LRU_SIZE {
+            self.hot_contract_lru.pop_front();
+        }
+    }
+
+    fn defer_complex_transaction(
+        &mut self,
+        key: Key,
+        storage_id: S::StorageIndex,
+        contracts: Vec<ContractId>,
+    ) {
+        self.remove_key_from_indexes(key, &contracts);
+        self.deferred_complex_transactions.insert(
+            Reverse(key),
+            DeferredComplexTx {
+                storage_id,
+                contracts,
+            },
+        );
+    }
+
+    fn try_enqueue_deferred_complex_transaction(
+        constraints: &Constraints,
+        stored_transaction: &StorageData,
+        storage_id: S::StorageIndex,
+        prioritized_queue: &mut VecDeque<S::StorageIndex>,
+        budget: &mut SelectionBudget,
+    ) -> Option<u64> {
+        if !budget.has_capacity() {
+            return None;
+        }
+
+        if stored_transaction.transaction.max_gas_price() < constraints.minimal_gas_price
+        {
+            return None;
+        }
+
+        let tx_gas = stored_transaction.transaction.max_gas();
+        if tx_gas > budget.gas_left {
+            return None;
+        }
+
+        let tx_size = stored_transaction.transaction.metered_bytes_size() as u64;
+        if tx_size > budget.space_left {
+            return None;
+        }
+
+        budget.gas_left = budget.gas_left.saturating_sub(tx_gas);
+        budget.space_left = budget.space_left.saturating_sub(tx_size);
+        budget.nb_left = budget.nb_left.saturating_sub(1);
+        prioritized_queue.push_back(storage_id);
+        Some(tx_gas)
+    }
+
+    fn fill_from_deferred_complex_set(
+        &mut self,
+        constraints: &Constraints,
+        storage: &S,
+        queue_limit: usize,
+        prioritized_queue: &mut VecDeque<S::StorageIndex>,
+        budget: &mut SelectionBudget,
+    ) -> usize {
+        let mut selected_keys = Vec::new();
+        let mut selected_contracts = HashSet::new();
+        let mut stale_keys = Vec::new();
+
+        for (key, entry) in &self.deferred_complex_transactions {
+            if prioritized_queue.len() >= queue_limit || !budget.has_capacity() {
+                break;
+            }
+
+            if entry
+                .contracts
+                .iter()
+                .any(|contract_id| selected_contracts.contains(contract_id))
+            {
+                continue;
+            }
+
+            let Some(stored_transaction) = storage.get(&entry.storage_id) else {
+                stale_keys.push(key.0);
+                continue;
+            };
+
+            if Self::try_enqueue_deferred_complex_transaction(
+                constraints,
+                stored_transaction,
+                entry.storage_id,
+                prioritized_queue,
+                budget,
+            )
+            .is_none()
+            {
+                continue;
+            }
+
+            entry.contracts.iter().copied().for_each(|contract_id| {
+                selected_contracts.insert(contract_id);
+            });
+            selected_keys.push(key.0);
+        }
+
+        stale_keys.into_iter().for_each(|key| {
+            self.deferred_complex_transactions.remove(&Reverse(key));
+        });
+
+        if selected_keys.is_empty() {
+            return 0;
+        }
+
+        let selected_count = selected_keys.len();
+        selected_keys.into_iter().for_each(|key| {
+            self.deferred_complex_transactions.remove(&Reverse(key));
+        });
+        selected_count
+    }
+
     fn try_enqueue_stored_transaction(
-        &self,
+        &mut self,
         constraints: &Constraints,
         stored_transaction: &StorageData,
         storage_id: S::StorageIndex,
@@ -295,6 +453,16 @@ where
         skipped: &mut SkipCounters,
     ) -> Option<u64> {
         if !budget.has_capacity() {
+            return None;
+        }
+
+        if self.classify_as_complex(stored_transaction) {
+            skipped.complex = skipped.complex.saturating_add(1);
+            self.defer_complex_transaction(
+                Self::key(stored_transaction),
+                storage_id,
+                Self::collect_contract_inputs(stored_transaction),
+            );
             return None;
         }
 
@@ -352,12 +520,17 @@ where
     ) -> bool {
         let mut anchor_state = anchor_state;
         let mut selected_transactions = Vec::new();
-        for (key, storage_id) in &self.executable_transactions_sorted_tip_gas_ratio {
+        let candidates = self
+            .executable_transactions_sorted_tip_gas_ratio
+            .iter()
+            .map(|(key, storage_id)| (key.0, *storage_id))
+            .collect::<Vec<_>>();
+        for (key, storage_id) in candidates {
             if prioritized_queue.len() >= queue_limit || !budget.has_capacity() {
                 break;
             }
 
-            let Some(stored_transaction) = storage.get(storage_id) else {
+            let Some(stored_transaction) = storage.get(&storage_id) else {
                 debug_assert!(
                     false,
                     "Transaction not found in the storage during `gather_best_txs`."
@@ -365,14 +538,14 @@ where
                 tracing::warn!(
                     "Transaction not found in the storage during `gather_best_txs`."
                 );
-                selected_transactions.push((key.0, Vec::new()));
+                selected_transactions.push((key, Vec::new()));
                 continue;
             };
 
             if let Some(gas) = self.try_enqueue_stored_transaction(
                 constraints,
                 stored_transaction,
-                *storage_id,
+                storage_id,
                 prioritized_queue,
                 budget,
                 skipped,
@@ -383,8 +556,8 @@ where
                         gas,
                     );
                 }
-                selected_transactions
-                    .push((key.0, Self::collect_contract_inputs(stored_transaction)));
+                let contracts = Self::collect_contract_inputs(stored_transaction);
+                selected_transactions.push((key, contracts));
             }
         }
 
@@ -448,8 +621,8 @@ where
                 if let Some(state) = anchor_state.as_mut() {
                     state.on_selected(Some(anchor_contract_id), gas);
                 }
-                selected_transactions
-                    .push((key, Self::collect_contract_inputs(stored_transaction)));
+                let contracts = Self::collect_contract_inputs(stored_transaction);
+                selected_transactions.push((key, contracts));
             }
         }
 
@@ -512,10 +685,8 @@ where
                     );
                 }
                 let key = Self::key(stored_transaction);
-                self.remove_key_from_indexes(
-                    key,
-                    &Self::collect_contract_inputs(stored_transaction),
-                );
+                let contracts = Self::collect_contract_inputs(stored_transaction);
+                self.remove_key_from_indexes(key, &contracts);
                 filled = true;
             }
         }
@@ -571,6 +742,14 @@ where
                 )
             });
         }
+        for key in self.deferred_complex_transactions.keys() {
+            expected_txs.remove(&key.0.tx_id).unwrap_or_else(|| {
+                panic!(
+                    "Deferred transaction with id {:?} is not in the expected transactions.",
+                    key.0.tx_id
+                )
+            });
+        }
         assert!(
             expected_txs.is_empty(),
             "Some transactions are missing from the selection algorithm: {:?}",
@@ -615,16 +794,33 @@ where
             batch_graphs_count
         };
 
-        self.fill_from_executable_set(
-            constraints,
-            storage,
-            initial_queue_limit,
-            &mut prioritized_queue,
-            &mut budget,
-            &mut skipped,
-            anchor_state.as_mut(),
-        );
-        let mut anchor_contract_id = if contract_anchor_bias_enabled {
+        let should_try_complex_batch = Self::should_try_complex_batch(constraints);
+        let mut complex_txs_selected = should_try_complex_batch
+            .then(|| {
+                self.fill_from_deferred_complex_set(
+                    constraints,
+                    storage,
+                    batch_graphs_count,
+                    &mut prioritized_queue,
+                    &mut budget,
+                )
+            })
+            .unwrap_or(0);
+
+        if prioritized_queue.is_empty() {
+            self.fill_from_executable_set(
+                constraints,
+                storage,
+                initial_queue_limit,
+                &mut prioritized_queue,
+                &mut budget,
+                &mut skipped,
+                anchor_state.as_mut(),
+            );
+        }
+        let mut anchor_contract_id = if complex_txs_selected > 0 {
+            None
+        } else if contract_anchor_bias_enabled {
             prioritized_queue
                 .front()
                 .and_then(|storage_id| storage.get(storage_id))
@@ -640,6 +836,20 @@ where
 
         loop {
             if budget.has_capacity() {
+                let filled_from_complex = should_try_complex_batch
+                    && prioritized_queue.len() < batch_graphs_count
+                    && {
+                        let selected = self.fill_from_deferred_complex_set(
+                            constraints,
+                            storage,
+                            batch_graphs_count,
+                            &mut prioritized_queue,
+                            &mut budget,
+                        );
+                        complex_txs_selected =
+                            complex_txs_selected.saturating_add(selected);
+                        selected > 0
+                    };
                 let locked_anchor = anchor_state
                     .as_ref()
                     .and_then(|state| state.locked_anchor);
@@ -703,6 +913,7 @@ where
                     );
 
                 if prioritized_queue.is_empty()
+                    && !filled_from_complex
                     && !filled_from_promoted
                     && !filled_from_anchor
                     && !filled_from_executable
@@ -765,6 +976,15 @@ where
             self.new_executable_txs_notifier.send_replace(());
         }
 
+        parallel_executor_metrics::set_complex_txs_classified(skipped.complex);
+        parallel_executor_metrics::set_complex_txs_selected(complex_txs_selected);
+        parallel_executor_metrics::set_complex_txs_remaining(
+            self.deferred_complex_transactions.len(),
+        );
+        parallel_executor_metrics::set_hot_contracts_tracked(
+            self.hot_contract_lru.len(),
+        );
+
         self.last_selection_anchors = selected_anchors;
 
         tracing::warn!(
@@ -776,6 +996,7 @@ where
             skipped_not_enough_gas = skipped.not_enough_gas,
             skipped_too_big_tx = skipped.too_big_tx,
             skipped_less_price = skipped.less_price,
+            skipped_complex = skipped.complex,
             skipped_excluded_contracts = skipped.excluded_contracts,
             contract_anchor_bias_enabled,
             contract_anchor_dominance_threshold_pct,
@@ -793,10 +1014,12 @@ where
         store_entry: &StorageData,
     ) {
         let key = Self::key(store_entry);
+        let contract_inputs = Self::collect_contract_inputs(store_entry);
+        self.remember_hot_contracts(&contract_inputs);
         self.insert_key_into_indexes(
             key,
             storage_id,
-            &Self::collect_contract_inputs(store_entry),
+            &contract_inputs,
         );
         // tracing::warn!(
         //     executable_set_size = self
@@ -822,6 +1045,7 @@ where
             key,
             &Self::collect_contract_inputs(storage_entry),
         );
+        self.deferred_complex_transactions.remove(&Reverse(key));
         // tracing::warn!(
         //     executable_set_size = self
         //         .executable_transactions_sorted_tip_gas_ratio
@@ -832,5 +1056,6 @@ where
 
     fn number_of_executable_transactions(&self) -> usize {
         self.executable_transactions_sorted_tip_gas_ratio.len()
+            + self.deferred_complex_transactions.len()
     }
 }

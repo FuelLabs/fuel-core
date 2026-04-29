@@ -66,6 +66,7 @@ use fuel_core_types::{
         Transaction,
         TxId,
         UtxoId,
+        UniqueIdentifier,
     },
     fuel_types::Nonce,
     fuel_vm::checked_transaction::IntoChecked,
@@ -860,6 +861,12 @@ where
         start_idx_txs: u32,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<(), SchedulerError> {
+        let input_tx_ids = batch
+            .transactions
+            .iter()
+            .map(|tx| tx.id(&self.consensus_parameters.chain_id()))
+            .collect::<Vec<_>>();
+        let chain_id = self.consensus_parameters.chain_id();
         let worker_id =
             self.worker_pool
                 .take_worker()
@@ -916,6 +923,31 @@ where
                         memory.as_mut(),
                     )
                     .await?;
+                let returned_tx_ids = transactions
+                    .iter()
+                    .map(|tx| tx.id(&chain_id))
+                    .collect::<Vec<_>>();
+                let skipped_errors = execution_data
+                    .skipped_transactions
+                    .iter()
+                    .map(|(tx_id, error)| format!("{tx_id}: {error}"))
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                if input_tx_ids.len() <= 4
+                    || transactions.len() != input_tx_ids.len()
+                    || execution_data.used_gas == 0
+                {
+                    eprintln!(
+                        "parallel executor batch {batch_id}: input_count={} returned_count={} skipped_count={} used_gas={} input_ids=[{}] returned_ids=[{}] skipped_errors=[{}]",
+                        input_tx_ids.len(),
+                        transactions.len(),
+                        execution_data.skipped_transactions.len(),
+                        execution_data.used_gas,
+                        format_tx_ids(input_tx_ids.iter().copied()),
+                        format_tx_ids(returned_tx_ids.iter().copied()),
+                        skipped_errors,
+                    );
+                }
                 let coins_created = get_coins_outputs(
                     transactions.iter().zip(
                         execution_data
@@ -1313,6 +1345,18 @@ where
             )
             .await?;
         execution_data.changes = storage_tx.into_changes();
+        if !execution_data.skipped_transactions.is_empty() {
+            let skipped = execution_data
+                .skipped_transactions
+                .iter()
+                .map(|(tx_id, error)| format!("{tx_id}: {error}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            eprintln!(
+                "parallel executor sequential fallback skipped {} tx(s): {skipped}",
+                execution_data.skipped_transactions.len()
+            );
+        }
 
         // Save execution results for all batch id with empty data
         // to not break the batch chain
@@ -1332,7 +1376,7 @@ where
                 message_ids: execution_data.message_ids,
                 events: execution_data.events,
                 tx_statuses: execution_data.tx_status,
-                skipped_tx: vec![],
+                skipped_tx: execution_data.skipped_transactions,
                 used_gas: execution_data.used_gas,
                 used_size: execution_data.used_size,
                 coinbase: execution_data.coinbase,
@@ -1472,4 +1516,13 @@ fn get_coins_outputs<'a>(
         }
     }
     coins
+}
+
+fn format_tx_ids(
+    txs: impl IntoIterator<Item = TxId>,
+) -> String {
+    txs.into_iter()
+        .map(|tx_id| tx_id.to_string())
+        .collect::<Vec<_>>()
+        .join(",")
 }
