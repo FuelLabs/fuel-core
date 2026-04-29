@@ -2,6 +2,7 @@ use crate::{
     block_range_response::{
         BlockRangeResponse,
         BoxStream,
+        RemoteBlockPayload,
     },
     protobuf_types::{
         BlockHeightRequest as ProtoBlockHeightRequest,
@@ -10,6 +11,7 @@ use crate::{
         BlockResponse as ProtoBlockResponse,
         NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
         RemoteBlockResponse as ProtoRemoteBlockResponse,
+        RemoteHttpEndpoint as ProtoRemoteHttpEndpoint,
         RemoteS3Bucket as ProtoRemoteS3Bucket,
         block_aggregator_server::{
             BlockAggregator,
@@ -129,16 +131,25 @@ where
                         .boxed();
                     Ok(tonic::Response::new(stream))
                 }
-                BlockRangeResponse::S3(inner) => {
+                BlockRangeResponse::Remote(inner) => {
                     let stream = inner
                         .map(|(height, res)| {
-                            let s3 = ProtoRemoteS3Bucket {
-                                bucket: res.bucket,
-                                key: res.key,
-                                requester_pays: res.requester_pays,
-                                endpoint: res.aws_endpoint,
+                            let location = match res {
+                                RemoteBlockPayload::S3(s3) => {
+                                    ProtoRemoteLocation::S3(ProtoRemoteS3Bucket {
+                                        bucket: s3.bucket,
+                                        key: s3.key,
+                                        requester_pays: s3.requester_pays,
+                                        endpoint: s3.aws_endpoint,
+                                    })
+                                }
+                                RemoteBlockPayload::Http(http) => {
+                                    ProtoRemoteLocation::Http(ProtoRemoteHttpEndpoint {
+                                        endpoint: http.url,
+                                        headers: http.headers,
+                                    })
+                                }
                             };
-                            let location = ProtoRemoteLocation::S3(s3);
                             let proto_response = ProtoRemoteBlockResponse {
                                 location: Some(location),
                             };

@@ -7,6 +7,8 @@ use crate::{
     },
     block_range_response::{
         BlockRangeResponse,
+        RemoteBlockPayload,
+        RemoteHttpResponse,
         RemoteS3Response,
     },
     blocks::old_block_source::{
@@ -32,6 +34,7 @@ use futures::{
     TryStreamExt,
 };
 use std::{
+    collections::HashMap,
     net::SocketAddr,
     sync::Arc,
 };
@@ -139,25 +142,29 @@ async fn await_query__get_block_range__client_receives_expected_value__remote() 
     let mut api = MockBlocksAggregatorApi::default();
 
     // Given
-    let list: Vec<_> = [(BlockHeight::new(1), "1"), (BlockHeight::new(2), "2")]
+    let expected: Vec<(BlockHeight, RemoteS3Response)> =
+        [(BlockHeight::new(1), "1"), (BlockHeight::new(2), "2")]
+            .iter()
+            .map(|(height, key)| {
+                let bucket = "test-bucket".to_string();
+                let key = key.to_string();
+                let res = RemoteS3Response {
+                    bucket,
+                    key,
+                    requester_pays: false,
+                    aws_endpoint: None,
+                };
+                (*height, res)
+            })
+            .collect();
+    let list: Vec<_> = expected
         .iter()
-        .map(|(height, key)| {
-            let bucket = "test-bucket".to_string();
-            let key = key.to_string();
-            let res = RemoteS3Response {
-                bucket,
-                key,
-                requester_pays: false,
-                aws_endpoint: None,
-            };
-            (*height, res)
-        })
+        .map(|(h, s)| (*h, RemoteBlockPayload::S3(s.clone())))
         .collect();
-    let expected = list.clone();
     api.expect_get_block_range()
         .times(1)
         .returning(move |_: u32, _: u32| {
-            let response = BlockRangeResponse::S3(
+            let response = BlockRangeResponse::Remote(
                 futures::stream::iter(list.clone().into_iter()).boxed(),
             );
             Ok(response)
@@ -274,4 +281,87 @@ async fn await_query__new_block_stream__client_receives_expected_value() {
         .collect();
 
     assert_eq!(list, actual);
+}
+
+/// HTTP-endpoint `RemoteBlockPayload` values must flow through the tonic codec as `Location::Http`
+/// records (with the URL and headers preserved). Consumers like `FuelClient::get_block_range` rely
+/// on this to decide whether to dispatch the block fetch through the AWS SDK or reqwest.
+#[tokio::test]
+async fn await_query__get_block_range__client_receives_expected_value__remote_http() {
+    let socket = free_local_addr();
+    let mut api = MockBlocksAggregatorApi::default();
+
+    // Given
+    let headers: HashMap<String, String> =
+        [("x-api-key".to_string(), "token".to_string())]
+            .into_iter()
+            .collect();
+    let expected: Vec<(BlockHeight, RemoteHttpResponse)> = [
+        (BlockHeight::new(1), "https://cdn.example/blocks/1"),
+        (BlockHeight::new(2), "https://cdn.example/blocks/2"),
+    ]
+    .iter()
+    .map(|(height, url)| {
+        (
+            *height,
+            RemoteHttpResponse {
+                url: (*url).to_string(),
+                headers: headers.clone(),
+            },
+        )
+    })
+    .collect();
+    let list: Vec<_> = expected
+        .iter()
+        .map(|(h, http)| (*h, RemoteBlockPayload::Http(http.clone())))
+        .collect();
+    api.expect_get_block_range()
+        .times(1)
+        .returning(move |_: u32, _: u32| {
+            let response = BlockRangeResponse::Remote(
+                futures::stream::iter(list.clone().into_iter()).boxed(),
+            );
+            Ok(response)
+        });
+
+    let service = new_service(socket, api).unwrap();
+    service.start_and_await().await.unwrap();
+
+    let url = format!("http://{}", socket);
+    let mut client = ProtoBlockAggregatorClient::connect(url.to_string())
+        .await
+        .expect("could not connect to server");
+    let request = BlockRangeRequest { start: 0, end: 1 };
+
+    // When
+    let result = client.get_block_range(request).await;
+
+    // Then
+    let response = result.unwrap();
+    let actual: Vec<(BlockHeight, RemoteHttpResponse)> = response
+        .into_inner()
+        .try_collect::<Vec<_>>()
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|b| {
+            if let Some(Payload::Remote(inner)) = b.payload {
+                let height = BlockHeight::new(b.height);
+                let Location::Http(http) = inner.location.unwrap() else {
+                    panic!("unexpected location type")
+                };
+                (
+                    height,
+                    RemoteHttpResponse {
+                        url: http.endpoint,
+                        headers: http.headers,
+                    },
+                )
+            } else {
+                panic!("unexpected response type")
+            }
+        })
+        .collect();
+
+    assert_eq!(expected, actual);
 }

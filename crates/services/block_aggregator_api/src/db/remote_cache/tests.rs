@@ -1,6 +1,9 @@
 use super::*;
 use crate::{
-    block_range_response::RemoteS3Response,
+    block_range_response::{
+        RemoteBlockPayload,
+        RemoteS3Response,
+    },
     blocks::old_block_source::{
         BlockConverter,
         convertor_adapter::ProtobufBlockConverter,
@@ -73,14 +76,15 @@ async fn get_block_range__happy_path() {
         .insert(&(), &Mode::new_s3(end))
         .unwrap();
 
-    let adapter = RemoteBlocksProvider::new(aws_bucket.clone(), false, None, storage);
+    let adapter =
+        RemoteBlocksProvider::new(aws_bucket.clone(), false, None, None, storage);
 
     // when
     let addresses = adapter.get_block_range(start, end).unwrap();
 
     // then
     let actual = match addresses {
-        BlockRangeResponse::S3(stream) => stream.collect::<Vec<_>>().await,
+        BlockRangeResponse::Remote(stream) => stream.collect::<Vec<_>>().await,
         _ => {
             panic!("Expected remote response, got literal");
         }
@@ -94,10 +98,22 @@ async fn get_block_range__happy_path() {
                 requester_pays: false,
                 aws_endpoint: None,
             };
-            (BlockHeight::new(height), res)
+            (BlockHeight::new(height), RemoteBlockPayload::S3(res))
         })
         .collect::<Vec<_>>();
     assert_eq!(actual, expected);
+}
+
+#[test]
+fn public_http_object_url__joins_base_and_key() {
+    assert_eq!(
+        public_http_object_url("https://cdn.example/blocks", "aa/bb/cc/dd"),
+        "https://cdn.example/blocks/aa/bb/cc/dd"
+    );
+    assert_eq!(
+        public_http_object_url("https://cdn.example/blocks/", "/aa/bb/cc/dd"),
+        "https://cdn.example/blocks/aa/bb/cc/dd"
+    );
 }
 
 #[tokio::test]
@@ -142,4 +158,83 @@ async fn store_block__fails_if_not_contiguous() {
 
     // Then
     result.expect_err("expected error");
+}
+
+/// When `PublicHttpConfig` is set on the provider, the range response must be HTTP payloads built
+/// from `{base}/{s3-key}` URLs with the configured headers — not S3 bucket metadata. Clients use
+/// this to fetch block objects via a CDN/public URL while uploads still go to S3.
+#[tokio::test]
+async fn get_block_range__with_public_http_config__returns_http_payloads() {
+    // given
+    use crate::{
+        block_range_response::RemoteHttpResponse,
+        db::remote_cache::PublicHttpConfig,
+    };
+    use std::collections::HashMap;
+
+    let start = BlockHeight::new(10);
+    let end = BlockHeight::new(12);
+    let mut storage = database();
+    storage
+        .storage_as_mut::<LatestBlock>()
+        .insert(&(), &Mode::new_s3(end))
+        .unwrap();
+
+    let headers: HashMap<String, String> =
+        [("x-api-key".to_string(), "token".to_string())]
+            .into_iter()
+            .collect();
+    let public_http = PublicHttpConfig {
+        base_url: "https://cdn.example/blocks/".to_string(),
+        headers: headers.clone(),
+    };
+
+    let adapter = RemoteBlocksProvider::new(
+        "test-bucket".to_string(),
+        false,
+        None,
+        Some(public_http),
+        storage,
+    );
+
+    // when
+    let response = adapter.get_block_range(start, end).unwrap();
+    let actual = match response {
+        BlockRangeResponse::Remote(stream) => stream.collect::<Vec<_>>().await,
+        _ => panic!("expected remote response"),
+    };
+
+    // then
+    let expected: Vec<_> = (10..=12)
+        .map(|height| {
+            let key = block_height_to_key(&BlockHeight::new(height));
+            (
+                BlockHeight::new(height),
+                RemoteBlockPayload::Http(RemoteHttpResponse {
+                    url: format!("https://cdn.example/blocks/{key}"),
+                    headers: headers.clone(),
+                }),
+            )
+        })
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+/// Requesting a range that extends past the last synced block is the contract the gRPC server
+/// relies on to surface "not yet available" to clients — the remote provider should refuse rather
+/// than hand out URLs for nonexistent objects.
+#[tokio::test]
+async fn get_block_range__past_latest_synced__returns_error() {
+    let mut storage = database();
+    let synced = BlockHeight::new(5);
+    storage
+        .storage_as_mut::<LatestBlock>()
+        .insert(&(), &Mode::new_s3(synced))
+        .unwrap();
+
+    let adapter =
+        RemoteBlocksProvider::new("test-bucket".to_string(), false, None, None, storage);
+
+    let result = adapter.get_block_range(BlockHeight::new(1), BlockHeight::new(6));
+    result.expect_err("expected error for range past synced height");
 }
