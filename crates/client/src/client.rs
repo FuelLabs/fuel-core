@@ -181,6 +181,7 @@ mod rpc_deps {
     };
     pub use aws_sdk_s3::Client as AWSClient;
     pub use flate2::read::{
+        DeflateDecoder,
         GzDecoder,
         ZlibDecoder,
     };
@@ -1994,11 +1995,21 @@ impl FuelClient {
         Ok(output)
     }
 
+    /// Decodes a `Content-Encoding: deflate` body. RFC 9110 specifies zlib-wrapped data (RFC 1950)
+    /// for this coding, but in practice most CDNs and HTTP servers (nginx, Apache, CloudFront)
+    /// emit raw deflate (RFC 1951) instead. Mirror mainstream browser/HTTP-client behavior: try
+    /// the spec-compliant zlib format first, then fall back to raw deflate so we interoperate
+    /// with either variant when a CDN fronts the block object store.
     fn inflate_deflate_remote_block_bytes(data: &[u8]) -> io::Result<Vec<u8>> {
-        let mut decoder = ZlibDecoder::new(Cursor::new(data));
         let mut output = Vec::new();
-        decoder
-            .read_to_end(&mut output)
+        let mut zlib = ZlibDecoder::new(Cursor::new(data));
+        if zlib.read_to_end(&mut output).is_ok() {
+            return Ok(output);
+        }
+
+        output.clear();
+        let mut raw = DeflateDecoder::new(data);
+        raw.read_to_end(&mut output)
             .map_err(|e| io::Error::other(e.to_string()))?;
         Ok(output)
     }

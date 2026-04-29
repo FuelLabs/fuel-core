@@ -235,7 +235,7 @@ jobs:
     timeout-minutes: 45
     services:
       localstack:
-        image: localstack/localstack:latest
+        image: localstack/localstack:4.14 # last version that does not require license
         ports:
           - 4566:4566
         env:
