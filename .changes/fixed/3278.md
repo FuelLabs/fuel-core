@@ -1,0 +1,1 @@
+Fix mainnet block-production hang when a single ElastiCache leader-lock node enters a half-alive state. Bumps `redis` to 1.2 (the older 0.27 client did not apply the connect timeout to the post-connect handshake pipeline) and short-circuits `publish_block_on_all_nodes` on quorum so a stuck per-node thread can no longer wedge the publish path.

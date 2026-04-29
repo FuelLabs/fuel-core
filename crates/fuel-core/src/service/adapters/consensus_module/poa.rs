@@ -797,20 +797,29 @@ impl RedisLeaderLeaseAdapter {
                 break;
             }
 
+            // Group votes by block_id only (not epoch). The same block can
+            // be written to different nodes with different epochs during
+            // re-promotion storms — but if the block_id matches, it's the
+            // same block and all copies count toward quorum. We track the
+            // max epoch per block_id as the tiebreaker for fork resolution
+            // when block_ids genuinely differ.
             let votes = blocks_by_node
                 .iter()
                 .filter_map(|blocks_by_height| blocks_by_height.get(&current_height))
                 .flat_map(|blocks_by_epoch| blocks_by_epoch.iter())
                 .fold(
-                    HashMap::<(u64, BlockId), (usize, SealedBlock)>::new(),
+                    HashMap::<BlockId, (u64, usize, SealedBlock)>::new(),
                     |mut votes, (epoch, block)| {
-                        let vote_key = (*epoch, block.entity.id());
+                        let vote_key = block.entity.id();
                         match votes.get_mut(&vote_key) {
-                            Some((count, _)) => {
+                            Some((max_epoch, count, _)) => {
                                 *count = count.saturating_add(1);
+                                if *epoch > *max_epoch {
+                                    *max_epoch = *epoch;
+                                }
                             }
                             None => {
-                                votes.insert(vote_key, (1, block.clone()));
+                                votes.insert(vote_key, (*epoch, 1, block.clone()));
                             }
                         }
                         votes
@@ -819,8 +828,8 @@ impl RedisLeaderLeaseAdapter {
 
             let winner = votes
                 .into_iter()
-                .max_by_key(|((epoch, _), _)| *epoch)
-                .map(|(_, (count, block))| (count, block));
+                .max_by_key(|(_, (max_epoch, _, _))| *max_epoch)
+                .map(|(_, (_, count, block))| (count, block));
 
             if let Some((count, block)) = winner {
                 if self.quorum_reached(count) {
@@ -928,30 +937,143 @@ impl RedisLeaderLeaseAdapter {
         }
     }
 
-    fn publish_block_on_node(
+    fn publish_block_on_all_nodes(
         &self,
-        redis_node: &RedisNode,
         epoch: u64,
         block: &SealedBlock,
         block_data: &[u8],
-    ) -> anyhow::Result<WriteBlockResult> {
-        let mut connection = redis_node
-            .redis_client
-            .get_connection_with_timeout(self.node_timeout)?;
-        connection.set_read_timeout(Some(self.node_timeout))?;
-        connection.set_write_timeout(Some(self.node_timeout))?;
+    ) -> Vec<anyhow::Result<WriteBlockResult>> {
+        // Detached `std::thread::spawn` (not scoped) lets us return as soon
+        // as `Written` quorum is reached without waiting for slow nodes.
+        // Stragglers — including any thread blocked inside the sync `redis`
+        // client — are abandoned: they will exit when their syscall returns
+        // (e.g. when the peer recovers, or when SO_RCVTIMEO fires inside
+        // `invoke_write_block_script`'s set_read_timeout/set_write_timeout
+        // window). Their result is discarded via the dropped channel.
+        //
+        // This is the class-of-failure fix for the 2026-04-22 mainnet hang
+        // where a half-alive ElastiCache node stalled one thread inside the
+        // pre-1.2 `redis::Client::get_connection_with_timeout` handshake,
+        // which combined with the previous `std::thread::scope` to wedge
+        // every block publish forever. The redis crate upgrade to 1.2 also
+        // closes that specific upstream bug; the short-circuit here protects
+        // against any future single-node hang that survives per-syscall
+        // timeouts.
+        let n = self.redis_nodes.len();
+        let block_data: std::sync::Arc<[u8]> = block_data.into();
         let block_height = u32::from(*block.entity.header().height());
+        let block_stream_key: std::sync::Arc<str> = self.block_stream_key.as_str().into();
+        let epoch_key: std::sync::Arc<str> = self.epoch_key.as_str().into();
+        let lease_key: std::sync::Arc<str> = self.lease_key.as_str().into();
+        let lease_owner_token: std::sync::Arc<str> =
+            self.lease_owner_token.as_str().into();
+        let lease_ttl_millis = self.lease_ttl_millis;
+        let stream_max_len = self.stream_max_len;
+        let node_timeout = self.node_timeout;
+
+        let (tx, rx) =
+            std::sync::mpsc::channel::<(usize, anyhow::Result<WriteBlockResult>)>();
+
+        for (idx, redis_node) in self.redis_nodes.iter().enumerate() {
+            let client = redis_node.redis_client.clone();
+            let tx = tx.clone();
+            let block_data = block_data.clone();
+            let block_stream_key = block_stream_key.clone();
+            let epoch_key = epoch_key.clone();
+            let lease_key = lease_key.clone();
+            let lease_owner_token = lease_owner_token.clone();
+            std::thread::spawn(move || {
+                let result = Self::invoke_write_block_script(
+                    &client,
+                    node_timeout,
+                    &block_stream_key,
+                    &epoch_key,
+                    &lease_key,
+                    epoch,
+                    &lease_owner_token,
+                    block_height,
+                    &block_data,
+                    lease_ttl_millis,
+                    stream_max_len,
+                );
+                // Send may fail if the receiver was dropped because we
+                // already short-circuited on quorum — that's intentional.
+                let _ = tx.send((idx, result));
+            });
+        }
+        // Drop our local sender so `rx.recv` returns `Err` once every spawned
+        // thread has either sent or dropped its sender.
+        drop(tx);
+
+        let mut results: Vec<Option<anyhow::Result<WriteBlockResult>>> =
+            (0..n).map(|_| None).collect();
+        let mut written_count = 0usize;
+        let mut received = 0usize;
+
+        while received < n {
+            let Ok((idx, result)) = rx.recv() else {
+                // All senders dropped (every thread either reported or
+                // panicked). Stop draining and fill remaining slots below.
+                break;
+            };
+            if matches!(result, Ok(WriteBlockResult::Written)) {
+                written_count = written_count.saturating_add(1);
+            }
+            results[idx] = Some(result);
+            received = received.saturating_add(1);
+
+            if self.quorum_reached(written_count) {
+                // Quorum reached. Return immediately; any threads still
+                // running are abandoned. Their later `tx.send` will fail
+                // silently because we drop the receiver below.
+                break;
+            }
+        }
+
+        results
+            .into_iter()
+            .map(|r| {
+                r.unwrap_or_else(|| {
+                    Err(anyhow!(
+                        "publish abandoned: quorum reached before this \
+                         node responded"
+                    ))
+                })
+            })
+            .collect()
+    }
+
+    /// `'static` helper that runs `write_block.lua` against a single node.
+    /// Free function (no `&self`) so detached threads spawned by
+    /// `publish_block_on_all_nodes` can run it without borrowing the adapter.
+    #[allow(clippy::too_many_arguments)]
+    fn invoke_write_block_script(
+        redis_client: &redis::Client,
+        node_timeout: Duration,
+        block_stream_key: &str,
+        epoch_key: &str,
+        lease_key: &str,
+        epoch: u64,
+        lease_owner_token: &str,
+        block_height: u32,
+        block_data: &[u8],
+        lease_ttl_millis: u64,
+        stream_max_len: u32,
+    ) -> anyhow::Result<WriteBlockResult> {
+        let mut connection = redis_client.get_connection_with_timeout(node_timeout)?;
+        connection.set_read_timeout(Some(node_timeout))?;
+        connection.set_write_timeout(Some(node_timeout))?;
         let lua_start = std::time::Instant::now();
         let write_result = redis::Script::new(WRITE_BLOCK_SCRIPT)
-            .key(&self.block_stream_key)
-            .key(&self.epoch_key)
-            .key(&self.lease_key)
+            .key(block_stream_key)
+            .key(epoch_key)
+            .key(lease_key)
             .arg(epoch)
-            .arg(&self.lease_owner_token)
+            .arg(lease_owner_token)
             .arg(block_height)
             .arg(block_data)
-            .arg(self.lease_ttl_millis)
-            .arg(self.stream_max_len)
+            .arg(lease_ttl_millis)
+            .arg(stream_max_len)
             .invoke::<String>(&mut connection);
         poa_metrics()
             .write_block_duration_s
@@ -990,7 +1112,7 @@ impl RedisLeaderLeaseAdapter {
     /// `pre_existing_count` is the number of nodes already confirmed to
     /// have this specific block during the reconciliation read phase.
     ///
-    /// Uses `publish_block_on_node` which runs `write_block.lua`:
+    /// Uses `publish_block_on_all_nodes` which runs `write_block.lua`:
     /// - Written: node accepted the block (counted toward quorum)
     /// - HEIGHT_EXISTS: node has *some* block at this height — may be a
     ///   different block from a competing partial write, so NOT counted
@@ -1020,8 +1142,8 @@ impl RedisLeaderLeaseAdapter {
         // block at this height, but it might be a different block from
         // a competing leader's partial write.
         let mut total_with_block = pre_existing_count;
-        for redis_node in &self.redis_nodes {
-            match self.publish_block_on_node(redis_node, epoch, block, &block_data) {
+        for result in self.publish_block_on_all_nodes(epoch, block, &block_data) {
+            match result {
                 Ok(WriteBlockResult::Written) => {
                     total_with_block = total_with_block.saturating_add(1);
                 }
@@ -1211,16 +1333,14 @@ impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
         };
         let block_data = postcard::to_allocvec(block)?;
         let successes = self
-            .redis_nodes
-            .iter()
-            .map(|redis_node| {
-                match self.publish_block_on_node(redis_node, epoch, block, &block_data) {
-                    Ok(WriteBlockResult::Written) => true,
-                    Ok(_) => false,
-                    Err(err) => {
-                        tracing::debug!("Redis publish on node failed: {err}");
-                        false
-                    }
+            .publish_block_on_all_nodes(epoch, block, &block_data)
+            .into_iter()
+            .map(|result| match result {
+                Ok(WriteBlockResult::Written) => true,
+                Ok(_) => false,
+                Err(err) => {
+                    tracing::debug!("Redis publish on node failed: {err}");
+                    false
                 }
             })
             .filter(|success| *success)
@@ -1383,6 +1503,7 @@ mod tests {
     use fuel_core_poa::ports::BlockReconciliationReadPort;
     use fuel_core_types::blockchain::consensus::Consensus;
     use std::{
+        io::Read as _,
         net::{
             SocketAddrV4,
             TcpListener,
@@ -1393,8 +1514,12 @@ mod tests {
             Command,
             Stdio,
         },
+        sync::mpsc,
         thread,
-        time::Duration,
+        time::{
+            Duration,
+            Instant,
+        },
     };
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1562,6 +1687,81 @@ mod tests {
         assert!(
             matches!(leader_state, LeaderState::UnreconciledBlocks(ref blocks) if blocks.len() == 1),
             "Expected repair to pick one block and reach quorum, got {leader_state:?}",
+        );
+    }
+
+    /// Reproduces the devnet deadlock from April 17, 2026.
+    ///
+    /// The same block was written to all 3 nodes during re-promotion storms,
+    /// so each node has the same block_id but with different epoch metadata.
+    /// The old `(epoch, block_id)` vote grouping fragmented these into
+    /// separate vote groups, with the max-epoch group having a count below
+    /// quorum. Repair then failed because every node returned HEIGHT_EXISTS.
+    ///
+    /// With the fix (grouping by block_id only), all copies of the same
+    /// block count toward quorum regardless of epoch metadata — so this
+    /// state resolves without repair.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn leader_state__when_same_block_has_different_epochs_across_nodes_then_reconciles_without_repair()
+     {
+        // given: same block on all 3 nodes, but with different epochs
+        // (as happens when re-promotion writes race during production)
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:same-block-different-epochs".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let adapter = new_test_adapter(
+            vec![
+                redis_a.redis_url(),
+                redis_b.redis_url(),
+                redis_c.redis_url(),
+            ],
+            lease_key,
+        );
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter should acquire lease"
+        );
+
+        // Same block (same data, same block_id) on all 3 nodes, but each
+        // with a different epoch. This simulates what happens when the
+        // original leader was re-promoted repeatedly during a race,
+        // writing the same block content each time with a bumped epoch.
+        let block = poa_block_at_time(1, 10);
+        let block_data = postcard::to_allocvec(&block).expect("should serialize");
+
+        let redis_a_client =
+            redis::Client::open(redis_a.redis_url()).expect("redis a client");
+        let redis_b_client =
+            redis::Client::open(redis_b.redis_url()).expect("redis b client");
+        let redis_c_client =
+            redis::Client::open(redis_c.redis_url()).expect("redis c client");
+        let mut conn_a = redis_a_client.get_connection().expect("redis a conn");
+        let mut conn_b = redis_b_client.get_connection().expect("redis b conn");
+        let mut conn_c = redis_c_client.get_connection().expect("redis c conn");
+
+        // Same block_id, three different epochs
+        append_stream_block(&mut conn_a, &stream_key, 1, &block_data, 5);
+        append_stream_block(&mut conn_b, &stream_key, 1, &block_data, 7);
+        append_stream_block(&mut conn_c, &stream_key, 1, &block_data, 9);
+
+        // when: leader reconciles
+        let leader_state = adapter
+            .leader_state(1.into())
+            .await
+            .expect("leader_state should succeed");
+
+        // then: the block is reconciled directly (no repair needed). Without
+        // the fix, the old logic would have split the 3 copies into 3 vote
+        // groups and tried to repair the max-epoch group (count=1), which
+        // would deadlock because every node returns HEIGHT_EXISTS.
+        assert!(
+            matches!(leader_state, LeaderState::UnreconciledBlocks(ref blocks) if blocks.len() == 1),
+            "Expected block to be reconciled from quorum across mixed epochs, got {leader_state:?}"
         );
     }
 
@@ -2413,6 +2613,171 @@ mod tests {
             unreconciled[0].entity.header().time(),
             block_a.entity.header().time(),
             "Reconciliation should return block_a (the only entry in the stream)"
+        );
+    }
+
+    // ---------------------------------------------------------------------
+    // Regression tests for the 2026-04-22 mainnet hang.
+    //
+    // On v0.47.4 the deployed binary linked `redis 0.27.x`. That release of
+    // `redis::Client::get_connection_with_timeout` only applied the timeout
+    // to the TCP connect step; the post-connect handshake pipeline
+    // (`CLIENT SETINFO LIB-NAME`, `CLIENT SETINFO LIB-VER`) ran without any
+    // socket-level read/write timeout. A peer that accepted TCP but stopped
+    // responding caused the call to hang indefinitely. Combined with the
+    // previous `std::thread::scope`-based `publish_block_on_all_nodes`, one
+    // stuck per-node thread wedged every block publish forever and halted
+    // block production on mainnet for ~22 minutes.
+    //
+    // The fix in this PR has two parts:
+    //   1. Bump `redis` to 1.2. Upstream's `connect()` now sets read/write
+    //      timeouts on the socket BEFORE running the handshake pipeline and
+    //      clears them afterward.
+    //   2. Replace `std::thread::scope` in `publish_block_on_all_nodes`
+    //      with detached `std::thread::spawn` workers reporting into an
+    //      mpsc channel, returning as soon as `Written` quorum is reached.
+    //      Stragglers are abandoned.
+    //
+    // The first test below targets (1) directly: raw library call against a
+    // half-alive peer must now be bounded.
+    //
+    // The second test targets (2) at the adapter level: with 3 healthy
+    // redis-server processes + 1 half-alive TCP listener (4 nodes, quorum =
+    // 3), `publish_produced_block` must complete within a tight wall-clock
+    // deadline. On pre-fix code this call hangs forever because the scoped
+    // thread for the half-alive node never exits; on the fixed code the
+    // publish returns as soon as the 3 healthy nodes acknowledge.
+    // ---------------------------------------------------------------------
+
+    /// Accepts TCP connections and drains incoming bytes into a buffer
+    /// without ever writing a single byte back. Emulates an ElastiCache /
+    /// Valkey node in the "half-alive" recovery state observed on 2026-04-22.
+    fn spawn_halflive_redis_listener() -> u16 {
+        let listener =
+            TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
+                .expect("bind ephemeral port");
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            for incoming in listener.incoming() {
+                let Ok(mut stream) = incoming else {
+                    continue;
+                };
+                thread::spawn(move || {
+                    let mut buf = [0u8; 4096];
+                    while let Ok(n) = stream.read(&mut buf) {
+                        if n == 0 {
+                            return;
+                        }
+                    }
+                });
+            }
+        });
+        port
+    }
+
+    /// Library-level regression guard for the upstream `redis 0.27.x` bug.
+    /// On that version this test would hang indefinitely and the process
+    /// would need to be killed. On `redis >= 1.2` the call returns an `Err`
+    /// within roughly `2 * node_timeout` (one timeout per handshake
+    /// pipeline command: `CLIENT SETINFO LIB-NAME`, `CLIENT SETINFO LIB-VER`).
+    #[test]
+    fn redis_get_connection_with_timeout__is_bounded_against_halflive_peer() {
+        const NODE_TIMEOUT: Duration = Duration::from_secs(1);
+        const MAX_WAIT: Duration = Duration::from_secs(5);
+
+        let port = spawn_halflive_redis_listener();
+        let url = format!("redis://127.0.0.1:{port}/");
+        let client = redis::Client::open(url).expect("client open");
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let start = Instant::now();
+            let result = client.get_connection_with_timeout(NODE_TIMEOUT);
+            let _ = tx.send((start.elapsed(), result.is_ok()));
+        });
+
+        match rx.recv_timeout(MAX_WAIT) {
+            Ok((elapsed, ok)) => {
+                assert!(
+                    !ok,
+                    "expected err against a half-alive peer, got Ok after \
+                     {elapsed:?}",
+                );
+                assert!(
+                    elapsed <= MAX_WAIT,
+                    "call took {elapsed:?}, expected to be bounded under \
+                     {MAX_WAIT:?}",
+                );
+            }
+            Err(_) => {
+                panic!(
+                    "REGRESSION: get_connection_with_timeout did not \
+                     return within {MAX_WAIT:?} against a half-alive \
+                     peer. The redis-crate upstream bug from 0.27.x has \
+                     reappeared.",
+                );
+            }
+        }
+    }
+
+    /// Adapter-level regression test for the block-production hang. With 3
+    /// healthy redis nodes and 1 half-alive TCP listener (4 nodes total,
+    /// quorum = 3), `publish_produced_block` must complete within a
+    /// wall-clock deadline much smaller than "forever".
+    ///
+    /// On the pre-fix code (`std::thread::scope` waiting for all 4 handles
+    /// to join) this call hangs until the process is killed. On the fixed
+    /// code the detached threads report via an mpsc channel and
+    /// `publish_block_on_all_nodes` returns as soon as the 3 healthy nodes
+    /// acknowledge `Written`.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn publish_produced_block__returns_within_bound_when_one_node_is_half_alive() {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:halflive-publish".to_string();
+        let urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+            format!("redis://127.0.0.1:{halflive_port}/"),
+        ];
+        let adapter = new_test_adapter(urls, lease_key);
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "should acquire quorum from 3 healthy nodes out of 4",
+        );
+
+        // when — publish is sync; offload to a blocking thread so we can
+        // enforce a wall-clock deadline via tokio::time::timeout. Without
+        // the fix this task never completes.
+        let block = poa_block_at_time(1, 111);
+        let publish_adapter = adapter.clone();
+        let start = Instant::now();
+        let publish = tokio::task::spawn_blocking(move || {
+            publish_adapter.publish_produced_block(&block)
+        });
+        let deadline = Duration::from_secs(5);
+        let result = tokio::time::timeout(deadline, publish)
+            .await
+            .expect(
+                "publish_produced_block must return within the deadline — \
+                 on the pre-fix code it hangs forever against a half-alive \
+                 peer",
+            )
+            .expect("spawn_blocking should not panic");
+        let elapsed = start.elapsed();
+
+        // then
+        result.expect("publish should succeed: 3/4 healthy nodes is quorum");
+        assert!(
+            elapsed < deadline,
+            "publish took {elapsed:?}, expected well under {deadline:?}",
         );
     }
 

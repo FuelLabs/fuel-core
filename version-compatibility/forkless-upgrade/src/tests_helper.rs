@@ -138,6 +138,8 @@ impl LatestFuelCoreDriver {
 }
 
 pub const IGNITION_TESTNET_SNAPSHOT: &str = "./chain-configurations/ignition";
+pub const IGNITION_V21_TESTNET_SNAPSHOT: &str =
+    "./chain-configurations/ignition-v21";
 
 pub const V44_TESTNET_SNAPSHOT: &str = "./chain-configurations/v44";
 pub const POA_SECRET_KEY: &str =

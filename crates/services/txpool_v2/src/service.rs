@@ -806,8 +806,12 @@ where
     let (current_height_writer, current_height_reader) =
         unsafe { SeqLock::new(current_height) };
 
-    let pool_worker =
-        PoolWorkerInterface::new(txpool, storage_provider, &service_channel_limits);
+    let pool_worker = PoolWorkerInterface::new(
+        txpool,
+        storage_provider,
+        &service_channel_limits,
+        current_height,
+    );
 
     let shared_state = SharedState {
         request_read_sender: pool_worker.request_read_sender.clone(),

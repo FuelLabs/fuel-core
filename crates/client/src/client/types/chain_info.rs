@@ -30,3 +30,16 @@ impl TryFrom<schema::chain::ChainInfo> for ChainInfo {
         })
     }
 }
+
+impl TryFrom<schema::chain::ChainInfoLegacy> for ChainInfo {
+    type Error = ConversionError;
+
+    fn try_from(value: schema::chain::ChainInfoLegacy) -> Result<Self, Self::Error> {
+        Ok(Self {
+            da_height: value.da_height.into(),
+            name: value.name,
+            latest_block: value.latest_block.try_into()?,
+            consensus_parameters: value.consensus_parameters.try_into()?,
+        })
+    }
+}
