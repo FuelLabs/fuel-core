@@ -259,13 +259,19 @@ jobs:
           cache-on-failure: true
       - name: Wait for LocalStack
         run: |
+          last_response=""
           for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:4566/_localstack/health | grep -q '"s3": "running"'; then
+            last_response=$(curl -fsS http://127.0.0.1:4566/_localstack/health || true)
+            # S3 reports "available" until first use and "running" afterward; both mean the
+            # service is ready to accept requests.
+            state=$(printf '%s' "$last_response" | jq -r '.services.s3 // empty' 2>/dev/null || true)
+            if [ "$state" = "running" ] || [ "$state" = "available" ]; then
               exit 0
             fi
             sleep 2
           done
-          echo "LocalStack failed to start"
+          echo "LocalStack failed to start; last health response:"
+          printf '%s\n' "$last_response"
           exit 1
       - name: Run RPC S3 integration tests
         run: cargo test --package fuel-core-tests --test integration_tests rpc_s3 --features rpc -- --test-threads=1
