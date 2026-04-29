@@ -1650,7 +1650,6 @@ mod tests {
         net::{
             SocketAddrV4,
             TcpListener,
-            TcpStream,
         },
         process::{
             Child,
@@ -3406,12 +3405,22 @@ mod tests {
             .expect("Failed to spawn redis-server")
     }
 
+    /// Probe redis with a real `PING`/`PONG` round-trip — TCP accept can
+    /// succeed before redis-server is ready to process commands (the
+    /// same class of half-ready state that caused the 2026-04-22
+    /// mainnet hang). On a fresh start this is usually instant; on
+    /// restart it can take a few extra ticks while redis re-binds.
     fn wait_for_redis_ready(port: u16) {
-        let addr = SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, port);
+        let url = format!("redis://127.0.0.1:{port}/");
         let start = std::time::Instant::now();
         let timeout = Duration::from_secs(5);
+        let per_attempt = Duration::from_millis(200);
         while start.elapsed() < timeout {
-            if TcpStream::connect(addr).is_ok() {
+            if let Ok(client) = redis::Client::open(url.as_str())
+                && let Ok(mut conn) = client.get_connection_with_timeout(per_attempt)
+                && let Ok(reply) = redis::cmd("PING").query::<String>(&mut conn)
+                && reply == "PONG"
+            {
                 return;
             }
             thread::sleep(Duration::from_millis(10));
