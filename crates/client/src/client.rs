@@ -2204,42 +2204,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "rpc")]
-    mod remote_block_object_decode_tests {
-        use super::FuelClient;
-        use flate2::{
-            Compression,
-            write::GzEncoder,
-        };
-        use std::io::Write;
-
-        #[test]
-        fn no_header_is_identity() {
-            let raw = b"payload";
-            let out = FuelClient::decode_body_by_content_encoding(raw, None).unwrap();
-            assert_eq!(out, raw);
-        }
-
-        #[test]
-        fn identity_header_passes_through() {
-            let raw = b"payload";
-            let out = FuelClient::decode_body_by_content_encoding(raw, Some("identity"))
-                .unwrap();
-            assert_eq!(out, raw);
-        }
-
-        #[test]
-        fn gzip_header_decompresses() {
-            let raw = b"protobuf-bytes";
-            let mut enc = GzEncoder::new(Vec::new(), Compression::default());
-            enc.write_all(raw).unwrap();
-            let gz = enc.finish().unwrap();
-            let out =
-                FuelClient::decode_body_by_content_encoding(&gz, Some("gzip")).unwrap();
-            assert_eq!(out, raw);
-        }
-    }
-
     #[test]
     fn is_legacy_node_version_detection() {
         // Pre-0.48.0 nodes require the legacy query path.

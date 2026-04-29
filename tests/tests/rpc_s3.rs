@@ -22,7 +22,12 @@ use fuel_core_types::{
     fuel_types::BlockHeight,
 };
 use futures::StreamExt;
+use rand::{
+    SeedableRng,
+    rngs::StdRng,
+};
 use std::iter;
+use test_helpers::produce_block_with_tx;
 use tokio::time::sleep;
 
 const AWS_ENDPOINT_URL: &str = "http://127.0.0.1:4566";
@@ -123,6 +128,40 @@ async fn clean_s3_bucket() {
         let req = client.delete_object().bucket(bucket).key(obj.key.unwrap());
         let _ = req.send().await.unwrap();
     }
+}
+
+/// Allow unauthenticated GETs on the bucket so the client's reqwest-based HTTP path can read
+/// objects directly (mirroring a real CDN-in-front-of-S3 deployment).
+async fn allow_public_reads(bucket: &str) {
+    let client = aws_client().await;
+    let policy = format!(
+        r#"{{"Version":"2012-10-17","Statement":[{{"Sid":"AllowPublicRead","Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::{bucket}/*"}}]}}"#
+    );
+    let _ = client
+        .put_bucket_policy()
+        .bucket(bucket)
+        .policy(policy)
+        .send()
+        .await;
+}
+
+/// Waits for the block aggregator to catch up to `expected` or panics after a bounded retry window.
+/// The aggregator runs in a background task so there is a small delay between block commit and
+/// the S3 upload being visible to RPC consumers.
+async fn wait_for_aggregated_height(client: &FuelClient, expected: BlockHeight) {
+    for _ in 0..50 {
+        if let Ok(height) = client.get_aggregated_height().await
+            && height >= expected
+        {
+            return;
+        }
+        sleep(std::time::Duration::from_millis(100)).await;
+    }
+    panic!("block aggregator did not reach height {expected}");
+}
+
+fn public_http_base() -> String {
+    format!("{AWS_ENDPOINT_URL}/test-bucket")
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -266,4 +305,304 @@ async fn submit_and_await_commit__no_publish__does_not_publish_to_s3_bucket() {
     // then
     let found_block = block_found_in_s3_bucket().await;
     assert!(!found_block);
+}
+
+/// Verifies the end-to-end HTTP endpoint path: the gRPC server returns `RemoteHttpEndpoint` URLs
+/// that point at the (unsigned) S3 HTTP URL, and the client fetches + gzip-decompresses the block
+/// object. This is the same plumbing a production deployment uses when placing a CDN in front of
+/// the S3 bucket.
+#[tokio::test(flavor = "multi_thread")]
+async fn get_block_range__public_http_endpoint__fetches_and_decompresses_block() {
+    // setup
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+    allow_public_reads("test-bucket").await;
+
+    // given
+    let storage_method = StorageMethod::S3 {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(AWS_ENDPOINT_URL.to_string()),
+        requester_pays: false,
+        public_block_http_url: Some(public_http_base()),
+        public_block_http_headers: Default::default(),
+    };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+    let fuel_client = FuelClient::new_with_rpc(
+        iter::once(srv.bound_address.to_string()),
+        srv.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
+    let tx = Transaction::default_test_tx();
+    let _ = fuel_client.submit_and_await_commit(&tx).await.unwrap();
+    wait_for_aggregated_height(&fuel_client, BlockHeight::new(1)).await;
+
+    // when
+    let stream = fuel_client
+        .get_block_range(BlockHeight::new(1), BlockHeight::new(1))
+        .await
+        .unwrap();
+    futures::pin_mut!(stream);
+    let (block, receipts) = stream.next().await.unwrap().unwrap();
+
+    // then - the HTTP body came back gzipped (stored with content_encoding=gzip) and the client
+    // decompressed it before decoding the protobuf block + receipts.
+    assert_eq!(*block.header().height(), BlockHeight::new(1));
+    assert!(
+        matches!(
+            receipts[0][1],
+            Receipt::ScriptResult {
+                result: ScriptExecutionResult::Success,
+                ..
+            }
+        ),
+        "should have a script result receipt, received: {:?}",
+        receipts
+    );
+    assert!(
+        matches!(receipts[0][0], Receipt::Return { .. }),
+        "should have a return receipt, received: {:?}",
+        receipts
+    );
+
+    clean_s3_bucket().await;
+    drop(srv);
+}
+
+/// Requesting a range that spans multiple blocks over the public HTTP endpoint should stream each
+/// block as a separate HTTP fetch and decompress each one.
+#[tokio::test(flavor = "multi_thread")]
+async fn get_block_range__public_http_endpoint__streams_multi_block_range() {
+    // setup
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+    allow_public_reads("test-bucket").await;
+
+    // given
+    const NUM_BLOCKS: u32 = 3;
+    let storage_method = StorageMethod::S3 {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(AWS_ENDPOINT_URL.to_string()),
+        requester_pays: false,
+        public_block_http_url: Some(public_http_base()),
+        public_block_http_headers: Default::default(),
+    };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+    let fuel_client = FuelClient::new_with_rpc(
+        iter::once(srv.bound_address.to_string()),
+        srv.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
+
+    let mut rng = StdRng::seed_from_u64(0xC0FFEE);
+    for _ in 0..NUM_BLOCKS {
+        produce_block_with_tx(&mut rng, &fuel_client).await;
+    }
+    wait_for_aggregated_height(&fuel_client, BlockHeight::new(NUM_BLOCKS)).await;
+
+    // when
+    let stream = fuel_client
+        .get_block_range(BlockHeight::new(1), BlockHeight::new(NUM_BLOCKS))
+        .await
+        .unwrap();
+    futures::pin_mut!(stream);
+
+    let mut heights = Vec::new();
+    while let Some(next) = stream.next().await {
+        let (block, _receipts) = next.unwrap();
+        heights.push(*block.header().height());
+    }
+
+    // then
+    let expected: Vec<BlockHeight> = (1..=NUM_BLOCKS).map(BlockHeight::new).collect();
+    assert_eq!(heights, expected);
+
+    clean_s3_bucket().await;
+    drop(srv);
+}
+
+/// `S3NoPublish` + public HTTP URL: another node publishes the blocks, but the local node should
+/// still hand out HTTP endpoint URLs so consumers can fetch blocks via the CDN path.
+#[tokio::test(flavor = "multi_thread")]
+async fn get_block_range__no_publish_with_public_http_endpoint__serves_blocks_written_by_peer()
+ {
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+    allow_public_reads("test-bucket").await;
+
+    // given - a "publisher" node uploads blocks to S3
+    let publisher_storage = StorageMethod::S3 {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(AWS_ENDPOINT_URL.to_string()),
+        requester_pays: false,
+        public_block_http_url: None,
+        public_block_http_headers: Default::default(),
+    };
+    let publisher_config =
+        Config::local_node_with_rpc_and_storage_method(publisher_storage);
+    let publisher = FuelService::from_database(Database::default(), publisher_config)
+        .await
+        .unwrap();
+    let publisher_client = FuelClient::from(publisher.bound_address);
+    let mut rng = StdRng::seed_from_u64(0xDECAF);
+    produce_block_with_tx(&mut rng, &publisher_client).await;
+
+    // wait for the publisher's S3 upload to complete before starting the consumer. We observe via
+    // the publisher's own RPC to avoid ordering issues against the object store.
+    let publisher_rpc_client = FuelClient::new_with_rpc(
+        iter::once(publisher.bound_address.to_string()),
+        publisher.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
+    wait_for_aggregated_height(&publisher_rpc_client, BlockHeight::new(1)).await;
+
+    // given - a separate "consumer" node in no-publish mode, advertising the HTTP URL
+    let consumer_storage = StorageMethod::S3NoPublish {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(AWS_ENDPOINT_URL.to_string()),
+        requester_pays: false,
+        public_block_http_url: Some(public_http_base()),
+        public_block_http_headers: Default::default(),
+    };
+    let consumer_config =
+        Config::local_node_with_rpc_and_storage_method(consumer_storage);
+    let consumer = FuelService::from_database(Database::default(), consumer_config)
+        .await
+        .unwrap();
+    let consumer_client = FuelClient::new_with_rpc(
+        iter::once(consumer.bound_address.to_string()),
+        consumer.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
+    wait_for_aggregated_height(&consumer_client, BlockHeight::new(1)).await;
+
+    // when - consumer streams the block via its own RPC (which should route fetches through the
+    // public HTTP URL we configured, not through the publisher)
+    let stream = consumer_client
+        .get_block_range(BlockHeight::new(1), BlockHeight::new(1))
+        .await
+        .unwrap();
+    futures::pin_mut!(stream);
+    let (block, _receipts) = stream.next().await.unwrap().unwrap();
+
+    // then
+    assert_eq!(*block.header().height(), BlockHeight::new(1));
+
+    clean_s3_bucket().await;
+    drop(consumer);
+    drop(publisher);
+}
+
+/// Multi-block coverage for the S3 (AWS SDK) fetch path. The existing single-block test covers
+/// the happy path; this ensures the streamed range both in the gRPC response and the subsequent
+/// per-block S3 GETs handle more than one element.
+#[tokio::test(flavor = "multi_thread")]
+async fn get_block_range__s3_endpoint__streams_multi_block_range() {
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+
+    const NUM_BLOCKS: u32 = 3;
+    let storage_method = StorageMethod::S3 {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(AWS_ENDPOINT_URL.to_string()),
+        requester_pays: false,
+        public_block_http_url: None,
+        public_block_http_headers: Default::default(),
+    };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let srv = FuelService::from_database(Database::default(), config)
+        .await
+        .unwrap();
+    let fuel_client = FuelClient::new_with_rpc(
+        iter::once(srv.bound_address.to_string()),
+        srv.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
+
+    let mut rng = StdRng::seed_from_u64(0xF00D);
+    for _ in 0..NUM_BLOCKS {
+        produce_block_with_tx(&mut rng, &fuel_client).await;
+    }
+    wait_for_aggregated_height(&fuel_client, BlockHeight::new(NUM_BLOCKS)).await;
+
+    let stream = fuel_client
+        .get_block_range(BlockHeight::new(1), BlockHeight::new(NUM_BLOCKS))
+        .await
+        .unwrap();
+    futures::pin_mut!(stream);
+
+    let mut heights = Vec::new();
+    while let Some(next) = stream.next().await {
+        let (block, _receipts) = next.unwrap();
+        heights.push(*block.header().height());
+    }
+
+    let expected: Vec<BlockHeight> = (1..=NUM_BLOCKS).map(BlockHeight::new).collect();
+    assert_eq!(heights, expected);
+
+    clean_s3_bucket().await;
+    drop(srv);
+}
+
+/// The server-side upload path should tag S3 objects with `Content-Encoding: gzip` so that both
+/// the aws-sdk and raw HTTP clients see the encoding and decompress correctly. Without this, the
+/// client decoder would feed gzipped bytes into the protobuf parser.
+#[tokio::test(flavor = "multi_thread")]
+async fn store_block__s3_object_carries_gzip_content_encoding_metadata() {
+    require_env_var_or_panic!("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION");
+    ensure_bucket_exists().await;
+    clean_s3_bucket().await;
+
+    let storage_method = StorageMethod::S3 {
+        bucket: "test-bucket".to_string(),
+        endpoint_url: Some(AWS_ENDPOINT_URL.to_string()),
+        requester_pays: false,
+        public_block_http_url: None,
+        public_block_http_headers: Default::default(),
+    };
+    let config = Config::local_node_with_rpc_and_storage_method(storage_method);
+    let srv = FuelService::from_database(Database::default(), config)
+        .await
+        .unwrap();
+    let fuel_client = FuelClient::new_with_rpc(
+        iter::once(srv.bound_address.to_string()),
+        srv.rpc_address.unwrap().to_string(),
+    )
+    .await
+    .unwrap();
+
+    let _ = fuel_client
+        .submit_and_await_commit(&Transaction::default_test_tx())
+        .await
+        .unwrap();
+    wait_for_aggregated_height(&fuel_client, BlockHeight::new(1)).await;
+
+    // Inspect the raw S3 object metadata independently of the client's fetch path.
+    let aws = aws_client().await;
+    let key = block_height_to_key(&BlockHeight::new(1));
+    let head = aws
+        .head_object()
+        .bucket("test-bucket")
+        .key(&key)
+        .send()
+        .await
+        .expect("block object should exist in S3");
+    assert_eq!(head.content_encoding(), Some("gzip"));
+
+    clean_s3_bucket().await;
+    drop(srv);
 }
