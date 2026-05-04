@@ -531,7 +531,8 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        for service in self.services.iter() {
+        // Stop services in reverse order so PoA, which is inserted last, is stopped first.
+        for service in self.services.iter().rev() {
             let result = service.stop_and_await().await;
 
             if let Err(err) = result {
