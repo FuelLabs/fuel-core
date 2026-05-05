@@ -36,6 +36,7 @@ use std::{
         HashSet,
         VecDeque,
     },
+    convert::Infallible,
     task::{
         Context,
         Poll,
@@ -49,7 +50,6 @@ use tokio::time::{
     self,
     Interval,
 };
-use void::Void;
 
 const HEALTH_CHECK_INTERVAL_IN_SECONDS: u64 = 10;
 const REPUTATION_DECAY_INTERVAL_IN_SECONDS: u64 = 1;
@@ -73,7 +73,7 @@ pub struct Behaviour {
     reserved_nodes_to_connect: VecDeque<(Instant, PeerId)>,
     connected_reserved_nodes: HashSet<PeerId>,
     pending_connections: HashSet<ConnectionId>,
-    pending_events: VecDeque<ToSwarm<PeerReportEvent, Void>>,
+    pending_events: VecDeque<ToSwarm<PeerReportEvent, Infallible>>,
     decay_interval: Interval,
 }
 

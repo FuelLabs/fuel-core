@@ -3,6 +3,7 @@
 #![deny(unused_crate_dependencies)]
 #![deny(warnings)]
 
+use libp2p_gossipsub as _;
 use yamux as _;
 
 pub mod behavior;
