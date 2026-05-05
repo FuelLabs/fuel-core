@@ -532,8 +532,24 @@ impl RunnableTask for Task {
 
     async fn shutdown(self) -> anyhow::Result<()> {
         // Stop services in reverse order so PoA, which is inserted last, is stopped first.
-        for service in self.services.iter().rev() {
+        let total_services = self.services.len();
+        for (shutdown_order, service) in self.services.iter().rev().enumerate() {
+            let service_num = shutdown_order + 1;
+            tracing::info!(
+                service_num,
+                total_services,
+                state_before = ?service.state(),
+                "FuelService about to stop sub-service"
+            );
             let result = service.stop_and_await().await;
+
+            tracing::info!(
+                service_num,
+                total_services,
+                result = ?result,
+                state_after = ?service.state(),
+                "FuelService finished waiting for sub-service shutdown"
+            );
 
             if let Err(err) = result {
                 tracing::error!(
