@@ -33,6 +33,7 @@ futures = { workspace = true }
 parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+serde_json = { workspace = true }
 tower = "0.5.2"
 url = { workspace = true }
 
