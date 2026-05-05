@@ -77,12 +77,12 @@ use futures::Stream;
 use hyper::rt::Executor;
 use serde_json::json;
 use std::{
+    time::Duration,
     future::Future,
     net::{
         SocketAddr,
         TcpListener,
     },
-    pin::Pin,
     sync::{
         Arc,
         OnceLock,
@@ -135,9 +135,10 @@ pub struct ServerParams {
 }
 
 pub struct Task {
-    // Ugly workaround because of https://github.com/hyperium/hyper/issues/2582
-    server: Pin<Box<dyn Future<Output = hyper::Result<()>> + Send + 'static>>,
+    server: tokio::task::JoinHandle<hyper::Result<()>>,
 }
+
+const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Clone)]
 struct ExecutorWithMetrics {
@@ -206,20 +207,36 @@ impl RunnableService for GraphqlService {
             });
 
         Ok(Task {
-            server: Box::pin(server),
+            server: tokio::spawn(server),
         })
     }
 }
 
 impl RunnableTask for Task {
-    async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
-        match self.server.as_mut().await {
-            Ok(()) => {
-                // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
-                // error or stop signal.
-                TaskNextAction::Stop
+    async fn run(&mut self, state: &mut StateWatcher) -> TaskNextAction {
+        tokio::select! {
+            result = &mut self.server => map_server_result(result),
+            result = state.while_started() => {
+                match result {
+                    Ok(_) => {
+                        match tokio::time::timeout(
+                            GRAPHQL_SHUTDOWN_TIMEOUT,
+                            &mut self.server,
+                        ).await {
+                            Ok(result) => map_server_result(result),
+                            Err(_) => {
+                                tracing::warn!(
+                                    timeout_secs = GRAPHQL_SHUTDOWN_TIMEOUT.as_secs(),
+                                    "GraphQL shutdown timed out; aborting server task"
+                                );
+                                self.server.abort();
+                                map_server_result((&mut self.server).await)
+                            }
+                        }
+                    }
+                    Err(err) => TaskNextAction::ErrorContinue(err.into()),
+                }
             }
-            Err(err) => TaskNextAction::ErrorContinue(err.into()),
         }
     }
 
@@ -228,6 +245,21 @@ impl RunnableTask for Task {
         // and we don't spawn any sub-tasks that we need to finish or await.
         // The `axum::Server` was already gracefully shutdown at this point.
         Ok(())
+    }
+}
+
+fn map_server_result(
+    result: Result<hyper::Result<()>, tokio::task::JoinError>,
+) -> TaskNextAction {
+    match result {
+        Ok(Ok(())) => {
+            // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
+            // error or stop signal.
+            TaskNextAction::Stop
+        }
+        Ok(Err(err)) => TaskNextAction::ErrorContinue(err.into()),
+        Err(err) if err.is_cancelled() => TaskNextAction::Stop,
+        Err(err) => TaskNextAction::ErrorContinue(err.into()),
     }
 }
 
