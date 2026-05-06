@@ -77,7 +77,6 @@ use futures::Stream;
 use hyper::rt::Executor;
 use serde_json::json;
 use std::{
-    time::Duration,
     future::Future,
     net::{
         SocketAddr,
@@ -87,6 +86,7 @@ use std::{
         Arc,
         OnceLock,
     },
+    time::Duration,
 };
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;

@@ -531,35 +531,45 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Stop services in reverse order so PoA, which is inserted last, is stopped first.
         let total_services = self.services.len();
-        for (shutdown_order, service) in self.services.iter().rev().enumerate() {
-            let service_num = shutdown_order + 1;
-            tracing::info!(
-                service_num,
-                total_services,
-                state_before = ?service.state(),
-                "FuelService about to stop sub-service"
-            );
-            let result = service.stop_and_await().await;
+        futures::future::join_all(self.services.iter().enumerate().map(
+            |(index, service)| {
+                stop_sub_service(index + 1, total_services, service.as_ref())
+            },
+        ))
+        .await;
 
-            tracing::info!(
-                service_num,
-                total_services,
-                result = ?result,
-                state_after = ?service.state(),
-                "FuelService finished waiting for sub-service shutdown"
-            );
-
-            if let Err(err) = result {
-                tracing::error!(
-                    "Got and error during awaiting for stop of the service: {}",
-                    err
-                );
-            }
-        }
         self.database.shutdown();
         Ok(())
+    }
+}
+
+async fn stop_sub_service(
+    service_num: usize,
+    total_services: usize,
+    service: &(dyn ServiceTrait + Send + Sync + 'static),
+) {
+    tracing::info!(
+        service_num,
+        total_services,
+        state_before = ?service.state(),
+        "FuelService about to stop sub-service"
+    );
+    let result = service.stop_and_await().await;
+
+    tracing::info!(
+        service_num,
+        total_services,
+        result = ?result,
+        state_after = ?service.state(),
+        "FuelService finished waiting for sub-service shutdown"
+    );
+
+    if let Err(err) = result {
+        tracing::error!(
+            "Got an error during awaiting for stop of the service: {}",
+            err
+        );
     }
 }
 

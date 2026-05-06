@@ -984,7 +984,10 @@ impl RedisLeaderLeaseAdapter {
     }
 
     fn current_epoch_token_value(&self) -> Option<u64> {
-        self.current_epoch_token.lock().ok().and_then(|epoch| *epoch)
+        self.current_epoch_token
+            .lock()
+            .ok()
+            .and_then(|epoch| *epoch)
     }
 
     fn publish_block_on_all_nodes(
