@@ -409,6 +409,14 @@ impl RedisLeaderLeaseAdapter {
         .await;
         let owner_count = ownership.iter().filter(|&&is_owner| is_owner).count();
         if !self.quorum_reached(owner_count) {
+            tracing::info!(
+                owner_count,
+                quorum = self.quorum,
+                redis_nodes = self.redis_nodes.len(),
+                current_epoch_token = ?self.current_epoch_token_value(),
+                lease_key = %self.lease_key,
+                "Leader lock quorum not held by this authority"
+            );
             return Ok(false);
         }
 
@@ -472,6 +480,19 @@ impl RedisLeaderLeaseAdapter {
                 u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
             let validity_millis =
                 self.calculate_remaining_validity_millis(elapsed_millis);
+            tracing::debug!(
+                attempt = attempt_index.saturating_add(1),
+                max_attempts = self.max_attempts,
+                acquired_count,
+                quorum = self.quorum,
+                redis_nodes = self.redis_nodes.len(),
+                elapsed_millis,
+                validity_millis,
+                promoted_tokens = ?promoted_tokens,
+                current_epoch_token = ?self.current_epoch_token_value(),
+                lease_key = %self.lease_key,
+                "Leader lock promotion attempt finished"
+            );
             if self.quorum_reached(acquired_count) && validity_millis > 0 {
                 // Record epoch drift across quorum nodes
                 if promoted_tokens.len() > 1
@@ -507,6 +528,14 @@ impl RedisLeaderLeaseAdapter {
                 self.delay_next_retry().await;
             }
         }
+        tracing::warn!(
+            max_attempts = self.max_attempts,
+            quorum = self.quorum,
+            redis_nodes = self.redis_nodes.len(),
+            current_epoch_token = ?self.current_epoch_token_value(),
+            lease_key = %self.lease_key,
+            "Leader lock promotion failed; cannot produce block"
+        );
         poa_metrics().promotion_failure_total.inc();
         poa_metrics()
             .promotion_duration_s
@@ -902,9 +931,26 @@ impl RedisLeaderLeaseAdapter {
     async fn can_produce_block(&self) -> anyhow::Result<bool> {
         tracing::debug!("Checking Redis leader lock");
         if self.has_lease_owner_quorum().await? {
+            tracing::debug!(
+                quorum = self.quorum,
+                redis_nodes = self.redis_nodes.len(),
+                current_epoch_token = ?self.current_epoch_token_value(),
+                lease_key = %self.lease_key,
+                "This authority already holds leader lock quorum"
+            );
             return Ok(true);
         }
-        self.acquire_lease_if_free().await
+        let can_produce = self.acquire_lease_if_free().await?;
+        if !can_produce {
+            tracing::info!(
+                quorum = self.quorum,
+                redis_nodes = self.redis_nodes.len(),
+                current_epoch_token = ?self.current_epoch_token_value(),
+                lease_key = %self.lease_key,
+                "can_produce_block returned false"
+            );
+        }
+        Ok(can_produce)
     }
 
     async fn release_if_owner(&self) -> anyhow::Result<()> {
@@ -935,6 +981,10 @@ impl RedisLeaderLeaseAdapter {
         } else {
             Err(anyhow!("Failed to release lease on quorum"))
         }
+    }
+
+    fn current_epoch_token_value(&self) -> Option<u64> {
+        self.current_epoch_token.lock().ok().and_then(|epoch| *epoch)
     }
 
     fn publish_block_on_all_nodes(
