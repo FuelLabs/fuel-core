@@ -214,6 +214,8 @@ impl RunnableService for GraphqlService {
 
 impl RunnableTask for Task {
     async fn run(&mut self, state: &mut StateWatcher) -> TaskNextAction {
+        // Allow the `StateWatcher` to override the "graceful shutdown" of the internal GraphQL
+        // server. If the service is taking too long to shutdown, we abort the server task.
         tokio::select! {
             result = &mut self.server => map_server_result(result),
             result = state.while_started() => {

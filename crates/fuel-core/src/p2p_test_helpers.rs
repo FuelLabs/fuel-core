@@ -686,6 +686,7 @@ impl Node {
 
     async fn insert_tx_with_retry(&self, tx: Transaction) {
         let retry_delay = Duration::from_millis(100);
+        #[allow(clippy::arithmetic_side_effects)]
         let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
 
         loop {
