@@ -4,6 +4,7 @@ use crate::{
         BlocksProvider,
         BlocksStorage,
         remote_cache::{
+            PublicHttpConfig,
             RemoteBlocksProvider,
             RemoteCache,
         },
@@ -46,11 +47,13 @@ impl<S> StorageOrRemoteBlocksProvider<S> {
         aws_bucket: String,
         requester_pays: bool,
         aws_endpoint_url: Option<String>,
+        public_http: Option<PublicHttpConfig>,
     ) -> Self {
         let remote_cache = RemoteBlocksProvider::new(
             aws_bucket,
             requester_pays,
             aws_endpoint_url,
+            public_http,
             storage,
         );
         StorageOrRemoteBlocksProvider::Remote(remote_cache)

@@ -17,6 +17,7 @@ use crate::{
     },
     db::{
         BlocksProvider,
+        remote_cache::PublicHttpConfig,
         storage_or_remote_db::{
             StorageOrRemoteBlocksProvider,
             StorageOrRemoteDB,
@@ -63,6 +64,7 @@ use fuel_core_types::{
 };
 use futures::Stream;
 use std::{
+    collections::HashMap,
     fmt::Debug,
     net::SocketAddr,
     sync::Arc,
@@ -88,12 +90,17 @@ pub enum StorageMethod {
         bucket: String,
         endpoint_url: Option<String>,
         requester_pays: bool,
+        /// When set, gRPC returns HTTP endpoint URLs (public base URL + same object key path as S3) instead of S3 bucket metadata.
+        public_block_http_url: Option<String>,
+        public_block_http_headers: HashMap<String, String>,
     },
     // Assumes another node is publishing blocks to S3 bucket, but relaying details
     S3NoPublish {
         bucket: String,
         endpoint_url: Option<String>,
         requester_pays: bool,
+        public_block_http_url: Option<String>,
+        public_block_http_headers: HashMap<String, String>,
     },
 }
 
@@ -326,17 +333,32 @@ where
             bucket,
             endpoint_url,
             requester_pays,
+            public_block_http_url,
+            public_block_http_headers,
         }
         | StorageMethod::S3NoPublish {
             bucket,
             endpoint_url,
             requester_pays,
-        } => StorageOrRemoteBlocksProvider::new_s3(
-            db.clone(),
-            bucket.clone(),
-            *requester_pays,
-            endpoint_url.clone(),
-        ),
+            public_block_http_url,
+            public_block_http_headers,
+        } => {
+            let public_http = public_block_http_url
+                .as_ref()
+                .map(String::as_str)
+                .filter(|s| !s.is_empty())
+                .map(|base| PublicHttpConfig {
+                    base_url: base.to_string(),
+                    headers: public_block_http_headers.clone(),
+                });
+            StorageOrRemoteBlocksProvider::new_s3(
+                db.clone(),
+                bucket.clone(),
+                *requester_pays,
+                endpoint_url.clone(),
+                public_http,
+            )
+        }
     };
 
     let convertor = Arc::new(convertor);

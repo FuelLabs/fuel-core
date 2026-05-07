@@ -3,4 +3,5 @@ ignore = [
     "RUSTSEC-2025-0009", # https://github.com/FuelLabs/fuel-core/issues/2814
     "RUSTSEC-2026-0098", # https://github.com/FuelLabs/fuel-core/issues/3265
     "RUSTSEC-2026-0099", # https://github.com/FuelLabs/fuel-core/issues/3265
+    "RUSTSEC-2026-0104", # https://github.com/FuelLabs/fuel-core/issues/3279
 ]
