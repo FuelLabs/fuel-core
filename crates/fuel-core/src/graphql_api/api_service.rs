@@ -257,9 +257,15 @@ fn map_server_result(
             // error or stop signal.
             TaskNextAction::Stop
         }
-        Ok(Err(err)) => TaskNextAction::ErrorContinue(err.into()),
+        Ok(Err(err)) => {
+            tracing::error!("GraphQL server task exited with error: {err}");
+            TaskNextAction::Stop
+        }
         Err(err) if err.is_cancelled() => TaskNextAction::Stop,
-        Err(err) => TaskNextAction::ErrorContinue(err.into()),
+        Err(err) => {
+            tracing::error!("GraphQL server task join failed: {err}");
+            TaskNextAction::Stop
+        }
     }
 }
 
