@@ -234,7 +234,7 @@ impl RunnableTask for Task {
                             }
                         }
                     }
-                    Err(err) => TaskNextAction::ErrorContinue(err.into()),
+                    Err(err) => TaskNextAction::ErrorContinue(err),
                 }
             }
         }

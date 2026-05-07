@@ -98,10 +98,7 @@ parking_lot = { workspace = true }
 postcard = { workspace = true }
 rand = { workspace = true }
 redis = { version = "1.2", features = ["tokio-comp"] }
-rocksdb = { version = "0.21", default-features = false, features = [
-    "lz4",
-    "multi-threaded-cf",
-], optional = true }
+rocksdb = { version = "0.21", default-features = false, features = ["lz4", "multi-threaded-cf"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 serde_with = { workspace = true, optional = true }

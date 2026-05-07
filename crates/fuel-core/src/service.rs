@@ -532,9 +532,9 @@ impl RunnableTask for Task {
 
     async fn shutdown(self) -> anyhow::Result<()> {
         let total_services = self.services.len();
-        futures::future::join_all(self.services.iter().enumerate().map(
-            |(index, service)| {
-                stop_sub_service(index + 1, total_services, service.as_ref())
+        futures::future::join_all((1_usize..).zip(self.services.iter()).map(
+            |(service_num, service)| {
+                stop_sub_service(service_num, total_services, service.as_ref())
             },
         ))
         .await;
