@@ -45,6 +45,11 @@ use test_helpers::assemble_tx::{
     AssembleAndRunTx,
     SigningAccount,
 };
+use tokio::time::{
+    Duration,
+    Instant,
+    sleep,
+};
 
 use crate::config::{
     ClientConfig,
@@ -65,8 +70,14 @@ impl TestContext {
         let alice_client = Self::new_client(config.endpoint.clone(), &config.wallet_a);
         let bob_client = Self::new_client(config.endpoint.clone(), &config.wallet_b);
         Self {
-            alice: Wallet::new(config.wallet_a.secret, alice_client).await,
-            bob: Wallet::new(config.wallet_b.secret, bob_client).await,
+            alice: Wallet::new(
+                config.wallet_a.secret,
+                alice_client,
+                config.sync_timeout(),
+            )
+            .await,
+            bob: Wallet::new(config.wallet_b.secret, bob_client, config.sync_timeout())
+                .await,
             config,
         }
     }
@@ -85,12 +96,15 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub async fn new(secret: SecretKey, client: FuelClient) -> Self {
+    pub async fn new(
+        secret: SecretKey,
+        client: FuelClient,
+        startup_timeout: Duration,
+    ) -> Self {
         let public_key: PublicKey = (&secret).into();
         let address = Input::owner(&public_key);
         // get consensus params
-        let consensus_params = client
-            .chain_info()
+        let consensus_params = wait_for_chain_info(&client, startup_timeout)
             .await
             .expect("failed to get chain info")
             .consensus_parameters;
@@ -271,6 +285,28 @@ impl Wallet {
         }
 
         Ok(())
+    }
+}
+
+async fn wait_for_chain_info(
+    client: &FuelClient,
+    startup_timeout: Duration,
+) -> anyhow::Result<fuel_core_client::client::types::ChainInfo> {
+    let deadline = Instant::now() + startup_timeout;
+    let mut last_error = None;
+
+    loop {
+        match client.chain_info().await {
+            Ok(info) => return Ok(info),
+            Err(err) => {
+                last_error = Some(err);
+                if Instant::now() >= deadline {
+                    let err = last_error.expect("last error should exist on timeout");
+                    return Err(anyhow!("failed to get chain info before timeout: {err}"));
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+        }
     }
 }
 
