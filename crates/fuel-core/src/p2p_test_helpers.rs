@@ -77,7 +77,11 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::broadcast;
+use tokio::{
+    net::TcpStream,
+    sync::broadcast,
+    time::sleep,
+};
 
 #[derive(Copy, Clone)]
 pub enum BootstrapType {
@@ -558,6 +562,16 @@ pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node 
     })
     .expect("The `FuelService should start without error");
 
+    tokio::time::timeout(time_limit, wait_for_node_ready(&node))
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "All node interfaces should become ready in less than {} seconds",
+                time_limit.as_secs()
+            )
+        })
+        .expect("The `FuelService` interfaces should become ready");
+
     let config = node.shared.config.clone();
     Node {
         node,
@@ -689,6 +703,19 @@ impl Node {
             .send_stop_signal_and_await_shutdown()
             .await
             .unwrap();
+    }
+}
+
+async fn wait_for_node_ready(node: &FuelService) -> anyhow::Result<()> {
+    loop {
+        let graphql_ready = TcpStream::connect(node.bound_address).await.is_ok();
+        let txpool_ready = node.shared.txpool_shared_state.get_tx_ids(1).await.is_ok();
+
+        if graphql_ready && txpool_ready {
+            return Ok(());
+        }
+
+        sleep(Duration::from_millis(100)).await;
     }
 }
 
