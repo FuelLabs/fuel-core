@@ -102,7 +102,7 @@ where
 
                 let ss = tokio::select! {
                     biased;
-                    _ = state.while_started() => {
+                    _ = state.wait_stopping_or_stopped() => {
                         return Err(anyhow::anyhow!(
                             "Shutdown requested during SharedSequencer initialization"
                         ));
