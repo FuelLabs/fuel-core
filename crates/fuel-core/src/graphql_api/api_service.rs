@@ -200,8 +200,14 @@ impl RunnableService for GraphqlService {
             .executor(executor)
             .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
+                // Wait for an actual stop signal. Using `while_started` here would
+                // resolve immediately while the state is still `Starting`, racing
+                // with the runner setting the state to `Started`. When the race
+                // is lost, the spawned server task aborts before it ever serves
+                // a request — which then cascades into a full FuelService
+                // shutdown via `select_all(await_stop)` in `service.rs::run`.
                 state
-                    .while_started()
+                    .wait_stopping_or_stopped()
                     .await
                     .expect("The service is destroyed");
             });
