@@ -940,17 +940,7 @@ impl RedisLeaderLeaseAdapter {
             );
             return Ok(true);
         }
-        let can_produce = self.acquire_lease_if_free().await?;
-        if !can_produce {
-            tracing::info!(
-                quorum = self.quorum,
-                redis_nodes = self.redis_nodes.len(),
-                current_epoch_token = ?self.current_epoch_token_value(),
-                lease_key = %self.lease_key,
-                "can_produce_block returned false"
-            );
-        }
-        Ok(can_produce)
+        self.acquire_lease_if_free().await
     }
 
     async fn release_if_owner(&self) -> anyhow::Result<()> {

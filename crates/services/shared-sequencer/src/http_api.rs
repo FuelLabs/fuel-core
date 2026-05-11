@@ -81,6 +81,7 @@ pub struct SimulateRequest {
 }
 
 pub async fn estimate_transaction(
+    http: &reqwest::Client,
     api_url: &str,
     tx_bytes: Vec<u8>,
 ) -> anyhow::Result<u64> {
@@ -90,51 +91,53 @@ pub async fn estimate_transaction(
     };
     let path = "/cosmos/tx/v1beta1/simulate";
     let full_url = Url::parse(api_url)?.join(path).unwrap();
-    let r = reqwest::Client::new()
-        .post(full_url)
-        .json(&request)
-        .send()
-        .await?;
+    let r = http.post(full_url).json(&request).send().await?;
     let text = r.text().await?;
     let resp: api_types::SimulateResponse =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp.gas_info.gas_used.parse()?)
 }
 
-pub async fn get_account_prefix(api_url: &str) -> anyhow::Result<String> {
+pub async fn get_account_prefix(
+    http: &reqwest::Client,
+    api_url: &str,
+) -> anyhow::Result<String> {
     let path = "/cosmos/auth/v1beta1/bech32";
     let full_url = Url::parse(api_url)?.join(path).unwrap();
-    let r = reqwest::get(full_url).await?;
+    let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::AccountPrefix =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp.bech32_prefix)
 }
 
-pub async fn chain_id(api_url: &str) -> anyhow::Result<String> {
+pub async fn chain_id(http: &reqwest::Client, api_url: &str) -> anyhow::Result<String> {
     let path = "/cosmos/base/tendermint/v1beta1/node_info";
     let full_url = Url::parse(api_url)?.join(path).unwrap();
-    let r = reqwest::get(full_url).await?;
+    let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::NodeInfo =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp.default_node_info.network)
 }
 
-pub async fn config(api_url: &str) -> anyhow::Result<api_types::Config> {
+pub async fn config(
+    http: &reqwest::Client,
+    api_url: &str,
+) -> anyhow::Result<api_types::Config> {
     let path = "/cosmos/base/node/v1beta1/config";
     let full_url = Url::parse(api_url)?.join(path).unwrap();
-    let r = reqwest::get(full_url).await?;
+    let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::Config =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
     Ok(resp)
 }
 
-pub async fn coin_denom(api_url: &str) -> anyhow::Result<String> {
+pub async fn coin_denom(http: &reqwest::Client, api_url: &str) -> anyhow::Result<String> {
     let path = "/cosmos/staking/v1beta1/params";
     let full_url = Url::parse(api_url)?.join(path).unwrap();
-    let r = reqwest::get(full_url).await?;
+    let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::StakingParams =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
@@ -142,12 +145,13 @@ pub async fn coin_denom(api_url: &str) -> anyhow::Result<String> {
 }
 
 pub async fn get_account(
+    http: &reqwest::Client,
     api_url: &str,
     id: AccountId,
 ) -> anyhow::Result<AccountMetadata> {
     let path = format!("/cosmos/auth/v1beta1/accounts/{id}");
     let full_url = Url::parse(api_url)?.join(&path).unwrap();
-    let r = reqwest::get(full_url).await?;
+    let r = http.get(full_url).send().await?;
     let text = r.text().await?;
     let resp: api_types::AccountResponse =
         serde_json::from_str(&text).with_context(|| format!("response text {text}"))?;
@@ -173,11 +177,15 @@ pub struct TopicInfo {
     pub order: u64,
 }
 
-pub async fn get_topic(api_url: &str, id: [u8; 32]) -> anyhow::Result<Option<TopicInfo>> {
+pub async fn get_topic(
+    http: &reqwest::Client,
+    api_url: &str,
+    id: [u8; 32],
+) -> anyhow::Result<Option<TopicInfo>> {
     let id_b64 = BASE64_STANDARD.encode(id);
     let path = format!("/fuelsequencer/sequencing/v1/topic/{id_b64}");
     let full_url = Url::parse(api_url)?.join(&path).unwrap();
-    let r = reqwest::get(full_url).await?;
+    let r = http.get(full_url).send().await?;
     if r.status() == 404 {
         return Ok(None);
     }
