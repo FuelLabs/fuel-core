@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - [3259](https://github.com/FuelLabs/fuel-core/pull/3259): Bump wasmtime to 0.43.1
 
 ### Fixed
-- [3258](https://github.com/FuelLabs/fuel-core/pull/3258): Fix backward-compatiblity of GraphQL queries for pre-0.48.0 versions
+- [3258](https://github.com/FuelLabs/fuel-core/pull/3258): Fix backward-compatibility of GraphQL queries for pre-0.48.0 versions
 - [3261](https://github.com/FuelLabs/fuel-core/pull/3261): Fix PoA leader deadlock after reconciliation import where `ensure_synced()` blocked forever because `execute_and_commit` marked reconciliation blocks as `Source::Network`, causing the SyncTask to transition to `NotSynced`.
 - [3264](https://github.com/FuelLabs/fuel-core/pull/3264): Rollback stale preconfirmations in the mempool when the canonical block at that height omits the preconfirmed transactions, restoring spent inputs and removing dependent transactions.
 - [3269](https://github.com/FuelLabs/fuel-core/pull/3269): Fix PoA reconciliation deadlock when the same block exists on all Redis nodes but with different epochs. `unreconciled_blocks` now groups votes by `block_id` only (tracking max epoch as tiebreaker), so identical blocks written during re-promotion storms count toward quorum.
