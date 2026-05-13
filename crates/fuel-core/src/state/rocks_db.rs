@@ -871,13 +871,14 @@ where
     }
 
     pub fn shutdown(&self) {
-        // Stop rocksdb's background compaction/flush threads synchronously,
-        // so that by the time the surrounding service Drop chain runs there
-        // are no rocksdb worker threads still touching the DB. This is the
-        // same mitigation TiKV uses (tikv/tikv#16680) to bound shutdown time
-        // and avoid teardown races with rocksdb's static-singleton thread
-        // pools.
-        self.db.cancel_all_background_work(true);
+        // Signal rocksdb's background compaction/flush threads to stop. We
+        // use `wait=false` so this returns immediately — each `CombinedDatabase`
+        // has several layered DBs and `wait=true` per-DB serialises into a
+        // shutdown that blows past tight per-service timeouts in tests
+        // (`tests/tests/poa.rs` budgets 1s for `send_stop_signal_and_await_shutdown`).
+        // The work is still cancelled; rocksdb's own destructor finishes the
+        // teardown when the last `Arc<PrimaryInstance>` clone is dropped.
+        self.db.cancel_all_background_work(false);
 
         // Belt-and-suspenders for the test suite only: spin until no other
         // `Arc<PrimaryInstance>` clone is alive. CI runs surface a residual

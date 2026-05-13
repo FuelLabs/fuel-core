@@ -138,7 +138,7 @@ pub struct Task {
     server: tokio::task::JoinHandle<hyper::Result<()>>,
 }
 
-const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
+const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Clone)]
 struct ExecutorWithMetrics {
@@ -206,10 +206,13 @@ impl RunnableService for GraphqlService {
                 // is lost, the spawned server task aborts before it ever serves
                 // a request — which then cascades into a full FuelService
                 // shutdown via `select_all(await_stop)` in `service.rs::run`.
-                state
-                    .wait_stopping_or_stopped()
-                    .await
-                    .expect("The service is destroyed");
+                //
+                // A `wait_stopping_or_stopped` error means the watcher's sender
+                // was already dropped (the `ServiceRunner` is being torn down).
+                // That is *also* a stop signal — we want graceful shutdown to
+                // fire — so swallow the error rather than panicking, which would
+                // crash the spawned server task and leak the listener.
+                let _ = state.wait_stopping_or_stopped().await;
             });
 
         Ok(Task {
