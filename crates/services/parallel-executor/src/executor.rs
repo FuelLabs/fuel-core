@@ -24,8 +24,13 @@ use std::{
         Arc,
         RwLock,
     },
+    time::Duration,
 };
 use tokio::runtime::Runtime;
+
+/// See the comment in `AsyncProcessor::drop` (services crate) for why we wait
+/// for workers to exit synchronously instead of using `shutdown_background`.
+const RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[cfg(feature = "wasm-executor")]
 use fuel_core_upgradable_executor::error::UpgradableError;
@@ -44,7 +49,9 @@ pub struct Executor<S, R> {
 impl<S, R> Drop for Executor<S, R> {
     fn drop(&mut self) {
         if let Some(runtime) = self.runtime.take() {
-            runtime.shutdown_background();
+            // Join workers synchronously so they cannot survive past this drop
+            // and race rocksdb's static-destructor teardown during libc `atexit`.
+            runtime.shutdown_timeout(RUNTIME_SHUTDOWN_TIMEOUT);
         }
     }
 }

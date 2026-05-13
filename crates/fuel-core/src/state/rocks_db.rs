@@ -871,7 +871,13 @@ where
     }
 
     pub fn shutdown(&self) {
-        while Arc::strong_count(&self.db) > 1 {}
+        // Stop rocksdb's background compaction/flush threads synchronously,
+        // so that by the time the surrounding service Drop chain runs there
+        // are no rocksdb worker threads still touching the DB. This is the
+        // same mitigation TiKV uses (tikv/tikv#16680) to bound shutdown time
+        // and avoid teardown races with rocksdb's static-singleton thread
+        // pools.
+        self.db.cancel_all_background_work(true);
     }
 }
 
