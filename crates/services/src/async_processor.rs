@@ -5,7 +5,6 @@ use fuel_core_metrics::futures::{
 use std::{
     future::Future,
     sync::Arc,
-    time::Duration,
 };
 use tokio::{
     runtime,
@@ -15,12 +14,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-
-/// Upper bound for waiting on worker threads of an owned tokio runtime to exit
-/// before allowing the surrounding process/teardown to proceed. We must join the
-/// workers (rather than detach via `shutdown_background`) to avoid racing rocksdb's
-/// C++ static destructors during libc `atexit`.
-const RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A processor that can execute async tasks with a limit on the number of tasks that can be
 /// executed concurrently.
@@ -33,11 +26,15 @@ pub struct AsyncProcessor {
 impl Drop for AsyncProcessor {
     fn drop(&mut self) {
         if let Some(runtime) = self.thread_pool.take() {
-            // Synchronously join worker threads. `shutdown_background` would let
-            // workers outlive this drop and finish on their own — including any
-            // residual `Arc<PrimaryInstance>` drops, which race rocksdb's C++
-            // static destructors at libc `atexit` and crash the process.
-            runtime.shutdown_timeout(RUNTIME_SHUTDOWN_TIMEOUT);
+            // This `Drop` typically runs from within an async context (a tokio
+            // worker is unwinding the owning service), so we cannot block here:
+            // calling `shutdown_timeout` from a tokio worker panics with
+            // "Cannot drop a runtime in a context where blocking is not
+            // allowed". Detach the workers instead; the rocksdb teardown race
+            // they could otherwise participate in is bounded separately by
+            // `RocksDb::shutdown`'s `cancel_all_background_work(true)` and by
+            // joining the *outer* runtime in `fuel-core-bin::main`.
+            runtime.shutdown_background();
         }
     }
 }
