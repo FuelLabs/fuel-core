@@ -871,6 +871,23 @@ where
     }
 
     pub fn shutdown(&self) {
+        // Signal rocksdb's background compaction/flush threads to stop. We
+        // use `wait=false` so this returns immediately — each `CombinedDatabase`
+        // has several layered DBs and `wait=true` per-DB serialises into a
+        // shutdown that blows past tight per-service timeouts in tests
+        // (`tests/tests/poa.rs` budgets 1s for `send_stop_signal_and_await_shutdown`).
+        // The work is still cancelled; rocksdb's own destructor finishes the
+        // teardown when the last `Arc<PrimaryInstance>` clone is dropped.
+        self.db.cancel_all_background_work(false);
+
+        // Belt-and-suspenders for the test suite only: spin until no other
+        // `Arc<PrimaryInstance>` clone is alive. CI runs surface a residual
+        // atexit-phase race ("pthread lock: Invalid argument") that doesn't
+        // reproduce reliably; blocking shutdown here until readers are
+        // released gives the process exit path a clean baseline. Disabled
+        // in production builds because a stuck reader would hang shutdown
+        // indefinitely.
+        #[cfg(feature = "test-helpers")]
         while Arc::strong_count(&self.db) > 1 {}
     }
 }
