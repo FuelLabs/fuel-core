@@ -1,5 +1,5 @@
 {
-  "chain_name": "Local testnet",
+  "chain_name": "Ignition",
   "consensus_parameters": {
     "V2": {
       "tx_params": {
@@ -14,10 +14,10 @@
       },
       "predicate_params": {
         "V1": {
-          "max_predicate_length": 102400,
-          "max_predicate_data_length": 102400,
+          "max_predicate_length": 24576,
+          "max_predicate_data_length": 24576,
           "max_message_data_length": 102400,
-          "max_gas_per_predicate": 30000000
+          "max_gas_per_predicate": 1000000
         }
       },
       "script_params": {
@@ -29,14 +29,14 @@
       },
       "contract_params": {
         "V1": {
-          "contract_max_size": 102400,
+          "contract_max_size": 112640,
           "max_storage_slots": 1760
         }
       },
       "fee_params": {
         "V1": {
-          "gas_price_factor": 92000,
-          "gas_per_byte": 63
+          "gas_price_factor": 1150000,
+          "gas_per_byte": 1
         }
       },
       "chain_id": 0,
@@ -304,17 +304,15 @@
           }
         }
       },
-      "base_asset_id": "f8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07",
-      "block_gas_limit": 30000000,
-      "block_transaction_size_limit": 129024,
-      "privileged_address": "9f0e19d6c2a6283a3222426ab2630d35516b1799b503f37b02105bebe1b8a3e9"
+      "base_asset_id": "0xf8f8b6283d7fa5b672b530cbb84fcccb4ff8dc40f8176ef4544ddb1f1952ad07",
+      "block_gas_limit": 42000000,
+      "block_transaction_size_limit": 2621440,
+      "privileged_address": "f034f7859dbf1d775cba16fc175eef249a045d6484a8b9388c9e280267125b73"
     }
   },
-  "genesis_state_transition_version": 34,
   "consensus": {
-    "PoAV2": {
-      "genesis_signing_key": "e0a9fcde1b73f545252e01b30b50819eb9547d07531fa3df0385c5695736634d",
-      "signing_key_overrides": {}
+    "PoA": {
+      "signing_key": "3ba3b213c8d5ec4d4901ac34b0e924d635384a8b0a5df6e116bce9a783da8e02"
     }
   }
 }

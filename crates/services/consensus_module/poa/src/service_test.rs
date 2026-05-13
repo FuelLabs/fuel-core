@@ -47,9 +47,12 @@ use fuel_core_types::{
     fuel_tx::*,
     fuel_types::BlockHeight,
     secrecy::Secret,
-    services::executor::{
-        ExecutionResult,
-        UncommittedResult,
+    services::{
+        block_importer::BlockImportInfo,
+        executor::{
+            ExecutionResult,
+            UncommittedResult,
+        },
     },
     signer::SignMode,
     tai64::{
@@ -939,4 +942,145 @@ async fn consensus_service__run__will_produce_blocks_with_ready_signal() {
     // then
     let produced_block = block_receiver.recv().await.unwrap();
     assert!(matches!(produced_block, FakeProducedBlock::New(_, _)));
+}
+
+/// Reproduces the deadlock from the April 9, 2026 testnet outage.
+///
+/// After a FENCING_ERROR, reconciliation imports a block via
+/// `execute_and_commit` which marks it as `Source::Network`. The SyncTask
+/// sees this non-local block and transitions from Synced → NotSynced.
+/// On the next `run()` iteration, `ensure_synced()` blocks forever
+/// because the leader can't produce locally-sourced blocks while blocked.
+///
+/// This test uses a `FakeReconciliationPort` that returns
+/// `UnreconciledBlocks` on the first call (simulating reconciliation after
+/// fencing error), then switches to `ReconciledLeader`. The
+/// `MockBlockImporter::execute_and_commit` broadcasts a `Source::Network`
+/// block into the block_stream, triggering the SyncTask's NotSynced
+/// transition. Without the watermark fix, the service deadlocks and
+/// never produces a block.
+#[tokio::test]
+async fn main_task__reconciliation_import_does_not_deadlock_leader() {
+    // given: a PoA service with Trigger::Interval
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(10),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        min_connected_reserved_peers: 0,
+        time_until_synced: Duration::ZERO,
+        ..Default::default()
+    };
+
+    let (block_producer, mut block_receiver) = FakeBlockProducer::new();
+
+    // Use an mpsc channel to feed both execute_and_commit results and
+    // the SyncTask's block_stream. This simulates what the real importer
+    // does when `execute_and_commit` commits a block and broadcasts it.
+    let (block_import_sender, block_import_receiver) =
+        tokio::sync::mpsc::channel::<BlockImportInfo>(16);
+
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+
+    // When execute_and_commit is called for the reconciliation block,
+    // send it as Source::Network — this is what the real importer
+    // does (ImportResult::new_from_network at importer.rs:585).
+    let sender_for_import = block_import_sender.clone();
+    block_importer
+        .expect_execute_and_commit()
+        .returning(move |block| {
+            let header = block.entity.header().clone();
+            let _ = sender_for_import.try_send(BlockImportInfo::new_from_network(header));
+            Ok(())
+        });
+
+    // The block_stream feeds the SyncTask — wrap the mpsc receiver.
+    // Use Option+Mutex to allow moving out of the FnMut closure.
+    let receiver_cell = Arc::new(StdMutex::new(Some(block_import_receiver)));
+    block_importer.expect_block_stream().returning(move || {
+        let rx = receiver_cell
+            .lock()
+            .unwrap()
+            .take()
+            .expect("block_stream called more than once");
+        Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx))
+    });
+
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
+
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::at_unix_epoch();
+    let watch = time.watch();
+
+    // Create a reconciliation port that returns UnreconciledBlocks once,
+    // then switches to ReconciledLeader for subsequent calls.
+    let block = block_for_height(2);
+    let consensus = FakeBlockSigner { succeeds: true }
+        .seal_block(&block)
+        .await
+        .unwrap();
+    let unreconciled = LeaderState::UnreconciledBlocks(vec![SealedBlock {
+        entity: block,
+        consensus,
+    }]);
+
+    let reconciliation_port = FakeReconciliationPort::with_state(Ok(unreconciled));
+    let reconciliation_state = reconciliation_port.state.clone();
+
+    let task = MainTask::new(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        block_producer,
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        reconciliation_port,
+    );
+
+    // when: start the service
+    let service = ServiceRunner::new(task);
+    service.start_and_await().await.unwrap();
+
+    // Give time for the reconciliation block to be imported.
+    // After import, switch to ReconciledLeader so the service can
+    // attempt normal block production.
+    tokio::task::yield_now().await;
+    time::advance(Duration::from_millis(20)).await;
+    tokio::task::yield_now().await;
+
+    // Switch reconciliation port to ReconciledLeader
+    {
+        let mut state = reconciliation_state.lock().unwrap();
+        *state = Ok(LeaderState::ReconciledLeader);
+    }
+
+    // then: try to receive a produced block within a timeout.
+    // Without the fix, ensure_synced() deadlocks and no block is produced.
+    let receive_timeout = tokio::spawn(async move {
+        time::timeout(Duration::from_millis(500), block_receiver.recv()).await
+    });
+    time::advance(Duration::from_millis(501)).await;
+    tokio::task::yield_now().await;
+    let receive_result = receive_timeout.await.unwrap();
+
+    let _ = service.stop_and_await().await;
+
+    // This assertion fails without the watermark fix — the service
+    // deadlocks in ensure_synced() and never produces a block.
+    assert!(
+        receive_result.is_ok(),
+        "Expected block production after reconciliation, but the service \
+         deadlocked in ensure_synced() — this is the bug from the \
+         April 9, 2026 testnet outage"
+    );
 }

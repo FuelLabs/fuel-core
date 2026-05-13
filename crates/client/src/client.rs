@@ -180,7 +180,11 @@ mod rpc_deps {
         default_provider::credentials::DefaultCredentialsChain,
     };
     pub use aws_sdk_s3::Client as AWSClient;
-    pub use flate2::read::GzDecoder;
+    pub use flate2::read::{
+        DeflateDecoder,
+        GzDecoder,
+        ZlibDecoder,
+    };
     pub use fuel_core_block_aggregator_api::{
         blocks::old_block_source::convertor_adapter::proto_to_fuel_conversions::fuel_block_from_protobuf,
         protobuf_types::{
@@ -190,6 +194,7 @@ mod rpc_deps {
             BlockResponse,
             NewBlockSubscriptionRequest as ProtoNewBlockSubscriptionRequest,
             RemoteBlockResponse,
+            RemoteHttpEndpoint,
             RemoteS3Bucket,
             block_aggregator_client::BlockAggregatorClient as ProtoBlockAggregatorClient,
             block_response::Payload,
@@ -199,13 +204,30 @@ mod rpc_deps {
     pub use prost::Message;
     pub use std::{
         collections::HashMap,
-        io::Read,
+        io::{
+            Cursor,
+            Read,
+        },
     };
     pub use tokio::sync::RwLock;
     pub use tonic::transport::Channel;
 }
 #[cfg(feature = "rpc")]
 use rpc_deps::*;
+
+/// `reqwest::Client` used only for fetching block bytes over HTTP(S). Automatic response
+/// decompression is disabled so `Content-Encoding` matches the raw body and manual decoding in
+/// `FuelClient` stays consistent.
+#[cfg(feature = "rpc")]
+fn remote_block_object_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .no_gzip()
+        .no_brotli()
+        .no_deflate()
+        .no_zstd()
+        .build()
+        .expect("reqwest ClientBuilder for remote block fetches should succeed")
+}
 
 pub mod pagination;
 pub mod schema;
@@ -260,6 +282,8 @@ impl Clone for ConsistencyPolicy {
 struct ChainStateInfo {
     current_stf_version: Arc<Mutex<Option<StateTransitionBytecodeVersion>>>,
     current_consensus_parameters_version: Arc<Mutex<Option<ConsensusParametersVersion>>>,
+    /// Cached node version string (e.g. "0.47.3"). Populated on first use.
+    node_version: Arc<Mutex<Option<String>>>,
 }
 
 impl Clone for ChainStateInfo {
@@ -274,6 +298,9 @@ impl Clone for ChainStateInfo {
                     .ok()
                     .and_then(|v| *v),
             )),
+            node_version: Arc::new(Mutex::new(
+                self.node_version.lock().ok().and_then(|v| v.clone()),
+            )),
         }
     }
 }
@@ -287,6 +314,9 @@ pub struct FuelClient {
     rpc_client: Option<ProtoBlockAggregatorClient<Channel>>,
     #[cfg(feature = "rpc")]
     aws_client: AWSClientManager,
+    /// Shared HTTP client for remote block fetches (connection pool reuse).
+    #[cfg(feature = "rpc")]
+    http_client: reqwest::Client,
 }
 
 #[cfg(feature = "rpc")]
@@ -355,6 +385,8 @@ impl FromStr for FuelClient {
             rpc_client: None,
             #[cfg(feature = "rpc")]
             aws_client: AWSClientManager::new(),
+            #[cfg(feature = "rpc")]
+            http_client: remote_block_object_http_client(),
         })
     }
 }
@@ -369,6 +401,22 @@ where
             .parse()
             .unwrap()
     }
+}
+
+/// Returns `true` when the node version predates v0.48.0, which introduced
+/// `maxStorageSlotLength` on `ScriptParameters` and the storage gas-cost fields.
+/// Falls back to `false` (i.e. assume new node) if the version string cannot be parsed.
+fn is_legacy_node(version: &str) -> bool {
+    let mut parts = version.splitn(3, '.');
+    let major: u64 = match parts.next().and_then(|s| s.parse().ok()) {
+        Some(v) => v,
+        None => return false,
+    };
+    let minor: u64 = match parts.next().and_then(|s| s.parse().ok()) {
+        Some(v) => v,
+        None => return false,
+    };
+    major == 0 && minor < 48
 }
 
 pub fn from_strings_errors_to_std_error(errors: Vec<String>) -> io::Error {
@@ -424,6 +472,8 @@ impl FuelClient {
             rpc_client: None,
             #[cfg(feature = "rpc")]
             aws_client: AWSClientManager::new(),
+            #[cfg(feature = "rpc")]
+            http_client: remote_block_object_http_client(),
         })
     }
 
@@ -531,6 +581,27 @@ impl FuelClient {
         }
     }
 
+    /// Fetch the connected node's version string, caching it after the first call.
+    /// Uses a minimal query fragment that is safe for all node versions.
+    async fn ensure_node_version(&self) -> io::Result<String> {
+        {
+            let lock = self
+                .chain_state_info
+                .node_version
+                .lock()
+                .map_err(|_| io::Error::other("Mutex poisoned"))?;
+            if let Some(v) = lock.as_ref() {
+                return Ok(v.clone());
+            }
+        }
+        let query = schema::node_info::QueryNodeVersionInfo::build(());
+        let version = self.query(query).await?.node_info.node_version;
+        if let Ok(mut lock) = self.chain_state_info.node_version.lock() {
+            *lock = Some(version.clone());
+        }
+        Ok(version)
+    }
+
     /// Send the GraphQL query to the client.
     pub async fn query<ResponseData, Vars>(
         &self,
@@ -635,28 +706,49 @@ impl FuelClient {
     }
 
     pub async fn chain_info(&self) -> io::Result<types::ChainInfo> {
-        let query = schema::chain::ChainQuery::build(());
-        self.query(query).await.and_then(|r| {
-            let result = r.chain.try_into()?;
-            Ok(result)
-        })
+        let node_version = self.ensure_node_version().await?;
+        if is_legacy_node(&node_version) {
+            let query = schema::chain::ChainQueryLegacy::build(());
+            self.query(query).await.and_then(|r| {
+                let result = r.chain.try_into()?;
+                Ok(result)
+            })
+        } else {
+            let query = schema::chain::ChainQuery::build(());
+            self.query(query).await.and_then(|r| {
+                let result = r.chain.try_into()?;
+                Ok(result)
+            })
+        }
     }
 
     pub async fn consensus_parameters(
         &self,
         version: i32,
     ) -> io::Result<Option<ConsensusParameters>> {
+        let node_version = self.ensure_node_version().await?;
         let args = schema::upgrades::ConsensusParametersByVersionArgs { version };
-        let query = schema::upgrades::ConsensusParametersByVersionQuery::build(args);
 
-        let result = self
-            .query(query)
-            .await?
-            .consensus_parameters
-            .map(TryInto::try_into)
-            .transpose()?;
-
-        Ok(result)
+        if is_legacy_node(&node_version) {
+            let query =
+                schema::upgrades::ConsensusParametersByVersionQueryLegacy::build(args);
+            let result = self
+                .query(query)
+                .await?
+                .consensus_parameters
+                .map(TryInto::try_into)
+                .transpose()?;
+            Ok(result)
+        } else {
+            let query = schema::upgrades::ConsensusParametersByVersionQuery::build(args);
+            let result = self
+                .query(query)
+                .await?
+                .consensus_parameters
+                .map(TryInto::try_into)
+                .transpose()?;
+            Ok(result)
+        }
     }
 
     pub async fn state_transition_byte_code_by_version(
@@ -1775,11 +1867,13 @@ impl FuelClient {
             .into_inner()
             .then(|res| {
                 let maybe_aws_client = self.aws_client.clone();
+                let http_client = self.http_client.clone();
                 async move {
                     let maybe_aws_client = maybe_aws_client.clone();
                     let resp =
                         res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
-                    Self::convert_block_response(resp, maybe_aws_client).await
+                    Self::convert_block_response(resp, maybe_aws_client, http_client)
+                        .await
                 }
             });
         Ok(stream)
@@ -1788,6 +1882,7 @@ impl FuelClient {
     async fn convert_block_response(
         resp: BlockResponse,
         s3_client: AWSClientManager,
+        http_client: reqwest::Client,
     ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
         let payload = resp
             .payload
@@ -1816,7 +1911,7 @@ impl FuelClient {
                             endpoint,
                             requester_pays,
                         } = s3;
-                        let zipped_bytes = Self::get_block_from_s3_bucket(
+                        let (body, content_encoding) = Self::get_block_from_s3_bucket(
                             s3_client,
                             &endpoint,
                             &bucket,
@@ -1825,31 +1920,148 @@ impl FuelClient {
                         )
                         .await?;
 
-                        let block_bytes = Self::unzip_bytes(&zipped_bytes)?;
-                        let block =
-                            ProtoBlock::decode(block_bytes.as_slice()).map_err(|e| {
-                                io::Error::other(format!("Failed to decode block: {e}"))
-                            })?;
-                        let (block, receipts) =
-                            fuel_block_from_protobuf(block).map_err(|e| {
-                                io::Error::other(format!(
-                                    "Failed to convert RPC block to internal block: {e:?}"
-                                ))
-                            })?;
-                        Ok((block, receipts))
+                        let block_bytes = Self::decode_body_by_content_encoding(
+                            body.as_ref(),
+                            content_encoding.as_deref(),
+                        )?;
+                        Self::decode_remote_protobuf_block(&block_bytes)
                     }
-                    _ => Err(io::Error::other("Remote blocks are not supported yet")),
+                    Some(Location::Http(http)) => {
+                        let (body, content_encoding) =
+                            Self::get_block_from_http(&http_client, &http).await?;
+                        let block_bytes = Self::decode_body_by_content_encoding(
+                            body.as_ref(),
+                            content_encoding.as_deref(),
+                        )?;
+                        Self::decode_remote_protobuf_block(&block_bytes)
+                    }
+                    None => {
+                        Err(io::Error::other("Remote block response missing location"))
+                    }
                 }
             }
         }
     }
+
+    /// Decodes the object body using a `Content-Encoding` value from HTTP headers or S3 object
+    /// metadata. Missing or empty means identity (raw protobuf bytes). Codings are listed in
+    /// application order; this reverses to decode from the outermost coding inward (RFC 9110).
+    fn decode_body_by_content_encoding(
+        body: &[u8],
+        content_encoding: Option<&str>,
+    ) -> io::Result<Vec<u8>> {
+        let Some(header) = content_encoding.map(str::trim).filter(|s| !s.is_empty())
+        else {
+            return Ok(body.to_vec());
+        };
+        let tokens: Vec<&str> = header
+            .split(',')
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .collect();
+        if tokens.is_empty() {
+            return Ok(body.to_vec());
+        }
+        let mut data = body.to_vec();
+        for &token in tokens.iter().rev() {
+            let lower = token.trim().to_ascii_lowercase();
+            if lower.is_empty() || lower == "identity" {
+                continue;
+            }
+            data = Self::decode_one_content_encoding_layer(&data, &lower)?;
+        }
+        Ok(data)
+    }
+
+    fn decode_one_content_encoding_layer(
+        data: &[u8],
+        token_lower: &str,
+    ) -> io::Result<Vec<u8>> {
+        match token_lower {
+            "gzip" | "x-gzip" => Self::gunzip_remote_block_bytes(data),
+            "deflate" => Self::inflate_deflate_remote_block_bytes(data),
+            _ => Err(io::Error::other(format!(
+                "unsupported Content-Encoding: {token_lower}"
+            ))),
+        }
+    }
+
+    fn gunzip_remote_block_bytes(data: &[u8]) -> io::Result<Vec<u8>> {
+        let mut decoder = GzDecoder::new(data);
+        let mut output = Vec::new();
+        decoder
+            .read_to_end(&mut output)
+            .map_err(|e| io::Error::other(e.to_string()))?;
+        Ok(output)
+    }
+
+    /// Decodes a `Content-Encoding: deflate` body. RFC 9110 specifies zlib-wrapped data (RFC 1950)
+    /// for this coding, but in practice most CDNs and HTTP servers (nginx, Apache, CloudFront)
+    /// emit raw deflate (RFC 1951) instead. Mirror mainstream browser/HTTP-client behavior: try
+    /// the spec-compliant zlib format first, then fall back to raw deflate so we interoperate
+    /// with either variant when a CDN fronts the block object store.
+    fn inflate_deflate_remote_block_bytes(data: &[u8]) -> io::Result<Vec<u8>> {
+        let mut output = Vec::new();
+        let mut zlib = ZlibDecoder::new(Cursor::new(data));
+        if zlib.read_to_end(&mut output).is_ok() {
+            return Ok(output);
+        }
+
+        output.clear();
+        let mut raw = DeflateDecoder::new(data);
+        raw.read_to_end(&mut output)
+            .map_err(|e| io::Error::other(e.to_string()))?;
+        Ok(output)
+    }
+
+    fn decode_remote_protobuf_block(
+        block_bytes: &[u8],
+    ) -> io::Result<(fuel_core_types::blockchain::block::Block, Vec<Vec<Receipt>>)> {
+        let block = ProtoBlock::decode(block_bytes)
+            .map_err(|e| io::Error::other(format!("Failed to decode block: {e}")))?;
+        fuel_block_from_protobuf(block).map_err(|e| {
+            io::Error::other(format!(
+                "Failed to convert RPC block to internal block: {e:?}"
+            ))
+        })
+    }
+
+    async fn get_block_from_http(
+        client: &reqwest::Client,
+        http: &RemoteHttpEndpoint,
+    ) -> io::Result<(prost::bytes::Bytes, Option<String>)> {
+        let mut req = client.get(http.endpoint.clone());
+        for (k, v) in &http.headers {
+            req = req.header(k, v);
+        }
+        let res = req.send().await.map_err(|e| {
+            io::Error::other(format!("HTTP fetch for block object failed: {e}"))
+        })?;
+        if !res.status().is_success() {
+            return Err(io::Error::other(format!(
+                "HTTP {} when fetching block object",
+                res.status()
+            )));
+        }
+        let content_encoding = res
+            .headers()
+            .get(reqwest::header::CONTENT_ENCODING)
+            .and_then(|v| v.to_str().ok())
+            .map(std::string::ToString::to_string);
+        let bytes = res
+            .bytes()
+            .await
+            .map_err(|e| io::Error::other(format!("Reading block object body: {e}")))?;
+        Ok((bytes, content_encoding))
+    }
+
     async fn get_block_from_s3_bucket(
         s3_client: AWSClientManager,
         url: &Option<String>,
         bucket: &str,
         key: &str,
         requester_pays: bool,
-    ) -> io::Result<prost::bytes::Bytes> {
+    ) -> io::Result<(prost::bytes::Bytes, Option<String>)> {
         use aws_sdk_s3::types::RequestPayer;
         tracing::debug!("getting block from bucket: {} with key {}", bucket, key);
         let mut req = s3_client
@@ -1864,6 +2076,8 @@ impl FuelClient {
         let obj = req.send().await.map_err(|e| {
             io::Error::other(format!("Failed to get object from S3: {e:?}"))
         })?;
+        let content_encoding =
+            obj.content_encoding().map(std::string::ToString::to_string);
         let bytes = obj
             .body
             .collect()
@@ -1872,7 +2086,7 @@ impl FuelClient {
                 io::Error::other(format!("Failed to get object from S3: {e:?}"))
             })?
             .into_bytes();
-        Ok(bytes)
+        Ok((bytes, content_encoding))
     }
 
     async fn new_aws_client(url: &Option<String>) -> AWSClient {
@@ -1886,13 +2100,6 @@ impl FuelClient {
         let builder = aws_sdk_s3::config::Builder::from(&sdk_config);
         let config = builder.force_path_style(true).build();
         AWSClient::from_conf(config)
-    }
-
-    fn unzip_bytes(bytes: &[u8]) -> io::Result<Vec<u8>> {
-        let mut decoder = GzDecoder::new(bytes);
-        let mut output = Vec::new();
-        decoder.read_to_end(&mut output).map_err(io::Error::other)?;
-        Ok(output)
     }
 
     /// Used to get the synced height of the block aggregator,
@@ -1929,11 +2136,13 @@ impl FuelClient {
             .into_inner()
             .then(|res| {
                 let maybe_aws_client = self.aws_client.clone();
+                let http_client = self.http_client.clone();
                 async move {
                     let maybe_aws_client = maybe_aws_client.clone();
                     let resp =
                         res.map_err(|e| io::Error::other(format!("RPC error: {:?}", e)))?;
-                    Self::convert_block_response(resp, maybe_aws_client).await
+                    Self::convert_block_response(resp, maybe_aws_client, http_client)
+                        .await
                 }
             });
         Ok(stream)
@@ -2004,5 +2213,21 @@ mod tests {
             client_new.get_default_url().as_str(),
             client_with_urls.get_default_url().as_str()
         );
+    }
+
+    #[test]
+    fn is_legacy_node_version_detection() {
+        // Pre-0.48.0 nodes require the legacy query path.
+        assert!(is_legacy_node("0.47.3"));
+        assert!(is_legacy_node("0.47.0"));
+        assert!(is_legacy_node("0.1.0"));
+        assert!(is_legacy_node("0.0.1"));
+
+        // 0.48.0 and above use the standard query path.
+        assert!(!is_legacy_node("0.48.0"));
+        assert!(!is_legacy_node("0.49.0"));
+        assert!(!is_legacy_node("0.100.0"));
+        assert!(!is_legacy_node("1.0.0"));
+        assert!(!is_legacy_node("2.47.0"));
     }
 }

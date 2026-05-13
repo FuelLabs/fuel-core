@@ -143,6 +143,9 @@ pub struct MainTask<B, I, S, PB, C, RS, RP> {
     /// externally controlled start of block production
     block_production_ready_signal: BlockProductionReadySignal<RS>,
     reconciliation_port: RP,
+    /// Shared with SyncTask — blocks at heights <= this watermark were
+    /// imported via reconciliation and should not trigger NotSynced.
+    reconciliation_watermark: Arc<std::sync::atomic::AtomicU32>,
 }
 
 impl<B, I, S, PB, C, RS, RP> MainTask<B, I, S, PB, C, RS, RP>
@@ -183,12 +186,15 @@ where
             ..
         } = config;
 
+        let reconciliation_watermark = Arc::new(std::sync::atomic::AtomicU32::new(0));
+
         let sync_task = SyncTask::new(
             peer_connections_stream,
             min_connected_reserved_peers,
             time_until_synced,
             block_stream,
             last_block,
+            Arc::clone(&reconciliation_watermark),
         );
 
         let sync_task_handle = ServiceRunner::new(sync_task);
@@ -213,6 +219,7 @@ where
             production_timeout,
             block_production_ready_signal,
             reconciliation_port,
+            reconciliation_watermark,
         }
     }
 
@@ -627,6 +634,17 @@ where
                     if block_height <= self.last_height {
                         continue;
                     }
+
+                    // Set watermark to this block's height so SyncTask
+                    // doesn't transition to NotSynced when it sees the
+                    // broadcast. execute_and_commit marks blocks as
+                    // Source::Network, which would otherwise cause a
+                    // Synced → NotSynced transition and deadlock
+                    // ensure_synced().
+                    self.reconciliation_watermark.fetch_max(
+                        u32::from(block_height),
+                        std::sync::atomic::Ordering::Release,
+                    );
 
                     match self.block_importer.execute_and_commit(block).await {
                         Ok(()) => {

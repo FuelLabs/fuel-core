@@ -22,6 +22,12 @@ pub struct Config {
     pub endpoints: Option<Endpoints>,
     /// Topic to post blocks to
     pub topic: [u8; 32],
+    /// Per-request timeout applied to REST/RPC calls against the shared
+    /// sequencer endpoints. Bounds how long a single HTTP request can hang
+    /// before failing, which in turn bounds shutdown latency.
+    pub http_request_timeout: Duration,
+    /// TCP connect timeout for REST/RPC calls.
+    pub http_connect_timeout: Duration,
 }
 
 impl Config {
@@ -32,6 +38,8 @@ impl Config {
             block_posting_frequency: Duration::from_secs(12),
             endpoints: None,
             topic: [0u8; 32],
+            http_request_timeout: Duration::from_secs(5),
+            http_connect_timeout: Duration::from_secs(3),
         }
     }
 }

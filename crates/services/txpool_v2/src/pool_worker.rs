@@ -14,7 +14,10 @@ use fuel_core_types::{
     },
 };
 use std::{
-    iter,
+    collections::{
+        BTreeMap,
+        HashSet,
+    },
     ops::Deref,
     sync::Arc,
     time::SystemTime,
@@ -91,6 +94,7 @@ impl PoolWorkerInterface {
         tx_pool: TxPool<TxStatusManager>,
         view_provider: Arc<dyn AtomicView<LatestView = View>>,
         limits: &ServiceChannelLimits,
+        initial_block_height: BlockHeight,
     ) -> Self
     where
         View: TxPoolPersistentStorage,
@@ -134,6 +138,8 @@ impl PoolWorkerInterface {
                     pending_pool: PendingPool::new(tx_pool.config.pending_pool_tx_ttl),
                     pool: tx_pool,
                     view_provider,
+                    tentative_preconfs: BTreeMap::new(),
+                    current_canonical_height: initial_block_height,
                 };
 
                 tokio_runtime.block_on(async {
@@ -268,6 +274,14 @@ pub(super) struct PoolWorker<View, TxStatusManager> {
     pending_pool: PendingPool,
     view_provider: Arc<dyn AtomicView<LatestView = View>>,
     notification_sender: Sender<PoolNotification>,
+    /// Tracks preconfirmed transaction IDs by their tentative block height.
+    /// Used to roll back stale preconfirmations when the canonical block at
+    /// that height does not include those transactions.
+    tentative_preconfs: BTreeMap<BlockHeight, HashSet<TxId>>,
+    /// The height of the last canonical block imported by this node.
+    /// Used to discard late preconfirmations whose tentative block height
+    /// is already at or below the canonical tip.
+    current_canonical_height: BlockHeight,
 }
 
 impl<View, TxStatusManager> PoolWorker<View, TxStatusManager>
@@ -485,15 +499,54 @@ where
     }
 
     fn process_block(&mut self, block_result: SharedImportResult) {
-        self.pool.process_committed_transactions(
-            block_result.tx_status.iter().map(|tx_status| tx_status.id),
-        );
+        let block_height = *block_result.sealed_block.entity.header().height();
+        self.current_canonical_height = self.current_canonical_height.max(block_height);
+
+        let confirmed_tx_ids: HashSet<TxId> = block_result
+            .tx_status
+            .iter()
+            .map(|tx_status| tx_status.id)
+            .collect();
+
+        self.pool
+            .process_committed_transactions(confirmed_tx_ids.iter().copied());
 
         block_result.tx_status.iter().for_each(|tx_status| {
             self.pool
                 .extracted_outputs
                 .new_executed_transaction(&tx_status.id);
         });
+
+        // Reconcile tentative preconfirmations for all heights up to and including
+        // the imported block height. Any preconfirmed tx that is absent from the
+        // canonical block must have its state rolled back so those inputs/outputs
+        // do not remain stale in the mempool.
+        let stale_heights: Vec<BlockHeight> = self
+            .tentative_preconfs
+            .range(..=block_height)
+            .map(|(h, _)| *h)
+            .collect();
+
+        for height in stale_heights {
+            if let Some(tentative_txs) = self.tentative_preconfs.remove(&height) {
+                for tx_id in tentative_txs {
+                    if confirmed_tx_ids.contains(&tx_id) {
+                        // Tx was included in the canonical block — confirm the
+                        // tentative spend record so it won't be rolled back.
+                        self.pool.spent_inputs.confirm_tentative_spend(&tx_id);
+                    } else {
+                        tracing::debug!(
+                            "Rolling back stale preconfirmation for tx {} \
+                             (tentative block {}, canonical block {})",
+                            tx_id,
+                            height,
+                            block_height,
+                        );
+                        self.pool.rollback_preconfirmed_transaction(tx_id);
+                    }
+                }
+            }
+        }
 
         let resolved_txs = self.pending_pool.new_known_txs(
             block_result
@@ -524,20 +577,54 @@ where
         tx_id: TxId,
         status: PreConfirmationStatus,
     ) {
-        let outputs = match &status {
+        // Reject late preconfirmations whose tentative block height is already
+        // at or below the node's current canonical tip.  Applying them would
+        // temporarily mark inputs as spent and admit dependents against outputs
+        // that may not be in any canonical block, creating a stale-acceptance
+        // window that is only unwound on the next block import.
+        let preconf_height = match &status {
+            PreConfirmationStatus::Success(s) => Some(s.tx_pointer.block_height()),
+            PreConfirmationStatus::Failure(s) => Some(s.tx_pointer.block_height()),
+            PreConfirmationStatus::SqueezedOut(_) => None,
+        };
+        if let Some(h) = preconf_height
+            && h <= self.current_canonical_height
+        {
+            tracing::debug!(
+                "Ignoring late preconfirmation for tx {} at height {} \
+                 (current canonical height {})",
+                tx_id,
+                h,
+                self.current_canonical_height,
+            );
+            return;
+        }
+
+        let (outputs, block_height) = match &status {
             PreConfirmationStatus::Success(status) => {
-                self.pool.process_committed_transactions(iter::once(tx_id));
+                self.pool.process_preconfirmed_committed_transaction(tx_id);
+                let height = status.tx_pointer.block_height();
                 if let Some(outputs) = &status.resolved_outputs {
-                    outputs
+                    (outputs, Some(height))
                 } else {
+                    // Still track the height so block import can clean up spent_inputs.
+                    self.tentative_preconfs
+                        .entry(height)
+                        .or_default()
+                        .insert(tx_id);
                     return;
                 }
             }
             PreConfirmationStatus::Failure(status) => {
-                self.pool.process_committed_transactions(iter::once(tx_id));
+                self.pool.process_preconfirmed_committed_transaction(tx_id);
+                let height = status.tx_pointer.block_height();
                 if let Some(outputs) = &status.resolved_outputs {
-                    outputs
+                    (outputs, Some(height))
                 } else {
+                    self.tentative_preconfs
+                        .entry(height)
+                        .or_default()
+                        .insert(tx_id);
                     return;
                 }
             }
@@ -546,6 +633,16 @@ where
                 return;
             }
         };
+
+        // Track the tentative block height so the preconfirmed outputs can be
+        // rolled back if the canonical block at that height omits this tx.
+        if let Some(height) = block_height {
+            self.tentative_preconfs
+                .entry(height)
+                .or_default()
+                .insert(tx_id);
+        }
+
         // All of this can be useful in case that we didn't know about the transaction
         let resolved = self
             .pending_pool

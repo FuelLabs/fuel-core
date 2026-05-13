@@ -6,6 +6,8 @@ use std::{
     sync::Arc,
 };
 
+use fuel_core_types::services::transaction_status::PreConfirmationStatus;
+
 use crate::{
     GasPrice,
     Service,
@@ -486,6 +488,12 @@ impl TestPoolUniverse {
 
     pub fn get_pool(&self) -> Shared<TxPool<MockTxStatusManager>> {
         self.pool.clone().unwrap()
+    }
+
+    /// Send a preconfirmation update directly to the pool worker.
+    pub fn send_preconfirmation(&self, tx_id: TxId, status: PreConfirmationStatus) {
+        self.mock_tx_status_manager
+            .send_preconfirmation(tx_id, status);
     }
 
     pub fn setup_coin(&mut self) -> (Coin, Input) {

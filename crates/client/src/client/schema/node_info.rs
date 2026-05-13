@@ -97,6 +97,20 @@ pub struct IndexationFlags {
     pub asset_metadata: bool,
 }
 
+/// Minimal query fragment that only requests the `nodeVersion` field.
+/// Safe to use against all node versions, including pre-0.48.0.
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "NodeInfo")]
+pub struct NodeVersionInfo {
+    pub node_version: String,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
+pub struct QueryNodeVersionInfo {
+    pub node_info: NodeVersionInfo,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

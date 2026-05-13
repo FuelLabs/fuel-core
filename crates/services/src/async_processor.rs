@@ -5,6 +5,7 @@ use fuel_core_metrics::futures::{
 use std::{
     future::Future,
     sync::Arc,
+    time::Duration,
 };
 use tokio::{
     runtime,
@@ -14,6 +15,12 @@ use tokio::{
     },
     task::JoinHandle,
 };
+
+/// Upper bound for synchronously joining the inner runtime's worker threads
+/// during `AsyncProcessor::drop`. The shutdown itself happens on a dedicated
+/// OS thread so it does not violate tokio's "cannot drop a runtime from an
+/// async context" assertion; the calling thread blocks on the join.
+const RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A processor that can execute async tasks with a limit on the number of tasks that can be
 /// executed concurrently.
@@ -26,7 +33,26 @@ pub struct AsyncProcessor {
 impl Drop for AsyncProcessor {
     fn drop(&mut self) {
         if let Some(runtime) = self.thread_pool.take() {
-            runtime.shutdown_background();
+            // We need to synchronously join the inner runtime's workers so
+            // they cannot drop `Arc<rocksdb::PrimaryInstance>` clones after
+            // `main` has returned (which races rocksdb's C++ static destructors
+            // at libc `atexit` and crashes the process).
+            //
+            // `Runtime::shutdown_timeout` is the API that joins workers, but
+            // tokio refuses to drop a runtime from within an async context and
+            // panics with "Cannot drop a runtime in a context where blocking
+            // is not allowed". This `Drop` typically runs from a tokio worker
+            // of the *outer* runtime while a service is being torn down, so
+            // calling `shutdown_timeout` directly is forbidden.
+            //
+            // The workaround is to move the runtime onto a fresh OS thread and
+            // do the shutdown there — the assertion only triggers on tokio
+            // worker threads. The calling thread blocks on `join`, which is a
+            // plain `pthread_join` and is not intercepted by tokio.
+            let handle = std::thread::spawn(move || {
+                runtime.shutdown_timeout(RUNTIME_SHUTDOWN_TIMEOUT);
+            });
+            let _ = handle.join();
         }
     }
 }

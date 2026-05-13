@@ -19,12 +19,16 @@ use crate::{
 use async_graphql::{
     Context,
     Enum,
+    Lookahead,
     Object,
     Union,
 };
 use fuel_core_types::{
     fuel_tx,
-    fuel_tx::GasCostsValues,
+    fuel_tx::{
+        GasCostsValues,
+        consensus_parameters::gas::GasCostsValuesV6,
+    },
 };
 use std::{
     ops::Deref,
@@ -91,6 +95,203 @@ pub struct LightOperation {
 pub struct HeavyOperation {
     base: u64,
     gas_per_unit: u64,
+}
+
+fn requires_v2_consensus_parameters(look_ahead: &Lookahead<'_>) -> bool {
+    let script_params_require_v2 = look_ahead
+        .field("scriptParams")
+        .field("maxStorageSlotLength")
+        .exists();
+    let gas_costs_require_v2 = [
+        "storageReadCold",
+        "storageReadHot",
+        "storageWrite",
+        "storageClear",
+    ]
+    .into_iter()
+    .any(|field| look_ahead.field("gasCosts").field(field).exists());
+
+    script_params_require_v2 || gas_costs_require_v2
+}
+
+#[allow(unused)]
+fn script_params_as_v1(
+    script_params: fuel_tx::ScriptParameters,
+) -> fuel_tx::ScriptParameters {
+    match script_params {
+        fuel_tx::ScriptParameters::V1(params) => params.into(),
+        fuel_tx::ScriptParameters::V2(params) => {
+            fuel_tx::consensus_parameters::ScriptParametersV1 {
+                max_script_length: params.max_script_length,
+                max_script_data_length: params.max_script_data_length,
+            }
+            .into()
+        }
+    }
+}
+
+#[allow(unused)]
+fn gas_costs_as_v6(gas_costs: fuel_tx::GasCosts) -> fuel_tx::GasCosts {
+    use fuel_tx::consensus_parameters::DependentCost;
+
+    match gas_costs.deref() {
+        GasCostsValues::V1(_)
+        | GasCostsValues::V2(_)
+        | GasCostsValues::V3(_)
+        | GasCostsValues::V4(_)
+        | GasCostsValues::V5(_)
+        | GasCostsValues::V6(_) => gas_costs,
+        GasCostsValues::V7(values) => fuel_tx::GasCosts::new(
+            GasCostsValuesV6 {
+                add: values.add,
+                addi: values.addi,
+                and: values.and,
+                andi: values.andi,
+                bal: values.bal,
+                bhei: values.bhei,
+                bhsh: values.bhsh,
+                burn: values.burn,
+                cb: values.cb,
+                cfsi: values.cfsi,
+                div: values.div,
+                divi: values.divi,
+                eck1: values.eck1,
+                ecr1: values.ecr1,
+                eq: values.eq,
+                exp: values.exp,
+                expi: values.expi,
+                flag: values.flag,
+                gm: values.gm,
+                gt: values.gt,
+                gtf: values.gtf,
+                ji: values.ji,
+                jmp: values.jmp,
+                jne: values.jne,
+                jnei: values.jnei,
+                jnzi: values.jnzi,
+                jmpf: values.jmpf,
+                jmpb: values.jmpb,
+                jnzf: values.jnzf,
+                jnzb: values.jnzb,
+                jnef: values.jnef,
+                jneb: values.jneb,
+                lb: values.lb,
+                log: values.log,
+                lt: values.lt,
+                lw: values.lw,
+                mint: values.mint,
+                mlog: values.mlog,
+                mod_op: values.mod_op,
+                modi: values.modi,
+                move_op: values.move_op,
+                movi: values.movi,
+                mroo: values.mroo,
+                mul: values.mul,
+                muli: values.muli,
+                mldv: values.mldv,
+                niop: values.niop,
+                noop: values.noop,
+                not: values.not,
+                or: values.or,
+                ori: values.ori,
+                poph: values.poph,
+                popl: values.popl,
+                pshh: values.pshh,
+                pshl: values.pshl,
+                ret: values.ret,
+                rvrt: values.rvrt,
+                sb: values.sb,
+                sll: values.sll,
+                slli: values.slli,
+                srl: values.srl,
+                srli: values.srli,
+                srw: 0,
+                sub: values.sub,
+                subi: values.subi,
+                sw: values.sw,
+                sww: 0,
+                time: values.time,
+                tr: values.tr,
+                tro: values.tro,
+                wdcm: values.wdcm,
+                wqcm: values.wqcm,
+                wdop: values.wdop,
+                wqop: values.wqop,
+                wdml: values.wdml,
+                wqml: values.wqml,
+                wddv: values.wddv,
+                wqdv: values.wqdv,
+                wdmd: values.wdmd,
+                wqmd: values.wqmd,
+                wdam: values.wdam,
+                wqam: values.wqam,
+                wdmm: values.wdmm,
+                wqmm: values.wqmm,
+                xor: values.xor,
+                xori: values.xori,
+                ecop: values.ecop,
+                aloc: values.aloc,
+                bsiz: values.bsiz,
+                bldd: values.bldd,
+                cfe: values.cfe,
+                cfei: values.cfei,
+                call: values.call,
+                ccp: values.ccp,
+                croo: values.croo,
+                csiz: values.csiz,
+                ed19: values.ed19,
+                k256: values.k256,
+                ldc: values.ldc,
+                logd: values.logd,
+                mcl: values.mcl,
+                mcli: values.mcli,
+                mcp: values.mcp,
+                mcpi: values.mcpi,
+                meq: values.meq,
+                retd: values.retd,
+                s256: values.s256,
+                scwq: DependentCost::free(),
+                smo: values.smo,
+                srwq: DependentCost::free(),
+                swwq: DependentCost::free(),
+                epar: values.epar,
+                contract_root: values.contract_root,
+                state_root: values.state_root,
+                vm_initialization: values.vm_initialization,
+                new_storage_per_byte: values.new_storage_per_byte,
+            }
+            .into(),
+        ),
+    }
+}
+
+pub(crate) fn consensus_params_for_selection(
+    params: Arc<fuel_tx::ConsensusParameters>,
+    look_ahead: &Lookahead<'_>,
+) -> Arc<fuel_tx::ConsensusParameters> {
+    if requires_v2_consensus_parameters(look_ahead) {
+        return params;
+    }
+
+    match params.as_ref() {
+        fuel_tx::ConsensusParameters::V1(_) => params,
+        fuel_tx::ConsensusParameters::V2(params) => Arc::new(
+            fuel_tx::consensus_parameters::ConsensusParametersV2 {
+                tx_params: params.tx_params,
+                predicate_params: params.predicate_params,
+                script_params: script_params_as_v1(params.script_params),
+                contract_params: params.contract_params,
+                fee_params: params.fee_params,
+                chain_id: params.chain_id,
+                gas_costs: gas_costs_as_v6(params.gas_costs.clone()),
+                base_asset_id: params.base_asset_id,
+                block_gas_limit: params.block_gas_limit,
+                block_transaction_size_limit: params.block_transaction_size_limit,
+                privileged_address: params.privileged_address,
+            }
+            .into(),
+        ),
+    }
 }
 
 impl From<fuel_tx::DependentCost> for DependentCost {
@@ -846,7 +1047,10 @@ impl ChainInfo {
             .data_unchecked::<ChainInfoProvider>()
             .current_consensus_params();
 
-        Ok(ConsensusParameters(params))
+        Ok(ConsensusParameters(consensus_params_for_selection(
+            params,
+            &ctx.look_ahead(),
+        )))
     }
 
     #[graphql(complexity = "query_costs().storage_read + child_complexity")]
@@ -866,5 +1070,120 @@ pub struct ChainQuery;
 impl ChainQuery {
     async fn chain(&self) -> ChainInfo {
         ChainInfo
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        graphql_api::{
+            Config,
+            ServiceConfig,
+            ports::MockChainStateProvider,
+        },
+        schema::build_schema,
+    };
+    use async_graphql::Request;
+    use fuel_tx::consensus_parameters::ConsensusParametersV2;
+    use std::{
+        net::{
+            IpAddr,
+            Ipv4Addr,
+            SocketAddr,
+        },
+        time::Duration,
+    };
+
+    #[test]
+    fn gas_costs_downgrade_to_v6_fills_legacy_only_fields() {
+        use fuel_tx::consensus_parameters::DependentCost;
+
+        let downgraded =
+            gas_costs_as_v6(fuel_tx::ConsensusParameters::standard().gas_costs().clone());
+
+        let GasCostsValues::V6(values) = downgraded.deref() else {
+            panic!("expected downgraded gas costs to be V6");
+        };
+
+        assert_eq!(values.srw, 0);
+        assert_eq!(values.sww, 0);
+        assert_eq!(values.scwq, DependentCost::free());
+        assert_eq!(values.srwq, DependentCost::free());
+        assert_eq!(values.swwq, DependentCost::free());
+    }
+
+    #[tokio::test]
+    async fn v047_shape_query_keeps_block_transaction_size_limit() {
+        const BLOCK_TRANSACTION_SIZE_LIMIT: u64 = 1_234_567;
+
+        let mut params = ConsensusParametersV2::standard();
+        params.block_transaction_size_limit = BLOCK_TRANSACTION_SIZE_LIMIT;
+
+        let mut mocked_provider = MockChainStateProvider::default();
+        mocked_provider
+            .expect_current_consensus_params()
+            .return_const(Arc::new(params.into()));
+
+        let config = Config {
+            config: ServiceConfig {
+                addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
+                number_of_threads: 1,
+                database_batch_size: 1,
+                block_subscriptions_queue: 1,
+                max_queries_depth: 16,
+                max_queries_complexity: 10_000,
+                max_queries_recursive_depth: 32,
+                max_queries_resolver_recursive_depth: 32,
+                max_queries_directives: 16,
+                max_concurrent_queries: 16,
+                request_body_bytes_limit: 1024 * 1024,
+                required_fuel_block_height_tolerance: 0,
+                required_fuel_block_height_timeout: Duration::from_secs(1),
+                query_log_threshold_time: Duration::from_secs(1),
+                api_request_timeout: Duration::from_secs(1),
+                assemble_tx_dry_run_limit: 1,
+                assemble_tx_estimate_predicates_limit: 1,
+                costs: Default::default(),
+            },
+            utxo_validation: false,
+            debug: false,
+            allow_syscall: false,
+            historical_execution: false,
+            expensive_subscriptions: false,
+            max_tx: 1,
+            max_gas: 1,
+            max_size: 1,
+            max_txpool_dependency_chain_length: 1,
+            chain_name: "test".into(),
+        };
+
+        let schema = build_schema()
+            .data(config)
+            .data(Box::new(mocked_provider)
+                as crate::graphql_api::api_service::ChainInfoProvider)
+            .finish();
+
+        let response = schema
+            .execute(Request::new(
+                "{ chain { consensusParameters { blockTransactionSizeLimit } } }",
+            ))
+            .await;
+
+        assert!(
+            response.errors.is_empty(),
+            "unexpected GraphQL errors: {:?}",
+            response.errors
+        );
+        assert_eq!(
+            response.data.into_json().unwrap(),
+            serde_json::json!({
+                "chain": {
+                    "consensusParameters": {
+                        "blockTransactionSizeLimit": BLOCK_TRANSACTION_SIZE_LIMIT.to_string()
+                    }
+                }
+            })
+        );
     }
 }

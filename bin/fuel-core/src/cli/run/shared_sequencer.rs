@@ -24,6 +24,12 @@ pub struct Args {
         default_value = "0000000000000000000000000000000000000000000000000000000000000000"
     )]
     topic: Bytes32,
+    /// Per-request timeout for REST/RPC calls against the shared sequencer.
+    #[clap(long = "ss-http-request-timeout", env, default_value = "5s")]
+    http_request_timeout: humantime::Duration,
+    /// TCP connect timeout for REST/RPC calls against the shared sequencer.
+    #[clap(long = "ss-http-connect-timeout", env, default_value = "3s")]
+    http_connect_timeout: humantime::Duration,
 }
 
 #[cfg(feature = "shared-sequencer")]
@@ -51,6 +57,8 @@ impl TryFrom<Args> for fuel_core_shared_sequencer::Config {
             block_posting_frequency: val.block_posting_frequency.into(),
             endpoints,
             topic: *val.topic,
+            http_request_timeout: val.http_request_timeout.into(),
+            http_connect_timeout: val.http_connect_timeout.into(),
         })
     }
 }

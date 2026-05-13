@@ -42,6 +42,7 @@ use fuel_core_storage::{
     StorageAsRef,
     transactional::AtomicView,
 };
+use fuel_core_txpool::error::Error as TxPoolError;
 use fuel_core_types::{
     fuel_asm::{
         RegId,
@@ -77,7 +78,11 @@ use std::{
     },
     time::Duration,
 };
-use tokio::sync::broadcast;
+use tokio::{
+    net::TcpStream,
+    sync::broadcast,
+    time::sleep,
+};
 
 #[derive(Copy, Clone)]
 pub enum BootstrapType {
@@ -558,6 +563,16 @@ pub async fn make_node(node_config: Config, test_txs: Vec<Transaction>) -> Node 
     })
     .expect("The `FuelService should start without error");
 
+    tokio::time::timeout(time_limit, wait_for_node_ready(&node))
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "All node interfaces should become ready in less than {} seconds",
+                time_limit.as_secs()
+            )
+        })
+        .expect("The `FuelService` interfaces should become ready");
+
     let config = node.shared.config.clone();
     Node {
         node,
@@ -662,16 +677,35 @@ impl Node {
         let mut expected = HashMap::new();
         for tx in &self.test_txs {
             let tx_id = tx.id(&ChainId::default());
-            self.node
-                .shared
-                .txpool_shared_state
-                .insert(tx.clone())
-                .await
-                .unwrap();
+            self.insert_tx_with_retry(tx.clone()).await;
 
             expected.insert(tx_id, tx.clone());
         }
         expected
+    }
+
+    async fn insert_tx_with_retry(&self, tx: Transaction) {
+        let retry_delay = Duration::from_millis(100);
+        #[allow(clippy::arithmetic_side_effects)]
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+
+        loop {
+            match self
+                .node
+                .shared
+                .txpool_shared_state
+                .insert(tx.clone())
+                .await
+            {
+                Ok(()) => return,
+                Err(TxPoolError::ServiceCommunicationFailed)
+                    if tokio::time::Instant::now() < deadline =>
+                {
+                    sleep(retry_delay).await;
+                }
+                Err(err) => panic!("failed to insert transaction into txpool: {err}"),
+            }
+        }
     }
 
     /// Start a node that has been shutdown.
@@ -689,6 +723,16 @@ impl Node {
             .send_stop_signal_and_await_shutdown()
             .await
             .unwrap();
+    }
+}
+
+async fn wait_for_node_ready(node: &FuelService) -> anyhow::Result<()> {
+    loop {
+        if TcpStream::connect(node.bound_address).await.is_ok() {
+            return Ok(());
+        }
+
+        sleep(Duration::from_millis(100)).await;
     }
 }
 
