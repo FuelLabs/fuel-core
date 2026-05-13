@@ -70,7 +70,7 @@ Follow : https://docs.fuel.network/docs/node-operator/fuel-ignition/mainnet-node
 
 ### From source
 
-Clone the `fuel-core` repository : 
+Clone the `fuel-core` repository :
 ```
 git clone https://github.com/FuelLabs/fuel-core.git
 ```
@@ -89,7 +89,7 @@ To run the node follow : https://docs.fuel.network/docs/node-operator/fuel-ignit
 
 ## Running a Local network from source
 
-Clone the `fuel-core` repository : 
+Clone the `fuel-core` repository :
 ```
 git clone https://github.com/FuelLabs/fuel-core.git
 ```
@@ -179,7 +179,7 @@ If you have problems with publishing, you can troubleshoot it locally with [`act
 act release -s GITHUB_TOKEN=<YOUR_GITHUB_TOKEN> -j publish-crates-check --container-architecture linux/amd64 --reuse
 ```
 
-It requires GitHubToken to do request to the GitHub. You can create it 
+It requires GitHubToken to do request to the GitHub. You can create it
 with [this](https://docs.github.com/en/enterprise-server@3.4/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) instruction.
 
 #### Outdated database
