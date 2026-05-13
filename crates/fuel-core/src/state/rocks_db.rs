@@ -878,6 +878,16 @@ where
         // and avoid teardown races with rocksdb's static-singleton thread
         // pools.
         self.db.cancel_all_background_work(true);
+
+        // Belt-and-suspenders for the test suite only: spin until no other
+        // `Arc<PrimaryInstance>` clone is alive. CI runs surface a residual
+        // atexit-phase race ("pthread lock: Invalid argument") that doesn't
+        // reproduce reliably; blocking shutdown here until readers are
+        // released gives the process exit path a clean baseline. Disabled
+        // in production builds because a stuck reader would hang shutdown
+        // indefinitely.
+        #[cfg(feature = "test-helpers")]
+        while Arc::strong_count(&self.db) > 1 {}
     }
 }
 
