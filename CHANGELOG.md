@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.48.2]
+
+### Fixed
+- [3289](https://github.com/FuelLabs/fuel-core/pull/3289): shutdown services in parallel to stop poa promptly
+- [3290](https://github.com/FuelLabs/fuel-core/pull/3290): Use semantic JSON comparison in QuorumTransport
+- [3301](https://github.com/FuelLabs/fuel-core/pull/3301): disable coredumps in the fuel-core binary so the rocksdb atexit SIGABRT does not block pod restart for tens of seconds; set `FUEL_CORE_ENABLE_COREDUMP=1` to opt back in.
+
 ## [Version 0.48.1]
 
 ### Changed
