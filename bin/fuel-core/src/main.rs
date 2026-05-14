@@ -27,10 +27,22 @@ const RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 /// the canonical workaround.
 ///
 /// To keep coredumps on (e.g. when debugging a real crash) set
-/// `FUEL_CORE_ENABLE_COREDUMP=1`.
+/// `FUEL_CORE_ENABLE_COREDUMP` to a truthy value (`1`, `true`, `yes`, `on`,
+/// case-insensitive). Any other value — including `0`, `false`, or an empty
+/// string — leaves coredumps disabled, so operators can explicitly opt out
+/// in their manifests without accidentally re-enabling them.
 #[cfg(feature = "rocksdb")]
 fn disable_coredump_unless_opted_in() {
-    if std::env::var_os("FUEL_CORE_ENABLE_COREDUMP").is_some() {
+    let opted_in = std::env::var("FUEL_CORE_ENABLE_COREDUMP")
+        .ok()
+        .map(|v| {
+            matches!(
+                v.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on"
+            )
+        })
+        .unwrap_or(false);
+    if opted_in {
         return;
     }
     if let Err(e) = rlimit::setrlimit(rlimit::Resource::CORE, 0, 0) {
