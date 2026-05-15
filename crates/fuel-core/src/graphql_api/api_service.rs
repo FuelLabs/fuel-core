@@ -153,6 +153,14 @@ const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
 #[derive(Clone)]
 struct ExecutorWithMetrics {
     processor: Arc<AsyncProcessor>,
+    /// Watched alongside every spawned request future so that the future
+    /// resolves as soon as the service leaves `Started`. This bounds the
+    /// time `Task::shutdown` has to wait inside `processor.drain()`: even
+    /// a handler stuck in a long-running await terminates at the stop
+    /// signal instead of being detached at the end of
+    /// `Runtime::shutdown_timeout` and racing the rocksdb static
+    /// destructors at process atexit.
+    state: StateWatcher,
 }
 
 impl<F> Executor<F> for ExecutorWithMetrics
@@ -161,7 +169,18 @@ where
     F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
-        let result = self.processor.try_spawn(fut);
+        let mut state = self.state.clone();
+        let wrapped = async move {
+            // We don't need the future's output (axum/hyper drives the
+            // request lifecycle via I/O on the connection itself), so
+            // dropping it on shutdown is safe — the connection's drop
+            // closes the socket cleanly.
+            tokio::select! {
+                _ = fut => {}
+                _ = state.while_started() => {}
+            }
+        };
+        let result = self.processor.try_spawn(wrapped);
 
         if let Err(err) = result {
             tracing::error!("Failed to spawn a task for GraphQL: {:?}", err);
@@ -203,6 +222,7 @@ impl RunnableService for GraphqlService {
 
         let executor = ExecutorWithMetrics {
             processor: processor.clone(),
+            state: state.clone(),
         };
 
         let server = axum::Server::from_tcp(listener)
