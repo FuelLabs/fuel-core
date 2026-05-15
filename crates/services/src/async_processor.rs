@@ -4,12 +4,19 @@ use fuel_core_metrics::futures::{
 };
 use std::{
     future::Future,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{
+            AtomicUsize,
+            Ordering,
+        },
+    },
     time::Duration,
 };
 use tokio::{
     runtime,
     sync::{
+        Notify,
         OwnedSemaphorePermit,
         Semaphore,
     },
@@ -28,6 +35,13 @@ pub struct AsyncProcessor {
     metric: FuturesMetrics,
     semaphore: Arc<Semaphore>,
     thread_pool: Option<runtime::Runtime>,
+    /// Number of spawned tasks that have not yet completed. Used by
+    /// `drain` to wait for in-flight work to finish before the inner
+    /// runtime is shut down — otherwise `shutdown_timeout` would
+    /// detach still-running workers, which then race with rocksdb's
+    /// global `Env::Default()` destructor at process atexit.
+    active: Arc<AtomicUsize>,
+    drained: Arc<Notify>,
 }
 
 impl Drop for AsyncProcessor {
@@ -89,7 +103,31 @@ impl AsyncProcessor {
             metric,
             thread_pool,
             semaphore,
+            active: Arc::new(AtomicUsize::new(0)),
+            drained: Arc::new(Notify::new()),
         })
+    }
+
+    /// Waits until every task previously spawned via this processor has
+    /// finished. Callers must ensure no further tasks will be spawned
+    /// before awaiting this future, otherwise it may resolve and then
+    /// the count is non-zero again.
+    ///
+    /// This is the explicit synchronisation point that must be reached
+    /// before `Drop` runs — without it, `Runtime::shutdown_timeout`
+    /// detaches any task that hasn't finished within its budget and the
+    /// detached worker continues running into the libc `atexit` chain.
+    pub async fn drain(&self) {
+        loop {
+            // Order matters: register interest first, then check the
+            // counter. Reversing it would let a task complete between
+            // load and notify-registration and we'd miss the wakeup.
+            let notified = self.drained.notified();
+            if self.active.load(Ordering::SeqCst) == 0 {
+                return;
+            }
+            notified.await;
+        }
     }
 
     /// Reserve a slot for a task to be executed.
@@ -112,10 +150,16 @@ impl AsyncProcessor {
         F::Output: Send,
     {
         let permit = reservation.0;
+        let active = self.active.clone();
+        let drained = self.drained.clone();
+        active.fetch_add(1, Ordering::SeqCst);
         let future = async move {
             let permit = permit;
             let result = future.await;
             drop(permit);
+            if active.fetch_sub(1, Ordering::SeqCst) == 1 {
+                drained.notify_waiters();
+            }
             result
         };
         let metered_future = MeteredFuture::new(future, self.metric.clone());

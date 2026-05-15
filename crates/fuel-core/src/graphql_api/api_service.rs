@@ -136,6 +136,16 @@ pub struct ServerParams {
 
 pub struct Task {
     server: tokio::task::JoinHandle<hyper::Result<()>>,
+    /// Handle to the inner `AsyncProcessor`'s task tracker. Kept here so
+    /// `Task::shutdown` can `await processor.drain()` and wait for every
+    /// hyper request future to complete before the surrounding service
+    /// teardown reaches `AsyncProcessor::drop`. If we skip this, the
+    /// `Runtime::shutdown_timeout` in `Drop` would detach any task still
+    /// running at its deadline; the detached worker then outlives the
+    /// service and races rocksdb's global `Env::Default()` destructor in
+    /// `__run_exit_handlers`, surfacing as SIGABRT/SIGSEGV at process
+    /// exit.
+    processor: Arc<AsyncProcessor>,
 }
 
 const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -185,14 +195,14 @@ impl RunnableService for GraphqlService {
             number_of_threads,
         } = params;
 
-        let processor = AsyncProcessor::new(
+        let processor = Arc::new(AsyncProcessor::new(
             "GraphQLFutures",
             number_of_threads,
             tokio::sync::Semaphore::MAX_PERMITS,
-        )?;
+        )?);
 
         let executor = ExecutorWithMetrics {
-            processor: Arc::new(processor),
+            processor: processor.clone(),
         };
 
         let server = axum::Server::from_tcp(listener)
@@ -217,6 +227,7 @@ impl RunnableService for GraphqlService {
 
         Ok(Task {
             server: tokio::spawn(server),
+            processor,
         })
     }
 }
@@ -252,9 +263,17 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
-        // The `axum::Server` was already gracefully shutdown at this point.
+        // The `axum::Server` has already gracefully stopped accepting new
+        // requests, but some hyper request futures may still be running on
+        // the inner `AsyncProcessor` runtime — connection-drain tasks and
+        // any handler whose response was mid-flight when the stop signal
+        // arrived. We must wait for them to complete here, because
+        // `AsyncProcessor::drop` falls back to `Runtime::shutdown_timeout`
+        // which detaches any task still running at its deadline; the
+        // detached worker then outlives the service and races rocksdb's
+        // global `Env::Default()` destructor in `__run_exit_handlers`,
+        // surfacing as SIGABRT/SIGSEGV at process exit.
+        self.processor.drain().await;
         Ok(())
     }
 }
