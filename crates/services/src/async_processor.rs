@@ -4,12 +4,19 @@ use fuel_core_metrics::futures::{
 };
 use std::{
     future::Future,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{
+            AtomicUsize,
+            Ordering,
+        },
+    },
     time::Duration,
 };
 use tokio::{
     runtime,
     sync::{
+        Notify,
         OwnedSemaphorePermit,
         Semaphore,
     },
@@ -28,6 +35,13 @@ pub struct AsyncProcessor {
     metric: FuturesMetrics,
     semaphore: Arc<Semaphore>,
     thread_pool: Option<runtime::Runtime>,
+    /// Number of spawned tasks that have not yet completed. Used by
+    /// `drain` to wait for in-flight work to finish before the inner
+    /// runtime is shut down — otherwise `shutdown_timeout` would
+    /// detach still-running workers, which then race with rocksdb's
+    /// global `Env::Default()` destructor at process atexit.
+    active: Arc<AtomicUsize>,
+    drained: Arc<Notify>,
 }
 
 impl Drop for AsyncProcessor {
@@ -55,6 +69,29 @@ impl Drop for AsyncProcessor {
             let _ = handle.join();
         }
     }
+}
+
+/// RAII counter for tasks spawned via `spawn_reserved`. The increment
+/// happens at spawn time (outside the future); this guard owns the
+/// matching decrement and the `notify_waiters` call, so the count is
+/// released even if the future panics, is dropped before its first
+/// poll, or is cancelled mid-await. The cooperating helper
+/// `active_guard_inc` performs the matching increment.
+struct ActiveGuard {
+    active: Arc<AtomicUsize>,
+    drained: Arc<Notify>,
+}
+
+impl Drop for ActiveGuard {
+    fn drop(&mut self) {
+        if self.active.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.drained.notify_waiters();
+        }
+    }
+}
+
+fn active_guard_inc(active: &Arc<AtomicUsize>) {
+    active.fetch_add(1, Ordering::SeqCst);
 }
 
 /// A reservation for a task to be executed by the `AsyncProcessor`.
@@ -89,7 +126,31 @@ impl AsyncProcessor {
             metric,
             thread_pool,
             semaphore,
+            active: Arc::new(AtomicUsize::new(0)),
+            drained: Arc::new(Notify::new()),
         })
+    }
+
+    /// Waits until every task previously spawned via this processor has
+    /// finished. Callers must ensure no further tasks will be spawned
+    /// before awaiting this future, otherwise it may resolve and then
+    /// the count is non-zero again.
+    ///
+    /// This is the explicit synchronisation point that must be reached
+    /// before `Drop` runs — without it, `Runtime::shutdown_timeout`
+    /// detaches any task that hasn't finished within its budget and the
+    /// detached worker continues running into the libc `atexit` chain.
+    pub async fn drain(&self) {
+        loop {
+            // Order matters: register interest first, then check the
+            // counter. Reversing it would let a task complete between
+            // load and notify-registration and we'd miss the wakeup.
+            let notified = self.drained.notified();
+            if self.active.load(Ordering::SeqCst) == 0 {
+                return;
+            }
+            notified.await;
+        }
     }
 
     /// Reserve a slot for a task to be executed.
@@ -112,7 +173,17 @@ impl AsyncProcessor {
         F::Output: Send,
     {
         let permit = reservation.0;
+        // Counted via an RAII guard so the count is decremented and
+        // waiters are notified even if `future` panics or is cancelled
+        // mid-await. Without the guard, a panic in `future.await` would
+        // leak `active` and `drain()` would hang forever.
+        active_guard_inc(&self.active);
+        let guard = ActiveGuard {
+            active: self.active.clone(),
+            drained: self.drained.clone(),
+        };
         let future = async move {
+            let _guard = guard;
             let permit = permit;
             let result = future.await;
             drop(permit);
@@ -149,6 +220,41 @@ mod tests {
         time::Duration,
     };
     use tokio::time::Instant;
+
+    #[tokio::test]
+    async fn drain__returns_when_panicking_task_completes() {
+        // Regression: a previous version decremented `active` inside the
+        // spawned future *after* `future.await`. A panicking task would
+        // skip the decrement and `drain()` would hang forever.
+        let proc = AsyncProcessor::new("Test", 1, 4).unwrap();
+        let h = proc
+            .try_spawn(async {
+                panic!("intentional panic from spawned task");
+            })
+            .unwrap();
+        // Let the panic propagate and the task end.
+        let _ = h.await;
+        // Should return promptly, not hang.
+        tokio::time::timeout(Duration::from_secs(2), proc.drain())
+            .await
+            .expect("drain must not hang after a panicking task");
+    }
+
+    #[tokio::test]
+    async fn drain__returns_when_cancelled_before_first_poll() {
+        // Another panic-safety path: spawn a future, drop the JoinHandle
+        // before it is polled, ensure `drain()` still terminates because
+        // the `ActiveGuard` is dropped along with the future.
+        let proc = AsyncProcessor::new("Test", 1, 4).unwrap();
+        let h = proc
+            .try_spawn(async { tokio::time::sleep(Duration::from_secs(60)).await })
+            .unwrap();
+        h.abort();
+        let _ = h.await;
+        tokio::time::timeout(Duration::from_secs(2), proc.drain())
+            .await
+            .expect("drain must not hang after task cancellation");
+    }
 
     #[tokio::test]
     async fn one_spawn_single_tasks_works() {

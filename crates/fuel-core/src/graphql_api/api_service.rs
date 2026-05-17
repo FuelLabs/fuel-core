@@ -136,6 +136,16 @@ pub struct ServerParams {
 
 pub struct Task {
     server: tokio::task::JoinHandle<hyper::Result<()>>,
+    /// Handle to the inner `AsyncProcessor`'s task tracker. Kept here so
+    /// `Task::shutdown` can `await processor.drain()` and wait for every
+    /// hyper request future to complete before the surrounding service
+    /// teardown reaches `AsyncProcessor::drop`. If we skip this, the
+    /// `Runtime::shutdown_timeout` in `Drop` would detach any task still
+    /// running at its deadline; the detached worker then outlives the
+    /// service and races rocksdb's global `Env::Default()` destructor in
+    /// `__run_exit_handlers`, surfacing as SIGABRT/SIGSEGV at process
+    /// exit.
+    processor: Arc<AsyncProcessor>,
 }
 
 const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -143,6 +153,14 @@ const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
 #[derive(Clone)]
 struct ExecutorWithMetrics {
     processor: Arc<AsyncProcessor>,
+    /// Watched alongside every spawned request future so that the future
+    /// resolves as soon as the service leaves `Started`. This bounds the
+    /// time `Task::shutdown` has to wait inside `processor.drain()`: even
+    /// a handler stuck in a long-running await terminates at the stop
+    /// signal instead of being detached at the end of
+    /// `Runtime::shutdown_timeout` and racing the rocksdb static
+    /// destructors at process atexit.
+    state: StateWatcher,
 }
 
 impl<F> Executor<F> for ExecutorWithMetrics
@@ -151,7 +169,18 @@ where
     F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
-        let result = self.processor.try_spawn(fut);
+        let mut state = self.state.clone();
+        let wrapped = async move {
+            // We don't need the future's output (axum/hyper drives the
+            // request lifecycle via I/O on the connection itself), so
+            // dropping it on shutdown is safe — the connection's drop
+            // closes the socket cleanly.
+            tokio::select! {
+                _ = fut => {}
+                _ = state.while_started() => {}
+            }
+        };
+        let result = self.processor.try_spawn(wrapped);
 
         if let Err(err) = result {
             tracing::error!("Failed to spawn a task for GraphQL: {:?}", err);
@@ -185,14 +214,15 @@ impl RunnableService for GraphqlService {
             number_of_threads,
         } = params;
 
-        let processor = AsyncProcessor::new(
+        let processor = Arc::new(AsyncProcessor::new(
             "GraphQLFutures",
             number_of_threads,
             tokio::sync::Semaphore::MAX_PERMITS,
-        )?;
+        )?);
 
         let executor = ExecutorWithMetrics {
-            processor: Arc::new(processor),
+            processor: processor.clone(),
+            state: state.clone(),
         };
 
         let server = axum::Server::from_tcp(listener)
@@ -217,6 +247,7 @@ impl RunnableService for GraphqlService {
 
         Ok(Task {
             server: tokio::spawn(server),
+            processor,
         })
     }
 }
@@ -252,9 +283,17 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
-        // The `axum::Server` was already gracefully shutdown at this point.
+        // The `axum::Server` has already gracefully stopped accepting new
+        // requests, but some hyper request futures may still be running on
+        // the inner `AsyncProcessor` runtime — connection-drain tasks and
+        // any handler whose response was mid-flight when the stop signal
+        // arrived. We must wait for them to complete here, because
+        // `AsyncProcessor::drop` falls back to `Runtime::shutdown_timeout`
+        // which detaches any task still running at its deadline; the
+        // detached worker then outlives the service and races rocksdb's
+        // global `Env::Default()` destructor in `__run_exit_handlers`,
+        // surfacing as SIGABRT/SIGSEGV at process exit.
+        self.processor.drain().await;
         Ok(())
     }
 }

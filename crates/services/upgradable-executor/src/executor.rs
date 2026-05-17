@@ -265,7 +265,9 @@ impl<S, R> Executor<S, R> {
         // We are skipping 0-47-0 because it was not published.
         ("0-47-1", 32),
         ("0-48-0", 33),
-        ("0-48-1", LATEST_STATE_TRANSITION_VERSION),
+        // Changed between 0-48-1 and 0-48-2 are off-chain and doesn't require a state transition
+        // upgrade.
+        ("0-48-2", LATEST_STATE_TRANSITION_VERSION),
     ];
 
     pub fn new(

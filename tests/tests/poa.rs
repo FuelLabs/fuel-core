@@ -253,6 +253,18 @@ mod p2p {
         // The first producer should produce 2 more blocks.
         // The second producer should synchronize 3(1 manual and 2 produced) blocks.
         let second_producer = make_node(second_producer_config, vec![]).await;
+
+        // Anchor the timer before any block reaches `second_producer`.
+        // The invariant we assert below is that `second_producer` cannot enter
+        // `Synced` until `time_until_synced` passes without new blocks, and
+        // every block received from the network restarts that timer
+        // (see `SyncTask::restart_timer` in `consensus_module/poa/src/sync.rs`).
+        // Anchoring after `wait_for_blocks` makes the assertion race-prone on
+        // slow CI because `first_producer` may stop before another block
+        // reaches `second_producer`, leaving the last-block time slightly
+        // before `start_time`.
+        let start_time = tokio::time::Instant::now();
+
         tokio::time::timeout(
             Duration::from_secs(SYNC_TIMEOUT),
             second_producer.wait_for_blocks(3, false /* is_local */),
@@ -260,7 +272,6 @@ mod p2p {
         .await
         .expect("The second should sync with the first");
 
-        let start_time = tokio::time::Instant::now();
         // Stop the first producer.
         tokio::time::timeout(
             Duration::from_secs(1),
