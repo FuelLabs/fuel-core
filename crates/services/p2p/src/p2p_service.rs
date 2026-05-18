@@ -255,10 +255,10 @@ impl FuelP2PService {
             // we use the global registry to store the metrics without needing to create a new one
             // since libp2p already creates sub-registries
             let mut registry = global_registry().registry.lock();
-            libp2p_metrics_registry = Some(Metrics::new(&mut registry));
+            libp2p_metrics_registry = Some(Metrics::new(&mut *registry));
 
             swarm_builder
-                .with_bandwidth_metrics(&mut registry)
+                .with_bandwidth_metrics(&mut *registry)
                 .with_behaviour(|_| behaviour)?
                 .with_swarm_config(|cfg| match config.connection_idle_timeout {
                     Some(timeout) => cfg.with_idle_connection_timeout(timeout),
@@ -359,7 +359,7 @@ impl FuelP2PService {
         }
     }
 
-    #[cfg(feature = "test-helpers")]
+    #[cfg(any(test, feature = "test-helpers"))]
     pub fn multiaddrs(&self) -> Vec<Multiaddr> {
         let local_peer = self.local_peer_id;
         self.swarm
@@ -654,7 +654,7 @@ impl FuelP2PService {
         event: request_response::Event<RequestMessage, V2ResponseMessage>,
     ) -> Option<FuelP2PEvent> {
         match event {
-            request_response::Event::Message { peer, message } => match message {
+            request_response::Event::Message { peer, message, .. } => match message {
                 request_response::Message::Request {
                     request,
                     channel,
@@ -751,6 +751,7 @@ impl FuelP2PService {
                 peer,
                 error,
                 request_id,
+                ..
             } => {
                 tracing::error!(
                     "RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}",
@@ -766,6 +767,7 @@ impl FuelP2PService {
                 peer,
                 error,
                 request_id,
+                ..
             } => {
                 // If the remote peer doesn't support the protocol, it is better to disconnect
                 // to find another peer that supports it.
