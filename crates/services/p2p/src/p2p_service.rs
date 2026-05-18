@@ -255,10 +255,10 @@ impl FuelP2PService {
             // we use the global registry to store the metrics without needing to create a new one
             // since libp2p already creates sub-registries
             let mut registry = global_registry().registry.lock();
-            libp2p_metrics_registry = Some(Metrics::new(&mut *registry));
+            libp2p_metrics_registry = Some(Metrics::new(&mut registry));
 
             swarm_builder
-                .with_bandwidth_metrics(&mut *registry)
+                .with_bandwidth_metrics(&mut registry)
                 .with_behaviour(|_| behaviour)?
                 .with_swarm_config(|cfg| match config.connection_idle_timeout {
                     Some(timeout) => cfg.with_idle_connection_timeout(timeout),
