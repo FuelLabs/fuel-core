@@ -33,6 +33,7 @@ use std::{
         HashSet,
         hash_map::Entry,
     },
+    convert::Infallible,
     fmt,
     sync::Arc,
     task::{
@@ -40,7 +41,6 @@ use std::{
         Poll,
     },
 };
-use void::Void;
 
 #[derive(Default)]
 pub struct ConnectionsStatistic {
@@ -196,7 +196,7 @@ impl ConnectionLimits {
 
 impl NetworkBehaviour for Behaviour {
     type ConnectionHandler = dummy::ConnectionHandler;
-    type ToSwarm = Void;
+    type ToSwarm = Infallible;
 
     fn handle_pending_inbound_connection(
         &mut self,
@@ -409,7 +409,7 @@ impl NetworkBehaviour for Behaviour {
         _: ConnectionId,
         event: THandlerOutEvent<Self>,
     ) {
-        void::unreachable(event)
+        match event {}
     }
 
     fn poll(
