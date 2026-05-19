@@ -13,10 +13,8 @@ use crate::{
         upgrade_transaction,
     },
 };
-use libp2p::{
-    futures::StreamExt,
-    identity::secp256k1::Keypair as SecpKeypair,
-};
+use futures::StreamExt;
+use libp2p_identity::secp256k1::Keypair as SecpKeypair;
 use rand::{
     SeedableRng,
     rngs::StdRng,
