@@ -24,6 +24,7 @@ use fuel_core_storage::{
     transactional::HistoricalView,
 };
 use fuel_core_types::{
+    ClampedPercentage,
     blockchain::{
         block::Block,
         header::ConsensusParametersVersion,
@@ -91,7 +92,9 @@ impl From<Config> for V1AlgorithmConfig {
             new_exec_gas_price: starting_exec_gas_price.max(min_exec_gas_price),
             min_exec_gas_price,
             exec_gas_price_change_percent,
-            l2_block_fullness_threshold_percent: exec_gas_price_threshold_percent,
+            l2_block_fullness_threshold_percent: ClampedPercentage::new(
+                exec_gas_price_threshold_percent,
+            ),
             min_da_gas_price,
             max_da_gas_price,
             max_da_gas_price_change_percent,
@@ -100,7 +103,7 @@ impl From<Config> for V1AlgorithmConfig {
             normal_range_size: activity_normal_range_size,
             capped_range_size: activity_capped_range_size,
             decrease_range_size: activity_decrease_range_size,
-            block_activity_threshold,
+            block_activity_threshold: ClampedPercentage::new(block_activity_threshold),
             da_poll_interval,
             gas_price_factor: da_gas_price_factor,
             starting_recorded_height: starting_recorded_height.map(BlockHeight::from),
