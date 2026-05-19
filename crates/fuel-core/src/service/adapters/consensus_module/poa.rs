@@ -118,23 +118,49 @@ impl Clone for RedisNode {
     }
 }
 
+/// Uses a set of Redis servers to take ownership of fencing tokens for each epoch and publish
+/// block data.
+///
+/// In steady state, a single block producer should be able to hold the lock indefinitely. If that
+/// producer is shut down, it will release the token and allow another producer to take over.
+///
+/// The code however is designed to be fault tolerant. If a producer fails to release the lock,
+/// there is a TTL on the lock that will allow another producer to take over.
+///
+/// If different producers claim locks on each Redis server, nodes can deterministically
+/// identify the true block producer of any given block. This is done by iterating over each epochs
+/// and finding the highest epoch with a quorum of blocks produced.
 pub struct RedisLeaderLeaseAdapter {
+    /// Redis nodes that participate in leader election and block reconciliation
     redis_nodes: Vec<RedisNode>,
+    /// Minimum number of Redis nodes that must agree for ownership or writes to be accepted
     quorum: usize,
-    quorum_disruption_budget: u32,
+    /// Redis key that stores the current lease owner id with a TTL
     lease_key: String,
+    /// Redis key that stores the monotonically increasing fencing token
     epoch_key: String,
+    /// Redis stream key that stores published blocks for reconciliation
     block_stream_key: String,
-    lease_owner_token: String,
-    drop_release_guard: std::sync::Arc<()>,
+    /// Unique id for this adapter instance, written into the lease key when it acquires leadership
+    lease_owner_id: String,
+    /// Locally cached fencing token currently used for block writes.
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
+    /// Lease TTL applied to the Redis lease key and renewed on successful writes.
     lease_ttl_millis: u64,
+    /// Safety margin subtracted from the nominal TTL when evaluating remaining lease validity.
     lease_drift_millis: u64,
+    /// Timeout used for individual Redis node operations.
     node_timeout: Duration,
-    retry_delay_millis: u64,
-    max_retry_delay_offset_millis: u64,
-    max_attempts: usize,
+    /// Approximate upper bound for the Redis block stream and per-round reconciliation reads.
     stream_max_len: u32,
+    /// Base delay before retrying lease acquisition after a failed attempt.
+    retry_delay_millis: u64,
+    /// Random jitter added to the retry delay to reduce election collisions.
+    max_retry_delay_offset_millis: u64,
+    /// Maximum number of lease acquisition attempts per election round.
+    max_attempts: usize,
+    /// Ensures only the last live clone attempts lease release during drop.
+    drop_release_guard: std::sync::Arc<()>,
 }
 
 impl Clone for RedisLeaderLeaseAdapter {
@@ -142,20 +168,19 @@ impl Clone for RedisLeaderLeaseAdapter {
         Self {
             redis_nodes: self.redis_nodes.clone(),
             quorum: self.quorum,
-            quorum_disruption_budget: self.quorum_disruption_budget,
             lease_key: self.lease_key.clone(),
             epoch_key: self.epoch_key.clone(),
             block_stream_key: self.block_stream_key.clone(),
-            lease_owner_token: self.lease_owner_token.clone(),
-            drop_release_guard: self.drop_release_guard.clone(),
+            lease_owner_id: self.lease_owner_id.clone(),
             current_epoch_token: self.current_epoch_token.clone(),
             lease_ttl_millis: self.lease_ttl_millis,
             lease_drift_millis: self.lease_drift_millis,
             node_timeout: self.node_timeout,
+            stream_max_len: self.stream_max_len,
             retry_delay_millis: self.retry_delay_millis,
             max_retry_delay_offset_millis: self.max_retry_delay_offset_millis,
             max_attempts: self.max_attempts,
-            stream_max_len: self.stream_max_len,
+            drop_release_guard: self.drop_release_guard.clone(),
         }
     }
 }
@@ -168,6 +193,9 @@ pub enum ReconciliationAdapter {
     Redis(RedisLeaderLeaseAdapter),
     Noop(NoopReconciliationAdapter),
 }
+
+type BlocksByEpoch = HashMap<u64, SealedBlock>;
+type BlocksByHeight = HashMap<u32, BlocksByEpoch>;
 
 impl RedisLeaderLeaseAdapter {
     fn calculate_quorum(redis_nodes_len: usize, quorum_disruption_budget: u32) -> usize {
@@ -185,6 +213,7 @@ impl RedisLeaderLeaseAdapter {
     pub fn new(
         redis_urls: Vec<String>,
         lease_key: String,
+        quorum_disruption_budget: u32,
         lease_ttl: Duration,
         node_timeout: Duration,
         retry_delay: Duration,
@@ -206,14 +235,13 @@ impl RedisLeaderLeaseAdapter {
                 "At least one redis url is required for leader lock"
             ));
         }
-        let quorum_disruption_budget = 0u32;
         let quorum = Self::calculate_quorum(redis_nodes.len(), quorum_disruption_budget);
         let lease_ttl_millis = u64::try_from(lease_ttl.as_millis())?;
         let retry_delay_millis = u64::try_from(retry_delay.as_millis())?;
         let max_retry_delay_offset_millis =
             u64::try_from(max_retry_delay_offset.as_millis())?;
         let max_attempts = usize::try_from(max_attempts)?.max(1);
-        let lease_owner_token = uuid::Uuid::new_v4().to_string();
+        let lease_owner_id = uuid::Uuid::new_v4().to_string();
         let epoch_key = format!("{lease_key}:epoch:token");
         let block_stream_key = format!("{lease_key}:block:stream");
         let lease_drift_millis = lease_ttl_millis
@@ -223,31 +251,20 @@ impl RedisLeaderLeaseAdapter {
         Ok(Self {
             redis_nodes,
             quorum,
-            quorum_disruption_budget,
             lease_key,
             epoch_key,
             block_stream_key,
-            lease_owner_token,
-            drop_release_guard: std::sync::Arc::new(()),
+            lease_owner_id,
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
             lease_ttl_millis,
             lease_drift_millis,
             node_timeout,
+            stream_max_len,
             retry_delay_millis,
             max_retry_delay_offset_millis,
             max_attempts,
-            stream_max_len,
+            drop_release_guard: std::sync::Arc::new(()),
         })
-    }
-
-    pub fn with_quorum_disruption_budget(
-        mut self,
-        quorum_disruption_budget: u32,
-    ) -> Self {
-        self.quorum_disruption_budget = quorum_disruption_budget;
-        self.quorum =
-            Self::calculate_quorum(self.redis_nodes.len(), quorum_disruption_budget);
-        self
     }
 
     async fn multiplexed_connection(
@@ -289,7 +306,7 @@ impl RedisLeaderLeaseAdapter {
             self.node_timeout,
             redis::Script::new(CHECK_LEASE_OWNER_SCRIPT)
                 .key(&self.lease_key)
-                .arg(&self.lease_owner_token)
+                .arg(&self.lease_owner_id)
                 .invoke_async::<i32>(&mut connection),
         )
         .await;
@@ -319,7 +336,7 @@ impl RedisLeaderLeaseAdapter {
             redis::Script::new(PROMOTE_LEADER_SCRIPT)
                 .key(&self.lease_key)
                 .key(&self.epoch_key)
-                .arg(&self.lease_owner_token)
+                .arg(&self.lease_owner_id)
                 .arg(self.lease_ttl_millis)
                 .invoke_async::<u64>(&mut connection),
         )
@@ -349,7 +366,7 @@ impl RedisLeaderLeaseAdapter {
             self.node_timeout,
             redis::Script::new(RELEASE_LOCK_SCRIPT)
                 .key(&self.lease_key)
-                .arg(&self.lease_owner_token)
+                .arg(&self.lease_owner_id)
                 .invoke_async::<i32>(&mut connection),
         )
         .await;
@@ -546,7 +563,7 @@ impl RedisLeaderLeaseAdapter {
     async fn release_lease_on_client(
         redis_client: redis::Client,
         lease_key: String,
-        lease_owner_token: String,
+        lease_owner_id: String,
         node_timeout: Duration,
     ) {
         let connection = timeout(
@@ -563,7 +580,7 @@ impl RedisLeaderLeaseAdapter {
             node_timeout,
             redis::Script::new(RELEASE_LOCK_SCRIPT)
                 .key(lease_key)
-                .arg(lease_owner_token)
+                .arg(lease_owner_id)
                 .invoke_async::<i32>(&mut connection),
         )
         .await;
@@ -572,7 +589,7 @@ impl RedisLeaderLeaseAdapter {
     async fn release_lease_on_clients(
         redis_clients: Vec<redis::Client>,
         lease_key: String,
-        lease_owner_token: String,
+        lease_owner_id: String,
         node_timeout: Duration,
     ) {
         let _ =
@@ -580,7 +597,7 @@ impl RedisLeaderLeaseAdapter {
                 Self::release_lease_on_client(
                     redis_client,
                     lease_key.clone(),
-                    lease_owner_token.clone(),
+                    lease_owner_id.clone(),
                     node_timeout,
                 )
             }))
@@ -590,7 +607,7 @@ impl RedisLeaderLeaseAdapter {
     fn release_lease_on_clients_sync(
         redis_clients: Vec<redis::Client>,
         lease_key: String,
-        lease_owner_token: String,
+        lease_owner_id: String,
     ) {
         redis_clients.into_iter().for_each(|redis_client| {
             let Ok(mut connection) = redis_client.get_connection() else {
@@ -598,7 +615,7 @@ impl RedisLeaderLeaseAdapter {
             };
             let _ = redis::Script::new(RELEASE_LOCK_SCRIPT)
                 .key(&lease_key)
-                .arg(&lease_owner_token)
+                .arg(&lease_owner_id)
                 .invoke::<i32>(&mut connection);
         });
     }
@@ -741,17 +758,20 @@ impl RedisLeaderLeaseAdapter {
         if !self.should_reconcile_from_stream(next_height).await? {
             return Ok(Vec::new());
         }
-        let mut reconciled = Vec::new();
-        let max_reconcile_blocks_per_round =
-            usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
-        let next_height_u32 = u32::from(next_height);
+        let blocks_by_node = self.read_backlog(next_height).await?;
+        self.update_backlog_metrics(&blocks_by_node, next_height);
+        self.reconcile_contiguous_heights(blocks_by_node, next_height)
+    }
+
+    async fn read_backlog(
+        &self,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<Vec<BlocksByHeight>> {
+        let max_blocks = usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
+        let next_height = u32::from(next_height);
         let read_results =
             futures::future::join_all(self.redis_nodes.iter().map(|redis_node| {
-                self.read_stream_entries_on_node(
-                    redis_node,
-                    next_height_u32,
-                    max_reconcile_blocks_per_round,
-                )
+                self.read_stream_entries_on_node(redis_node, next_height, max_blocks)
             }))
             .await;
 
@@ -776,48 +796,54 @@ impl RedisLeaderLeaseAdapter {
             ));
         }
 
-        let blocks_by_node = successful_reads
+        Ok(successful_reads
             .into_iter()
-            .map(|entries| {
-                entries.into_iter().fold(
-                    HashMap::<u32, HashMap<u64, SealedBlock>>::new(),
-                    |mut blocks_by_height, (height, epoch, block)| {
-                        blocks_by_height
-                            .entry(height)
-                            .or_default()
-                            .insert(epoch, block);
-                        blocks_by_height
-                    },
-                )
-            })
-            .collect::<Vec<_>>();
+            .map(Self::group_entries_by_height)
+            .collect())
+    }
 
-        // Compute stream trim headroom: min stream height - local committed height
+    fn group_entries_by_height(entries: Vec<(u32, u64, SealedBlock)>) -> BlocksByHeight {
+        entries.into_iter().fold(
+            HashMap::new(),
+            |mut blocks_by_height, (height, epoch, block)| {
+                blocks_by_height
+                    .entry(height)
+                    .or_default()
+                    .insert(epoch, block);
+                blocks_by_height
+            },
+        )
+    }
+
+    fn update_backlog_metrics(
+        &self,
+        blocks_by_node: &[BlocksByHeight],
+        next_height: BlockHeight,
+    ) {
         let min_stream_height = blocks_by_node
             .iter()
             .flat_map(|blocks_by_height| blocks_by_height.keys().copied())
             .min();
-        if let Some(min_h) = min_stream_height {
+        if let Some(min_height) = min_stream_height {
             let local_committed = i64::from(u32::from(next_height).saturating_sub(1));
-            let headroom = i64::from(min_h).saturating_sub(local_committed);
+            let headroom = i64::from(min_height).saturating_sub(local_committed);
             poa_metrics().stream_trim_headroom.set(headroom);
         }
+    }
 
+    fn reconcile_contiguous_heights(
+        &self,
+        blocks_by_node: Vec<BlocksByHeight>,
+        next_height: BlockHeight,
+    ) -> anyhow::Result<Vec<SealedBlock>> {
+        let mut reconciled = Vec::new();
         let mut current_height = u32::from(next_height);
+        let max_blocks = usize::try_from(self.stream_max_len).unwrap_or(usize::MAX);
 
-        for _ in 0..max_reconcile_blocks_per_round {
-            let nodes_with_height = blocks_by_node
-                .iter()
-                .filter(|blocks_by_height| blocks_by_height.contains_key(&current_height))
-                .count();
-
-            tracing::debug!(
-                "unreconciled_blocks: height={current_height} nodes_with_height={nodes_with_height}/{}",
-                blocks_by_node.len()
-            );
-
-            if nodes_with_height == 0 {
-                if reconciled.is_empty() {
+        for _ in 0..max_blocks {
+            match self.reconcile_height(&blocks_by_node, current_height) {
+                Ok(Some(block)) => reconciled.push(block),
+                Ok(None) if reconciled.is_empty() => {
                     return Err(anyhow!(
                         "Backlog unresolved at height {current_height}: \
                          stream indicates backlog but no entries found at next height"
@@ -926,6 +952,70 @@ impl RedisLeaderLeaseAdapter {
         }
 
         Ok(reconciled)
+    }
+
+    fn reconcile_height(
+        &self,
+        blocks_by_node: &[BlocksByHeight],
+        current_height: u32,
+    ) -> anyhow::Result<Option<SealedBlock>> {
+        let nodes_with_height = blocks_by_node
+            .iter()
+            .filter(|blocks_by_height| blocks_by_height.contains_key(&current_height))
+            .count();
+
+        tracing::debug!(
+            "unreconciled_blocks: height={current_height} nodes_with_height={nodes_with_height}/{}",
+            blocks_by_node.len()
+        );
+
+        if nodes_with_height == 0 {
+            return Ok(None);
+        }
+
+        let Some((count, block)) =
+            self.select_height_winner(blocks_by_node, current_height)
+        else {
+            return Err(anyhow!(
+                "Backlog unresolved at height {current_height}: \
+                 no winning block candidate"
+            ));
+        };
+
+        if self.quorum_reached(count) {
+            return Ok(Some(block));
+        }
+
+        self.repair_sub_quorum_block(current_height, block, count, blocks_by_node.len())
+    }
+
+    fn select_height_winner(
+        &self,
+        blocks_by_node: &[BlocksByHeight],
+        current_height: u32,
+    ) -> Option<(usize, SealedBlock)> {
+        blocks_by_node
+            .iter()
+            .filter_map(|blocks_by_height| blocks_by_height.get(&current_height))
+            .flat_map(|blocks_by_epoch| blocks_by_epoch.iter())
+            .fold(
+                HashMap::<(u64, BlockId), (usize, SealedBlock)>::new(),
+                |mut votes, (epoch, block)| {
+                    let vote_key = (*epoch, block.entity.id());
+                    match votes.get_mut(&vote_key) {
+                        Some((count, _)) => {
+                            *count = count.saturating_add(1);
+                        }
+                        None => {
+                            votes.insert(vote_key, (1, block.clone()));
+                        }
+                    }
+                    votes
+                },
+            )
+            .into_iter()
+            .max_by_key(|((epoch, _), _)| *epoch)
+            .map(|(_, (count, block))| (count, block))
     }
 
     async fn can_produce_block(&self) -> anyhow::Result<bool> {
@@ -1163,9 +1253,15 @@ impl RedisLeaderLeaseAdapter {
     /// - The total (pre_existing + newly written) must reach quorum
     fn repair_sub_quorum_block(
         &self,
-        block: &SealedBlock,
+        current_height: u32,
+        block: SealedBlock,
         pre_existing_count: usize,
-    ) -> anyhow::Result<bool> {
+        node_count: usize,
+    ) -> anyhow::Result<Option<SealedBlock>> {
+        tracing::info!(
+            "Repairing sub-quorum block at height {current_height} \
+             (found on {pre_existing_count}/{node_count} nodes)"
+        );
         let epoch = match *self
             .current_epoch_token
             .lock()
@@ -1178,7 +1274,7 @@ impl RedisLeaderLeaseAdapter {
                 ));
             }
         };
-        let block_data = postcard::to_allocvec(block)?;
+        let block_data = postcard::to_allocvec(&block)?;
         // Start from the pre-existing count (nodes already confirmed to
         // have this specific block during reconciliation). Only count
         // newly Written nodes — HeightExists means the node has *some*
@@ -1209,10 +1305,22 @@ impl RedisLeaderLeaseAdapter {
         let reached_quorum = self.quorum_reached(total_with_block);
         if reached_quorum {
             poa_metrics().repair_success_total.inc();
+            tracing::info!(
+                "Repair succeeded — block at height {current_height} \
+                 now has quorum"
+            );
+            Ok(Some(block))
         } else {
             poa_metrics().repair_failure_total.inc();
+            tracing::warn!(
+                "Repair failed to reach quorum at height \
+                 {current_height} — will retry next round"
+            );
+            Err(anyhow!(
+                "Backlog unresolved at height {current_height}: \
+                 repair failed to reach quorum"
+            ))
         }
-        Ok(reached_quorum)
     }
 }
 
@@ -1331,7 +1439,7 @@ impl Drop for RedisLeaderLeaseAdapter {
                 Self::release_lease_on_clients(
                     redis_clients,
                     self.lease_key.clone(),
-                    self.lease_owner_token.clone(),
+                    self.lease_owner_id.clone(),
                     self.node_timeout,
                 ),
             );
@@ -1346,7 +1454,7 @@ impl Drop for RedisLeaderLeaseAdapter {
         Self::release_lease_on_clients_sync(
             redis_clients,
             self.lease_key.clone(),
-            self.lease_owner_token.clone(),
+            self.lease_owner_id.clone(),
         );
     }
 }
@@ -1575,6 +1683,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -1629,6 +1738,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -1946,6 +2056,7 @@ mod tests {
                 redis_c.redis_url(),
             ],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2068,7 +2179,7 @@ mod tests {
             "Adapter should acquire lease"
         );
         let adapter_clone = adapter.clone();
-        let owner_token = adapter.lease_owner_token.clone();
+        let owner_id = adapter.lease_owner_id.clone();
 
         // when
         drop(adapter_clone);
@@ -2079,7 +2190,7 @@ mod tests {
             .iter()
             .filter(|redis_url| {
                 read_lease_owner(redis_url, &lease_key).as_deref()
-                    == Some(owner_token.as_str())
+                    == Some(owner_id.as_str())
             })
             .count();
         assert!(
@@ -2103,6 +2214,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             redis_urls.clone(),
             lease_key.clone(),
+            0,
             Duration::from_millis(500),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2121,7 +2233,7 @@ mod tests {
             .iter()
             .filter(|redis_url| {
                 read_lease_owner(redis_url, &lease_key).as_deref()
-                    == Some(adapter.lease_owner_token.as_str())
+                    == Some(adapter.lease_owner_id.as_str())
             })
             .count();
 
@@ -2151,6 +2263,7 @@ mod tests {
         let first_adapter = RedisLeaderLeaseAdapter::new(
             redis_urls.clone(),
             lease_key.clone(),
+            0,
             Duration::from_millis(300),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2162,6 +2275,7 @@ mod tests {
         let second_adapter = RedisLeaderLeaseAdapter::new(
             redis_urls.clone(),
             lease_key.clone(),
+            0,
             Duration::from_millis(300),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2186,7 +2300,7 @@ mod tests {
             .iter()
             .filter(|redis_url| {
                 read_lease_owner(redis_url, &lease_key).as_deref()
-                    == Some(second_adapter.lease_owner_token.as_str())
+                    == Some(second_adapter.lease_owner_id.as_str())
             })
             .count();
 
@@ -2321,6 +2435,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             redis_urls.clone(),
             lease_key.clone(),
+            0,
             Duration::from_millis(700),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2346,7 +2461,7 @@ mod tests {
             .iter()
             .filter(|redis_url| {
                 read_lease_owner(redis_url, &lease_key).as_deref()
-                    == Some(adapter.lease_owner_token.as_str())
+                    == Some(adapter.lease_owner_id.as_str())
             })
             .count();
 
@@ -2424,6 +2539,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2464,6 +2580,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2525,6 +2642,7 @@ mod tests {
         let adapter = RedisLeaderLeaseAdapter::new(
             vec![redis.redis_url()],
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -2957,6 +3075,7 @@ mod tests {
         RedisLeaderLeaseAdapter::new(
             redis_urls,
             lease_key,
+            0,
             Duration::from_secs(2),
             Duration::from_millis(100),
             Duration::from_millis(50),
@@ -3239,7 +3358,7 @@ mod tests {
             let mut conn = client.get_connection().expect("conn");
             let _: () = redis::cmd("SET")
                 .arg(&lease_key)
-                .arg(&candidate_b.lease_owner_token)
+                .arg(&candidate_b.lease_owner_id)
                 .arg("PX")
                 .arg(5000u64)
                 .query(&mut conn)
@@ -3258,11 +3377,11 @@ mod tests {
 
         // Verify A owns nodes A,B but NOT node C
         let owns_a = read_lease_owner(&redis_a.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+            == Some(adapter_a.lease_owner_id.clone());
         let owns_b = read_lease_owner(&redis_b.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+            == Some(adapter_a.lease_owner_id.clone());
         let owns_c = read_lease_owner(&redis_c.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+            == Some(adapter_a.lease_owner_id.clone());
         assert!(owns_a && owns_b, "A should own nodes A and B");
         assert!(!owns_c, "A should NOT own node C (held by B)");
 
@@ -3282,7 +3401,7 @@ mod tests {
 
         // then — A should now own node C too
         let owns_c_after = read_lease_owner(&redis_c.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+            == Some(adapter_a.lease_owner_id.clone());
         assert!(owns_c_after, "Lock expansion should have acquired node C");
 
         // Verify writes now go to all 3 nodes
@@ -3327,7 +3446,7 @@ mod tests {
             // Simulate B's promote_leader.lua on node C: SET NX + INCR
             let _: () = redis::cmd("SET")
                 .arg(&lease_key)
-                .arg(&candidate_b.lease_owner_token)
+                .arg(&candidate_b.lease_owner_id)
                 .arg("PX")
                 .arg(5000u64)
                 .query(&mut conn)

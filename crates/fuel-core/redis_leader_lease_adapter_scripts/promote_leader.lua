@@ -1,7 +1,7 @@
 -- Atomically promote follower to leader and return a new fencing token.
 -- KEYS[1]: leader lock key (e.g., poa:leader:lock)
 -- KEYS[2]: epoch token key (e.g., poa:leader:lock:epoch:token)
--- ARGV[1]: lease owner token (UUID)
+-- ARGV[1]: lease owner id (UUID)
 -- ARGV[2]: lease TTL in milliseconds
 --
 -- Returns: new epoch token on success, error if lock is held.
