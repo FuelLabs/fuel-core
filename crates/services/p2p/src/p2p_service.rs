@@ -41,7 +41,11 @@ use crate::{
 };
 use fuel_core_metrics::{
     global_registry,
-    p2p_metrics::increment_unique_peers,
+    p2p_metrics::{
+        increment_unique_peers,
+        set_functional_peers_connected,
+        set_reserved_peers_connected,
+    },
 };
 use fuel_core_types::{
     fuel_types::BlockHeight,
@@ -638,15 +642,24 @@ impl FuelP2PService {
                 if self.peer_manager.handle_peer_connected(&peer_id) {
                     let _ = self.swarm.disconnect_peer_id(peer_id);
                 } else {
+                    self.update_peer_metrics();
                     return Some(FuelP2PEvent::PeerConnected(peer_id));
                 }
             }
             PeerReportEvent::PeerDisconnected { peer_id } => {
                 self.peer_manager.handle_peer_disconnect(peer_id);
+                self.update_peer_metrics();
                 return Some(FuelP2PEvent::PeerDisconnected(peer_id));
             }
         }
         None
+    }
+
+    fn update_peer_metrics(&self) {
+        self.update_metrics(|| {
+            set_functional_peers_connected(self.peer_manager.total_peers_connected());
+            set_reserved_peers_connected(self.peer_manager.reserved_peers_connected());
+        });
     }
 
     fn handle_request_response_event(
