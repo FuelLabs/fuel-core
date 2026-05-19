@@ -307,7 +307,9 @@ where
 
             match entry {
                 Entry::Occupied(old) => {
-                    if old.get() != &required_balance.change_policy {
+                    let specified_change_policy = &required_balance.change_policy;
+                    let existing_change_policy = old.get();
+                    if existing_change_policy != specified_change_policy {
                         return Err(anyhow::anyhow!(
                             "The asset {} has multiple change policies",
                             asset_id
