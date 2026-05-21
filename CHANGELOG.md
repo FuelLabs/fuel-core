@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased (see .changes folder)]
 
+## [Version 0.48.2]
+
+### Fixed
+- [3289](https://github.com/FuelLabs/fuel-core/pull/3289): shutdown services in parallel to stop poa promptly
+- [3290](https://github.com/FuelLabs/fuel-core/pull/3290): Use semantic JSON comparison in QuorumTransport
+- [3301](https://github.com/FuelLabs/fuel-core/pull/3301): disable coredumps in the fuel-core binary so the rocksdb atexit SIGABRT does not block pod restart for tens of seconds; set `FUEL_CORE_ENABLE_COREDUMP=1` to opt back in.
+
+## [Version 0.48.1]
+
+### Changed
+- [3243](https://github.com/FuelLabs/fuel-core/pull/3243): Migrating from standard Debian slim base Docker images to GCR Distroless images.
+- [3255](https://github.com/FuelLabs/fuel-core/pull/3255): Adds client & server support for the existing protobuf HTTP-based remote RPC block accessor.
+- [3259](https://github.com/FuelLabs/fuel-core/pull/3259): Bump wasmtime to 0.43.1
+
+### Fixed
+- [3258](https://github.com/FuelLabs/fuel-core/pull/3258): Fix backward-compatibility of GraphQL queries for pre-0.48.0 versions
+- [3261](https://github.com/FuelLabs/fuel-core/pull/3261): Fix PoA leader deadlock after reconciliation import where `ensure_synced()` blocked forever because `execute_and_commit` marked reconciliation blocks as `Source::Network`, causing the SyncTask to transition to `NotSynced`.
+- [3264](https://github.com/FuelLabs/fuel-core/pull/3264): Rollback stale preconfirmations in the mempool when the canonical block at that height omits the preconfirmed transactions, restoring spent inputs and removing dependent transactions.
+- [3269](https://github.com/FuelLabs/fuel-core/pull/3269): Fix PoA reconciliation deadlock when the same block exists on all Redis nodes but with different epochs. `unreconciled_blocks` now groups votes by `block_id` only (tracking max epoch as tiebreaker), so identical blocks written during re-promotion storms count toward quorum.
+- [3272](https://github.com/FuelLabs/fuel-core/pull/3272): Improve performance of redis block publish by making more parallel and optimizing the lua code
+- [3278](https://github.com/FuelLabs/fuel-core/pull/3278): Fix mainnet block-production hang when a single ElastiCache leader-lock node enters a half-alive state. Bumps `redis` to 1.2 (the older 0.27 client did not apply the connect timeout to the post-connect handshake pipeline) and short-circuits `publish_block_on_all_nodes` on quorum so a stuck per-node thread can no longer wedge the publish path.
+- [3281](https://github.com/FuelLabs/fuel-core/pull/3281): Add forward-compatibility for old clients and new fuel-core
+
 ## [Version 0.48.0]
 
 ### Breaking

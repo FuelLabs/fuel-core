@@ -87,12 +87,28 @@ where
 
     async fn into_task(
         mut self,
-        _: &StateWatcher,
+        state: &StateWatcher,
         _: Self::TaskParams,
     ) -> anyhow::Result<Self::Task> {
         let shared_sequencer_client = match &self.config.endpoints {
             Some(endpoints) => {
-                let ss = Client::new(endpoints.clone(), self.config.topic).await?;
+                let mut state = state.clone();
+                let init = Client::new(
+                    endpoints.clone(),
+                    self.config.topic,
+                    self.config.http_request_timeout,
+                    self.config.http_connect_timeout,
+                );
+
+                let ss = tokio::select! {
+                    biased;
+                    _ = state.wait_stopping_or_stopped() => {
+                        return Err(anyhow::anyhow!(
+                            "Shutdown requested during SharedSequencer initialization"
+                        ));
+                    }
+                    res = init => res?,
+                };
 
                 if self.signer.is_available() {
                     let cosmos_public_address =
@@ -181,15 +197,33 @@ where
             return TaskNextAction::Stop
         }
 
-        if let Err(err) = self.ensure_account_metadata().await {
-            // We don't want to spam the RPC endpoint with a lot of queries,
-            // so wait for one second before sending the next one.
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            return TaskNextAction::ErrorContinue(err)
+        tokio::select! {
+            biased;
+            _ = watcher.while_started() => return TaskNextAction::Stop,
+            res = self.ensure_account_metadata() => {
+                if let Err(err) = res {
+                    // We don't want to spam the RPC endpoint with a lot of queries,
+                    // so wait for one second before sending the next one — but still
+                    // bail out immediately on shutdown.
+                    tokio::select! {
+                        biased;
+                        _ = watcher.while_started() => return TaskNextAction::Stop,
+                        _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                    }
+                    return TaskNextAction::ErrorContinue(err)
+                }
+            }
         }
-        if let Err(err) = self.ensure_prev_order().await {
-            return TaskNextAction::ErrorContinue(err)
-        };
+
+        tokio::select! {
+            biased;
+            _ = watcher.while_started() => return TaskNextAction::Stop,
+            res = self.ensure_prev_order() => {
+                if let Err(err) = res {
+                    return TaskNextAction::ErrorContinue(err)
+                }
+            }
+        }
 
         tokio::select! {
             biased;
@@ -202,7 +236,11 @@ where
                     core::mem::take(&mut *lock)
                 };
                 if blobs.is_empty() {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    tokio::select! {
+                        biased;
+                        _ = watcher.while_started() => return TaskNextAction::Stop,
+                        _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                    }
                     return TaskNextAction::Continue;
                 };
 
@@ -212,8 +250,15 @@ where
                     .as_ref().expect("Shared sequencer client is not set");
                 let blobs_bytes = postcard::to_allocvec(&blobs).expect("Failed to serialize SSBlob");
 
-                if let Err(err) = ss.send(self.signer.as_ref(), account, next_order, blobs_bytes).await {
-                    return TaskNextAction::ErrorContinue(err);
+                let send = ss.send(self.signer.as_ref(), account, next_order, blobs_bytes);
+                tokio::select! {
+                    biased;
+                    _ = watcher.while_started() => return TaskNextAction::Stop,
+                    res = send => {
+                        if let Err(err) = res {
+                            return TaskNextAction::ErrorContinue(err);
+                        }
+                    }
                 }
 
                 tracing::info!("Posted block to shared sequencer {blobs:?}");

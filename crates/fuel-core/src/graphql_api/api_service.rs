@@ -82,11 +82,11 @@ use std::{
         SocketAddr,
         TcpListener,
     },
-    pin::Pin,
     sync::{
         Arc,
         OnceLock,
     },
+    time::Duration,
 };
 use tokio_stream::StreamExt;
 use tower::limit::ConcurrencyLimitLayer;
@@ -135,13 +135,32 @@ pub struct ServerParams {
 }
 
 pub struct Task {
-    // Ugly workaround because of https://github.com/hyperium/hyper/issues/2582
-    server: Pin<Box<dyn Future<Output = hyper::Result<()>> + Send + 'static>>,
+    server: tokio::task::JoinHandle<hyper::Result<()>>,
+    /// Handle to the inner `AsyncProcessor`'s task tracker. Kept here so
+    /// `Task::shutdown` can `await processor.drain()` and wait for every
+    /// hyper request future to complete before the surrounding service
+    /// teardown reaches `AsyncProcessor::drop`. If we skip this, the
+    /// `Runtime::shutdown_timeout` in `Drop` would detach any task still
+    /// running at its deadline; the detached worker then outlives the
+    /// service and races rocksdb's global `Env::Default()` destructor in
+    /// `__run_exit_handlers`, surfacing as SIGABRT/SIGSEGV at process
+    /// exit.
+    processor: Arc<AsyncProcessor>,
 }
+
+const GRAPHQL_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Clone)]
 struct ExecutorWithMetrics {
     processor: Arc<AsyncProcessor>,
+    /// Watched alongside every spawned request future so that the future
+    /// resolves as soon as the service leaves `Started`. This bounds the
+    /// time `Task::shutdown` has to wait inside `processor.drain()`: even
+    /// a handler stuck in a long-running await terminates at the stop
+    /// signal instead of being detached at the end of
+    /// `Runtime::shutdown_timeout` and racing the rocksdb static
+    /// destructors at process atexit.
+    state: StateWatcher,
 }
 
 impl<F> Executor<F> for ExecutorWithMetrics
@@ -150,7 +169,18 @@ where
     F::Output: Send + 'static,
 {
     fn execute(&self, fut: F) {
-        let result = self.processor.try_spawn(fut);
+        let mut state = self.state.clone();
+        let wrapped = async move {
+            // We don't need the future's output (axum/hyper drives the
+            // request lifecycle via I/O on the connection itself), so
+            // dropping it on shutdown is safe — the connection's drop
+            // closes the socket cleanly.
+            tokio::select! {
+                _ = fut => {}
+                _ = state.while_started() => {}
+            }
+        };
+        let result = self.processor.try_spawn(wrapped);
 
         if let Err(err) = result {
             tracing::error!("Failed to spawn a task for GraphQL: {:?}", err);
@@ -184,14 +214,15 @@ impl RunnableService for GraphqlService {
             number_of_threads,
         } = params;
 
-        let processor = AsyncProcessor::new(
+        let processor = Arc::new(AsyncProcessor::new(
             "GraphQLFutures",
             number_of_threads,
             tokio::sync::Semaphore::MAX_PERMITS,
-        )?;
+        )?);
 
         let executor = ExecutorWithMetrics {
-            processor: Arc::new(processor),
+            processor: processor.clone(),
+            state: state.clone(),
         };
 
         let server = axum::Server::from_tcp(listener)
@@ -199,35 +230,92 @@ impl RunnableService for GraphqlService {
             .executor(executor)
             .serve(router.into_make_service())
             .with_graceful_shutdown(async move {
-                state
-                    .while_started()
-                    .await
-                    .expect("The service is destroyed");
+                // Wait for an actual stop signal. Using `while_started` here would
+                // resolve immediately while the state is still `Starting`, racing
+                // with the runner setting the state to `Started`. When the race
+                // is lost, the spawned server task aborts before it ever serves
+                // a request — which then cascades into a full FuelService
+                // shutdown via `select_all(await_stop)` in `service.rs::run`.
+                //
+                // A `wait_stopping_or_stopped` error means the watcher's sender
+                // was already dropped (the `ServiceRunner` is being torn down).
+                // That is *also* a stop signal — we want graceful shutdown to
+                // fire — so swallow the error rather than panicking, which would
+                // crash the spawned server task and leak the listener.
+                let _ = state.wait_stopping_or_stopped().await;
             });
 
         Ok(Task {
-            server: Box::pin(server),
+            server: tokio::spawn(server),
+            processor,
         })
     }
 }
 
 impl RunnableTask for Task {
-    async fn run(&mut self, _: &mut StateWatcher) -> TaskNextAction {
-        match self.server.as_mut().await {
-            Ok(()) => {
-                // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
-                // error or stop signal.
-                TaskNextAction::Stop
+    async fn run(&mut self, state: &mut StateWatcher) -> TaskNextAction {
+        // Allow the `StateWatcher` to override the "graceful shutdown" of the internal GraphQL
+        // server. If the service is taking too long to shutdown, we abort the server task.
+        tokio::select! {
+            result = &mut self.server => map_server_result(result),
+            result = state.while_started() => {
+                match result {
+                    Ok(_) => {
+                        match tokio::time::timeout(
+                            GRAPHQL_SHUTDOWN_TIMEOUT,
+                            &mut self.server,
+                        ).await {
+                            Ok(result) => map_server_result(result),
+                            Err(_) => {
+                                tracing::warn!(
+                                    timeout_secs = GRAPHQL_SHUTDOWN_TIMEOUT.as_secs(),
+                                    "GraphQL shutdown timed out; aborting server task"
+                                );
+                                self.server.abort();
+                                map_server_result((&mut self.server).await)
+                            }
+                        }
+                    }
+                    Err(err) => TaskNextAction::ErrorContinue(err),
+                }
             }
-            Err(err) => TaskNextAction::ErrorContinue(err.into()),
         }
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        // Nothing to shut down because we don't have any temporary state that should be dumped,
-        // and we don't spawn any sub-tasks that we need to finish or await.
-        // The `axum::Server` was already gracefully shutdown at this point.
+        // The `axum::Server` has already gracefully stopped accepting new
+        // requests, but some hyper request futures may still be running on
+        // the inner `AsyncProcessor` runtime — connection-drain tasks and
+        // any handler whose response was mid-flight when the stop signal
+        // arrived. We must wait for them to complete here, because
+        // `AsyncProcessor::drop` falls back to `Runtime::shutdown_timeout`
+        // which detaches any task still running at its deadline; the
+        // detached worker then outlives the service and races rocksdb's
+        // global `Env::Default()` destructor in `__run_exit_handlers`,
+        // surfacing as SIGABRT/SIGSEGV at process exit.
+        self.processor.drain().await;
         Ok(())
+    }
+}
+
+fn map_server_result(
+    result: Result<hyper::Result<()>, tokio::task::JoinError>,
+) -> TaskNextAction {
+    match result {
+        Ok(Ok(())) => {
+            // The `axum::Server` has its internal loop. If `await` is finished, we get an internal
+            // error or stop signal.
+            TaskNextAction::Stop
+        }
+        Ok(Err(err)) => {
+            tracing::error!("GraphQL server task exited with error: {err}");
+            TaskNextAction::Stop
+        }
+        Err(err) if err.is_cancelled() => TaskNextAction::Stop,
+        Err(err) => {
+            tracing::error!("GraphQL server task join failed: {err}");
+            TaskNextAction::Stop
+        }
     }
 }
 

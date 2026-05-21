@@ -1,9 +1,6 @@
-use std::{
-    collections::BTreeMap,
-    sync::{
-        Arc,
-        OnceLock,
-    },
+use std::sync::{
+    Arc,
+    OnceLock,
 };
 
 use crate::utils::{
@@ -697,17 +694,24 @@ pub fn run(c: &mut Criterion) {
 
     #[allow(clippy::type_complexity)]
     static FILLED_CACHE_SLOTS: OnceLock<
-        BTreeMap<(ContractId, Bytes32), Option<Vec<u8>>>,
+        hashbrown::HashMap<ContractId, hashbrown::HashMap<Bytes32, Option<Vec<u8>>>>,
     > = OnceLock::new();
-    fn get_filled_cache_slots()
-    -> &'static BTreeMap<(ContractId, Bytes32), Option<Vec<u8>>> {
+    fn get_filled_cache_slots() -> &'static hashbrown::HashMap<
+        ContractId,
+        hashbrown::HashMap<Bytes32, Option<Vec<u8>>>,
+    > {
         FILLED_CACHE_SLOTS.get_or_init(|| {
-            let mut map = BTreeMap::new();
+            let mut map = hashbrown::HashMap::<
+                ContractId,
+                hashbrown::HashMap<Bytes32, Option<Vec<u8>>>,
+            >::new();
             // A realistic number of slots for an adversarial state access scenario
             for i in 1..=SLOT_COUNT {
                 let mut key = Bytes32::zeroed();
                 key.as_mut()[..8].copy_from_slice(&i.to_be_bytes());
-                map.insert((VmBench::CONTRACT, key), Some(vec![0u8; 32]));
+                map.entry(VmBench::CONTRACT)
+                    .or_default()
+                    .insert(key, Some(vec![0u8; 32]));
             }
             map
         })
@@ -725,10 +729,10 @@ pub fn run(c: &mut Criterion) {
             .parse::<u32>()
             .expect("bench_id should be a number");
         *vm.bench_storage_slot_cache_mut() = get_filled_cache_slots().clone();
-        vm.bench_storage_slot_cache_mut().insert(
-            (VmBench::CONTRACT, Bytes32::zeroed()),
-            Some(vec![0u8; slot_size as usize]),
-        );
+        vm.bench_storage_slot_cache_mut()
+            .entry(VmBench::CONTRACT)
+            .or_default()
+            .insert(Bytes32::zeroed(), Some(vec![0u8; slot_size as usize]));
     }
 
     fn pre_instruction_hook_cold(

@@ -50,22 +50,34 @@ pub struct Client {
     gas_price: u128,
     coin_denom: Denom,
     account_prefix: String,
+    http: reqwest::Client,
+    request_timeout: core::time::Duration,
 }
 
 impl Client {
     /// Create a new shared sequencer client from config.
-    pub async fn new(endpoints: Endpoints, topic: [u8; 32]) -> anyhow::Result<Self> {
-        let coin_denom = http_api::coin_denom(&endpoints.blockchain_rest_api)
+    pub async fn new(
+        endpoints: Endpoints,
+        topic: [u8; 32],
+        request_timeout: core::time::Duration,
+        connect_timeout: core::time::Duration,
+    ) -> anyhow::Result<Self> {
+        let http = reqwest::Client::builder()
+            .timeout(request_timeout)
+            .connect_timeout(connect_timeout)
+            .build()?;
+
+        let coin_denom = http_api::coin_denom(&http, &endpoints.blockchain_rest_api)
             .await?
             .parse()
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
         let account_prefix =
-            http_api::get_account_prefix(&endpoints.blockchain_rest_api).await?;
-        let ss_chain_id = http_api::chain_id(&endpoints.blockchain_rest_api)
+            http_api::get_account_prefix(&http, &endpoints.blockchain_rest_api).await?;
+        let ss_chain_id = http_api::chain_id(&http, &endpoints.blockchain_rest_api)
             .await?
             .parse()
             .map_err(|e| anyhow::anyhow!("{e:?}"))?;
-        let ss_config = http_api::config(&endpoints.blockchain_rest_api).await?;
+        let ss_config = http_api::config(&http, &endpoints.blockchain_rest_api).await?;
 
         let mut minimum_gas_price = ss_config.minimum_gas_price;
 
@@ -83,6 +95,8 @@ impl Client {
             coin_denom,
             ss_chain_id,
             gas_price,
+            http,
+            request_timeout,
         })
     }
 
@@ -104,13 +118,13 @@ impl Client {
 
     /// Retrieve latest block height
     pub async fn latest_block_height(&self) -> anyhow::Result<u32> {
-        Ok(self
-            .tendermint()?
-            .abci_info()
-            .await?
-            .last_block_height
-            .value()
-            .try_into()?)
+        let info =
+            tokio::time::timeout(self.request_timeout, self.tendermint()?.abci_info())
+                .await
+                .map_err(|_| {
+                    anyhow!("Timeout fetching latest block height from tendermint")
+                })??;
+        Ok(info.last_block_height.value().try_into()?)
     }
 
     /// Retrieve account metadata by its ID
@@ -119,13 +133,18 @@ impl Client {
         signer: &S,
     ) -> anyhow::Result<AccountMetadata> {
         let sender_account_id = self.sender_account_id(signer)?;
-        http_api::get_account(&self.endpoints.blockchain_rest_api, sender_account_id)
-            .await
+        http_api::get_account(
+            &self.http,
+            &self.endpoints.blockchain_rest_api,
+            sender_account_id,
+        )
+        .await
     }
 
     /// Retrieve the topic info, if it exists
     pub async fn get_topic(&self) -> anyhow::Result<Option<TopicInfo>> {
-        http_api::get_topic(&self.endpoints.blockchain_rest_api, self.topic).await
+        http_api::get_topic(&self.http, &self.endpoints.blockchain_rest_api, self.topic)
+            .await
     }
 
     /// Post a sealed block to the sequencer chain using some
@@ -188,6 +207,7 @@ impl Client {
             .await?;
 
         let used_gas = http_api::estimate_transaction(
+            &self.http,
             &self.endpoints.blockchain_rest_api,
             dummy_payload,
         )
@@ -205,7 +225,12 @@ impl Client {
             .make_payload(timeout_height, fee, signer, account, order, topic, data)
             .await?;
 
-        let r = self.tendermint()?.broadcast_tx_sync(payload).await?;
+        let r = tokio::time::timeout(
+            self.request_timeout,
+            self.tendermint()?.broadcast_tx_sync(payload),
+        )
+        .await
+        .map_err(|_| anyhow!("Timeout broadcasting tx to tendermint"))??;
         if r.code.is_err() {
             return Err(PostBlobError { message: r.log }.into());
         }

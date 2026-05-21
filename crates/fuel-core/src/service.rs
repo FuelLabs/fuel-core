@@ -531,18 +531,45 @@ impl RunnableTask for Task {
     }
 
     async fn shutdown(self) -> anyhow::Result<()> {
-        for service in self.services.iter() {
-            let result = service.stop_and_await().await;
+        let total_services = self.services.len();
+        futures::future::join_all((1_usize..).zip(self.services.iter()).map(
+            |(service_num, service)| {
+                stop_sub_service(service_num, total_services, service.as_ref())
+            },
+        ))
+        .await;
 
-            if let Err(err) = result {
-                tracing::error!(
-                    "Got and error during awaiting for stop of the service: {}",
-                    err
-                );
-            }
-        }
         self.database.shutdown();
         Ok(())
+    }
+}
+
+async fn stop_sub_service(
+    service_num: usize,
+    total_services: usize,
+    service: &(dyn ServiceTrait + Send + Sync + 'static),
+) {
+    tracing::info!(
+        service_num,
+        total_services,
+        state_before = ?service.state(),
+        "FuelService about to stop sub-service"
+    );
+    let result = service.stop_and_await().await;
+
+    tracing::info!(
+        service_num,
+        total_services,
+        result = ?result,
+        state_after = ?service.state(),
+        "FuelService finished waiting for sub-service shutdown"
+    );
+
+    if let Err(err) = result {
+        tracing::error!(
+            "Got an error during awaiting for stop of the service: {}",
+            err
+        );
     }
 }
 

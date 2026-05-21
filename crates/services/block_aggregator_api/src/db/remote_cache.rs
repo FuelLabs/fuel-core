@@ -1,5 +1,10 @@
 use crate::{
-    block_range_response::BlockRangeResponse,
+    block_range_response::{
+        BlockRangeResponse,
+        RemoteBlockPayload,
+        RemoteHttpResponse,
+        RemoteS3Response,
+    },
     db::{
         BlocksProvider,
         BlocksStorage,
@@ -33,9 +38,24 @@ use fuel_core_storage::{
 };
 use fuel_core_types::fuel_types::BlockHeight;
 use std::{
+    collections::HashMap,
     io::Write,
     sync::Arc,
 };
+
+/// Configuration for returning [`RemoteHttpResponse`] URLs to RPC clients while objects remain stored in S3.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PublicHttpConfig {
+    pub base_url: String,
+    pub headers: HashMap<String, String>,
+}
+
+/// Joins a public HTTP(S) base (e.g. CDN origin) with the same S3 object key path used for uploads.
+pub fn public_http_object_url(base: &str, key: &str) -> String {
+    let base = base.trim_end_matches('/');
+    let key = key.trim_start_matches('/');
+    format!("{base}/{key}")
+}
 
 #[allow(non_snake_case)]
 #[cfg(test)]
@@ -72,6 +92,7 @@ pub struct RemoteBlocksProvider<S> {
     aws_bucket: String,
     requester_pays: bool,
     aws_endpoint: Option<String>,
+    public_http: Option<PublicHttpConfig>,
 
     // track consistency between runs
     local_persisted: S,
@@ -82,12 +103,14 @@ impl<S> RemoteBlocksProvider<S> {
         aws_bucket: String,
         requester_pays: bool,
         aws_endpoint: Option<String>,
+        public_http: Option<PublicHttpConfig>,
         local_persisted: S,
     ) -> Self {
         RemoteBlocksProvider {
             aws_bucket,
             requester_pays,
             aws_endpoint,
+            public_http,
             local_persisted,
         }
     }
@@ -100,18 +123,26 @@ impl<S> RemoteBlocksProvider<S> {
         let bucket = self.aws_bucket.clone();
         let requester_pays = self.requester_pays;
         let aws_endpoint = self.aws_endpoint.clone();
+        let public_http = self.public_http.clone();
         let stream = futures::stream::iter((*first..=*last).map(move |height| {
             let block_height = BlockHeight::new(height);
             let key = block_height_to_key(&block_height);
-            let res = crate::block_range_response::RemoteS3Response {
-                bucket: bucket.clone(),
-                key: key.clone(),
-                requester_pays,
-                aws_endpoint: aws_endpoint.clone(),
+            let payload = if let Some(ref cfg) = public_http {
+                RemoteBlockPayload::Http(RemoteHttpResponse {
+                    url: public_http_object_url(&cfg.base_url, &key),
+                    headers: cfg.headers.clone(),
+                })
+            } else {
+                RemoteBlockPayload::S3(RemoteS3Response {
+                    bucket: bucket.clone(),
+                    key: key.clone(),
+                    requester_pays,
+                    aws_endpoint: aws_endpoint.clone(),
+                })
             };
-            (block_height, res)
+            (block_height, payload)
         }));
-        Ok(BlockRangeResponse::S3(Box::pin(stream)))
+        Ok(BlockRangeResponse::Remote(Box::pin(stream)))
     }
 }
 
