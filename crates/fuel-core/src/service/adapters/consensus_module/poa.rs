@@ -10,7 +10,10 @@ use crate::{
 };
 use anyhow::anyhow;
 use fuel_core_importer::ports::ImporterDatabase;
-use fuel_core_metrics::poa_metrics::poa_metrics;
+use fuel_core_metrics::poa_metrics::{
+    QuorumOp,
+    poa_metrics,
+};
 use fuel_core_poa::{
     ports::{
         BlockImporter,
@@ -387,6 +390,7 @@ impl RedisLeaderLeaseAdapter {
         // lease coverage to nodes that hadn't yet confirmed as owners,
         // including ones whose check we just cancelled.
         let n = self.redis_nodes.len();
+        let quorum_start = std::time::Instant::now();
         let mut checks = FuturesUnordered::new();
         for idx in 0..n {
             let Some(op) = self.per_node_adapter(idx) else {
@@ -404,6 +408,10 @@ impl RedisLeaderLeaseAdapter {
                     *slot = true;
                 }
                 if self.quorum_reached(owner_count) {
+                    poa_metrics().observe_quorum_latency(
+                        QuorumOp::OwnerCheck,
+                        quorum_start.elapsed().as_secs_f64(),
+                    );
                     drop(checks);
                     // Best-effort: extend lease coverage to any node
                     // we did not (yet) confirm as owner. Runs as a
@@ -497,6 +505,10 @@ impl RedisLeaderLeaseAdapter {
                     let validity_millis =
                         self.calculate_remaining_validity_millis(elapsed_millis);
                     if validity_millis > 0 {
+                        poa_metrics().observe_quorum_latency(
+                            QuorumOp::Promote,
+                            start.elapsed().as_secs_f64(),
+                        );
                         acquired = true;
                         break;
                     }
@@ -623,6 +635,7 @@ impl RedisLeaderLeaseAdapter {
         //   repair. Bounded by `node_timeout` per node.
         let next_height = u32::from(next_height);
         let n = self.redis_nodes.len();
+        let quorum_start = std::time::Instant::now();
         let mut reads = FuturesUnordered::new();
         for idx in 0..n {
             let Some(op) = self.per_node_adapter(idx) else {
@@ -651,11 +664,19 @@ impl RedisLeaderLeaseAdapter {
                 }
             }
             if backlog_seen && self.quorum_reached(successful_reads) {
+                poa_metrics().observe_quorum_latency(
+                    QuorumOp::ReconcileRead,
+                    quorum_start.elapsed().as_secs_f64(),
+                );
                 drop(reads);
                 return Ok(true);
             }
         }
         if self.quorum_reached(successful_reads) {
+            poa_metrics().observe_quorum_latency(
+                QuorumOp::ReconcileRead,
+                quorum_start.elapsed().as_secs_f64(),
+            );
             Ok(false)
         } else {
             Err(anyhow!(
@@ -968,6 +989,7 @@ impl RedisLeaderLeaseAdapter {
         let mut results: Vec<Option<anyhow::Result<WriteBlockResult>>> =
             (0..n).map(|_| None).collect();
         let mut written_count = 0usize;
+        let quorum_start = std::time::Instant::now();
 
         // Share the block payload across spawned tasks via `Arc` so we
         // clone it once rather than once per node.
@@ -1016,6 +1038,10 @@ impl RedisLeaderLeaseAdapter {
             }
             results[idx] = Some(result);
             if self.quorum_reached(written_count) {
+                poa_metrics().observe_quorum_latency(
+                    QuorumOp::Publish,
+                    quorum_start.elapsed().as_secs_f64(),
+                );
                 // Short-circuit: stop draining, but leave the remaining
                 // tasks running. They will each complete their write
                 // attempt; when `rx` drops below, their subsequent sends
