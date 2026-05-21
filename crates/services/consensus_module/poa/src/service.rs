@@ -18,7 +18,7 @@ use crate::{
         BlockImporter,
         BlockProducer,
         BlockProductionReadySignal,
-        BlockReconciliationReadPort,
+        BlockReconciliationPort,
         BlockSigner,
         GetTime,
         LeaderState,
@@ -154,7 +154,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
-    RP: BlockReconciliationReadPort,
+    RP: BlockReconciliationPort,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new<P: P2pPort, T: TransactionPool>(
@@ -288,7 +288,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
-    RP: BlockReconciliationReadPort,
+    RP: BlockReconciliationPort,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
@@ -417,6 +417,14 @@ where
             consensus: seal,
         };
 
+        // Publish the block to the leader-lock backend BEFORE committing
+        // it locally. If publish fails to reach quorum, do not commit —
+        // this preserves the invariant "no block exists in the local DB
+        // unless it has been published to quorum by its producer".
+        self.reconciliation_port
+            .publish_produced_block(&block)
+            .await?;
+
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
@@ -479,6 +487,10 @@ where
             entity: block,
             consensus: seal,
         };
+        // Publish to the leader-lock backend before committing locally.
+        self.reconciliation_port
+            .publish_produced_block(&sealed_block)
+            .await?;
         // Import the sealed block
         self.block_importer
             .commit_result(Uncommitted::new(
@@ -727,7 +739,7 @@ where
     PB: PredefinedBlocks,
     C: GetTime,
     RS: WaitForReadySignal,
-    RP: BlockReconciliationReadPort,
+    RP: BlockReconciliationPort,
 {
     async fn run(&mut self, watcher: &mut StateWatcher) -> TaskNextAction {
         tokio::select! {
@@ -836,7 +848,7 @@ where
     P: P2pPort,
     C: GetTime,
     RS: WaitForReadySignal,
-    RP: BlockReconciliationReadPort + 'static,
+    RP: BlockReconciliationPort + 'static,
 {
     Service::new(MainTask::new(
         last_block,

@@ -123,13 +123,22 @@ pub enum LeaderState {
     ReconciledFollower,
 }
 
+/// Reads from and writes to the leader-lock backend (e.g. Redis) used
+/// to coordinate which authority is the active block producer.
+///
+/// Read methods (`leader_state`, `release`) drive PoA's leader/follower
+/// transitions. The write method (`publish_produced_block`) is called
+/// by PoA just before committing a locally-produced block to the local
+/// database — the commit only proceeds if the publish reaches quorum.
 #[async_trait::async_trait]
 #[cfg_attr(test, mockall::automock)]
-pub trait BlockReconciliationReadPort: Send + Sync {
+pub trait BlockReconciliationPort: Send + Sync {
     async fn leader_state(&self, next_height: BlockHeight)
     -> anyhow::Result<LeaderState>;
 
     async fn release(&self) -> anyhow::Result<()>;
+
+    async fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()>;
 }
 
 pub trait PredefinedBlocks: Send + Sync {

@@ -52,7 +52,6 @@ use crate::{
             TxPoolAdapter,
             UniversalGasPriceProvider,
             VerifierAdapter,
-            block_importer::BlockReconciliationWriteAdapter,
             chain_state_info_provider,
             consensus_module::poa::{
                 InDirectoryPredefinedBlocks,
@@ -232,7 +231,7 @@ pub fn init_sub_services(
         database.on_chain().clone(),
     );
 
-    let redis_reconciliation_adapter = config
+    let mut redis_reconciliation_adapter = config
         .leader_lock
         .as_ref()
         .map(|leader_lock| {
@@ -259,11 +258,6 @@ pub fn init_sub_services(
         database.on_chain().clone(),
         executor.clone(),
         verifier.clone(),
-        redis_reconciliation_adapter
-            .as_ref()
-            .cloned()
-            .map(BlockReconciliationWriteAdapter::Redis)
-            .unwrap_or_else(|| BlockReconciliationWriteAdapter::Noop(Default::default())),
     );
 
     let chain_state_info_provider_service = chain_state_info_provider::new_service(
@@ -423,8 +417,7 @@ pub fn init_sub_services(
     let poa = production_enabled
         .then(|| -> anyhow::Result<_> {
             let reconciliation_port = redis_reconciliation_adapter
-                .as_ref()
-                .cloned()
+                .take()
                 .map(ReconciliationAdapter::Redis)
                 .unwrap_or_else(|| {
                     ReconciliationAdapter::Noop(NoopReconciliationAdapter)

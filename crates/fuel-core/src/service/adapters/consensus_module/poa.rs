@@ -9,15 +9,15 @@ use crate::{
     },
 };
 use anyhow::anyhow;
-use fuel_core_importer::ports::{
-    BlockReconciliationWritePort,
-    ImporterDatabase,
+use fuel_core_importer::ports::ImporterDatabase;
+use fuel_core_metrics::poa_metrics::{
+    QuorumOp,
+    poa_metrics,
 };
-use fuel_core_metrics::poa_metrics::poa_metrics;
 use fuel_core_poa::{
     ports::{
         BlockImporter,
-        BlockReconciliationReadPort,
+        BlockReconciliationPort,
         LeaderState,
         P2pPort,
         PredefinedBlocks,
@@ -47,6 +47,7 @@ use fuel_core_types::{
     },
     tai64::Tai64,
 };
+use futures::stream::FuturesUnordered;
 use std::{
     collections::HashMap,
     path::{
@@ -106,14 +107,17 @@ const READ_LATEST_STREAM_ENTRY_SCRIPT: &str = include_str!(concat!(
 
 struct RedisNode {
     redis_client: redis::Client,
-    cached_connection: Mutex<Option<redis::aio::MultiplexedConnection>>,
+    /// Cached per-node multiplexed async connection. Wrapped in `Arc` so
+    /// background publish handles can share the cache instead of opening
+    /// a fresh socket per publish.
+    cached_connection: std::sync::Arc<Mutex<Option<redis::aio::MultiplexedConnection>>>,
 }
 
 impl Clone for RedisNode {
     fn clone(&self) -> Self {
         Self {
             redis_client: self.redis_client.clone(),
-            cached_connection: Mutex::new(None),
+            cached_connection: self.cached_connection.clone(),
         }
     }
 }
@@ -126,7 +130,6 @@ pub struct RedisLeaderLeaseAdapter {
     epoch_key: String,
     block_stream_key: String,
     lease_owner_token: String,
-    drop_release_guard: std::sync::Arc<()>,
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
     lease_ttl_millis: u64,
     lease_drift_millis: u64,
@@ -137,27 +140,18 @@ pub struct RedisLeaderLeaseAdapter {
     stream_max_len: u32,
 }
 
-impl Clone for RedisLeaderLeaseAdapter {
-    fn clone(&self) -> Self {
-        Self {
-            redis_nodes: self.redis_nodes.clone(),
-            quorum: self.quorum,
-            quorum_disruption_budget: self.quorum_disruption_budget,
-            lease_key: self.lease_key.clone(),
-            epoch_key: self.epoch_key.clone(),
-            block_stream_key: self.block_stream_key.clone(),
-            lease_owner_token: self.lease_owner_token.clone(),
-            drop_release_guard: self.drop_release_guard.clone(),
-            current_epoch_token: self.current_epoch_token.clone(),
-            lease_ttl_millis: self.lease_ttl_millis,
-            lease_drift_millis: self.lease_drift_millis,
-            node_timeout: self.node_timeout,
-            retry_delay_millis: self.retry_delay_millis,
-            max_retry_delay_offset_millis: self.max_retry_delay_offset_millis,
-            max_attempts: self.max_attempts,
-            stream_max_len: self.stream_max_len,
-        }
-    }
+/// Per-node operation context. Carried by spawned tokio tasks so they
+/// don't need a clone of the full adapter — covers publish, lease-owner
+/// check, lease promotion, and stream reads.
+struct PerNodeAdapter {
+    redis_node: RedisNode,
+    lease_key: String,
+    epoch_key: String,
+    block_stream_key: String,
+    lease_owner_token: String,
+    lease_ttl_millis: u64,
+    node_timeout: Duration,
+    stream_max_len: u32,
 }
 
 #[derive(Default, Clone)]
@@ -197,7 +191,7 @@ impl RedisLeaderLeaseAdapter {
             .map(|redis_url| {
                 redis::Client::open(redis_url).map(|redis_client| RedisNode {
                     redis_client,
-                    cached_connection: Mutex::new(None),
+                    cached_connection: std::sync::Arc::new(Mutex::new(None)),
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -228,7 +222,6 @@ impl RedisLeaderLeaseAdapter {
             epoch_key,
             block_stream_key,
             lease_owner_token,
-            drop_release_guard: std::sync::Arc::new(()),
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
             lease_ttl_millis,
             lease_drift_millis,
@@ -250,9 +243,25 @@ impl RedisLeaderLeaseAdapter {
         self
     }
 
-    async fn multiplexed_connection(
-        &self,
+    fn per_node_adapter(&self, idx: usize) -> Option<PerNodeAdapter> {
+        self.redis_nodes
+            .get(idx)
+            .cloned()
+            .map(|redis_node| PerNodeAdapter {
+                redis_node,
+                lease_key: self.lease_key.clone(),
+                epoch_key: self.epoch_key.clone(),
+                block_stream_key: self.block_stream_key.clone(),
+                lease_owner_token: self.lease_owner_token.clone(),
+                lease_ttl_millis: self.lease_ttl_millis,
+                node_timeout: self.node_timeout,
+                stream_max_len: self.stream_max_len,
+            })
+    }
+
+    async fn multiplexed_connection_for(
         redis_node: &RedisNode,
+        node_timeout: Duration,
     ) -> anyhow::Result<redis::aio::MultiplexedConnection> {
         if let Some(connection) =
             redis_node.cached_connection.lock().await.as_ref().cloned()
@@ -261,7 +270,7 @@ impl RedisLeaderLeaseAdapter {
         }
 
         let new_connection = timeout(
-            self.node_timeout,
+            node_timeout,
             redis_node.redis_client.get_multiplexed_async_connection(),
         )
         .await
@@ -274,70 +283,21 @@ impl RedisLeaderLeaseAdapter {
         Ok(new_connection)
     }
 
-    async fn clear_cached_connection(&self, redis_node: &RedisNode) {
+    async fn clear_cached_connection_for(redis_node: &RedisNode) {
         let mut cached_connection = redis_node.cached_connection.lock().await;
         *cached_connection = None;
         poa_metrics().connection_reset_total.inc();
     }
 
-    async fn check_lease_owner_on_node(&self, redis_node: &RedisNode) -> bool {
-        let mut connection = match self.multiplexed_connection(redis_node).await {
-            Ok(connection) => connection,
-            Err(_) => return false,
-        };
-        let is_owner = timeout(
-            self.node_timeout,
-            redis::Script::new(CHECK_LEASE_OWNER_SCRIPT)
-                .key(&self.lease_key)
-                .arg(&self.lease_owner_token)
-                .invoke_async::<i32>(&mut connection),
-        )
-        .await;
-        match is_owner {
-            Ok(Ok(is_owner)) => is_owner == 1,
-            Err(_) => {
-                self.clear_cached_connection(redis_node).await;
-                false
-            }
-            Ok(Err(_)) => {
-                self.clear_cached_connection(redis_node).await;
-                false
-            }
-        }
-    }
-
-    async fn promote_leader_on_node(
+    async fn multiplexed_connection(
         &self,
         redis_node: &RedisNode,
-    ) -> anyhow::Result<Option<u64>> {
-        let mut connection = match self.multiplexed_connection(redis_node).await {
-            Ok(connection) => connection,
-            Err(_) => return Ok(None),
-        };
-        let promoted = timeout(
-            self.node_timeout,
-            redis::Script::new(PROMOTE_LEADER_SCRIPT)
-                .key(&self.lease_key)
-                .key(&self.epoch_key)
-                .arg(&self.lease_owner_token)
-                .arg(self.lease_ttl_millis)
-                .invoke_async::<u64>(&mut connection),
-        )
-        .await;
-        match promoted {
-            Ok(Ok(token)) => Ok(Some(token)),
-            Ok(Err(err)) => {
-                if err.to_string().contains("LOCK_HELD:") {
-                    return Ok(None);
-                }
-                self.clear_cached_connection(redis_node).await;
-                Ok(None)
-            }
-            Err(_) => {
-                self.clear_cached_connection(redis_node).await;
-                Ok(None)
-            }
-        }
+    ) -> anyhow::Result<redis::aio::MultiplexedConnection> {
+        Self::multiplexed_connection_for(redis_node, self.node_timeout).await
+    }
+
+    async fn clear_cached_connection(&self, redis_node: &RedisNode) {
+        Self::clear_cached_connection_for(redis_node).await;
     }
 
     async fn release_lease_on_node(&self, redis_node: &RedisNode) -> bool {
@@ -368,6 +328,27 @@ impl RedisLeaderLeaseAdapter {
 
     fn quorum_reached(&self, success_count: usize) -> bool {
         success_count >= self.quorum
+    }
+
+    /// Atomically max-CAS an epoch token into the shared cell and bump
+    /// the `leader_epoch` gauge if the value moves up. Used by both the
+    /// caller of `acquire_lease_if_free` and by background per-node
+    /// promotion tasks that continue running after the parent's quorum
+    /// short-circuit, so a late-promoted node's higher epoch is never
+    /// lost. Lock poisoning is treated as a no-op (matches the
+    /// `spawn_acquire_lease_on_unowned_nodes` pattern); a poisoned lock means a
+    /// previous holder panicked and a subsequent write would surface
+    /// the inconsistency anyway.
+    fn fold_epoch_max(epoch_cell: &std::sync::Mutex<Option<u64>>, candidate: u64) {
+        let Ok(mut current) = epoch_cell.lock() else {
+            return;
+        };
+        if Some(candidate) > *current {
+            *current = Some(candidate);
+            poa_metrics()
+                .leader_epoch
+                .set(i64::try_from(candidate).unwrap_or(i64::MAX));
+        }
     }
 
     fn calculate_remaining_validity_millis(&self, elapsed_millis: u64) -> u64 {
@@ -401,100 +382,172 @@ impl RedisLeaderLeaseAdapter {
     }
 
     async fn has_lease_owner_quorum(&self) -> anyhow::Result<bool> {
-        let ownership = futures::future::join_all(
-            self.redis_nodes
-                .iter()
-                .map(|redis_node| self.check_lease_owner_on_node(redis_node)),
-        )
-        .await;
-        let owner_count = ownership.iter().filter(|&&is_owner| is_owner).count();
-        if !self.quorum_reached(owner_count) {
-            tracing::info!(
-                owner_count,
-                quorum = self.quorum,
-                redis_nodes = self.redis_nodes.len(),
-                current_epoch_token = ?self.current_epoch_token_value(),
-                lease_key = %self.lease_key,
-                "Leader lock quorum not held by this authority"
-            );
-            return Ok(false);
+        // Pure read: poll all nodes via FuturesUnordered. Short-circuit
+        // on quorum and drop the stream — slow nodes' in-flight redis
+        // calls are cancelled cooperatively (no spawned tasks holding
+        // connections after we return). The expand-to-non-owners phase
+        // (which writes via `promote_leader`) is then spawned to extend
+        // lease coverage to nodes that hadn't yet confirmed as owners,
+        // including ones whose check we just cancelled.
+        let n = self.redis_nodes.len();
+        let quorum_start = std::time::Instant::now();
+        let mut checks = FuturesUnordered::new();
+        for idx in 0..n {
+            let Some(op) = self.per_node_adapter(idx) else {
+                continue;
+            };
+            checks.push(async move { (idx, op.check_lease_owner().await) });
         }
 
-        // Best-effort: acquire the lock on nodes we don't own yet.
-        // Expands write coverage beyond minimum quorum so block data
-        // is replicated to more nodes, improving fault tolerance.
-        // If a newly-acquired node returns a higher epoch (from
-        // election storm drift), adopt it so write_block.lua uses
-        // a consistent epoch across all owned nodes.
-        let non_owned: Vec<&RedisNode> = self
-            .redis_nodes
-            .iter()
-            .zip(ownership.iter())
-            .filter(|(_, is_owner)| !**is_owner)
-            .map(|(node, _)| node)
-            .collect();
-
-        if !non_owned.is_empty() {
-            let results = futures::future::join_all(
-                non_owned
-                    .into_iter()
-                    .map(|redis_node| self.promote_leader_on_node(redis_node)),
-            )
-            .await;
-
-            if let Some(max_new) =
-                results.into_iter().filter_map(|r| r.ok().flatten()).max()
-                && let Ok(mut epoch) = self.current_epoch_token.lock()
-            {
-                let current = epoch.unwrap_or(0);
-                if max_new > current {
-                    tracing::debug!(
-                        old_epoch = current,
-                        new_epoch = max_new,
-                        "Adopted higher epoch from lock expansion"
+        let mut owner_count = 0usize;
+        let mut confirmed_owner = vec![false; n];
+        while let Some((idx, is_owner)) = checks.next().await {
+            if is_owner {
+                owner_count = owner_count.saturating_add(1);
+                if let Some(slot) = confirmed_owner.get_mut(idx) {
+                    *slot = true;
+                }
+                if self.quorum_reached(owner_count) {
+                    poa_metrics().observe_quorum_latency(
+                        QuorumOp::OwnerCheck,
+                        quorum_start.elapsed().as_secs_f64(),
                     );
-                    *epoch = Some(max_new);
+                    drop(checks);
+                    // Best-effort: extend lease coverage to any node
+                    // we did not (yet) confirm as owner. Runs as a
+                    // detached background task so a slow node can't
+                    // pin the caller.
+                    self.spawn_acquire_lease_on_unowned_nodes(&confirmed_owner);
+                    return Ok(true);
                 }
             }
         }
+        tracing::info!(
+            owner_count,
+            quorum = self.quorum,
+            redis_nodes = self.redis_nodes.len(),
+            current_epoch_token = ?self.current_epoch_token_value(),
+            lease_key = %self.lease_key,
+            "Leader lock quorum not held by this authority"
+        );
+        Ok(false)
+    }
 
-        Ok(true)
+    /// Best-effort: try to acquire the lease on nodes we don't already
+    /// own (or haven't yet confirmed as owners). If a newly-acquired
+    /// node reports a higher epoch (election-storm drift), adopt it so
+    /// `write_block.lua` uses a consistent epoch across owned nodes.
+    /// Runs as a fire-and-forget background task so the calling
+    /// `has_lease_owner_quorum` can short-circuit on quorum.
+    fn spawn_acquire_lease_on_unowned_nodes(&self, confirmed_owner: &[bool]) {
+        let candidates: Vec<PerNodeAdapter> = confirmed_owner
+            .iter()
+            .enumerate()
+            .filter(|(_, owned)| !**owned)
+            .filter_map(|(idx, _)| self.per_node_adapter(idx))
+            .collect();
+        if candidates.is_empty() {
+            return;
+        }
+        let current_epoch_token = std::sync::Arc::clone(&self.current_epoch_token);
+        tokio::spawn(async move {
+            // Promote against all non-owner candidates in parallel so
+            // a single unreachable node doesn't serialize the rest
+            // behind its node_timeout. Each promote_leader is already
+            // individually bounded.
+            let results = futures::future::join_all(
+                candidates
+                    .into_iter()
+                    .map(|op| async move { op.promote_leader().await }),
+            )
+            .await;
+            for token in results.into_iter().filter_map(|r| r.ok().flatten()) {
+                Self::fold_epoch_max(&current_epoch_token, token);
+            }
+        });
     }
 
     async fn acquire_lease_if_free(&self) -> anyhow::Result<bool> {
         let promotion_start = std::time::Instant::now();
+        let n = self.redis_nodes.len();
         for attempt_index in 0..self.max_attempts {
             let start = std::time::Instant::now();
-            let promoted_nodes = futures::future::join_all(
-                self.redis_nodes
-                    .iter()
-                    .map(|redis_node| self.promote_leader_on_node(redis_node)),
-            )
-            .await;
-            let promoted_tokens = promoted_nodes
-                .into_iter()
-                .filter_map(|token| token.ok().flatten())
-                .collect::<Vec<_>>();
-            let acquired_count = promoted_tokens.len();
+
+            // Spawn promotion attempts on every node and drain via mpsc.
+            // Short-circuit as soon as quorum is acquired and the lease
+            // still has positive remaining validity. Tokens from nodes
+            // that respond AFTER short-circuit are still folded into
+            // `current_epoch_token` via max-CAS inside each spawned
+            // task — see `fold_epoch_max`. So a late-promoted node with
+            // a higher (drift) epoch contributes its token even though
+            // the parent has stopped reading from the channel.
+            let (tx, mut rx) =
+                tokio::sync::mpsc::unbounded_channel::<anyhow::Result<Option<u64>>>();
+            for idx in 0..n {
+                let Some(op) = self.per_node_adapter(idx) else {
+                    continue;
+                };
+                let tx = tx.clone();
+                let epoch_cell = std::sync::Arc::clone(&self.current_epoch_token);
+                tokio::spawn(async move {
+                    let result = op.promote_leader().await;
+                    if let Ok(Some(token)) = &result {
+                        Self::fold_epoch_max(&epoch_cell, *token);
+                    }
+                    let _ = tx.send(result);
+                });
+            }
+            drop(tx);
+
+            let mut promoted_tokens: Vec<u64> = Vec::with_capacity(n);
+            let mut total_responded = 0usize;
+            let mut acquired = false;
+            while let Some(result) = rx.recv().await {
+                if let Ok(Some(token)) = result {
+                    promoted_tokens.push(token);
+                }
+                total_responded = total_responded.saturating_add(1);
+                if self.quorum_reached(promoted_tokens.len()) {
+                    let elapsed_millis =
+                        u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+                    let validity_millis =
+                        self.calculate_remaining_validity_millis(elapsed_millis);
+                    if validity_millis > 0 {
+                        poa_metrics().observe_quorum_latency(
+                            QuorumOp::Promote,
+                            start.elapsed().as_secs_f64(),
+                        );
+                        acquired = true;
+                        break;
+                    }
+                }
+                if total_responded >= n {
+                    break;
+                }
+            }
+            // Drop the receiver so the still-running tasks' sends are no-ops.
+            // Their epoch contributions are not lost — each task max-CASes
+            // into `current_epoch_token` directly before returning.
+            drop(rx);
+
             let elapsed_millis =
                 u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-            let validity_millis =
-                self.calculate_remaining_validity_millis(elapsed_millis);
             tracing::debug!(
                 attempt = attempt_index.saturating_add(1),
                 max_attempts = self.max_attempts,
-                acquired_count,
+                acquired_count = promoted_tokens.len(),
                 quorum = self.quorum,
                 redis_nodes = self.redis_nodes.len(),
                 elapsed_millis,
-                validity_millis,
+                validity_millis =
+                    self.calculate_remaining_validity_millis(elapsed_millis),
                 promoted_tokens = ?promoted_tokens,
                 current_epoch_token = ?self.current_epoch_token_value(),
                 lease_key = %self.lease_key,
                 "Leader lock promotion attempt finished"
             );
-            if self.quorum_reached(acquired_count) && validity_millis > 0 {
-                // Record epoch drift across quorum nodes
+
+            if acquired {
                 if promoted_tokens.len() > 1
                     && let (Some(min_tok), Some(max_tok)) = (
                         promoted_tokens.iter().copied().min(),
@@ -507,14 +560,7 @@ impl RedisLeaderLeaseAdapter {
                     );
                 }
                 if let Some(max_token) = promoted_tokens.into_iter().max() {
-                    let mut current_epoch_token = self
-                        .current_epoch_token
-                        .lock()
-                        .map_err(|e| anyhow!("epoch token lock poisoned: {}", e))?;
-                    *current_epoch_token = Some(max_token);
-                    poa_metrics()
-                        .leader_epoch
-                        .set(i64::try_from(max_token).unwrap_or(i64::MAX));
+                    Self::fold_epoch_max(&self.current_epoch_token, max_token);
                 }
                 poa_metrics().promotion_success_total.inc();
                 poa_metrics()
@@ -522,6 +568,7 @@ impl RedisLeaderLeaseAdapter {
                     .observe(promotion_start.elapsed().as_secs_f64());
                 return Ok(true);
             }
+
             self.release_lease_on_all_nodes().await;
             let is_last_attempt = attempt_index.saturating_add(1) == self.max_attempts;
             if !is_last_attempt {
@@ -603,65 +650,43 @@ impl RedisLeaderLeaseAdapter {
         });
     }
 
-    async fn read_latest_stream_entry_on_node(
-        &self,
-        redis_node: &RedisNode,
-    ) -> anyhow::Result<Option<(u32, String)>> {
-        let mut connection = self.multiplexed_connection(redis_node).await?;
-        let latest_entry = timeout(
-            self.node_timeout,
-            redis::Script::new(READ_LATEST_STREAM_ENTRY_SCRIPT)
-                .key(&self.block_stream_key)
-                .invoke_async::<Vec<String>>(&mut connection),
-        )
-        .await;
-        match latest_entry {
-            Err(_) => {
-                self.clear_cached_connection(redis_node).await;
-                Err(anyhow!(
-                    "Timed out reading latest stream entry from Redis node"
-                ))
-            }
-            Ok(Err(e)) => {
-                self.clear_cached_connection(redis_node).await;
-                Err(anyhow!(
-                    "Failed to read latest stream entry from Redis node: {e}"
-                ))
-            }
-            Ok(Ok(entry)) => {
-                if entry.len() != 2 {
-                    return Ok(None);
-                }
-                let height = entry[0]
-                    .parse::<u32>()
-                    .map_err(|e| anyhow!("Invalid latest stream entry height: {e}"))?;
-                Ok(Some((height, entry[1].clone())))
-            }
-        }
-    }
-
     async fn should_reconcile_from_stream(
         &self,
         next_height: BlockHeight,
     ) -> anyhow::Result<bool> {
+        // Pure read across all nodes via FuturesUnordered.
+        //
+        // - Backlog short-circuit: return Ok(true) as soon as we have
+        //   BOTH (a) at least one node reporting height >= next_height
+        //   AND (b) a quorum of successful responses. The quorum gate
+        //   matches the old `join_all + Err on degraded quorum`
+        //   contract — a single reachable node can't drag the cluster
+        //   into reconciliation when the majority is unreachable.
+        // - "No backlog" conclusion: requires all responses, otherwise
+        //   a race between empty-stream nodes and an orphan-holding
+        //   node could cause us to miss a sub-quorum orphan that needs
+        //   repair. Bounded by `node_timeout` per node.
         let next_height = u32::from(next_height);
-        let latest_results = futures::future::join_all(
-            self.redis_nodes
-                .iter()
-                .map(|redis_node| self.read_latest_stream_entry_on_node(redis_node)),
-        )
-        .await;
+        let n = self.redis_nodes.len();
+        let quorum_start = std::time::Instant::now();
+        let mut reads = FuturesUnordered::new();
+        for idx in 0..n {
+            let Some(op) = self.per_node_adapter(idx) else {
+                continue;
+            };
+            reads.push(async move { op.read_latest_stream_entry().await });
+        }
+
         let mut successful_reads = 0usize;
         let mut failed_count = 0usize;
-        let mut nodes_indicating_backlog = 0usize;
-        for result in latest_results {
+        let mut backlog_seen = false;
+        while let Some(result) = reads.next().await {
             match result {
-                Ok(Some((latest_height, _latest_stream_id))) => {
-                    successful_reads = successful_reads.saturating_add(1);
+                Ok(Some((latest_height, _))) => {
                     if latest_height >= next_height {
-                        nodes_indicating_backlog =
-                            nodes_indicating_backlog.saturating_add(1);
+                        backlog_seen = true;
                     }
+                    successful_reads = successful_reads.saturating_add(1);
                 }
                 Ok(None) => {
                     successful_reads = successful_reads.saturating_add(1);
@@ -671,16 +696,29 @@ impl RedisLeaderLeaseAdapter {
                     failed_count = failed_count.saturating_add(1);
                 }
             }
+            if backlog_seen && self.quorum_reached(successful_reads) {
+                poa_metrics().observe_quorum_latency(
+                    QuorumOp::ReconcileRead,
+                    quorum_start.elapsed().as_secs_f64(),
+                );
+                drop(reads);
+                return Ok(true);
+            }
         }
-        if !self.quorum_reached(successful_reads) {
-            return Err(anyhow!(
+        if self.quorum_reached(successful_reads) {
+            poa_metrics().observe_quorum_latency(
+                QuorumOp::ReconcileRead,
+                quorum_start.elapsed().as_secs_f64(),
+            );
+            Ok(false)
+        } else {
+            Err(anyhow!(
                 "Cannot reconcile: only {}/{} Redis nodes responded ({} failed)",
                 successful_reads,
-                self.redis_nodes.len(),
+                n,
                 failed_count
-            ));
+            ))
         }
-        Ok(nodes_indicating_backlog > 0)
     }
 
     async fn read_stream_entries_on_node(
@@ -874,7 +912,7 @@ impl RedisLeaderLeaseAdapter {
                          (found on {count}/{} nodes)",
                         blocks_by_node.len()
                     );
-                    match self.repair_sub_quorum_block(&block, count) {
+                    match self.repair_sub_quorum_block(&block, count).await {
                         Ok(true) => {
                             tracing::info!(
                                 "Repair succeeded — block at height {current_height} \
@@ -945,32 +983,28 @@ impl RedisLeaderLeaseAdapter {
 
     async fn release_if_owner(&self) -> anyhow::Result<()> {
         tracing::debug!("Releasing Redis leader lock");
-        if !self.has_lease_owner_quorum().await? {
-            let mut current_epoch_token = self
-                .current_epoch_token
-                .lock()
-                .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
-            *current_epoch_token = None;
-            return Ok(());
-        }
-
-        let releases = futures::future::join_all(
+        // RELEASE_LOCK_SCRIPT is a per-node CAS-DEL — it only removes
+        // the lease key when the stored owner matches our token, so
+        // calling it on every node is safe regardless of whether we
+        // currently hold quorum. We deliberately do NOT call
+        // `has_lease_owner_quorum` here: that would spawn the
+        // `spawn_acquire_lease_on_unowned_nodes` extension as a
+        // detached task, which can race our own DELs and resurrect
+        // the lease on a node we are simultaneously releasing
+        // (observed as "Lost lock during repair" / FENCING_ERROR
+        // when the next leader's writes hit the resurrected entry).
+        let _ = futures::future::join_all(
             self.redis_nodes
                 .iter()
                 .map(|redis_node| self.release_lease_on_node(redis_node)),
         )
         .await;
-        let released_count = releases.into_iter().filter(|released| *released).count();
-        if self.quorum_reached(released_count) {
-            let mut current_epoch_token = self
-                .current_epoch_token
-                .lock()
-                .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
-            *current_epoch_token = None;
-            Ok(())
-        } else {
-            Err(anyhow!("Failed to release lease on quorum"))
-        }
+        let mut current_epoch_token = self
+            .current_epoch_token
+            .lock()
+            .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?;
+        *current_epoch_token = None;
+        Ok(())
     }
 
     fn current_epoch_token_value(&self) -> Option<u64> {
@@ -980,98 +1014,89 @@ impl RedisLeaderLeaseAdapter {
             .and_then(|epoch| *epoch)
     }
 
-    fn publish_block_on_all_nodes(
+    /// Publish `block` to every Redis node in parallel and return as soon
+    /// as `Written` quorum is reached. Each per-node publish runs in its
+    /// own `tokio::spawn`ed task so it completes in the background even
+    /// after we short-circuit — we trade a bit of background work per
+    /// publish for maximum durability: every reachable node gets a real
+    /// write attempt, bounded by `node_timeout`, instead of the call
+    /// being cancelled mid-RESP when the parent drops a `FuturesUnordered`.
+    ///
+    /// Background tasks are bounded: each is bounded by `node_timeout`,
+    /// they share the adapter state via `Arc` and the block payload via
+    /// `Arc<SealedBlock>` / `Arc<[u8]>` (no per-task clone), and they're
+    /// cooperative tokio tasks rather than OS threads.
+    async fn publish_block_on_all_nodes(
         &self,
         epoch: u64,
         block: &SealedBlock,
         block_data: &[u8],
     ) -> Vec<anyhow::Result<WriteBlockResult>> {
-        // Detached `std::thread::spawn` (not scoped) lets us return as soon
-        // as `Written` quorum is reached without waiting for slow nodes.
-        // Stragglers — including any thread blocked inside the sync `redis`
-        // client — are abandoned: they will exit when their syscall returns
-        // (e.g. when the peer recovers, or when SO_RCVTIMEO fires inside
-        // `invoke_write_block_script`'s set_read_timeout/set_write_timeout
-        // window). Their result is discarded via the dropped channel.
-        //
-        // This is the class-of-failure fix for the 2026-04-22 mainnet hang
-        // where a half-alive ElastiCache node stalled one thread inside the
-        // pre-1.2 `redis::Client::get_connection_with_timeout` handshake,
-        // which combined with the previous `std::thread::scope` to wedge
-        // every block publish forever. The redis crate upgrade to 1.2 also
-        // closes that specific upstream bug; the short-circuit here protects
-        // against any future single-node hang that survives per-syscall
-        // timeouts.
         let n = self.redis_nodes.len();
-        let block_data: std::sync::Arc<[u8]> = block_data.into();
-        let block_height = u32::from(*block.entity.header().height());
-        let block_stream_key: std::sync::Arc<str> = self.block_stream_key.as_str().into();
-        let epoch_key: std::sync::Arc<str> = self.epoch_key.as_str().into();
-        let lease_key: std::sync::Arc<str> = self.lease_key.as_str().into();
-        let lease_owner_token: std::sync::Arc<str> =
-            self.lease_owner_token.as_str().into();
-        let lease_ttl_millis = self.lease_ttl_millis;
-        let stream_max_len = self.stream_max_len;
-        let node_timeout = self.node_timeout;
-
-        let (tx, rx) =
-            std::sync::mpsc::channel::<(usize, anyhow::Result<WriteBlockResult>)>();
-
-        for (idx, redis_node) in self.redis_nodes.iter().enumerate() {
-            let client = redis_node.redis_client.clone();
-            let tx = tx.clone();
-            let block_data = block_data.clone();
-            let block_stream_key = block_stream_key.clone();
-            let epoch_key = epoch_key.clone();
-            let lease_key = lease_key.clone();
-            let lease_owner_token = lease_owner_token.clone();
-            std::thread::spawn(move || {
-                let result = Self::invoke_write_block_script(
-                    &client,
-                    node_timeout,
-                    &block_stream_key,
-                    &epoch_key,
-                    &lease_key,
-                    epoch,
-                    &lease_owner_token,
-                    block_height,
-                    &block_data,
-                    lease_ttl_millis,
-                    stream_max_len,
-                );
-                // Send may fail if the receiver was dropped because we
-                // already short-circuited on quorum — that's intentional.
-                let _ = tx.send((idx, result));
-            });
-        }
-        // Drop our local sender so `rx.recv` returns `Err` once every spawned
-        // thread has either sent or dropped its sender.
-        drop(tx);
-
         let mut results: Vec<Option<anyhow::Result<WriteBlockResult>>> =
             (0..n).map(|_| None).collect();
         let mut written_count = 0usize;
-        let mut received = 0usize;
+        let quorum_start = std::time::Instant::now();
 
-        while received < n {
-            let Ok((idx, result)) = rx.recv() else {
-                // All senders dropped (every thread either reported or
-                // panicked). Stop draining and fill remaining slots below.
-                break;
+        // Share the block payload across spawned tasks via `Arc` so we
+        // clone it once rather than once per node.
+        let block: std::sync::Arc<SealedBlock> = std::sync::Arc::new(block.clone());
+        let block_data: std::sync::Arc<[u8]> = block_data.into();
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(
+            usize,
+            anyhow::Result<WriteBlockResult>,
+        )>();
+        #[allow(clippy::needless_range_loop)]
+        for idx in 0..n {
+            let Some(per_node) = self.per_node_adapter(idx) else {
+                results[idx] = Some(Err(anyhow!(
+                    "publish setup failed: missing redis node at index {idx}"
+                )));
+                continue;
             };
+            let tx = tx.clone();
+            let block = block.clone();
+            let block_data = block_data.clone();
+            // Increment the gauge synchronously here (before the task
+            // is queued) and move the guard into the closure so it
+            // decrements whether the task completes normally, panics,
+            // or is cancelled mid-await.
+            let task_guard = OutstandingPublishTaskGuard::new();
+            tokio::spawn(async move {
+                let _task_guard = task_guard;
+                let result = per_node
+                    .publish_block_on_node(epoch, &block, &block_data)
+                    .await;
+                // Ignored if the receiver was dropped after quorum — the
+                // write attempt still executed against the node.
+                let _ = tx.send((idx, result));
+            });
+        }
+        // Drop the parent sender so `rx.recv` returns `None` once every
+        // spawned task has reported (each task owns its own cloned
+        // sender; the channel stays open until the last task's sender
+        // drops when its closure returns).
+        drop(tx);
+
+        while let Some((idx, result)) = rx.recv().await {
             if matches!(result, Ok(WriteBlockResult::Written)) {
                 written_count = written_count.saturating_add(1);
             }
             results[idx] = Some(result);
-            received = received.saturating_add(1);
-
             if self.quorum_reached(written_count) {
-                // Quorum reached. Return immediately; any threads still
-                // running are abandoned. Their later `tx.send` will fail
-                // silently because we drop the receiver below.
+                poa_metrics().observe_quorum_latency(
+                    QuorumOp::Publish,
+                    quorum_start.elapsed().as_secs_f64(),
+                );
+                // Short-circuit: stop draining, but leave the remaining
+                // tasks running. They will each complete their write
+                // attempt; when `rx` drops below, their subsequent sends
+                // become no-ops, but the publish has landed on the node.
                 break;
             }
         }
+        drop(rx);
 
         results
             .into_iter()
@@ -1079,72 +1104,11 @@ impl RedisLeaderLeaseAdapter {
                 r.unwrap_or_else(|| {
                     Err(anyhow!(
                         "publish abandoned: quorum reached before this \
-                         node responded"
+                         node responded (background task still running)"
                     ))
                 })
             })
             .collect()
-    }
-
-    /// `'static` helper that runs `write_block.lua` against a single node.
-    /// Free function (no `&self`) so detached threads spawned by
-    /// `publish_block_on_all_nodes` can run it without borrowing the adapter.
-    #[allow(clippy::too_many_arguments)]
-    fn invoke_write_block_script(
-        redis_client: &redis::Client,
-        node_timeout: Duration,
-        block_stream_key: &str,
-        epoch_key: &str,
-        lease_key: &str,
-        epoch: u64,
-        lease_owner_token: &str,
-        block_height: u32,
-        block_data: &[u8],
-        lease_ttl_millis: u64,
-        stream_max_len: u32,
-    ) -> anyhow::Result<WriteBlockResult> {
-        let mut connection = redis_client.get_connection_with_timeout(node_timeout)?;
-        connection.set_read_timeout(Some(node_timeout))?;
-        connection.set_write_timeout(Some(node_timeout))?;
-        let lua_start = std::time::Instant::now();
-        let write_result = redis::Script::new(WRITE_BLOCK_SCRIPT)
-            .key(block_stream_key)
-            .key(epoch_key)
-            .key(lease_key)
-            .arg(epoch)
-            .arg(lease_owner_token)
-            .arg(block_height)
-            .arg(block_data)
-            .arg(lease_ttl_millis)
-            .arg(stream_max_len)
-            .invoke::<String>(&mut connection);
-        poa_metrics()
-            .write_block_duration_s
-            .observe(lua_start.elapsed().as_secs_f64());
-        match write_result {
-            Ok(_) => {
-                poa_metrics().write_block_success_total.inc();
-                Ok(WriteBlockResult::Written)
-            }
-            Err(err) if err.to_string().contains("HEIGHT_EXISTS:") => {
-                poa_metrics().write_block_height_exists_total.inc();
-                tracing::debug!(
-                    "write_block: height already exists (height={block_height})"
-                );
-                Ok(WriteBlockResult::HeightExists)
-            }
-            Err(err) if err.to_string().contains("FENCING_ERROR:") => {
-                poa_metrics().write_block_fencing_error_total.inc();
-                tracing::warn!(
-                    "write_block: fencing rejected (height={block_height}): {err}"
-                );
-                Ok(WriteBlockResult::FencingRejected)
-            }
-            Err(err) => {
-                poa_metrics().write_block_error_total.inc();
-                Err(err.into())
-            }
-        }
     }
 
     /// Repropose a sub-quorum block to all Redis nodes to reach quorum.
@@ -1161,7 +1125,7 @@ impl RedisLeaderLeaseAdapter {
     ///   different block from a competing partial write, so NOT counted
     /// - FENCING_ERROR: lost the lock — abort the repair
     /// - The total (pre_existing + newly written) must reach quorum
-    fn repair_sub_quorum_block(
+    async fn repair_sub_quorum_block(
         &self,
         block: &SealedBlock,
         pre_existing_count: usize,
@@ -1185,7 +1149,10 @@ impl RedisLeaderLeaseAdapter {
         // block at this height, but it might be a different block from
         // a competing leader's partial write.
         let mut total_with_block = pre_existing_count;
-        for result in self.publish_block_on_all_nodes(epoch, block, &block_data) {
+        for result in self
+            .publish_block_on_all_nodes(epoch, block, &block_data)
+            .await
+        {
             match result {
                 Ok(WriteBlockResult::Written) => {
                     total_with_block = total_with_block.saturating_add(1);
@@ -1213,6 +1180,203 @@ impl RedisLeaderLeaseAdapter {
             poa_metrics().repair_failure_total.inc();
         }
         Ok(reached_quorum)
+    }
+}
+
+impl PerNodeAdapter {
+    async fn publish_block_on_node(
+        &self,
+        epoch: u64,
+        block: &SealedBlock,
+        block_data: &[u8],
+    ) -> anyhow::Result<WriteBlockResult> {
+        let mut connection = RedisLeaderLeaseAdapter::multiplexed_connection_for(
+            &self.redis_node,
+            self.node_timeout,
+        )
+        .await?;
+        let block_height = u32::from(*block.entity.header().height());
+        let lua_start = std::time::Instant::now();
+        let write_result = tokio::time::timeout(
+            self.node_timeout,
+            redis::Script::new(WRITE_BLOCK_SCRIPT)
+                .key(&self.block_stream_key)
+                .key(&self.epoch_key)
+                .key(&self.lease_key)
+                .arg(epoch)
+                .arg(&self.lease_owner_token)
+                .arg(block_height)
+                .arg(block_data)
+                .arg(self.lease_ttl_millis)
+                .arg(self.stream_max_len)
+                .invoke_async::<String>(&mut connection),
+        )
+        .await;
+        poa_metrics()
+            .write_block_duration_s
+            .observe(lua_start.elapsed().as_secs_f64());
+        match write_result {
+            Ok(Ok(_)) => {
+                poa_metrics().write_block_success_total.inc();
+                Ok(WriteBlockResult::Written)
+            }
+            Ok(Err(err)) if err.to_string().contains("HEIGHT_EXISTS:") => {
+                poa_metrics().write_block_height_exists_total.inc();
+                tracing::debug!(
+                    "write_block: height already exists (height={block_height})"
+                );
+                Ok(WriteBlockResult::HeightExists)
+            }
+            Ok(Err(err)) if err.to_string().contains("FENCING_ERROR:") => {
+                poa_metrics().write_block_fencing_error_total.inc();
+                tracing::warn!(
+                    "write_block: fencing rejected (height={block_height}): {err}"
+                );
+                Ok(WriteBlockResult::FencingRejected)
+            }
+            Ok(Err(err)) => {
+                poa_metrics().write_block_error_total.inc();
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
+                Err(err.into())
+            }
+            Err(_) => {
+                poa_metrics().write_block_error_total.inc();
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
+                Err(anyhow!(
+                    "write_block timed out after {:?}",
+                    self.node_timeout
+                ))
+            }
+        }
+    }
+
+    async fn check_lease_owner(&self) -> bool {
+        let mut connection = match RedisLeaderLeaseAdapter::multiplexed_connection_for(
+            &self.redis_node,
+            self.node_timeout,
+        )
+        .await
+        {
+            Ok(connection) => connection,
+            Err(_) => return false,
+        };
+        let is_owner = timeout(
+            self.node_timeout,
+            redis::Script::new(CHECK_LEASE_OWNER_SCRIPT)
+                .key(&self.lease_key)
+                .arg(&self.lease_owner_token)
+                .invoke_async::<i32>(&mut connection),
+        )
+        .await;
+        match is_owner {
+            Ok(Ok(is_owner)) => is_owner == 1,
+            Err(_) | Ok(Err(_)) => {
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
+                false
+            }
+        }
+    }
+
+    async fn promote_leader(&self) -> anyhow::Result<Option<u64>> {
+        let mut connection = match RedisLeaderLeaseAdapter::multiplexed_connection_for(
+            &self.redis_node,
+            self.node_timeout,
+        )
+        .await
+        {
+            Ok(connection) => connection,
+            Err(_) => return Ok(None),
+        };
+        let promoted = timeout(
+            self.node_timeout,
+            redis::Script::new(PROMOTE_LEADER_SCRIPT)
+                .key(&self.lease_key)
+                .key(&self.epoch_key)
+                .arg(&self.lease_owner_token)
+                .arg(self.lease_ttl_millis)
+                .invoke_async::<u64>(&mut connection),
+        )
+        .await;
+        match promoted {
+            Ok(Ok(token)) => Ok(Some(token)),
+            Ok(Err(err)) => {
+                if err.to_string().contains("LOCK_HELD:") {
+                    return Ok(None);
+                }
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
+                Ok(None)
+            }
+            Err(_) => {
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
+                Ok(None)
+            }
+        }
+    }
+
+    async fn read_latest_stream_entry(&self) -> anyhow::Result<Option<(u32, String)>> {
+        let mut connection = RedisLeaderLeaseAdapter::multiplexed_connection_for(
+            &self.redis_node,
+            self.node_timeout,
+        )
+        .await?;
+        let latest_entry = timeout(
+            self.node_timeout,
+            redis::Script::new(READ_LATEST_STREAM_ENTRY_SCRIPT)
+                .key(&self.block_stream_key)
+                .invoke_async::<Vec<String>>(&mut connection),
+        )
+        .await;
+        match latest_entry {
+            Err(_) => {
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
+                Err(anyhow!(
+                    "Timed out reading latest stream entry from Redis node"
+                ))
+            }
+            Ok(Err(e)) => {
+                RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
+                    .await;
+                Err(anyhow!(
+                    "Failed to read latest stream entry from Redis node: {e}"
+                ))
+            }
+            Ok(Ok(entry)) => {
+                if entry.len() != 2 {
+                    return Ok(None);
+                }
+                let height = entry[0]
+                    .parse::<u32>()
+                    .map_err(|e| anyhow!("Invalid latest stream entry height: {e}"))?;
+                Ok(Some((height, entry[1].clone())))
+            }
+        }
+    }
+}
+
+/// RAII guard that increments `poa_outstanding_publish_tasks` on
+/// construction and decrements on drop. Constructed in the parent of
+/// `publish_block_on_all_nodes` (so the gauge counts the task from the
+/// instant it is queued) and moved into the spawn closure (so the
+/// decrement runs whether the task completes normally, panics inside
+/// the closure, or is cancelled mid-await).
+struct OutstandingPublishTaskGuard;
+
+impl OutstandingPublishTaskGuard {
+    fn new() -> Self {
+        poa_metrics().outstanding_publish_tasks.inc();
+        Self
+    }
+}
+
+impl Drop for OutstandingPublishTaskGuard {
+    fn drop(&mut self) {
+        poa_metrics().outstanding_publish_tasks.dec();
     }
 }
 
@@ -1245,7 +1409,7 @@ impl PoAAdapter {
 }
 
 #[async_trait::async_trait]
-impl BlockReconciliationReadPort for NoopReconciliationAdapter {
+impl BlockReconciliationPort for NoopReconciliationAdapter {
     async fn leader_state(
         &self,
         _next_height: BlockHeight,
@@ -1256,10 +1420,14 @@ impl BlockReconciliationReadPort for NoopReconciliationAdapter {
     async fn release(&self) -> anyhow::Result<()> {
         Ok(())
     }
+
+    async fn publish_produced_block(&self, _block: &SealedBlock) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
-impl BlockReconciliationReadPort for RedisLeaderLeaseAdapter {
+impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
     async fn leader_state(
         &self,
         next_height: BlockHeight,
@@ -1292,10 +1460,56 @@ impl BlockReconciliationReadPort for RedisLeaderLeaseAdapter {
     async fn release(&self) -> anyhow::Result<()> {
         self.release_if_owner().await
     }
+
+    async fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
+        let epoch = match *self
+            .current_epoch_token
+            .lock()
+            .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?
+        {
+            Some(epoch) => epoch,
+            None => {
+                if matches!(
+                    block.consensus,
+                    fuel_core_types::blockchain::consensus::Consensus::Genesis(_)
+                ) {
+                    tracing::debug!(
+                        "Skipping redis block publish for genesis block because fencing token is not initialized"
+                    );
+                    return Ok(());
+                }
+                return Err(anyhow!(
+                    "Cannot publish block because fencing token is not initialized"
+                ));
+            }
+        };
+        let block_data = postcard::to_allocvec(block)?;
+        let successes = self
+            .publish_block_on_all_nodes(epoch, block, &block_data)
+            .await
+            .into_iter()
+            .map(|result| match result {
+                Ok(WriteBlockResult::Written) => true,
+                Ok(_) => false,
+                Err(err) => {
+                    tracing::debug!("Redis publish on node failed: {err}");
+                    false
+                }
+            })
+            .filter(|success| *success)
+            .count();
+        if self.quorum_reached(successes) {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "Failed to publish block to redis quorum with fencing checks"
+            ))
+        }
+    }
 }
 
 #[async_trait::async_trait]
-impl BlockReconciliationReadPort for ReconciliationAdapter {
+impl BlockReconciliationPort for ReconciliationAdapter {
     async fn leader_state(
         &self,
         next_height: BlockHeight,
@@ -1312,14 +1526,17 @@ impl BlockReconciliationReadPort for ReconciliationAdapter {
             Self::Noop(adapter) => adapter.release().await,
         }
     }
+
+    async fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
+        match self {
+            Self::Redis(adapter) => adapter.publish_produced_block(block).await,
+            Self::Noop(adapter) => adapter.publish_produced_block(block).await,
+        }
+    }
 }
 
 impl Drop for RedisLeaderLeaseAdapter {
     fn drop(&mut self) {
-        if std::sync::Arc::strong_count(&self.drop_release_guard) != 1 {
-            return;
-        }
-
         let redis_clients = self
             .redis_nodes
             .iter()
@@ -1348,53 +1565,6 @@ impl Drop for RedisLeaderLeaseAdapter {
             self.lease_key.clone(),
             self.lease_owner_token.clone(),
         );
-    }
-}
-
-impl BlockReconciliationWritePort for RedisLeaderLeaseAdapter {
-    fn publish_produced_block(&self, block: &SealedBlock) -> anyhow::Result<()> {
-        let epoch = match *self
-            .current_epoch_token
-            .lock()
-            .map_err(|_| anyhow!("cannot access epoch token, poisoned lock"))?
-        {
-            Some(epoch) => epoch,
-            None => {
-                if matches!(
-                    block.consensus,
-                    fuel_core_types::blockchain::consensus::Consensus::Genesis(_)
-                ) {
-                    tracing::debug!(
-                        "Skipping redis block publish for genesis block because fencing token is not initialized"
-                    );
-                    return Ok(());
-                }
-                return Err(anyhow!(
-                    "Cannot publish block because fencing token is not initialized"
-                ));
-            }
-        };
-        let block_data = postcard::to_allocvec(block)?;
-        let successes = self
-            .publish_block_on_all_nodes(epoch, block, &block_data)
-            .into_iter()
-            .map(|result| match result {
-                Ok(WriteBlockResult::Written) => true,
-                Ok(_) => false,
-                Err(err) => {
-                    tracing::debug!("Redis publish on node failed: {err}");
-                    false
-                }
-            })
-            .filter(|success| *success)
-            .count();
-        if self.quorum_reached(successes) {
-            Ok(())
-        } else {
-            Err(anyhow!(
-                "Failed to publish block to redis quorum with fencing checks"
-            ))
-        }
     }
 }
 
@@ -1542,15 +1712,13 @@ impl BlockImporter for BlockImporterAdapter {
 #[allow(non_snake_case)]
 mod tests {
     use super::*;
-    use fuel_core_importer::ports::BlockReconciliationWritePort;
-    use fuel_core_poa::ports::BlockReconciliationReadPort;
+    use fuel_core_poa::ports::BlockReconciliationPort;
     use fuel_core_types::blockchain::consensus::Consensus;
     use std::{
         io::Read as _,
         net::{
             SocketAddrV4,
             TcpListener,
-            TcpStream,
         },
         process::{
             Child,
@@ -2014,7 +2182,7 @@ mod tests {
         let block = poa_block_at_time(1, 100);
 
         // when
-        let publish_result = adapter.publish_produced_block(&block);
+        let publish_result = adapter.publish_produced_block(&block).await;
 
         // then
         assert!(
@@ -2047,13 +2215,133 @@ mod tests {
         );
     }
 
+    /// Verifies that `poa_outstanding_publish_tasks` increments while
+    /// background per-node publish tasks are running (after quorum
+    /// short-circuit) and decrements back to baseline once they exit.
+    /// A sustained non-zero gauge in production would indicate a
+    /// regression in the per-call timeout — this test is the smallest
+    /// reproducible signal that the inc/dec wiring is correct.
     #[tokio::test(flavor = "multi_thread")]
-    async fn drop__when_non_last_clone_is_dropped_then_does_not_release_shared_lease() {
+    async fn publish_produced_block__outstanding_tasks_metric_drains_to_baseline() {
+        // given — 3 healthy + 1 half-alive listener
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:outstanding-tasks-metric".to_string();
+        let urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+            format!("redis://127.0.0.1:{halflive_port}/"),
+        ];
+        let adapter = new_test_adapter(urls, lease_key);
+        adapter
+            .acquire_lease_if_free()
+            .await
+            .expect("acquire should succeed");
+
+        let baseline = poa_metrics().outstanding_publish_tasks.get();
+
+        // when — publish returns once 3 healthy nodes ack; the 4th
+        // (half-alive) background task is still running
+        let block = poa_block_at_time(1, 111);
+        adapter
+            .publish_produced_block(&block)
+            .await
+            .expect("publish should succeed");
+        let in_flight = poa_metrics().outstanding_publish_tasks.get();
+
+        // then — at least one task is still running right after publish
+        assert!(
+            in_flight > baseline,
+            "expected outstanding tasks > baseline right after quorum \
+             short-circuit; baseline={baseline}, in_flight={in_flight}",
+        );
+
+        // give the half-alive node's background task time to time out
+        // (node_timeout in `new_test_adapter` is 100ms)
+        sleep(Duration::from_millis(500)).await;
+        let after_drain = poa_metrics().outstanding_publish_tasks.get();
+        assert_eq!(
+            after_drain, baseline,
+            "outstanding tasks should drain back to baseline after \
+             background tasks exit",
+        );
+    }
+
+    /// Regression test: after `publish_produced_block` short-circuits on
+    /// quorum, lingering background publish tasks for slow nodes must not
+    /// delay the owning adapter's release-on-drop path.
+    ///
+    /// Spawned publish work now runs through a dedicated `PerNodeAdapter`
+    /// handle, so dropping the owning adapter immediately after a
+    /// publish triggers release within a small window — well under
+    /// `node_timeout` even when one node is half-alive and its
+    /// background task is still running.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn drop__after_publish_releases_lease_promptly_despite_inflight_background_tasks()
+     {
+        // given — 3 real redis + 1 half-alive listener (quorum = 3)
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:drop-after-publish".to_string();
+        let healthy_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let mut all_urls = healthy_urls.clone();
+        all_urls.push(format!("redis://127.0.0.1:{halflive_port}/"));
+        let adapter = new_test_adapter(all_urls, lease_key.clone());
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "should acquire quorum from 3 healthy nodes out of 4",
+        );
+        let owner_token = adapter.lease_owner_token.clone();
+
+        // when — publish (returns once 3 healthy nodes ack; the 4th
+        // half-alive node's publish task is still running in the
+        // background) and immediately drop the adapter
+        let block = poa_block_at_time(1, 111);
+        adapter
+            .publish_produced_block(&block)
+            .await
+            .expect("publish should succeed: 3/4 healthy is quorum");
+        drop(adapter);
+
+        // then — give the release-on-drop a brief window (well under
+        // `node_timeout` so the half-alive background task is provably
+        // still in flight) and verify the lease is gone on the healthy
+        // quorum
+        sleep(Duration::from_millis(150)).await;
+        let still_owned = healthy_urls
+            .iter()
+            .filter(|redis_url| {
+                read_lease_owner(redis_url, &lease_key).as_deref()
+                    == Some(owner_token.as_str())
+            })
+            .count();
+        assert_eq!(
+            still_owned, 0,
+            "lease should be released on all 3 healthy nodes within \
+             the wait window even with a half-alive node's background \
+             publish task still running",
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn drop__when_per_node_adapter_is_dropped_then_parent_lease_is_unchanged() {
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
         let redis_c = RedisTestServer::spawn();
-        let lease_key = "poa:test:drop-non-last-clone".to_string();
+        let lease_key = "poa:test:drop-per-node-adapter".to_string();
         let redis_urls = vec![
             redis_a.redis_url(),
             redis_b.redis_url(),
@@ -2067,11 +2355,13 @@ mod tests {
                 .expect("acquire should succeed"),
             "Adapter should acquire lease"
         );
-        let adapter_clone = adapter.clone();
         let owner_token = adapter.lease_owner_token.clone();
+        let per_node = adapter
+            .per_node_adapter(0)
+            .expect("per-node adapter should exist for first redis node");
 
         // when
-        drop(adapter_clone);
+        drop(per_node);
         sleep(Duration::from_millis(50)).await;
 
         // then
@@ -2084,7 +2374,7 @@ mod tests {
             .count();
         assert!(
             owners >= 2,
-            "Dropping a non-last clone must not release quorum lease ownership"
+            "Dropping a per-node adapter must not release quorum lease ownership"
         );
     }
 
@@ -2246,7 +2536,7 @@ mod tests {
         );
 
         // when
-        let zombie_write = old_leader.publish_produced_block(&block);
+        let zombie_write = old_leader.publish_produced_block(&block).await;
 
         // then
         assert!(
@@ -2292,17 +2582,25 @@ mod tests {
         set_epoch(&redis_a.redis_url(), &epoch_key, stale_epoch);
 
         // when
-        let publish_result = adapter.publish_produced_block(&block);
+        let publish_result = adapter.publish_produced_block(&block).await;
 
-        // then
+        // then — publish_produced_block returns once quorum acks.
+        // Node A's per-node task may still be running in the
+        // background; poll for its self-heal write to land before
+        // asserting the epoch was bumped.
         assert!(
             publish_result.is_ok(),
             "Publish should still succeed on quorum"
         );
+        let healed = wait_for(Duration::from_secs(2), || {
+            read_epoch(&redis_a.redis_url(), &epoch_key) == leader_epoch
+        })
+        .await;
         let healed_epoch = read_epoch(&redis_a.redis_url(), &epoch_key);
-        assert_eq!(
-            healed_epoch, leader_epoch,
-            "First successful write should heal lagging epoch"
+        assert!(
+            healed,
+            "First successful write should heal lagging epoch on node A \
+             (observed {healed_epoch}, expected {leader_epoch})",
         );
     }
 
@@ -2340,7 +2638,7 @@ mod tests {
         sleep(Duration::from_millis(500)).await;
 
         // when
-        let publish_result = adapter.publish_produced_block(&block);
+        let publish_result = adapter.publish_produced_block(&block).await;
         sleep(Duration::from_millis(400)).await;
         let owners = redis_urls
             .iter()
@@ -2395,7 +2693,7 @@ mod tests {
         );
 
         // when
-        let publish_result = adapter.publish_produced_block(&block);
+        let publish_result = adapter.publish_produced_block(&block).await;
         let unreconciled = adapter.unreconciled_blocks(1.into()).await;
 
         // then
@@ -2625,7 +2923,7 @@ mod tests {
             block_b.entity.header().time()
         );
 
-        let result = adapter_a.publish_produced_block(&block_b);
+        let result = adapter_a.publish_produced_block(&block_b).await;
         assert!(
             result.is_err(),
             "publish at same height should fail due to HEIGHT_EXISTS"
@@ -2796,24 +3094,19 @@ mod tests {
             "should acquire quorum from 3 healthy nodes out of 4",
         );
 
-        // when — publish is sync; offload to a blocking thread so we can
-        // enforce a wall-clock deadline via tokio::time::timeout. Without
-        // the fix this task never completes.
+        // when — publish is async and uses cached multiplexed connections
+        // per node; per-node calls are wrapped in `tokio::time::timeout` and
+        // quorum short-circuit drops the unfinished futures cleanly.
         let block = poa_block_at_time(1, 111);
-        let publish_adapter = adapter.clone();
-        let start = Instant::now();
-        let publish = tokio::task::spawn_blocking(move || {
-            publish_adapter.publish_produced_block(&block)
-        });
         let deadline = Duration::from_secs(5);
-        let result = tokio::time::timeout(deadline, publish)
-            .await
-            .expect(
-                "publish_produced_block must return within the deadline — \
-                 on the pre-fix code it hangs forever against a half-alive \
-                 peer",
-            )
-            .expect("spawn_blocking should not panic");
+        let start = Instant::now();
+        let result =
+            tokio::time::timeout(deadline, adapter.publish_produced_block(&block))
+                .await
+                .expect(
+                    "publish_produced_block must return within the deadline — \
+             on the pre-fix code it hangs forever against a half-alive peer",
+                );
         let elapsed = start.elapsed();
 
         // then
@@ -2821,6 +3114,293 @@ mod tests {
         assert!(
             elapsed < deadline,
             "publish took {elapsed:?}, expected well under {deadline:?}",
+        );
+    }
+
+    /// Same regression contract as the publish path, but for the
+    /// `acquire_lease_if_free` write+read path. With 3 healthy redis
+    /// nodes and 1 half-alive TCP listener, lease acquisition must
+    /// short-circuit on quorum so a single slow peer can't stall
+    /// leader promotion.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn acquire_lease_if_free__returns_within_bound_when_one_node_is_half_alive() {
+        // given
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:halflive-acquire".to_string();
+        let urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+            format!("redis://127.0.0.1:{halflive_port}/"),
+        ];
+        let adapter = new_test_adapter(urls, lease_key);
+
+        // when
+        let deadline = Duration::from_secs(5);
+        let start = Instant::now();
+        let result = tokio::time::timeout(deadline, adapter.acquire_lease_if_free())
+            .await
+            .expect(
+                "acquire_lease_if_free must return within the deadline \
+                     even with a half-alive peer",
+            );
+        let elapsed = start.elapsed();
+
+        // then
+        let acquired = result.expect("acquire should succeed");
+        assert!(
+            acquired,
+            "should acquire quorum from 3 healthy nodes out of 4",
+        );
+        assert!(
+            elapsed < deadline,
+            "acquire took {elapsed:?}, expected well under {deadline:?}",
+        );
+    }
+
+    /// Regression for the quorum-short-circuit + late-token-folding
+    /// contract. With pre-drifted epochs across nodes (simulating
+    /// election-storm history), `acquire_lease_if_free` may
+    /// short-circuit on the first quorum of received tokens — and the
+    /// drifted-high node may be among the late responders. The
+    /// background spawned task must still fold its higher token into
+    /// `current_epoch_token` via max-CAS, so subsequent writes can
+    /// heal lagging nodes upward instead of FENCING_ERROR-ing forever.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn acquire_lease_if_free__folds_late_higher_epoch_into_current_epoch_token() {
+        // given — 3 redis nodes with node C pre-drifted to epoch 100
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:late-token-fold".to_string();
+        let epoch_key = format!("{lease_key}:epoch:token");
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        set_epoch(&redis_c.redis_url(), &epoch_key, 100);
+        let adapter = new_test_adapter(redis_urls, lease_key);
+
+        // when
+        let acquired = adapter
+            .acquire_lease_if_free()
+            .await
+            .expect("acquire should succeed");
+        assert!(acquired, "should acquire quorum");
+
+        // then — current_epoch_token must reflect node C's promoted
+        // value (100 + 1 = 101) regardless of whether C was among the
+        // first quorum responders or arrived after the short-circuit.
+        let folded = wait_for(Duration::from_secs(2), || {
+            adapter
+                .current_epoch_token
+                .lock()
+                .expect("lock")
+                .is_some_and(|epoch| epoch >= 101)
+        })
+        .await;
+        assert!(
+            folded,
+            "current_epoch_token should fold node C's drifted-high \
+             token (>=101) even if C responded after the quorum \
+             short-circuit; observed {:?}",
+            adapter.current_epoch_token.lock().expect("lock"),
+        );
+    }
+
+    /// Unit-level guard for `fold_epoch_max`: under heavy concurrent
+    /// contention the cell must reach the global maximum and never
+    /// regress to a smaller value. Together with the integration test
+    /// above this pins down the contract that backs the late-token
+    /// folding in `acquire_lease_if_free`.
+    #[test]
+    fn fold_epoch_max__monotonic_max_under_concurrent_writers() {
+        let cell = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let writers = 8usize;
+        let per_writer = 200u64;
+        let mut handles = Vec::with_capacity(writers);
+        for w in 0..writers {
+            let cell = std::sync::Arc::clone(&cell);
+            let base = (w as u64).saturating_mul(per_writer);
+            handles.push(std::thread::spawn(move || {
+                // Interleave ascending and descending values to force
+                // racy max-CAS attempts in both directions.
+                for i in 0..per_writer {
+                    RedisLeaderLeaseAdapter::fold_epoch_max(
+                        &cell,
+                        base.saturating_add(i),
+                    );
+                    RedisLeaderLeaseAdapter::fold_epoch_max(
+                        &cell,
+                        base.saturating_add(per_writer.saturating_sub(i)),
+                    );
+                }
+            }));
+        }
+        for h in handles {
+            h.join().expect("worker join");
+        }
+        let final_value = cell.lock().expect("lock").expect("set");
+        let expected_max = (writers as u64).saturating_mul(per_writer);
+        assert_eq!(
+            final_value, expected_max,
+            "fold_epoch_max must converge on the global max across \
+             concurrent writers",
+        );
+    }
+
+    /// `has_lease_owner_quorum` is a pure read path. With 3 healthy
+    /// nodes and 1 half-alive listener, the FuturesUnordered drain must
+    /// short-circuit as soon as 3 nodes confirm ownership, dropping the
+    /// half-alive read so a single slow peer can't delay block
+    /// production. The expand-to-non-owners coverage extension runs in
+    /// a detached background task and does not pin the caller.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn has_lease_owner_quorum__returns_within_bound_when_one_node_is_half_alive() {
+        // given — 3 healthy + 1 half-alive, adapter has acquired lease
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:halflive-owner-check".to_string();
+        let urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+            format!("redis://127.0.0.1:{halflive_port}/"),
+        ];
+        let adapter = new_test_adapter(urls, lease_key);
+        adapter
+            .acquire_lease_if_free()
+            .await
+            .expect("acquire should succeed");
+
+        // when
+        let deadline = Duration::from_secs(5);
+        let start = Instant::now();
+        let result = tokio::time::timeout(deadline, adapter.has_lease_owner_quorum())
+            .await
+            .expect(
+                "has_lease_owner_quorum must return within the deadline \
+                     even with a half-alive peer",
+            );
+        let elapsed = start.elapsed();
+
+        // then
+        let is_owner = result.expect("ownership check should succeed");
+        assert!(is_owner, "adapter should still own quorum lease");
+        assert!(
+            elapsed < deadline,
+            "ownership check took {elapsed:?}, expected well under {deadline:?}",
+        );
+    }
+
+    /// `should_reconcile_from_stream` (exercised via `unreconciled_blocks`)
+    /// must short-circuit on the first node reporting backlog. With 3
+    /// healthy nodes and 1 half-alive listener, the reconciliation read
+    /// must return well within the deadline even if the half-alive peer
+    /// never responds.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unreconciled_blocks__returns_within_bound_when_one_node_is_half_alive_with_backlog()
+     {
+        // given — pre-seed a block at height 1 on one healthy node so
+        // should_reconcile_from_stream sees backlog from at least one
+        // responsive node; the half-alive listener never responds.
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:halflive-reconcile-backlog".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+            format!("redis://127.0.0.1:{halflive_port}/"),
+        ];
+        let adapter = new_test_adapter(urls, lease_key);
+        let block = poa_block_at_time(1, 111);
+        let block_data = postcard::to_allocvec(&block).expect("serialize block");
+        let redis_client =
+            redis::Client::open(redis_a.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        append_stream_block(&mut conn, &stream_key, 1, &block_data, 1);
+
+        // when
+        let deadline = Duration::from_secs(5);
+        let start = Instant::now();
+        let result =
+            tokio::time::timeout(deadline, adapter.unreconciled_blocks(1.into()))
+                .await
+                .expect(
+                    "unreconciled_blocks must return within the deadline \
+                     even with a half-alive peer",
+                );
+        let elapsed = start.elapsed();
+
+        // then — backlog detection is the contract; repair may or may
+        // not succeed depending on whether the adapter holds the lease,
+        // but the call must not hang on the half-alive peer.
+        drop(result);
+        assert!(
+            elapsed < deadline,
+            "unreconciled_blocks took {elapsed:?}, expected well under \
+             {deadline:?}",
+        );
+    }
+
+    /// Companion to the backlog test: when no node has backlog,
+    /// `should_reconcile_from_stream` must wait for all responses
+    /// (otherwise empty-stream nodes could outrun an orphan-holding
+    /// node and we'd miss a sub-quorum orphan), but still bounded by
+    /// `node_timeout` per node — never indefinite against a half-alive
+    /// peer.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unreconciled_blocks__returns_within_bound_when_one_node_is_half_alive_no_backlog()
+     {
+        // given — all healthy streams empty + 1 half-alive listener
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let halflive_port = spawn_halflive_redis_listener();
+        let lease_key = "poa:test:halflive-reconcile-empty".to_string();
+        let urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+            format!("redis://127.0.0.1:{halflive_port}/"),
+        ];
+        let adapter = new_test_adapter(urls, lease_key);
+
+        // when
+        let deadline = Duration::from_secs(5);
+        let start = Instant::now();
+        let result =
+            tokio::time::timeout(deadline, adapter.unreconciled_blocks(1.into()))
+                .await
+                .expect(
+                    "unreconciled_blocks must return within the deadline \
+                     even with a half-alive peer when no backlog exists",
+                );
+        let elapsed = start.elapsed();
+
+        // then
+        let entries = result.expect("no-backlog reconciliation should succeed");
+        assert!(
+            entries.is_empty(),
+            "expected empty reconciliation, got {} entries",
+            entries.len(),
+        );
+        assert!(
+            elapsed < deadline,
+            "unreconciled_blocks took {elapsed:?}, expected well under \
+             {deadline:?}",
         );
     }
 
@@ -2902,12 +3482,22 @@ mod tests {
             .expect("Failed to spawn redis-server")
     }
 
+    /// Probe redis with a real `PING`/`PONG` round-trip — TCP accept can
+    /// succeed before redis-server is ready to process commands (the
+    /// same class of half-ready state that caused the 2026-04-22
+    /// mainnet hang). On a fresh start this is usually instant; on
+    /// restart it can take a few extra ticks while redis re-binds.
     fn wait_for_redis_ready(port: u16) {
-        let addr = SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, port);
+        let url = format!("redis://127.0.0.1:{port}/");
         let start = std::time::Instant::now();
         let timeout = Duration::from_secs(5);
+        let per_attempt = Duration::from_millis(200);
         while start.elapsed() < timeout {
-            if TcpStream::connect(addr).is_ok() {
+            if let Ok(client) = redis::Client::open(url.as_str())
+                && let Ok(mut conn) = client.get_connection_with_timeout(per_attempt)
+                && let Ok(reply) = redis::cmd("PING").query::<String>(&mut conn)
+                && reply == "PONG"
+            {
                 return;
             }
             thread::sleep(Duration::from_millis(10));
@@ -3025,6 +3615,24 @@ mod tests {
             .expect("lease owner get should succeed")
     }
 
+    /// Polls `predicate` until it returns true or `deadline` elapses,
+    /// sleeping briefly between checks. Returns whether the predicate
+    /// was observed true. Used in tests where a fire-and-forget
+    /// background task is expected to update Redis state and the
+    /// observation must not race the spawn.
+    async fn wait_for<F: FnMut() -> bool>(deadline: Duration, mut predicate: F) -> bool {
+        let start = Instant::now();
+        loop {
+            if predicate() {
+                return true;
+            }
+            if start.elapsed() >= deadline {
+                return false;
+            }
+            sleep(Duration::from_millis(20)).await;
+        }
+    }
+
     fn clear_lease_on_nodes(redis_urls: &[String], lease_key: &str) {
         redis_urls.iter().for_each(|redis_url| {
             let redis_client = redis::Client::open(redis_url.as_str())
@@ -3080,13 +3688,27 @@ mod tests {
         let block = poa_block_at_time(1, 100);
         adapter_a
             .publish_produced_block(&block)
+            .await
             .expect("publish should succeed on all 3 nodes");
 
-        // Verify block exists on all 3 nodes
+        // Verify block exists on all 3 nodes. `publish_produced_block`
+        // returns once a quorum acks; the third per-node task runs in
+        // a detached background tokio task, so poll briefly for the
+        // last node to land before asserting.
         let stream_key = format!("{lease_key}:block:stream");
-        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_c.redis_url(), &stream_key), 1);
+        let urls = [
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let all_have_block = wait_for(Duration::from_secs(2), || {
+            urls.iter().all(|url| stream_len(url, &stream_key) == 1)
+        })
+        .await;
+        assert!(
+            all_have_block,
+            "block should land on all 3 nodes once background publish tasks drain",
+        );
 
         // Simulate A releasing lease
         adapter_a.release().await.expect("release should succeed");
@@ -3280,23 +3902,40 @@ mod tests {
             .expect("quorum check should succeed");
         assert!(has_quorum, "A should still have quorum");
 
-        // then — A should now own node C too
-        let owns_c_after = read_lease_owner(&redis_c.redis_url(), &lease_key)
-            == Some(adapter_a.lease_owner_token.clone());
+        // then — A should eventually own node C too. Expansion runs
+        // in a detached background task, so poll briefly for it to
+        // land instead of asserting on a single immediate read.
+        let owns_c_after = wait_for(Duration::from_secs(2), || {
+            read_lease_owner(&redis_c.redis_url(), &lease_key)
+                == Some(adapter_a.lease_owner_token.clone())
+        })
+        .await;
         assert!(owns_c_after, "Lock expansion should have acquired node C");
 
-        // Verify writes now go to all 3 nodes
+        // Verify writes now go to all 3 nodes. `publish_produced_block`
+        // returns once a quorum acks; the third per-node task runs in
+        // a detached background tokio task, so poll briefly for the
+        // last node to land before asserting.
         let block = poa_block_at_time(1, 100);
         adapter_a
             .publish_produced_block(&block)
+            .await
             .expect("publish should succeed");
 
-        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
-        assert_eq!(
-            stream_len(&redis_c.redis_url(), &stream_key),
-            1,
-            "Block should be written to expanded node C"
+        let urls_for_check = [
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let landed = wait_for(Duration::from_secs(2), || {
+            urls_for_check
+                .iter()
+                .all(|url| stream_len(url, &stream_key) == 1)
+        })
+        .await;
+        assert!(
+            landed,
+            "Block should be written to all 3 nodes (including expanded node C)",
         );
     }
 
@@ -3351,27 +3990,55 @@ mod tests {
                 .await
                 .expect("acquire should succeed"),
         );
+
+        // A's epoch should be max across all 3 nodes:
+        //   Node C had epoch=1 from B's INCR; A's promote INCR'd it to 2
+        //   Nodes A,B were at 0; A's promote INCR'd them to 1
+        // A takes max(1, 1, 2) = 2.
+        // `acquire_lease_if_free` short-circuits on quorum and folds
+        // late-arriving tokens into `current_epoch_token` from background
+        // tasks (see fold_epoch_max). Poll briefly so the assertion
+        // doesn't race the fold from node C's late response.
+        let folded = wait_for(Duration::from_secs(2), || {
+            adapter_a
+                .current_epoch_token
+                .lock()
+                .expect("lock")
+                .is_some_and(|epoch| epoch > epoch_c_before)
+        })
+        .await;
         let epoch_a = (*adapter_a.current_epoch_token.lock().expect("lock"))
             .expect("epoch should be set");
-
-        // A's epoch should be max across all 3 nodes
-        // Node C had epoch=1 from B's INCR, then A's promote INCR'd it to 2
-        // Nodes A,B were at 0, A's promote INCR'd them to 1
-        // A takes max(1, 1, 2) = 2
         assert!(
-            epoch_a > epoch_c_before,
+            folded,
             "Leader's epoch ({epoch_a}) should be > node C's pre-acquisition epoch ({epoch_c_before})"
         );
 
-        // Verify writes succeed on ALL nodes with the adopted epoch
+        // Verify writes succeed on ALL nodes with the adopted epoch.
+        // `publish_produced_block` returns once a quorum acks; the
+        // third per-node task runs in a detached background tokio
+        // task, so poll briefly for the last node to land.
         let block = poa_block_at_time(1, 100);
         adapter_a
             .publish_produced_block(&block)
+            .await
             .expect("publish should succeed on all 3 nodes");
 
-        assert_eq!(stream_len(&redis_a.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_b.redis_url(), &stream_key), 1);
-        assert_eq!(stream_len(&redis_c.redis_url(), &stream_key), 1);
+        let urls_for_check = [
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let landed = wait_for(Duration::from_secs(2), || {
+            urls_for_check
+                .iter()
+                .all(|url| stream_len(url, &stream_key) == 1)
+        })
+        .await;
+        assert!(
+            landed,
+            "Block should land on all 3 nodes once background publish tasks drain",
+        );
     }
 
     /// Exercises promotion, block write, fencing rejection, repair, and
@@ -3405,11 +4072,12 @@ mod tests {
         let block1 = poa_block_at_time(1, 100);
         adapter
             .publish_produced_block(&block1)
+            .await
             .expect("publish should succeed");
 
         // 3. HEIGHT_EXISTS — write same height again
         let block1_dup = poa_block_at_time(1, 200);
-        let dup_result = adapter.publish_produced_block(&block1_dup);
+        let dup_result = adapter.publish_produced_block(&block1_dup).await;
         assert!(dup_result.is_err(), "duplicate height should fail");
 
         // 4. Fencing rejection — old leader tries to write after handoff
@@ -3419,7 +4087,8 @@ mod tests {
             let mut epoch = old_adapter.current_epoch_token.lock().expect("lock");
             *epoch = Some(1);
         }
-        let _zombie = old_adapter.publish_produced_block(&poa_block_at_time(2, 300));
+        let zombie_block = poa_block_at_time(2, 300);
+        let _zombie = old_adapter.publish_produced_block(&zombie_block).await;
 
         // 5. Reconciliation with sub-quorum repair
         //    Put an orphan block on node A only at height 2
@@ -3464,6 +4133,7 @@ mod tests {
             "poa_is_leader",
             "poa_epoch_max_drift",
             "poa_stream_trim_headroom",
+            "poa_outstanding_publish_tasks",
             "poa_write_block_success_total",
             "poa_write_block_height_exists_total",
             "poa_write_block_fencing_error_total",
@@ -3539,6 +4209,7 @@ mod tests {
         let block = poa_block_at_time(1, 100);
         adapter
             .publish_produced_block(&block)
+            .await
             .expect("publish should succeed on all 3 nodes");
         adapter.release().await.expect("release should succeed");
 

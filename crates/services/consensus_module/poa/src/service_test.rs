@@ -8,7 +8,7 @@ use crate::{
     new_service,
     ports::{
         BlockProducer,
-        BlockReconciliationReadPort,
+        BlockReconciliationPort,
         BlockSigner,
         GetTime,
         InMemoryPredefinedBlocks,
@@ -306,7 +306,7 @@ impl FakeReconciliationPort {
 }
 
 #[async_trait::async_trait]
-impl BlockReconciliationReadPort for FakeReconciliationPort {
+impl BlockReconciliationPort for FakeReconciliationPort {
     async fn leader_state(
         &self,
         _next_height: BlockHeight,
@@ -323,6 +323,13 @@ impl BlockReconciliationReadPort for FakeReconciliationPort {
 
     async fn release(&self) -> anyhow::Result<()> {
         self.release_called.store(true, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn publish_produced_block(
+        &self,
+        _block: &fuel_core_types::blockchain::SealedBlock,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 }
