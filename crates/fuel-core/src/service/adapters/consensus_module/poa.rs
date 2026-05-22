@@ -140,6 +140,22 @@ pub struct RedisLeaderLeaseAdapter {
     stream_max_len: u32,
 }
 
+/// Outcome of a single per-node `promote_leader.lua` call. Distinguishes
+/// "another authority holds the lock" (definitive — no point retrying
+/// within the lease window) from "node unreachable / timed out" (outcome
+/// genuinely unknown). Collapsing these — as a bare `Option` does — forces
+/// `acquire_lease_if_free` to wait out every node and retry on every
+/// follower cycle, which is what ballooned the follower lock-check to
+/// multiple seconds when one Redis node was slow.
+enum PromoteOutcome {
+    /// Lock acquired on this node; carries the epoch token.
+    Acquired(u64),
+    /// `SET NX` rejected — another authority currently holds the lock.
+    LockHeld,
+    /// Node unreachable, timed out, or errored — outcome unknown.
+    Unavailable,
+}
+
 /// Per-node operation context. Carried by spawned tokio tasks so they
 /// don't need a clone of the full adapter — covers publish, lease-owner
 /// check, lease promotion, and stream reads.
@@ -461,8 +477,10 @@ impl RedisLeaderLeaseAdapter {
                     .map(|op| async move { op.promote_leader().await }),
             )
             .await;
-            for token in results.into_iter().filter_map(|r| r.ok().flatten()) {
-                Self::fold_epoch_max(&current_epoch_token, token);
+            for outcome in results {
+                if let PromoteOutcome::Acquired(token) = outcome {
+                    Self::fold_epoch_max(&current_epoch_token, token);
+                }
             }
         });
     }
@@ -481,8 +499,7 @@ impl RedisLeaderLeaseAdapter {
             // task — see `fold_epoch_max`. So a late-promoted node with
             // a higher (drift) epoch contributes its token even though
             // the parent has stopped reading from the channel.
-            let (tx, mut rx) =
-                tokio::sync::mpsc::unbounded_channel::<anyhow::Result<Option<u64>>>();
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<PromoteOutcome>();
             for idx in 0..n {
                 let Some(op) = self.per_node_adapter(idx) else {
                     continue;
@@ -490,36 +507,43 @@ impl RedisLeaderLeaseAdapter {
                 let tx = tx.clone();
                 let epoch_cell = std::sync::Arc::clone(&self.current_epoch_token);
                 tokio::spawn(async move {
-                    let result = op.promote_leader().await;
-                    if let Ok(Some(token)) = &result {
+                    let outcome = op.promote_leader().await;
+                    if let PromoteOutcome::Acquired(token) = &outcome {
                         Self::fold_epoch_max(&epoch_cell, *token);
                     }
-                    let _ = tx.send(result);
+                    let _ = tx.send(outcome);
                 });
             }
             drop(tx);
 
             let mut promoted_tokens: Vec<u64> = Vec::with_capacity(n);
+            let mut lock_held_count = 0usize;
             let mut total_responded = 0usize;
             let mut acquired = false;
-            while let Some(result) = rx.recv().await {
-                if let Ok(Some(token)) = result {
-                    promoted_tokens.push(token);
+            // A quorum of nodes reporting the lock held by another owner
+            // is a definitive "no" — by the pigeonhole property this node
+            // cannot also win a quorum. Stop the moment we know it.
+            let mut lock_taken = false;
+            while let Some(outcome) = rx.recv().await {
+                match outcome {
+                    PromoteOutcome::Acquired(token) => promoted_tokens.push(token),
+                    PromoteOutcome::LockHeld => {
+                        lock_held_count = lock_held_count.saturating_add(1);
+                    }
+                    PromoteOutcome::Unavailable => {}
                 }
                 total_responded = total_responded.saturating_add(1);
                 if self.quorum_reached(promoted_tokens.len()) {
                     let elapsed_millis =
                         u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
-                    let validity_millis =
-                        self.calculate_remaining_validity_millis(elapsed_millis);
-                    if validity_millis > 0 {
-                        poa_metrics().observe_quorum_latency(
-                            QuorumOp::Promote,
-                            start.elapsed().as_secs_f64(),
-                        );
+                    if self.calculate_remaining_validity_millis(elapsed_millis) > 0 {
                         acquired = true;
                         break;
                     }
+                }
+                if self.quorum_reached(lock_held_count) {
+                    lock_taken = true;
+                    break;
                 }
                 if total_responded >= n {
                     break;
@@ -532,10 +556,16 @@ impl RedisLeaderLeaseAdapter {
 
             let elapsed_millis =
                 u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+            // One observation per attempt regardless of outcome, so the
+            // failure-dominated handoff path shows up in the metric and
+            // not just the rare winning attempt.
+            poa_metrics()
+                .observe_quorum_latency(QuorumOp::Promote, start.elapsed().as_secs_f64());
             tracing::debug!(
                 attempt = attempt_index.saturating_add(1),
                 max_attempts = self.max_attempts,
                 acquired_count = promoted_tokens.len(),
+                lock_held_count,
                 quorum = self.quorum,
                 redis_nodes = self.redis_nodes.len(),
                 elapsed_millis,
@@ -569,7 +599,26 @@ impl RedisLeaderLeaseAdapter {
                 return Ok(true);
             }
 
-            self.release_lease_on_all_nodes().await;
+            // Release any locks we did grab so a partial acquisition is
+            // not stranded for a lease TTL. Skip the fan-out entirely
+            // when we acquired nothing — the common follower case.
+            if !promoted_tokens.is_empty() {
+                self.release_lease_on_all_nodes().await;
+            }
+
+            if lock_taken {
+                // Another authority holds the lock on a quorum of nodes.
+                // Retrying within this lease window cannot win; bail now
+                // so a slow Redis node cannot stretch a routine follower
+                // lock-check across multiple node_timeouts. The next
+                // `leader_state` cycle re-checks cheaply.
+                poa_metrics().promotion_failure_total.inc();
+                poa_metrics()
+                    .promotion_duration_s
+                    .observe(promotion_start.elapsed().as_secs_f64());
+                return Ok(false);
+            }
+
             let is_last_attempt = attempt_index.saturating_add(1) == self.max_attempts;
             if !is_last_attempt {
                 self.delay_next_retry().await;
@@ -1280,7 +1329,7 @@ impl PerNodeAdapter {
         }
     }
 
-    async fn promote_leader(&self) -> anyhow::Result<Option<u64>> {
+    async fn promote_leader(&self) -> PromoteOutcome {
         let mut connection = match RedisLeaderLeaseAdapter::multiplexed_connection_for(
             &self.redis_node,
             self.node_timeout,
@@ -1288,7 +1337,7 @@ impl PerNodeAdapter {
         .await
         {
             Ok(connection) => connection,
-            Err(_) => return Ok(None),
+            Err(_) => return PromoteOutcome::Unavailable,
         };
         let promoted = timeout(
             self.node_timeout,
@@ -1301,19 +1350,21 @@ impl PerNodeAdapter {
         )
         .await;
         match promoted {
-            Ok(Ok(token)) => Ok(Some(token)),
+            Ok(Ok(token)) => PromoteOutcome::Acquired(token),
             Ok(Err(err)) => {
+                // `LOCK_HELD` is a definitive answer from a healthy node,
+                // not a transport failure — keep the cached connection.
                 if err.to_string().contains("LOCK_HELD:") {
-                    return Ok(None);
+                    return PromoteOutcome::LockHeld;
                 }
                 RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
                     .await;
-                Ok(None)
+                PromoteOutcome::Unavailable
             }
             Err(_) => {
                 RedisLeaderLeaseAdapter::clear_cached_connection_for(&self.redis_node)
                     .await;
-                Ok(None)
+                PromoteOutcome::Unavailable
             }
         }
     }
@@ -1733,9 +1784,24 @@ mod tests {
         },
     };
 
+    /// Serializes the `poa_outstanding_publish_tasks` metric test against
+    /// every other test that drives the publish path. Those tests mutate
+    /// the process-global gauge via `OutstandingPublishTaskGuard`; they
+    /// take a *read* lock so they still run in parallel with each other,
+    /// while `publish_produced_block__outstanding_tasks_metric_drains_to_baseline`
+    /// takes the *write* lock for an exclusive, pollution-free measurement
+    /// window. Any new test that reaches the publish path must take the
+    /// read lock too, otherwise the metric test can flake again.
+    fn publish_gauge_lock() -> &'static tokio::sync::RwLock<()> {
+        static LOCK: std::sync::OnceLock<tokio::sync::RwLock<()>> =
+            std::sync::OnceLock::new();
+        LOCK.get_or_init(|| tokio::sync::RwLock::new(()))
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_same_height_has_multiple_stream_entries_then_returns_highest_epoch_block()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:stream-conflict".to_string();
@@ -1790,6 +1856,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_same_height_same_epoch_has_multiple_stream_entries_then_keeps_latest_entry()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:equal-epoch-latest-entry".to_string();
@@ -1843,6 +1910,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_height_has_disagreeing_block_ids_then_repairs_with_highest_epoch_block()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given: two different blocks at height 1 on different nodes, same epoch
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -1915,6 +1983,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_same_block_has_different_epochs_across_nodes_then_reconciles_without_repair()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given: same block on all 3 nodes, but with different epochs
         // (as happens when re-promotion writes race during production)
         let redis_a = RedisTestServer::spawn();
@@ -1979,6 +2048,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_same_height_entry_exists_on_less_than_quorum_nodes_then_repairs_it()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given: orphan block on only 1 of 3 nodes (below quorum)
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2028,6 +2098,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_contiguous_heights_have_quorum_then_repairs_sub_quorum_tail()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given: h1, h2 on quorum (a,b). h3 below quorum (a only).
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2101,6 +2172,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_contiguous_quorum_blocks_are_present_then_returns_all_available_contiguous_blocks()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2168,6 +2240,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__when_fencing_token_is_uninitialized_then_returns_error()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2241,6 +2314,25 @@ mod tests {
             .await
             .expect("acquire should succeed");
 
+        // Exclusive measurement window. Acquired only now — after the
+        // (lock-free) redis setup above — so we hold the write lock just
+        // for the measurement and don't batch every other publish-path
+        // test's redis spawns into a post-barrier stampede.
+        let _serial = publish_gauge_lock().write().await;
+
+        // Drain stragglers from publish-path tests that finished just
+        // before we acquired the write lock — their background tasks live
+        // up to node_timeout. With the write lock held no further such
+        // test can start, so once the gauge reaches 0 it stays there
+        // until our own publish below.
+        let drain_deadline = Instant::now() + Duration::from_secs(5);
+        while poa_metrics().outstanding_publish_tasks.get() != 0 {
+            assert!(
+                Instant::now() < drain_deadline,
+                "publish-task gauge never drained to 0 before measurement",
+            );
+            sleep(Duration::from_millis(20)).await;
+        }
         let baseline = poa_metrics().outstanding_publish_tasks.get();
 
         // when — publish returns once 3 healthy nodes ack; the 4th
@@ -2282,6 +2374,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn drop__after_publish_releases_lease_promptly_despite_inflight_background_tasks()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 real redis + 1 half-alive listener (quorum = 3)
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2380,6 +2473,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_lease_is_free_then_acquires_quorum_ownership() {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2428,6 +2522,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn leader_state__when_lease_expires_then_another_adapter_becomes_leader() {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2498,6 +2593,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__when_previous_leader_writes_after_handoff_then_rejects_zombie_write()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2556,6 +2652,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__when_epoch_is_behind_on_one_node_then_first_write_heals_epoch()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2606,6 +2703,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__when_write_succeeds_then_extends_lease_ttl() {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2659,6 +2757,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__when_write_succeeds_on_less_than_quorum_then_entry_is_not_reconciled()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -2715,6 +2814,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn unreconciled_blocks__when_quorum_latest_height_is_below_next_height_then_returns_empty()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:cursor-fast-path".to_string();
@@ -2890,6 +2990,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn partial_publish_then_retry_at_same_height__new_leader_reconciles_stale_block()
      {
+        let _serial = publish_gauge_lock().read().await;
         let redis = RedisTestServer::spawn();
         let lease_key = "poa:test:fork-repro".to_string();
         let stream_key = format!("{lease_key}:block:stream");
@@ -3073,6 +3174,7 @@ mod tests {
     /// acknowledge `Written`.
     #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__returns_within_bound_when_one_node_is_half_alive() {
+        let _serial = publish_gauge_lock().read().await;
         // given
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -3307,6 +3409,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn unreconciled_blocks__returns_within_bound_when_one_node_is_half_alive_with_backlog()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given — pre-seed a block at height 1 on one healthy node so
         // should_reconcile_from_stream sees backlog from at least one
         // responsive node; the half-alive listener never responds.
@@ -3364,6 +3467,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn unreconciled_blocks__returns_within_bound_when_one_node_is_half_alive_no_backlog()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given — all healthy streams empty + 1 half-alive listener
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -3430,9 +3534,26 @@ mod tests {
             if self.child.is_some() {
                 return;
             }
-            let child = spawn_redis_server(self.port);
-            wait_for_redis_ready(self.port);
-            self.child = Some(child);
+            // Retry on the *same* port: a transient bind failure releases
+            // the port within milliseconds (the squatter is gone by the
+            // next attempt), and a stable port keeps the redis URL valid
+            // across stop()/start() restart tests.
+            for attempt in 1..=5u32 {
+                let mut child = spawn_redis_server(self.port);
+                if wait_for_redis_ready(self.port, &mut child) {
+                    self.child = Some(child);
+                    return;
+                }
+                let _ = child.kill();
+                let _ = child.wait();
+                if attempt < 5 {
+                    thread::sleep(Duration::from_millis(u64::from(100 * attempt)));
+                }
+            }
+            panic!(
+                "redis-server failed to become ready on port {} after 5 attempts",
+                self.port
+            );
         }
 
         fn stop(&mut self) {
@@ -3457,13 +3578,38 @@ mod tests {
         }
     }
 
+    /// Allocate a distinct TCP port for a test `redis-server`.
+    ///
+    /// The old "bind an ephemeral port, read it, close the listener, hand
+    /// the number to redis-server" pattern has a TOCTOU race: under the
+    /// suite's burst of ~150 redis spawns the OS routinely hands the same
+    /// just-closed ephemeral port to two callers, the second redis-server
+    /// fails to bind, never becomes ready, and shows up either as a
+    /// `wait_for_redis_ready` timeout or as a permanently-dead node that
+    /// drags later quorum operations below threshold.
+    ///
+    /// A process-wide monotonic counter gives every caller a distinct
+    /// candidate (no intra-suite collision); the bind-probe filters ports
+    /// already held by an unrelated process and the loop skips them for
+    /// good. Two test callers can never be handed the same number, so the
+    /// ephemeral-port reuse race is gone.
     fn bind_unused_port() -> u16 {
-        let socket =
-            TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, 0))
-                .expect("Should bind an ephemeral port");
-        let port = socket.local_addr().expect("Should get local addr").port();
-        drop(socket);
-        port
+        use std::sync::atomic::{
+            AtomicU16,
+            Ordering,
+        };
+        static NEXT: AtomicU16 = AtomicU16::new(0);
+        static BASE: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
+        // Randomized base so separate test binaries / reruns rarely overlap.
+        let base = *BASE.get_or_init(|| 20_000 + (rand::random::<u16>() % 20_000));
+        loop {
+            let port = base.saturating_add(NEXT.fetch_add(1, Ordering::Relaxed));
+            if TcpListener::bind(SocketAddrV4::new(std::net::Ipv4Addr::LOCALHOST, port))
+                .is_ok()
+            {
+                return port;
+            }
+        }
     }
 
     fn spawn_redis_server(port: u16) -> Child {
@@ -3482,27 +3628,33 @@ mod tests {
             .expect("Failed to spawn redis-server")
     }
 
-    /// Probe redis with a real `PING`/`PONG` round-trip — TCP accept can
-    /// succeed before redis-server is ready to process commands (the
-    /// same class of half-ready state that caused the 2026-04-22
-    /// mainnet hang). On a fresh start this is usually instant; on
-    /// restart it can take a few extra ticks while redis re-binds.
-    fn wait_for_redis_ready(port: u16) {
+    /// Wait until redis answers a real `PING`/`PONG` (TCP accept can
+    /// succeed before redis-server can process commands — the half-ready
+    /// state behind the 2026-04-22 mainnet hang).
+    ///
+    /// Returns `false` — for the caller to retry — if redis-server has
+    /// exited (e.g. failed to bind its port) or hasn't answered within
+    /// the budget. A failed-bind redis-server exits within milliseconds,
+    /// so `try_wait` short-circuits us out instead of polling a dead
+    /// port for the whole budget.
+    fn wait_for_redis_ready(port: u16, child: &mut Child) -> bool {
         let url = format!("redis://127.0.0.1:{port}/");
-        let start = std::time::Instant::now();
-        let timeout = Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + Duration::from_secs(8);
         let per_attempt = Duration::from_millis(200);
-        while start.elapsed() < timeout {
+        while std::time::Instant::now() < deadline {
+            if matches!(child.try_wait(), Ok(Some(_))) {
+                return false;
+            }
             if let Ok(client) = redis::Client::open(url.as_str())
                 && let Ok(mut conn) = client.get_connection_with_timeout(per_attempt)
                 && let Ok(reply) = redis::cmd("PING").query::<String>(&mut conn)
                 && reply == "PONG"
             {
-                return;
+                return true;
             }
             thread::sleep(Duration::from_millis(10));
         }
-        panic!("Redis server did not become ready on port {port}");
+        false
     }
 
     fn poa_block_at_time(height: u32, timestamp: u64) -> SealedBlock {
@@ -3665,6 +3817,7 @@ mod tests {
     /// a divergent block.
     #[tokio::test(flavor = "multi_thread")]
     async fn unreconciled_blocks__when_reads_fail_on_quorum_nodes__returns_error() {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 Redis nodes, leader A publishes block to all 3
         let mut redis_a = RedisTestServer::spawn();
         let mut redis_b = RedisTestServer::spawn();
@@ -3739,6 +3892,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn unreconciled_blocks__when_redis_node_restarts_and_loses_data__drops_block_below_quorum()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 Redis nodes, leader A publishes block to nodes A and B only
         // (simulating a partial publish where node C timed out)
         let redis_a = RedisTestServer::spawn();
@@ -3841,6 +3995,7 @@ mod tests {
     /// writes then go to all 3 nodes instead of just 2.
     #[tokio::test(flavor = "multi_thread")]
     async fn has_lease_owner_quorum__expands_lock_to_non_owned_nodes() {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 Redis nodes
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -3944,6 +4099,7 @@ mod tests {
     /// so write_block.lua succeeds on all nodes.
     #[tokio::test(flavor = "multi_thread")]
     async fn has_lease_owner_quorum__adopts_higher_epoch_from_expanded_node() {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 Redis nodes
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -4046,6 +4202,7 @@ mod tests {
     /// metrics appear on the /v1/metrics endpoint with expected values.
     #[tokio::test(flavor = "multi_thread")]
     async fn metrics__poa_metrics_appear_in_encoded_output_after_exercising_all_paths() {
+        let _serial = publish_gauge_lock().read().await;
         // --- setup: 3 Redis nodes ---
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
@@ -4185,6 +4342,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn unreconciled_blocks__after_quorum_read_failure_then_backlog_remains_readable()
      {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 Redis nodes, block published to all 3
         let mut redis_a = RedisTestServer::spawn();
         let mut redis_b = RedisTestServer::spawn();
@@ -4254,6 +4412,7 @@ mod tests {
     /// should still be able to re-read and retry.
     #[tokio::test(flavor = "multi_thread")]
     async fn unreconciled_blocks__after_repair_failure_then_backlog_remains_readable() {
+        let _serial = publish_gauge_lock().read().await;
         // given — 3 Redis nodes, block published to only 1 node (sub-quorum)
         let redis_a = RedisTestServer::spawn();
         let redis_b = RedisTestServer::spawn();
