@@ -138,6 +138,18 @@ pub struct RedisLeaderLeaseAdapter {
     max_retry_delay_offset_millis: u64,
     max_attempts: usize,
     stream_max_len: u32,
+    /// Leadership "generation" — bumped on every successful lease
+    /// acquisition. A freshly promoted leader's generation differs from
+    /// `reconciled_generation`, forcing one full all-nodes reconcile scan
+    /// before it produces (fork-safety: a new leader may have missed a
+    /// block across the handoff).
+    leadership_generation: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    /// The `leadership_generation` at which the last full all-nodes
+    /// reconcile completed with the leader fully caught up. While it
+    /// equals `leadership_generation` the leader is known in-sync and the
+    /// hot path uses the cheap quorum-gated check instead of the
+    /// all-nodes scan.
+    reconciled_generation: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
 /// Outcome of a single per-node `promote_leader.lua` call. Distinguishes
@@ -246,6 +258,14 @@ impl RedisLeaderLeaseAdapter {
             max_retry_delay_offset_millis,
             max_attempts,
             stream_max_len,
+            leadership_generation: std::sync::Arc::new(
+                std::sync::atomic::AtomicU64::new(0),
+            ),
+            // u64::MAX never equals a real generation, so the first
+            // `leader_state` call always runs a full scan.
+            reconciled_generation: std::sync::Arc::new(
+                std::sync::atomic::AtomicU64::new(u64::MAX),
+            ),
         })
     }
 
@@ -596,6 +616,11 @@ impl RedisLeaderLeaseAdapter {
                 poa_metrics()
                     .promotion_duration_s
                     .observe(promotion_start.elapsed().as_secs_f64());
+                // New leadership generation — forces the next
+                // `leader_state` to run a full all-nodes reconcile scan
+                // before this leader produces.
+                self.leadership_generation
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 return Ok(true);
             }
 
@@ -702,19 +727,21 @@ impl RedisLeaderLeaseAdapter {
     async fn should_reconcile_from_stream(
         &self,
         next_height: BlockHeight,
+        quorum_shortcircuit: bool,
     ) -> anyhow::Result<bool> {
         // Pure read across all nodes via FuturesUnordered.
         //
-        // - Backlog short-circuit: return Ok(true) as soon as we have
-        //   BOTH (a) at least one node reporting height >= next_height
-        //   AND (b) a quorum of successful responses. The quorum gate
-        //   matches the old `join_all + Err on degraded quorum`
-        //   contract — a single reachable node can't drag the cluster
-        //   into reconciliation when the majority is unreachable.
-        // - "No backlog" conclusion: requires all responses, otherwise
-        //   a race between empty-stream nodes and an orphan-holding
-        //   node could cause us to miss a sub-quorum orphan that needs
-        //   repair. Bounded by `node_timeout` per node.
+        // - Backlog short-circuit (always on): return Ok(true) as soon as
+        //   a node reports height >= next_height AND a quorum has
+        //   responded. A quorum-replicated (committed) block cannot be
+        //   missed once a quorum responds — any two quorums overlap.
+        // - No-backlog short-circuit (`quorum_shortcircuit` only): return
+        //   Ok(false) as soon as a quorum reports nothing >= next_height.
+        //   Pigeonhole again rules out a committed block; a slower node
+        //   may still hold a *sub-quorum orphan*, so this is used only on
+        //   the hot path of a leader already known in-sync — the
+        //   mandatory promotion-time full scan (quorum_shortcircuit =
+        //   false) is what catches orphans, by waiting for every node.
         let next_height = u32::from(next_height);
         let n = self.redis_nodes.len();
         let quorum_start = std::time::Instant::now();
@@ -727,6 +754,7 @@ impl RedisLeaderLeaseAdapter {
         }
 
         let mut successful_reads = 0usize;
+        let mut no_backlog_reads = 0usize;
         let mut failed_count = 0usize;
         let mut backlog_seen = false;
         while let Some(result) = reads.next().await {
@@ -734,10 +762,13 @@ impl RedisLeaderLeaseAdapter {
                 Ok(Some((latest_height, _))) => {
                     if latest_height >= next_height {
                         backlog_seen = true;
+                    } else {
+                        no_backlog_reads = no_backlog_reads.saturating_add(1);
                     }
                     successful_reads = successful_reads.saturating_add(1);
                 }
                 Ok(None) => {
+                    no_backlog_reads = no_backlog_reads.saturating_add(1);
                     successful_reads = successful_reads.saturating_add(1);
                 }
                 Err(e) => {
@@ -752,6 +783,14 @@ impl RedisLeaderLeaseAdapter {
                 );
                 drop(reads);
                 return Ok(true);
+            }
+            if quorum_shortcircuit && self.quorum_reached(no_backlog_reads) {
+                poa_metrics().observe_quorum_latency(
+                    QuorumOp::ReconcileRead,
+                    quorum_start.elapsed().as_secs_f64(),
+                );
+                drop(reads);
+                return Ok(false);
             }
         }
         if self.quorum_reached(successful_reads) {
@@ -825,7 +864,10 @@ impl RedisLeaderLeaseAdapter {
         &self,
         next_height: BlockHeight,
     ) -> anyhow::Result<Vec<SealedBlock>> {
-        if !self.should_reconcile_from_stream(next_height).await? {
+        if !self
+            .should_reconcile_from_stream(next_height, false)
+            .await?
+        {
             return Ok(Vec::new());
         }
         let mut reconciled = Vec::new();
@@ -1492,12 +1534,43 @@ impl BlockReconciliationPort for RedisLeaderLeaseAdapter {
                     .leader_epoch
                     .set(i64::try_from(epoch).unwrap_or(i64::MAX));
             }
+            use std::sync::atomic::Ordering::Relaxed;
+            // The full all-nodes reconcile scan runs only on the first
+            // cycle of a new leadership generation: a freshly promoted
+            // leader may have missed a block across the handoff, so it
+            // must scan before producing (fork-safety). A leader that has
+            // held the lock continuously since then cannot be behind its
+            // own stream, so steady-state cycles use the cheap
+            // quorum-gated check. A Redis node that dropped offline is
+            // re-incorporated by lock expansion + the write fan-out — not
+            // by this scan.
+            let generation = self.leadership_generation.load(Relaxed);
+            let full_scan = self.reconciled_generation.load(Relaxed) != generation;
+
             let reconcile_start = std::time::Instant::now();
-            let unreconciled_blocks = self.unreconciled_blocks(next_height).await?;
+            let unreconciled_blocks = if full_scan {
+                self.unreconciled_blocks(next_height).await?
+            } else if self.should_reconcile_from_stream(next_height, true).await? {
+                // The cheap check found a committed backlog — anomalous
+                // for a continuous leader. Handle it with the full read +
+                // repair, and force a full scan on the next cycle.
+                self.reconciled_generation.store(u64::MAX, Relaxed);
+                self.unreconciled_blocks(next_height).await?
+            } else {
+                Vec::new()
+            };
             poa_metrics()
                 .reconciliation_duration_s
                 .observe(reconcile_start.elapsed().as_secs_f64());
-            if unreconciled_blocks.is_empty() {
+
+            let caught_up = unreconciled_blocks.is_empty();
+            if full_scan && caught_up {
+                // Fully reconciled for this generation — subsequent
+                // cycles take the cheap path.
+                self.reconciled_generation.store(generation, Relaxed);
+            }
+
+            if caught_up {
                 Ok(LeaderState::ReconciledLeader)
             } else {
                 Ok(LeaderState::UnreconciledBlocks(unreconciled_blocks))
