@@ -129,6 +129,7 @@ pub struct RedisLeaderLeaseAdapter {
     lease_key: String,
     epoch_key: String,
     block_stream_key: String,
+    heights_index_key: String,
     lease_owner_token: String,
     current_epoch_token: std::sync::Arc<std::sync::Mutex<Option<u64>>>,
     lease_ttl_millis: u64,
@@ -176,6 +177,7 @@ struct PerNodeAdapter {
     lease_key: String,
     epoch_key: String,
     block_stream_key: String,
+    heights_index_key: String,
     lease_owner_token: String,
     lease_ttl_millis: u64,
     node_timeout: Duration,
@@ -238,6 +240,7 @@ impl RedisLeaderLeaseAdapter {
         let lease_owner_token = uuid::Uuid::new_v4().to_string();
         let epoch_key = format!("{lease_key}:epoch:token");
         let block_stream_key = format!("{lease_key}:block:stream");
+        let heights_index_key = format!("{lease_key}:heights:index");
         let lease_drift_millis = lease_ttl_millis
             .checked_div(100)
             .unwrap_or(0)
@@ -249,6 +252,7 @@ impl RedisLeaderLeaseAdapter {
             lease_key,
             epoch_key,
             block_stream_key,
+            heights_index_key,
             lease_owner_token,
             current_epoch_token: std::sync::Arc::new(std::sync::Mutex::new(None)),
             lease_ttl_millis,
@@ -288,6 +292,7 @@ impl RedisLeaderLeaseAdapter {
                 lease_key: self.lease_key.clone(),
                 epoch_key: self.epoch_key.clone(),
                 block_stream_key: self.block_stream_key.clone(),
+                heights_index_key: self.heights_index_key.clone(),
                 lease_owner_token: self.lease_owner_token.clone(),
                 lease_ttl_millis: self.lease_ttl_millis,
                 node_timeout: self.node_timeout,
@@ -637,7 +642,7 @@ impl RedisLeaderLeaseAdapter {
                 // so a slow Redis node cannot stretch a routine follower
                 // lock-check across multiple node_timeouts. The next
                 // `leader_state` cycle re-checks cheaply.
-                poa_metrics().promotion_failure_total.inc();
+                poa_metrics().promotion_lock_held_total.inc();
                 poa_metrics()
                     .promotion_duration_s
                     .observe(promotion_start.elapsed().as_secs_f64());
@@ -1294,6 +1299,7 @@ impl PerNodeAdapter {
                 .key(&self.block_stream_key)
                 .key(&self.epoch_key)
                 .key(&self.lease_key)
+                .key(&self.heights_index_key)
                 .arg(epoch)
                 .arg(&self.lease_owner_token)
                 .arg(block_height)
@@ -3131,6 +3137,189 @@ mod tests {
         );
     }
 
+    /// A successful `write_block.lua` invocation must populate the
+    /// heights-index ZSET (`{lease_key}:heights:index`) with the
+    /// posted height. Subsequent duplicate-height detection is sourced
+    /// from this index, so failing to populate it would silently break
+    /// the fork-prevention check.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn write_block__populates_heights_index_on_success() {
+        let _serial = publish_gauge_lock().read().await;
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:heights-index-populate".to_string();
+        let heights_index_key = format!("{lease_key}:heights:index");
+        let adapter = new_test_adapter(vec![redis.redis_url()], lease_key);
+
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter should acquire lease"
+        );
+
+        let block = poa_block_at_time(1, 100);
+        adapter
+            .publish_produced_block(&block)
+            .await
+            .expect("publish should succeed");
+
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        let score: Option<f64> = redis::cmd("ZSCORE")
+            .arg(&heights_index_key)
+            .arg(1u32)
+            .query(&mut conn)
+            .expect("ZSCORE should succeed");
+        assert_eq!(score, Some(1.0), "height 1 should be indexed");
+    }
+
+    /// `write_block.lua`'s HEIGHT_EXISTS check must be sourced from the
+    /// heights-index ZSET, not from the stream. Pre-seeding the index
+    /// without inserting into the stream should still cause a publish
+    /// at that height to be rejected — proves the new check is wired
+    /// to the right key.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn write_block__height_exists_rejected_via_index_only() {
+        let _serial = publish_gauge_lock().read().await;
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:heights-index-rejects".to_string();
+        let stream_key = format!("{lease_key}:block:stream");
+        let heights_index_key = format!("{lease_key}:heights:index");
+        let adapter = new_test_adapter(vec![redis.redis_url()], lease_key);
+
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter should acquire lease"
+        );
+
+        // Seed only the index — leave the stream empty.
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        let _: i32 = redis::cmd("ZADD")
+            .arg(&heights_index_key)
+            .arg(1u32)
+            .arg(1u32)
+            .query(&mut conn)
+            .expect("ZADD should succeed");
+        assert_eq!(
+            stream_len(&redis.redis_url(), &stream_key),
+            0,
+            "stream should still be empty"
+        );
+
+        let block = poa_block_at_time(1, 100);
+        let result = adapter.publish_produced_block(&block).await;
+        assert!(
+            result.is_err(),
+            "publish at indexed height should be rejected even when stream is empty"
+        );
+        assert_eq!(
+            stream_len(&redis.redis_url(), &stream_key),
+            0,
+            "stream should remain empty after rejected publish"
+        );
+    }
+
+    /// The script's `ZREMRANGEBYRANK` keeps the heights index bounded
+    /// at `2 * stream_max_len + 256`. Drive far more writes than that
+    /// bound and assert the ZCARD stays within the budget — protects
+    /// against an unbounded-growth regression in the trim formula.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn write_block__heights_index_trim_bounded() {
+        let _serial = publish_gauge_lock().read().await;
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:heights-index-trim".to_string();
+        let heights_index_key = format!("{lease_key}:heights:index");
+        let stream_max_len: u32 = 5;
+        let writes: u32 = 3 * stream_max_len + 256 + 50;
+        let adapter = RedisLeaderLeaseAdapter::new(
+            vec![redis.redis_url()],
+            lease_key,
+            Duration::from_secs(2),
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            stream_max_len,
+        )
+        .expect("adapter should be created");
+        assert!(
+            adapter
+                .acquire_lease_if_free()
+                .await
+                .expect("acquire should succeed"),
+            "adapter should acquire lease"
+        );
+
+        for height in 1..=writes {
+            let block = poa_block_at_time(height, u64::from(height));
+            adapter
+                .publish_produced_block(&block)
+                .await
+                .expect("publish should succeed");
+        }
+
+        let redis_client =
+            redis::Client::open(redis.redis_url()).expect("redis client should open");
+        let mut conn = redis_client
+            .get_connection()
+            .expect("redis connection should open");
+        let zcard: u64 = redis::cmd("ZCARD")
+            .arg(&heights_index_key)
+            .query(&mut conn)
+            .expect("ZCARD should succeed");
+        let bound = u64::from(2 * stream_max_len + 256);
+        assert!(
+            zcard <= bound,
+            "heights index ZCARD {zcard} exceeded bound {bound}"
+        );
+    }
+
+    /// When a peer already owns the lease, `acquire_lease_if_free`
+    /// short-circuits on the quorum LOCK_HELD signal. That path is the
+    /// follower-defer happy path and must increment
+    /// `promotion_lock_held_total` — folding it into
+    /// `promotion_failure_total` made the failure metric fire on every
+    /// follower cycle. (We assert the lock-held counter advances; the
+    /// failure counter is process-global and shared with other parallel
+    /// tests, so a strict equality assertion there would be flaky.)
+    #[tokio::test(flavor = "multi_thread")]
+    async fn acquire_lease_if_free__when_peer_holds_lock_then_increments_lock_held_counter()
+     {
+        let _serial = publish_gauge_lock().read().await;
+        let redis = RedisTestServer::spawn();
+        let lease_key = "poa:test:promotion-counter-split".to_string();
+
+        // Peer holds the lease for the full duration of this test.
+        set_lease_owner(&redis.redis_url(), &lease_key, "peer-owner", 60_000);
+
+        let lock_held_before = poa_metrics().promotion_lock_held_total.get();
+
+        let adapter = new_test_adapter(vec![redis.redis_url()], lease_key);
+        let acquired = adapter
+            .acquire_lease_if_free()
+            .await
+            .expect("acquire should resolve");
+        assert!(!acquired, "should defer to current owner");
+
+        let lock_held_after = poa_metrics().promotion_lock_held_total.get();
+        assert!(
+            lock_held_after > lock_held_before,
+            "promotion_lock_held_total should advance on follower-defer \
+             (before={lock_held_before}, after={lock_held_after})"
+        );
+    }
+
     // ---------------------------------------------------------------------
     // Regression tests for the 2026-04-22 mainnet hang.
     //
@@ -3763,6 +3952,16 @@ mod tests {
             .arg(epoch)
             .query(conn)
             .expect("stream write should succeed");
+        // Mirror the script's heights-index update so tests that
+        // pre-seed the stream don't have to know about the index key.
+        let heights_index_key =
+            stream_key.trim_end_matches(":block:stream").to_string() + ":heights:index";
+        let _: i32 = redis::cmd("ZADD")
+            .arg(&heights_index_key)
+            .arg(height)
+            .arg(height)
+            .query(conn)
+            .expect("heights index write should succeed");
     }
 
     fn new_test_adapter(

@@ -86,7 +86,17 @@ pub struct PoAMetrics {
 
     /// Successful lock promotions (lease acquired).
     pub promotion_success_total: Counter,
-    /// Failed lock promotions after all retry attempts.
+    /// Lock promotions where a quorum of nodes reported the lock held
+    /// by another authority — the normal follower-defer path, not a
+    /// failure. Tracked separately from `promotion_failure_total` so
+    /// dashboards can see follower-cycle cadence without that signal
+    /// drowning out true failures.
+    pub promotion_lock_held_total: Counter,
+    /// Lock promotions that exhausted all retry attempts without
+    /// either acquiring the lease or determining via quorum that the
+    /// lock is held — i.e. the cluster could not reach a verdict.
+    /// Does not include follower defers (see
+    /// `promotion_lock_held_total`).
     pub promotion_failure_total: Counter,
 
     /// Redis connection cache clears (connection errors/timeouts).
@@ -124,6 +134,7 @@ impl Default for PoAMetrics {
         let repair_failure_total = Counter::default();
 
         let promotion_success_total = Counter::default();
+        let promotion_lock_held_total = Counter::default();
         let promotion_failure_total = Counter::default();
 
         let connection_reset_total = Counter::default();
@@ -202,8 +213,16 @@ impl Default for PoAMetrics {
             promotion_success_total.clone(),
         );
         registry.register(
+            "poa_promotion_lock_held",
+            "Lock promotions where a quorum reported the lock held by \
+             another authority (follower-defer; not a failure)",
+            promotion_lock_held_total.clone(),
+        );
+        registry.register(
             "poa_promotion_failure",
-            "Failed lock promotions after all retry attempts",
+            "Lock promotions that exhausted retries without acquiring \
+             or determining the lock state (does not include follower \
+             defers)",
             promotion_failure_total.clone(),
         );
 
@@ -248,6 +267,7 @@ impl Default for PoAMetrics {
             repair_success_total,
             repair_failure_total,
             promotion_success_total,
+            promotion_lock_held_total,
             promotion_failure_total,
             connection_reset_total,
             promotion_duration_s,

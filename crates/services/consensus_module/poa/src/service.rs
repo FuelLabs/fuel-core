@@ -576,9 +576,11 @@ where
         }
     }
 
-    /// Returns the error retry delay based on the trigger's block time.
-    /// Uses the block production interval instead of a hardcoded 1s
-    /// so that followers can retry lease acquisition sooner.
+    /// Cadence used both for the post-error backoff and for the
+    /// follower-state sleep. Returns the trigger's block time (or
+    /// period for `Open`), falling back to 1s. Reusing one cadence
+    /// for both keeps followers re-checking leadership at the same
+    /// rhythm the leader would be producing blocks at.
     fn error_retry_delay(&self) -> Duration {
         match self.trigger {
             Trigger::Interval { block_time } => block_time,
@@ -630,7 +632,15 @@ where
             .await?
         {
             LeaderState::ReconciledFollower => {
-                sleep_until(deadline).await;
+                // `deadline` is `last_block_created + period`, but
+                // `last_block_created` only advances when *this*
+                // authority produces a block — for a persistent
+                // follower it is always in the past, making
+                // `sleep_until(deadline)` a no-op and spinning the
+                // loop on every iteration. Sleep an explicit period
+                // instead so `leader_state` fan-out happens once per
+                // cycle.
+                tokio::time::sleep(self.error_retry_delay()).await;
                 Ok(TaskNextAction::Continue)
             }
             LeaderState::ReconciledLeader => {

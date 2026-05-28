@@ -2,6 +2,7 @@
 -- KEYS[1]: block stream key (e.g., poa:leader:lock:block:stream)
 -- KEYS[2]: epoch token key (e.g., poa:leader:lock:epoch:token)
 -- KEYS[3]: leader lock key (e.g., poa:leader:lock)
+-- KEYS[4]: heights index key (e.g., poa:leader:lock:heights:index)
 -- ARGV[1]: my_epoch (max token observed during promotion quorum)
 -- ARGV[2]: lease owner token (UUID)
 -- ARGV[3]: block_height
@@ -26,41 +27,31 @@ if tonumber(ARGV[1]) > current_token then
     redis.call("SET", KEYS[2], ARGV[1])
 end
 
--- 4) Strict height-uniqueness check: reject if ANY entry at this height
---    already exists in the stream, regardless of epoch.
+-- 4) Strict height-uniqueness check via the heights-index ZSET:
+--    reject if a block at this height was ever written through this
+--    script. ZSCORE is O(log N) and does not materialize stream
+--    payloads into Lua memory, unlike the prior XREVRANGE scan.
 --
---    This prevents forks via the pigeonhole principle: any two quorums of
---    size ceil(N/2)+1 overlap on at least one node. If Leader A published
---    a block at height H to quorum, the overlapping node already has an
---    entry at height H. Leader B's write is rejected on that node,
---    preventing it from reaching quorum with a different block.
+--    This prevents forks via the pigeonhole principle: any two quorums
+--    of size ceil(N/2)+1 overlap on at least one node. If Leader A
+--    published a block at height H to quorum, the overlapping node has
+--    height H indexed. Leader B's ZSCORE on that node returns non-nil,
+--    so its write is rejected there, preventing it from reaching
+--    quorum with a different block.
+--
+--    The index is trimmed below to retain strictly more heights than
+--    the stream's `XTRIM ~` keeps, so a height that is still in the
+--    stream is always still in the index — no false negatives.
 --
 --    Sub-quorum orphans (partial writes from failed leaders) may cause
---    the new leader to fail on the orphan's node, but it can still reach
---    quorum on the remaining nodes. If the orphan blocks quorum entirely,
---    the leader must reconcile via the read path instead.
+--    the new leader to fail on the orphan's node, but it can still
+--    reach quorum on the remaining nodes. If the orphan blocks quorum
+--    entirely, the leader must reconcile via the read path instead.
 local posted_height = tonumber(ARGV[3])
-local existing = redis.call("XREVRANGE", KEYS[1], "+", "-")
-local stop_scan = false
-for _, entry in ipairs(existing) do
-    local fields = entry[2]
-    for i = 1, #fields, 2 do
-        if fields[i] == "height" then
-            local entry_height = tonumber(fields[i + 1])
-            if entry_height == posted_height then
-                return redis.error_reply(
-                    "HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream"
-                )
-            end
-            if entry_height ~= nil and entry_height < posted_height then
-                stop_scan = true
-                break
-            end
-        end
-    end
-    if stop_scan then
-        break
-    end
+if redis.call("ZSCORE", KEYS[4], posted_height) then
+    return redis.error_reply(
+        "HEIGHT_EXISTS: Block at height " .. ARGV[3] .. " already in stream"
+    )
 end
 
 -- 5) Persist block entry.
@@ -71,7 +62,19 @@ local stream_id = redis.call("XADD", KEYS[1], "*",
     "timestamp", redis.call("TIME")[1]
 )
 
+-- 6) Record the height in the dedup index (member == score == height).
+redis.call("ZADD", KEYS[4], posted_height, posted_height)
+
 redis.call("XTRIM", KEYS[1], "MAXLEN", "~", ARGV[6])
+
+-- 7) Trim the index to a window strictly larger than the stream's
+--    `XTRIM ~` retention so the index always covers what the stream
+--    still holds. `XTRIM MAXLEN ~ N` keeps up to N + macronode_size
+--    (~64 in current Redis); 2N + 256 is comfortably above that for
+--    both production and small-N test paths.
+local stream_max_len = tonumber(ARGV[6])
+redis.call("ZREMRANGEBYRANK", KEYS[4], 0, -(2 * stream_max_len + 256) - 1)
+
 redis.call("PEXPIRE", KEYS[3], ARGV[5])
 
 return stream_id

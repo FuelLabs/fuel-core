@@ -73,6 +73,7 @@ use std::{
         Mutex,
         atomic::{
             AtomicBool,
+            AtomicUsize,
             Ordering,
         },
     },
@@ -270,6 +271,7 @@ pub struct TxPoolContext {
 pub(crate) struct FakeReconciliationPort {
     state: Arc<StdMutex<anyhow::Result<LeaderState>>>,
     release_called: Arc<AtomicBool>,
+    leader_state_calls: Arc<AtomicUsize>,
 }
 
 impl Default for FakeReconciliationPort {
@@ -283,6 +285,7 @@ impl FakeReconciliationPort {
         Self {
             state: Arc::new(StdMutex::new(Ok(LeaderState::ReconciledLeader))),
             release_called: Arc::new(AtomicBool::new(false)),
+            leader_state_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -290,6 +293,7 @@ impl FakeReconciliationPort {
         Self {
             state: Arc::new(StdMutex::new(Ok(LeaderState::ReconciledFollower))),
             release_called: Arc::new(AtomicBool::new(false)),
+            leader_state_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -297,11 +301,16 @@ impl FakeReconciliationPort {
         Self {
             state: Arc::new(StdMutex::new(state)),
             release_called: Arc::new(AtomicBool::new(false)),
+            leader_state_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 
     pub fn release_called_handle(&self) -> Arc<AtomicBool> {
         self.release_called.clone()
+    }
+
+    pub fn leader_state_calls_handle(&self) -> Arc<AtomicUsize> {
+        self.leader_state_calls.clone()
     }
 }
 
@@ -311,6 +320,7 @@ impl BlockReconciliationPort for FakeReconciliationPort {
         &self,
         _next_height: BlockHeight,
     ) -> anyhow::Result<LeaderState> {
+        self.leader_state_calls.fetch_add(1, Ordering::SeqCst);
         let guard = self
             .state
             .lock()
@@ -436,6 +446,73 @@ async fn main_task__when_reconciliation_returns_follower_then_does_not_produce_b
         "Expected block receive to time out"
     );
     let _ = stop_result.unwrap();
+}
+
+#[tokio::test]
+async fn main_task__when_follower_then_does_not_spin_on_leader_state_check() {
+    // given — follower with a 100ms block period. With the spin fix
+    // the loop should call `leader_state` once per period (~10 times
+    // in 1s of paused time); without it the loop re-fires on every
+    // poll and the count runs into the hundreds before the runtime's
+    // cooperative budget forces a yield.
+    let config = Config {
+        trigger: Trigger::Interval {
+            block_time: Duration::from_millis(100),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::default();
+    let watch = time.watch();
+    let reconciliation_port = FakeReconciliationPort::reconciled_follower();
+    let leader_state_calls = reconciliation_port.leader_state_calls_handle();
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        MockBlockProducer::default(),
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        reconciliation_port,
+    );
+
+    // when — start the service, then advance paused time in 100ms
+    // chunks for ~1s, yielding between each chunk so the service task
+    // wakes and processes the elapsed period.
+    service.start_and_await().await.unwrap();
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    for _ in 0..10 {
+        time::advance(Duration::from_millis(100)).await;
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+    }
+    let _ = service.stop_and_await().await.unwrap();
+
+    // then
+    let count = leader_state_calls.load(Ordering::SeqCst);
+    assert!(
+        count <= 30,
+        "follower should not spin on leader_state — got {count} calls in 1s with period=100ms"
+    );
 }
 
 #[tokio::test]
