@@ -516,6 +516,71 @@ async fn main_task__when_follower_then_does_not_spin_on_leader_state_check() {
 }
 
 #[tokio::test]
+async fn main_task__when_follower_with_open_trigger_then_does_not_spin_on_leader_state_check()
+ {
+    // Same assertion as the Interval variant above, but using
+    // `Trigger::Open`. Trigger::Open's `next_block_production` future
+    // resolves the deadline *immediately* (no internal sleep_until),
+    // so the spin pathology pre-fix was even tighter than Interval's.
+    // This is the trigger devnet/mainnet actually run, so we test it
+    // explicitly.
+    let config = Config {
+        trigger: Trigger::Open {
+            period: Duration::from_millis(100),
+        },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    };
+    let mut block_importer = MockBlockImporter::default();
+    block_importer.expect_commit_result().returning(|_| Ok(()));
+    block_importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    block_importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    let txpool = MockTransactionPool::no_tx_updates();
+    let p2p_port = generate_p2p_port();
+    let predefined_blocks = InMemoryPredefinedBlocks::new(HashMap::new());
+    let time = TestTime::default();
+    let watch = time.watch();
+    let reconciliation_port = FakeReconciliationPort::reconciled_follower();
+    let leader_state_calls = reconciliation_port.leader_state_calls_handle();
+    let service = new_service(
+        &BlockHeader::new_block(BlockHeight::from(1u32), watch.now()),
+        config,
+        txpool,
+        MockBlockProducer::default(),
+        block_importer,
+        p2p_port,
+        FakeBlockSigner { succeeds: true }.into(),
+        predefined_blocks,
+        watch,
+        FakeBlockProductionReadySignal,
+        reconciliation_port,
+    );
+
+    service.start_and_await().await.unwrap();
+    for _ in 0..10 {
+        tokio::task::yield_now().await;
+    }
+    for _ in 0..10 {
+        time::advance(Duration::from_millis(100)).await;
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+        }
+    }
+    let _ = service.stop_and_await().await.unwrap();
+
+    let count = leader_state_calls.load(Ordering::SeqCst);
+    assert!(
+        count <= 30,
+        "Open-trigger follower should not spin on leader_state — got {count} calls in 1s with period=100ms"
+    );
+}
+
+#[tokio::test]
 async fn run__when_leader_state_fails_then_does_not_produce_or_commit_result() {
     // given
     let config = Config {
