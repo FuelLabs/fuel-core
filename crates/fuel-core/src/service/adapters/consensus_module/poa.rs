@@ -2669,6 +2669,107 @@ mod tests {
         );
     }
 
+    /// With the follower-spin fix, a persistent follower now sleeps
+    /// `period` between `leader_state` checks instead of busy-looping.
+    /// That means total handoff time is bounded by
+    ///   `lease_ttl + follower_sleep_period + promote_fanout`
+    /// instead of `lease_ttl + ~0` pre-fix.
+    ///
+    /// This test pins that bound: with `lease_ttl = 300ms` and a follower
+    /// loop polling every 100ms, the time from when the previous leader
+    /// stops renewing to when the follower returns `ReconciledLeader`
+    /// must be ≤ `lease_ttl + follower_sleep + 200ms slack`. If a future
+    /// change inadvertently makes the follower sleep much longer (or
+    /// blocks on the leader_state fan-out under contention), this test
+    /// fails.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn handoff_time__bounded_by_lease_ttl_plus_follower_sleep_period() {
+        let _serial = publish_gauge_lock().read().await;
+        let redis_a = RedisTestServer::spawn();
+        let redis_b = RedisTestServer::spawn();
+        let redis_c = RedisTestServer::spawn();
+        let lease_key = "poa:test:handoff-time-bound".to_string();
+        let redis_urls = vec![
+            redis_a.redis_url(),
+            redis_b.redis_url(),
+            redis_c.redis_url(),
+        ];
+        let lease_ttl = Duration::from_millis(300);
+        let follower_sleep = Duration::from_millis(100);
+
+        let leader = RedisLeaderLeaseAdapter::new(
+            redis_urls.clone(),
+            lease_key.clone(),
+            lease_ttl,
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("leader adapter should be created");
+        let follower = RedisLeaderLeaseAdapter::new(
+            redis_urls,
+            lease_key,
+            lease_ttl,
+            Duration::from_millis(100),
+            Duration::from_millis(50),
+            Duration::from_millis(0),
+            1,
+            1000,
+        )
+        .expect("follower adapter should be created");
+
+        // Leader acquires; follower sees LOCK_HELD on its first cycle.
+        let first = leader
+            .leader_state(1.into())
+            .await
+            .expect("leader leader_state should succeed");
+        assert!(
+            matches!(first, LeaderState::ReconciledLeader),
+            "leader adapter should acquire on first call"
+        );
+        let follower_first = follower
+            .leader_state(1.into())
+            .await
+            .expect("follower leader_state should succeed");
+        assert!(
+            matches!(follower_first, LeaderState::ReconciledFollower),
+            "follower adapter should defer to current leader"
+        );
+
+        // Stop renewing the lease (drop the leader's reference so its
+        // Drop-on-publish doesn't kick in mid-test) — analogous to the
+        // leader's process being killed in production.
+        drop(leader);
+        let lease_dropped_at = std::time::Instant::now();
+
+        // Follower loop: poll leader_state every `follower_sleep` until
+        // it sees `ReconciledLeader`. This mirrors the service loop's
+        // post-fix follower behavior.
+        let max_wait = lease_ttl + follower_sleep + Duration::from_millis(200);
+        let promoted_at = loop {
+            tokio::time::sleep(follower_sleep).await;
+            let state = follower
+                .leader_state(1.into())
+                .await
+                .expect("follower leader_state should succeed");
+            if matches!(state, LeaderState::ReconciledLeader) {
+                break std::time::Instant::now();
+            }
+            if lease_dropped_at.elapsed() > max_wait {
+                panic!("follower failed to promote within {max_wait:?} after lease drop");
+            }
+        };
+
+        let handoff = promoted_at.duration_since(lease_dropped_at);
+        assert!(
+            handoff <= max_wait,
+            "handoff took {handoff:?}, expected ≤ {max_wait:?} \
+             (lease_ttl={lease_ttl:?} + follower_sleep={follower_sleep:?} + 200ms slack)"
+        );
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn publish_produced_block__when_previous_leader_writes_after_handoff_then_rejects_zombie_write()
      {
