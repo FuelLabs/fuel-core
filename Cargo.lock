@@ -4512,6 +4512,7 @@ dependencies = [
  "fuel-core-types 0.48.2",
  "futures",
  "hex",
+ "hyper 0.14.32",
  "hyper-rustls 0.24.2",
  "insta",
  "itertools 0.14.0",

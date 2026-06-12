@@ -37,6 +37,9 @@ use std::{
     },
 };
 
+#[cfg(feature = "subscriptions")]
+type SseConnector = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
+
 #[derive(Debug)]
 pub struct FailoverTransport {
     client: reqwest::Client,
@@ -44,6 +47,13 @@ pub struct FailoverTransport {
     default_url_index: AtomicUsize,
     #[cfg(feature = "subscriptions")]
     cookie: Arc<reqwest::cookie::Jar>,
+    /// Lazily initialized hyper client shared by all subscriptions (and all
+    /// clones of this transport). `hyper::Client` keeps an internal
+    /// keep-alive connection pool, so consecutive subscriptions reuse
+    /// established TCP+TLS connections instead of paying a fresh handshake
+    /// per call.
+    #[cfg(feature = "subscriptions")]
+    sse_client: Arc<std::sync::OnceLock<hyper::Client<SseConnector>>>,
 }
 
 impl Clone for FailoverTransport {
@@ -56,6 +66,8 @@ impl Clone for FailoverTransport {
             ),
             #[cfg(feature = "subscriptions")]
             cookie: self.cookie.clone(),
+            #[cfg(feature = "subscriptions")]
+            sse_client: self.sse_client.clone(),
         }
     }
 }
@@ -73,6 +85,7 @@ impl FailoverTransport {
                 client,
                 default_url_index: AtomicUsize::new(0),
                 cookie,
+                sse_client: Default::default(),
             })
         }
 
@@ -254,13 +267,23 @@ impl FailoverTransport {
                 })?;
         }
 
-        let client = client_builder.build_with_conn(
-            hyper_rustls::HttpsConnectorBuilder::new()
-                .with_webpki_roots()
-                .https_or_http()
-                .enable_http1()
-                .build(),
-        );
+        // Reuse one pooled hyper client for every subscription: building a
+        // client (and connection) per call costs a TCP+TLS handshake each
+        // time, which dominates submission latency for
+        // `submit_and_await_status` consumers.
+        let http_client = self
+            .sse_client
+            .get_or_init(|| {
+                hyper::Client::builder().build(
+                    hyper_rustls::HttpsConnectorBuilder::new()
+                        .with_webpki_roots()
+                        .https_or_http()
+                        .enable_http1()
+                        .build(),
+                )
+            })
+            .clone();
+        let client = client_builder.build_with_http_client(http_client);
 
         enum Event<ResponseData> {
             Connected,
