@@ -20,10 +20,8 @@ use latest_fuel_core_type::{
         },
     },
 };
-use libp2p::{
-    futures::StreamExt,
-    identity::secp256k1::Keypair as SecpKeypair,
-};
+use futures::StreamExt;
+use libp2p_identity::secp256k1::Keypair as SecpKeypair;
 use std::time::Duration;
 use version_44_fuel_core_client::client::FuelClient as Version44Client;
 

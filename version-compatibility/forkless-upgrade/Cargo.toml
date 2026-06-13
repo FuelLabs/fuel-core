@@ -9,7 +9,8 @@ build = "build.rs"
 [dev-dependencies]
 anyhow = "1.0"
 clap = "4.4"
-libp2p = "0.54.1"
+futures = "0.3"
+libp2p-identity = { version = "0.2", features = ["secp256k1"] }
 hex = "0.4.3"
 rand = "0.8"
 tempfile = "3.4"

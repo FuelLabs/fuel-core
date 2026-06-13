@@ -228,17 +228,14 @@ impl FuelBehaviour {
             propagation_source,
             acceptance,
         ) {
-            Ok(true) => {
+            true => {
                 tracing::debug!(target: "fuel-p2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, propagation_source);
                 if should_check_score {
                     return self.gossipsub.peer_score(propagation_source);
                 }
             }
-            Ok(false) => {
+            false => {
                 tracing::warn!(target: "fuel-p2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
-            }
-            Err(e) => {
-                tracing::error!(target: "fuel-p2p", "Failed to report Message with MessageId: {} with Error: {:?}", msg_id, e);
             }
         }
 
@@ -255,6 +252,6 @@ impl FuelBehaviour {
     }
 
     pub fn block_peer(&mut self, peer_id: PeerId) {
-        self.blocked_peer.block_peer(peer_id)
+        self.blocked_peer.block_peer(peer_id);
     }
 }

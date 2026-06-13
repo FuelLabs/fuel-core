@@ -316,7 +316,7 @@ impl TaskP2PService for FuelP2PService {
         match result {
             Ok(_) => Ok(()),
             Err(e) => {
-                if matches!(&e, PublishError::InsufficientPeers) {
+                if matches!(&e, PublishError::NoPeersSubscribedToTopic) {
                     Ok(())
                 } else {
                     Err(anyhow!(e))

@@ -1,3 +1,10 @@
 [workspace]
 resolver = "2"
 members = ["forkless-upgrade"]
+
+# libp2p 0.54.1 (used by version-44-fuel-core-bin) pins libp2p-swarm-derive =0.35.0,
+# while libp2p 0.56.0 (used by the latest fuel-core) pins =0.35.1. Since both are in
+# the same semver bucket, Cargo can't select two versions. Patch libp2p-swarm 0.45.1
+# to use =0.35.1 instead — the diff between the two proc-macro versions is cosmetic.
+[patch.crates-io]
+libp2p-swarm = { path = "vendor/libp2p-swarm-0.45.1" }
