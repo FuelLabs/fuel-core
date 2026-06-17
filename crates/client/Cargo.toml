@@ -30,6 +30,8 @@ subscriptions = [
     "futures",
     "hyper",
     "hyper-rustls",
+    "dep:hickory-resolver",
+    "dep:tower-service",
     "dep:postcard",
     "fuel-core-types/serde",
 ]
@@ -48,13 +50,17 @@ fuel-core-block-aggregator-api = { workspace = true, optional = true }
 fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 futures = { workspace = true, optional = true }
 hex = { workspace = true }
+# Caching DNS resolver, shared by the reqwest client (via the `hickory-dns`
+# feature below) and wired into the subscription SSE connector so both paths
+# cache lookups and avoid the glibc parallel-A/AAAA resolver stalls.
+hickory-resolver = { version = "0.24", optional = true }
 # Included to enable webpki in the eventsource client
 hyper = { version = "0.14", features = ["client", "http1", "tcp"], optional = true }
 hyper-rustls = { version = "0.24", features = ["webpki-tokio"], optional = true }
 itertools = { workspace = true }
 postcard = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["hickory-dns"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 # We force the version because 4.1.0 update leap seconds that breaks our timestamps
@@ -62,6 +68,8 @@ tai64 = { version = "=4.0.0", features = ["serde"] }
 thiserror = "1.0"
 tokio = { workspace = true, optional = true }
 tonic = { workspace = true, optional = true }
+# `Service<Name>` impl for the custom SSE DNS resolver (matches hyper 0.14's bound)
+tower-service = { version = "0.3", optional = true }
 tracing = "0.1"
 
 [build-dependencies]

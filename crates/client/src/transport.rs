@@ -38,7 +38,71 @@ use std::{
 };
 
 #[cfg(feature = "subscriptions")]
-type SseConnector = hyper_rustls::HttpsConnector<hyper::client::HttpConnector>;
+type SseConnector =
+    hyper_rustls::HttpsConnector<hyper::client::HttpConnector<HickoryResolver>>;
+
+/// A caching DNS resolver for the subscription SSE connector.
+///
+/// hyper's default `GaiResolver` calls glibc `getaddrinfo`, which (a) does not
+/// cache, so every new connection re-resolves, and (b) fires the A and AAAA
+/// queries from the same UDP source port, which under the Kubernetes conntrack
+/// race intermittently drops one and blocks for the full 5s resolver timeout.
+/// hickory caches per record TTL and manages its own queries, removing both the
+/// per-connection lookups and the stall.
+#[cfg(feature = "subscriptions")]
+#[derive(Clone)]
+struct HickoryResolver(Arc<hickory_resolver::TokioAsyncResolver>);
+
+#[cfg(feature = "subscriptions")]
+impl tower_service::Service<hyper::client::connect::dns::Name> for HickoryResolver {
+    type Response = std::vec::IntoIter<std::net::SocketAddr>;
+    type Error = io::Error;
+    type Future = std::pin::Pin<
+        Box<dyn core::future::Future<Output = io::Result<Self::Response>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Result<(), Self::Error>> {
+        core::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, name: hyper::client::connect::dns::Name) -> Self::Future {
+        let resolver = self.0.clone();
+        Box::pin(async move {
+            let lookup = resolver
+                .lookup_ip(name.as_str())
+                .await
+                .map_err(|e| io::Error::other(format!("hickory lookup failed: {e}")))?;
+            // hyper fills in the port from the URL; 0 here is a placeholder.
+            let addrs: Vec<std::net::SocketAddr> = lookup
+                .iter()
+                .map(|ip| std::net::SocketAddr::new(ip, 0))
+                .collect();
+            Ok(addrs.into_iter())
+        })
+    }
+}
+
+/// Build the shared, hickory-resolving HTTPS connector used by every
+/// subscription. Reads the system resolver config (`/etc/resolv.conf`) so it
+/// honours the cluster's search domains and nameserver.
+#[cfg(feature = "subscriptions")]
+fn build_sse_connector() -> io::Result<SseConnector> {
+    let resolver = hickory_resolver::TokioAsyncResolver::tokio_from_system_conf()
+        .map_err(|e| io::Error::other(format!("failed to init hickory resolver: {e}")))?;
+    let mut http = hyper::client::HttpConnector::new_with_resolver(HickoryResolver(
+        Arc::new(resolver),
+    ));
+    // HttpConnector won't enforce a scheme, but HttpsConnector will.
+    http.enforce_http(false);
+    Ok(hyper_rustls::HttpsConnectorBuilder::new()
+        .with_webpki_roots()
+        .https_or_http()
+        .enable_http1()
+        .wrap_connector(http))
+}
 
 #[derive(Debug)]
 pub struct FailoverTransport {
@@ -267,22 +331,24 @@ impl FailoverTransport {
                 })?;
         }
 
-        // Reuse one pooled hyper client for every subscription: building a
-        // client (and connection) per call costs a TCP+TLS handshake each
-        // time, which dominates submission latency for
-        // `submit_and_await_status` consumers.
-        let http_client = self
-            .sse_client
-            .get_or_init(|| {
-                hyper::Client::builder().build(
-                    hyper_rustls::HttpsConnectorBuilder::new()
-                        .with_webpki_roots()
-                        .https_or_http()
-                        .enable_http1()
-                        .build(),
-                )
-            })
-            .clone();
+        // Reuse one pooled hyper client (with a shared caching resolver) for
+        // every subscription: building a client (and connection) per call costs
+        // a TCP+TLS handshake each time, and re-resolving per connection invites
+        // the glibc 5s DNS stall — both dominate `submit_and_await_status`
+        // latency. `get_or_init` can't surface the resolver-init error, so we
+        // initialise explicitly and propagate it.
+        let http_client = match self.sse_client.get() {
+            Some(client) => client.clone(),
+            None => {
+                let client = hyper::Client::builder().build(build_sse_connector()?);
+                // If another task initialised it first, ours is simply dropped.
+                let _ = self.sse_client.set(client);
+                self.sse_client
+                    .get()
+                    .expect("sse_client was just initialised")
+                    .clone()
+            }
+        };
         let client = client_builder.build_with_http_client(http_client);
 
         enum Event<ResponseData> {
