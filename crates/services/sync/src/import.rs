@@ -115,7 +115,7 @@ enum BlockHeaderData {
     /// The headers (or full blocks) have been fetched and checked.
     Cached(CachedDataBatch),
     /// The headers has just been fetched from the network.
-    Fetched(Batch<SealedBlockHeader>),
+    Fetched(Arc<Batch<SealedBlockHeader>>),
 }
 
 impl<P, E, C> Import<P, E, C> {
@@ -167,8 +167,8 @@ impl<T> Batch<T> {
     }
 }
 
-type SealedHeaderBatch = Batch<SealedBlockHeader>;
-type SealedBlockBatch = Batch<SealedBlock>;
+type SealedHeaderBatch = Arc<Batch<SealedBlockHeader>>;
+type SealedBlockBatch = Arc<Batch<SealedBlock>>;
 
 impl<P, E, C> Import<P, E, C>
 where
@@ -330,7 +330,7 @@ where
                         peer,
                         range,
                         results,
-                    } = batch;
+                    } = batch.as_ref();
 
                     let mut done = vec![];
                     let mut shutdown = shutdown.clone();
@@ -341,7 +341,7 @@ where
                             _ = shutdown.while_started() => {
                                 break;
                             },
-                            res = execute_and_commit(executor.as_ref(), state, sealed_block) => {
+                            res = execute_and_commit(executor.as_ref(), state, sealed_block.clone()) => {
                                 cache.remove_element(&height);
                                 res
                             },
@@ -363,10 +363,10 @@ where
                     let batch = Batch::new(peer.clone(), range.clone(), done);
 
                     if !batch.is_err() {
-                        report_peer(p2p, peer, PeerReportReason::SuccessfulBlockImport);
+                        report_peer(p2p, peer.clone(), PeerReportReason::SuccessfulBlockImport);
                     }
 
-                    batch
+                    Arc::new(batch)
                 }
                 .instrument(tracing::debug_span!("execute_and_commit"))
                 .in_current_span()
@@ -432,9 +432,9 @@ fn get_block_stream<
                                 peer,
                                 range,
                                 results,
-                            } = fetched_batch;
+                            } = fetched_batch.as_ref();
                             let checked_headers = results
-                                .into_iter()
+                                .iter()
                                 .take_while(|header| {
                                     check_sealed_header(
                                         header,
@@ -443,8 +443,9 @@ fn get_block_stream<
                                         &consensus,
                                     )
                                 })
+                                .cloned()
                                 .collect::<Vec<_>>();
-                            let batch = Batch::new(peer, range.clone(), checked_headers);
+                            let batch = Arc::new(Batch::new(peer.clone(), range.clone(), checked_headers));
                             if !batch.is_err() {
                                 cache.insert_headers(batch.clone());
                             }
@@ -470,9 +471,9 @@ fn get_block_stream<
                                 peer,
                                 range,
                                 results,
-                            } = batch;
+                            } = batch.as_ref();
                             if results.is_empty() {
-                                SealedBlockBatch::new(peer, range, vec![])
+                                Arc::new(Batch::new(peer.clone(), range.clone(), vec![]))
                             } else {
                                 await_da_height(
                                     results
@@ -482,7 +483,7 @@ fn get_block_stream<
                                 )
                                 .await;
                                 let headers =
-                                    SealedHeaderBatch::new(peer, range.clone(), results);
+                                    Arc::new(Batch::new(peer.clone(), range.clone(), results.to_vec()));
                                 let batch = get_blocks(&p2p, headers).await;
                                 if !batch.is_err() {
                                     cache.insert_blocks(batch.clone());
@@ -492,7 +493,7 @@ fn get_block_stream<
                         }
                         BlockHeaderData::Cached(CachedDataBatch::None(_)) => {
                             tracing::error!("Cached data batch should never be created outside of the caching algorithm.");
-                            Batch::new(None, 0..1, vec![])
+                            Arc::new(Batch::new(None, 0..1, vec![]))
                         }
                     }
                 }
@@ -624,7 +625,7 @@ where
         range.end
     );
     let Some(sourced_headers) = get_sealed_block_headers(range.clone(), p2p).await else {
-        return Batch::new(None, range, vec![])
+        return Arc::new(Batch::new(None, range, vec![]))
     };
     let SourcePeer {
         peer_id,
@@ -647,7 +648,7 @@ where
             PeerReportReason::MissingBlockHeaders,
         );
     }
-    Batch::new(Some(peer_id), range, headers)
+    Arc::new(Batch::new(Some(peer_id), range, headers))
 }
 
 fn report_peer<P>(p2p: &Arc<P>, peer_id: Option<PeerId>, reason: PeerReportReason)
@@ -674,17 +675,17 @@ where
         results: headers,
         range,
         peer,
-    } = headers;
+    } = headers.as_ref();
 
     let Some(SourcePeer {
         peer_id,
         data: transactions,
     }) = get_transactions(range.clone(), peer.clone(), p2p).await
     else {
-        return Batch::new(peer, range, vec![])
+        return Arc::new(Batch::new(peer.clone(), range.clone(), vec![]))
     };
 
-    let iter = headers.into_iter().zip(transactions.into_iter());
+    let iter = headers.iter().zip(transactions.into_iter());
     let mut blocks = vec![];
     for (block_header, transactions) in iter {
         let SealedBlockHeader {
@@ -692,9 +693,11 @@ where
             entity: header,
         } = block_header;
         let block =
-            Block::try_from_executed(header, transactions.0).map(|block| SealedBlock {
-                entity: block,
-                consensus,
+            Block::try_from_executed(header.clone(), transactions.0).map(|block| {
+                SealedBlock {
+                    entity: block,
+                    consensus: consensus.clone(),
+                }
             });
         if let Some(block) = block {
             blocks.push(block);
@@ -707,7 +710,7 @@ where
             break
         }
     }
-    Batch::new(Some(peer_id), range, blocks)
+    Arc::new(Batch::new(Some(peer_id), range.clone(), blocks))
 }
 
 #[tracing::instrument(
@@ -774,9 +777,9 @@ impl<S> ScanNone<S> {
 }
 
 impl<S> ScanErr<S> {
-    fn scan_err<'a, T: 'a>(self) -> impl Stream<Item = Batch<T>> + 'a
+    fn scan_err<'a, T: 'a>(self) -> impl Stream<Item = Arc<Batch<T>>> + 'a
     where
-        S: Stream<Item = Batch<T>> + Send + 'a,
+        S: Stream<Item = Arc<Batch<T>>> + Send + 'a,
     {
         let stream = self.0.boxed::<'a>();
         futures::stream::unfold((false, stream), |(mut err, mut stream)| async move {
