@@ -28,6 +28,7 @@ subscriptions = [
     "base64",
     "eventsource-client",
     "futures",
+    "hyper",
     "hyper-rustls",
     "dep:postcard",
     "fuel-core-types/serde",
@@ -48,6 +49,7 @@ fuel-core-types = { workspace = true, features = ["alloc", "serde"] }
 futures = { workspace = true, optional = true }
 hex = { workspace = true }
 # Included to enable webpki in the eventsource client
+hyper = { version = "0.14", features = ["client", "http1", "tcp"], optional = true }
 hyper-rustls = { version = "0.24", features = ["webpki-tokio"], optional = true }
 itertools = { workspace = true }
 postcard = { workspace = true, optional = true }
