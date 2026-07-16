@@ -5078,6 +5078,7 @@ dependencies = [
  "fuel-core-trace",
  "fuel-core-types 0.48.0",
  "futures",
+ "lane-scheduler",
  "lru 0.16.3",
  "mockall",
  "num-rational",
@@ -6690,6 +6691,10 @@ checksum = "b5baa5e9ff84f1aefd264e6869907646538a52147a755d494517a8007fb48733"
 dependencies = [
  "rustversion",
 ]
+
+[[package]]
+name = "lane-scheduler"
+version = "0.1.0"
 
 [[package]]
 name = "lazy_static"
