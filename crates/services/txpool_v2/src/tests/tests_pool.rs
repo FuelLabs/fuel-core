@@ -349,7 +349,7 @@ fn extract_transactions_for_block__revisits_deferred_complex_txs_in_same_block()
     let complex_ab_2 = universe.verify_and_insert(complex_ab_2).unwrap();
 
     let pool = universe.get_pool();
-    let (selected, _) =
+    let (selected, _, _) =
         pool.write()
             .extract_transactions_for_block_with_anchors(&Constraints {
                 minimal_gas_price: 0,
@@ -1646,6 +1646,85 @@ fn extract_one_batch(
             excluded_contracts: excluded,
             execution_worker_count: 1,
         })
+}
+
+/// Like [`extract_one_batch`] but also returns the lane-scheduler `BatchId`
+/// assigned to the extracted batch (used to round-trip completion feedback).
+fn extract_one_batch_with_id(
+    universe: &TestPoolUniverse,
+    excluded: HashSet<ContractId>,
+) -> (
+    Vec<fuel_core_types::services::txpool::ArcPoolTx>,
+    Option<crate::lane_integration::BatchId>,
+) {
+    let (txs, _anchors, batch_id) = universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block_with_anchors(&Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u32::MAX,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: excluded,
+            execution_worker_count: 1,
+        });
+    (txs, batch_id)
+}
+
+#[test]
+fn lane_scheduler__batch_feedback_round_trips_completion() {
+    use crate::lane_integration::BatchFeedback;
+
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    // Given: two independent transactions extracted as a single in-flight batch.
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+
+    let (batch, batch_id) = extract_one_batch_with_id(&universe, HashSet::new());
+    assert_eq!(batch.len(), 2, "both txs should be dispatched in one batch");
+    let batch_id = batch_id.expect("lane scheduler must assign a batch id");
+
+    // The batch is dispatched but not yet reported complete → in flight.
+    let in_flight_before = universe
+        .get_pool()
+        .read()
+        .lane_scheduler
+        .as_ref()
+        .expect("lane scheduler enabled")
+        .in_flight_batches();
+    assert_eq!(in_flight_before, 1, "one dispatched batch awaiting feedback");
+
+    // When: the executor reports the batch complete (the executor→pool half of
+    // the feedback loop), then the pool is asked again (feedback is drained onto
+    // the next request, the scheduler's documented transport).
+    universe
+        .get_pool()
+        .write()
+        .lane_scheduler_feedback(BatchFeedback {
+            batch_id,
+            overhead_time: 5,
+            execution_time: 100,
+            completed: true,
+        });
+    let (drained, _) = extract_one_batch_with_id(&universe, HashSet::new());
+    assert!(drained.is_empty(), "pool already drained; nothing new to give");
+
+    // Then: the completed batch is no longer in flight — the feedback landed.
+    let in_flight_after = universe
+        .get_pool()
+        .read()
+        .lane_scheduler
+        .as_ref()
+        .expect("lane scheduler enabled")
+        .in_flight_batches();
+    assert_eq!(
+        in_flight_after, 0,
+        "completion feedback must clear the in-flight batch"
+    );
 }
 
 fn writes_contract(tx: &fuel_core_types::services::txpool::ArcPoolTx, contract: ContractId) -> bool {

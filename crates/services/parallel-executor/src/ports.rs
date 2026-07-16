@@ -108,3 +108,55 @@ pub trait TransactionsSource {
     /// Returns a notification receiver for new transactions
     fn get_new_transactions_notifier(&self) -> watch::Receiver<()>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{
+        Arc,
+        Mutex,
+    };
+
+    #[test]
+    fn feedback_handle_reports_once_with_the_given_values() {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let handle = {
+            let sink = sink.clone();
+            BatchFeedbackHandle::new(move |report| sink.lock().unwrap().push(report))
+        };
+
+        handle.report(BatchExecutionReport {
+            execution_time: 100,
+            overhead_time: 7,
+            completed: true,
+        });
+
+        let reported = sink.lock().unwrap().clone();
+        assert_eq!(
+            reported,
+            vec![BatchExecutionReport {
+                execution_time: 100,
+                overhead_time: 7,
+                completed: true,
+            }]
+        );
+    }
+
+    #[test]
+    fn dropping_a_handle_without_reporting_is_silent() {
+        let sink = Arc::new(Mutex::new(Vec::new()));
+        let handle = {
+            let sink = sink.clone();
+            BatchFeedbackHandle::new(move |report| sink.lock().unwrap().push(report))
+        };
+
+        // Drop without reporting — the producer tolerates missing feedback, so
+        // the closure must never run.
+        drop(handle);
+
+        assert!(
+            sink.lock().unwrap().is_empty(),
+            "dropping a handle must not fire the reporting closure"
+        );
+    }
+}

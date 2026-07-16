@@ -279,6 +279,14 @@ impl LaneSchedulerState {
     pub fn pending_count(&self) -> usize {
         self.scheduler.pending_count()
     }
+
+    /// Number of dispatched batches still awaiting completion feedback. Drops by
+    /// one when a `completed` [`BatchFeedback`] for a batch is applied — lets a
+    /// test observe that the executor→pool feedback round-trip landed.
+    #[cfg(test)]
+    pub fn in_flight_batches(&self) -> usize {
+        self.scheduler.in_flight_batches()
+    }
 }
 
 #[cfg(test)]
