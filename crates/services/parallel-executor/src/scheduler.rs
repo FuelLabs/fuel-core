@@ -818,7 +818,10 @@ where
         start_execution_time: Instant,
         initial_gas_per_core: u64,
         selection_worker_count: usize,
-    ) -> Result<(PreparedBatch, Vec<ContractId>, Option<BatchFeedbackHandle>), SchedulerError>
+    ) -> Result<
+        (PreparedBatch, Vec<ContractId>, Option<BatchFeedbackHandle>),
+        SchedulerError,
+    >
     where
         TxSource: TransactionsSource,
     {

@@ -166,11 +166,11 @@ impl SharedState {
             completed,
         };
         // Best-effort: ignore a full queue or a closed receiver (shutdown).
-        let _ = self
-            .request_update_sender
-            .try_send(PoolUpdateRequest::LaneSchedulerFeedback {
+        let _ = self.request_update_sender.try_send(
+            PoolUpdateRequest::LaneSchedulerFeedback {
                 feedback: vec![feedback],
-            });
+            },
+        );
     }
 
     pub async fn get_tx_ids(&self, max_txs: usize) -> Result<Vec<TxId>, Error> {

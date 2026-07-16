@@ -339,8 +339,7 @@ mod tests {
     fn contract_created_output_is_write() {
         let created = contract_id(3);
         let inputs = vec![];
-        let outputs =
-            vec![Output::contract_created(created, Bytes32::zeroed())];
+        let outputs = vec![Output::contract_created(created, Bytes32::zeroed())];
 
         let accesses = derive_contract_accesses_from_io(&inputs, &outputs);
         assert_eq!(accesses, vec![(created, Access::Write)]);

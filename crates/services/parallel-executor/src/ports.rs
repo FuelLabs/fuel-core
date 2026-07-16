@@ -75,7 +75,8 @@ impl BatchFeedbackHandle {
 
 impl core::fmt::Debug for BatchFeedbackHandle {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("BatchFeedbackHandle").finish_non_exhaustive()
+        f.debug_struct("BatchFeedbackHandle")
+            .finish_non_exhaustive()
     }
 }
 

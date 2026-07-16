@@ -1696,7 +1696,10 @@ fn lane_scheduler__batch_feedback_round_trips_completion() {
         .as_ref()
         .expect("lane scheduler enabled")
         .in_flight_batches();
-    assert_eq!(in_flight_before, 1, "one dispatched batch awaiting feedback");
+    assert_eq!(
+        in_flight_before, 1,
+        "one dispatched batch awaiting feedback"
+    );
 
     // When: the executor reports the batch complete (the executor→pool half of
     // the feedback loop), then the pool is asked again (feedback is drained onto
@@ -1711,7 +1714,10 @@ fn lane_scheduler__batch_feedback_round_trips_completion() {
             completed: true,
         });
     let (drained, _) = extract_one_batch_with_id(&universe, HashSet::new());
-    assert!(drained.is_empty(), "pool already drained; nothing new to give");
+    assert!(
+        drained.is_empty(),
+        "pool already drained; nothing new to give"
+    );
 
     // Then: the completed batch is no longer in flight — the feedback landed.
     let in_flight_after = universe
@@ -1727,7 +1733,10 @@ fn lane_scheduler__batch_feedback_round_trips_completion() {
     );
 }
 
-fn writes_contract(tx: &fuel_core_types::services::txpool::ArcPoolTx, contract: ContractId) -> bool {
+fn writes_contract(
+    tx: &fuel_core_types::services::txpool::ArcPoolTx,
+    contract: ContractId,
+) -> bool {
     crate::lane_integration::derive_contract_accesses(tx)
         .into_iter()
         .any(|(c, access)| {
@@ -1807,14 +1816,30 @@ fn lane_scheduler__excluded_contract_writer_is_not_selected() {
 
     // Writer of contract_a (contract input WITH matching output).
     let writes_a = universe.build_script_transaction(
-        Some(vec![create_contract_input(Default::default(), 0, contract_a)]),
-        Some(vec![Output::contract(0, Default::default(), Default::default())]),
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_a,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
         10,
     );
     // Writer of contract_b.
     let writes_b = universe.build_script_transaction(
-        Some(vec![create_contract_input(Default::default(), 0, contract_b)]),
-        Some(vec![Output::contract(0, Default::default(), Default::default())]),
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_b,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
         10,
     );
     let writes_a = universe.verify_and_insert(writes_a).unwrap();

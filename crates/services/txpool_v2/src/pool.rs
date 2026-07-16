@@ -494,7 +494,8 @@ where
         &mut self,
         constraints: &Constraints,
     ) -> Vec<ArcPoolTx> {
-        self.extract_transactions_for_block_with_anchors(constraints).0
+        self.extract_transactions_for_block_with_anchors(constraints)
+            .0
     }
 
     pub fn get(&self, tx_id: &TxId) -> Option<&StorageData> {
@@ -897,11 +898,9 @@ where
             let Some(storage_entry) = self.storage.remove_transaction(storage_id) else {
                 continue;
             };
-            for (contract, _access) in
-                crate::lane_integration::derive_contract_accesses(
-                    &storage_entry.transaction,
-                )
-            {
+            for (contract, _access) in crate::lane_integration::derive_contract_accesses(
+                &storage_entry.transaction,
+            ) {
                 if !contracts_used.contains(&contract) {
                     contracts_used.push(contract);
                 }

@@ -187,7 +187,6 @@ impl PoolWorkerInterface {
                 )
             })
     }
-
 }
 
 enum ThreadManagementRequest {
@@ -225,13 +224,19 @@ pub(super) enum PoolExtractBlockTransactions {
 }
 
 pub(super) enum PoolUpdateRequest {
-    ProcessBlock { block_result: SharedImportResult },
-    ExpiredTransactions { expired_txs: Vec<TxId> },
+    ProcessBlock {
+        block_result: SharedImportResult,
+    },
+    ExpiredTransactions {
+        expired_txs: Vec<TxId>,
+    },
     /// Batch-completion feedback for the lane scheduler (measured overhead /
     /// execution time / completion). Ignored when the lane scheduler is off.
     /// Constructed by [`crate::SharedState::report_lane_scheduler_feedback`]
     /// after the executor finishes a batch.
-    LaneSchedulerFeedback { feedback: Vec<BatchFeedback> },
+    LaneSchedulerFeedback {
+        feedback: Vec<BatchFeedback>,
+    },
 }
 pub(super) enum PoolReadRequest {
     NonExistingTxs {
@@ -547,7 +552,12 @@ where
             "txpool_v2 extract_block_transactions result"
         );
         if blocks
-            .send((txs, constraints.excluded_contracts, selected_anchors, batch_id))
+            .send((
+                txs,
+                constraints.excluded_contracts,
+                selected_anchors,
+                batch_id,
+            ))
             .is_err()
         {
             tracing::error!("Failed to send block transactions");
