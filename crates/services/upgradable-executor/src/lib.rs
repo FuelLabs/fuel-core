@@ -9,6 +9,8 @@ pub mod executor;
 
 mod storage_access_recorder;
 pub use fuel_core_executor as native_executor;
+#[cfg(not(feature = "wasm-executor"))]
+use fuel_core_wasm_executor as _;
 
 #[cfg(feature = "wasm-executor")]
 pub mod instance;

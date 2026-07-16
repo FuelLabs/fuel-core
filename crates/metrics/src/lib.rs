@@ -34,10 +34,6 @@ pub mod tx_status_manager_metrics;
 pub mod txpool_metrics;
 
 pub use self::parallel_executor_metrics::{
-    set_complex_txs_classified,
-    set_complex_txs_remaining,
-    set_complex_txs_selected,
-    set_hot_contracts_tracked,
     next_debug_batch_metrics_block_height,
     record_batch_execute,
     record_batch_prepare,
@@ -46,6 +42,10 @@ pub use self::parallel_executor_metrics::{
     record_scheduler_run_time,
     set_batch_anchor_contracts,
     set_block_height,
+    set_complex_txs_classified,
+    set_complex_txs_remaining,
+    set_complex_txs_selected,
+    set_hot_contracts_tracked,
     set_max_workers_used,
     set_non_empty_batch_allocated_gas,
     set_non_empty_batch_transactions,

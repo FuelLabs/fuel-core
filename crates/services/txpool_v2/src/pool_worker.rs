@@ -514,8 +514,9 @@ where
                 .number_of_executable_transactions(),
             "txpool_v2 extract_block_transactions start"
         );
-        let (txs, selected_anchors) =
-            self.pool.extract_transactions_for_block_with_anchors(&constraints);
+        let (txs, selected_anchors) = self
+            .pool
+            .extract_transactions_for_block_with_anchors(&constraints);
         tracing::warn!(
             result_size = txs.len(),
             selected_anchor_count = selected_anchors.len(),

@@ -6,12 +6,14 @@ use crate::{
     global_registry,
 };
 use fuel_core_types::fuel_tx::ContractId;
-use prometheus_client::metrics::{
-    family::Family,
-    gauge::Gauge,
-    histogram::Histogram,
+use prometheus_client::{
+    encoding::EncodeLabelSet,
+    metrics::{
+        family::Family,
+        gauge::Gauge,
+        histogram::Histogram,
+    },
 };
-use prometheus_client::encoding::EncodeLabelSet;
 use std::{
     sync::{
         OnceLock,
@@ -328,10 +330,7 @@ pub fn next_debug_batch_metrics_block_height() -> u64 {
         .saturating_add(1)
 }
 
-pub fn set_non_empty_batch_transactions(
-    block_height: u64,
-    batch_tx_counts: &[u32],
-) {
+pub fn set_non_empty_batch_transactions(block_height: u64, batch_tx_counts: &[u32]) {
     let metrics = parallel_executor_metrics();
     metrics
         .non_empty_batches

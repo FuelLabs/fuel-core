@@ -141,9 +141,7 @@ impl AnchorState {
             self.current_anchor_gas = tx_gas;
         }
         if self.current_anchor_gas.saturating_mul(100)
-            >= self
-                .total_gas
-                .saturating_mul(u64::from(self.threshold_pct))
+            >= self.total_gas.saturating_mul(u64::from(self.threshold_pct))
         {
             self.locked_anchor = self.current_anchor;
         }
@@ -225,29 +223,23 @@ where
         }
     }
 
-    fn remove_key_from_indexes(
-        &mut self,
-        key: Key,
-        contract_ids: &[ContractId],
-    ) {
+    fn remove_key_from_indexes(&mut self, key: Key, contract_ids: &[ContractId]) {
         self.executable_transactions_sorted_tip_gas_ratio
             .remove(&Reverse(key));
-        contract_ids
-            .iter()
-            .for_each(|contract_id| self.remove_key_from_contract_index(*contract_id, key));
+        contract_ids.iter().for_each(|contract_id| {
+            self.remove_key_from_contract_index(*contract_id, key)
+        });
     }
 
-    fn remove_key_from_contract_index(
-        &mut self,
-        contract_id: ContractId,
-        key: Key,
-    ) {
-        if let Some(contract_index) =
-            self.executable_transactions_by_contract.get_mut(&contract_id)
+    fn remove_key_from_contract_index(&mut self, contract_id: ContractId, key: Key) {
+        if let Some(contract_index) = self
+            .executable_transactions_by_contract
+            .get_mut(&contract_id)
         {
             contract_index.remove(&Reverse(key));
             if contract_index.is_empty() {
-                self.executable_transactions_by_contract.remove(&contract_id);
+                self.executable_transactions_by_contract
+                    .remove(&contract_id);
             }
         }
     }
@@ -850,9 +842,8 @@ where
                             complex_txs_selected.saturating_add(selected);
                         selected > 0
                     };
-                let locked_anchor = anchor_state
-                    .as_ref()
-                    .and_then(|state| state.locked_anchor);
+                let locked_anchor =
+                    anchor_state.as_ref().and_then(|state| state.locked_anchor);
                 if let Some(locked_anchor) = locked_anchor {
                     Self::push_selected_anchor(&mut selected_anchors, locked_anchor);
                     let filled_from_locked_anchor = self.fill_from_anchor_contract_set(
@@ -898,9 +889,9 @@ where
                         )
                     })
                     .unwrap_or(false);
-                let should_fill_from_executable =
-                    prioritized_queue.len() < batch_graphs_count
-                        && self.eagerly_include_tx_dependency_graphs;
+                let should_fill_from_executable = prioritized_queue.len()
+                    < batch_graphs_count
+                    && self.eagerly_include_tx_dependency_graphs;
                 let filled_from_executable = should_fill_from_executable
                     && self.fill_from_executable_set(
                         constraints,
@@ -981,9 +972,7 @@ where
         parallel_executor_metrics::set_complex_txs_remaining(
             self.deferred_complex_transactions.len(),
         );
-        parallel_executor_metrics::set_hot_contracts_tracked(
-            self.hot_contract_lru.len(),
-        );
+        parallel_executor_metrics::set_hot_contracts_tracked(self.hot_contract_lru.len());
 
         self.last_selection_anchors = selected_anchors;
 
@@ -1016,11 +1005,7 @@ where
         let key = Self::key(store_entry);
         let contract_inputs = Self::collect_contract_inputs(store_entry);
         self.remember_hot_contracts(&contract_inputs);
-        self.insert_key_into_indexes(
-            key,
-            storage_id,
-            &contract_inputs,
-        );
+        self.insert_key_into_indexes(key, storage_id, &contract_inputs);
         // tracing::warn!(
         //     executable_set_size = self
         //         .executable_transactions_sorted_tip_gas_ratio
@@ -1041,10 +1026,7 @@ where
 
     fn on_removed_transaction(&mut self, storage_entry: &StorageData) {
         let key = Self::key(storage_entry);
-        self.remove_key_from_indexes(
-            key,
-            &Self::collect_contract_inputs(storage_entry),
-        );
+        self.remove_key_from_indexes(key, &Self::collect_contract_inputs(storage_entry));
         self.deferred_complex_transactions.remove(&Reverse(key));
         // tracing::warn!(
         //     executable_set_size = self

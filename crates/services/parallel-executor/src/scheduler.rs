@@ -17,6 +17,7 @@ use crate::{
     },
     tx_waiter::NoWaitTxs,
 };
+use ::fuel_core_metrics as parallel_executor_metrics;
 use ::futures::{
     StreamExt,
     stream::FuturesUnordered,
@@ -36,7 +37,6 @@ use fuel_core_executor::{
         RelayerPort,
     },
 };
-use ::fuel_core_metrics as parallel_executor_metrics;
 use fuel_core_storage::{
     Error as StorageError,
     column::Column,
@@ -65,8 +65,8 @@ use fuel_core_types::{
         Output,
         Transaction,
         TxId,
-        UtxoId,
         UniqueIdentifier,
+        UtxoId,
     },
     fuel_types::Nonce,
     fuel_vm::checked_transaction::IntoChecked,
@@ -1518,9 +1518,7 @@ fn get_coins_outputs<'a>(
     coins
 }
 
-fn format_tx_ids(
-    txs: impl IntoIterator<Item = TxId>,
-) -> String {
+fn format_tx_ids(txs: impl IntoIterator<Item = TxId>) -> String {
     txs.into_iter()
         .map(|tx_id| tx_id.to_string())
         .collect::<Vec<_>>()

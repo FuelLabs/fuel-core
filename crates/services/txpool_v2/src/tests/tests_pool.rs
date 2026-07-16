@@ -294,7 +294,11 @@ fn extract_transactions_for_block__revisits_deferred_complex_txs_in_same_block()
     let contract_b = ContractId::from([2u8; 32]);
 
     let simple_a = universe.build_script_transaction(
-        Some(vec![create_contract_input(Default::default(), 0, contract_a)]),
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_a,
+        )]),
         Some(vec![Output::contract(
             0,
             Default::default(),
@@ -303,7 +307,11 @@ fn extract_transactions_for_block__revisits_deferred_complex_txs_in_same_block()
         10,
     );
     let simple_b = universe.build_script_transaction(
-        Some(vec![create_contract_input(Default::default(), 0, contract_b)]),
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_b,
+        )]),
         Some(vec![Output::contract(
             0,
             Default::default(),
@@ -340,16 +348,16 @@ fn extract_transactions_for_block__revisits_deferred_complex_txs_in_same_block()
     let complex_ab_2 = universe.verify_and_insert(complex_ab_2).unwrap();
 
     let pool = universe.get_pool();
-    let (selected, _) = pool.write().extract_transactions_for_block_with_anchors(
-        &Constraints {
-            minimal_gas_price: 0,
-            max_gas: u64::MAX,
-            maximum_txs: 10,
-            maximum_block_size: u64::MAX,
-            excluded_contracts: HashSet::new(),
-            execution_worker_count: 13,
-        },
-    );
+    let (selected, _) =
+        pool.write()
+            .extract_transactions_for_block_with_anchors(&Constraints {
+                minimal_gas_price: 0,
+                max_gas: u64::MAX,
+                maximum_txs: 10,
+                maximum_block_size: u64::MAX,
+                excluded_contracts: HashSet::new(),
+                execution_worker_count: 13,
+            });
 
     let selected_ids = selected.iter().map(|tx| tx.id()).collect::<HashSet<_>>();
     let expected_ids = [
