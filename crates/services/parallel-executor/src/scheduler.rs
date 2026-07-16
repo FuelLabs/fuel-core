@@ -1008,6 +1008,22 @@ where
     }
 
     fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
+        // TODO(lane-scheduler-feedback): when the txpool `lane_scheduler` flag is
+        // on, this is the point at which a completed batch would report
+        // `BatchFeedback { batch_id, overhead_time, execution_time, completed:
+        // true }` back to the pool via
+        // `PoolWorkerInterface::lane_scheduler_feedback` (the STEP-2 plumbing).
+        // Two carriers are missing today and must be added first:
+        //   1. The pool-assigned `BatchId` — `ask_new_transactions_batch` /
+        //      `TransactionSourceExecutableTransactions` currently drop it, so
+        //      the executor cannot correlate a completion with a pool batch.
+        //   2. Merge/handoff timing — `execution_time` is measurable here (see
+        //      `record_batch_execute`), but `verify_coherency_and_merge_results`
+        //      and the per-contract `Changes` handoff are not yet instrumented
+        //      (design doc A.5), so `overhead_time` would be partial. Send what
+        //      exists (execution_time) and TODO the rest.
+        // Without feedback the scheduler degrades gracefully (the adaptive slice
+        // simply stops adapting; correctness is unaffected).
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
         }

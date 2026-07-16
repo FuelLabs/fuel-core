@@ -99,6 +99,16 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
                 transaction.into()
             })
             .collect();
+        // TODO(lane-scheduler-feedback): when the txpool `lane_scheduler` flag is
+        // on, the pool assigns a `BatchId` per proposal in
+        // `LaneScheduler::next_batches`. To close the feedback loop, that
+        // `BatchId` must be surfaced here (a new field on
+        // `TransactionSourceExecutableTransactions`), threaded through
+        // `ask_new_transactions_batch`, stored alongside the executing batch, and
+        // echoed back on completion into
+        // `PoolWorkerInterface::lane_scheduler_feedback`. Until this round-trip
+        // exists the lane scheduler runs without batch-completion feedback
+        // (graceful degradation — see scheduler.rs `register_execution_result`).
         Ok(TransactionSourceExecutableTransactions {
             transactions,
             anchor_contract_ids,
