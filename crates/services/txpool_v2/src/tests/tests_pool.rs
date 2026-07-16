@@ -1733,6 +1733,91 @@ fn lane_scheduler__batch_feedback_round_trips_completion() {
     );
 }
 
+#[test]
+fn lane_scheduler__committed_parent_makes_child_proposable_after_dropped_handle() {
+    // Liveness regression: a parent is dispatched in a batch whose feedback
+    // handle is DROPPED (executor crash / shutdown / any missed report). The
+    // parent then commits on-chain and the pool processes the commit. The
+    // parent's in-pool child must become proposable by the lane scheduler even
+    // though no completion feedback ever arrived — the commit is an independent
+    // completion path.
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    // Given: parent tx1 with a coin output, and child tx2 that spends it.
+    let (output, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
+    let tx1_id = tx1.id(&ChainId::default());
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
+    let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+
+    // Extract: only the parent is proposable/extractable (the child still has an
+    // in-pool dependency).
+    let (batch, batch_id) = extract_one_batch_with_id(&universe, HashSet::new());
+    let batch_ids: HashSet<_> = batch.iter().map(|tx| tx.id()).collect();
+    assert_eq!(
+        batch_ids,
+        [tx1_id].into_iter().collect::<HashSet<_>>(),
+        "only the parent is extractable in the first batch"
+    );
+    let _batch_id = batch_id.expect("lane scheduler must assign a batch id");
+
+    // The feedback handle is DROPPED: we never call `lane_scheduler_feedback`.
+    // (In production the executor owns the handle; a crash/shutdown drops it.)
+
+    // Now the parent commits on-chain and the pool processes the commit. This
+    // removes the parent and promotes the child to executable inside the pool.
+    universe
+        .get_pool()
+        .write()
+        .process_committed_transactions(std::iter::once(tx1_id));
+
+    // Then: the child MUST now be proposable by the lane scheduler.
+    let (batch2, _) = extract_one_batch_with_id(&universe, HashSet::new());
+    let batch2_ids: HashSet<_> = batch2.iter().map(|tx| tx.id()).collect();
+    assert_eq!(
+        batch2_ids,
+        [tx2_id].into_iter().collect::<HashSet<_>>(),
+        "committed parent must make the child proposable even without feedback"
+    );
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn lane_scheduler__unrelated_tx_stays_live_after_dropped_handle() {
+    // A dispatched batch whose feedback handle is dropped must NOT wedge
+    // unrelated (non-descendant) transactions: the scheduler keeps no persistent
+    // lock table, so an in-flight-but-never-reported batch cannot block a fresh
+    // independent tx.
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    // Given: one independent tx dispatched as a batch, handle dropped.
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    universe.verify_and_insert(tx1).unwrap();
+    let (batch, batch_id) = extract_one_batch_with_id(&universe, HashSet::new());
+    assert_eq!(batch.len(), 1);
+    let _ = batch_id.expect("lane scheduler must assign a batch id");
+    // No feedback: the handle is dropped.
+
+    // When: a fresh unrelated tx arrives.
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx2).unwrap();
+
+    // Then: it is immediately proposable.
+    let (batch2, _) = extract_one_batch_with_id(&universe, HashSet::new());
+    let batch2_ids: HashSet<_> = batch2.iter().map(|tx| tx.id()).collect();
+    assert_eq!(
+        batch2_ids,
+        [tx2_id].into_iter().collect::<HashSet<_>>(),
+        "an unrelated tx must stay live despite a dropped in-flight handle"
+    );
+}
+
 fn writes_contract(
     tx: &fuel_core_types::services::txpool::ArcPoolTx,
     contract: ContractId,

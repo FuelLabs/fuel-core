@@ -516,6 +516,17 @@ where
     pub fn process_committed_transactions(&mut self, tx_ids: impl Iterator<Item = TxId>) {
         let mut transactions_to_promote = vec![];
         for tx_id in tx_ids {
+            // Notify the lane scheduler that this tx committed on-chain — BEFORE
+            // (and independent of) the `tx_id_to_storage_id` lookup below. A tx
+            // produced by THIS node was already extracted (removed from the pool)
+            // at block-production time, so that lookup misses; but the lane
+            // scheduler still tracks the tx's in-pool CHILDREN as waiting on it.
+            // Completing it here is a feedback-independent completion path: it
+            // unblocks those children even when the dispatched batch's feedback
+            // handle was dropped (executor crash / shutdown / any missed report).
+            // Idempotent with feedback and with the imported-block removal below.
+            self.lane_on_committed(&tx_id);
+
             self.spent_inputs.spend_inputs_by_tx_id(tx_id);
             if let Some(storage_id) = self.tx_id_to_storage_id.remove(&tx_id) {
                 let dependents: Vec<S::StorageIndex> =
@@ -532,10 +543,10 @@ where
                     .new_extracted_transaction(&transaction.transaction);
                 self.spent_inputs
                     .spend_inputs(tx_id, transaction.transaction.inputs());
-                // A committed tx leaves the pool. If it was dispatched by the
-                // lane scheduler this is a tolerant no-op; otherwise (e.g. an
-                // imported block) it cleans the scheduler's view.
-                self.lane_on_removed(iter::once(&transaction), RemovalReason::Dropped);
+                // The lane scheduler was already told this tx committed via
+                // `lane_on_committed` at the top of the loop (which both completes
+                // its children and de-indexes it), so here we only clean the
+                // classic pool components.
                 self.update_components_and_caches_on_removal(iter::once(&transaction));
 
                 for dependent in dependents {
@@ -833,6 +844,17 @@ where
             for storage_entry in removed {
                 lane.on_removal(&storage_entry.transaction.id(), reason);
             }
+        }
+    }
+
+    /// Notify the lane scheduler that `tx_id` committed on-chain, by tx id alone
+    /// (the tx may already have left the pool via extraction, so no
+    /// [`StorageData`] is available). This is the feedback-independent completion
+    /// path: it marks the tx complete in the scheduler and promotes its in-pool
+    /// children to ready. No-op when the lane scheduler is disabled.
+    fn lane_on_committed(&mut self, tx_id: &TxId) {
+        if let Some(lane) = self.lane_scheduler.as_mut() {
+            lane.on_removal(tx_id, RemovalReason::Committed);
         }
     }
 
