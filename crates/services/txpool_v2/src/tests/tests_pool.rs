@@ -42,6 +42,7 @@ use fuel_core_types::{
         Chargeable,
         ConsensusParameters,
         Contract,
+        ContractId,
         Input,
         Output,
         PanicReason,
@@ -1612,3 +1613,164 @@ fn extract__tx_with_excluded_contract() {
     assert_eq!(txs[2].id(), tx2_id, "First should be tx2");
     universe.assert_pool_integrity(&[tx1]);
 }
+
+// ============================================================================
+// Lane scheduler integration tests (config flag `lane_scheduler`).
+// ============================================================================
+
+fn lane_config() -> Config {
+    Config {
+        lane_scheduler: true,
+        // Contract-input transactions in these tests reference contracts that
+        // are not present in the mock DB; skip UTXO/contract existence checks
+        // (mirrors how contract-input txs are exercised elsewhere).
+        utxo_validation: false,
+        ..Default::default()
+    }
+}
+
+/// Extract everything the lane scheduler is willing to give in one call, using a
+/// non-binding (huge) budget and no in-flight locks.
+fn extract_one_batch(
+    universe: &TestPoolUniverse,
+    excluded: HashSet<ContractId>,
+) -> Vec<fuel_core_types::services::txpool::ArcPoolTx> {
+    universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block(&Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            maximum_txs: u32::MAX,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: excluded,
+            execution_worker_count: 1,
+        })
+}
+
+fn writes_contract(tx: &fuel_core_types::services::txpool::ArcPoolTx, contract: ContractId) -> bool {
+    crate::lane_integration::derive_contract_accesses(tx)
+        .into_iter()
+        .any(|(c, access)| {
+            c == contract && access == crate::lane_integration::Access::Write
+        })
+}
+
+#[test]
+fn lane_scheduler__round_trips_independent_txs_when_enabled() {
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    // Given: three independent (no-contract) transactions.
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 9);
+    let tx3 = universe.build_script_transaction(None, None, 20);
+    let expected: HashSet<_> = [
+        tx1.id(&ChainId::default()),
+        tx2.id(&ChainId::default()),
+        tx3.id(&ChainId::default()),
+    ]
+    .into_iter()
+    .collect();
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+    universe.verify_and_insert(tx3).unwrap();
+
+    // When: draining the pool via the lane scheduler (loop across batches).
+    let mut collected = HashSet::new();
+    for _ in 0..10 {
+        let batch = extract_one_batch(&universe, HashSet::new());
+        if batch.is_empty() {
+            break;
+        }
+        for tx in batch {
+            collected.insert(tx.id());
+        }
+    }
+
+    // Then: every transaction is selected exactly once and the pool empties.
+    assert_eq!(collected, expected);
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn lane_scheduler__off_by_default_uses_classic_selection() {
+    // Default config keeps the lane scheduler off — classic path returns txs.
+    assert!(!Config::default().lane_scheduler);
+
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    let tx1 = universe.build_script_transaction(None, None, 10);
+    let tx2 = universe.build_script_transaction(None, None, 20);
+    universe.verify_and_insert(tx1).unwrap();
+    universe.verify_and_insert(tx2).unwrap();
+
+    let txs = extract_one_batch(&universe, HashSet::new());
+    assert_eq!(txs.len(), 2);
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn lane_scheduler__excluded_contract_writer_is_not_selected() {
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    let contract_a = ContractId::from([1u8; 32]);
+    let contract_b = ContractId::from([2u8; 32]);
+    // Register the contracts so their contract inputs validate.
+    {
+        let db = universe.database();
+        let mut data = db.data.lock().unwrap();
+        data.contracts.insert(contract_a, Contract::default());
+        data.contracts.insert(contract_b, Contract::default());
+    }
+
+    // Writer of contract_a (contract input WITH matching output).
+    let writes_a = universe.build_script_transaction(
+        Some(vec![create_contract_input(Default::default(), 0, contract_a)]),
+        Some(vec![Output::contract(0, Default::default(), Default::default())]),
+        10,
+    );
+    // Writer of contract_b.
+    let writes_b = universe.build_script_transaction(
+        Some(vec![create_contract_input(Default::default(), 0, contract_b)]),
+        Some(vec![Output::contract(0, Default::default(), Default::default())]),
+        10,
+    );
+    let writes_a = universe.verify_and_insert(writes_a).unwrap();
+    let writes_b = universe.verify_and_insert(writes_b).unwrap();
+
+    // When: contract_a is already locked by an in-flight batch.
+    let excluded = HashSet::from([contract_a]);
+    let batch = extract_one_batch(&universe, excluded);
+
+    // Then: the contract_a writer is withheld; only the contract_b writer runs.
+    let ids: HashSet<_> = batch.iter().map(|tx| tx.id()).collect();
+    assert!(
+        ids.contains(&writes_b.id()),
+        "contract_b writer should be selected"
+    );
+    assert!(
+        !ids.contains(&writes_a.id()),
+        "contract_a writer must not run concurrently with the in-flight lock"
+    );
+    for tx in &batch {
+        assert!(
+            !writes_contract(tx, contract_a),
+            "no selected tx may write the excluded contract"
+        );
+    }
+}
+
+// NOTE (finding): reader-sharing is NOT reachable through a valid fuel
+// transaction. A contract INPUT with no matching contract OUTPUT — the
+// Read-derivation case — is rejected by consensus validity
+// (`ValidityError::InputContractAssociatedOutputContract`): fuel-tx requires
+// every contract input to have a matching contract output. The Read/Write
+// derivation rule is therefore correct per the lane-scheduler spec, but every
+// VALID fuel transaction yields only `Write` accesses today. The Read code path
+// (and its concurrent reader-sharing) only becomes exercisable if a
+// protocol-level read/write intent is introduced. The derivation itself is unit
+// tested in `lane_integration::tests` (which builds the inputs/outputs directly,
+// bypassing consensus validity).

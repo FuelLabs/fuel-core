@@ -148,6 +148,12 @@ pub struct Config {
     pub metrics: bool,
     /// Allow mixing dependency graphs after the initial batch fill.
     pub eagerly_include_tx_dependency_graphs: bool,
+    /// Enable the event-driven lane scheduler (`rw-lanes-fast`) for block
+    /// transaction selection. When `false` (the default) the pool behaves
+    /// byte-for-byte as before and the classic `ratio_tip_gas` selection runs
+    /// untouched. When `true`, block extraction is answered from the lane
+    /// scheduler instead. Experimental.
+    pub lane_scheduler: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -211,6 +217,7 @@ impl Default for Config {
             max_pending_pool_size_percentage: 50,
             metrics: false,
             eagerly_include_tx_dependency_graphs: false,
+            lane_scheduler: false,
         }
     }
 }

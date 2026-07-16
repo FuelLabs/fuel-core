@@ -5,6 +5,7 @@ use crate::{
         Error,
         InsertionErrorType,
     },
+    lane_integration::BatchFeedback,
     pending_pool::PendingPool,
     ports::{
         TxPoolPersistentStorage,
@@ -183,6 +184,26 @@ impl PoolWorkerInterface {
                 )
             })
     }
+
+    /// Deliver lane-scheduler batch feedback (overhead / execution timing /
+    /// completion) into the pool. The executor-facing service calls this after a
+    /// batch finishes; it is a no-op when the lane scheduler is disabled.
+    ///
+    /// TODO(executor-feedback): the parallel-executor does not yet echo the
+    /// pool-assigned `BatchId` back, so the executor-side caller of this method
+    /// is not wired. Once the batch-id round-trip exists (through
+    /// `get_executable_transactions`), the executor sends measured timings here.
+    #[allow(dead_code)]
+    pub fn lane_scheduler_feedback(
+        &self,
+        feedback: Vec<BatchFeedback>,
+    ) -> anyhow::Result<()> {
+        self.request_update_sender
+            .try_send(PoolUpdateRequest::LaneSchedulerFeedback { feedback })
+            .map_err(|e| {
+                anyhow::anyhow!("Failed to send lane scheduler feedback: {}", e)
+            })
+    }
 }
 
 enum ThreadManagementRequest {
@@ -218,6 +239,13 @@ pub(super) enum PoolExtractBlockTransactions {
 pub(super) enum PoolUpdateRequest {
     ProcessBlock { block_result: SharedImportResult },
     ExpiredTransactions { expired_txs: Vec<TxId> },
+    /// Batch-completion feedback for the lane scheduler (measured overhead /
+    /// execution time / completion). Ignored when the lane scheduler is off.
+    ///
+    /// TODO(executor-feedback): not yet constructed — the parallel-executor
+    /// does not echo the pool-assigned `BatchId` back, so no caller exists yet.
+    #[allow(dead_code)]
+    LaneSchedulerFeedback { feedback: Vec<BatchFeedback> },
 }
 pub(super) enum PoolReadRequest {
     NonExistingTxs {
@@ -324,6 +352,11 @@ where
                         }
                         PoolUpdateRequest::ExpiredTransactions { expired_txs } => {
                             self.remove_expired_transactions(expired_txs);
+                        }
+                        PoolUpdateRequest::LaneSchedulerFeedback { feedback } => {
+                            for fb in feedback {
+                                self.pool.lane_scheduler_feedback(fb);
+                            }
                         }
                     }
                 }
