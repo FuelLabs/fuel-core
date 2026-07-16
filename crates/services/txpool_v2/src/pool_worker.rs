@@ -5,7 +5,10 @@ use crate::{
         Error,
         InsertionErrorType,
     },
-    lane_integration::BatchFeedback,
+    lane_integration::{
+        BatchFeedback,
+        BatchId,
+    },
     pending_pool::PendingPool,
     ports::{
         TxPoolPersistentStorage,
@@ -185,25 +188,6 @@ impl PoolWorkerInterface {
             })
     }
 
-    /// Deliver lane-scheduler batch feedback (overhead / execution timing /
-    /// completion) into the pool. The executor-facing service calls this after a
-    /// batch finishes; it is a no-op when the lane scheduler is disabled.
-    ///
-    /// TODO(executor-feedback): the parallel-executor does not yet echo the
-    /// pool-assigned `BatchId` back, so the executor-side caller of this method
-    /// is not wired. Once the batch-id round-trip exists (through
-    /// `get_executable_transactions`), the executor sends measured timings here.
-    #[allow(dead_code)]
-    pub fn lane_scheduler_feedback(
-        &self,
-        feedback: Vec<BatchFeedback>,
-    ) -> anyhow::Result<()> {
-        self.request_update_sender
-            .try_send(PoolUpdateRequest::LaneSchedulerFeedback { feedback })
-            .map_err(|e| {
-                anyhow::anyhow!("Failed to send lane scheduler feedback: {}", e)
-            })
-    }
 }
 
 enum ThreadManagementRequest {
@@ -231,8 +215,12 @@ pub(super) enum PoolInsertRequest {
 pub(super) enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
-        transactions:
-            oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>)>,
+        transactions: oneshot::Sender<(
+            Vec<ArcPoolTx>,
+            HashSet<ContractId>,
+            Vec<ContractId>,
+            Option<BatchId>,
+        )>,
     },
 }
 
@@ -241,10 +229,8 @@ pub(super) enum PoolUpdateRequest {
     ExpiredTransactions { expired_txs: Vec<TxId> },
     /// Batch-completion feedback for the lane scheduler (measured overhead /
     /// execution time / completion). Ignored when the lane scheduler is off.
-    ///
-    /// TODO(executor-feedback): not yet constructed — the parallel-executor
-    /// does not echo the pool-assigned `BatchId` back, so no caller exists yet.
-    #[allow(dead_code)]
+    /// Constructed by [`crate::SharedState::report_lane_scheduler_feedback`]
+    /// after the executor finishes a batch.
     LaneSchedulerFeedback { feedback: Vec<BatchFeedback> },
 }
 pub(super) enum PoolReadRequest {
@@ -533,7 +519,12 @@ where
     fn extract_block_transactions(
         &mut self,
         constraints: Constraints,
-        blocks: oneshot::Sender<(Vec<ArcPoolTx>, HashSet<ContractId>, Vec<ContractId>)>,
+        blocks: oneshot::Sender<(
+            Vec<ArcPoolTx>,
+            HashSet<ContractId>,
+            Vec<ContractId>,
+            Option<BatchId>,
+        )>,
     ) {
         tracing::warn!(
             max_gas = constraints.max_gas,
@@ -547,7 +538,7 @@ where
                 .number_of_executable_transactions(),
             "txpool_v2 extract_block_transactions start"
         );
-        let (txs, selected_anchors) = self
+        let (txs, selected_anchors, batch_id) = self
             .pool
             .extract_transactions_for_block_with_anchors(&constraints);
         tracing::warn!(
@@ -556,7 +547,7 @@ where
             "txpool_v2 extract_block_transactions result"
         );
         if blocks
-            .send((txs, constraints.excluded_contracts, selected_anchors))
+            .send((txs, constraints.excluded_contracts, selected_anchors, batch_id))
             .is_err()
         {
             tracing::error!("Failed to send block transactions");

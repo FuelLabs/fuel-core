@@ -24,6 +24,7 @@ use fuel_core_executor::{
 };
 #[cfg(feature = "parallel-executor")]
 use fuel_core_parallel_executor::ports::{
+    BatchFeedbackHandle,
     Filter,
     TransactionFiltered,
     TransactionSourceExecutableTransactions,
@@ -80,7 +81,7 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
         selection_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
-        let (transactions, excluded_contract_ids, anchor_contract_ids) = self
+        let (transactions, excluded_contract_ids, anchor_contract_ids, batch_id) = self
             .tx_pool
             .extract_transactions_for_block_async(Constraints {
                 minimal_gas_price: self.minimum_gas_price,
@@ -99,10 +100,22 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
                 transaction.into()
             })
             .collect();
-        // TODO(lane-scheduler-feedback): when the txpool `lane_scheduler` flag is
-        // on, build a `BatchFeedbackHandle` here that carries the pool-assigned
-        // batch id + a feedback sender, so the executor can report completion
-        // timings back on `register_execution_result`. Wired in the next commit.
+        // When the txpool lane scheduler answered this extraction it assigned a
+        // `BatchId`; wrap it in an opaque handle that reports the executor's
+        // measured timings straight back into the pool. The executor never sees
+        // the batch id or the pool channel — only the handle. When the lane
+        // scheduler is off, `batch_id` is `None` and no handle is produced.
+        let feedback_handle = batch_id.map(|batch_id| {
+            let tx_pool = self.tx_pool.clone();
+            BatchFeedbackHandle::new(move |report| {
+                tx_pool.report_lane_scheduler_feedback(
+                    batch_id,
+                    report.execution_time,
+                    report.overhead_time,
+                    report.completed,
+                );
+            })
+        });
         Ok(TransactionSourceExecutableTransactions {
             transactions,
             anchor_contract_ids,
@@ -110,7 +123,7 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
             filter: Filter {
                 excluded_contract_ids,
             },
-            feedback_handle: None,
+            feedback_handle,
         })
     }
 

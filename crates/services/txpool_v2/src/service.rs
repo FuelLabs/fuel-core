@@ -816,6 +816,7 @@ where
 
     let shared_state = SharedState {
         request_read_sender: pool_worker.request_read_sender.clone(),
+        request_update_sender: pool_worker.request_update_sender.clone(),
         write_pool_requests_sender,
         select_transactions_requests_sender: pool_worker
             .extract_block_transactions_sender

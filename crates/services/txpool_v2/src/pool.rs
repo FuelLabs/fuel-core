@@ -47,6 +47,7 @@ use crate::{
     extracted_outputs::ExtractedOutputs,
     lane_integration::{
         BatchFeedback,
+        BatchId,
         LaneSchedulerState,
         RemovalReason,
     },
@@ -415,9 +416,14 @@ where
     pub fn extract_transactions_for_block_with_anchors(
         &mut self,
         constraints: &Constraints,
-    ) -> (Vec<ArcPoolTx>, Vec<fuel_core_types::fuel_tx::ContractId>) {
+    ) -> (
+        Vec<ArcPoolTx>,
+        Vec<fuel_core_types::fuel_tx::ContractId>,
+        Option<BatchId>,
+    ) {
         // When the lane scheduler is enabled it answers extraction instead of
-        // the classic `ratio_tip_gas` selection. Off (default) → unchanged.
+        // the classic `ratio_tip_gas` selection. Off (default) → unchanged, and
+        // there is no batch id to carry (`None`).
         if self.lane_scheduler.is_some() {
             return self.extract_transactions_for_block_lane(constraints);
         }
@@ -475,12 +481,15 @@ where
             "txpool_v2 selection summary"
         );
 
-        (txs, selected_anchors)
+        // Classic path assigns no lane-scheduler batch id.
+        (txs, selected_anchors, None)
     }
 
     /// Extract transactions for a block, returning only the selected
-    /// transactions (dropping the anchor/contract ids). Thin wrapper over
-    /// [`Self::extract_transactions_for_block_with_anchors`].
+    /// transactions (dropping the anchor/contract ids and batch id). Thin
+    /// wrapper over [`Self::extract_transactions_for_block_with_anchors`], used
+    /// only by the crate's own tests.
+    #[cfg(test)]
     pub fn extract_transactions_for_block(
         &mut self,
         constraints: &Constraints,
@@ -836,7 +845,9 @@ where
 
     /// Answer a block-extraction request from the lane scheduler instead of the
     /// classic `ratio_tip_gas` selection. Returns the selected transactions in
-    /// the scheduler's proposed order plus the anchor/contract ids touched.
+    /// the scheduler's proposed order, the anchor/contract ids touched, and the
+    /// scheduler-assigned [`BatchId`] so the executor can round-trip completion
+    /// feedback for this batch.
     ///
     /// Only the proposed transactions that are currently dependency-free in the
     /// pool graph are actually extracted (a defensive invariant: we never remove
@@ -845,7 +856,11 @@ where
     fn extract_transactions_for_block_lane(
         &mut self,
         constraints: &Constraints,
-    ) -> (Vec<ArcPoolTx>, Vec<fuel_core_types::fuel_tx::ContractId>) {
+    ) -> (
+        Vec<ArcPoolTx>,
+        Vec<fuel_core_types::fuel_tx::ContractId>,
+        Option<BatchId>,
+    ) {
         let maximum_txs = constraints.maximum_txs as u64;
         let proposal = {
             let lane = self
@@ -861,7 +876,7 @@ where
         };
 
         let Some(proposal) = proposal else {
-            return (Vec::new(), Vec::new());
+            return (Vec::new(), Vec::new(), None);
         };
 
         let batch_id = proposal.batch_id;
@@ -907,7 +922,7 @@ where
         }
 
         self.update_stats();
-        (txs, contracts_used)
+        (txs, contracts_used, Some(batch_id))
     }
 
     #[cfg(test)]
