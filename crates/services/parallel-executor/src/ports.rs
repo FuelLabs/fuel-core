@@ -25,6 +25,60 @@ impl Filter {
     }
 }
 
+/// Measured timings for a completed batch, reported back to whoever produced the
+/// batch (today: the txpool lane scheduler). Time units are opaque to the
+/// executor — the producer decides how to interpret them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BatchExecutionReport {
+    /// Inner execution cost of the batch (the work itself).
+    pub execution_time: u64,
+    /// Parallelization overhead the executor paid for this batch (batch
+    /// preparation / split / merge). Partial today — see the caller.
+    pub overhead_time: u64,
+    /// Whether the batch finished executing successfully.
+    pub completed: bool,
+}
+
+/// Opaque, fire-at-most-once handle that travels alongside a batch of executable
+/// transactions. Whoever registers the batch's execution result calls
+/// [`Self::report`] exactly once with the measured timings; the handle then
+/// forwards them to the batch's producer.
+///
+/// The executor never learns anything about the producer's internals (batch
+/// ids, channels): the entire transport is captured inside an opaque closure, so
+/// the parallel-executor crate stays independent of the txpool.
+///
+/// Dropping a handle without reporting is intentionally silent — the producer
+/// (the lane scheduler) tolerates missing feedback by design, so a shutdown or
+/// error path that loses a handle degrades gracefully rather than panicking.
+pub struct BatchFeedbackHandle {
+    report_fn: Option<Box<dyn FnOnce(BatchExecutionReport) + Send>>,
+}
+
+impl BatchFeedbackHandle {
+    /// Build a handle from the producer-supplied reporting closure. The closure
+    /// runs at most once, when [`Self::report`] is called.
+    pub fn new(report_fn: impl FnOnce(BatchExecutionReport) + Send + 'static) -> Self {
+        Self {
+            report_fn: Some(Box::new(report_fn)),
+        }
+    }
+
+    /// Report the batch's measured timings back to the producer, consuming the
+    /// handle so it can fire at most once.
+    pub fn report(mut self, report: BatchExecutionReport) {
+        if let Some(report_fn) = self.report_fn.take() {
+            report_fn(report);
+        }
+    }
+}
+
+impl core::fmt::Debug for BatchFeedbackHandle {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("BatchFeedbackHandle").finish_non_exhaustive()
+    }
+}
+
 pub struct TransactionSourceExecutableTransactions {
     /// The transactions that can be executed
     pub transactions: Vec<MaybeCheckedTransaction>,
@@ -34,6 +88,10 @@ pub struct TransactionSourceExecutableTransactions {
     pub filtered: TransactionFiltered,
     /// The filter used to fetch these transactions
     pub filter: Filter,
+    /// Opaque handle to report this batch's completion/timings back to the
+    /// producer. `None` when the producer wants no feedback (e.g. the txpool
+    /// lane scheduler is disabled) — the default, zero-overhead path.
+    pub feedback_handle: Option<BatchFeedbackHandle>,
 }
 
 pub trait TransactionsSource {

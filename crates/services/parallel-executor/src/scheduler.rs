@@ -8,6 +8,8 @@ use crate::{
     memory::MemoryPool,
     once_transaction_source::OnceTransactionsSource,
     ports::{
+        BatchExecutionReport,
+        BatchFeedbackHandle,
         Filter,
         TransactionsSource,
     },
@@ -140,6 +142,12 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     state: SchedulerState,
     /// Batch preparation stats keyed by batch id
     batch_preparations: Option<HashMap<usize, BatchPreparationStats>>,
+    /// Producer feedback handles keyed by (internal) batch id, awaiting the
+    /// batch's completion so the measured timings can be reported back. Only
+    /// populated for batches whose producer requested feedback (i.e. the txpool
+    /// lane scheduler is enabled); empty otherwise, so the flag-off path is
+    /// untouched.
+    batch_feedback: FxHashMap<usize, PendingBatchFeedback>,
     /// Total maximum of transactions left
     tx_left: u32,
     /// Total maximum of byte size left
@@ -202,6 +210,19 @@ struct BatchPreparationStats {
     duration: Duration,
     tx_count: u32,
     gas: u64,
+}
+
+/// A producer feedback handle held until its batch completes, together with the
+/// overhead (batch-preparation) time already measured at dispatch. On
+/// completion the execution time is added and the pair is reported.
+struct PendingBatchFeedback {
+    handle: BatchFeedbackHandle,
+    /// Parallelization overhead measured before execution (batch preparation).
+    /// TODO(lane-scheduler-overhead): this is preparation time only. The
+    /// per-contract `Changes` handoff and `verify_coherency_and_merge_results`
+    /// merge stage are not yet instrumented (design doc A.5), so the reported
+    /// `overhead_time` is partial until those metrics exist.
+    overhead: Duration,
 }
 
 #[derive(Default)]
@@ -400,6 +421,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             blob_gas: 0,
             deadline,
             batch_preparations,
+            batch_feedback: FxHashMap::default(),
             worker_counters,
         })
     }
@@ -472,7 +494,7 @@ where
                 // so we await them here.
                 let batch_prepare_start = Instant::now();
                 let selection_worker_count = self.selection_worker_count();
-                let (mut batch, anchor_contract_ids) = self
+                let (mut batch, anchor_contract_ids, feedback_handle) = self
                     .ask_new_transactions_batch(
                         tx_source,
                         now,
@@ -531,6 +553,22 @@ where
                         );
                     }
                     total_gas = total_gas.saturating_add(batch.gas);
+                }
+
+                // Hold the producer feedback handle (if any) until this batch's
+                // execution result is registered, so its measured timings can be
+                // reported back. `feedback_handle` is `None` (and this map stays
+                // empty) unless the txpool lane scheduler is enabled. A batch
+                // that never reaches completion simply drops its handle
+                // (silent-safe by design).
+                if let Some(handle) = feedback_handle {
+                    self.batch_feedback.insert(
+                        nb_batch_created,
+                        PendingBatchFeedback {
+                            handle,
+                            overhead: batch_prepare_duration,
+                        },
+                    );
                 }
 
                 self.execute_batch(
@@ -780,7 +818,7 @@ where
         start_execution_time: Instant,
         initial_gas_per_core: u64,
         selection_worker_count: usize,
-    ) -> Result<(PreparedBatch, Vec<ContractId>), SchedulerError>
+    ) -> Result<(PreparedBatch, Vec<ContractId>, Option<BatchFeedbackHandle>), SchedulerError>
     where
         TxSource: TransactionsSource,
     {
@@ -829,6 +867,7 @@ where
         self.current_executing_contracts =
             executable_transactions.filter.excluded_contract_ids;
         let anchor_contract_ids = executable_transactions.anchor_contract_ids;
+        let feedback_handle = executable_transactions.feedback_handle;
 
         let prepared_batch = prepare_transactions_batch(
             &self.consensus_parameters,
@@ -844,7 +883,7 @@ where
             instant.elapsed(),
             prepared_batch.number_of_transactions
         );
-        Ok((prepared_batch, anchor_contract_ids))
+        Ok((prepared_batch, anchor_contract_ids, feedback_handle))
     }
 
     fn selection_worker_count(&self) -> usize {
@@ -1008,22 +1047,20 @@ where
     }
 
     fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
-        // TODO(lane-scheduler-feedback): when the txpool `lane_scheduler` flag is
-        // on, this is the point at which a completed batch would report
-        // `BatchFeedback { batch_id, overhead_time, execution_time, completed:
-        // true }` back to the pool via
-        // `PoolWorkerInterface::lane_scheduler_feedback` (the STEP-2 plumbing).
-        // Two carriers are missing today and must be added first:
-        //   1. The pool-assigned `BatchId` — `ask_new_transactions_batch` /
-        //      `TransactionSourceExecutableTransactions` currently drop it, so
-        //      the executor cannot correlate a completion with a pool batch.
-        //   2. Merge/handoff timing — `execution_time` is measurable here (see
-        //      `record_batch_execute`), but `verify_coherency_and_merge_results`
-        //      and the per-contract `Changes` handoff are not yet instrumented
-        //      (design doc A.5), so `overhead_time` would be partial. Send what
-        //      exists (execution_time) and TODO the rest.
-        // Without feedback the scheduler degrades gracefully (the adaptive slice
-        // simply stops adapting; correctness is unaffected).
+        // Report this completed batch's measured timings back to the producer
+        // (the txpool lane scheduler) if it asked for feedback. `execution_time`
+        // is the inner batch work; `overhead_time` is the batch-preparation time
+        // captured at dispatch (merge/handoff overhead is not yet instrumented —
+        // design doc A.5 — so it is partial, hence the TODO on `overhead`).
+        // No-op (map empty) when the lane scheduler is disabled.
+        if let Some(feedback) = self.batch_feedback.remove(&res.batch_id) {
+            feedback.handle.report(BatchExecutionReport {
+                execution_time: duration_as_u64_nanos(res.execution_duration),
+                overhead_time: duration_as_u64_nanos(feedback.overhead),
+                completed: true,
+            });
+        }
+
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
         }
@@ -1401,6 +1438,12 @@ where
 
         Ok(())
     }
+}
+
+/// Convert a [`Duration`] into `u64` nanoseconds, saturating (durations that
+/// large do not occur in block production; this only guards the cast).
+fn duration_as_u64_nanos(duration: Duration) -> u64 {
+    u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX)
 }
 
 #[allow(clippy::type_complexity)]

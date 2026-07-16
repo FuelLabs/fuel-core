@@ -150,6 +150,7 @@ impl TransactionsSource for MockTransactionsSource {
                 anchor_contract_ids: vec![],
                 filtered: response.filtered,
                 filter: response.filter.unwrap_or(filter),
+                feedback_handle: None,
             })
         } else {
             Ok(TransactionSourceExecutableTransactions {
@@ -157,6 +158,7 @@ impl TransactionsSource for MockTransactionsSource {
                 anchor_contract_ids: vec![],
                 filtered: TransactionFiltered::NotFiltered,
                 filter,
+                feedback_handle: None,
             })
         }
     }
