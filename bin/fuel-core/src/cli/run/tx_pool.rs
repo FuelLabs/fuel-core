@@ -89,6 +89,12 @@ pub struct TxPoolArgs {
     /// The max percentage of the `TxPool` that can be used by the `PendingPool`.
     #[clap(long = "tx-pending-pool-size-percentage", default_value = "50", env)]
     pub tx_pending_pool_size_percentage: u16,
+
+    /// Enable the experimental event-driven lane scheduler (`rw-lanes-fast`) for
+    /// block transaction selection. When disabled (the default) the classic
+    /// `ratio_tip_gas` selection runs unchanged.
+    #[clap(long = "lane-scheduler", default_value = "false", env)]
+    pub lane_scheduler: bool,
 }
 
 #[cfg(test)]

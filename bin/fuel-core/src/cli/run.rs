@@ -627,6 +627,7 @@ impl Command {
             tx_max_pending_write_requests,
             tx_pending_pool_ttl,
             tx_pending_pool_size_percentage,
+            lane_scheduler,
         } = tx_pool;
 
         let TxStatusManagerArgs {
@@ -774,10 +775,9 @@ impl Command {
                 max_pending_pool_size_percentage: tx_pending_pool_size_percentage,
                 metrics: metrics.is_enabled(Module::TxPool),
                 eagerly_include_tx_dependency_graphs: false,
-                // Experimental lane scheduler; off by default. Flip to `true`
-                // (or wire a CLI flag) to answer block extraction from the
-                // event-driven rw-lanes scheduler.
-                lane_scheduler: false,
+                // Experimental event-driven rw-lanes scheduler; off by default,
+                // enabled with `--lane-scheduler` (env `LANE_SCHEDULER`).
+                lane_scheduler,
             },
             block_producer: ProducerConfig {
                 coinbase_recipient,
