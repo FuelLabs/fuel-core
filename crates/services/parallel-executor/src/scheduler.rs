@@ -318,12 +318,15 @@ impl SchedulerExecutionResult {
             .extend(blob_execution_data.skipped_transactions);
         self.transactions_status
             .extend(blob_execution_data.tx_status);
-        // Should contains all the changes from all executions
+        // `blob_execution_data.changes` is the fully-merged block state at the
+        // point blobs run: the base view plus DA + every batch/contract change
+        // (seeded into the blob transaction) plus the blob txs' own writes. So
+        // this field is expected to be *non-empty* — it carries all the changes
+        // from all executions, as the comment above says. The previous
+        // `debug_assert!(self.changes.is_empty(), ..)` was self-contradictory
+        // (it fired immediately after assigning a non-empty value) and panicked
+        // every debug-build block that contained a blob.
         self.changes = StorageChanges::Changes(blob_execution_data.changes);
-        debug_assert!(
-            self.changes.is_empty(),
-            "Changes should be empty after blob merging"
-        );
         self.used_gas = self.used_gas.saturating_add(blob_execution_data.used_gas);
         self.used_size = self.used_size.saturating_add(blob_execution_data.used_size);
         self.coinbase = self.coinbase.saturating_add(blob_execution_data.coinbase);

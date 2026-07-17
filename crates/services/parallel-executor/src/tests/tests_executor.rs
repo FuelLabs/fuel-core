@@ -13,7 +13,10 @@ use crate::{
         Filter,
         TransactionFiltered,
     },
-    scheduler::fold_changes_in_canonical_order,
+    scheduler::{
+        SchedulerExecutionResult,
+        fold_changes_in_canonical_order,
+    },
     tests::mocks::{
         MockPreconfirmationSender,
         MockRelayer,
@@ -21,6 +24,7 @@ use crate::{
         MockTxPoolResponse,
     },
 };
+use fuel_core_executor::executor::ExecutionData;
 use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
@@ -1107,4 +1111,28 @@ async fn execute__user_tx_touching_coinbase_contract_then_mint_commits_cleanly()
         "expected a single coalesced Changes, got a ChangesList",
     );
     assert_commits_without_conflict(&changes);
+}
+
+// TEST 4 (blob debug assert) — `add_blob_execution_data` must carry the merged
+// blob changes through. The old code asserted `self.changes.is_empty()`
+// immediately after assigning the non-empty merged changes into it, panicking
+// every debug-build block that contained a blob. This is the unit-level proof
+// (a full blob block through the mock harness needs a valid blob tx, which the
+// mock source does not build).
+#[test]
+fn add_blob_execution_data__carries_changes_and_does_not_panic() {
+    let mut res = SchedulerExecutionResult::default();
+
+    let mut blob_changes = ExecutionData::new();
+    blob_changes.changes = single_op_changes(Column::Coins, coins_key(), insert_op(1));
+    blob_changes.used_gas = 42;
+
+    // Would panic here in a debug build before the fix.
+    res.add_blob_execution_data(blob_changes, vec![]);
+
+    assert!(
+        !res.changes.is_empty(),
+        "blob execution data must be carried through, not asserted empty",
+    );
+    assert_eq!(res.used_gas, 42);
 }
