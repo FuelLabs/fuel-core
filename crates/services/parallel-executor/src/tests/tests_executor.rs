@@ -1473,6 +1473,14 @@ fn tx_ids(txs: &[Transaction]) -> Vec<Bytes32> {
     txs.iter().map(|tx| tx.id(&ChainId::default())).collect()
 }
 
+/// Drop per-column buckets that hold no operations. An empty bucket is a no-op
+/// at commit time (it changes no keys), so two `Changes` that differ only in
+/// vacuous empty buckets describe the identical database state.
+fn strip_empty_columns(mut changes: Changes) -> Changes {
+    changes.retain(|_, ops| !ops.is_empty());
+    changes
+}
+
 /// Run the parallel producer over `batches`, then replay its committed order
 /// through the sequential reference executor and assert full agreement.
 async fn run_replay_oracle(
@@ -1532,32 +1540,40 @@ async fn run_replay_oracle(
              got a ChangesList (NEW BUG)"
         ),
     };
-    assert!(
-        par_result.skipped_transactions.is_empty(),
-        "[{scenario}] parallel producer skipped txs (unexpected): {:?}",
-        par_result.skipped_transactions,
-    );
-
     let par_block_txs = par_result.block.transactions().to_vec();
     let (par_mint, par_user) = split_off_mint(&par_block_txs, scenario);
-    // Deadline was generous enough / nothing silently dropped: all fed txs made
-    // it in (guards against under-inclusion masking a divergence).
-    assert_eq!(
-        par_user.len(),
-        fed_tx_count,
-        "[{scenario}] parallel producer did not include every fed tx \
-         ({} of {}) — raise ORACLE_DEADLINE_MS or investigate",
+    // Upper bound only: the producer never commits MORE than it was fed. The
+    // exact committed set is pinned by the `par_user == seq_user` comparison
+    // below (which also catches under-inclusion — a tx the producer dropped but
+    // the reference keeps). We do NOT assert every fed tx committed, because a
+    // runtime-failing tx (a bad predicate tripping the fallback) is legitimately
+    // dropped by both executors.
+    assert!(
+        par_user.len() <= fed_tx_count,
+        "[{scenario}] parallel producer committed more txs ({}) than fed ({})",
         par_user.len(),
         fed_tx_count,
     );
 
-    // ---- sequential reference: same view, same options, single storage tx ----
+    // ---- sequential reference ----
+    // Feed the reference the ORIGINAL fed txs (flattened, in fed order), NOT
+    // just the parallel block's committed txs, so it INDEPENDENTLY decides which
+    // txs to commit vs skip. This is what lets the oracle validate a
+    // fallback-triggering scenario: a runtime-failing tx (bad predicate) is
+    // dropped by both executors, and the committed sets must still match. Note
+    // the parallel producer does NOT surface L2 runtime-skips in
+    // `skipped_transactions` (every batch-level skip is consumed by the
+    // fallback, which re-executes only the surviving txs and drops the skipped
+    // one silently), so we compare the COMMITTED sets rather than the skip
+    // metadata. For a skip-free scenario the fed txs equal the committed txs, so
+    // this is identical to the old harness.
     let options = ExecutionOptions {
         forbid_unauthorized_inputs: true,
         forbid_fake_utxo: false,
         allow_syscall: false,
     };
-    let seq_source = OnceTransactionsSource::new(par_user.clone());
+    let fed_flat: Vec<Transaction> = batches.iter().flatten().cloned().collect();
+    let seq_source = OnceTransactionsSource::new(fed_flat);
     let components = Components {
         header_to_produce: header_at_height_1(),
         transactions_source: seq_source,
@@ -1580,19 +1596,17 @@ async fn run_replay_oracle(
     .unwrap()
     .into();
 
-    assert!(
-        seq_result.skipped_transactions.is_empty(),
-        "[{scenario}] sequential reference skipped txs — the parallel producer \
-         emitted an order the plain executor rejects (NEW BUG): {:?}",
-        seq_result.skipped_transactions,
-    );
-
     let seq_block_txs = seq_result.block.transactions().to_vec();
     let (seq_mint, seq_user) = split_off_mint(&seq_block_txs, scenario);
 
     // (1) final state: folded parallel Changes == sequential Changes, key-for-key.
+    // Empty per-column buckets are stripped first: they carry no keys (committing
+    // one is a no-op, so they are not a state difference), and the sequential
+    // reference can leave a vacuous empty bucket behind after processing-then-
+    // skipping a runtime-failing tx that the parallel fallback never replays.
     assert_eq!(
-        par_changes, seq_changes,
+        strip_empty_columns(par_changes),
+        strip_empty_columns(seq_changes),
         "[{scenario}] final-state mismatch: folded parallel Changes != sequential \
          Changes (NEW BUG)",
     );
@@ -1669,6 +1683,78 @@ fn coin_creating_tx(
         .finalize_as_transaction();
     let utxo = UtxoId::new(tx.id(&ChainId::default()), 0);
     (tx, utxo)
+}
+
+// A `Create` transaction that deploys a fresh contract; returns the tx (to feed
+// into a batch) and the id of the contract it creates. Deploying the contract
+// *inside the block* (rather than pre-seeding storage) is what makes the
+// fallback-soundness bug observable: a kept batch's contract creation lives only
+// in the accumulated in-block state, so if the fallback replays a later batch
+// that calls the contract against the stale pre-block view, the contract does
+// not exist and the call is wrongly skipped.
+fn create_contract_tx(
+    rng: &mut StdRng,
+    storage: &mut Storage,
+) -> (Transaction, ContractId) {
+    let tx = TransactionBuilder::create(
+        Default::default(),
+        Salt::new(rng.r#gen()),
+        Default::default(),
+    )
+    .add_stored_coin_input(rng, storage, 1000)
+    .add_contract_created()
+    .finalize_as_transaction();
+    let contract_id = tx
+        .outputs()
+        .first()
+        .and_then(|output| output.contract_id())
+        .cloned()
+        .expect("Create tx must have a ContractCreated output");
+    (tx, contract_id)
+}
+
+// A tx whose coin-predicate input mis-declares its predicate gas (declares 0 but
+// the predicate actually costs gas), which the executor rejects at runtime — the
+// tx is SKIPPED, which is exactly what triggers the scheduler's sequential
+// fallback. The same tx is skipped identically by the sequential reference, so
+// the oracle's skip-set comparison stays balanced. Mirrors the trigger used by
+// `execute__trigger_skipped_txs_fallback_mechanism` /
+// `feedback__fallback_path_reports_completed_false_and_does_not_leak`.
+fn fallback_trigger_tx(rng: &mut StdRng, storage: &mut Storage) -> Transaction {
+    let utxo_id: UtxoId = rng.r#gen();
+    let code = [op::ret(RegId::ONE)];
+    let code_bytes: Vec<u8> = code.iter().flat_map(|op| op.to_bytes()).collect();
+    let owner = Input::predicate_owner(&code_bytes);
+    let amount = 1000;
+    let mut tx = storage.0.write_transaction();
+    tx.storage_as_mut::<Coins>()
+        .insert(
+            &utxo_id,
+            &(Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id: Default::default(),
+                tx_pointer: Default::default(),
+            }
+            .compress()),
+        )
+        .unwrap();
+    tx.commit().unwrap();
+
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_stored_coin_input(rng, storage, 1000);
+    builder.add_input(Input::coin_predicate(
+        utxo_id,
+        owner,
+        amount,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        code_bytes,
+        vec![],
+    ));
+    builder.finalize_as_transaction()
 }
 
 async fn setup_contracts(
@@ -1818,6 +1904,44 @@ async fn oracle__contested_single_contract_serial_chain() {
     .await;
 }
 
+// SCENARIO 4b — FALLBACK SOUNDNESS (audit finding #5). A kept batch (batch 0)
+// creates a contract; a LATER batch (batch 1) both calls that contract AND
+// contains a runtime-failing tx (a bad predicate) that trips the sequential
+// fallback. The fallback re-executes batch 1's range, which must observe the
+// contract created by the kept batch. Before the fix the replay ran against the
+// bare pre-block view: the contract did not exist, so the call was wrongly
+// skipped and the contract creation was lost entirely — the parallel producer's
+// final state and skip set diverged from the sequential reference. After the fix
+// the replay is seeded with the as-of-`lower` accumulated state (base + DA +
+// kept batches' per-contract changes), so the call succeeds and only the bad
+// predicate is skipped, matching the reference exactly.
+//
+// Single worker so the create batch is fully committed (and thus a KEPT batch
+// with id < the fallback's `lower`) before the calling batch runs.
+#[tokio::test]
+async fn oracle__fallback_replays_range_against_kept_batch_contract_state() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    // batch 0 (KEPT): create a contract in-block.
+    let (create_tx, contract_id) = create_contract_tx(&mut rng, &mut storage);
+    // batch 1 (fallback range): a call to the just-created contract, plus a
+    // bad-predicate tx that trips the fallback for the whole batch.
+    let call_tx = contract_call_tx(&mut rng, &mut storage, &[contract_id]);
+    let bad_tx = fallback_trigger_tx(&mut rng, &mut storage);
+
+    run_replay_oracle(
+        storage,
+        Default::default(),
+        0,
+        vec![vec![create_tx], vec![call_tx, bad_tx]],
+        1,
+        "fallback_replays_range_against_kept_batch_contract_state",
+    )
+    .await;
+}
+
 // SCENARIO 5 — seeded pseudo-random workloads mixing all of the above patterns,
 // so the oracle explores batch boundaries / fold / fallback combinations the
 // hand-written cases don't. Single worker (see the concurrency note above);
@@ -1837,7 +1961,14 @@ fn build_random_workload(
 
     for _ in 0..n {
         let pick = rng.gen_range(0u8..100);
-        let tx = if pick < 25 {
+        let tx = if pick < 8 {
+            // runtime-failing tx (bad predicate) — skipped at execution, which
+            // trips the sequential fallback. Mixing these into the random
+            // workload means the net permanently exercises the fallback replay
+            // (and its as-of-`lower` seeding) across varied batch boundaries and
+            // alongside contract/coin state, not just in the hand-written case.
+            fallback_trigger_tx(&mut rng, storage)
+        } else if pick < 28 {
             // plain transfer
             basic_tx(&mut rng, storage)
         } else if pick < 50 {

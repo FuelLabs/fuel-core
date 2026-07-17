@@ -52,7 +52,6 @@ use fuel_core_storage::{
         Changes,
         ConflictPolicy,
         IntoTransaction,
-        ReadTransaction,
         StorageChanges,
         StorageTransaction,
     },
@@ -151,6 +150,34 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     /// lane scheduler is enabled); empty otherwise, so the flag-off path is
     /// untouched.
     batch_feedback: FxHashMap<usize, PendingBatchFeedback>,
+    /// Per-batch snapshot of the accumulated per-contract `Changes` that each
+    /// dispatched batch was SEEDED with (i.e. the state of those contracts as
+    /// left by all previously-dispatched batches). Populated in
+    /// [`Self::execute_batch`] with a clone of the seed handed to the worker,
+    /// but ONLY for contracts that already carried accumulated changes — a batch
+    /// touching only fresh contracts stores nothing, so the common path pays
+    /// only for genuinely re-touched (contended) contracts.
+    ///
+    /// This is the reconstruction source for [`Self::sequential_fallback`]: when
+    /// a runtime hazard forces a batch-id range to be re-executed sequentially,
+    /// the replay must observe the contract state left by the KEPT earlier
+    /// batches (id `< lower`), which was moved out of `contracts_changes` when
+    /// the in-range batches picked those contracts up (and then discarded with
+    /// the aborted parallel results). The seed handed to the lowest-id in-range
+    /// batch that touched a contract is exactly that as-of-`lower` state, so the
+    /// fallback rebuilds its replay seed from here rather than from the (stale)
+    /// pre-block view. Entries are consumed by the fallback and otherwise freed
+    /// when the per-block scheduler is dropped.
+    dispatched_contract_seeds: FxHashMap<usize, FxHashMap<ContractId, Changes>>,
+    /// The block-relative starting transaction index each dispatched batch was
+    /// given (`start_idx_txs`, i.e. the count of block txs scheduled before it).
+    /// `sequential_fallback` replays the `[lower, higher]` range starting at the
+    /// index the lowest-id batch in the range originally used, so the replayed
+    /// txs land at the same block positions the sequential executor assigns —
+    /// their `TxPointer` (hence e.g. `ContractsLatestUtxo`) must match, or the
+    /// producer diverges from the validator. Populated for every dispatched
+    /// batch; freed with the per-block scheduler.
+    dispatched_start_idx: FxHashMap<usize, u32>,
     /// Total maximum of transactions left
     tx_left: u32,
     /// Total maximum of byte size left
@@ -428,6 +455,8 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             deadline,
             batch_preparations,
             batch_feedback: FxHashMap::default(),
+            dispatched_contract_seeds: FxHashMap::default(),
+            dispatched_start_idx: FxHashMap::default(),
             worker_counters,
         })
     }
@@ -628,7 +657,14 @@ where
                                     // their `batch_preparations`/`batch_feedback`
                                     // bookkeeping — so no explicit cleanup here.
                                     drop(res.worker_id);
-                                    self.sequential_fallback(res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used, res.execution_duration).await?;
+                                    // The fallback drops the range's skipped txs,
+                                    // so the running block-tx counter must be
+                                    // reset to the true committed count (the range
+                                    // start + what the replay committed) — else
+                                    // every later batch/blob gets a shifted
+                                    // `start_idx_txs` and its `TxPointer`s diverge
+                                    // from the sequential validator.
+                                    nb_transactions = self.sequential_fallback(res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used, res.execution_duration, storage_with_da.clone()).await?;
                                     continue;
                                 }
 
@@ -688,7 +724,14 @@ where
 
         tracing::warn!("******");
         tracing::warn!("waiting for execution tasks: {:?}", instant.elapsed());
-        let exceeded_deadline = self.wait_all_execution_tasks().await?;
+        let (exceeded_deadline, fallback_next_start_idx) = self
+            .wait_all_execution_tasks(storage_with_da.clone())
+            .await?;
+        if let Some(next_idx) = fallback_next_start_idx {
+            // A drain-time fallback dropped skipped txs; keep the block-tx
+            // counter contiguous for the blob stage / metrics below.
+            nb_transactions = next_idx;
+        }
         tracing::warn!("execution tasks done: {:?}", instant.elapsed());
         if self.config.metrics {
             if exceeded_deadline && !execution_time_recorded {
@@ -953,6 +996,18 @@ where
             }
         }
 
+        // Snapshot the seed this batch is dispatched with (the accumulated
+        // per-contract state of everything scheduled before it) so
+        // `sequential_fallback` can rebuild the correct as-of-`lower` replay
+        // view if this or a neighbouring batch later aborts. Only non-empty
+        // seeds (contracts that already carried changes) are stored, so a batch
+        // over fresh contracts adds nothing.
+        if !changes_per_contract.is_empty() {
+            self.dispatched_contract_seeds
+                .insert(batch_id, changes_per_contract.iter().cloned().collect());
+        }
+        self.dispatched_start_idx.insert(batch_id, start_idx_txs);
+
         let executor = self.executor.clone();
         let coinbase_recipient = self.coinbase_recipient;
         let gas_price = self.gas_price;
@@ -1161,8 +1216,14 @@ where
         );
     }
 
-    // returns `true` if exceeded deadline
-    async fn wait_all_execution_tasks(&mut self) -> Result<bool, SchedulerError> {
+    // Returns `(exceeded_deadline, fallback_next_start_idx)`. The second element
+    // is `Some(next_idx)` if a fallback ran during the drain (so the caller can
+    // reset its block-tx counter for the blob stage / metrics), else `None`.
+    async fn wait_all_execution_tasks(
+        &mut self,
+        storage_with_da: Arc<StorageTransaction<View>>,
+    ) -> Result<(bool, Option<u32>), SchedulerError> {
+        let mut fallback_next_start_idx = None;
         // We have reached the deadline
         // We need to merge the states of all the workers
         while !self.current_execution_tasks.is_empty() {
@@ -1171,15 +1232,18 @@ where
                     let res = res?;
                     if !res.skipped_tx.is_empty() {
                         drop(res.worker_id);
-                        self.sequential_fallback(
-                            res.batch_id,
-                            res.txs,
-                            res.coins_used,
-                            res.coins_created,
-                            res.message_nonces_used,
-                            res.execution_duration,
-                        )
-                        .await?;
+                        let next_start_idx = self
+                            .sequential_fallback(
+                                res.batch_id,
+                                res.txs,
+                                res.coins_used,
+                                res.coins_created,
+                                res.message_nonces_used,
+                                res.execution_duration,
+                                storage_with_da.clone(),
+                            )
+                            .await?;
+                        fallback_next_start_idx = Some(next_start_idx);
                         break;
                     } else {
                         // End-of-block drain: this batch completed cleanly and
@@ -1230,7 +1294,7 @@ where
             );
             exceeded_deadline = true;
         }
-        Ok(exceeded_deadline)
+        Ok((exceeded_deadline, fallback_next_start_idx))
     }
 
     fn verify_coherency_and_merge_results(
@@ -1353,16 +1417,43 @@ where
         Ok((execution_data, transactions))
     }
 
-    // Wait for all the workers to finish gather all theirs transactions
-    // re-execute them in one worker without skipped one. We also need to
-    // fetch all the possible executed and stored batch after the lowest batch_id we gonna
-    // re-execute.
+    // Wait for all the workers to finish, gather all their transactions and
+    // re-execute the affected contiguous batch-id range on a single worker
+    // without the skipped transaction. We also fetch every already-executed
+    // batch inside that range so the replay covers the whole `[lower, higher]`
+    // window in committed order.
+    //
+    // Correctness of the replay hinges on the STARTING view. The re-execution
+    // must observe exactly the state left by the KEPT earlier batches (id
+    // `< lower`) — otherwise a range tx that reads a contract mutated by a kept
+    // batch, or spends a coin/message it created, would replay against stale
+    // state and diverge from the sequential (validation) executor, which is a
+    // consensus split. We therefore seed the replay with:
+    //   * `storage_with_da` — the pre-block view PLUS the DA-import changes
+    //     (previously the replay used a bare `latest_view()`, dropping DA), and
+    //   * the per-contract state as of `lower`, rebuilt from
+    //     `dispatched_contract_seeds` (the seed each in-range batch was handed;
+    //     the lowest-id toucher of a contract carries its as-of-`lower` state).
+    // Coins/messages created by kept batches need no seeding: the executor runs
+    // with `forbid_fake_utxo: false`, so a spend of a not-yet-committed
+    // input succeeds and the post-hoc `CoinDependencyChainVerifier` / nonce
+    // dedup validate it, and the canonical fold nets create-then-spend to a
+    // `Remove` (matching the sequential map). Contract state has no such
+    // post-hoc check, which is why it must be seeded.
+    //
+    // The replay runs through `InMemoryTransactionWithContracts` (as normal
+    // batches do), so its contract writes are split back out per contract and
+    // merged into `contracts_changes` (one entry per contract, preserving the
+    // canonical-fold invariant); only the non-contract (coin/message) writes go
+    // into this batch's `ChangesList` entry.
+    //
     // Tell the TransactionSource that this transaction is skipped
     // to avoid sending new transactions that depend on it (using preconfirmation squeeze out)
     //
     // Can be replaced by a mechanism that replace the skipped_tx by a dummy transaction to not shift everything
     // TODO: Rework this function to continue the execution from the batch that got conflict
-    //  and use the state of the contracts before execution of that batch.
+    //  instead of re-executing the whole `[lower, higher]` range.
+    #[allow(clippy::too_many_arguments)]
     async fn sequential_fallback(
         &mut self,
         batch_id: usize,
@@ -1371,7 +1462,8 @@ where
         coins_created: Vec<CoinInBatch>,
         message_nonces_used: Vec<Nonce>,
         execution_duration: Duration,
-    ) -> Result<(), SchedulerError> {
+        storage_with_da: Arc<StorageTransaction<View>>,
+    ) -> Result<u32, SchedulerError> {
         let block_height = *self.header_to_produce.height();
         // This batch's parallel results are discarded and re-executed
         // sequentially below. Report its feedback as `completed: false` — the
@@ -1472,11 +1564,45 @@ where
             }
         }
 
+        // Rebuild the per-contract state as of `lower_batch_id`. For each
+        // contract touched anywhere in the range, take the seed handed to the
+        // LOWEST-id in-range batch that touched it: that batch saw exactly the
+        // state left by the kept batches (< lower), because any earlier in-range
+        // batch that did not touch the contract left it unchanged. Higher-id
+        // seeds also fold in earlier in-range writes, which the replay itself
+        // recomputes — so first-writer-wins per contract is precisely the
+        // as-of-`lower` state. Contracts first created/touched inside the range
+        // have no seed here and correctly start from the base view.
+        let mut contract_seed: FxHashMap<ContractId, Changes> = FxHashMap::default();
+        for id in lower_batch_id..=higher_batch_id {
+            if let Some(seed) = self.dispatched_contract_seeds.remove(&id) {
+                for (contract_id, changes) in seed {
+                    contract_seed.entry(contract_id).or_insert(changes);
+                }
+            }
+        }
+
+        // Replay the range starting at the block index the lowest-id batch in
+        // the range originally used, so the replayed txs keep their true block
+        // positions (their `TxPointer` must match the sequential executor's, or
+        // e.g. `ContractsLatestUtxo` diverges). All batches before `lower` are
+        // kept and committed, so this equals the count of block txs before the
+        // range.
+        let start_idx_txs = self
+            .dispatched_start_idx
+            .get(&lower_batch_id)
+            .copied()
+            .unwrap_or(0);
+
         let executor = self.executor.clone();
-        // Get a memory instance for the blob transactions execution
+        // Get a memory instance for the re-execution
         let mut memory_instance = self.memory_pool.take_raw();
-        let view = self.storage.latest_view()?;
-        let mut storage_tx = view.read_transaction();
+        // Replay over the pre-block view + DA changes, seeded with the
+        // as-of-`lower` per-contract state, using the same
+        // contract-splitting transaction the parallel batches use.
+        let memory_tx =
+            InMemoryTransactionWithContracts::new(storage_with_da, contract_seed);
+        let mut storage_tx = StructuredStorage::new(memory_tx);
         let (transactions, mut execution_data) = executor
             .execute_l2_transactions(
                 Components {
@@ -1486,11 +1612,29 @@ where
                     gas_price: self.gas_price,
                 },
                 &mut storage_tx,
-                0,
+                start_idx_txs,
                 memory_instance.as_mut(),
             )
             .await?;
-        execution_data.changes = storage_tx.into_changes();
+        // Split the replay's writes: contract state → merged back into
+        // `contracts_changes` (one entry per contract), everything else →
+        // this batch's `ChangesList` entry.
+        let (changes, changes_per_contract) = storage_tx.into_storage().into_changes();
+        execution_data.changes = changes;
+        for (contract_id, contract_changes) in changes_per_contract {
+            // The range's contracts were removed from `contracts_changes` when
+            // the in-range batches picked them up, so there is normally no
+            // existing entry. Fold defensively if one is present so we never
+            // emit two `ChangesList` entries for a single contract (which the
+            // strict canonical fold would reject).
+            if let Some(existing) = self.contracts_changes.remove(&contract_id) {
+                let merged =
+                    fold_changes_in_canonical_order(vec![existing, contract_changes])?;
+                self.contracts_changes.insert(contract_id, merged);
+            } else {
+                self.contracts_changes.insert(contract_id, contract_changes);
+            }
+        }
         if !execution_data.skipped_transactions.is_empty() {
             let skipped = execution_data
                 .skipped_transactions
@@ -1510,6 +1654,17 @@ where
             self.execution_results
                 .insert(id, WorkSessionSavedData::default());
         }
+        // The number of block txs committed through the end of this range: the
+        // range's starting index plus what the replay actually committed. The
+        // caller resets its running tx counter to this so subsequent batches
+        // (and the blob stage) get contiguous `start_idx_txs` matching the
+        // sequential validator — the fallback dropped the range's skipped txs,
+        // which the dispatch-time counter had already counted.
+        let committed_in_range = u32::try_from(transactions.len()).map_err(|_| {
+            SchedulerError::InternalError("Too many transactions".to_string())
+        })?;
+        let next_start_idx_txs = start_idx_txs.saturating_add(committed_in_range);
+
         // Save the execution results for the current batch
         self.execution_results.insert(
             batch_id,
@@ -1529,7 +1684,7 @@ where
             },
         );
 
-        Ok(())
+        Ok(next_start_idx_txs)
     }
 }
 
