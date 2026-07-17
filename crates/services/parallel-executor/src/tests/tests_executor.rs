@@ -24,7 +24,14 @@ use crate::{
         MockTxPoolResponse,
     },
 };
-use fuel_core_executor::executor::ExecutionData;
+use fuel_core_executor::executor::{
+    ExecutionData,
+    ExecutionInstance,
+    ExecutionOptions,
+    OnceTransactionsSource,
+    TimeoutOnlyTxWaiter,
+    TransparentPreconfirmationSender,
+};
 use fuel_core_storage::{
     Result as StorageResult,
     StorageAsMut,
@@ -39,6 +46,7 @@ use fuel_core_storage::{
     tables::{
         Coins,
         ConsensusParametersVersions,
+        FuelBlocks,
     },
     transactional::{
         AtomicView,
@@ -52,7 +60,11 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::transaction::TransactionExt,
+    blockchain::{
+        block::Block,
+        header::PartialBlockHeader,
+        transaction::TransactionExt,
+    },
     entities::coins::coin::Coin,
     fuel_asm::{
         RegId,
@@ -64,11 +76,13 @@ use fuel_core_types::{
     },
     fuel_tx::{
         Buildable,
+        Bytes32,
         Chargeable,
         ConsensusParameters,
         ContractId,
         Input,
         Output,
+        Receipt,
         Transaction,
         TransactionBuilder,
         UniqueIdentifier,
@@ -78,8 +92,15 @@ use fuel_core_types::{
     fuel_vm::{
         Salt,
         SecretKey,
+        interpreter::MemoryInstance,
     },
-    services::block_producer::Components,
+    services::{
+        block_producer::Components,
+        executor::{
+            TransactionExecutionResult,
+            TransactionExecutionStatus,
+        },
+    },
 };
 use rand::SeedableRng;
 use tokio::time::Instant;
@@ -1357,4 +1378,549 @@ fn add_blob_execution_data__carries_changes_and_does_not_panic() {
         "blob execution data must be carried through, not asserted empty",
     );
     assert_eq!(res.used_gas, 42);
+}
+
+// ---------------------------------------------------------------------------
+// Package B — sequential-replay oracle (systematic regression net).
+//
+// For each scenario the parallel producer builds a block (via the existing
+// `produce_without_commit_with_source` mock harness, forcing multi-batch splits
+// through the mock's response queue), then the SAME committed tx order is
+// re-executed by the plain sequential `fuel-core-executor`
+// `ExecutionInstance::produce_without_commit` — the PRIMARY reference, run from
+// the same starting view and the same `ExecutionOptions`, in a single storage
+// transaction. We then assert the two agree on: folded final state (key-for-key
+// `Changes`), committed order, mint/coinbase, tx statuses/receipts/gas/fees, and
+// skipped-tx sets.
+//
+// All scenarios PASS on the current (post-audit-fix) code; the value is
+// regression protection. A FAILURE here is a NEW BUG (the assertions are
+// deliberately strict and must not be weakened to go green).
+//
+// Concurrency note: the mock `TransactionsSource` does NOT honour the
+// scheduler's per-contract exclusion (the real txpool does), so two
+// concurrently-dispatched batches touching the SAME contract would violate the
+// scheduler's one-writer-per-contract invariant. The hand-written multi-worker
+// scenarios therefore keep each contract within a single batch; the
+// same-contract serial-chain and the random workloads use a single worker
+// (still exercising cross-batch fold/handoff/fallback across varied batch
+// boundaries). Cross-batch coin spends legitimately route through the sequential
+// fallback regardless of worker count.
+// ---------------------------------------------------------------------------
+
+const ORACLE_DEADLINE_MS: u64 = 400;
+
+// The sequential reference executor refuses to run a height-0 (genesis) block,
+// and both producers look up the previous block for DA processing, so the oracle
+// produces block height 1 with an empty previous block at height 0 (da_height 0
+// == the produced header's da_height, so no DA events are processed on either
+// side).
+fn add_previous_block(storage: &mut Storage) {
+    let mut block = Block::default();
+    block.header_mut().set_da_height(0u64.into());
+    block.header_mut().recalculate_metadata();
+    let compressed = block.compress(&ChainId::default());
+    let mut tx = storage.0.write_transaction();
+    tx.storage_as_mut::<FuelBlocks>()
+        .insert(&0u32.into(), &compressed)
+        .unwrap();
+    tx.commit().unwrap();
+}
+
+fn header_at_height_1() -> PartialBlockHeader {
+    let mut header = PartialBlockHeader::default();
+    header.consensus.height = 1u32.into();
+    header
+}
+
+fn split_off_mint(
+    txs: &[Transaction],
+    scenario: &str,
+) -> (Transaction, Vec<Transaction>) {
+    let (last, rest) = txs
+        .split_last()
+        .unwrap_or_else(|| panic!("[{scenario}] produced block has no transactions"));
+    assert!(
+        last.is_mint(),
+        "[{scenario}] expected the last block tx to be the mint, got {last:?}",
+    );
+    (last.clone(), rest.to_vec())
+}
+
+type StatusSummary = (Bytes32, bool, u64, u64, Vec<Receipt>);
+
+fn status_summary(s: &TransactionExecutionStatus) -> StatusSummary {
+    let success = matches!(s.result, TransactionExecutionResult::Success { .. });
+    (
+        s.id,
+        success,
+        *s.result.total_gas(),
+        *s.result.total_fee(),
+        s.result.receipts().to_vec(),
+    )
+}
+
+// Compare statuses as a by-id-sorted multiset: every tx's status/receipts/gas/fee
+// must match, independent of the order the two executors emit them in (block
+// order is asserted separately via the committed-tx-id list).
+fn sorted_summaries(v: &[TransactionExecutionStatus]) -> Vec<StatusSummary> {
+    let mut out: Vec<StatusSummary> = v.iter().map(status_summary).collect();
+    out.sort_by_key(|s| s.0);
+    out
+}
+
+fn tx_ids(txs: &[Transaction]) -> Vec<Bytes32> {
+    txs.iter().map(|tx| tx.id(&ChainId::default())).collect()
+}
+
+/// Run the parallel producer over `batches`, then replay its committed order
+/// through the sequential reference executor and assert full agreement.
+async fn run_replay_oracle(
+    mut storage: Storage,
+    coinbase_recipient: ContractId,
+    gas_price: u64,
+    batches: Vec<Vec<Transaction>>,
+    worker_count: usize,
+    scenario: &str,
+) {
+    let fed_tx_count: usize = batches.iter().map(|b| b.len()).sum();
+    // Both producers start from the same view, which now includes the previous
+    // block so height-1 production is accepted by both.
+    add_previous_block(&mut storage);
+    let storage_for_seq = storage.clone();
+
+    // ---- parallel producer ----
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(worker_count).unwrap(),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
+                metrics: false,
+            },
+        )
+        .unwrap();
+    let (source, pool) = MockTransactionsSource::new();
+    for batch in &batches {
+        let refs: Vec<&Transaction> = batch.iter().collect();
+        pool.push_response(MockTxPoolResponse::new(
+            &refs,
+            TransactionFiltered::NotFiltered,
+        ));
+    }
+    let (par_result, par_changes) = executor
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: header_at_height_1(),
+                transactions_source: source,
+                coinbase_recipient,
+                gas_price,
+            },
+            Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+        )
+        .await
+        .unwrap()
+        .into();
+
+    // The parallel path must emit ONE coalesced `Changes` (audit fix #1).
+    let par_changes = match par_changes {
+        StorageChanges::Changes(c) => c,
+        StorageChanges::ChangesList(_) => panic!(
+            "[{scenario}] parallel producer must emit a single coalesced Changes, \
+             got a ChangesList (NEW BUG)"
+        ),
+    };
+    assert!(
+        par_result.skipped_transactions.is_empty(),
+        "[{scenario}] parallel producer skipped txs (unexpected): {:?}",
+        par_result.skipped_transactions,
+    );
+
+    let par_block_txs = par_result.block.transactions().to_vec();
+    let (par_mint, par_user) = split_off_mint(&par_block_txs, scenario);
+    // Deadline was generous enough / nothing silently dropped: all fed txs made
+    // it in (guards against under-inclusion masking a divergence).
+    assert_eq!(
+        par_user.len(),
+        fed_tx_count,
+        "[{scenario}] parallel producer did not include every fed tx \
+         ({} of {}) — raise ORACLE_DEADLINE_MS or investigate",
+        par_user.len(),
+        fed_tx_count,
+    );
+
+    // ---- sequential reference: same view, same options, single storage tx ----
+    let options = ExecutionOptions {
+        forbid_unauthorized_inputs: true,
+        forbid_fake_utxo: false,
+        allow_syscall: false,
+    };
+    let seq_source = OnceTransactionsSource::new(par_user.clone());
+    let components = Components {
+        header_to_produce: header_at_height_1(),
+        transactions_source: seq_source,
+        coinbase_recipient,
+        gas_price,
+    };
+    let (seq_result, seq_changes) = ExecutionInstance::new(
+        MockRelayer,
+        storage_for_seq,
+        options,
+        MemoryInstance::new(),
+    )
+    .produce_without_commit(
+        components,
+        false,
+        TimeoutOnlyTxWaiter,
+        TransparentPreconfirmationSender,
+    )
+    .await
+    .unwrap()
+    .into();
+
+    assert!(
+        seq_result.skipped_transactions.is_empty(),
+        "[{scenario}] sequential reference skipped txs — the parallel producer \
+         emitted an order the plain executor rejects (NEW BUG): {:?}",
+        seq_result.skipped_transactions,
+    );
+
+    let seq_block_txs = seq_result.block.transactions().to_vec();
+    let (seq_mint, seq_user) = split_off_mint(&seq_block_txs, scenario);
+
+    // (1) final state: folded parallel Changes == sequential Changes, key-for-key.
+    assert_eq!(
+        par_changes, seq_changes,
+        "[{scenario}] final-state mismatch: folded parallel Changes != sequential \
+         Changes (NEW BUG)",
+    );
+    // (2) committed user-tx order.
+    assert_eq!(
+        tx_ids(&par_user),
+        tx_ids(&seq_user),
+        "[{scenario}] committed user-tx order mismatch (NEW BUG)",
+    );
+    // (3) mint tx (encodes the coinbase amount).
+    assert_eq!(
+        par_mint, seq_mint,
+        "[{scenario}] mint tx / coinbase amount mismatch (NEW BUG)",
+    );
+    // (4) statuses / receipts / gas / fees.
+    assert_eq!(
+        sorted_summaries(&par_result.tx_status),
+        sorted_summaries(&seq_result.tx_status),
+        "[{scenario}] tx status/receipts/gas/fee mismatch (NEW BUG)",
+    );
+    // (5) block used_gas (sum over statuses) — explicit though implied by (4).
+    let par_gas: u64 = par_result
+        .tx_status
+        .iter()
+        .map(|s| *s.result.total_gas())
+        .sum();
+    let seq_gas: u64 = seq_result
+        .tx_status
+        .iter()
+        .map(|s| *s.result.total_gas())
+        .sum();
+    assert_eq!(par_gas, seq_gas, "[{scenario}] used_gas mismatch (NEW BUG)");
+}
+
+// A script tx that takes one contract input/output per contract in `contracts`
+// (indices 0..n) plus a funding coin input.
+fn contract_call_tx(
+    rng: &mut StdRng,
+    storage: &mut Storage,
+    contracts: &[ContractId],
+) -> Transaction {
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    for (i, contract) in contracts.iter().enumerate() {
+        builder.add_input(Input::contract(
+            rng.r#gen(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            *contract,
+        ));
+        builder.add_output(Output::contract(
+            i as u16,
+            Default::default(),
+            Default::default(),
+        ));
+    }
+    builder.add_stored_coin_input(rng, storage, 1000);
+    builder.finalize_as_transaction()
+}
+
+// A tx that spends a stored coin and creates a fresh coin output owned by
+// `new_key`; returns the tx and the spendable UtxoId of its output (gas_price 0,
+// so out-amount == in-amount).
+fn coin_creating_tx(
+    rng: &mut StdRng,
+    storage: &mut Storage,
+    new_key: &SecretKey,
+    amount: u64,
+) -> (Transaction, UtxoId) {
+    let owner = Input::owner(&new_key.public_key());
+    let tx = TransactionBuilder::script(vec![], vec![])
+        .add_stored_coin_input(rng, storage, amount)
+        .add_output(Output::coin(owner, amount, Default::default()))
+        .finalize_as_transaction();
+    let utxo = UtxoId::new(tx.id(&ChainId::default()), 0);
+    (tx, utxo)
+}
+
+async fn setup_contracts(
+    rng: &mut StdRng,
+    storage: &mut Storage,
+    n: usize,
+) -> Vec<ContractId> {
+    let mut contracts = Vec::with_capacity(n);
+    for _ in 0..n {
+        let (cid, changes) = contract_creation_changes(rng).await;
+        storage.merge_changes(changes).unwrap();
+        contracts.push(cid);
+    }
+    contracts
+}
+
+// SCENARIO 1 — multi-contract txs spread across batches (distinct contracts per
+// batch, so real 2-worker parallelism is safe): exercises multi-contract
+// per-contract Changes handoff + cross-batch merge + fold.
+#[tokio::test]
+async fn oracle__multi_contract_txs_across_batches() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    let contracts = setup_contracts(&mut rng, &mut storage, 4).await;
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    let b0 = vec![
+        contract_call_tx(&mut rng, &mut storage, &[contracts[0], contracts[1]]),
+        contract_call_tx(&mut rng, &mut storage, &[contracts[0]]),
+    ];
+    let b1 = vec![
+        contract_call_tx(&mut rng, &mut storage, &[contracts[2], contracts[3]]),
+        contract_call_tx(&mut rng, &mut storage, &[contracts[3]]),
+    ];
+
+    run_replay_oracle(
+        storage,
+        Default::default(),
+        0,
+        vec![b0, b1],
+        2,
+        "multi_contract_across_batches",
+    )
+    .await;
+}
+
+// SCENARIO 2 — cross-batch coin create-then-spend chain (3 links across 3
+// batches). The later batches' spenders cannot see not-yet-committed coins, so
+// this routes through the sequential fallback; the oracle proves the fallback's
+// result matches a straight sequential run.
+#[tokio::test]
+async fn oracle__cross_batch_coin_create_then_spend_chain() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    let k1 = SecretKey::random(&mut rng);
+    let (tx1, utxo1) = coin_creating_tx(&mut rng, &mut storage, &k1, 1000);
+    // tx2 spends coinA (from k1) and creates coinB (to k2).
+    let k2 = SecretKey::random(&mut rng);
+    let owner2 = Input::owner(&k2.public_key());
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .add_unsigned_coin_input(k1, utxo1, 1000, Default::default(), Default::default())
+        .add_output(Output::coin(owner2, 1000, Default::default()))
+        .finalize_as_transaction();
+    let utxo2 = UtxoId::new(tx2.id(&ChainId::default()), 0);
+    // tx3 spends coinB.
+    let owner3 = Input::owner(&SecretKey::random(&mut rng).public_key());
+    let tx3 = TransactionBuilder::script(vec![], vec![])
+        .add_unsigned_coin_input(k2, utxo2, 1000, Default::default(), Default::default())
+        .add_output(Output::coin(owner3, 1000, Default::default()))
+        .finalize_as_transaction();
+
+    run_replay_oracle(
+        storage,
+        Default::default(),
+        0,
+        vec![vec![tx1], vec![tx2], vec![tx3]],
+        2,
+        "cross_batch_coin_chain",
+    )
+    .await;
+}
+
+// SCENARIO 3 — a user tx that touches the coinbase contract, plus the mint. With
+// gas_price > 0 the coinbase is non-zero, so this checks mint-on-the-merged-view
+// (audit fix #3): the mint's coinbase-contract write must coalesce with the user
+// tx's and the coinbase accounting must match the sequential run.
+#[tokio::test]
+async fn oracle__user_tx_touching_coinbase_contract_plus_mint() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    let (contract_id, contract_changes) = contract_creation_changes(&mut rng).await;
+    storage.merge_changes(contract_changes).unwrap();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder
+        .max_fee_limit(1_000_000) // gas_price > 0 needs a fee budget
+        .add_input(Input::contract(
+            rng.r#gen(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            contract_id,
+        ))
+        .add_stored_coin_input(&mut rng, &mut storage, 1_000_000)
+        .add_output(Output::contract(0, Default::default(), Default::default()));
+    let tx_call = builder.finalize_as_transaction();
+
+    run_replay_oracle(
+        storage,
+        contract_id, // coinbase recipient IS the touched contract
+        1,           // non-zero gas price => non-zero coinbase
+        vec![vec![tx_call]],
+        2,
+        "coinbase_contract_plus_mint",
+    )
+    .await;
+}
+
+// SCENARIO 4 — a contested single contract as a serial chain: every tx touches
+// the same contract, one per batch, single worker (serial). Exercises repeated
+// cross-batch handoff of one contract's Changes.
+#[tokio::test]
+async fn oracle__contested_single_contract_serial_chain() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    let contracts = setup_contracts(&mut rng, &mut storage, 1).await;
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    let c = contracts[0];
+
+    let batches = vec![
+        vec![contract_call_tx(&mut rng, &mut storage, &[c])],
+        vec![contract_call_tx(&mut rng, &mut storage, &[c])],
+        vec![contract_call_tx(&mut rng, &mut storage, &[c])],
+    ];
+
+    run_replay_oracle(
+        storage,
+        Default::default(),
+        0,
+        batches,
+        1,
+        "contested_single_contract",
+    )
+    .await;
+}
+
+// SCENARIO 5 — seeded pseudo-random workloads mixing all of the above patterns,
+// so the oracle explores batch boundaries / fold / fallback combinations the
+// hand-written cases don't. Single worker (see the concurrency note above);
+// deterministic per seed. Fast enough to run in the normal suite (measured well
+// under the 30s budget), so NOT #[ignore]d.
+fn build_random_workload(
+    seed: u64,
+    storage: &mut Storage,
+    contracts: &[ContractId],
+    n: usize,
+) -> Vec<Vec<Transaction>> {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed ^ 0xA5A5_A5A5);
+    let mut batches: Vec<Vec<Transaction>> = vec![];
+    let mut current: Vec<Transaction> = vec![];
+    // Coins created earlier that a later tx may spend (start/extend a chain).
+    let mut spendable: Vec<(SecretKey, UtxoId, u64)> = vec![];
+
+    for _ in 0..n {
+        let pick = rng.gen_range(0u8..100);
+        let tx = if pick < 25 {
+            // plain transfer
+            basic_tx(&mut rng, storage)
+        } else if pick < 50 {
+            // single-contract call
+            let c = contracts[rng.gen_range(0..contracts.len())];
+            contract_call_tx(&mut rng, storage, &[c])
+        } else if pick < 70 {
+            // multi-contract call (2..=3 distinct contracts)
+            let k = rng.gen_range(2..=std::cmp::min(3, contracts.len()));
+            let mut idxs: Vec<usize> = vec![];
+            while idxs.len() < k {
+                let i = rng.gen_range(0..contracts.len());
+                if !idxs.contains(&i) {
+                    idxs.push(i);
+                }
+            }
+            let picked: Vec<ContractId> = idxs.iter().map(|&i| contracts[i]).collect();
+            contract_call_tx(&mut rng, storage, &picked)
+        } else if pick < 85 && !spendable.is_empty() {
+            // spend an earlier coin, create a new one (extend a chain)
+            let idx = rng.gen_range(0..spendable.len());
+            let (key, utxo, amount) = spendable.remove(idx);
+            let new_key = SecretKey::random(&mut rng);
+            let new_owner = Input::owner(&new_key.public_key());
+            let tx = TransactionBuilder::script(vec![], vec![])
+                .add_unsigned_coin_input(
+                    key,
+                    utxo,
+                    amount,
+                    Default::default(),
+                    Default::default(),
+                )
+                .add_output(Output::coin(new_owner, amount, Default::default()))
+                .finalize_as_transaction();
+            let new_utxo = UtxoId::new(tx.id(&ChainId::default()), 0);
+            spendable.push((new_key, new_utxo, amount));
+            tx
+        } else {
+            // create a fresh coin (potential chain start)
+            let new_key = SecretKey::random(&mut rng);
+            let (tx, utxo) = coin_creating_tx(&mut rng, storage, &new_key, 1000);
+            spendable.push((new_key, utxo, 1000));
+            tx
+        };
+        current.push(tx);
+        if rng.gen_bool(0.4) && !current.is_empty() {
+            batches.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        batches.push(current);
+    }
+    batches
+}
+
+async fn run_random_seed(seed: u64) {
+    let mut setup_rng = rand::rngs::StdRng::seed_from_u64(seed);
+    let mut storage = Storage::default();
+    let contracts = setup_contracts(&mut setup_rng, &mut storage, 4).await;
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    let batches = build_random_workload(seed, &mut storage, &contracts, 30);
+    run_replay_oracle(
+        storage,
+        Default::default(),
+        0,
+        batches,
+        1,
+        &format!("random_seed_{seed}"),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn oracle__random_workload_seed_1() {
+    run_random_seed(1).await;
+}
+
+#[tokio::test]
+async fn oracle__random_workload_seed_2() {
+    run_random_seed(7).await;
+}
+
+#[tokio::test]
+async fn oracle__random_workload_seed_3() {
+    run_random_seed(42).await;
 }
