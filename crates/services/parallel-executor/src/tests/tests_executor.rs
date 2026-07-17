@@ -1512,14 +1512,41 @@ fn strip_empty_columns(mut changes: Changes) -> Changes {
 }
 
 /// Run the parallel producer over `batches`, then replay its committed order
-/// through the sequential reference executor and assert full agreement.
+/// through the sequential reference executor and assert full agreement. Uses the
+/// default (comfortable) block deadline, so batches complete in the scheduler's
+/// main loop.
 async fn run_replay_oracle(
+    storage: Storage,
+    coinbase_recipient: ContractId,
+    gas_price: u64,
+    batches: Vec<Vec<Transaction>>,
+    worker_count: usize,
+    scenario: &str,
+) {
+    run_replay_oracle_with_deadline(
+        storage,
+        coinbase_recipient,
+        gas_price,
+        batches,
+        worker_count,
+        scenario,
+        Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+    )
+    .await
+}
+
+/// As [`run_replay_oracle`], but with a caller-chosen `deadline` so a scenario can
+/// force batches to complete on the end-of-block drain path
+/// (`wait_all_execution_tasks`) by passing an already-elapsed deadline.
+#[allow(clippy::too_many_arguments)]
+async fn run_replay_oracle_with_deadline(
     mut storage: Storage,
     coinbase_recipient: ContractId,
     gas_price: u64,
     batches: Vec<Vec<Transaction>>,
     worker_count: usize,
     scenario: &str,
+    deadline: Instant,
 ) {
     let fed_tx_count: usize = batches.iter().map(|b| b.len()).sum();
     // Both producers start from the same view, which now includes the previous
@@ -1556,7 +1583,7 @@ async fn run_replay_oracle(
                 coinbase_recipient,
                 gas_price,
             },
-            Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+            deadline,
         )
         .await
         .unwrap()
@@ -1968,6 +1995,76 @@ async fn oracle__fallback_replays_range_against_kept_batch_contract_state() {
         vec![vec![create_tx], vec![call_tx, bad_tx]],
         1,
         "fallback_replays_range_against_kept_batch_contract_state",
+    )
+    .await;
+}
+
+// A contract-calling script heavy enough that its batch is still executing on the
+// worker runtime when the (already-elapsed) block deadline breaks the scheduler's
+// main loop — so the batch is completed by the end-of-block drain
+// (`wait_all_execution_tasks`) rather than the main loop's
+// `register_execution_result`. The contract input/output makes the batch write
+// per-contract state (`ContractsLatestUtxo`), so a drain path that fails to
+// re-insert the batch's `changes_per_contract` into the shared map silently drops
+// that write from the final merge (FIX 1). Same busy-loop body as `heavy_tx`.
+fn heavy_contract_tx(
+    rng: &mut StdRng,
+    storage: &mut Storage,
+    contract: ContractId,
+) -> Transaction {
+    let mut ops = vec![op::movi(0x10, 10_000), op::movi(0x11, 0)];
+    let loop_start = ops.len();
+    ops.push(op::subi(0x10, 0x10, 1));
+    for _ in 0..10 {
+        ops.push(op::add(0x11, 0x11, 0x10));
+    }
+    let back = (ops.len() - loop_start) as u16;
+    ops.push(op::jnzb(0x10, RegId::ZERO, back));
+    ops.push(op::ret(RegId::ONE));
+    let script_bytes: Vec<u8> = ops.iter().flat_map(|op| op.to_bytes()).collect();
+    let mut builder = TransactionBuilder::script(script_bytes, vec![]);
+    builder.add_input(Input::contract(
+        rng.r#gen(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        contract,
+    ));
+    builder.add_output(Output::contract(0, Default::default(), Default::default()));
+    builder.script_gas_limit(50_000_000);
+    builder.add_stored_coin_input(rng, storage, 1_000_000);
+    builder.finalize_as_transaction()
+}
+
+// SCENARIO 6 (FIX 1 repro) — a contract-writing batch that completes on the
+// end-of-block DRAIN path. The heavy contract-call tx is still in flight when the
+// already-elapsed deadline breaks the main loop, so `wait_all_execution_tasks`
+// completes it. Before FIX 1 the drain path inserted the batch's non-contract
+// `Changes` into `execution_results` but never re-inserted its
+// `changes_per_contract` into the shared `contracts_changes` map — so the
+// contract's `ContractsLatestUtxo` write was dropped from the final coalesced
+// `Changes` and the parallel producer's state diverged from the sequential
+// validator (a consensus split). This oracle asserts key-for-key agreement, so it
+// FAILS on the pre-fix scheduler and PASSES after.
+#[tokio::test]
+async fn oracle__drain_completing_contract_batch_keeps_contract_writes() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    let contracts = setup_contracts(&mut rng, &mut storage, 1).await;
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    let tx = heavy_contract_tx(&mut rng, &mut storage, contracts[0]);
+
+    // Already-elapsed deadline + single worker: the one heavy batch is dispatched,
+    // the main loop immediately breaks, and the batch drains.
+    run_replay_oracle_with_deadline(
+        storage,
+        Default::default(),
+        0,
+        vec![vec![tx]],
+        1,
+        "drain_completing_contract_batch",
+        Instant::now(),
     )
     .await;
 }

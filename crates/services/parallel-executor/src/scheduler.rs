@@ -1308,31 +1308,25 @@ where
                         break;
                     } else {
                         // End-of-block drain: this batch completed cleanly and
-                        // its results are kept, so report `completed: true` with
-                        // its real timings (previously this path silently dropped
-                        // the handle and leaked its `batch_preparations` entry).
-                        self.report_batch_feedback(
-                            res.batch_id,
-                            res.execution_duration,
-                            true,
-                        );
-                        self.execution_results.insert(
-                            res.batch_id,
-                            WorkSessionSavedData {
-                                changes: res.changes,
-                                coins_created: res.coins_created,
-                                coins_used: res.coins_used,
-                                message_nonces_used: res.message_nonces_used,
-                                txs: res.txs,
-                                message_ids: res.message_ids,
-                                events: res.events,
-                                tx_statuses: res.tx_statuses,
-                                skipped_tx: res.skipped_tx,
-                                used_gas: res.used_gas,
-                                used_size: res.used_size,
-                                coinbase: res.coinbase,
-                            },
-                        );
+                        // its results are kept. Route through the SAME
+                        // registration as the main loop so nothing is dropped.
+                        //
+                        // FIX 1 (consensus bug): this path used to insert only the
+                        // batch's non-contract `Changes` into `execution_results`
+                        // and NEVER re-inserted its `changes_per_contract` into the
+                        // shared `contracts_changes` map (which `execute_batch`
+                        // removed at dispatch). The final
+                        // `verify_coherency_and_merge_results` merge folds
+                        // `contracts_changes`, so a batch completing here silently
+                        // dropped ALL its per-contract writes (e.g.
+                        // `ContractsLatestUtxo`) from the block — a producer/
+                        // validator state split. `register_execution_result`
+                        // re-inserts the per-contract changes (and also reports
+                        // `completed: true`, records the merge-handoff metric, and
+                        // frees the batch's contracts + gas), so delegating to it
+                        // fixes the drop and removes the divergence from the main
+                        // loop.
+                        self.register_execution_result(res);
                     }
                 }
                 Some(Err(_)) => {
