@@ -1,4 +1,6 @@
 use crate::ports::{
+    BatchExecutionReport,
+    BatchFeedbackHandle,
     Filter,
     TransactionFiltered,
     TransactionSourceExecutableTransactions,
@@ -23,9 +25,38 @@ use std::{
     sync::{
         Arc,
         Mutex,
+        atomic::{
+            AtomicUsize,
+            Ordering,
+        },
     },
 };
 use tokio::sync::watch;
+
+/// Test-only observation point for the batch-feedback loop. The mock attaches a
+/// real [`BatchFeedbackHandle`] to every non-empty batch it hands out (mirroring
+/// what the txpool lane scheduler does when enabled). `created` counts those
+/// dispatched batches; `reports` collects every [`BatchExecutionReport`] the
+/// scheduler forwards back. With no blob-only responses, `created ==
+/// reports.len()` is the leak-free / no-dropped-handle invariant, and each
+/// report's `completed` flag reveals which completion path handled the batch.
+#[derive(Clone, Default)]
+pub struct FeedbackSink {
+    created: Arc<AtomicUsize>,
+    reports: Arc<Mutex<Vec<BatchExecutionReport>>>,
+}
+
+impl FeedbackSink {
+    /// Number of non-empty batches handed out (each got a feedback handle).
+    pub fn created(&self) -> usize {
+        self.created.load(Ordering::Relaxed)
+    }
+
+    /// All reports forwarded back by the scheduler, in arrival order.
+    pub fn reports(&self) -> Vec<BatchExecutionReport> {
+        self.reports.lock().expect("Mutex poisoned").clone()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct MockRelayer;
@@ -50,6 +81,9 @@ pub struct PoolRequestParams {
 }
 pub struct MockTransactionsSource {
     response_queue: Arc<Mutex<VecDeque<MockTxPoolResponse>>>,
+    /// When set, a real feedback handle is attached to every non-empty batch and
+    /// its completion report is collected here (see [`FeedbackSink`]).
+    feedback: Option<FeedbackSink>,
 }
 #[derive(Debug)]
 pub struct MockTxPoolResponse {
@@ -113,8 +147,26 @@ impl MockTransactionsSource {
         (
             Self {
                 response_queue: response_queue.clone(),
+                feedback: None,
             },
             MockTxPool { response_queue },
+        )
+    }
+
+    /// Like [`Self::new`] but the source attaches a batch-feedback handle to
+    /// every non-empty batch it hands out and collects the reports into the
+    /// returned [`FeedbackSink`], so tests can observe the executor's feedback
+    /// loop on all completion paths.
+    pub fn new_with_feedback() -> (Self, MockTxPool, FeedbackSink) {
+        let response_queue = Arc::new(Mutex::new(VecDeque::new()));
+        let sink = FeedbackSink::default();
+        (
+            Self {
+                response_queue: response_queue.clone(),
+                feedback: Some(sink.clone()),
+            },
+            MockTxPool { response_queue },
+            sink,
         )
     }
 }
@@ -145,12 +197,26 @@ impl TransactionsSource for MockTransactionsSource {
             {
                 assert_eq!(expected_selection_worker_count, selection_worker_count);
             }
+            // Attach a real feedback handle to non-empty batches when the sink is
+            // enabled (empty responses never become a dispatched batch, so they
+            // get no handle — keeping `created` == dispatched-batch count).
+            let feedback_handle = match (&self.feedback, response.transactions.is_empty())
+            {
+                (Some(sink), false) => {
+                    sink.created.fetch_add(1, Ordering::Relaxed);
+                    let reports = sink.reports.clone();
+                    Some(BatchFeedbackHandle::new(move |report| {
+                        reports.lock().expect("Mutex poisoned").push(report);
+                    }))
+                }
+                _ => None,
+            };
             Ok(TransactionSourceExecutableTransactions {
                 transactions: response.transactions,
                 anchor_contract_ids: vec![],
                 filtered: response.filtered,
                 filter: response.filter.unwrap_or(filter),
-                feedback_handle: None,
+                feedback_handle,
             })
         } else {
             Ok(TransactionSourceExecutableTransactions {

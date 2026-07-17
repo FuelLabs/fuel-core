@@ -842,6 +842,228 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
 }
 
 // ---------------------------------------------------------------------------
+// Package A regression tests — batch feedback fires on EVERY completion path
+// (main loop, end-of-block drain, sequential fallback) and never leaks.
+// ---------------------------------------------------------------------------
+
+/// A script heavy enough that its batch is still executing on the worker runtime
+/// when the (already-elapsed) block deadline breaks the scheduler's main loop —
+/// so the batch is completed by the end-of-block drain (`wait_all_execution_tasks`)
+/// rather than the main loop's `register_execution_result`.
+fn heavy_tx(rng: &mut StdRng, storage: &mut Storage) -> Transaction {
+    // A tight counted loop that burns many millions of iterations of real
+    // interpreter work — tens of ms of wall-clock time, far longer than the
+    // microseconds the scheduler's main loop takes to reach the deadline break,
+    // so the batch is reliably still in flight when the loop breaks. Gas stays
+    // under the 100M block/tx limit (and even gas-exhaustion would only revert,
+    // never trigger the skipped-tx fallback).
+    // `movi`'s immediate is 18-bit (< 262_144), so the counter is capped there;
+    // a fat loop body (many cheap ops per iteration) supplies the rest of the
+    // work.
+    let mut ops = vec![op::movi(0x10, 10_000), op::movi(0x11, 0)];
+    let loop_start = ops.len();
+    ops.push(op::subi(0x10, 0x10, 1)); // counter -= 1
+    for _ in 0..10 {
+        ops.push(op::add(0x11, 0x11, 0x10)); // cheap busy-work
+    }
+    // Jump back over the whole body (subi + busy-work) while counter != 0.
+    let back = (ops.len() - loop_start) as u16;
+    ops.push(op::jnzb(0x10, RegId::ZERO, back));
+    ops.push(op::ret(RegId::ONE));
+    let script_bytes: Vec<u8> = ops.iter().flat_map(|op| op.to_bytes()).collect();
+    TransactionBuilder::script(script_bytes, vec![])
+        .script_gas_limit(50_000_000)
+        .add_stored_coin_input(rng, storage, 1_000_000)
+        .finalize_as_transaction()
+}
+
+// The end-of-block drain path (`wait_all_execution_tasks`) previously inserted a
+// completed batch straight into `execution_results`, silently DROPPING its
+// feedback handle (starving the lane scheduler's overhead EMA) and leaking its
+// bookkeeping. With an already-elapsed deadline the heavy batch is still running
+// when the main loop breaks, so it drains here. Whichever completion path runs,
+// the handle must fire exactly once with `completed: true` and nothing must
+// leak: `created == reports.len()`.
+#[tokio::test]
+async fn feedback__drain_path_reports_completed_true_and_does_not_leak() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    let tx = heavy_tx(&mut rng, &mut storage);
+
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(2).unwrap(),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
+                metrics: false,
+            },
+        )
+        .unwrap();
+    let (transactions_source, mock_tx_pool, sink) =
+        MockTransactionsSource::new_with_feedback();
+
+    // Already-elapsed deadline: the main loop breaks while the heavy batch is
+    // still in flight, forcing the drain path to complete it.
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Instant::now(),
+    );
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx],
+        TransactionFiltered::NotFiltered,
+    ));
+
+    let _ = future.await.unwrap().into_result();
+
+    let reports = sink.reports();
+    // Exactly one non-empty batch was dispatched, so exactly one handle exists.
+    assert_eq!(
+        sink.created(),
+        1,
+        "one non-empty batch should be dispatched"
+    );
+    // No dropped handle, no leak: every dispatched batch reported once.
+    assert_eq!(
+        reports.len(),
+        sink.created(),
+        "every dispatched batch's feedback handle must fire exactly once",
+    );
+    // The batch's results are kept, so it reports completion.
+    assert!(
+        reports.iter().all(|r| r.completed),
+        "a kept batch must report completed=true, got {reports:?}",
+    );
+    // Real timings were measured (non-zero inner execution for a heavy batch).
+    assert!(
+        reports.iter().all(|r| r.execution_time > 0),
+        "a completed batch must report a non-zero execution_time, got {reports:?}",
+    );
+}
+
+// The sequential-fallback path (`sequential_fallback`) discards the parallel
+// results of every in-flight batch and re-executes them serially. It previously
+// dropped all those feedback handles and leaked their bookkeeping. Now each
+// discarded batch must report `completed: false` (an overhead/timing signal for
+// the EMA, but NOT a completion — the batch never committed), and no handle may
+// leak. A bad predicate estimate deterministically triggers the fallback.
+#[tokio::test]
+async fn feedback__fallback_path_reports_completed_false_and_does_not_leak() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    let mut consensus_parameters = ConsensusParameters::default();
+    consensus_parameters.set_block_gas_limit(100000);
+    storage = add_consensus_parameters(storage, &consensus_parameters);
+    let utxo_id: UtxoId = rng.r#gen();
+    let code = [op::ret(RegId::ONE)];
+    let code_bytes: Vec<u8> = code.iter().flat_map(|op| op.to_bytes()).collect();
+    let owner = Input::predicate_owner(&code_bytes);
+    let amount = 1000;
+    let mut tx = storage.0.write_transaction();
+    tx.storage_as_mut::<Coins>()
+        .insert(
+            &utxo_id,
+            &(Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id: Default::default(),
+                tx_pointer: Default::default(),
+            }
+            .compress()),
+        )
+        .unwrap();
+    tx.commit().unwrap();
+
+    let tx1: Transaction = basic_tx(&mut rng, &mut storage);
+    let tx2: Transaction = basic_tx(&mut rng, &mut storage);
+
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_stored_coin_input(&mut rng, &mut storage, 1000);
+    builder.add_input(Input::coin_predicate(
+        utxo_id,
+        owner,
+        amount,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        code_bytes.clone(),
+        vec![],
+    ));
+    let tx3 = builder.finalize_as_transaction();
+    let tx4: Transaction = basic_tx(&mut rng, &mut storage);
+
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(3).unwrap(),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
+                metrics: false,
+            },
+        )
+        .unwrap();
+    let (transactions_source, mock_tx_pool, sink) =
+        MockTransactionsSource::new_with_feedback();
+
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Instant::now() + Duration::from_millis(300),
+    );
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx1],
+        TransactionFiltered::NotFiltered,
+    ));
+    // tx3's predicate estimate is wrong, so this batch gets a skipped tx and
+    // triggers the sequential fallback.
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx2, &tx3],
+        TransactionFiltered::NotFiltered,
+    ));
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx4],
+        TransactionFiltered::NotFiltered,
+    ));
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[],
+        TransactionFiltered::NotFiltered,
+    ));
+
+    // Must not panic.
+    let _ = future.await.unwrap().into_result();
+
+    let reports = sink.reports();
+    // No leak / no dropped handle: every dispatched batch reported exactly once.
+    assert_eq!(
+        reports.len(),
+        sink.created(),
+        "every dispatched batch's feedback handle must fire exactly once (no leak)",
+    );
+    assert_eq!(sink.created(), 3, "three non-empty batches were dispatched",);
+    // At least the fallback-consumed batch reports discarded work (completed=false).
+    assert!(
+        reports.iter().any(|r| !r.completed),
+        "a fallback-discarded batch must report completed=false, got {reports:?}",
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Audit-fix regression tests (coalescing / mint-on-merged-view / blob assert).
 // ---------------------------------------------------------------------------
 

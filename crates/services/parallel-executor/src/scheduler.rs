@@ -622,15 +622,13 @@ where
                             Ok(res) => {
                                 let res = res?;
                                 if !res.skipped_tx.is_empty() {
-                                    if self.config.metrics {
-                                        if let Some(batch_preparations) =
-                                            self.batch_preparations.as_mut()
-                                        {
-                                            batch_preparations.remove(&res.batch_id);
-                                        }
-                                    }
+                                    // Fallback consumes this batch (and every
+                                    // other in-flight one); it reports their
+                                    // feedback as `completed: false` and clears
+                                    // their `batch_preparations`/`batch_feedback`
+                                    // bookkeeping — so no explicit cleanup here.
                                     drop(res.worker_id);
-                                    self.sequential_fallback(res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used).await?;
+                                    self.sequential_fallback(res.batch_id, res.txs, res.coins_used, res.coins_created, res.message_nonces_used, res.execution_duration).await?;
                                     continue;
                                 }
 
@@ -1078,20 +1076,58 @@ where
         Ok(())
     }
 
-    fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
-        // Report this completed batch's measured timings back to the producer
-        // (the txpool lane scheduler) if it asked for feedback. `execution_time`
-        // is the inner batch work; `overhead_time` is the batch-preparation time
-        // captured at dispatch (merge/handoff overhead is not yet instrumented —
-        // design doc A.5 — so it is partial, hence the TODO on `overhead`).
-        // No-op (map empty) when the lane scheduler is disabled.
-        if let Some(feedback) = self.batch_feedback.remove(&res.batch_id) {
+    /// Report a batch's measured timings back to its producer (the txpool lane
+    /// scheduler) if it requested feedback, then clear this batch's per-batch
+    /// bookkeeping (`batch_feedback` + `batch_preparations`). Every
+    /// batch-completion path — the main-loop [`Self::register_execution_result`],
+    /// the end-of-block drain in [`Self::wait_all_execution_tasks`], and the
+    /// [`Self::sequential_fallback`] path — routes through here, so no feedback
+    /// handle is silently dropped and no map entry leaks to scheduler drop.
+    /// Fire-at-most-once: a batch id with no pending handle (already reported, or
+    /// the lane scheduler is disabled) is a no-op.
+    ///
+    /// `completed` selects the two semantics the lane scheduler distinguishes
+    /// (see `lane-scheduler`'s `apply_feedback`, which feeds the overhead EMA on
+    /// *every* report but only promotes the batch's in-pool children when
+    /// `completed`):
+    /// * `true`  — this batch's results are KEPT (they become part of the block).
+    ///   Feeds the EMA and completes the batch's txs (idempotent with the
+    ///   on-chain `RemovalReason::Committed` promotion path).
+    /// * `false` — this batch executed but its results are DISCARDED and
+    ///   re-executed sequentially ([`Self::sequential_fallback`]). The overhead
+    ///   and inner-execution time genuinely happened, so we still feed them to
+    ///   the EMA (this is exactly the overhead-floor signal that was being
+    ///   starved), but we must NOT signal completion: the discarded batch never
+    ///   committed, and its children are promoted by the commit path instead.
+    ///   `completed: false` is therefore the safe, idempotent signal for
+    ///   discarded work.
+    fn report_batch_feedback(
+        &mut self,
+        batch_id: usize,
+        execution_duration: Duration,
+        completed: bool,
+    ) {
+        if let Some(feedback) = self.batch_feedback.remove(&batch_id) {
             feedback.handle.report(BatchExecutionReport {
-                execution_time: duration_as_u64_nanos(res.execution_duration),
+                execution_time: duration_as_u64_nanos(execution_duration),
                 overhead_time: duration_as_u64_nanos(feedback.overhead),
-                completed: true,
+                completed,
             });
         }
+        // Drop any leftover preparation stats for this batch so the map does not
+        // leak entries past block end (metrics-only; `None` when metrics off).
+        if let Some(batch_preparations) = self.batch_preparations.as_mut() {
+            batch_preparations.remove(&batch_id);
+        }
+    }
+
+    fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
+        // Report this completed batch's measured timings back to the producer
+        // (the txpool lane scheduler). `execution_time` is the inner batch work;
+        // `overhead_time` is the batch-preparation time captured at dispatch
+        // (merge/handoff overhead is not yet instrumented — design doc A.5 — so
+        // it is partial). `completed: true` — this batch's results are kept.
+        self.report_batch_feedback(res.batch_id, res.execution_duration, true);
 
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
@@ -1141,10 +1177,20 @@ where
                             res.coins_used,
                             res.coins_created,
                             res.message_nonces_used,
+                            res.execution_duration,
                         )
                         .await?;
                         break;
                     } else {
+                        // End-of-block drain: this batch completed cleanly and
+                        // its results are kept, so report `completed: true` with
+                        // its real timings (previously this path silently dropped
+                        // the handle and leaked its `batch_preparations` entry).
+                        self.report_batch_feedback(
+                            res.batch_id,
+                            res.execution_duration,
+                            true,
+                        );
                         self.execution_results.insert(
                             res.batch_id,
                             WorkSessionSavedData {
@@ -1324,8 +1370,15 @@ where
         coins_used: Vec<CoinInBatch>,
         coins_created: Vec<CoinInBatch>,
         message_nonces_used: Vec<Nonce>,
+        execution_duration: Duration,
     ) -> Result<(), SchedulerError> {
         let block_height = *self.header_to_produce.height();
+        // This batch's parallel results are discarded and re-executed
+        // sequentially below. Report its feedback as `completed: false` — the
+        // measured overhead/exec time still feeds the lane scheduler's overhead
+        // EMA, but the batch did not commit, so it must not signal completion.
+        // Also clears its `batch_feedback` / `batch_preparations` bookkeeping.
+        self.report_batch_feedback(batch_id, execution_duration, false);
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
@@ -1338,6 +1391,14 @@ where
             match future.await {
                 Ok(res) => {
                     let res = res?;
+                    // Every other in-flight batch is also consumed and
+                    // re-executed here, so it is discarded too: same
+                    // `completed: false` semantics + bookkeeping cleanup.
+                    self.report_batch_feedback(
+                        res.batch_id,
+                        res.execution_duration,
+                        false,
+                    );
                     all_txs_by_batch_id.insert(
                         res.batch_id,
                         (
