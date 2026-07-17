@@ -39,9 +39,11 @@ use fuel_core_storage::{
     transactional::{
         AtomicView,
         Changes,
+        ConflictPolicy,
         Modifiable,
         ReferenceBytesKey,
         StorageChanges,
+        StorageTransaction,
         WriteTransaction,
     },
 };
@@ -839,6 +841,32 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
 // Audit-fix regression tests (coalescing / mint-on-merged-view / blob assert).
 // ---------------------------------------------------------------------------
 
+/// Commit `changes` the way the *strict* storage layer does. Every entry of a
+/// `ChangesList` is applied, in order, into a single `Fail`-policy transaction
+/// that rejects a key appearing in two different entries — the exact
+/// same-key conflict detection performed by `RocksDb::commit_changes`' conflict
+/// finder (and the scheduler's own blob-path commit). A block whose parallel
+/// batches split an `Insert` and a `Remove` of one key across entries is
+/// rejected here unless the executor coalesced them first.
+fn assert_commits_without_conflict(changes: &StorageChanges) {
+    let base = InMemoryStorage::<Column>::default();
+    let mut tx =
+        StorageTransaction::transaction(&base, ConflictPolicy::Fail, Changes::default());
+    match changes {
+        StorageChanges::Changes(c) => {
+            tx.commit_changes(c.clone())
+                .expect("changes must commit cleanly");
+        }
+        StorageChanges::ChangesList(list) => {
+            for (i, c) in list.iter().enumerate() {
+                tx.commit_changes(c.clone()).unwrap_or_else(|e| {
+                    panic!("conflict committing ChangesList entry {i}: {e}")
+                });
+            }
+        }
+    }
+}
+
 fn coins_key() -> ReferenceBytesKey {
     // 34 bytes = a compressed UtxoId key.
     vec![5u8; 34].into()
@@ -926,4 +954,157 @@ fn fold__double_remove_and_remove_then_insert_are_conflicts() {
     let c = single_op_changes(Column::Coins, key.clone(), WriteOperation::Remove);
     let d = single_op_changes(Column::Coins, key.clone(), insert_op(9));
     assert!(fold_changes_in_canonical_order(vec![c, d]).is_err());
+}
+
+// TEST 1 (integration level) — a block with a coin created in one batch and
+// spent in a later batch. Before the coalescing fix the produced changes are a
+// ChangesList whose Insert/Remove of the coin land in different entries and the
+// strict conflict finder rejects the whole block; after the fix they coalesce
+// to a single Changes that commits cleanly.
+#[tokio::test]
+async fn execute__coin_created_and_spent_in_later_batch_commits_cleanly() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    let recipient_private_key = SecretKey::random(&mut rng);
+    let owner = Input::owner(&recipient_private_key.public_key());
+
+    // tx1 (batch 0) creates a coin; tx2 (batch 1) spends it.
+    let tx1 = TransactionBuilder::script(vec![], vec![])
+        .add_stored_coin_input(&mut rng, &mut storage, 1000)
+        .add_output(Output::coin(owner, 1000, Default::default()))
+        .finalize_as_transaction();
+    let coin_utxo = UtxoId::new(tx1.id(&ChainId::default()), 0);
+    let tx2 = TransactionBuilder::script(vec![], vec![])
+        .add_unsigned_coin_input(
+            recipient_private_key,
+            coin_utxo,
+            1000,
+            Default::default(),
+            Default::default(),
+        )
+        .add_output(Output::coin(owner, 1000, Default::default()))
+        .finalize_as_transaction();
+
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(2).unwrap(),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
+                metrics: false,
+            },
+        )
+        .unwrap();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
+
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            coinbase_recipient: Default::default(),
+            gas_price: 0,
+        },
+        Instant::now() + Duration::from_millis(300),
+    );
+    // batch 0: creator; batch 1: spender (forces the cross-batch split).
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx1],
+        TransactionFiltered::NotFiltered,
+    ));
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx2],
+        TransactionFiltered::NotFiltered,
+    ));
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[],
+        TransactionFiltered::NotFiltered,
+    ));
+
+    let (result, changes) = future.await.unwrap().into();
+
+    // both txs made it into the block (+ mint)
+    assert_eq!(result.block.transactions().len(), 3);
+    // the block's changes are a single, coalesced map ...
+    assert!(
+        matches!(changes, StorageChanges::Changes(_)),
+        "expected a single coalesced Changes, got a ChangesList",
+    );
+    // ... and commit cleanly through the strict conflict finder.
+    assert_commits_without_conflict(&changes);
+}
+
+// TEST 3 (mint on the merged view) — a user tx that touches the coinbase
+// contract plus the mint tx. The mint updates the coinbase contract's UTXO, and
+// so does the user tx; before the fix those two writes land in different
+// ChangesList entries (mint ran on a fresh pre-block view and was appended as
+// its own entry) and the strict conflict finder rejects the block. After the
+// fix the mint executes against the fully-merged view and its changes fold into
+// a single Changes that commits cleanly — and the coinbase accounting is
+// computed against the same-block contract state, not a stale pre-block one.
+#[tokio::test]
+async fn execute__user_tx_touching_coinbase_contract_then_mint_commits_cleanly() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let (contract_id, contract_changes) = contract_creation_changes(&mut rng).await;
+    let mut storage = Storage::default();
+    storage.merge_changes(contract_changes).unwrap();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    // A user tx that calls the coinbase contract (touches its UTXO).
+    let tx_call: Transaction = TransactionBuilder::script(vec![], vec![])
+        .add_input(Input::contract(
+            rng.r#gen(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            contract_id,
+        ))
+        .add_stored_coin_input(&mut rng, &mut storage, 1_000_000)
+        .add_output(Output::contract(0, Default::default(), Default::default()))
+        .finalize_as_transaction();
+
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(2).unwrap(),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
+                metrics: false,
+            },
+        )
+        .unwrap();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
+
+    let future = executor.produce_without_commit_with_source(
+        Components {
+            header_to_produce: Default::default(),
+            transactions_source,
+            // The coinbase recipient IS the contract the user tx touches.
+            coinbase_recipient: contract_id,
+            gas_price: 0,
+        },
+        Instant::now() + Duration::from_millis(300),
+    );
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[&tx_call],
+        TransactionFiltered::NotFiltered,
+    ));
+    mock_tx_pool.push_response(MockTxPoolResponse::new(
+        &[],
+        TransactionFiltered::NotFiltered,
+    ));
+
+    let (result, changes) = future.await.unwrap().into();
+
+    // user tx + mint tx
+    assert_eq!(result.block.transactions().len(), 2);
+    assert!(
+        matches!(changes, StorageChanges::Changes(_)),
+        "expected a single coalesced Changes, got a ChangesList",
+    );
+    assert_commits_without_conflict(&changes);
 }

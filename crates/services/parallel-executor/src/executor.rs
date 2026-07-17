@@ -412,7 +412,7 @@ where
             message_ids,
             skipped_txs,
             transactions_status,
-            mut changes,
+            changes,
             used_gas,
             used_size,
             coinbase,
@@ -427,11 +427,32 @@ where
             transactions,
         };
 
-        let mut tx_changes = StorageTransaction::transaction(
-            view,
-            ConflictPolicy::Fail,
-            Default::default(),
-        );
+        // FIX 2 — the mint tx must execute against the fully-merged block state,
+        // not a fresh pre-block view. The mint is the LAST transaction in the
+        // block, so it has to observe every same-block delta — in particular the
+        // coinbase contract's UTXO/balance as left by the user txs — otherwise
+        // its coinbase accounting is computed against a stale balance.
+        //
+        // The scheduler already coalesced DA + all batch + all per-contract
+        // changes into a single `Changes` (FIX 1), so we seed the mint
+        // transaction with it and run the mint on top. `Overwrite` lets the
+        // mint's write to the coinbase contract's slot supersede the batch's
+        // write for that one slot (a legitimate last-writer overwrite the strict
+        // fold intentionally leaves to this stage); FIX 1 already resolved every
+        // cross-batch coin/message collision, so no genuine conflict reaches
+        // here. The result is one fully-coalesced `Changes` for the whole block
+        // — the same shape the sequential executor/validator produces.
+        let merged = match changes {
+            StorageChanges::Changes(changes) => changes,
+            // Defensive: the scheduler already emits a single coalesced
+            // `Changes`. If a canonical-ordered list ever reaches here, fold it
+            // with the same strict semantics rather than silently concatenating.
+            StorageChanges::ChangesList(list) => {
+                crate::scheduler::fold_changes_in_canonical_order(list)?
+            }
+        };
+        let mut tx_changes =
+            StorageTransaction::transaction(view, ConflictPolicy::Overwrite, merged);
 
         let mut execution_data = ExecutionData {
             coinbase,
@@ -455,15 +476,7 @@ where
             &mut MemoryInstance::new(),
         )?;
 
-        let storage_changes = match changes {
-            StorageChanges::Changes(changes) => {
-                StorageChanges::ChangesList(vec![changes, tx_changes.into_changes()])
-            }
-            StorageChanges::ChangesList(ref mut changes_list) => {
-                changes_list.push(tx_changes.into_changes());
-                changes
-            }
-        };
+        let storage_changes = StorageChanges::Changes(tx_changes.into_changes());
 
         Ok((execution_data, storage_changes, partial_block))
     }
