@@ -90,6 +90,13 @@ pub struct MockTxPoolResponse {
     pub transactions: Vec<MaybeCheckedTransaction>,
     pub filtered: TransactionFiltered,
     pub filter: Option<Filter>,
+    /// Like `filter` but accepts ANY of several filters. Used where the exact
+    /// excluded set at a given pull is legitimately timing-dependent (which
+    /// in-flight batch has already completed by the time the scheduler pulls),
+    /// so the assertion pins the set of *valid* exclusion states rather than one
+    /// wall-clock-dependent value — deterministic, yet still rejecting an
+    /// excluded set that could not arise from the protocol.
+    pub filter_one_of: Option<Vec<Filter>>,
     pub gas_limit_lt: Option<u64>,
     pub selection_worker_count: Option<usize>,
 }
@@ -99,35 +106,34 @@ impl MockTxPoolResponse {
             transactions: into_checked_txs(transactions),
             filtered,
             filter: None,
+            filter_one_of: None,
             gas_limit_lt: None,
             selection_worker_count: None,
         }
     }
     pub fn assert_filter(self, filter: Filter) -> Self {
         Self {
-            transactions: self.transactions,
-            filtered: self.filtered,
             filter: Some(filter),
-            gas_limit_lt: self.gas_limit_lt,
-            selection_worker_count: self.selection_worker_count,
+            ..self
+        }
+    }
+    /// Assert the incoming filter is one of `filters` (see `filter_one_of`).
+    pub fn assert_filter_one_of(self, filters: Vec<Filter>) -> Self {
+        Self {
+            filter_one_of: Some(filters),
+            ..self
         }
     }
     pub fn assert_gas_limit_lt(self, gas_limit: u64) -> Self {
         Self {
-            transactions: self.transactions,
-            filtered: self.filtered,
-            filter: self.filter,
             gas_limit_lt: Some(gas_limit),
-            selection_worker_count: self.selection_worker_count,
+            ..self
         }
     }
     pub fn assert_selection_worker_count(self, selection_worker_count: usize) -> Self {
         Self {
-            transactions: self.transactions,
-            filtered: self.filtered,
-            filter: self.filter,
-            gas_limit_lt: self.gas_limit_lt,
             selection_worker_count: Some(selection_worker_count),
+            ..self
         }
     }
 }
@@ -184,6 +190,14 @@ impl TransactionsSource for MockTransactionsSource {
             assert!(response.transactions.len() <= tx_count_limit as usize);
             if let Some(expected_filter) = &response.filter {
                 assert_eq!(expected_filter, &filter);
+            }
+            if let Some(allowed_filters) = &response.filter_one_of {
+                assert!(
+                    allowed_filters.contains(&filter),
+                    "filter {:?} is not one of the valid exclusion states {:?}",
+                    filter,
+                    allowed_filters,
+                );
             }
             if let Some(expected_gas_limit) = &response.gas_limit_lt {
                 assert!(

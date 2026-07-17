@@ -572,18 +572,41 @@ async fn execute__gas_left_updated_when_state_merges() {
             .assert_filter(empty_filter()),
     );
 
-    // Request for the other thread
+    // Request for the other thread. tx_contract_1's batch (contract_id_1) is
+    // in flight — but it is a fast batch, so by the time this pull happens it may
+    // already have completed and freed contract_id_1. Both are valid exclusion
+    // states; assert the pull is one of them rather than the wall-clock-dependent
+    // exact value (this is the ~1/6 flake root cause).
     mock_tx_pool.push_response(
         MockTxPoolResponse::new(&[&tx_contract_2], TransactionFiltered::NotFiltered)
-            .assert_filter(Filter::new(vec![contract_id_1].into_iter().collect())),
+            .assert_filter_one_of(vec![
+                Filter::new(vec![contract_id_1].into_iter().collect()),
+                empty_filter(),
+            ]),
     );
 
-    std::thread::sleep(Duration::from_millis(100));
+    // (Removed a `thread::sleep(100ms)` that ran BEFORE the future is awaited: the
+    // block deadline is fixed at future-creation time, so the sleep only burned
+    // ~1/3 of the 300ms window before the scheduler even started, making it race
+    // to dispatch the final `tx_both_contracts` batch — the other half of the
+    // flake. All responses are queued up-front regardless, so it synchronised
+    // nothing.)
 
-    // Request for one of the threads again that asked before
+    // Request for one of the threads again that asked before. This pull fires
+    // when the FIRST of the two batches completes and frees its worker — but
+    // which one finishes first (the fast empty-script contract_1 batch or the
+    // slow k256-loop contract_2 batch) is not fixed, and both can even be done.
+    // So the excluded set is any of {}, {contract_1}, {contract_2} (at most one
+    // batch still in flight); assert membership in that set rather than one
+    // wall-clock-dependent value. This is the flake root cause.
     mock_tx_pool.push_response(
-        MockTxPoolResponse::new(&[], TransactionFiltered::Filtered)
-            .assert_filter(Filter::new(vec![contract_id_2].into_iter().collect())),
+        MockTxPoolResponse::new(&[], TransactionFiltered::Filtered).assert_filter_one_of(
+            vec![
+                empty_filter(),
+                Filter::new(vec![contract_id_1].into_iter().collect()),
+                Filter::new(vec![contract_id_2].into_iter().collect()),
+            ],
+        ),
     );
 
     // Request for the other one of the threads again that asked before
