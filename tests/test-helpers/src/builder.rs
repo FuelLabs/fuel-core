@@ -125,6 +125,11 @@ pub struct TestSetupBuilder {
     pub executor_parallel_worker_count_policy: ParallelExecutorWorkerCountPolicy,
     pub executor_mode: ExecutorMode,
     pub executor_metrics: bool,
+    /// Enable the experimental event-driven lane scheduler in `txpool_v2`
+    /// (`Config::lane_scheduler`). Additive test-visibility hook: there is no
+    /// other way to flip the txpool flag through this builder, and it defaults
+    /// to `false` so every existing caller is byte-for-byte unchanged.
+    pub lane_scheduler: bool,
 }
 
 impl TestSetupBuilder {
@@ -303,6 +308,7 @@ impl TestSetupBuilder {
         txpool.heavy_work.number_threads_p2p_sync = self.txpool_p2p_sync_threads;
         txpool.heavy_work.size_of_p2p_sync_queue = self.txpool_p2p_sync_queue_size;
         txpool.utxo_validation = self.utxo_validation;
+        txpool.lane_scheduler = self.lane_scheduler;
 
         let gas_price_config = GasPriceConfig {
             starting_exec_gas_price: self.starting_gas_price,
@@ -371,6 +377,7 @@ impl Default for TestSetupBuilder {
                 ParallelExecutorWorkerCountPolicy::StaticMax,
             executor_mode: ExecutorMode::Normal,
             executor_metrics: false,
+            lane_scheduler: false,
         }
     }
 }
