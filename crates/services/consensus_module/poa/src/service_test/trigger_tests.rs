@@ -241,6 +241,94 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     Ok(())
 }
 
+// FIX 3: in interval mode the periodic wait elapses BEFORE production, so the
+// block-spacing deadline is essentially "now". Handing that straight to the
+// executor gave it a zero (already-elapsed) execution budget — the parallel
+// scheduler treats the deadline as a hard wall-clock budget, so it dispatched
+// ~one batch and drained, packing only a handful of txs per block. The producer
+// must instead receive a real budget (spacing + block_time). This test captures
+// the deadline the producer is handed and asserts it is at least ~block_time
+// ahead of production start.
+#[tokio::test]
+async fn interval_trigger_gives_the_executor_a_real_execution_budget() {
+    let block_time = Duration::from_secs(2);
+    // Records (production_start, deadline_handed_to_producer) per block.
+    let captured: Arc<StdMutex<Vec<(Instant, Instant)>>> =
+        Arc::new(StdMutex::new(Vec::new()));
+
+    let mut ctx_builder = TestContextBuilder::new();
+    ctx_builder.with_config(Config {
+        trigger: Trigger::Interval { block_time },
+        signer: SignMode::Key(test_signing_key()),
+        metrics: false,
+        ..Default::default()
+    });
+    let TxPoolContext {
+        txpool,
+        new_txs_notifier,
+        ..
+    } = MockTransactionPool::new_with_txs(vec![]);
+    ctx_builder.with_txpool(txpool);
+
+    let (block_import_sender, mut block_import_receiver) = broadcast::channel(100);
+    let mut importer = MockBlockImporter::default();
+    importer.expect_commit_result().returning(move |result| {
+        let (result, _) = result.into();
+        block_import_sender.send(result.sealed_block)?;
+        Ok(())
+    });
+    importer
+        .expect_block_stream()
+        .returning(|| Box::pin(tokio_stream::pending()));
+    importer
+        .expect_latest_block_height()
+        .returning(|| Ok(Some(BlockHeight::from(0u32))));
+    ctx_builder.with_importer(importer);
+
+    let captured_in_producer = captured.clone();
+    let mut block_producer = MockBlockProducer::default();
+    block_producer
+        .expect_produce_and_execute_block()
+        .returning(move |_, time, _, deadline| {
+            captured_in_producer
+                .lock()
+                .unwrap()
+                .push((Instant::now(), deadline));
+            let mut block = Block::default();
+            block.header_mut().set_time(time);
+            block.header_mut().recalculate_metadata();
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block,
+                    ..Default::default()
+                },
+                Default::default(),
+            ))
+        });
+    ctx_builder.with_producer(block_producer);
+
+    let ctx = ctx_builder.build().await;
+    new_txs_notifier.send_replace(());
+
+    // Let one interval elapse so exactly one block is produced.
+    time::sleep(block_time + Duration::from_secs(1)).await;
+    assert!(block_import_receiver.try_recv().is_ok(), "a block was produced");
+
+    let recorded = captured.lock().unwrap().clone();
+    assert!(!recorded.is_empty(), "the producer was invoked");
+    let (start, deadline) = recorded[0];
+    // The executor's budget must span roughly the full inter-block window, not be
+    // an already-elapsed instant. Allow a small margin for scheduling slack.
+    let budget = deadline.saturating_duration_since(start);
+    assert!(
+        budget >= block_time - Duration::from_millis(200),
+        "interval executor budget {budget:?} should be ~block_time {block_time:?}, \
+         not a zero deadline",
+    );
+
+    assert_eq!(ctx.stop().await, State::Stopped);
+}
+
 #[tokio::test]
 async fn service__if_commit_result_fails_then_retry_commit_result_after_one_second()
 -> anyhow::Result<()> {

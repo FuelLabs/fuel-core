@@ -291,9 +291,31 @@ where
         source: TransactionsSource,
         deadline: Instant,
     ) -> anyhow::Result<UncommittedExecutionResult<StorageChanges>> {
-        let future = self
-            .block_producer
-            .produce_and_execute_block(height, block_time, source, deadline);
+        // `deadline` spaces blocks (the post-production `sleep_until` below). The
+        // executor gets its own, larger EXECUTION budget. In interval mode the
+        // periodic wait has already elapsed, so `deadline` is essentially "now" —
+        // handing that straight to the executor gave it a ZERO budget: the
+        // parallel scheduler treats the deadline as a hard wall-clock execution
+        // budget, so it dispatched roughly one batch and immediately drained,
+        // packing only a handful of txs per block regardless of the gas/count
+        // limits. But the node has the whole next `block_time` window before the
+        // following block is due, so the executor may keep pulling and executing
+        // until then. The sequential executor uses the same value as its
+        // new-transaction wait budget (how long to keep the block open for
+        // arriving txs), which mirrors how `Open` accumulates over its period.
+        // Block cadence is unaffected — spacing still comes from `deadline`.
+        let execution_deadline = match self.trigger {
+            Trigger::Interval {
+                block_time: interval,
+            } => deadline.checked_add(interval).unwrap_or(deadline),
+            _ => deadline,
+        };
+        let future = self.block_producer.produce_and_execute_block(
+            height,
+            block_time,
+            source,
+            execution_deadline,
+        );
 
         let result = tokio::time::timeout(self.production_timeout, future)
             .await
@@ -743,23 +765,7 @@ where
                 Instant::now()
             }),
             Trigger::Interval { block_time } => {
-                // Mirror `Trigger::Open`: hand the deadline (`last_block_created +
-                // block_time`) to the producer up front instead of sleeping the
-                // whole interval first and then passing `Instant::now()` (an
-                // already-elapsed deadline). The old shape gave the block producer
-                // a ZERO execution budget: the parallel scheduler treats the
-                // deadline as a hard wall-clock budget, so it dispatched ~one batch
-                // and immediately drained, packing only a handful of txs per block
-                // regardless of the gas/count limits. With a real future deadline
-                // the parallel executor gets the full inter-block window to pull
-                // and execute batches; the sequential executor uses the same value
-                // as its `NewTxWaiter` budget (how long to keep waiting for more
-                // txs), so both modes now stay busy for the whole window. Block
-                // cadence is unchanged: `signal_produce_block` still
-                // `sleep_until(deadline)` after production, which spaces blocks
-                // exactly one `block_time` apart (the old pre-production sleep did
-                // the same spacing, only earlier in the cycle).
-                let deadline = match self
+                let next_block_time = match self
                     .last_block_created
                     .checked_add(block_time)
                     .ok_or(anyhow!("Time exceeds system limits"))
@@ -767,7 +773,10 @@ where
                     Ok(time) => time,
                     Err(err) => return TaskNextAction::ErrorContinue(err),
                 };
-                Box::pin(async move { deadline })
+                Box::pin(async move {
+                    sleep_until(next_block_time).await;
+                    Instant::now()
+                })
             }
             Trigger::Open { period } => {
                 let deadline = match self
