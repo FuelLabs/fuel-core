@@ -234,20 +234,36 @@ impl CoinDependencyChainVerifier {
                     // Coin is not in the database
                     match self.coins_registered.get(coin.utxo()) {
                         Some((coin_creation_batch_id, registered_coin)) => {
-                            // Coin is in the block
-                            if coin_creation_batch_id <= &batch_id
-                                && registered_coin.idx() <= coin.idx()
-                                && registered_coin == coin
-                            {
-                                // Coin is created in a batch that is before the current one
-                                continue;
-                            } else {
+                            // Coin is created in the block. The creation must be
+                            // ordered before this use:
+                            // * a STRICTLY EARLIER batch is always ordered first
+                            //   — the per-tx `idx` is batch-local, so comparing a
+                            //   creator's idx in batch `i` against a user's idx in
+                            //   batch `j > i` is meaningless (a coin created at
+                            //   idx 5 of batch 0 legitimately funds a tx at idx 0
+                            //   of batch 1). The old code ANDed the idx check in
+                            //   unconditionally and wrongly rejected such
+                            //   cross-batch coins as "created in a later batch".
+                            // * within the SAME batch the creator tx must come at
+                            //   an earlier-or-equal index than the user tx.
+                            let created_before = *coin_creation_batch_id < batch_id
+                                || (*coin_creation_batch_id == batch_id
+                                    && registered_coin.idx() <= coin.idx());
+                            if !created_before {
                                 // Coin is created in a batch that is after the current one
                                 return Err(SchedulerError::InternalError(format!(
                                     "Coin {} is created in a batch that is after the current one",
                                     coin.utxo()
                                 )));
                             }
+                            if registered_coin != coin {
+                                return Err(SchedulerError::InternalError(format!(
+                                    "coin is invalid: {}",
+                                    coin.utxo(),
+                                )));
+                            }
+                            // Coin is created earlier in the block and matches.
+                            continue;
                         }
                         None => {
                             return Err(SchedulerError::InternalError(format!(
@@ -266,5 +282,94 @@ impl CoinDependencyChainVerifier {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_core_storage::{
+        structured_storage::test::InMemoryStorage,
+        transactional::{
+            IntoTransaction,
+            StorageTransaction,
+        },
+    };
+
+    fn coin_at(utxo: UtxoId, idx: usize) -> CoinInBatch {
+        CoinInBatch::from_output(
+            utxo,
+            idx,
+            *utxo.tx_id(),
+            Address::default(),
+            100,
+            AssetId::default(),
+        )
+    }
+
+    fn empty_storage() -> StorageTransaction<InMemoryStorage<Column>> {
+        InMemoryStorage::<Column>::default().into_transaction()
+    }
+
+    // Regression (found by the sequential-replay oracle): a coin created in a
+    // STRICTLY EARLIER batch must be accepted regardless of the batch-local
+    // indices. Creator at idx 5 of batch 0 funding a user at idx 0 of batch 1 is
+    // valid; the old `registered.idx() <= used.idx()` conjunction wrongly
+    // rejected it as "created in a later batch".
+    #[test]
+    fn earlier_batch_coin_is_accepted_even_when_creator_idx_is_higher() {
+        let utxo = UtxoId::new([7u8; 32].into(), 0);
+        let mut verifier = CoinDependencyChainVerifier::new();
+        verifier.register_coins_created(0, vec![coin_at(utxo, 5)]);
+        let storage = empty_storage();
+        let used = coin_at(utxo, 0);
+        assert!(
+            verifier
+                .verify_coins_used(1, [used].iter(), &storage)
+                .is_ok(),
+            "a coin created in an earlier batch must be accepted regardless of idx",
+        );
+    }
+
+    // Within the SAME batch, the creator must come at an earlier-or-equal index.
+    #[test]
+    fn same_batch_requires_creator_before_user() {
+        let utxo = UtxoId::new([8u8; 32].into(), 0);
+        let mut verifier = CoinDependencyChainVerifier::new();
+        verifier.register_coins_created(0, vec![coin_at(utxo, 2)]);
+        let storage = empty_storage();
+        // creator idx 2 <= user idx 5 → ok
+        assert!(
+            verifier
+                .verify_coins_used(0, [coin_at(utxo, 5)].iter(), &storage)
+                .is_ok(),
+        );
+
+        let utxo2 = UtxoId::new([9u8; 32].into(), 0);
+        let mut verifier = CoinDependencyChainVerifier::new();
+        verifier.register_coins_created(0, vec![coin_at(utxo2, 5)]);
+        let storage = empty_storage();
+        // creator idx 5 > user idx 1 in the same batch → reject
+        assert!(
+            verifier
+                .verify_coins_used(0, [coin_at(utxo2, 1)].iter(), &storage)
+                .is_err(),
+        );
+    }
+
+    // A coin created in a LATER batch than its use is a genuine ordering
+    // violation and must still be rejected.
+    #[test]
+    fn later_batch_coin_is_rejected() {
+        let utxo = UtxoId::new([10u8; 32].into(), 0);
+        let mut verifier = CoinDependencyChainVerifier::new();
+        verifier.register_coins_created(2, vec![coin_at(utxo, 0)]);
+        let storage = empty_storage();
+        assert!(
+            verifier
+                .verify_coins_used(1, [coin_at(utxo, 0)].iter(), &storage)
+                .is_err(),
+            "a coin created in a later batch must be rejected",
+        );
     }
 }
