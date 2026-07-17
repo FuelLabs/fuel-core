@@ -39,6 +39,7 @@ mod tests {
         tables::{
             Coins,
             ConsensusParametersVersions,
+            ContractsLatestUtxo,
             ContractsRawCode,
             Messages,
         },
@@ -1921,6 +1922,283 @@ mod tests {
         assert_eq!(
             executed_tx.outputs()[0].state_root(),
             Some(&Bytes32::new(expected_state_root))
+        );
+    }
+
+    // ---- Read-only contract inputs (fuel-vm PR #1014) -----------------------
+    //
+    // A contract input WITHOUT the corresponding contract output is a
+    // read-only contract access, valid only when the consensus parameter
+    // `allow_read_only_contract_inputs` is enabled. The VM forbids any
+    // modification of such a contract's state or balances, so no output slot
+    // is needed to commit new roots. The executor must therefore never try to
+    // produce/rewrite an output (and thus a state/balance root) for it, and
+    // must leave the contract's persisted `ContractsLatestUtxo` untouched.
+
+    /// Consensus parameters with `allow_read_only_contract_inputs` enabled.
+    fn consensus_params_allowing_read_only() -> ConsensusParameters {
+        let mut params = ConsensusParameters::default();
+        let tx_params = params
+            .tx_params()
+            .with_allow_read_only_contract_inputs(true);
+        params.set_tx_params(tx_params);
+        params
+    }
+
+    /// Builds a script transaction that `CALL`s `contract_id`, forwarding zero
+    /// coins, with the contract as an input but WITHOUT a matching contract
+    /// output — i.e. a read-only contract access. The builder is configured to
+    /// allow read-only contract inputs so the transaction is well-formed.
+    fn read_only_contract_call_tx(contract_id: ContractId) -> Transaction {
+        let asset_id = AssetId::zeroed();
+        let (script, _) = script_with_data_offset!(
+            data_offset,
+            vec![
+                // 0x10 -> pointer to the `Call` struct (after the 32-byte asset id)
+                op::movi(0x10, data_offset + AssetId::LEN as u32),
+                // 0x11 -> pointer to the asset id
+                op::movi(0x11, data_offset),
+                // Forward zero coins => a coin-less call is allowed for a
+                // read-only contract.
+                op::call(0x10, RegId::ZERO, 0x11, RegId::CGAS),
+                op::ret(RegId::ONE),
+            ],
+            TxParameters::DEFAULT.tx_offset()
+        );
+        let script_data: Vec<u8> = [
+            asset_id.as_ref(),
+            Call::new(contract_id, 0, 0).to_bytes().as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+
+        TxBuilder::new(2322)
+            .allow_read_only_contract_inputs()
+            .script_gas_limit(500_000)
+            .coin_input(AssetId::zeroed(), 1_000_000)
+            .start_script(script, script_data)
+            .contract_input(contract_id)
+            .fee_input()
+            // NB: intentionally NO `.contract_output(&contract_id)`.
+            .build()
+            .transaction()
+            .clone()
+            .into()
+    }
+
+    #[test]
+    fn read_only_contract_input_executes_and_does_not_rewrite_root_when_allowed() {
+        // Given: a chain that allows read-only contract inputs and a deployed
+        // contract whose code only reads its own state.
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let (create, contract_id) = create_contract(
+            vec![
+                // Allocate a zeroed 32-byte key on the heap.
+                op::movi(0x15, 32),
+                op::aloc(0x15),
+                // Read a word from the contract's own state (allowed).
+                op::srw(0x10, 0x11, RegId::HP, 0),
+                op::ret(RegId::ONE),
+            ]
+            .into_iter()
+            .collect::<Vec<u8>>()
+            .as_slice(),
+            &mut rng,
+        );
+
+        let read_only_tx = read_only_contract_call_tx(contract_id);
+
+        let db = &mut Database::default();
+        let mut executor = create_executor(
+            db.clone(),
+            Config {
+                consensus_parameters: consensus_params_allowing_read_only(),
+                forbid_fake_coins_default: false,
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: 1.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![create.into(), read_only_tx],
+        };
+
+        // When
+        let ExecutionResult {
+            block,
+            tx_status,
+            skipped_transactions,
+            ..
+        } = executor.produce_and_commit(block).unwrap();
+
+        // Then: both transactions succeed and nothing is skipped.
+        assert!(skipped_transactions.is_empty());
+        assert!(
+            tx_status
+                .iter()
+                .all(|s| matches!(s.result, TransactionExecutionResult::Success { .. })),
+            "tx statuses: {:?}",
+            tx_status.iter().map(|s| &s.result).collect::<Vec<_>>()
+        );
+
+        // The read-only transaction produced NO contract output, so no
+        // state/balance root was ever computed or rewritten for it.
+        let executed_tx = block.transactions()[1].as_script().unwrap();
+        assert!(
+            !executed_tx
+                .outputs()
+                .iter()
+                .any(|o| matches!(o, Output::Contract(_))),
+            "read-only tx must not have a contract output"
+        );
+
+        // The contract's persisted UTXO pointer still points at the `Create`
+        // transaction (tx index 0), proving the executor did not persist a new
+        // output UTXO (and thus did not rewrite any root) for the read-only
+        // contract.
+        let contract_utxo = db
+            .storage::<ContractsLatestUtxo>()
+            .get(&contract_id)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        assert_eq!(
+            contract_utxo.tx_pointer().tx_index(),
+            0,
+            "read-only access must not update ContractsLatestUtxo"
+        );
+    }
+
+    #[test]
+    fn read_only_contract_input_is_rejected_when_not_allowed() {
+        // Given: the same read-only transaction, but a chain whose consensus
+        // parameters do NOT allow read-only contract inputs (the default).
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let (create, contract_id) = create_contract(&[], &mut rng);
+        let read_only_tx = read_only_contract_call_tx(contract_id);
+
+        let db = &mut Database::default();
+        let mut executor = create_executor(
+            db.clone(),
+            Config {
+                // Default consensus parameters => flag off.
+                forbid_fake_coins_default: false,
+                ..Default::default()
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: 1.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![create.into(), read_only_tx],
+        };
+
+        // When
+        let ExecutionResult {
+            skipped_transactions,
+            ..
+        } = executor.produce_and_commit(block).unwrap();
+
+        // Then: the read-only transaction is rejected as invalid because a
+        // contract input requires a matching contract output when the flag is
+        // off.
+        assert_eq!(skipped_transactions.len(), 1);
+        let err_str = format!("{:?}", skipped_transactions[0].1);
+        assert!(
+            err_str.contains("InputContractAssociatedOutputContract"),
+            "unexpected skip reason: {err_str}"
+        );
+    }
+
+    #[test]
+    fn read_only_contract_input_write_panics_and_preserves_state() {
+        // Given: a chain that allows read-only contract inputs and a deployed
+        // contract whose code tries to WRITE to its own state.
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let (create, contract_id) = create_contract(
+            vec![
+                // Attempt to write value 1 to a state slot (forbidden for a
+                // read-only contract).
+                op::sww(RegId::ZERO, 0x29, RegId::ONE),
+                op::ret(RegId::ONE),
+            ]
+            .into_iter()
+            .collect::<Vec<u8>>()
+            .as_slice(),
+            &mut rng,
+        );
+
+        let read_only_tx = read_only_contract_call_tx(contract_id);
+
+        let db = &mut Database::default();
+        let mut executor = create_executor(
+            db.clone(),
+            Config {
+                consensus_parameters: consensus_params_allowing_read_only(),
+                forbid_fake_coins_default: false,
+            },
+        );
+
+        let block = PartialFuelBlock {
+            header: PartialBlockHeader {
+                consensus: ConsensusHeader {
+                    height: 1.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            transactions: vec![create.into(), read_only_tx],
+        };
+
+        // When
+        let ExecutionResult { tx_status, .. } =
+            executor.produce_and_commit(block).unwrap();
+
+        // Then: the write panics with `ContractIsReadOnly`, so the transaction
+        // reverts (fails) rather than corrupting state.
+        assert!(
+            matches!(
+                tx_status[1].result,
+                TransactionExecutionResult::Failed { .. }
+            ),
+            "expected the write to a read-only contract to fail"
+        );
+
+        let receipts = tx_status[1].result.receipts();
+        assert!(
+            receipts.iter().any(|r| matches!(
+                r,
+                Receipt::Panic { reason, .. }
+                    if *reason.reason()
+                        == fuel_core_types::fuel_asm::PanicReason::ContractIsReadOnly
+            )),
+            "expected a ContractIsReadOnly panic receipt, got: {receipts:?}"
+        );
+
+        // The contract's persisted UTXO pointer is untouched: the reverted
+        // write neither produced an output nor corrupted the contract's state.
+        let contract_utxo = db
+            .storage::<ContractsLatestUtxo>()
+            .get(&contract_id)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        assert_eq!(
+            contract_utxo.tx_pointer().tx_index(),
+            0,
+            "a reverted read-only write must not update ContractsLatestUtxo"
         );
     }
 

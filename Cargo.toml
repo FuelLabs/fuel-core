@@ -180,3 +180,23 @@ lto = "fat"
 # To speedup iterations between compilation.
 #lto = "thin"
 panic = "unwind"
+
+# TEMPORARY: point the fuel-vm family at the unmerged PR #1014 branch
+# (commit e2f8cb8bd) that adds read-only contract inputs behind
+# `TxParametersV2::allow_read_only_contract_inputs`. fuel-core cannot be
+# merged until fuel-vm #1014 is merged and released; once that happens this
+# whole `[patch.crates-io]` block MUST be removed and the `fuel-vm-private`
+# version in `[workspace.dependencies]` bumped to the released version.
+# The PR branch is based on fuel-vm master v0.66.4, so versions line up and
+# only the 0.66.4 tree is redirected (the legacy 0.56.0 tree pulled in by
+# `fuel-core-types 0.35.0` is left untouched).
+[patch.crates-io]
+fuel-asm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
+fuel-compression = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
+fuel-crypto = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
+fuel-derive = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
+fuel-merkle = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
+fuel-storage = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
+fuel-tx = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
+fuel-types = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "feat/read-only-contract-inputs" }
