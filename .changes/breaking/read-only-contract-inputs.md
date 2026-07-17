@@ -1,1 +1,1 @@
-Enabling the new `allow_read_only_contract_inputs` transaction consensus parameter (`TxParameters::V2`) is consensus-breaking: it relaxes transaction validity so a contract input may omit its contract output. The flag defaults to off, so chains that do not enable it are unaffected.
+Consensus-breaking: with the new fuel-vm, transaction validity is relaxed so a contract input may omit its contract output (a read-only contract access). This is active for every transaction on the new version — it is not gated behind a consensus parameter — so nodes must upgrade in coordination.

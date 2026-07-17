@@ -1928,27 +1928,17 @@ mod tests {
     // ---- Read-only contract inputs (fuel-vm PR #1014) -----------------------
     //
     // A contract input WITHOUT the corresponding contract output is a
-    // read-only contract access, valid only when the consensus parameter
-    // `allow_read_only_contract_inputs` is enabled. The VM forbids any
-    // modification of such a contract's state or balances, so no output slot
-    // is needed to commit new roots. The executor must therefore never try to
-    // produce/rewrite an output (and thus a state/balance root) for it, and
-    // must leave the contract's persisted `ContractsLatestUtxo` untouched.
-
-    /// Consensus parameters with `allow_read_only_contract_inputs` enabled.
-    fn consensus_params_allowing_read_only() -> ConsensusParameters {
-        let mut params = ConsensusParameters::default();
-        let tx_params = params
-            .tx_params()
-            .with_allow_read_only_contract_inputs(true);
-        params.set_tx_params(tx_params);
-        params
-    }
+    // read-only contract access. This is supported automatically by the new
+    // fuel-vm version — there is no consensus parameter to enable. The VM
+    // forbids any modification of such a contract's state or balances, so no
+    // output slot is needed to commit new roots. The executor must therefore
+    // never try to produce/rewrite an output (and thus a state/balance root)
+    // for it, and must leave the contract's persisted `ContractsLatestUtxo`
+    // untouched.
 
     /// Builds a script transaction that `CALL`s `contract_id`, forwarding zero
     /// coins, with the contract as an input but WITHOUT a matching contract
-    /// output — i.e. a read-only contract access. The builder is configured to
-    /// allow read-only contract inputs so the transaction is well-formed.
+    /// output — i.e. a read-only contract access.
     fn read_only_contract_call_tx(contract_id: ContractId) -> Transaction {
         let asset_id = AssetId::zeroed();
         let (script, _) = script_with_data_offset!(
@@ -1975,7 +1965,6 @@ mod tests {
         .collect();
 
         TxBuilder::new(2322)
-            .allow_read_only_contract_inputs()
             .script_gas_limit(500_000)
             .coin_input(AssetId::zeroed(), 1_000_000)
             .start_script(script, script_data)
@@ -1989,9 +1978,8 @@ mod tests {
     }
 
     #[test]
-    fn read_only_contract_input_executes_and_does_not_rewrite_root_when_allowed() {
-        // Given: a chain that allows read-only contract inputs and a deployed
-        // contract whose code only reads its own state.
+    fn read_only_contract_input_executes_and_does_not_rewrite_root() {
+        // Given: a deployed contract whose code only reads its own state.
         let mut rng = StdRng::seed_from_u64(2322u64);
         let (create, contract_id) = create_contract(
             vec![
@@ -2014,8 +2002,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                consensus_parameters: consensus_params_allowing_read_only(),
                 forbid_fake_coins_default: false,
+                ..Default::default()
             },
         );
 
@@ -2077,55 +2065,8 @@ mod tests {
     }
 
     #[test]
-    fn read_only_contract_input_is_rejected_when_not_allowed() {
-        // Given: the same read-only transaction, but a chain whose consensus
-        // parameters do NOT allow read-only contract inputs (the default).
-        let mut rng = StdRng::seed_from_u64(2322u64);
-        let (create, contract_id) = create_contract(&[], &mut rng);
-        let read_only_tx = read_only_contract_call_tx(contract_id);
-
-        let db = &mut Database::default();
-        let mut executor = create_executor(
-            db.clone(),
-            Config {
-                // Default consensus parameters => flag off.
-                forbid_fake_coins_default: false,
-                ..Default::default()
-            },
-        );
-
-        let block = PartialFuelBlock {
-            header: PartialBlockHeader {
-                consensus: ConsensusHeader {
-                    height: 1.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-            transactions: vec![create.into(), read_only_tx],
-        };
-
-        // When
-        let ExecutionResult {
-            skipped_transactions,
-            ..
-        } = executor.produce_and_commit(block).unwrap();
-
-        // Then: the read-only transaction is rejected as invalid because a
-        // contract input requires a matching contract output when the flag is
-        // off.
-        assert_eq!(skipped_transactions.len(), 1);
-        let err_str = format!("{:?}", skipped_transactions[0].1);
-        assert!(
-            err_str.contains("InputContractAssociatedOutputContract"),
-            "unexpected skip reason: {err_str}"
-        );
-    }
-
-    #[test]
     fn read_only_contract_input_write_panics_and_preserves_state() {
-        // Given: a chain that allows read-only contract inputs and a deployed
-        // contract whose code tries to WRITE to its own state.
+        // Given: a deployed contract whose code tries to WRITE to its own state.
         let mut rng = StdRng::seed_from_u64(2322u64);
         let (create, contract_id) = create_contract(
             vec![
@@ -2146,8 +2087,8 @@ mod tests {
         let mut executor = create_executor(
             db.clone(),
             Config {
-                consensus_parameters: consensus_params_allowing_read_only(),
                 forbid_fake_coins_default: false,
+                ..Default::default()
             },
         );
 
