@@ -13,6 +13,7 @@ use crate::{
         Filter,
         TransactionFiltered,
     },
+    scheduler::fold_changes_in_canonical_order,
     tests::mocks::{
         MockPreconfirmationSender,
         MockRelayer,
@@ -26,7 +27,9 @@ use fuel_core_storage::{
     column::Column,
     kv_store::{
         KeyValueInspect,
+        StorageColumn,
         Value,
+        WriteOperation,
     },
     structured_storage::test::InMemoryStorage,
     tables::{
@@ -35,7 +38,9 @@ use fuel_core_storage::{
     },
     transactional::{
         AtomicView,
+        Changes,
         Modifiable,
+        ReferenceBytesKey,
         StorageChanges,
         WriteTransaction,
     },
@@ -828,4 +833,97 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
 
     // 3 txs + mint tx (because tx2 has been skipped)
     assert_eq!(result.block.transactions().len(), 4);
+}
+
+// ---------------------------------------------------------------------------
+// Audit-fix regression tests (coalescing / mint-on-merged-view / blob assert).
+// ---------------------------------------------------------------------------
+
+fn coins_key() -> ReferenceBytesKey {
+    // 34 bytes = a compressed UtxoId key.
+    vec![5u8; 34].into()
+}
+
+fn insert_op(byte: u8) -> WriteOperation {
+    WriteOperation::Insert(Value::from(vec![byte]))
+}
+
+fn single_op_changes(
+    column: Column,
+    key: ReferenceBytesKey,
+    op: WriteOperation,
+) -> Changes {
+    let mut changes = Changes::default();
+    changes.entry(column.id()).or_default().insert(key, op);
+    changes
+}
+
+// TEST 2 (fold semantics) — a DA-imported message (Insert in `da_changes`)
+// consumed by exactly one in-block L2 tx (Remove) is LEGAL and folds, in
+// canonical order (da first), to a net Remove. This is the harness-level proof
+// for the DA-message scenario: driving a full relayer import through the mock
+// parallel-executor harness would require a previous block + DA-height bump +
+// a relayer returning a Message event + a matching message-input tx, none of
+// which the current mock `TransactionsSource`/`MockRelayer` expose, so the fold
+// function (the code that legitimises the split) is exercised directly.
+#[test]
+fn fold__da_imported_message_consumed_by_one_tx_folds_to_remove() {
+    let key: ReferenceBytesKey = vec![3u8; 32].into();
+    let da = single_op_changes(Column::Messages, key.clone(), insert_op(1));
+    let batch = single_op_changes(Column::Messages, key.clone(), WriteOperation::Remove);
+
+    let folded = fold_changes_in_canonical_order(vec![da, batch])
+        .expect("Insert(da) then Remove(batch) is a legal create-then-spend fold");
+
+    assert_eq!(
+        folded
+            .get(&Column::Messages.id())
+            .and_then(|column| column.get(&key)),
+        Some(&WriteOperation::Remove),
+        "a consumed DA message must fold to a net Remove, matching the sequential map",
+    );
+}
+
+// TEST 1 (fold semantics, unit level) — a coin created in batch i and spent in
+// batch j > i folds (Insert then Remove, canonical order) to a net Remove.
+#[test]
+fn fold__coin_created_then_spent_across_batches_folds_to_remove() {
+    let key = coins_key();
+    let batch_i = single_op_changes(Column::Coins, key.clone(), insert_op(9));
+    let batch_j = single_op_changes(Column::Coins, key.clone(), WriteOperation::Remove);
+
+    let folded = fold_changes_in_canonical_order(vec![batch_i, batch_j]).unwrap();
+
+    assert_eq!(
+        folded.get(&Column::Coins.id()).and_then(|c| c.get(&key)),
+        Some(&WriteOperation::Remove),
+    );
+}
+
+// Genuine conflicts the ordering does NOT legitimise must still error.
+#[test]
+fn fold__two_inserts_of_the_same_coin_is_a_conflict() {
+    let key = coins_key();
+    let batch_i = single_op_changes(Column::Coins, key.clone(), insert_op(9));
+    let batch_j = single_op_changes(Column::Coins, key.clone(), insert_op(10));
+
+    assert!(
+        fold_changes_in_canonical_order(vec![batch_i, batch_j]).is_err(),
+        "two Inserts of the same UtxoId is impossible in a valid block and must error",
+    );
+}
+
+#[test]
+fn fold__double_remove_and_remove_then_insert_are_conflicts() {
+    let key = coins_key();
+
+    // Double spend of the same key.
+    let a = single_op_changes(Column::Coins, key.clone(), WriteOperation::Remove);
+    let b = single_op_changes(Column::Coins, key.clone(), WriteOperation::Remove);
+    assert!(fold_changes_in_canonical_order(vec![a, b]).is_err());
+
+    // Spend-before-create ordering.
+    let c = single_op_changes(Column::Coins, key.clone(), WriteOperation::Remove);
+    let d = single_op_changes(Column::Coins, key.clone(), insert_op(9));
+    assert!(fold_changes_in_canonical_order(vec![c, d]).is_err());
 }

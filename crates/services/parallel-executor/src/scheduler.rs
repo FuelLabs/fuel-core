@@ -42,14 +42,16 @@ use fuel_core_executor::{
 use fuel_core_storage::{
     Error as StorageError,
     column::Column,
-    kv_store::KeyValueInspect,
+    kv_store::{
+        KeyValueInspect,
+        WriteOperation,
+    },
     structured_storage::StructuredStorage,
     transactional::{
         AtomicView,
         Changes,
         ConflictPolicy,
         IntoTransaction,
-        Modifiable,
         ReadTransaction,
         StorageChanges,
         StorageTransaction,
@@ -87,6 +89,7 @@ use std::{
     collections::{
         HashMap,
         HashSet,
+        btree_map,
     },
     sync::{
         Arc,
@@ -740,40 +743,63 @@ where
         let mut res = result?;
 
         tracing::warn!("scheduler done: {:?}", instant.elapsed());
-        if !self.blob_transactions.is_empty() {
-            let mut tx = StorageTransaction::transaction(
-                storage_with_da.clone(),
-                ConflictPolicy::Fail,
-                Default::default(),
-            );
 
-            // TODO: Rework this part to avoid `commit_changes` and decreasing performance
-            for changes in res.changes.extract_list_of_changes() {
-                if let Err(e) = tx.commit_changes(changes) {
-                    return Err(SchedulerError::StorageError(e));
-                }
-            }
-            tracing::warn!("committed changes: {:?}", instant.elapsed());
-            res.changes = StorageChanges::Changes(Default::default());
+        // FIX 1 — coalesce same-key operations across the parallel batches'
+        // (and per-contract) `Changes` into a single, already-merged `Changes`.
+        //
+        // `verify_coherency_and_merge_results` returns a `ChangesList` with one
+        // entry per batch (in batch-id order) followed by the per-contract
+        // entries. A coin created in batch `i` and spent in batch `j > i` lands
+        // as an `Insert` in entry `i` and a `Remove` in entry `j` — legal (the
+        // block orders creation before spend), but the strict conflict finder in
+        // `RocksDb::commit_changes` (and the blob path's `Fail`-policy commit)
+        // rejects the same key appearing in two entries. Folding the list in
+        // canonical order collapses that pair to a net `Remove`, exactly what
+        // the SEQUENTIAL executor's single coalescing map produces for the same
+        // block. Emitting one merged `Changes` — the same shape the sequential
+        // executor/validator emits — is what keeps producer and validator
+        // symmetric: every node commits one coalesced map, so the same block is
+        // accepted everywhere.
+        let mut merged = fold_changes_in_canonical_order(
+            core::mem::take(&mut res.changes).extract_list_of_changes(),
+        )?;
+
+        if !self.blob_transactions.is_empty() {
+            // Execute the blob txs against the fully-merged block state so far:
+            // base view + DA changes (both carried by `storage_with_da`) plus
+            // every batch/contract change (`merged`). `Overwrite` here is safe —
+            // `merged` is already conflict-checked by the fold above, and blob
+            // txs run sequentially on top (a blob spending a batch-created coin
+            // simply turns that `Insert` into a `Remove`, matching sequential).
+            let tx = StorageTransaction::transaction(
+                storage_with_da.clone(),
+                ConflictPolicy::Overwrite,
+                merged,
+            );
 
             let (blob_execution_data, blob_txs) =
                 self.execute_blob_transactions(tx, nb_transactions).await?;
             tracing::warn!("blob execution done: {:?}", instant.elapsed());
             res.add_blob_execution_data(blob_execution_data, blob_txs);
             tracing::warn!("blob execution data added: {:?}", instant.elapsed());
+            merged = match core::mem::take(&mut res.changes) {
+                StorageChanges::Changes(changes) => changes,
+                StorageChanges::ChangesList(list) => {
+                    fold_changes_in_canonical_order(list)?
+                }
+            };
         }
 
+        // Fold the DA-import changes in FIRST (their canonical position is
+        // before batch 0): a DA-imported message is `Insert`-ed in `da_changes`
+        // and `Remove`-d by its single in-block consumer inside `merged`, so
+        // `[Insert(da), Remove(batch)]` folds to a net `Remove` — the message is
+        // consumed. `da_changes` never inserts a key that a batch also inserts,
+        // so this fold only ever pairs DA inserts with batch removes.
         // TODO: Avoid cloning the DA changes
         let da_changes = storage_with_da.changes().clone();
-        match &mut res.changes {
-            StorageChanges::Changes(changes) => {
-                let changes = core::mem::take(changes);
-                res.changes = StorageChanges::ChangesList(vec![changes, da_changes]);
-            }
-            StorageChanges::ChangesList(list) => {
-                list.push(da_changes);
-            }
-        }
+        let final_changes = fold_changes_in_canonical_order(vec![da_changes, merged])?;
+        res.changes = StorageChanges::Changes(final_changes);
 
         let execution_time = instant.elapsed();
         tracing::warn!("Scheduler `run` execution time: {:?}", execution_time);
@@ -1441,6 +1467,85 @@ where
 
         Ok(())
     }
+}
+
+/// Fold a canonically-ordered list of [`Changes`] into a single [`Changes`],
+/// coalescing per-key operations that the parallel executor split across
+/// separate list entries.
+///
+/// The caller MUST pass the entries in canonical block order — DA-import
+/// changes first (conceptually applied before batch 0), then each batch's
+/// changes in batch-id order, then the per-contract changes. Applied in this
+/// order the fold reproduces exactly what the SEQUENTIAL executor's single
+/// coalescing map would compute for the same block, which is what keeps the
+/// parallel *producer* and the sequential *validator* accepting the same
+/// blocks.
+///
+/// ## Legal cross-entry sequences for a key (and the net op emitted)
+/// * `[Insert]`         → `Insert`  — a coin/message/slot created (or a
+///   pre-existing value overwritten) by a single entry.
+/// * `[Remove]`         → `Remove`  — a pre-existing coin/message spent by a
+///   single entry.
+/// * `[Insert, Remove]` → `Remove`  — created *and* consumed inside this block:
+///   a coin created in batch `i` and spent in batch `j > i`, or a DA-imported
+///   message (`Insert` in `da_changes`, folded first) consumed by its one
+///   in-block spender. The sequential map stores `Remove` for such a key
+///   (`Insert` then `take`), so we emit `Remove`, not omission.
+///
+/// ## Genuine conflicts (rejected — the ordering does NOT legitimize them)
+/// * `[Insert, Insert]` — two creations of the same key (e.g. two coins sharing
+///   a `UtxoId`); impossible in a valid block.
+/// * `[Remove, Remove]` — double spend of the same key.
+/// * `[Remove, Insert]` — spend-before-create ordering.
+/// * any longer sequence.
+///
+/// ## Why this stays correct for contract state
+/// Per-contract state never reaches this fold split across entries: the
+/// scheduler serialises every write to a given contract into that contract's
+/// single `contracts_changes[c]` entry (guarded by
+/// `current_executing_contracts`), so a slot written by several txs is already
+/// coalesced *within one entry* and never appears here as a cross-entry
+/// `[Insert, Insert]`. The one legitimate cross-entry contract overwrite — the
+/// coinbase contract's UTXO/balance, re-written by the mint tx — is folded
+/// separately and later (the mint runs last, against the merged view, with
+/// `Overwrite`), so it is intentionally out of scope for this strict fold.
+pub(crate) fn fold_changes_in_canonical_order(
+    list: Vec<Changes>,
+) -> Result<Changes, SchedulerError> {
+    let mut acc = Changes::default();
+    for changes in list {
+        for (column, ops) in changes {
+            let acc_column = acc.entry(column).or_default();
+            for (key, op) in ops {
+                match acc_column.entry(key) {
+                    btree_map::Entry::Vacant(vacant) => {
+                        vacant.insert(op);
+                    }
+                    btree_map::Entry::Occupied(mut occupied) => {
+                        // The only legal collision is create-then-spend
+                        // (`Insert` already recorded, now superseded by a
+                        // `Remove`): net `Remove`, matching the sequential map.
+                        let legal = matches!(
+                            (occupied.get(), &op),
+                            (WriteOperation::Insert(_), WriteOperation::Remove)
+                        );
+                        if legal {
+                            occupied.insert(WriteOperation::Remove);
+                        } else {
+                            return Err(SchedulerError::InternalError(format!(
+                                "Conflicting storage writes for column {column} key \
+                                 {:?}: existing {:?} cannot be followed by {:?}",
+                                occupied.key(),
+                                occupied.get(),
+                                op,
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(acc)
 }
 
 /// Convert a [`Duration`] into `u64` nanoseconds, saturating (durations that
