@@ -243,15 +243,24 @@ struct BatchPreparationStats {
 }
 
 /// A producer feedback handle held until its batch completes, together with the
-/// overhead (batch-preparation) time already measured at dispatch. On
-/// completion the execution time is added and the pair is reported.
+/// parallelization overhead accumulated for the batch so far. On completion the
+/// inner execution time is added as a separate field and the report is sent.
 struct PendingBatchFeedback {
     handle: BatchFeedbackHandle,
-    /// Parallelization overhead measured before execution (batch preparation).
-    /// TODO(lane-scheduler-overhead): this is preparation time only. The
-    /// per-contract `Changes` handoff and `verify_coherency_and_merge_results`
-    /// merge stage are not yet instrumented (design doc A.5), so the reported
-    /// `overhead_time` is partial until those metrics exist.
+    /// Parallelization overhead directly attributable to this batch. Accrued at
+    /// three sites: batch preparation (at dispatch), the split side of the
+    /// per-contract `Changes` handoff (taking changes into the worker, in
+    /// `execute_batch`), and the merge side (re-inserting them on completion, in
+    /// `register_execution_result`).
+    ///
+    /// Attribution choice: only costs that are *directly per-batch measurable*
+    /// are folded in here. The block-level coherency+merge stage
+    /// (`verify_coherency_and_merge_results` + the canonical fold) is a single
+    /// whole-block cost with no non-arbitrary per-batch split, so it is
+    /// deliberately EXCLUDED from `overhead_time` and instead exported on its own
+    /// (`record_block_merge`). This keeps the per-batch `overhead_time` the lane
+    /// scheduler's EMA consumes an unbiased sum of that batch's own overhead,
+    /// while the block-level merge cost remains observable as an aggregate.
     overhead: Duration,
 }
 
@@ -774,6 +783,11 @@ where
         //     storage_with_da.clone(),
         // )?;
 
+        // Time the block-level coherency + merge stage: coin/nonce verification
+        // and the canonical fold(s). Blob execution (below) is a separate cost
+        // and is excluded from this measurement.
+        let merge_start = Instant::now();
+
         let result = self.verify_coherency_and_merge_results(
             nb_batch_created,
             l1_execution_data,
@@ -807,6 +821,8 @@ where
         let mut merged = fold_changes_in_canonical_order(
             core::mem::take(&mut res.changes).extract_list_of_changes(),
         )?;
+        // Merge time accrued so far (verify + first fold), before the blob stage.
+        let mut merge_elapsed = merge_start.elapsed();
 
         if !self.blob_transactions.is_empty() {
             // Execute the blob txs against the fully-merged block state so far:
@@ -841,13 +857,20 @@ where
         // consumed. `da_changes` never inserts a key that a batch also inserts,
         // so this fold only ever pairs DA inserts with batch removes.
         // TODO: Avoid cloning the DA changes
+        let da_fold_start = Instant::now();
         let da_changes = storage_with_da.changes().clone();
         let final_changes = fold_changes_in_canonical_order(vec![da_changes, merged])?;
         res.changes = StorageChanges::Changes(final_changes);
+        merge_elapsed = merge_elapsed.saturating_add(da_fold_start.elapsed());
 
         let execution_time = instant.elapsed();
         tracing::warn!("Scheduler `run` execution time: {:?}", execution_time);
         if self.config.metrics {
+            parallel_executor_metrics::record_block_merge(
+                merge_elapsed,
+                nb_transactions,
+                total_gas,
+            );
             parallel_executor_metrics::record_scheduler_run_time(execution_time);
         }
         Ok(res)
@@ -989,11 +1012,35 @@ where
 
         let mut changes_per_contract = Vec::with_capacity(batch.contracts_used.len());
 
+        // Split side of the per-contract `Changes` handoff: take each contract's
+        // accumulated changes out of the shared map to hand into the worker.
+        let split_start = Instant::now();
         for contract in batch.contracts_used.iter() {
             self.current_executing_contracts.insert(*contract);
             if let Some(changes) = self.contracts_changes.remove(contract) {
                 changes_per_contract.push((*contract, changes));
             }
+        }
+        let split_duration = split_start.elapsed();
+        let handoff_contract_count = changes_per_contract.len();
+        let handoff_changeset_keys: usize = changes_per_contract
+            .iter()
+            .map(|(_, changes)| {
+                changes.values().map(|column| column.len()).sum::<usize>()
+            })
+            .sum();
+        if self.config.metrics {
+            parallel_executor_metrics::record_contract_handoff_split(
+                split_duration,
+                handoff_contract_count,
+                handoff_changeset_keys,
+            );
+        }
+        // Attribute this batch's split-handoff cost to its overhead (the merge
+        // side is added on completion). Only present when the producer requested
+        // feedback (lane scheduler on).
+        if let Some(pending) = self.batch_feedback.get_mut(&batch_id) {
+            pending.overhead = pending.overhead.saturating_add(split_duration);
         }
 
         // Snapshot the seed this batch is dispatched with (the accumulated
@@ -1177,21 +1224,35 @@ where
     }
 
     fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
-        // Report this completed batch's measured timings back to the producer
-        // (the txpool lane scheduler). `execution_time` is the inner batch work;
-        // `overhead_time` is the batch-preparation time captured at dispatch
-        // (merge/handoff overhead is not yet instrumented — design doc A.5 — so
-        // it is partial). `completed: true` — this batch's results are kept.
-        self.report_batch_feedback(res.batch_id, res.execution_duration, true);
-
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
         }
 
+        // Merge side of the per-contract `Changes` handoff: re-insert this
+        // batch's per-contract changes into the shared map. Measured here so the
+        // cost can be attributed to this batch's overhead before we report.
+        let merge_start = Instant::now();
         for (contract_id, changes) in res.changes_per_contract {
             debug_assert!(!self.contracts_changes.contains_key(&contract_id));
             self.contracts_changes.insert(contract_id, changes);
         }
+        let merge_handoff_duration = merge_start.elapsed();
+        if self.config.metrics {
+            parallel_executor_metrics::record_contract_handoff_merge(
+                merge_handoff_duration,
+            );
+        }
+        if let Some(pending) = self.batch_feedback.get_mut(&res.batch_id) {
+            pending.overhead = pending.overhead.saturating_add(merge_handoff_duration);
+        }
+
+        // Report this completed batch's measured timings back to the producer
+        // (the txpool lane scheduler). `execution_time` is the inner batch work;
+        // `overhead_time` is the batch's full parallelization overhead — batch
+        // preparation + the split + merge per-contract handoff (accumulated into
+        // the pending feedback at each of those sites). `completed: true` — this
+        // batch's results are kept.
+        self.report_batch_feedback(res.batch_id, res.execution_duration, true);
 
         self.state = SchedulerState::TransactionsReadyForPickup;
 
@@ -1464,6 +1525,7 @@ where
         execution_duration: Duration,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<u32, SchedulerError> {
+        let fallback_start = Instant::now();
         let block_height = *self.header_to_produce.height();
         // This batch's parallel results are discarded and re-executed
         // sequentially below. Report its feedback as `completed: false` — the
@@ -1664,6 +1726,12 @@ where
             SchedulerError::InternalError("Too many transactions".to_string())
         })?;
         let next_start_idx_txs = start_idx_txs.saturating_add(committed_in_range);
+
+        if self.config.metrics {
+            parallel_executor_metrics::record_sequential_fallback(
+                fallback_start.elapsed(),
+            );
+        }
 
         // Save the execution results for the current batch
         self.execution_results.insert(

@@ -969,6 +969,13 @@ async fn feedback__drain_path_reports_completed_true_and_does_not_leak() {
         reports.iter().all(|r| r.execution_time > 0),
         "a completed batch must report a non-zero execution_time, got {reports:?}",
     );
+    // Overhead is now reported too (batch preparation + per-contract handoff),
+    // not left at zero — the feedback loop carries the batch's attributable
+    // parallelization overhead.
+    assert!(
+        reports.iter().all(|r| r.overhead_time > 0),
+        "a completed batch must report a non-zero overhead_time, got {reports:?}",
+    );
 }
 
 // The sequential-fallback path (`sequential_fallback`) discards the parallel

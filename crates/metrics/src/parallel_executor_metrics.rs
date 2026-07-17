@@ -50,6 +50,19 @@ pub struct ParallelExecutorMetrics {
     pub batch_total_ms: Histogram,
     pub batch_total_us_per_tx: Histogram,
     pub batch_total_ns_per_kgas: Histogram,
+    // Block-level coherency + merge stage (coin/nonce verification and the
+    // canonical fold), normalized by the block's tx count and gas.
+    pub merge_ms: Histogram,
+    pub merge_us_per_tx: Histogram,
+    pub merge_ns_per_kgas: Histogram,
+    // Per-contract `Changes` handoff, split into the take-into-worker side and
+    // the re-insert-on-completion side, plus the shape of what was handed off.
+    pub contract_handoff_split_us: Histogram,
+    pub contract_handoff_merge_us: Histogram,
+    pub contracts_per_batch: Histogram,
+    pub handoff_changeset_keys: Histogram,
+    // Sequential-fallback re-execution duration.
+    pub sequential_fallback_ms: Histogram,
     debug_batch_metrics_block_height: AtomicU64,
 }
 
@@ -105,6 +118,22 @@ impl Default for ParallelExecutorMetrics {
         let batch_total_ns_per_kgas = Histogram::new(buckets(
             Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas,
         ));
+        let merge_ms = Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
+        let merge_us_per_tx =
+            Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMicrosecondsPerTx));
+        let merge_ns_per_kgas = Histogram::new(buckets(
+            Buckets::ParallelExecutorBatchTimeNanosecondsPerKGas,
+        ));
+        let contract_handoff_split_us =
+            Histogram::new(buckets(Buckets::ParallelExecutorHandoffTimeMicroseconds));
+        let contract_handoff_merge_us =
+            Histogram::new(buckets(Buckets::ParallelExecutorHandoffTimeMicroseconds));
+        let contracts_per_batch =
+            Histogram::new(buckets(Buckets::ParallelExecutorContractsPerBatch));
+        let handoff_changeset_keys =
+            Histogram::new(buckets(Buckets::ParallelExecutorHandoffChangesetKeys));
+        let sequential_fallback_ms =
+            Histogram::new(buckets(Buckets::ParallelExecutorBatchTimeMs));
 
         let metrics = ParallelExecutorMetrics {
             execution_time_seconds,
@@ -132,6 +161,14 @@ impl Default for ParallelExecutorMetrics {
             batch_total_ms,
             batch_total_us_per_tx,
             batch_total_ns_per_kgas,
+            merge_ms,
+            merge_us_per_tx,
+            merge_ns_per_kgas,
+            contract_handoff_split_us,
+            contract_handoff_merge_us,
+            contracts_per_batch,
+            handoff_changeset_keys,
+            sequential_fallback_ms,
             debug_batch_metrics_block_height: AtomicU64::new(0),
         };
 
@@ -260,6 +297,46 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_batch_total_ns_per_kgas",
             "Total time spent preparing and executing a batch in nanoseconds normalized by 1000 gas",
             metrics.batch_total_ns_per_kgas.clone(),
+        );
+        registry.register(
+            "parallel_executor_merge_ms",
+            "Time spent in the block-level coherency + merge stage (coin/nonce verification and the canonical fold) in milliseconds",
+            metrics.merge_ms.clone(),
+        );
+        registry.register(
+            "parallel_executor_merge_us_per_tx",
+            "Block-level merge time in microseconds normalized by transactions",
+            metrics.merge_us_per_tx.clone(),
+        );
+        registry.register(
+            "parallel_executor_merge_ns_per_kgas",
+            "Block-level merge time in nanoseconds normalized by 1000 gas",
+            metrics.merge_ns_per_kgas.clone(),
+        );
+        registry.register(
+            "parallel_executor_contract_handoff_split_us",
+            "Time spent taking a batch's per-contract changes out of the shared map into the worker (split side) in microseconds",
+            metrics.contract_handoff_split_us.clone(),
+        );
+        registry.register(
+            "parallel_executor_contract_handoff_merge_us",
+            "Time spent re-inserting a completed batch's per-contract changes into the shared map (merge side) in microseconds",
+            metrics.contract_handoff_merge_us.clone(),
+        );
+        registry.register(
+            "parallel_executor_contracts_per_batch",
+            "Number of distinct contracts handed off in a batch",
+            metrics.contracts_per_batch.clone(),
+        );
+        registry.register(
+            "parallel_executor_handoff_changeset_keys",
+            "Number of storage keys in a batch's handed-off per-contract change set",
+            metrics.handoff_changeset_keys.clone(),
+        );
+        registry.register(
+            "parallel_executor_sequential_fallback_ms",
+            "Duration of a sequential-fallback re-execution in milliseconds",
+            metrics.sequential_fallback_ms.clone(),
         );
 
         metrics
@@ -470,4 +547,53 @@ pub fn record_batch_total(duration: Duration, tx_count: u32, gas: u64) {
         &metrics.batch_total_us_per_tx,
         &metrics.batch_total_ns_per_kgas,
     );
+}
+
+/// Record the block-level coherency + merge stage (coin/nonce verification and
+/// the canonical fold), normalized by the block's tx count and gas.
+pub fn record_block_merge(duration: Duration, tx_count: u32, gas: u64) {
+    let metrics = parallel_executor_metrics();
+    record_batch_time(
+        duration,
+        tx_count,
+        gas,
+        &metrics.merge_ms,
+        &metrics.merge_us_per_tx,
+        &metrics.merge_ns_per_kgas,
+    );
+}
+
+/// Record the split side of a batch's per-contract `Changes` handoff (taking the
+/// accumulated changes out of the shared map into the worker), together with the
+/// shape of what was handed off (contract count and total storage keys).
+pub fn record_contract_handoff_split(
+    duration: Duration,
+    contract_count: usize,
+    changeset_keys: usize,
+) {
+    let metrics = parallel_executor_metrics();
+    metrics
+        .contract_handoff_split_us
+        .observe(duration_us(duration));
+    if contract_count > 0 {
+        metrics.contracts_per_batch.observe(contract_count as f64);
+        metrics
+            .handoff_changeset_keys
+            .observe(changeset_keys as f64);
+    }
+}
+
+/// Record the merge side of a batch's per-contract `Changes` handoff
+/// (re-inserting a completed batch's changes into the shared map).
+pub fn record_contract_handoff_merge(duration: Duration) {
+    parallel_executor_metrics()
+        .contract_handoff_merge_us
+        .observe(duration_us(duration));
+}
+
+/// Record the duration of a sequential-fallback re-execution.
+pub fn record_sequential_fallback(duration: Duration) {
+    parallel_executor_metrics()
+        .sequential_fallback_ms
+        .observe(duration_ms(duration));
 }
