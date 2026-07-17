@@ -18,6 +18,7 @@ fault-proving = ["fuel-core-types/fault-proving", "fuel-core-storage/fault-provi
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 derive_more = { workspace = true }
+fuel-core-metrics = { workspace = true }
 fuel-core-storage = { workspace = true, features = ["std"] }
 fuel-core-types = { workspace = true, features = ["std"] }
 mockall = { workspace = true, optional = true }

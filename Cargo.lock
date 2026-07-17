@@ -4807,6 +4807,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "derive_more 2.1.1",
+ "fuel-core-metrics",
  "fuel-core-producer",
  "fuel-core-storage",
  "fuel-core-trace",

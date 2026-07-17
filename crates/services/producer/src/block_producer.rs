@@ -14,6 +14,7 @@ use anyhow::{
     Context,
     anyhow,
 };
+use fuel_core_metrics::producer_metrics::producer_metrics;
 use fuel_core_storage::transactional::{
     AtomicView,
     HistoricalView,
@@ -55,6 +56,7 @@ use fuel_core_types::{
 use std::{
     future::Future,
     sync::Arc,
+    time::Instant,
 };
 use tokio::sync::Mutex;
 use tracing::debug;
@@ -263,6 +265,7 @@ where
         // Store the context string in case we error.
         let context_string =
             format!("Failed to produce block {next_height:?} due to execution failure");
+        let execution_start = Instant::now();
         let result = self
             .executor
             .lock()
@@ -271,6 +274,37 @@ where
             .await
             .map_err(Into::<anyhow::Error>::into)
             .context(context_string)?;
+        let execution_time = execution_start.elapsed();
+
+        let execution_result = result.result();
+        let tx_count = execution_result.block.transactions().len();
+        let gas_used: u64 = execution_result
+            .tx_status
+            .iter()
+            .map(|status| *status.result.total_gas())
+            .sum();
+
+        let metrics = producer_metrics();
+        metrics
+            .block_execution_duration
+            .observe(execution_time.as_secs_f64());
+        metrics
+            .last_block_execution_time_ms
+            .set(execution_time.as_millis().try_into().unwrap_or(i64::MAX));
+        metrics
+            .last_block_gas_used
+            .set(gas_used.try_into().unwrap_or(i64::MAX));
+        metrics
+            .last_block_transactions
+            .set(tx_count.try_into().unwrap_or(i64::MAX));
+        tracing::info!(
+            target: "block_producer::execution_summary",
+            height = u32::from(next_height),
+            txs = tx_count,
+            execution_time_ms = execution_time.as_millis() as u64,
+            gas_used = gas_used,
+            "block execution summary",
+        );
 
         debug!("Produced block with result: {:?}", result.result());
         Ok(result)
