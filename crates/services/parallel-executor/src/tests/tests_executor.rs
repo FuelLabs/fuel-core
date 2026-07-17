@@ -2069,6 +2069,84 @@ async fn oracle__drain_completing_contract_batch_keeps_contract_writes() {
     .await;
 }
 
+// FIX 4 — fresh-contract "UTXO input does not exist" on the NEXT block after a
+// deploy. Root cause: the txpool validates a contract input via
+// `contract_exist` = `ContractsRawCode.contains_key(contract_id)`
+// (`adapters/txpool.rs`). A contract deployed in block N by a batch that
+// completed on the end-of-block DRAIN path had its per-contract changes — which
+// for a `Create` tx include `ContractsRawCode` — DROPPED before the merge (the
+// FIX 1 bug), so block N never persisted the code and any caller in block N+1 was
+// rejected. It was INTERMITTENT because it only bit when the deploy's batch
+// happened to finish during the drain rather than in the main loop (timing
+// dependent; interval mode's zero deadline — FIX 3 — made the drain the common
+// case). This test forces the deploy onto the drain path (a heavy tx keeps the
+// batch in flight past an already-elapsed deadline) and asserts the fresh
+// contract's `ContractsRawCode` is present in the committed, folded changes — so
+// the next block's `contract_exist` sees it. It fails on the pre-FIX-1 scheduler
+// and passes after.
+#[tokio::test]
+async fn drain_completing_deploy_persists_fresh_contract_code() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    let heavy = heavy_tx(&mut rng, &mut storage);
+    let (create_tx, contract_id) = create_contract_tx(&mut rng, &mut storage);
+
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(1).unwrap(),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
+                metrics: false,
+            },
+        )
+        .unwrap();
+    let (source, pool) = MockTransactionsSource::new();
+    // One batch containing the heavy tx (keeps the batch in flight) and the
+    // deploy. The already-elapsed deadline breaks the main loop while the batch
+    // is still running, so it is completed by the drain.
+    pool.push_response(MockTxPoolResponse::new(
+        &[&heavy, &create_tx],
+        TransactionFiltered::NotFiltered,
+    ));
+    let (_result, par_changes) = executor
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: header_at_height_1(),
+                transactions_source: source,
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Instant::now(),
+        )
+        .await
+        .unwrap()
+        .into();
+
+    let folded = match par_changes {
+        StorageChanges::Changes(c) => c,
+        StorageChanges::ChangesList(list) => {
+            fold_changes_in_canonical_order(list).unwrap()
+        }
+    };
+    let raw_code_col = Column::ContractsRawCode.id();
+    let has_code = folded
+        .get(&raw_code_col)
+        .map(|ops| ops.keys().any(|k| k.as_ref() == contract_id.as_ref()))
+        .unwrap_or(false);
+    assert!(
+        has_code,
+        "fresh contract's ContractsRawCode must be committed after a \
+         drain-completing deploy (FIX 4 / FIX 1) — otherwise the next block's \
+         txpool `contract_exist` rejects callers with 'UTXO input does not exist'",
+    );
+}
+
 // SCENARIO 5 — seeded pseudo-random workloads mixing all of the above patterns,
 // so the oracle explores batch boundaries / fold / fallback combinations the
 // hand-written cases don't. Single worker (see the concurrency note above);
