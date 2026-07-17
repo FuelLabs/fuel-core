@@ -287,9 +287,8 @@ async fn interval_trigger_gives_the_executor_a_real_execution_budget() {
 
     let captured_in_producer = captured.clone();
     let mut block_producer = MockBlockProducer::default();
-    block_producer
-        .expect_produce_and_execute_block()
-        .returning(move |_, time, _, deadline| {
+    block_producer.expect_produce_and_execute_block().returning(
+        move |_, time, _, deadline| {
             captured_in_producer
                 .lock()
                 .unwrap()
@@ -304,7 +303,8 @@ async fn interval_trigger_gives_the_executor_a_real_execution_budget() {
                 },
                 Default::default(),
             ))
-        });
+        },
+    );
     ctx_builder.with_producer(block_producer);
 
     let ctx = ctx_builder.build().await;
@@ -312,7 +312,10 @@ async fn interval_trigger_gives_the_executor_a_real_execution_budget() {
 
     // Let one interval elapse so exactly one block is produced.
     time::sleep(block_time + Duration::from_secs(1)).await;
-    assert!(block_import_receiver.try_recv().is_ok(), "a block was produced");
+    assert!(
+        block_import_receiver.try_recv().is_ok(),
+        "a block was produced"
+    );
 
     let recorded = captured.lock().unwrap().clone();
     assert!(!recorded.is_empty(), "the producer was invoked");

@@ -63,7 +63,66 @@ pub struct ParallelExecutorMetrics {
     pub handoff_changeset_keys: Histogram,
     // Sequential-fallback re-execution duration.
     pub sequential_fallback_ms: Histogram,
+    // ---- time-spend visibility (per block) ------------------------------
+    // Worker occupancy: total worker-seconds actually spent executing batch
+    // inner work vs the worker-seconds available over the scheduler window
+    // (worker_count x window). `busy / available` is the parallel utilization.
+    pub worker_busy_seconds: Gauge<f64, AtomicU64>,
+    pub worker_available_seconds: Gauge<f64, AtomicU64>,
+    // Latency from scheduler start to the first batch dispatched onto a worker.
+    pub time_to_first_dispatch_seconds: Gauge<f64, AtomicU64>,
+    // Time the scheduler spent blocked asking the txpool for transactions
+    // (`get_executable_transactions`), summed over the block.
+    pub pool_ask_seconds: Gauge<f64, AtomicU64>,
+    // Decomposition of the scheduler's wall-clock production window into serial
+    // phases (they sum to ~window); `execute_seconds` is the parallel
+    // worker-busy time shown alongside for context, NOT part of the serial sum.
+    pub phase_prepare_seconds: Gauge<f64, AtomicU64>,
+    pub phase_execute_seconds: Gauge<f64, AtomicU64>,
+    pub phase_handoff_seconds: Gauge<f64, AtomicU64>,
+    pub phase_merge_seconds: Gauge<f64, AtomicU64>,
+    pub phase_fallback_seconds: Gauge<f64, AtomicU64>,
+    pub phase_idle_seconds: Gauge<f64, AtomicU64>,
     debug_batch_metrics_block_height: AtomicU64,
+}
+
+/// Per-block decomposition of where the scheduler spent its production window,
+/// plus worker occupancy. Durations are gathered cheaply at the existing timing
+/// sites and emitted once per block.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BlockTimeDecomposition {
+    /// Total scheduler wall-clock window (`scheduler_run_time`).
+    pub window: Duration,
+    /// Batch preparation (`prepare_transactions_batch`), excluding the pool ask.
+    pub prepare: Duration,
+    /// Time blocked asking the txpool for transactions.
+    pub pool_ask: Duration,
+    /// Per-contract `Changes` handoff (split + merge sides).
+    pub handoff: Duration,
+    /// Block-level coherency + canonical fold.
+    pub merge: Duration,
+    /// Sequential-fallback re-execution.
+    pub fallback: Duration,
+    /// Latency from block start to the first batch dispatched.
+    pub first_dispatch: Duration,
+    /// Worker-seconds actually spent executing batch inner work.
+    pub worker_busy: Duration,
+    /// Worker-seconds available over the window (`worker_count x window`).
+    pub worker_available: Duration,
+}
+
+impl BlockTimeDecomposition {
+    /// Residual of the window not accounted for by the serial scheduler phases —
+    /// time spent awaiting workers or the deadline with nothing serial to do.
+    pub fn idle(&self) -> Duration {
+        let serial = self
+            .prepare
+            .saturating_add(self.pool_ask)
+            .saturating_add(self.handoff)
+            .saturating_add(self.merge)
+            .saturating_add(self.fallback);
+        self.window.saturating_sub(serial)
+    }
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
@@ -169,6 +228,16 @@ impl Default for ParallelExecutorMetrics {
             contracts_per_batch,
             handoff_changeset_keys,
             sequential_fallback_ms,
+            worker_busy_seconds: Gauge::default(),
+            worker_available_seconds: Gauge::default(),
+            time_to_first_dispatch_seconds: Gauge::default(),
+            pool_ask_seconds: Gauge::default(),
+            phase_prepare_seconds: Gauge::default(),
+            phase_execute_seconds: Gauge::default(),
+            phase_handoff_seconds: Gauge::default(),
+            phase_merge_seconds: Gauge::default(),
+            phase_fallback_seconds: Gauge::default(),
+            phase_idle_seconds: Gauge::default(),
             debug_batch_metrics_block_height: AtomicU64::new(0),
         };
 
@@ -337,6 +406,56 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_sequential_fallback_ms",
             "Duration of a sequential-fallback re-execution in milliseconds",
             metrics.sequential_fallback_ms.clone(),
+        );
+        registry.register(
+            "parallel_executor_worker_busy_seconds",
+            "Total worker-seconds spent executing batch inner work in the last block",
+            metrics.worker_busy_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_worker_available_seconds",
+            "Worker-seconds available over the last block's scheduler window (worker_count x window)",
+            metrics.worker_available_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_time_to_first_dispatch_seconds",
+            "Latency from scheduler start to the first batch dispatched onto a worker",
+            metrics.time_to_first_dispatch_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_pool_ask_seconds",
+            "Time the scheduler spent blocked asking the txpool for transactions, summed over the block",
+            metrics.pool_ask_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_phase_prepare_seconds",
+            "Block-window phase: batch preparation (excluding the txpool ask)",
+            metrics.phase_prepare_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_phase_execute_seconds",
+            "Block-window phase: parallel worker-busy seconds (shown for context; not part of the serial sum)",
+            metrics.phase_execute_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_phase_handoff_seconds",
+            "Block-window phase: per-contract Changes handoff (split + merge sides)",
+            metrics.phase_handoff_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_phase_merge_seconds",
+            "Block-window phase: block-level coherency + canonical fold",
+            metrics.phase_merge_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_phase_fallback_seconds",
+            "Block-window phase: sequential-fallback re-execution",
+            metrics.phase_fallback_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_phase_idle_seconds",
+            "Block-window phase: residual window spent awaiting workers or the deadline",
+            metrics.phase_idle_seconds.clone(),
         );
 
         metrics
@@ -596,4 +715,27 @@ pub fn record_sequential_fallback(duration: Duration) {
     parallel_executor_metrics()
         .sequential_fallback_ms
         .observe(duration_ms(duration));
+}
+
+/// Record the per-block time-spend decomposition (worker occupancy,
+/// time-to-first-dispatch, txpool ask time, and the production-window phase
+/// breakdown). Called once at the end of each block's scheduler run.
+pub fn record_block_time_decomposition(d: BlockTimeDecomposition) {
+    let metrics = parallel_executor_metrics();
+    metrics.worker_busy_seconds.set(d.worker_busy.as_secs_f64());
+    metrics
+        .worker_available_seconds
+        .set(d.worker_available.as_secs_f64());
+    metrics
+        .time_to_first_dispatch_seconds
+        .set(d.first_dispatch.as_secs_f64());
+    metrics.pool_ask_seconds.set(d.pool_ask.as_secs_f64());
+    metrics.phase_prepare_seconds.set(d.prepare.as_secs_f64());
+    metrics
+        .phase_execute_seconds
+        .set(d.worker_busy.as_secs_f64());
+    metrics.phase_handoff_seconds.set(d.handoff.as_secs_f64());
+    metrics.phase_merge_seconds.set(d.merge.as_secs_f64());
+    metrics.phase_fallback_seconds.set(d.fallback.as_secs_f64());
+    metrics.phase_idle_seconds.set(d.idle().as_secs_f64());
 }

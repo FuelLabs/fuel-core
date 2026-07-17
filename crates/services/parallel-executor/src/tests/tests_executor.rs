@@ -2147,6 +2147,63 @@ async fn drain_completing_deploy_persists_fresh_contract_code() {
     );
 }
 
+// Smoke test for the time-spend block-summary emit path (metrics ON): produce a
+// block through the full scheduler with `metrics: true` so the per-block
+// decomposition (`record_block_time_decomposition` + the block-summary log line)
+// and every accumulation site actually run. Just asserts the block is produced —
+// the value is exercising the metrics-on branch that the other tests
+// (`metrics: false`) never touch.
+#[tokio::test]
+async fn metrics_block_summary_emits_without_panicking() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    let contracts = setup_contracts(&mut rng, &mut storage, 2).await;
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    let b0 = vec![
+        contract_call_tx(&mut rng, &mut storage, &[contracts[0]]),
+        basic_tx(&mut rng, &mut storage),
+    ];
+    let b1 = vec![contract_call_tx(&mut rng, &mut storage, &[contracts[1]])];
+
+    let mut executor: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage,
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(2).unwrap(),
+                worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
+                metrics: true,
+            },
+        )
+        .unwrap();
+    let (source, pool) = MockTransactionsSource::new();
+    for batch in [b0, b1] {
+        let refs: Vec<&Transaction> = batch.iter().collect();
+        pool.push_response(MockTxPoolResponse::new(
+            &refs,
+            TransactionFiltered::NotFiltered,
+        ));
+    }
+    let (result, _changes) = executor
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: header_at_height_1(),
+                transactions_source: source,
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+        )
+        .await
+        .unwrap()
+        .into();
+    // 3 user txs + mint.
+    assert_eq!(result.block.transactions().len(), 4);
+}
+
 // SCENARIO 5 — seeded pseudo-random workloads mixing all of the above patterns,
 // so the oracle explores batch boundaries / fold / fallback combinations the
 // hand-written cases don't. Single worker (see the concurrency note above);

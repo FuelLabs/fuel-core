@@ -34,11 +34,13 @@ pub mod tx_status_manager_metrics;
 pub mod txpool_metrics;
 
 pub use self::parallel_executor_metrics::{
+    BlockTimeDecomposition,
     next_debug_batch_metrics_block_height,
     record_batch_execute,
     record_batch_prepare,
     record_batch_total,
     record_block_merge,
+    record_block_time_decomposition,
     record_contract_handoff_merge,
     record_contract_handoff_split,
     record_execution_time,

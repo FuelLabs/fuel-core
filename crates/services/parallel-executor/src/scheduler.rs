@@ -190,6 +190,31 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     blob_gas: u64,
     /// Counters for tracking worker concurrency when metrics are enabled
     worker_counters: Option<WorkerCounters>,
+    /// Per-block time-spend accumulators (only meaningful when metrics are on;
+    /// the adds are cheap and happen at the existing timing sites). Emitted once
+    /// as the block-summary decomposition at the end of [`Self::run`].
+    time_accounting: TimeAccounting,
+}
+
+/// Cheap per-block accumulators feeding the time-spend block summary. Each field
+/// is summed at the site where that phase's duration is already measured, so no
+/// new timers run in hot loops (only one extra timer wraps the per-ask txpool
+/// call, at the same cadence as the existing batch-prepare timer).
+#[derive(Default)]
+struct TimeAccounting {
+    /// Elapsed-from-block-start at the first batch dispatch.
+    first_dispatch: Option<Duration>,
+    /// `prepare_transactions_batch` cost (batch prepare minus the txpool ask).
+    prepare: Duration,
+    /// Time blocked in `get_executable_transactions` (the txpool ask).
+    pool_ask: Duration,
+    /// Per-contract `Changes` handoff, both split and merge sides.
+    handoff: Duration,
+    /// Sequential-fallback re-execution.
+    fallback: Duration,
+    /// Worker-seconds actually spent executing batch inner work (sum over
+    /// completed and discarded batches).
+    worker_busy: Duration,
 }
 
 struct WorkSessionExecutionResult {
@@ -467,6 +492,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             dispatched_contract_seeds: FxHashMap::default(),
             dispatched_start_idx: FxHashMap::default(),
             worker_counters,
+            time_accounting: TimeAccounting::default(),
         })
     }
 }
@@ -586,6 +612,16 @@ where
                         batch_len,
                         batch.gas,
                     );
+                    // `batch_prepare_duration` includes the txpool ask; the
+                    // `prepare` phase subtracts `pool_ask` at emit time so the two
+                    // do not double-count in the block summary.
+                    self.time_accounting.prepare = self
+                        .time_accounting
+                        .prepare
+                        .saturating_add(batch_prepare_duration);
+                    if self.time_accounting.first_dispatch.is_none() {
+                        self.time_accounting.first_dispatch = Some(instant.elapsed());
+                    }
                     if let Some(batch_preparations) = self.batch_preparations.as_mut() {
                         batch_preparations.insert(
                             nb_batch_created,
@@ -872,6 +908,54 @@ where
                 total_gas,
             );
             parallel_executor_metrics::record_scheduler_run_time(execution_time);
+
+            // Block-summary time-spend decomposition: where and how much time the
+            // scheduler spent this block. `prepare` excludes the txpool ask
+            // (reported separately as `pool_ask`); `worker_busy` is the parallel
+            // worker-seconds spent executing (occupancy vs `worker_available`),
+            // shown alongside the serial phases rather than summed into them.
+            let worker_count = self.config.worker_count.get() as u32;
+            let worker_available = execution_time
+                .checked_mul(worker_count)
+                .unwrap_or(execution_time);
+            let prepare = self
+                .time_accounting
+                .prepare
+                .saturating_sub(self.time_accounting.pool_ask);
+            let decomposition = parallel_executor_metrics::BlockTimeDecomposition {
+                window: execution_time,
+                prepare,
+                pool_ask: self.time_accounting.pool_ask,
+                handoff: self.time_accounting.handoff,
+                merge: merge_elapsed,
+                fallback: self.time_accounting.fallback,
+                first_dispatch: self.time_accounting.first_dispatch.unwrap_or_default(),
+                worker_busy: self.time_accounting.worker_busy,
+                worker_available,
+            };
+            let util = if worker_available.as_secs_f64() > 0.0 {
+                100.0 * self.time_accounting.worker_busy.as_secs_f64()
+                    / worker_available.as_secs_f64()
+            } else {
+                0.0
+            };
+            tracing::info!(
+                target: "parallel_executor::block_summary",
+                height = u32::from(*self.header_to_produce.height()),
+                txs = nb_transactions,
+                window_ms = execution_time.as_millis() as u64,
+                first_dispatch_ms = decomposition.first_dispatch.as_millis() as u64,
+                prepare_ms = prepare.as_millis() as u64,
+                pool_ask_ms = self.time_accounting.pool_ask.as_millis() as u64,
+                execute_worker_ms = self.time_accounting.worker_busy.as_millis() as u64,
+                handoff_ms = self.time_accounting.handoff.as_millis() as u64,
+                merge_ms = merge_elapsed.as_millis() as u64,
+                fallback_ms = self.time_accounting.fallback.as_millis() as u64,
+                idle_ms = decomposition.idle().as_millis() as u64,
+                worker_util_pct = util,
+                "block time-spend decomposition (prepare/pool_ask/execute/handoff/merge/fallback/idle)",
+            );
+            parallel_executor_metrics::record_block_time_decomposition(decomposition);
         }
         Ok(res)
     }
@@ -941,6 +1025,9 @@ where
             SchedulerError::InternalError("Current gas overflowed u64".to_string())
         })?;
 
+        // Time the txpool ask (how long the scheduler blocks waiting for the pool
+        // to hand back a batch) — one of the "where does time go" signals.
+        let pool_ask_start = Instant::now();
         let executable_transactions = tx_source
             .get_executable_transactions(
                 current_gas,
@@ -960,6 +1047,12 @@ where
                     e
                 ))
             })?;
+        if self.config.metrics {
+            self.time_accounting.pool_ask = self
+                .time_accounting
+                .pool_ask
+                .saturating_add(pool_ask_start.elapsed());
+        }
         self.current_executing_contracts =
             executable_transactions.filter.excluded_contract_ids;
         let anchor_contract_ids = executable_transactions.anchor_contract_ids;
@@ -1035,6 +1128,8 @@ where
                 handoff_contract_count,
                 handoff_changeset_keys,
             );
+            self.time_accounting.handoff =
+                self.time_accounting.handoff.saturating_add(split_duration);
         }
         // Attribute this batch's split-handoff cost to its overhead (the merge
         // side is added on completion). Only present when the producer requested
@@ -1241,6 +1336,16 @@ where
             parallel_executor_metrics::record_contract_handoff_merge(
                 merge_handoff_duration,
             );
+            self.time_accounting.handoff = self
+                .time_accounting
+                .handoff
+                .saturating_add(merge_handoff_duration);
+            // Worker occupancy: this batch's inner execution time is worker-seconds
+            // spent. Covers the main-loop and drain paths (both route here).
+            self.time_accounting.worker_busy = self
+                .time_accounting
+                .worker_busy
+                .saturating_add(res.execution_duration);
         }
         if let Some(pending) = self.batch_feedback.get_mut(&res.batch_id) {
             pending.overhead = pending.overhead.saturating_add(merge_handoff_duration);
@@ -1527,6 +1632,13 @@ where
         // EMA, but the batch did not commit, so it must not signal completion.
         // Also clears its `batch_feedback` / `batch_preparations` bookkeeping.
         self.report_batch_feedback(batch_id, execution_duration, false);
+        if self.config.metrics {
+            // The discarded work still consumed worker-seconds.
+            self.time_accounting.worker_busy = self
+                .time_accounting
+                .worker_busy
+                .saturating_add(execution_duration);
+        }
         let current_execution_tasks = std::mem::take(&mut self.current_execution_tasks);
         let mut lower_batch_id = batch_id;
         let mut higher_batch_id = batch_id;
@@ -1547,6 +1659,12 @@ where
                         res.execution_duration,
                         false,
                     );
+                    if self.config.metrics {
+                        self.time_accounting.worker_busy = self
+                            .time_accounting
+                            .worker_busy
+                            .saturating_add(res.execution_duration);
+                    }
                     all_txs_by_batch_id.insert(
                         res.batch_id,
                         (
@@ -1722,9 +1840,12 @@ where
         let next_start_idx_txs = start_idx_txs.saturating_add(committed_in_range);
 
         if self.config.metrics {
-            parallel_executor_metrics::record_sequential_fallback(
-                fallback_start.elapsed(),
-            );
+            let fallback_duration = fallback_start.elapsed();
+            parallel_executor_metrics::record_sequential_fallback(fallback_duration);
+            self.time_accounting.fallback = self
+                .time_accounting
+                .fallback
+                .saturating_add(fallback_duration);
         }
 
         // Save the execution results for the current batch
