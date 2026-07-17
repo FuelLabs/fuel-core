@@ -48,6 +48,14 @@ fn build_wasm() {
     #[cfg(feature = "fault-proving")]
     args.extend(["--features".to_owned(), "fault-proving".to_owned()]);
 
+    // The bundled WASM executor must agree with the native executor on
+    // `max_tx_count()`: without forwarding this feature, a node built with
+    // `u32-tx-count` that falls back to the bundled WASM (state transition
+    // bytecode version ahead of native LATEST) silently reverts to the u16
+    // path's 1024-transaction cap during block production.
+    #[cfg(feature = "u32-tx-count")]
+    args.extend(["--features".to_owned(), "u32-tx-count".to_owned()]);
+
     let manifest_dir =
         env::var_os("CARGO_MANIFEST_DIR").expect("The manifest directory is not set");
     let manifest_path = Path::new(&manifest_dir);
