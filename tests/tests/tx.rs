@@ -134,6 +134,47 @@ async fn dry_run_script() {
     assert_eq!(err.kind(), NotFound);
 }
 
+// A parallel-executor node must answer a dry-run (e.g. the gas estimation behind
+// any fuels-SDK default `.call()`) instead of panicking. The parallel executor
+// itself does not implement dry-run; the adapter routes it through the sequential
+// (upgradable) executor. Run with:
+//   cargo test -p fuel-core-tests --no-default-features \
+//     --features parallel-executor dry_run_script__parallel_executor
+#[cfg(feature = "parallel-executor")]
+#[tokio::test]
+async fn dry_run_script__parallel_executor_does_not_panic() {
+    let mut config = Config::local_node();
+    config.executor.mode = fuel_core::service::config::ExecutorMode::Parallel;
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let script = [
+        op::addi(0x10, RegId::ZERO, 0xca),
+        op::addi(0x11, RegId::ZERO, 0xba),
+        op::log(0x10, 0x11, RegId::ZERO, RegId::ZERO),
+        op::ret(RegId::ONE),
+    ];
+    let script: Vec<u8> = script
+        .iter()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
+        .collect();
+
+    let tx = TransactionBuilder::script(script, vec![])
+        .script_gas_limit(1_000_000)
+        .add_fee_input()
+        .finalize_as_transaction();
+
+    // Must return a result, not panic the node.
+    let tx_statuses = client.dry_run(&[tx.clone()]).await.unwrap();
+    let receipts = tx_statuses
+        .last()
+        .expect("Nonempty response")
+        .result
+        .receipts();
+    assert!(matches!(receipts[0],
+        Receipt::Log { ra, rb, .. } if ra == 0xca && rb == 0xba));
+}
+
 #[tokio::test]
 async fn dry_run_create() {
     let mut rng = StdRng::seed_from_u64(2322);

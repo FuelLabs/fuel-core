@@ -310,6 +310,16 @@ pub fn init_sub_services(
                     )
                 }
                 ExecutorMode::Parallel => {
+                    let upgradable_executor_config =
+                        fuel_core_upgradable_executor::config::Config {
+                            forbid_unauthorized_inputs_default: config.utxo_validation,
+                            forbid_fake_utxo_default: config.utxo_validation,
+                            allow_syscall: config.allow_syscall,
+                            native_executor_version: config
+                                .executor
+                                .native_executor_version,
+                            allow_historical_execution: config.historical_execution,
+                        };
                     let parallel_executor_config =
                         fuel_core_parallel_executor::config::Config {
                             worker_count: config.executor.parallel.worker_count,
@@ -331,6 +341,8 @@ pub fn init_sub_services(
                         database.on_chain().clone(),
                         database.relayer().clone(),
                         parallel_executor_config,
+                        upgradable_executor_config,
+                        new_txs_watcher,
                         preconfirmation_sender.clone(),
                     )?
                 }

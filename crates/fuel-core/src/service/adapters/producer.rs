@@ -230,18 +230,21 @@ impl fuel_core_producer::ports::DryRunner for ParallelExecutorAdapter {
         at_height: Option<BlockHeight>,
         record_storage_read_replay: bool,
     ) -> ExecutorResult<DryRunResult> {
-        match &self.inner {
-            ParallelExecutorAdapterInner::Parallel { .. } => {
-                unimplemented!("ParallelExecutorAdapter does not support dry run");
-            }
-            ParallelExecutorAdapterInner::Native(native) => native.executor.dry_run(
-                block,
-                forbid_fake_coins,
-                forbid_fake_coins,
-                at_height,
-                record_storage_read_replay,
-            ),
-        }
+        // Dry-run needs no parallelism — correctness and availability are what
+        // matter (a fuels-SDK default `.call()` estimates gas via dry-run, and a
+        // node must never panic on an RPC). Route it through the sequential
+        // (upgradable) executor in both modes.
+        let native = match &self.inner {
+            ParallelExecutorAdapterInner::Parallel { native, .. } => native,
+            ParallelExecutorAdapterInner::Native(native) => native,
+        };
+        native.executor.dry_run(
+            block,
+            forbid_fake_coins,
+            forbid_fake_coins,
+            at_height,
+            record_storage_read_replay,
+        )
     }
 }
 
@@ -260,16 +263,14 @@ impl fuel_core_producer::ports::StorageReadReplayRecorder for ParallelExecutorAd
         &self,
         block: &Block,
     ) -> ExecutorResult<Vec<StorageReadReplayEvent>> {
-        match &self.inner {
-            ParallelExecutorAdapterInner::Parallel { .. } => {
-                unimplemented!(
-                    "ParallelExecutorAdapter does not support storage read replay"
-                );
-            }
-            ParallelExecutorAdapterInner::Native(native) => {
-                native.executor.storage_read_replay(block)
-            }
-        }
+        // Storage-read replay is the dry-run's `record_storage_read_replay`
+        // companion (same RPC surface); route it through the sequential executor
+        // in both modes so it never panics the node.
+        let native = match &self.inner {
+            ParallelExecutorAdapterInner::Parallel { native, .. } => native,
+            ParallelExecutorAdapterInner::Native(native) => native,
+        };
+        native.executor.storage_read_replay(block)
     }
 }
 

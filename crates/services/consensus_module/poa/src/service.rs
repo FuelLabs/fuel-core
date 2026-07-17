@@ -743,7 +743,23 @@ where
                 Instant::now()
             }),
             Trigger::Interval { block_time } => {
-                let next_block_time = match self
+                // Mirror `Trigger::Open`: hand the deadline (`last_block_created +
+                // block_time`) to the producer up front instead of sleeping the
+                // whole interval first and then passing `Instant::now()` (an
+                // already-elapsed deadline). The old shape gave the block producer
+                // a ZERO execution budget: the parallel scheduler treats the
+                // deadline as a hard wall-clock budget, so it dispatched ~one batch
+                // and immediately drained, packing only a handful of txs per block
+                // regardless of the gas/count limits. With a real future deadline
+                // the parallel executor gets the full inter-block window to pull
+                // and execute batches; the sequential executor uses the same value
+                // as its `NewTxWaiter` budget (how long to keep waiting for more
+                // txs), so both modes now stay busy for the whole window. Block
+                // cadence is unchanged: `signal_produce_block` still
+                // `sleep_until(deadline)` after production, which spaces blocks
+                // exactly one `block_time` apart (the old pre-production sleep did
+                // the same spacing, only earlier in the cycle).
+                let deadline = match self
                     .last_block_created
                     .checked_add(block_time)
                     .ok_or(anyhow!("Time exceeds system limits"))
@@ -751,10 +767,7 @@ where
                     Ok(time) => time,
                     Err(err) => return TaskNextAction::ErrorContinue(err),
                 };
-                Box::pin(async move {
-                    sleep_until(next_block_time).await;
-                    Instant::now()
-                })
+                Box::pin(async move { deadline })
             }
             Trigger::Open { period } => {
                 let deadline = match self
