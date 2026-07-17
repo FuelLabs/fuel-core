@@ -1615,6 +1615,132 @@ fn extract__tx_with_excluded_contract() {
 }
 
 // ============================================================================
+// Dependent-transaction promotion around block commit (core pool, lane
+// scheduler OFF). These cover the three orderings of "child spends a Coin
+// output of parent" vs the parent's extraction/commit, and document that the
+// core dependency-graph promotion is sound in all three.
+// ============================================================================
+
+/// Case (a): parent and child both in the pool (child is a graph dependent).
+/// The parent commits while still in the pool (e.g. the block came from
+/// another producer). The child must be promoted to executable immediately.
+#[test]
+fn process_committed__parent_committed_from_pool_promotes_child() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given: tx2 depends on tx1's coin output; both in the pool.
+    let (output, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
+    let tx1_id = tx1.id(&ChainId::default());
+    universe.verify_and_insert(tx1).unwrap();
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
+    let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx2).unwrap();
+
+    // When: the parent commits (imported block) while still in the pool.
+    universe
+        .get_pool()
+        .write()
+        .process_committed_transactions(std::iter::once(tx1_id));
+
+    // Then: the child is promptly executable/extractable.
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    let ids: Vec<_> = extracted.iter().map(|tx| tx.id()).collect();
+    assert_eq!(ids, vec![tx2_id]);
+    universe.assert_pool_integrity(&[]);
+}
+
+/// Case (b): the child arrives while the parent is EXTRACTED for a block that
+/// is currently being produced (parent neither in the pool nor committed).
+/// The child validates against the extracted outputs, becomes executable, and
+/// must remain extractable after the parent's block commits.
+#[test]
+fn insert__child_mid_extraction_stays_extractable_after_parent_commit() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given: the parent is extracted for a block being produced.
+    let (output, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
+    let tx1_id = tx1.id(&ChainId::default());
+    universe.verify_and_insert(tx1).unwrap();
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    assert_eq!(extracted.len(), 1);
+    assert_eq!(extracted[0].id(), tx1_id);
+
+    // When: the child arrives mid-production (spends the parent's coin output)
+    // and then the parent's block commits.
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
+    let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx2).unwrap();
+    {
+        let pool = universe.get_pool();
+        let mut pool = pool.write();
+        // Mirrors `PoolWorker::process_block` for the committed parent.
+        pool.process_committed_transactions(std::iter::once(tx1_id));
+        pool.extracted_outputs.new_executed_transaction(&tx1_id);
+    }
+
+    // Then: the child is promptly extractable for the next block.
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    let ids: Vec<_> = extracted.iter().map(|tx| tx.id()).collect();
+    assert_eq!(ids, vec![tx2_id]);
+    universe.assert_pool_integrity(&[]);
+}
+
+/// Case (c): the child arrives AFTER the parent's block committed (the coin is
+/// already in the database). The child must be executable immediately.
+#[test]
+fn insert__child_after_parent_commit_is_immediately_extractable() {
+    let mut universe = TestPoolUniverse::default();
+    universe.build_pool();
+
+    // Given: the parent was extracted and its block committed.
+    let (output, unset_input) = universe.create_output_and_input();
+    let tx1 = universe.build_script_transaction(None, Some(vec![output]), 10);
+    let tx1_id = tx1.id(&ChainId::default());
+    universe.verify_and_insert(tx1).unwrap();
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    assert_eq!(extracted.len(), 1);
+    {
+        let pool = universe.get_pool();
+        let mut pool = pool.write();
+        pool.process_committed_transactions(std::iter::once(tx1_id));
+        pool.extracted_outputs.new_executed_transaction(&tx1_id);
+    }
+    // The importer wrote the parent's coin output to the database.
+    let input = unset_input.into_input(UtxoId::new(tx1_id, 0));
+    {
+        use fuel_core_types::entities::coins::coin::CompressedCoin;
+        let mut coin = CompressedCoin::default();
+        coin.set_owner(*input.input_owner().unwrap());
+        coin.set_amount(1);
+        coin.set_asset_id(AssetId::BASE);
+        universe
+            .database_mut()
+            .data
+            .lock()
+            .unwrap()
+            .coins
+            .insert(UtxoId::new(tx1_id, 0), coin);
+    }
+
+    // When: the child arrives after the commit.
+    let tx2 = universe.build_script_transaction(Some(vec![input]), None, 20);
+    let tx2_id = tx2.id(&ChainId::default());
+    universe.verify_and_insert(tx2).unwrap();
+
+    // Then: it is immediately extractable.
+    let extracted = extract_one_batch(&universe, HashSet::new());
+    let ids: Vec<_> = extracted.iter().map(|tx| tx.id()).collect();
+    assert_eq!(ids, vec![tx2_id]);
+    universe.assert_pool_integrity(&[]);
+}
+
+// ============================================================================
 // Lane scheduler integration tests (config flag `lane_scheduler`).
 // ============================================================================
 

@@ -626,10 +626,13 @@ where
                 return;
             }
         };
-        // All of this can be useful in case that we didn't know about the transaction
-        let resolved = self
-            .pending_pool
-            .new_known_tx(outputs.iter().map(|(utxo_id, output)| (*utxo_id, output)));
+        // All of this can be useful in case that we didn't know about the transaction.
+        // The pre-confirmation outputs are RESOLVED by execution, so
+        // `Change`/`Variable` outputs are real coins and must complete pending
+        // spenders too.
+        let resolved = self.pending_pool.new_known_resolved_tx(
+            outputs.iter().map(|(utxo_id, output)| (*utxo_id, output)),
+        );
         // First insert the outputs in the pool to be able to insert the resolved transactions
         self.pool
             .extracted_outputs
