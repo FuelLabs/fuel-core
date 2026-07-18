@@ -213,7 +213,7 @@ where
             )
             .await?;
 
-        tracing::warn!(
+        tracing::trace!(
             "produce_without_commit_with_source elapsed (before scheduler): {:?}",
             instant.elapsed()
         );
@@ -241,13 +241,13 @@ where
                 scheduler_result.skipped_txs.len()
             );
         }
-        tracing::warn!(
+        tracing::trace!(
             "Scheduler finished with {} transactions, {} events, and {} skipped transactions",
             scheduler_result.transactions.len(),
             scheduler_result.events.len(),
             scheduler_result.skipped_txs.len()
         );
-        tracing::warn!(
+        tracing::trace!(
             "produce_without_commit_with_source elapsed (before finalize): {:?}",
             instant.elapsed()
         );
@@ -259,7 +259,7 @@ where
             event_inbox_root,
             &mut executor,
         );
-        tracing::warn!(
+        tracing::trace!(
             "produce_without_commit_with_source elapsed (after finalize): {:?}",
             instant.elapsed()
         );
@@ -376,7 +376,7 @@ where
             .await?;
 
         let elapsed = instant.elapsed();
-        tracing::warn!("run scheduler elapsed: {:?}", elapsed);
+        tracing::trace!("run scheduler elapsed: {:?}", elapsed);
         Ok(res)
     }
 
@@ -401,7 +401,7 @@ where
             view,
             executor,
         )?;
-        tracing::warn!(
+        tracing::trace!(
             "Produced mint transaction with {} gas and {} size",
             execution_data.used_gas,
             execution_data.used_size
@@ -420,7 +420,7 @@ where
             });
 
         match &res {
-            Ok(_) => tracing::warn!("Block generated successfully"),
+            Ok(_) => tracing::trace!("Block generated successfully"),
             Err(e) => tracing::warn!("Failed to generate block: {}", e),
         }
         let block = res?;

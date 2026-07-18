@@ -617,7 +617,7 @@ where
             ))?;
         let mut total_gas: u64 = 0;
 
-        tracing::warn!("scheduler starting run loop at {:?}", instant.elapsed());
+        tracing::trace!("scheduler starting run loop at {:?}", instant.elapsed());
         'outer: loop {
             let tx_notifier = if new_tx_notifier.has_changed().is_ok() {
                 Either::Left(new_tx_notifier.changed())
@@ -648,7 +648,7 @@ where
 
                 let Some(ready_batches) = ready_batches else {
                     self.state = SchedulerState::NoTransactionsForPickup;
-                    tracing::warn!(
+                    tracing::trace!(
                         "No transactions to execute, waiting for new transactions or workers to finish"
                     );
                     continue 'outer;
@@ -671,7 +671,7 @@ where
                         feedback_handle,
                         prepare_duration,
                     } = ready;
-                    tracing::warn!(
+                    tracing::trace!(
                         "new batch id {:?} prepared at: {:?}",
                         nb_batch_created,
                         instant.elapsed()
@@ -796,20 +796,19 @@ where
                             parallel_executor_metrics::record_execution_time(execution_time);
                             execution_time_recorded = true;
                         }
-                        tracing::warn!("******");
-                        tracing::warn!("waited until deadline for {:?}, total elapsed: {:?}", waiting.elapsed(), instant.elapsed());
+                        tracing::trace!("waited until deadline for {:?}, total elapsed: {:?}", waiting.elapsed(), instant.elapsed());
                         break 'outer;
                     }
                 }
             } else {
-                tracing::warn!("Waiting for workers to finish");
+                tracing::trace!("Waiting for workers to finish");
                 tokio::select! {
                     _ = tx_notifier => {
-                        tracing::warn!("New transactions received");
+                        tracing::trace!("New transactions received");
                         self.state = SchedulerState::TransactionsReadyForPickup;
                     }
                     result = self.current_execution_tasks.select_next_some() => {
-                        tracing::warn!("Worker finished at {:?}", instant.elapsed());
+                        tracing::trace!("Worker finished at {:?}", instant.elapsed());
                         match result {
                             Ok(res) => {
                                 let res = res?;
@@ -878,15 +877,14 @@ where
                         }
                     }
                     _ = tokio::time::sleep_until(deadline) => {
-                        tracing::warn!("timeout waiting on workers");
+                        tracing::trace!("timeout waiting on workers");
                         break 'outer;
                     }
                 }
             }
         }
 
-        tracing::warn!("******");
-        tracing::warn!("waiting for execution tasks: {:?}", instant.elapsed());
+        tracing::trace!("waiting for execution tasks: {:?}", instant.elapsed());
         let (exceeded_deadline, fallback_next_start_idx) = self
             .wait_all_execution_tasks(storage_with_da.clone())
             .await?;
@@ -895,7 +893,7 @@ where
             // counter contiguous for the blob stage / metrics below.
             nb_transactions = next_idx;
         }
-        tracing::warn!("execution tasks done: {:?}", instant.elapsed());
+        tracing::trace!("execution tasks done: {:?}", instant.elapsed());
         if self.config.metrics {
             if exceeded_deadline && !execution_time_recorded {
                 parallel_executor_metrics::record_execution_time(instant.elapsed());
@@ -957,7 +955,7 @@ where
 
         let (mut res, mut final_tx_indices, db_coin_pointers) = result?;
 
-        tracing::warn!("scheduler done: {:?}", instant.elapsed());
+        tracing::trace!("scheduler done: {:?}", instant.elapsed());
 
         // FIX 1 — coalesce same-key operations across the parallel batches'
         // (and per-contract) `Changes` into a single, already-merged `Changes`.
@@ -996,7 +994,7 @@ where
 
             let (blob_execution_data, blob_txs) =
                 self.execute_blob_transactions(tx, nb_transactions).await?;
-            tracing::warn!("blob execution done: {:?}", instant.elapsed());
+            tracing::trace!("blob execution done: {:?}", instant.elapsed());
             // Blob txs execute contiguously from the running block-tx counter
             // (validation never reaches here — blob-carrying blocks are
             // rejected by `Executor::validate`'s guard rails).
@@ -1010,7 +1008,7 @@ where
                 })?;
             }
             res.add_blob_execution_data(blob_execution_data, blob_txs);
-            tracing::warn!("blob execution data added: {:?}", instant.elapsed());
+            tracing::trace!("blob execution data added: {:?}", instant.elapsed());
             merged = match core::mem::take(&mut res.changes) {
                 StorageChanges::Changes(changes) => changes,
                 StorageChanges::ChangesList(list) => {
@@ -1084,7 +1082,7 @@ where
         }
 
         let execution_time = instant.elapsed();
-        tracing::warn!("Scheduler `run` execution time: {:?}", execution_time);
+        tracing::trace!("Scheduler `run` execution time: {:?}", execution_time);
         if self.config.metrics {
             parallel_executor_metrics::record_block_merge(
                 merge_elapsed,
@@ -1315,7 +1313,7 @@ where
                     self.time_accounting.prepare.saturating_add(prepare_total);
             }
         }
-        tracing::warn!(
+        tracing::trace!(
             "new batches prepared in: {:?}, {:?} batches, for {:?} txs",
             instant.elapsed(),
             batch_count,
@@ -1471,9 +1469,14 @@ where
                     .map(|(tx_id, error)| format!("{tx_id}: {error}"))
                     .collect::<Vec<_>>()
                     .join("; ");
-                if input_tx_ids.len() <= 4
-                    || transactions.len() != input_tx_ids.len()
+                // Anomalies ONLY: a batch that lost transactions, burned no
+                // gas, or skipped something. (This used to also print for
+                // every batch of <= 4 txs, which at a ~4.7-tx batch average
+                // was nearly EVERY batch — hot-path output that inflated
+                // every measured window.)
+                if transactions.len() != input_tx_ids.len()
                     || execution_data.used_gas == 0
+                    || !skipped_errors.is_empty()
                 {
                     eprintln!(
                         "parallel executor batch {batch_id}: input_count={} returned_count={} skipped_count={} used_gas={} input_ids=[{}] returned_ids=[{}] skipped_errors=[{}]",
@@ -1511,7 +1514,7 @@ where
                     storage_tx.into_storage().into_changes();
 
                 let batch_duration = instant.elapsed();
-                tracing::warn!(
+                tracing::trace!(
                     "batch {:?} duration: {:?} with {:?} txs",
                     batch_id,
                     batch_duration,
