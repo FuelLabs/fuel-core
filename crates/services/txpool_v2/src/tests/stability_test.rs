@@ -184,7 +184,7 @@ fn stability_test_with_seed(seed: u64, limits: Limits, config: Config) {
         let result = txpool.write().extract_transactions_for_block(&Constraints {
             max_gas: limits.max_block_gas,
             total_gas: limits.max_block_gas,
-            maximum_txs: u32::MAX,
+            maximum_txs: !0,
             maximum_block_size: u64::MAX,
             minimal_gas_price: 0,
             excluded_contracts: Default::default(),
