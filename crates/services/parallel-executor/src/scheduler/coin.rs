@@ -179,13 +179,23 @@ impl From<CoinInBatch> for CompressedCoin {
 pub struct CoinDependencyChainVerifier {
     coins_registered: FxHashMap<UtxoId, (usize, CoinInBatch)>,
     coins_used: FxHashSet<UtxoId>,
+    /// The node's `utxo_validation` flag. When `false` (relaxed/debugging
+    /// mode), the sequential executor accepts coin inputs that exist neither
+    /// in the database nor in the block (`get_coin_or_default` fabricates
+    /// them), so this verifier must not reject them either. ONLY the
+    /// "must exist in db or block" rejection is relaxed: double-spend
+    /// detection and the cross-batch ordering/equality checks on coins that
+    /// ARE tracked stay active in both modes, because the state merge relies
+    /// on them.
+    utxo_validation: bool,
 }
 
 impl CoinDependencyChainVerifier {
-    pub fn new() -> Self {
+    pub fn new(utxo_validation: bool) -> Self {
         Self {
             coins_registered: FxHashMap::default(),
             coins_used: FxHashSet::default(),
+            utxo_validation,
         }
     }
 
@@ -266,10 +276,19 @@ impl CoinDependencyChainVerifier {
                             continue;
                         }
                         None => {
-                            return Err(SchedulerError::InternalError(format!(
-                                "Coin {} is not in the database and not created in the block",
-                                coin.utxo(),
-                            )));
+                            if self.utxo_validation {
+                                return Err(SchedulerError::InternalError(format!(
+                                    "Coin {} is not in the database and not created in the block",
+                                    coin.utxo(),
+                                )));
+                            }
+                            // `utxo_validation` is off: match the sequential
+                            // executor, which fabricates the missing coin from
+                            // the input's own fields (`get_coin_or_default`)
+                            // instead of rejecting it. The coin was already
+                            // recorded in `coins_used` above, so the
+                            // double-spend bookkeeping is unaffected.
+                            continue;
                         }
                     }
                 }
@@ -319,7 +338,7 @@ mod tests {
     #[test]
     fn earlier_batch_coin_is_accepted_even_when_creator_idx_is_higher() {
         let utxo = UtxoId::new([7u8; 32].into(), 0);
-        let mut verifier = CoinDependencyChainVerifier::new();
+        let mut verifier = CoinDependencyChainVerifier::new(true);
         verifier.register_coins_created(0, vec![coin_at(utxo, 5)]);
         let storage = empty_storage();
         let used = coin_at(utxo, 0);
@@ -335,7 +354,7 @@ mod tests {
     #[test]
     fn same_batch_requires_creator_before_user() {
         let utxo = UtxoId::new([8u8; 32].into(), 0);
-        let mut verifier = CoinDependencyChainVerifier::new();
+        let mut verifier = CoinDependencyChainVerifier::new(true);
         verifier.register_coins_created(0, vec![coin_at(utxo, 2)]);
         let storage = empty_storage();
         // creator idx 2 <= user idx 5 → ok
@@ -346,7 +365,7 @@ mod tests {
         );
 
         let utxo2 = UtxoId::new([9u8; 32].into(), 0);
-        let mut verifier = CoinDependencyChainVerifier::new();
+        let mut verifier = CoinDependencyChainVerifier::new(true);
         verifier.register_coins_created(0, vec![coin_at(utxo2, 5)]);
         let storage = empty_storage();
         // creator idx 5 > user idx 1 in the same batch → reject
@@ -362,7 +381,7 @@ mod tests {
     #[test]
     fn later_batch_coin_is_rejected() {
         let utxo = UtxoId::new([10u8; 32].into(), 0);
-        let mut verifier = CoinDependencyChainVerifier::new();
+        let mut verifier = CoinDependencyChainVerifier::new(true);
         verifier.register_coins_created(2, vec![coin_at(utxo, 0)]);
         let storage = empty_storage();
         assert!(
@@ -370,6 +389,43 @@ mod tests {
                 .verify_coins_used(1, [coin_at(utxo, 0)].iter(), &storage)
                 .is_err(),
             "a coin created in a later batch must be rejected",
+        );
+    }
+
+    // `utxo_validation = false` (relaxed/debugging mode): a coin that exists
+    // neither in the database nor in the block must be ACCEPTED, matching the
+    // sequential executor's `get_coin_or_default` fabrication. Strict mode
+    // keeps rejecting it (see `execute__utxo_validation_on_still_rejects_...`
+    // for the end-to-end pin), and double-spend detection stays active even in
+    // relaxed mode.
+    #[test]
+    fn unknown_coin_accepted_only_when_utxo_validation_off() {
+        let utxo = UtxoId::new([11u8; 32].into(), 0);
+        let storage = empty_storage();
+
+        // Strict mode rejects.
+        let mut strict = CoinDependencyChainVerifier::new(true);
+        assert!(
+            strict
+                .verify_coins_used(0, [coin_at(utxo, 0)].iter(), &storage)
+                .is_err(),
+            "strict mode must reject a coin that exists nowhere",
+        );
+
+        // Relaxed mode accepts...
+        let mut relaxed = CoinDependencyChainVerifier::new(false);
+        assert!(
+            relaxed
+                .verify_coins_used(0, [coin_at(utxo, 0)].iter(), &storage)
+                .is_ok(),
+            "relaxed mode must accept a coin that exists nowhere",
+        );
+        // ...but still tracks it for double-spend detection.
+        assert!(
+            relaxed
+                .verify_coins_used(1, [coin_at(utxo, 1)].iter(), &storage)
+                .is_err(),
+            "double-spend detection must stay active in relaxed mode",
         );
     }
 }

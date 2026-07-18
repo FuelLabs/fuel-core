@@ -1486,7 +1486,8 @@ where
             coinbase,
         };
         let mut storage_changes = vec![];
-        let mut compiled_created_coins = CoinDependencyChainVerifier::new();
+        let mut compiled_created_coins =
+            CoinDependencyChainVerifier::new(self.config.utxo_validation);
         let mut nonce_used = HashSet::new();
         for batch_id in 0..nb_batch {
             if let Some(changes) = self.execution_results.remove(&batch_id) {

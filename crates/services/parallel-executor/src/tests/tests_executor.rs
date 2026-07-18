@@ -131,6 +131,10 @@ trait TransactionBuilderExt {
         storage: &mut Storage,
         amount: u64,
     ) -> &mut Self;
+
+    /// A properly signed coin input whose UTXO does NOT exist in the database
+    /// (a "fake" coin). Only accepted with `utxo_validation = false`.
+    fn add_fake_coin_input(&mut self, rng: &mut StdRng, amount: u64) -> &mut Self;
 }
 
 impl<Tx> TransactionBuilderExt for TransactionBuilder<Tx>
@@ -162,6 +166,19 @@ where
             )
             .unwrap();
         tx.commit().unwrap();
+        self.add_unsigned_coin_input(
+            secret_key,
+            utxo_id,
+            amount,
+            Default::default(),
+            Default::default(),
+        );
+        self
+    }
+
+    fn add_fake_coin_input(&mut self, rng: &mut StdRng, amount: u64) -> &mut Self {
+        let utxo_id: UtxoId = rng.r#gen();
+        let secret_key = SecretKey::random(rng);
         self.add_unsigned_coin_input(
             secret_key,
             utxo_id,
@@ -239,6 +256,7 @@ async fn contract_creation_changes(rng: &mut StdRng) -> (ContractId, StorageChan
                 .expect("The value is not zero; qed"),
             worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
             metrics: false,
+            utxo_validation: true,
         },
     )
     .unwrap();
@@ -288,6 +306,7 @@ async fn execute__simple_independent_transactions_sorted() {
                     .expect("The value is not zero; qed"),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -363,6 +382,7 @@ async fn execute__when_dynamic_idle_policy_then_selection_uses_idle_worker_count
                     .expect("The value is not zero; qed"),
                 worker_count_policy: WorkerCountPolicy::DynamicIdle,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -431,6 +451,7 @@ async fn execute__filter_contract_id_currently_executed_and_fetch_after() {
                     .expect("The value is not zero; qed"),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -550,6 +571,7 @@ async fn execute__gas_left_updated_when_state_merges() {
                     .expect("The value is not zero; qed"),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -667,6 +689,7 @@ async fn execute__utxo_ordering_kept() {
                     .expect("The value is not zero; qed"),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -743,6 +766,7 @@ async fn execute__utxo_resolved() {
                 .expect("The value is not zero; qed"),
             worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
             metrics: false,
+            utxo_validation: true,
         },
     )
     .unwrap();
@@ -838,6 +862,7 @@ async fn execute__trigger_skipped_txs_fallback_mechanism() {
                     .expect("The value is not zero; qed"),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -945,6 +970,7 @@ async fn feedback__drain_path_reports_completed_true_and_does_not_leak() {
                 worker_count: std::num::NonZeroUsize::new(2).unwrap(),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -1062,6 +1088,7 @@ async fn feedback__fallback_path_reports_completed_false_and_does_not_leak() {
                 worker_count: std::num::NonZeroUsize::new(3).unwrap(),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -1272,6 +1299,7 @@ async fn execute__coin_created_and_spent_in_later_batch_commits_cleanly() {
                 worker_count: std::num::NonZeroUsize::new(2).unwrap(),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -1351,6 +1379,7 @@ async fn execute__user_tx_touching_coinbase_contract_then_mint_commits_cleanly()
                 worker_count: std::num::NonZeroUsize::new(2).unwrap(),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -1540,6 +1569,36 @@ async fn run_replay_oracle(
 /// (`wait_all_execution_tasks`) by passing an already-elapsed deadline.
 #[allow(clippy::too_many_arguments)]
 async fn run_replay_oracle_with_deadline(
+    storage: Storage,
+    coinbase_recipient: ContractId,
+    gas_price: u64,
+    batches: Vec<Vec<Transaction>>,
+    worker_count: usize,
+    scenario: &str,
+    deadline: Instant,
+) {
+    run_replay_oracle_with_deadline_and_utxo_validation(
+        storage,
+        coinbase_recipient,
+        gas_price,
+        batches,
+        worker_count,
+        scenario,
+        deadline,
+        true,
+    )
+    .await
+}
+
+/// As [`run_replay_oracle_with_deadline`], but with a caller-chosen
+/// `utxo_validation` mode. `utxo_validation = false` is the supported
+/// relaxed/debugging mode where input coins are NOT required to exist in the
+/// database; both producers are configured the way the node wires them in that
+/// mode (parallel: `Config::utxo_validation`; sequential:
+/// `forbid_unauthorized_inputs = utxo_validation`), and must still agree on
+/// everything.
+#[allow(clippy::too_many_arguments)]
+async fn run_replay_oracle_with_deadline_and_utxo_validation(
     mut storage: Storage,
     coinbase_recipient: ContractId,
     gas_price: u64,
@@ -1547,6 +1606,7 @@ async fn run_replay_oracle_with_deadline(
     worker_count: usize,
     scenario: &str,
     deadline: Instant,
+    utxo_validation: bool,
 ) {
     let fed_tx_count: usize = batches.iter().map(|b| b.len()).sum();
     // Both producers start from the same view, which now includes the previous
@@ -1564,6 +1624,7 @@ async fn run_replay_oracle_with_deadline(
                 worker_count: std::num::NonZeroUsize::new(worker_count).unwrap(),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation,
             },
         )
         .unwrap();
@@ -1625,7 +1686,7 @@ async fn run_replay_oracle_with_deadline(
     // metadata. For a skip-free scenario the fed txs equal the committed txs, so
     // this is identical to the old harness.
     let options = ExecutionOptions {
-        forbid_unauthorized_inputs: true,
+        forbid_unauthorized_inputs: utxo_validation,
         forbid_fake_utxo: false,
         allow_syscall: false,
     };
@@ -1896,6 +1957,97 @@ async fn oracle__cross_batch_coin_create_then_spend_chain() {
     .await;
 }
 
+// SCENARIO 2b — `utxo_validation = false` (relaxed/debugging mode): input coins
+// are NOT required to exist in the database. The sequential executor fabricates
+// missing coins (`get_coin_or_default`), so the parallel producer must accept
+// the same "fake"-coin transactions instead of failing the whole block with
+// "Coin ... not in the database and not created in the block". Mixes fake-coin
+// txs with a stored-coin tx across two batches and asserts full agreement with
+// the sequential run in the same mode.
+#[tokio::test]
+async fn oracle__utxo_validation_off_accepts_fake_coin_inputs() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    // Coins that exist nowhere: not in the database, not created in the block.
+    let fake_tx1 = TransactionBuilder::script(vec![], vec![])
+        .add_fake_coin_input(&mut rng, 1000)
+        .finalize_as_transaction();
+    let fake_tx2 = TransactionBuilder::script(vec![], vec![])
+        .add_fake_coin_input(&mut rng, 500)
+        .finalize_as_transaction();
+    // A regular stored coin still works in relaxed mode.
+    let stored_tx = basic_tx(&mut rng, &mut storage);
+
+    run_replay_oracle_with_deadline_and_utxo_validation(
+        storage,
+        Default::default(),
+        0,
+        vec![vec![fake_tx1], vec![fake_tx2, stored_tx]],
+        2,
+        "utxo_validation_off_fake_coins",
+        Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+        false,
+    )
+    .await;
+}
+
+// Negative control for SCENARIO 2b — with `utxo_validation = true` (the
+// production default) the coin coherency verifier must keep rejecting a coin
+// that is neither in the database nor created in the block, exactly as before.
+#[tokio::test]
+async fn execute__utxo_validation_on_still_rejects_fake_coin_inputs() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2322);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+
+    let fake_tx = TransactionBuilder::script(vec![], vec![])
+        .add_fake_coin_input(&mut rng, 1000)
+        .finalize_as_transaction();
+
+    let mut executor = Executor::new(
+        storage,
+        MockRelayer,
+        MockPreconfirmationSender,
+        Config {
+            worker_count: std::num::NonZeroUsize::new(1)
+                .expect("The value is not zero; qed"),
+            worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
+            metrics: false,
+            utxo_validation: true,
+        },
+    )
+    .unwrap();
+    let (transactions_source, mock_tx_pool) = MockTransactionsSource::new();
+    mock_tx_pool.push_response(
+        MockTxPoolResponse::new(&[&fake_tx], TransactionFiltered::NotFiltered)
+            .assert_filter(empty_filter()),
+    );
+
+    let result = executor
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: Default::default(),
+                transactions_source,
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Instant::now() + Duration::from_millis(300),
+        )
+        .await;
+
+    let err = result.expect_err(
+        "strict mode must keep rejecting a coin that exists neither in the \
+         database nor in the block",
+    );
+    assert!(
+        err.to_string()
+            .contains("not in the database and not created in the block"),
+        "unexpected error: {err}",
+    );
+}
+
 // SCENARIO 3 — a user tx that touches the coinbase contract, plus the mint. With
 // gas_price > 0 the coinbase is non-zero, so this checks mint-on-the-merged-view
 // (audit fix #3): the mint's coinbase-contract write must coalesce with the user
@@ -2103,6 +2255,7 @@ async fn drain_completing_deploy_persists_fresh_contract_code() {
                 worker_count: std::num::NonZeroUsize::new(1).unwrap(),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: false,
+                utxo_validation: true,
             },
         )
         .unwrap();
@@ -2176,6 +2329,7 @@ async fn metrics_block_summary_emits_without_panicking() {
                 worker_count: std::num::NonZeroUsize::new(2).unwrap(),
                 worker_count_policy: crate::config::WorkerCountPolicy::StaticMax,
                 metrics: true,
+                utxo_validation: true,
             },
         )
         .unwrap();

@@ -336,6 +336,7 @@ pub fn init_sub_services(
                                 }
                             },
                             metrics: config.executor.parallel.metrics,
+                            utxo_validation: config.utxo_validation,
                         };
                     crate::service::adapters::ParallelExecutorAdapter::new(
                         database.on_chain().clone(),

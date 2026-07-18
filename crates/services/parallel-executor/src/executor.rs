@@ -147,7 +147,16 @@ where
         let mut executor = BlockExecutor::new(
             self.relayer.clone(),
             ExecutionOptions {
-                forbid_unauthorized_inputs: true,
+                // Mirrors the node's mapping of `utxo_validation` onto the
+                // sequential executor's options: with `utxo_validation = false`
+                // signature/predicate checks are skipped, exactly like the
+                // sequential path.
+                forbid_unauthorized_inputs: self.config.utxo_validation,
+                // Always `false` on the parallel path regardless of
+                // `utxo_validation`: batches execute against pre-block views
+                // where same-block coins legitimately don't exist yet. The
+                // post-hoc `CoinDependencyChainVerifier` performs the UTXO
+                // existence check instead (gated on `utxo_validation`).
                 forbid_fake_utxo: false,
                 allow_syscall: false,
             },
