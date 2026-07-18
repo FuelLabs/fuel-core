@@ -134,7 +134,7 @@ fuel-gas-price-algorithm = { version = "0.48.0", path = "crates/fuel-gas-price-a
 fuel-vm-private = { version = "0.66.2", package = "fuel-vm", default-features = false }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
-hyper = { version = "0.14" }
+hyper = { version = "0.14", features = ["http2"] }
 impl-tools = "0.11"
 indicatif = { version = "0.18", default-features = false }
 insta = "1.8"
@@ -156,7 +156,7 @@ prost = "0.14.1"
 rand = "0.8"
 rayon = "1.10.0"
 # enable cookie store to support L7 sticky sessions
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "cookies", "json"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "cookies", "json", "http2", "stream"] }
 serde = "1.0"
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_with = { version = "3.4", default-features = false }

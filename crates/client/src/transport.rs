@@ -3,11 +3,6 @@ use crate::reqwest_ext::{
     FuelOperation,
     ReqwestExt,
 };
-#[cfg(feature = "subscriptions")]
-use base64::prelude::{
-    BASE64_STANDARD,
-    Engine as _,
-};
 use cynic::{
     Operation,
     QueryFragment,
@@ -65,7 +60,7 @@ impl FailoverTransport {
         #[cfg(feature = "subscriptions")]
         {
             let cookie = std::sync::Arc::new(reqwest::cookie::Jar::default());
-            let client = reqwest::Client::builder()
+            let client = Self::client_builder()
                 .cookie_provider(cookie.clone())
                 .build()?;
             Ok(Self {
@@ -78,12 +73,29 @@ impl FailoverTransport {
 
         #[cfg(not(feature = "subscriptions"))]
         {
-            let client = reqwest::Client::new();
+            let client = Self::client_builder().build()?;
             Ok(Self {
                 client,
                 urls: urls.into_boxed_slice(),
                 default_url_index: AtomicUsize::new(0),
             })
+        }
+    }
+
+    /// All transport (queries AND status subscriptions) goes through one
+    /// `reqwest` client speaking HTTP/2 with prior knowledge, so every
+    /// concurrent request/stream multiplexes over a single connection per
+    /// node instead of opening one TCP connection per subscription (which
+    /// exhausts client ephemeral ports at a few thousand submissions per
+    /// second). fuel-core's GraphQL server (hyper) auto-detects the h2
+    /// preface on cleartext connections. For a proxy that cannot speak
+    /// h2c, set `FUEL_GRAPHQL_HTTP1=1` to fall back to HTTP/1.1.
+    fn client_builder() -> reqwest::ClientBuilder {
+        let builder = reqwest::Client::builder();
+        if std::env::var_os("FUEL_GRAPHQL_HTTP1").is_some() {
+            builder
+        } else {
+            builder.http2_prior_knowledge()
         }
     }
 
@@ -212,129 +224,131 @@ impl FailoverTransport {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static + Send,
     {
-        use core::ops::Deref;
-        use eventsource_client as es;
-        use hyper_rustls as _;
-        use reqwest::cookie::CookieStore;
         let mut url = url.clone();
         url.set_path("/v1/graphql-sub");
 
         let fuel_operation = FuelOperation::new(q, required_block_height);
-
         let json_query = serde_json::to_string(&fuel_operation)?;
-        let mut client_builder = es::ClientBuilder::for_url(url.as_str())
-            .map_err(|e| io::Error::other(format!("Failed to start client {e:?}")))?
-            .body(json_query)
-            .method("POST".to_string())
-            .header("content-type", "application/json")
-            .map_err(|e| {
-                io::Error::other(format!("Failed to add header to client {e:?}"))
-            })?;
+
+        let mut request = self
+            .client
+            .post(url.clone())
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .header(reqwest::header::ACCEPT, "text/event-stream")
+            .body(json_query);
         if let Some(password) = url.password() {
-            let username = url.username();
-            let credentials = format!("{}:{}", username, password);
-            let authorization = format!("Basic {}", BASE64_STANDARD.encode(credentials));
-            client_builder = client_builder
-                .header("Authorization", &authorization)
-                .map_err(|e| {
-                    io::Error::other(format!("Failed to add header to client {e:?}"))
-                })?;
+            request = request.basic_auth(url.username(), Some(password));
         }
 
-        if let Some(value) = self.cookie.deref().cookies(&url) {
-            let value = value.to_str().map_err(|e| {
-                io::Error::other(format!("Unable convert header value to string {e:?}"))
-            })?;
-            client_builder = client_builder
-                .header(reqwest::header::COOKIE.as_str(), value)
-                .map_err(|e| {
-                    io::Error::other(format!(
-                        "Failed to add header from `reqwest` to client {e:?}"
-                    ))
-                })?;
-        }
+        // An accepted response is the historical `Connected` event: connection
+        // errors surface here, before a stream is returned.
+        let response = request
+            .send()
+            .await
+            .map_err(|e| io::Error::other(format!("Graphql error: {e:?}")))?
+            .error_for_status()
+            .map_err(|e| io::Error::other(format!("Graphql error: {e:?}")))?;
 
-        let client = client_builder.build_with_conn(
-            hyper_rustls::HttpsConnectorBuilder::new()
-                .with_webpki_roots()
-                .https_or_http()
-                .enable_http1()
-                .build(),
-        );
-
-        enum Event<ResponseData> {
-            Connected,
-            ResponseData(ResponseData),
-        }
-
-        let mut last = None;
-
-        let mut init_stream = es::Client::stream(&client)
-            .take_while(|result| {
-                futures::future::ready(!matches!(result, Err(es::Error::Eof)))
-            })
-            .filter_map(move |result| {
-                tracing::debug!("Got result: {result:?}");
-                let r = match result {
-                    Ok(es::SSE::Event(es::Event { data, .. })) => {
-                        match serde_json::from_str::<FuelGraphQlResponse<ResponseData>>(
-                            &data,
-                        ) {
-                            Ok(resp) => {
-                                match last.replace(data) {
-                                    // Remove duplicates
-                                    Some(l)
-                                        if l == *last.as_ref().expect(
-                                            "Safe because of the replace above",
-                                        ) =>
-                                    {
-                                        None
-                                    }
-                                    _ => Some(Ok(Event::ResponseData(resp))),
-                                }
-                            }
-                            Err(e) => {
-                                Some(Err(io::Error::other(format!("Json error: {e:?}"))))
-                            }
+        let stream = futures::stream::try_unfold(
+            SseState {
+                bytes: response.bytes_stream().boxed(),
+                buffer: Vec::new(),
+                pending: std::collections::VecDeque::new(),
+                last: None,
+                done: false,
+            },
+            |mut state| async move {
+                loop {
+                    if let Some(data) = state.pending.pop_front() {
+                        // Remove duplicates (same payload delivered twice in a
+                        // row), mirroring the historical eventsource path.
+                        if state.last.as_deref() == Some(data.as_str()) {
+                            continue;
+                        }
+                        let resp = serde_json::from_str::<
+                            FuelGraphQlResponse<ResponseData>,
+                        >(&data)
+                        .map_err(|e| io::Error::other(format!("Json error: {e:?}")))?;
+                        state.last = Some(data);
+                        return Ok(Some((resp, state)));
+                    }
+                    if state.done {
+                        return Ok(None);
+                    }
+                    match state.bytes.next().await {
+                        Some(Ok(chunk)) => {
+                            state.buffer.extend_from_slice(&chunk);
+                            let events = drain_sse_events(&mut state.buffer);
+                            state.pending.extend(events);
+                        }
+                        Some(Err(e)) => {
+                            return Err(io::Error::other(format!("Graphql error: {e:?}")));
+                        }
+                        None => {
+                            state.done = true;
                         }
                     }
-                    Ok(es::SSE::Connected(_)) => Some(Ok(Event::Connected)),
-                    Ok(_) => None,
-                    Err(e) => {
-                        Some(Err(io::Error::other(format!("Graphql error: {e:?}"))))
-                    }
-                };
-                futures::future::ready(r)
-            });
-
-        let event = init_stream.next().await;
-        let stream_with_resp = init_stream.filter_map(|result| async move {
-            match result {
-                Ok(Event::Connected) => None,
-                Ok(Event::ResponseData(resp)) => Some(Ok(resp)),
-                Err(error) => Some(Err(error)),
-            }
-        });
-
-        let stream = match event {
-            Some(Ok(Event::Connected)) => {
-                tracing::debug!("Subscription connected");
-                stream_with_resp.boxed()
-            }
-            Some(Ok(Event::ResponseData(resp))) => {
-                tracing::debug!("Subscription returned response");
-                let joined_stream = futures::stream::once(async move { Ok(resp) })
-                    .chain(stream_with_resp);
-                joined_stream.boxed()
-            }
-            Some(Err(e)) => return Err(e),
-            None => {
-                return Err(io::Error::other("Subscription stream ended unexpectedly"));
-            }
-        };
+                }
+            },
+        );
 
         Ok(stream)
     }
+}
+
+/// Streaming-parse state for one server-sent-events subscription.
+#[cfg(feature = "subscriptions")]
+struct SseState {
+    bytes: futures::stream::BoxStream<'static, reqwest::Result<bytes::Bytes>>,
+    buffer: Vec<u8>,
+    pending: std::collections::VecDeque<String>,
+    last: Option<String>,
+    done: bool,
+}
+
+/// Extract the `data` payloads of all COMPLETE server-sent events from the
+/// accumulator (events are terminated by a blank line). Comment/`event:`
+/// lines are ignored; multi-line data is joined with newlines per the SSE
+/// specification. Incomplete trailing bytes stay in the buffer.
+#[cfg(feature = "subscriptions")]
+fn drain_sse_events(buffer: &mut Vec<u8>) -> Vec<String> {
+    let mut out = Vec::new();
+    loop {
+        // An event ends at the first blank line: "\n\n" (or CRLF variants).
+        let mut frame_end = None;
+        let mut i = 0usize;
+        while let Some(window_start) = i.checked_add(1) {
+            if window_start >= buffer.len() {
+                break;
+            }
+            let (a, b) = (buffer[i], buffer[window_start]);
+            if a == b'\n' && b == b'\n' {
+                frame_end = Some((i, i.saturating_add(2)));
+                break;
+            }
+            if a == b'\n' && b == b'\r' && buffer.get(i.saturating_add(2)) == Some(&b'\n')
+            {
+                frame_end = Some((i, i.saturating_add(3)));
+                break;
+            }
+            i = window_start;
+        }
+        let Some((data_end, consumed)) = frame_end else {
+            break;
+        };
+        let frame: Vec<u8> = buffer.drain(..consumed).collect();
+        let text = String::from_utf8_lossy(&frame[..data_end]);
+        let mut data_lines: Vec<&str> = Vec::new();
+        for line in text.lines() {
+            if let Some(rest) = line.strip_prefix("data:") {
+                data_lines.push(rest.strip_prefix(' ').unwrap_or(rest));
+            }
+        }
+        if !data_lines.is_empty() {
+            out.push(data_lines.join("\n"));
+        }
+    }
+    out
 }
 
 fn clone_operation<ResponseData, Vars>(

@@ -4012,22 +4012,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "eventsource-client"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43ddc25e1ad2cc0106d5e2d967397b4fb2068a66677ee9b0eea4600e5cfe8fb4"
-dependencies = [
- "futures",
- "hyper 0.14.32",
- "hyper-rustls 0.24.2",
- "hyper-timeout 0.4.1",
- "log",
- "pin-project",
- "rand 0.8.5",
- "tokio",
-]
-
-[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4497,16 +4481,14 @@ dependencies = [
  "anyhow",
  "aws-config",
  "aws-sdk-s3",
- "base64 0.22.1",
+ "bytes",
  "cynic",
  "derive_more 2.1.1",
- "eventsource-client",
  "flate2",
  "fuel-core-block-aggregator-api",
  "fuel-core-types 0.48.0",
  "futures",
  "hex",
- "hyper-rustls 0.24.2",
  "insta",
  "itertools 0.14.0",
  "postcard",
@@ -6102,10 +6084,8 @@ dependencies = [
  "hyper 0.14.32",
  "log",
  "rustls 0.21.12",
- "rustls-native-certs 0.6.3",
  "tokio",
  "tokio-rustls 0.24.1",
- "webpki-roots 0.25.4",
 ]
 
 [[package]]
@@ -9294,6 +9274,8 @@ dependencies = [
  "cookie",
  "cookie_store",
  "futures-core",
+ "futures-util",
+ "h2 0.4.13",
  "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
@@ -9313,12 +9295,14 @@ dependencies = [
  "sync_wrapper 1.0.2",
  "tokio",
  "tokio-rustls 0.26.4",
+ "tokio-util",
  "tower 0.5.3",
  "tower-http 0.6.8",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
 ]
 
@@ -11935,6 +11919,19 @@ dependencies = [
  "indexmap 2.13.0",
  "wasm-encoder 0.244.0",
  "wasmparser 0.244.0",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d1ec4f6517c9e11ae630e200b2b65d193279042e28edd4a2cda233e46670bbb"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
