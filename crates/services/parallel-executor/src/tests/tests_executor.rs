@@ -2979,3 +2979,539 @@ async fn validate__accepts_block_with_in_block_coin_chain() {
         .collect();
     assert_eq!(status_ids, tx_ids(block.transactions()));
 }
+
+// ---------------------------------------------------------------------------
+// Correctness suite: commutativity of independent txs, dependency fan-out,
+// and double-spend behavior in both production and validation.
+// ---------------------------------------------------------------------------
+
+/// A pure coin transfer: one stored (db) coin input, caller-chosen outputs.
+fn transfer_tx(
+    rng: &mut StdRng,
+    storage: &mut Storage,
+    outputs: Vec<Output>,
+) -> Transaction {
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_stored_coin_input(rng, storage, 1000);
+    for output in outputs {
+        builder.add_output(output);
+    }
+    builder.finalize_as_transaction()
+}
+
+/// The sequential validator with FULL checks (signatures + UTXO existence) —
+/// the consensus reference every parallel-produced block must satisfy.
+fn sequential_validate(
+    storage: Storage,
+    block: &Block,
+) -> Result<
+    (
+        fuel_core_types::services::executor::ValidationResult,
+        Changes,
+    ),
+    fuel_core_types::services::executor::Error,
+> {
+    ExecutionInstance::new(
+        MockRelayer,
+        storage,
+        ExecutionOptions {
+            forbid_unauthorized_inputs: true,
+            forbid_fake_utxo: true,
+            allow_syscall: false,
+        },
+        MemoryInstance::new(),
+    )
+    .validate_without_commit(block)
+    .map(|uncommitted| uncommitted.into())
+}
+
+fn parallel_config(workers: usize) -> Config {
+    Config {
+        worker_count: std::num::NonZeroUsize::new(workers).unwrap(),
+        worker_count_policy: WorkerCountPolicy::StaticMax,
+        metrics: false,
+        utxo_validation: true,
+    }
+}
+
+async fn parallel_produce(
+    storage: &Storage,
+    workers: usize,
+    batches: Vec<Vec<Transaction>>,
+) -> Result<
+    (
+        fuel_core_types::services::executor::ExecutionResult,
+        StorageChanges,
+    ),
+    crate::scheduler::SchedulerError,
+> {
+    let mut producer: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            parallel_config(workers),
+        )
+        .unwrap();
+    let (source, pool) = MockTransactionsSource::new();
+    for batch in &batches {
+        let refs: Vec<&Transaction> = batch.iter().collect();
+        pool.push_response(MockTxPoolResponse::new(
+            &refs,
+            TransactionFiltered::NotFiltered,
+        ));
+    }
+    producer
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: header_at_height_1(),
+                transactions_source: source,
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+        )
+        .await
+        .map(|uncommitted| uncommitted.into())
+}
+
+/// A coin stored in the db for `secret`, returning its UtxoId.
+fn store_coin(
+    rng: &mut StdRng,
+    storage: &mut Storage,
+    secret: &SecretKey,
+    amount: u64,
+) -> UtxoId {
+    let owner = Input::owner(&secret.public_key());
+    let utxo_id: UtxoId = rng.r#gen();
+    let mut tx = storage.0.write_transaction();
+    tx.storage_as_mut::<Coins>()
+        .insert(
+            &utxo_id,
+            &(Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id: Default::default(),
+                tx_pointer: Default::default(),
+            }
+            .compress()),
+        )
+        .unwrap();
+    tx.commit().unwrap();
+    utxo_id
+}
+
+fn sorted_ids(txs: &[Transaction]) -> Vec<Bytes32> {
+    let mut ids = tx_ids(txs);
+    ids.sort_unstable();
+    ids
+}
+
+// CASE 1 — commutativity end to end: a block of many INDEPENDENT pure coin
+// transfers (disjoint db coins, no contracts). (a) the parallel producer
+// assembles a valid block that the sequential validator (full checks)
+// accepts; (b) parallel validation of that block matches sequential
+// validation byte-for-byte.
+#[tokio::test]
+async fn produce_and_validate__many_independent_coin_transfers() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(1111);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    let mut txs = Vec::with_capacity(150);
+    for _ in 0..150 {
+        let to: fuel_core_types::fuel_tx::Address = rng.r#gen();
+        txs.push(transfer_tx(
+            &mut rng,
+            &mut storage,
+            vec![Output::coin(to, 500, Default::default())],
+        ));
+    }
+
+    // Three multi-tx batches over four workers.
+    let batches: Vec<Vec<Transaction>> =
+        txs.chunks(50).map(|chunk| chunk.to_vec()).collect();
+    let (result, _produce_changes) = parallel_produce(&storage, 4, batches)
+        .await
+        .expect("independent transfers must produce cleanly");
+    assert!(result.skipped_transactions.is_empty());
+    let block = result.block;
+    assert_eq!(block.transactions().len(), 151, "150 transfers + mint");
+
+    // Exactly-once inclusion of exactly the fed set.
+    let (_mint, user_txs) = split_off_mint(block.transactions(), "case1");
+    let included = sorted_ids(&user_txs);
+    assert_eq!(
+        included,
+        sorted_ids(&txs),
+        "all fed txs included exactly once"
+    );
+    let mut deduped = included.clone();
+    deduped.dedup();
+    assert_eq!(deduped.len(), 150, "no duplicate inclusion");
+
+    // (a) sequential validation (full checks) accepts the parallel block.
+    let (_, sequential_changes) = sequential_validate(storage.clone(), &block)
+        .expect("sequential validation must accept the parallel block");
+
+    // (b) parallel validation, byte-identical to sequential validation.
+    let mut validator: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            parallel_config(4),
+        )
+        .unwrap();
+    let (validation_result, validation_changes) =
+        validator.validate(&block).await.unwrap().into();
+    assert_eq!(
+        strip_empty_columns(validation_changes),
+        strip_empty_columns(sequential_changes),
+        "parallel validation changes must equal sequential validation changes",
+    );
+    let status_ids: Vec<Bytes32> = validation_result
+        .tx_status
+        .iter()
+        .map(|status| status.id)
+        .collect();
+    assert_eq!(status_ids, tx_ids(block.transactions()));
+}
+
+// CASE 2 — dependency fan-out: one parent creating 13 outputs; 12 children
+// each spend one; two grandchildren extend chains to depth 3; one fan-in
+// child spends TWO in-block parents (the double-promotion regression shape).
+// Exactly-once inclusion, correct TxPointers on every in-block spend, and
+// parallel validation byte-identical to sequential validation.
+#[tokio::test]
+async fn produce_and_validate__parent_fan_out_chains_and_fan_in() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(2222);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    let child_secret = SecretKey::random(&mut rng);
+    let child_owner = Input::owner(&child_secret.public_key());
+    let gc_secret = SecretKey::random(&mut rng);
+    let gc_owner = Input::owner(&gc_secret.public_key());
+
+    // Parent: 13 coin outputs (12 children + 1 for the fan-in tail).
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_stored_coin_input(&mut rng, &mut storage, 20_000);
+    for _ in 0..13 {
+        builder.add_output(Output::coin(child_owner, 1000, Default::default()));
+    }
+    let parent = builder.finalize_as_transaction();
+    let parent_id = parent.id(&ChainId::default());
+
+    // 12 children, each spending one parent output. c0/c1/c2 create an
+    // output of their own (for the grandchildren / fan-in tail).
+    let mut children = Vec::with_capacity(12);
+    for i in 0..12u16 {
+        let mut builder = TransactionBuilder::script(vec![], vec![]);
+        builder.add_unsigned_coin_input(
+            child_secret,
+            UtxoId::new(parent_id, i),
+            1000,
+            Default::default(),
+            Default::default(),
+        );
+        if i < 3 {
+            builder.add_output(Output::coin(gc_owner, 400, Default::default()));
+        }
+        children.push(builder.finalize_as_transaction());
+    }
+    let child_ids: Vec<Bytes32> = children
+        .iter()
+        .map(|tx| tx.id(&ChainId::default()))
+        .collect();
+
+    // Two depth-3 chains: grandchildren of c0 and c1.
+    let grandchild = |of: Bytes32, rng: &mut StdRng| {
+        let _ = rng;
+        let mut builder = TransactionBuilder::script(vec![], vec![]);
+        builder.add_unsigned_coin_input(
+            gc_secret,
+            UtxoId::new(of, 0),
+            400,
+            Default::default(),
+            Default::default(),
+        );
+        builder.finalize_as_transaction()
+    };
+    let g0 = grandchild(child_ids[0], &mut rng);
+    let g1 = grandchild(child_ids[1], &mut rng);
+
+    // Fan-in tail: spends parent#12 AND c2's output — two in-block parents,
+    // one of which is itself the other's child.
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_unsigned_coin_input(
+        child_secret,
+        UtxoId::new(parent_id, 12),
+        1000,
+        Default::default(),
+        Default::default(),
+    );
+    builder.add_unsigned_coin_input(
+        gc_secret,
+        UtxoId::new(child_ids[2], 0),
+        400,
+        Default::default(),
+        Default::default(),
+    );
+    let fan_in = builder.finalize_as_transaction();
+
+    // Block order: parent(0), c0..c11 (1..=12), g0(13), g1(14), fan_in(15).
+    let mut fed = vec![parent];
+    fed.extend(children);
+    fed.push(g0);
+    fed.push(g1);
+    fed.push(fan_in);
+
+    let (result, _) = parallel_produce(&storage, 2, vec![fed.clone()])
+        .await
+        .expect("fan-out block must produce cleanly");
+    assert!(result.skipped_transactions.is_empty());
+    let block = result.block;
+    assert_eq!(block.transactions().len(), 17, "16 user txs + mint");
+
+    // Exactly-once inclusion.
+    let (_mint, user_txs) = split_off_mint(block.transactions(), "case2");
+    assert_eq!(sorted_ids(&user_txs), sorted_ids(&fed));
+
+    // TxPointers of every in-block spend point at the creator's position.
+    let height = 1u32.into();
+    for i in 0..12usize {
+        assert_eq!(
+            coin_input_pointer(&user_txs[1 + i], 0),
+            TxPointer::new(height, 0),
+            "child {i} must point at the parent (block index 0)",
+        );
+    }
+    assert_eq!(
+        coin_input_pointer(&user_txs[13], 0),
+        TxPointer::new(height, 1),
+        "g0 must point at c0 (block index 1)",
+    );
+    assert_eq!(
+        coin_input_pointer(&user_txs[14], 0),
+        TxPointer::new(height, 2),
+        "g1 must point at c1 (block index 2)",
+    );
+    assert_eq!(
+        coin_input_pointer(&user_txs[15], 0),
+        TxPointer::new(height, 0),
+        "fan-in input 0 must point at the parent",
+    );
+    assert_eq!(
+        coin_input_pointer(&user_txs[15], 1),
+        TxPointer::new(height, 3),
+        "fan-in input 1 must point at c2 (block index 3)",
+    );
+
+    // Sequential validation accepts; parallel validation is byte-identical.
+    let (_, sequential_changes) = sequential_validate(storage.clone(), &block)
+        .expect("sequential validation must accept the fan-out block");
+    let mut validator: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            parallel_config(2),
+        )
+        .unwrap();
+    let (validation_result, validation_changes) = validator
+        .validate(&block)
+        .await
+        .expect("parallel validation must accept the fan-out block")
+        .into();
+    assert_eq!(
+        strip_empty_columns(validation_changes),
+        strip_empty_columns(sequential_changes),
+    );
+    let status_ids: Vec<Bytes32> = validation_result
+        .tx_status
+        .iter()
+        .map(|status| status.id)
+        .collect();
+    assert_eq!(status_ids, tx_ids(block.transactions()));
+}
+
+/// Two signed spends of the SAME stored coin (differing outputs → distinct
+/// tx ids).
+fn double_spend_pair(
+    rng: &mut StdRng,
+    storage: &mut Storage,
+) -> (Transaction, Transaction) {
+    let secret = SecretKey::random(rng);
+    let utxo_id = store_coin(rng, storage, &secret, 1000);
+    let spend = |to_amount: u64| {
+        let mut builder = TransactionBuilder::script(vec![], vec![]);
+        builder.add_unsigned_coin_input(
+            secret,
+            utxo_id,
+            1000,
+            Default::default(),
+            Default::default(),
+        );
+        builder.add_output(Output::coin(
+            fuel_core_types::fuel_tx::Address::zeroed(),
+            to_amount,
+            Default::default(),
+        ));
+        builder.finalize_as_transaction()
+    };
+    (spend(100), spend(200))
+}
+
+// CASE 3a — PRODUCTION fed a double spend (impossible from a real pool — the
+// txpool enforces one spender per coin — so this bypasses it at the executor
+// level). The parallel producer must fail LOUDLY: the coin-coherency
+// verifier rejects the block in BOTH the same-batch and the cross-batch
+// arrangement, so no double-spend block (and no silently-mangled one) can
+// ever be produced. NOTE: the executor does not drop the loser and keep one
+// winner — dropping would require replaying merged state; failing the
+// production attempt is the safe contract since the pool guarantees this
+// input never occurs.
+#[tokio::test]
+async fn produce__double_spend_feed_fails_loudly_in_both_arrangements() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(3333);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+    let (spend_a, spend_b) = double_spend_pair(&mut rng, &mut storage);
+
+    // Same batch.
+    let result =
+        parallel_produce(&storage, 2, vec![vec![spend_a.clone(), spend_b.clone()]]).await;
+    let error = result.err().expect("same-batch double spend must fail");
+    assert!(
+        error.to_string().contains("already used"),
+        "must fail on coin coherency, got: {error}",
+    );
+
+    // Different batches: each batch's pre-block view would accept its spend
+    // individually — only the merge-phase coherency check can catch it.
+    let result = parallel_produce(&storage, 2, vec![vec![spend_a], vec![spend_b]]).await;
+    let error = result.err().expect("cross-batch double spend must fail");
+    assert!(
+        error.to_string().contains("already used"),
+        "must fail on coin coherency, got: {error}",
+    );
+}
+
+// CASE 3b(1) — VALIDATION of an invalid block carrying both spends of one
+// coin (plain coin txs, same lane: the validation planner may put them in
+// one batch). Parallel validation MUST reject; sequential must reject the
+// same block (equivalence in the negative direction).
+#[tokio::test]
+async fn validate__rejects_double_spend_block() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(4444);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+    let (spend_a, spend_b) = double_spend_pair(&mut rng, &mut storage);
+
+    // Produce a VALID block with only spend A, then tamper the second spend
+    // in at the block level.
+    let (result, _) = parallel_produce(&storage, 2, vec![vec![spend_a]])
+        .await
+        .expect("single spend must produce cleanly");
+    let mut block = result.block;
+    block.transactions_mut().insert(1, spend_b);
+
+    let mut validator: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            parallel_config(2),
+        )
+        .unwrap();
+    assert!(
+        validator.validate(&block).await.is_err(),
+        "parallel validation must reject a double-spend block",
+    );
+    assert!(
+        sequential_validate(storage.clone(), &block).is_err(),
+        "sequential validation must reject the same block",
+    );
+}
+
+// CASE 3b(2) — as above, but the two spends carry DISJOINT contract writes,
+// so the validation lane scheduler anchors them into DIFFERENT lanes and
+// they CANNOT share a batch (a batch lane admits writers of one anchor
+// contract; each tx writes only its own contract). Each batch's pre-block
+// view accepts its spend individually — only the merge-phase coin coherency
+// catches the conflict.
+#[tokio::test]
+async fn validate__rejects_cross_batch_double_spend_block() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(5555);
+    let mut storage = Storage::default();
+    let contracts = setup_contracts(&mut rng, &mut storage, 2).await;
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    let secret = SecretKey::random(&mut rng);
+    let utxo_id = store_coin(&mut rng, &mut storage, &secret, 1000);
+    let contract_spend = |contract: ContractId, rng: &mut StdRng| {
+        let mut builder = TransactionBuilder::script(vec![], vec![]);
+        builder.add_input(Input::contract(
+            rng.r#gen(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            contract,
+        ));
+        builder.add_output(Output::contract(0, Default::default(), Default::default()));
+        builder.add_unsigned_coin_input(
+            secret,
+            utxo_id,
+            1000,
+            Default::default(),
+            Default::default(),
+        );
+        builder.finalize_as_transaction()
+    };
+    let spend_a = contract_spend(contracts[0], &mut rng);
+    let spend_b = contract_spend(contracts[1], &mut rng);
+
+    // Control: the untampered single-spend block is accepted by BOTH
+    // validators (so the rejections below are attributable to the tamper).
+    let (result, _) = parallel_produce(&storage, 2, vec![vec![spend_a]])
+        .await
+        .expect("single contract spend must produce cleanly");
+    let mut block = result.block;
+    sequential_validate(storage.clone(), &block)
+        .expect("control: sequential validation accepts the untampered block");
+    let mut validator: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            parallel_config(2),
+        )
+        .unwrap();
+    validator
+        .validate(&block)
+        .await
+        .expect("control: parallel validation accepts the untampered block");
+
+    // Tamper the second spend in.
+    block.transactions_mut().insert(1, spend_b);
+    let error = validator
+        .validate(&block)
+        .await
+        .err()
+        .expect("parallel validation must reject the cross-batch double spend");
+    assert!(
+        error.to_string().contains("already used"),
+        "rejection must come from the merge-phase coin coherency, got: {error}",
+    );
+    assert!(
+        sequential_validate(storage.clone(), &block).is_err(),
+        "sequential validation must reject the same block",
+    );
+}
