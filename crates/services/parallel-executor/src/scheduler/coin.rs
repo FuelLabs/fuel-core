@@ -14,6 +14,7 @@ use fuel_core_types::{
         Address,
         AssetId,
         TxId,
+        TxPointer,
         UtxoId,
         Word,
         input::coin::{
@@ -179,6 +180,11 @@ impl From<CoinInBatch> for CompressedCoin {
 pub struct CoinDependencyChainVerifier {
     coins_registered: FxHashMap<UtxoId, (usize, CoinInBatch)>,
     coins_used: FxHashSet<UtxoId>,
+    /// The stored `tx_pointer` of every spent coin found in the DATABASE while
+    /// verifying `coins_used`. Captured here so the post-merge coin-input
+    /// `TxPointer` normalization can reuse the coins this verifier already
+    /// loaded instead of re-reading them from storage.
+    db_coin_pointers: FxHashMap<UtxoId, TxPointer>,
     /// The node's `utxo_validation` flag. When `false` (relaxed/debugging
     /// mode), the sequential executor accepts coin inputs that exist neither
     /// in the database nor in the block (`get_coin_or_default` fabricates
@@ -195,8 +201,16 @@ impl CoinDependencyChainVerifier {
         Self {
             coins_registered: FxHashMap::default(),
             coins_used: FxHashSet::default(),
+            db_coin_pointers: FxHashMap::default(),
             utxo_validation,
         }
+    }
+
+    /// The stored `tx_pointer` of every DATABASE coin loaded during
+    /// [`Self::verify_coins_used`], keyed by `UtxoId`. Consumes the verifier
+    /// (it is only called after the last batch is verified).
+    pub fn into_db_coin_pointers(self) -> FxHashMap<UtxoId, TxPointer> {
+        self.db_coin_pointers
     }
 
     pub fn register_coins_created(
@@ -231,7 +245,11 @@ impl CoinDependencyChainVerifier {
                 Ok(Some(db_coin)) => {
                     // Coin is in the database
                     match coin.equal_compressed_coin(&db_coin) {
-                        true => continue,
+                        true => {
+                            self.db_coin_pointers
+                                .insert(*coin.utxo(), *db_coin.tx_pointer());
+                            continue
+                        }
                         false => {
                             return Err(SchedulerError::InternalError(format!(
                                 "coin is invalid: {}",

@@ -85,6 +85,7 @@ use fuel_core_types::{
         Receipt,
         Transaction,
         TransactionBuilder,
+        TxPointer,
         UniqueIdentifier,
         UtxoId,
     },
@@ -2647,5 +2648,187 @@ async fn validate__rejects_block_with_tampered_transaction_order() {
     assert!(
         result.is_err(),
         "validation must reject a block with a tampered transaction order",
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Consensus regression (found by the validation benchmark's FIRST run, block
+// 5025): parallel batch execution runs with `forbid_fake_utxo: false`, whose
+// `get_coin_or_default` never reads the coin — so parallel-produced blocks
+// stored ZEROED tx_pointers on CoinSigned/CoinPredicate inputs, while a
+// sequential validator recomputes the REAL pointers and rejects the block
+// ("Transaction doesn't match expected result"). These tests pin the fix (the
+// post-merge pointer normalization in the scheduler).
+// ---------------------------------------------------------------------------
+
+/// A stored db coin with a caller-chosen (non-zero) `tx_pointer`, so the test
+/// can assert the pointer is COPIED from the database rather than zeroed.
+fn add_stored_coin_input_with_pointer<Tx>(
+    builder: &mut TransactionBuilder<Tx>,
+    rng: &mut StdRng,
+    storage: &mut Storage,
+    amount: u64,
+    tx_pointer: TxPointer,
+) where
+    Tx: Clone + Default + Chargeable + Buildable,
+{
+    let utxo_id: UtxoId = rng.r#gen();
+    let secret_key = SecretKey::random(rng);
+    let owner = Input::owner(&secret_key.public_key());
+    let mut tx = storage.0.write_transaction();
+    tx.storage_as_mut::<Coins>()
+        .insert(
+            &utxo_id,
+            &(Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id: Default::default(),
+                tx_pointer,
+            }
+            .compress()),
+        )
+        .unwrap();
+    tx.commit().unwrap();
+    builder.add_unsigned_coin_input(
+        secret_key,
+        utxo_id,
+        amount,
+        Default::default(),
+        Default::default(),
+    );
+}
+
+fn coin_input_pointer(tx: &Transaction, input_index: usize) -> TxPointer {
+    let inputs = tx.inputs();
+    match &inputs.as_ref()[input_index] {
+        Input::CoinSigned(coin) => coin.tx_pointer,
+        Input::CoinPredicate(coin) => coin.tx_pointer,
+        other => panic!("input {input_index} is not a coin input: {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn produce__coin_input_pointers_filled_and_block_passes_sequential_validation() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(31337);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    let db_pointer_a = TxPointer::new(3325u32.into(), 22);
+    let db_pointer_b = TxPointer::new(101u32.into(), 7);
+
+    // (a) spends a PRE-EXISTING db coin whose stored pointer is non-zero.
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    add_stored_coin_input_with_pointer(
+        &mut builder,
+        &mut rng,
+        &mut storage,
+        1000,
+        db_pointer_a,
+    );
+    let db_spend_tx = builder.finalize_as_transaction();
+
+    // (b) creator (funded by another db coin) makes a coin output that the
+    // spender consumes LATER IN THE SAME BLOCK.
+    let spend_secret = SecretKey::random(&mut rng);
+    let spend_owner = Input::owner(&spend_secret.public_key());
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    add_stored_coin_input_with_pointer(
+        &mut builder,
+        &mut rng,
+        &mut storage,
+        1000,
+        db_pointer_b,
+    );
+    builder.add_output(Output::coin(spend_owner, 500, Default::default()));
+    let creator_tx = builder.finalize_as_transaction();
+    let creator_id = creator_tx.id(&ChainId::default());
+
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_unsigned_coin_input(
+        spend_secret,
+        UtxoId::new(creator_id, 0),
+        500,
+        Default::default(),
+        Default::default(),
+    );
+    let spender_tx = builder.finalize_as_transaction();
+
+    let storage_for_seq = storage.clone();
+
+    // ---- parallel produce (utxo_validation ON, like the bench nodes) ----
+    let mut producer: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            Config {
+                worker_count: std::num::NonZeroUsize::new(1).unwrap(),
+                worker_count_policy: WorkerCountPolicy::StaticMax,
+                metrics: false,
+                utxo_validation: true,
+            },
+        )
+        .unwrap();
+    let (source, pool) = MockTransactionsSource::new();
+    let batch = vec![db_spend_tx, creator_tx, spender_tx];
+    let refs: Vec<&Transaction> = batch.iter().collect();
+    pool.push_response(MockTxPoolResponse::new(
+        &refs,
+        TransactionFiltered::NotFiltered,
+    ));
+    let (result, _changes) = producer
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: header_at_height_1(),
+                transactions_source: source,
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+        )
+        .await
+        .unwrap()
+        .into();
+    assert!(result.skipped_transactions.is_empty());
+    let block = result.block;
+    let txs = block.transactions();
+    assert_eq!(txs.len(), 4, "3 user txs + mint");
+
+    // Every coin input's tx_pointer must carry the spent coin's TRUE pointer.
+    assert_eq!(
+        coin_input_pointer(&txs[0], 0),
+        db_pointer_a,
+        "db-coin spend must copy the stored coin's pointer",
+    );
+    assert_eq!(
+        coin_input_pointer(&txs[1], 0),
+        db_pointer_b,
+        "creator's funding db coin must copy the stored coin's pointer",
+    );
+    assert_eq!(
+        coin_input_pointer(&txs[2], 0),
+        TxPointer::new(1u32.into(), 1),
+        "in-block coin spend must point at its creator's block position",
+    );
+
+    // THE consensus-equivalence check that was missing: the sequential
+    // validator (full checks) must accept the parallel-produced block.
+    let validation = ExecutionInstance::new(
+        MockRelayer,
+        storage_for_seq,
+        ExecutionOptions {
+            forbid_unauthorized_inputs: true,
+            forbid_fake_utxo: true,
+            allow_syscall: false,
+        },
+        MemoryInstance::new(),
+    )
+    .validate_without_commit(&block);
+    assert!(
+        validation.is_ok(),
+        "sequential validation must accept the parallel-produced block: {:?}",
+        validation.err(),
     );
 }

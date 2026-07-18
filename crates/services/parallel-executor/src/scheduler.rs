@@ -42,12 +42,14 @@ use fuel_core_executor::{
 };
 use fuel_core_storage::{
     Error as StorageError,
+    StorageAsRef,
     column::Column,
     kv_store::{
         KeyValueInspect,
         WriteOperation,
     },
     structured_storage::StructuredStorage,
+    tables::Coins,
     transactional::{
         AtomicView,
         Changes,
@@ -69,10 +71,19 @@ use fuel_core_types::{
         Output,
         Transaction,
         TxId,
+        TxPointer,
         UniqueIdentifier,
         UtxoId,
+        field::Inputs,
+        input::coin::{
+            CoinPredicate,
+            CoinSigned,
+        },
     },
-    fuel_types::Nonce,
+    fuel_types::{
+        BlockHeight,
+        Nonce,
+    },
     fuel_vm::checked_transaction::IntoChecked,
     services::{
         block_producer::Components,
@@ -170,6 +181,13 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     /// pre-block view. Entries are consumed by the fallback and otherwise freed
     /// when the per-block scheduler is dropped.
     dispatched_contract_seeds: FxHashMap<usize, FxHashMap<ContractId, Changes>>,
+    /// The EXPLICIT block-relative execution indices each dispatched batch
+    /// carried (validation mode only; see
+    /// [`crate::ports::ExecutableBatch::execution_indices`]). Consumed by
+    /// [`Self::verify_coherency_and_merge_results`] to reconstruct every merged
+    /// transaction's final block index for the coin-input `TxPointer`
+    /// normalization. Empty in production (contiguous indexing).
+    dispatched_explicit_indices: FxHashMap<usize, Vec<u32>>,
     /// The block-relative starting transaction index each dispatched batch was
     /// given (`start_idx_txs`, i.e. the count of block txs scheduled before it).
     /// `sequential_fallback` replays the `[lower, higher]` range starting at the
@@ -523,6 +541,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             batch_preparations,
             batch_feedback: FxHashMap::default(),
             dispatched_contract_seeds: FxHashMap::default(),
+            dispatched_explicit_indices: FxHashMap::default(),
             dispatched_start_idx: FxHashMap::default(),
             worker_counters,
             time_accounting: TimeAccounting::default(),
@@ -923,6 +942,9 @@ where
         // and is excluded from this measurement.
         let merge_start = Instant::now();
 
+        // Statuses are seeded with the L1 prefix while `transactions` is not,
+        // so the tx-id list for the merged transactions starts at this offset.
+        let l1_status_count = l1_execution_data.transactions_status.len();
         let result = self.verify_coherency_and_merge_results(
             nb_batch_created,
             l1_execution_data,
@@ -933,7 +955,7 @@ where
             tracing::warn!("coherency result: {:?}", result);
         }
 
-        let mut res = result?;
+        let (mut res, mut final_tx_indices, db_coin_pointers) = result?;
 
         tracing::warn!("scheduler done: {:?}", instant.elapsed());
 
@@ -975,6 +997,18 @@ where
             let (blob_execution_data, blob_txs) =
                 self.execute_blob_transactions(tx, nb_transactions).await?;
             tracing::warn!("blob execution done: {:?}", instant.elapsed());
+            // Blob txs execute contiguously from the running block-tx counter
+            // (validation never reaches here — blob-carrying blocks are
+            // rejected by `Executor::validate`'s guard rails).
+            let mut blob_index = nb_transactions;
+            for _ in 0..blob_txs.len() {
+                final_tx_indices.push(blob_index);
+                blob_index = blob_index.checked_add(1).ok_or_else(|| {
+                    SchedulerError::InternalError(
+                        "Transaction count overflow".to_string(),
+                    )
+                })?;
+            }
             res.add_blob_execution_data(blob_execution_data, blob_txs);
             tracing::warn!("blob execution data added: {:?}", instant.elapsed());
             merged = match core::mem::take(&mut res.changes) {
@@ -997,6 +1031,57 @@ where
         let final_changes = fold_changes_in_canonical_order(vec![da_changes, merged])?;
         res.changes = StorageChanges::Changes(final_changes);
         merge_elapsed = merge_elapsed.saturating_add(da_fold_start.elapsed());
+
+        // FIX (consensus divergence, found by the validation benchmark's first
+        // run): batch execution necessarily runs with `forbid_fake_utxo: false`
+        // (batches execute against pre-block views where same-block coins do
+        // not exist yet), and in that mode `get_coin_or_default` NEVER reads
+        // the coin — every CoinSigned/CoinPredicate input keeps a ZEROED
+        // `tx_pointer`. The sequential validator (with `utxo_validation` on)
+        // reads the real coin and fills the true pointer, so it would reject
+        // every parallel-produced block spending a coin
+        // ("Transaction doesn't match expected result"). Normalize here — over
+        // the COMPLETE merged transaction list (batches + fallback replays +
+        // blob txs) and BEFORE the block's transactions enter header
+        // generation (`finalize_block` / `check_block_matches`) — to the
+        // pointer the sequential executor computes. Input `tx_pointer` is a
+        // malleable field excluded from the transaction id, so this
+        // post-execution mutation cannot invalidate tx ids, receipts, or
+        // statuses. Gated on `utxo_validation`: with it OFF the sequential
+        // executor itself fabricates default (zeroed) pointers for every coin
+        // input, so zeroed is already the consensus-correct value there.
+        if self.config.utxo_validation {
+            let merged_tx_ids: Vec<TxId> = res
+                .transactions_status
+                .get(l1_status_count..)
+                .ok_or_else(|| {
+                    SchedulerError::InternalError(
+                        "transaction statuses shorter than the L1 prefix".to_string(),
+                    )
+                })?
+                .iter()
+                .map(|status| status.id)
+                .collect();
+            if merged_tx_ids.len() != res.transactions.len()
+                || final_tx_indices.len() != res.transactions.len()
+            {
+                return Err(SchedulerError::InternalError(format!(
+                    "coin-pointer normalization misalignment: {} transactions, \
+                     {} statuses, {} indices",
+                    res.transactions.len(),
+                    merged_tx_ids.len(),
+                    final_tx_indices.len()
+                )));
+            }
+            normalize_coin_input_tx_pointers(
+                &mut res.transactions,
+                &merged_tx_ids,
+                &final_tx_indices,
+                *self.header_to_produce.height(),
+                &db_coin_pointers,
+                storage_with_da.as_ref(),
+            )?;
+        }
 
         let execution_time = instant.elapsed();
         tracing::warn!("Scheduler `run` execution time: {:?}", execution_time);
@@ -1333,7 +1418,13 @@ where
         // running counter; validation batches carry the explicit positions of
         // their transactions in the received block (TxPointer correctness).
         let tx_indices = match batch.execution_indices.take() {
-            Some(indices) => TxIndices::Explicit(indices),
+            Some(indices) => {
+                // Retained so the merge phase can recover each transaction's
+                // final block index (validation batches are non-contiguous).
+                self.dispatched_explicit_indices
+                    .insert(batch_id, indices.clone());
+                TxIndices::Explicit(indices)
+            }
             None => TxIndices::Contiguous(start_idx_txs),
         };
 
@@ -1638,12 +1729,31 @@ where
         Ok((exceeded_deadline, fallback_next_start_idx))
     }
 
+    /// Verify cross-batch coherency (coins/nonces) and merge the per-batch
+    /// results in batch-id order.
+    ///
+    /// Besides the merged [`SchedulerExecutionResult`], returns:
+    /// * the FINAL block-relative index of every merged transaction (same
+    ///   order as `result.transactions`): the running execution counter in
+    ///   production, the batch's explicit indices in validation — exactly the
+    ///   numbering the executed txs' `TxPointer`/`ContractsLatestUtxo` writes
+    ///   used;
+    /// * the stored `tx_pointer` of every spent DATABASE coin the verifier
+    ///   loaded, for the coin-input `TxPointer` normalization (no re-reads).
+    #[allow(clippy::type_complexity)]
     fn verify_coherency_and_merge_results(
         &mut self,
         nb_batch: usize,
         l1_execution_data: L1ExecutionData,
         block_transaction: Arc<StorageTransaction<View>>,
-    ) -> Result<SchedulerExecutionResult, SchedulerError> {
+    ) -> Result<
+        (
+            SchedulerExecutionResult,
+            Vec<u32>,
+            FxHashMap<UtxoId, TxPointer>,
+        ),
+        SchedulerError,
+    > {
         let L1ExecutionData {
             coinbase,
             used_gas,
@@ -1652,7 +1762,7 @@ where
             transactions_status,
             events,
             skipped_txs,
-            ..
+            tx_count: l1_tx_count,
         } = l1_execution_data;
         let mut exec_result = SchedulerExecutionResult {
             header: self.header_to_produce,
@@ -1670,6 +1780,9 @@ where
         let mut compiled_created_coins =
             CoinDependencyChainVerifier::new(self.config.utxo_validation);
         let mut nonce_used = HashSet::new();
+        // Final block index of every merged transaction, in merge order.
+        let mut final_tx_indices: Vec<u32> = Vec::new();
+        let mut next_contiguous_index = l1_tx_count;
         for batch_id in 0..nb_batch {
             if let Some(changes) = self.execution_results.remove(&batch_id) {
                 compiled_created_coins
@@ -1691,6 +1804,33 @@ where
                 exec_result.message_ids.extend(changes.message_ids);
                 exec_result.skipped_txs.extend(changes.skipped_tx);
                 exec_result.transactions_status.extend(changes.tx_statuses);
+                // Reconstruct this batch's final block indices: explicit
+                // (validation) or the running execution counter (production —
+                // batches merge in batch-id order, which IS dispatch order, so
+                // the counter reproduces each tx's `start_idx_txs`-based
+                // execution index, including after a fallback collapse).
+                let batch_tx_count = changes.txs.len();
+                if let Some(explicit) = self.dispatched_explicit_indices.remove(&batch_id)
+                {
+                    if explicit.len() != batch_tx_count {
+                        return Err(SchedulerError::InternalError(format!(
+                            "batch {batch_id} committed {batch_tx_count} \
+                             transaction(s) but carried {} explicit indices",
+                            explicit.len()
+                        )));
+                    }
+                    final_tx_indices.extend(explicit);
+                } else {
+                    for _ in 0..batch_tx_count {
+                        final_tx_indices.push(next_contiguous_index);
+                        next_contiguous_index =
+                            next_contiguous_index.checked_add(1).ok_or_else(|| {
+                                SchedulerError::InternalError(
+                                    "Transaction count overflow".to_string(),
+                                )
+                            })?;
+                    }
+                }
                 exec_result.transactions.extend(changes.txs);
                 exec_result.used_gas = exec_result
                     .used_gas
@@ -1725,7 +1865,11 @@ where
         let contract_changes = core::mem::take(&mut self.contracts_changes);
         storage_changes.extend(contract_changes.into_values());
         exec_result.changes = StorageChanges::ChangesList(storage_changes);
-        Ok(exec_result)
+        Ok((
+            exec_result,
+            final_tx_indices,
+            compiled_created_coins.into_db_coin_pointers(),
+        ))
     }
 
     async fn execute_blob_transactions<D>(
@@ -2144,6 +2288,90 @@ pub(crate) fn fold_changes_in_canonical_order(
         }
     }
     Ok(acc)
+}
+
+/// Set every CoinSigned/CoinPredicate input's `tx_pointer` to the spent coin's
+/// TRUE pointer — the value the sequential executor computes via
+/// `get_coin_or_default` when `forbid_fake_utxo` is on:
+/// * coin created EARLIER IN THIS BLOCK → `TxPointer(block_height,
+///   creator's final block index)` — the same numbering the creator's stored
+///   coin output was persisted with (`persist_output_utxos`);
+/// * coin from the pre-block database → the stored coin's pointer (taken from
+///   `db_coin_pointers` — the coins the coherency verifier already loaded — or
+///   read from the pre-block view for inputs the bookkeeping did not cover,
+///   e.g. blob transactions);
+/// * neither in the database nor created in-block → left untouched (zeroed):
+///   with `utxo_validation` ON the coherency verifier has already rejected the
+///   block before this runs; the caller skips normalization entirely when the
+///   flag is OFF (sequential fabricates zeroed pointers in that mode).
+///
+/// `transactions`, `tx_ids` and `final_indices` are parallel slices in merge
+/// order. Message inputs carry no `tx_pointer`; contract inputs are already
+/// filled correctly during execution (`compute_inputs` reads
+/// `ContractsLatestUtxo` regardless of `forbid_fake_utxo`); the mint is not
+/// part of this list (it is produced/validated by the sequential machinery
+/// afterwards).
+fn normalize_coin_input_tx_pointers<T>(
+    transactions: &mut [Transaction],
+    tx_ids: &[TxId],
+    final_indices: &[u32],
+    block_height: BlockHeight,
+    db_coin_pointers: &FxHashMap<UtxoId, TxPointer>,
+    view: &StorageTransaction<T>,
+) -> Result<(), SchedulerError>
+where
+    T: KeyValueInspect<Column = Column>,
+{
+    // Every coin-producing output of this block, mapped to its creator's final
+    // block index.
+    let mut created_in_block: FxHashMap<UtxoId, u32> = FxHashMap::default();
+    for ((tx, tx_id), final_index) in transactions.iter().zip(tx_ids).zip(final_indices) {
+        for (output_index, output) in tx.outputs().iter().enumerate() {
+            if matches!(
+                output,
+                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. }
+            ) {
+                let output_index = u16::try_from(output_index).map_err(|_| {
+                    SchedulerError::InternalError("Too many outputs".to_string())
+                })?;
+                created_in_block.insert(UtxoId::new(*tx_id, output_index), *final_index);
+            }
+        }
+    }
+
+    for tx in transactions.iter_mut() {
+        let inputs = match tx {
+            Transaction::Script(tx) => tx.inputs_mut(),
+            Transaction::Create(tx) => tx.inputs_mut(),
+            Transaction::Upgrade(tx) => tx.inputs_mut(),
+            Transaction::Upload(tx) => tx.inputs_mut(),
+            Transaction::Blob(tx) => tx.inputs_mut(),
+            Transaction::Mint(_) => continue,
+        };
+        for input in inputs.iter_mut() {
+            let (utxo_id, tx_pointer) = match input {
+                fuel_core_types::fuel_tx::Input::CoinSigned(CoinSigned {
+                    utxo_id,
+                    tx_pointer,
+                    ..
+                })
+                | fuel_core_types::fuel_tx::Input::CoinPredicate(CoinPredicate {
+                    utxo_id,
+                    tx_pointer,
+                    ..
+                }) => (utxo_id, tx_pointer),
+                _ => continue,
+            };
+            if let Some(creator_index) = created_in_block.get(utxo_id) {
+                *tx_pointer = TxPointer::new(block_height, *creator_index);
+            } else if let Some(pointer) = db_coin_pointers.get(utxo_id) {
+                *tx_pointer = *pointer;
+            } else if let Some(coin) = view.storage::<Coins>().get(utxo_id)? {
+                *tx_pointer = *coin.tx_pointer();
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Convert a [`Duration`] into `u64` nanoseconds, saturating (durations that
