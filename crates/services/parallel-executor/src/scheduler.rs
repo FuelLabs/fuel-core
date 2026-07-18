@@ -408,6 +408,25 @@ pub(crate) struct PreparedBatch {
     pub number_of_transactions: u32,
 }
 
+/// A source batch prepared for dispatch: the checked/derived [`PreparedBatch`]
+/// plus the metadata that travels with it to the dispatch site.
+struct ReadyBatch {
+    batch: PreparedBatch,
+    anchor_contract_ids: Vec<ContractId>,
+    feedback_handle: Option<BatchFeedbackHandle>,
+    /// This batch's share of the round's ask+prepare cost (the shared cost is
+    /// split evenly across the round's batches).
+    prepare_duration: Duration,
+}
+
+/// The outcome of one ask round: the prepared batches (guaranteed non-empty)
+/// and whether the source's answer covered all requested workers (see
+/// [`crate::ports::TransactionSourceExecutableTransactions::answered_all_workers`]).
+struct ReadyBatches {
+    batches: Vec<ReadyBatch>,
+    answered_all_workers: bool,
+}
+
 #[derive(Clone)]
 struct WorkerCounters {
     current: Arc<AtomicU32>,
@@ -560,110 +579,138 @@ where
             };
 
             if self.is_worker_idling() {
-                // If we requested transactions, we shouldn't drop them,
-                // so we await them here.
-                let batch_prepare_start = Instant::now();
+                // ONE ask per dispatch round: request batches for ALL currently
+                // free workers in a single call, then dispatch every returned
+                // batch to its own worker exactly as received (the lane
+                // scheduler's proposals are conflict-free by construction and
+                // must not be re-packed). The classic (non-lane) txpool path
+                // still answers with a single batch per ask, keeping its
+                // historical ask cadence.
                 let selection_worker_count = self.selection_worker_count();
-                let (mut batch, anchor_contract_ids, feedback_handle) = self
-                    .ask_new_transactions_batch(
+                let free_worker_count = self.worker_pool.available_workers();
+                let ready_batches = self
+                    .ask_new_transaction_batches(
                         tx_source,
                         now,
                         initial_gas_per_worker,
                         selection_worker_count,
+                        free_worker_count,
                     )
                     .await?;
-                let batch_prepare_duration = batch_prepare_start.elapsed();
-                tracing::warn!(
-                    "new batch id {:?} prepared at: {:?}",
-                    nb_batch_created,
-                    instant.elapsed()
-                );
 
-                let blob_transactions = core::mem::take(&mut batch.blob_transactions);
-                self.blob_transactions.extend(blob_transactions.into_iter());
-                self.blob_gas = self.blob_gas.saturating_add(batch.blob_gas);
-
-                if batch.transactions.is_empty() {
+                let Some(ready_batches) = ready_batches else {
                     self.state = SchedulerState::NoTransactionsForPickup;
                     tracing::warn!(
                         "No transactions to execute, waiting for new transactions or workers to finish"
                     );
                     continue 'outer;
-                }
+                };
+                let returned_batches = ready_batches.batches.len();
 
-                let batch_len = batch.number_of_transactions;
-                if self.config.metrics {
-                    if let Some(batch_tx_counts) = non_empty_batch_tx_counts.as_mut() {
-                        batch_tx_counts.push(batch_len);
+                for ready in ready_batches.batches {
+                    // The source must never return more batches than the free
+                    // workers the ask covered: extracted transactions cannot be
+                    // handed back, so failing loudly beats dropping them.
+                    if self.worker_pool.is_empty() {
+                        return Err(SchedulerError::InternalError(
+                            "Transaction source returned more batches than free workers"
+                                .to_string(),
+                        ));
                     }
-                    if let Some(batch_allocated_gas) =
-                        non_empty_batch_allocated_gas.as_mut()
-                    {
-                        batch_allocated_gas.push(batch.gas);
-                    }
-                    if let Some(batch_used_gas) = non_empty_batch_used_gas.as_mut() {
-                        batch_used_gas.push(0);
-                    }
-                    if let Some(batch_anchors) = non_empty_batch_anchors.as_mut() {
-                        batch_anchors.push(anchor_contract_ids);
-                    }
-                    parallel_executor_metrics::record_batch_prepare(
-                        batch_prepare_duration,
-                        batch_len,
-                        batch.gas,
+                    let ReadyBatch {
+                        batch,
+                        anchor_contract_ids,
+                        feedback_handle,
+                        prepare_duration,
+                    } = ready;
+                    tracing::warn!(
+                        "new batch id {:?} prepared at: {:?}",
+                        nb_batch_created,
+                        instant.elapsed()
                     );
-                    // `batch_prepare_duration` includes the txpool ask; the
-                    // `prepare` phase subtracts `pool_ask` at emit time so the two
-                    // do not double-count in the block summary.
-                    self.time_accounting.prepare = self
-                        .time_accounting
-                        .prepare
-                        .saturating_add(batch_prepare_duration);
-                    if self.time_accounting.first_dispatch.is_none() {
-                        self.time_accounting.first_dispatch = Some(instant.elapsed());
+                    let batch_len = batch.number_of_transactions;
+                    if self.config.metrics {
+                        if let Some(batch_tx_counts) = non_empty_batch_tx_counts.as_mut()
+                        {
+                            batch_tx_counts.push(batch_len);
+                        }
+                        if let Some(batch_allocated_gas) =
+                            non_empty_batch_allocated_gas.as_mut()
+                        {
+                            batch_allocated_gas.push(batch.gas);
+                        }
+                        if let Some(batch_used_gas) = non_empty_batch_used_gas.as_mut() {
+                            batch_used_gas.push(0);
+                        }
+                        if let Some(batch_anchors) = non_empty_batch_anchors.as_mut() {
+                            batch_anchors.push(anchor_contract_ids);
+                        }
+                        parallel_executor_metrics::record_batch_prepare(
+                            prepare_duration,
+                            batch_len,
+                            batch.gas,
+                        );
+                        if self.time_accounting.first_dispatch.is_none() {
+                            self.time_accounting.first_dispatch = Some(instant.elapsed());
+                        }
+                        if let Some(batch_preparations) = self.batch_preparations.as_mut()
+                        {
+                            batch_preparations.insert(
+                                nb_batch_created,
+                                BatchPreparationStats {
+                                    duration: prepare_duration,
+                                    tx_count: batch_len,
+                                    gas: batch.gas,
+                                },
+                            );
+                        }
+                        total_gas = total_gas.saturating_add(batch.gas);
                     }
-                    if let Some(batch_preparations) = self.batch_preparations.as_mut() {
-                        batch_preparations.insert(
+
+                    // Hold the producer feedback handle (if any) until this
+                    // batch's execution result is registered, so its measured
+                    // timings can be reported back. `feedback_handle` is `None`
+                    // (and this map stays empty) unless the txpool lane
+                    // scheduler is enabled. A batch that never reaches
+                    // completion simply drops its handle (silent-safe by
+                    // design).
+                    if let Some(handle) = feedback_handle {
+                        self.batch_feedback.insert(
                             nb_batch_created,
-                            BatchPreparationStats {
-                                duration: batch_prepare_duration,
-                                tx_count: batch_len,
-                                gas: batch.gas,
+                            PendingBatchFeedback {
+                                handle,
+                                overhead: prepare_duration,
                             },
                         );
                     }
-                    total_gas = total_gas.saturating_add(batch.gas);
-                }
 
-                // Hold the producer feedback handle (if any) until this batch's
-                // execution result is registered, so its measured timings can be
-                // reported back. `feedback_handle` is `None` (and this map stays
-                // empty) unless the txpool lane scheduler is enabled. A batch
-                // that never reaches completion simply drops its handle
-                // (silent-safe by design).
-                if let Some(handle) = feedback_handle {
-                    self.batch_feedback.insert(
+                    self.execute_batch(
+                        batch,
                         nb_batch_created,
-                        PendingBatchFeedback {
-                            handle,
-                            overhead: batch_prepare_duration,
-                        },
-                    );
+                        nb_transactions,
+                        storage_with_da.clone(),
+                    )?;
+
+                    nb_batch_created = nb_batch_created.saturating_add(1);
+                    nb_transactions = nb_transactions.checked_add(batch_len).ok_or(
+                        SchedulerError::InternalError(
+                            "Transaction count overflow".to_string(),
+                        ),
+                    )?;
                 }
 
-                self.execute_batch(
-                    batch,
-                    nb_batch_created,
-                    nb_transactions,
-                    storage_with_da.clone(),
-                )?;
-
-                nb_batch_created = nb_batch_created.saturating_add(1);
-                nb_transactions = nb_transactions.checked_add(batch_len).ok_or(
-                    SchedulerError::InternalError(
-                        "Transaction count overflow".to_string(),
-                    ),
-                )?;
+                // The lane-scheduler path answers the WHOLE ask at once: fewer
+                // batches than requested workers means nothing more is
+                // schedulable right now, so wait for a state change (a batch
+                // completion or a new-transaction notification) instead of
+                // immediately re-asking for the leftover workers. The classic
+                // path (`answered_all_workers == false`) keeps its historical
+                // behavior of asking again for the remaining workers.
+                if ready_batches.answered_all_workers
+                    && returned_batches < free_worker_count
+                {
+                    self.state = SchedulerState::NoTransactionsForPickup;
+                }
             } else if self.current_execution_tasks.is_empty() {
                 let waiting = Instant::now();
                 tokio::select! {
@@ -989,16 +1036,21 @@ where
             && self.state == SchedulerState::TransactionsReadyForPickup
     }
 
-    async fn ask_new_transactions_batch<TxSource>(
+    /// One ask covering `free_worker_count` workers: fetch the source's next
+    /// executable batches, prepare each one (tx checking / metadata derivation
+    /// — NO re-packing: batches execute exactly as received), account the
+    /// blob transactions, and charge the block budgets.
+    ///
+    /// Returns `None` when the source yielded no executable (non-blob)
+    /// transactions at all, otherwise the prepared batches ready for dispatch.
+    async fn ask_new_transaction_batches<TxSource>(
         &mut self,
         tx_source: &TxSource,
         start_execution_time: Instant,
         initial_gas_per_core: u64,
         selection_worker_count: usize,
-    ) -> Result<
-        (PreparedBatch, Vec<ContractId>, Option<BatchFeedbackHandle>),
-        SchedulerError,
-    >
+        free_worker_count: usize,
+    ) -> Result<Option<ReadyBatches>, SchedulerError>
     where
         TxSource: TransactionsSource,
     {
@@ -1024,16 +1076,22 @@ where
         .map_err(|_| {
             SchedulerError::InternalError("Current gas overflowed u64".to_string())
         })?;
+        // The block's total remaining declared-gas budget across all workers:
+        // the source must keep the CUMULATIVE gas of the returned batches under
+        // it (per-worker `current_gas` budgets alone may sum above it).
+        let total_gas_limit = self.gas_left.saturating_sub(self.blob_gas);
 
         // Time the txpool ask (how long the scheduler blocks waiting for the pool
-        // to hand back a batch) — one of the "where does time go" signals.
+        // to hand back the batches) — one of the "where does time go" signals.
         let pool_ask_start = Instant::now();
         let executable_transactions = tx_source
             .get_executable_transactions(
                 current_gas,
+                total_gas_limit,
                 self.tx_left,
                 self.tx_size_left,
                 selection_worker_count,
+                free_worker_count,
                 Filter {
                     excluded_contract_ids: std::mem::take(
                         &mut self.current_executing_contracts,
@@ -1052,30 +1110,90 @@ where
                 .time_accounting
                 .pool_ask
                 .saturating_add(pool_ask_start.elapsed());
-            let returned_txs = executable_transactions.transactions.len();
-            let returned_batches = usize::from(returned_txs > 0);
-            parallel_executor_metrics::record_pool_ask(returned_batches, returned_txs);
+            let returned_txs = executable_transactions
+                .batches
+                .iter()
+                .map(|batch| batch.transactions.len())
+                .sum::<usize>();
+            parallel_executor_metrics::record_pool_ask(
+                executable_transactions.batches.len(),
+                returned_txs,
+            );
         }
         self.current_executing_contracts =
             executable_transactions.filter.excluded_contract_ids;
-        let anchor_contract_ids = executable_transactions.anchor_contract_ids;
-        let feedback_handle = executable_transactions.feedback_handle;
+        let answered_all_workers = executable_transactions.answered_all_workers;
 
-        let prepared_batch = prepare_transactions_batch(
-            &self.consensus_parameters,
-            executable_transactions.transactions,
-        )?;
-        self.update_constraints(
-            prepared_batch.number_of_transactions,
-            prepared_batch.total_size,
-            prepared_batch.gas,
-        )?;
+        let mut batches = Vec::with_capacity(executable_transactions.batches.len());
+        for source_batch in executable_transactions.batches {
+            let prepared_batch = prepare_transactions_batch(
+                &self.consensus_parameters,
+                source_batch.transactions,
+            )?;
+            self.update_constraints(
+                prepared_batch.number_of_transactions,
+                prepared_batch.total_size,
+                prepared_batch.gas,
+            )?;
+            let mut prepared_batch = prepared_batch;
+            let blob_transactions =
+                core::mem::take(&mut prepared_batch.blob_transactions);
+            self.blob_transactions.extend(blob_transactions.into_iter());
+            self.blob_gas = self.blob_gas.saturating_add(prepared_batch.blob_gas);
+            if prepared_batch.transactions.is_empty() {
+                // Blob-only (or empty) batch: nothing to dispatch onto a worker.
+                // Its feedback handle (if any) is dropped, which the producer
+                // tolerates by design.
+                continue;
+            }
+            batches.push(ReadyBatch {
+                batch: prepared_batch,
+                anchor_contract_ids: source_batch.anchor_contract_ids,
+                feedback_handle: source_batch.feedback_handle,
+                // Placeholder; the shared preparation cost is split evenly over
+                // the returned batches right below.
+                prepare_duration: Duration::default(),
+            });
+        }
+
+        // Split the shared ask+prepare cost of this round evenly across its
+        // batches: it is the per-batch parallelization overhead the producer's
+        // feedback loop consumes, and per-ask fixed protocol cost is exactly
+        // what the multi-batch protocol amortizes.
+        let prepare_total = instant.elapsed();
+        let batch_count = batches.len();
+        if batch_count > 0 {
+            let share = prepare_total
+                .checked_div(batch_count as u32)
+                .unwrap_or_default();
+            for ready in batches.iter_mut() {
+                ready.prepare_duration = share;
+            }
+            if self.config.metrics {
+                // `prepare_total` includes the txpool ask; the `prepare` phase
+                // subtracts `pool_ask` at emit time so the two do not
+                // double-count in the block summary.
+                self.time_accounting.prepare =
+                    self.time_accounting.prepare.saturating_add(prepare_total);
+            }
+        }
         tracing::warn!(
-            "new batch prepared in: {:?}, for {:?} txs",
+            "new batches prepared in: {:?}, {:?} batches, for {:?} txs",
             instant.elapsed(),
-            prepared_batch.number_of_transactions
+            batch_count,
+            batches
+                .iter()
+                .map(|b| b.batch.number_of_transactions)
+                .sum::<u32>(),
         );
-        Ok((prepared_batch, anchor_contract_ids, feedback_handle))
+        if batch_count == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(ReadyBatches {
+                batches,
+                answered_all_workers,
+            }))
+        }
     }
 
     fn selection_worker_count(&self) -> usize {

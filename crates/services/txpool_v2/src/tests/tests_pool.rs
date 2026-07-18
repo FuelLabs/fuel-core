@@ -349,16 +349,21 @@ fn extract_transactions_for_block__revisits_deferred_complex_txs_in_same_block()
     let complex_ab_2 = universe.verify_and_insert(complex_ab_2).unwrap();
 
     let pool = universe.get_pool();
-    let (selected, _, _) =
-        pool.write()
-            .extract_transactions_for_block_with_anchors(&Constraints {
-                minimal_gas_price: 0,
-                max_gas: u64::MAX,
-                maximum_txs: 10,
-                maximum_block_size: u64::MAX,
-                excluded_contracts: HashSet::new(),
-                execution_worker_count: 13,
-            });
+    let selected: Vec<_> = pool
+        .write()
+        .extract_transactions_for_block_with_anchors(&Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            total_gas: u64::MAX,
+            maximum_txs: 10,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: HashSet::new(),
+            execution_worker_count: 13,
+            free_worker_count: 13,
+        })
+        .into_iter()
+        .flat_map(|batch| batch.txs)
+        .collect();
 
     let selected_ids = selected.iter().map(|tx| tx.id()).collect::<HashSet<_>>();
     let expected_ids = [
@@ -732,10 +737,12 @@ fn get_sorted_out_tx1_2_3() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
+            total_gas: u64::MAX,
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -791,10 +798,12 @@ fn get_sorted_out_tx_same_tips() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
+            total_gas: u64::MAX,
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -850,10 +859,12 @@ fn get_sorted_out_zero_tip() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
+            total_gas: u64::MAX,
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -909,10 +920,12 @@ fn get_sorted_out_tx_profitable_ratios() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
+            total_gas: u64::MAX,
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -950,10 +963,12 @@ fn get_sorted_out_tx_by_creation_instant() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
+            total_gas: u64::MAX,
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: Default::default(),
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -1391,10 +1406,12 @@ fn verify_and_insert__when_dependent_tx_is_extracted_new_tx_still_accepted() {
                 .extract_transactions_for_block(&Constraints {
                     minimal_gas_price: 0,
                     max_gas: u64::MAX,
+                    total_gas: u64::MAX,
                     maximum_txs: u32::MAX,
                     maximum_block_size: u64::MAX,
                     excluded_contracts: Default::default(),
                     execution_worker_count: 1,
+                    free_worker_count: 1,
                 });
         assert_eq!(txs.len(), 1);
         assert_eq!(pool_dependency_tx.id(), txs[0].id());
@@ -1602,10 +1619,12 @@ fn extract__tx_with_excluded_contract() {
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
+            total_gas: u64::MAX,
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts,
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
 
     // Then
@@ -1767,10 +1786,12 @@ fn extract_one_batch(
         .extract_transactions_for_block(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
+            total_gas: u64::MAX,
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: excluded,
             execution_worker_count: 1,
+            free_worker_count: 1,
         })
 }
 
@@ -1783,17 +1804,25 @@ fn extract_one_batch_with_id(
     Vec<fuel_core_types::services::txpool::ArcPoolTx>,
     Option<crate::lane_integration::BatchId>,
 ) {
-    let (txs, _anchors, batch_id) = universe
+    let batches = universe
         .get_pool()
         .write()
         .extract_transactions_for_block_with_anchors(&Constraints {
             minimal_gas_price: 0,
             max_gas: u64::MAX,
+            total_gas: u64::MAX,
             maximum_txs: u32::MAX,
             maximum_block_size: u64::MAX,
             excluded_contracts: excluded,
             execution_worker_count: 1,
+            free_worker_count: 1,
         });
+    let mut txs = Vec::new();
+    let mut batch_id = None;
+    for batch in batches {
+        batch_id = batch.batch_id.or(batch_id);
+        txs.extend(batch.txs);
+    }
     (txs, batch_id)
 }
 
@@ -2076,6 +2105,177 @@ fn lane_scheduler__excluded_contract_writer_is_not_selected() {
             "no selected tx may write the excluded contract"
         );
     }
+}
+
+/// Extract with an explicit worker count and total-gas budget, returning the
+/// raw batches (multi-batch lane protocol).
+fn extract_batches(
+    universe: &TestPoolUniverse,
+    excluded: HashSet<ContractId>,
+    free_worker_count: usize,
+    total_gas: u64,
+) -> Vec<crate::pool::ExtractedBatch> {
+    universe
+        .get_pool()
+        .write()
+        .extract_transactions_for_block_with_anchors(&Constraints {
+            minimal_gas_price: 0,
+            max_gas: u64::MAX,
+            total_gas,
+            maximum_txs: u32::MAX,
+            maximum_block_size: u64::MAX,
+            excluded_contracts: excluded,
+            execution_worker_count: free_worker_count,
+            free_worker_count,
+        })
+}
+
+#[test]
+fn lane_scheduler__one_ask_answers_all_free_workers_with_disjoint_batches() {
+    // One ask covering two free workers is answered with two conflict-free
+    // batches (one per worker), each with its own batch id — the complete
+    // worker assignment for the dispatch round.
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    let contract_a = ContractId::from([1u8; 32]);
+    let contract_b = ContractId::from([2u8; 32]);
+    {
+        let db = universe.database();
+        let mut data = db.data.lock().unwrap();
+        data.contracts.insert(contract_a, Contract::default());
+        data.contracts.insert(contract_b, Contract::default());
+    }
+
+    let writes_a = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_a,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_b = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_b,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_a = universe.verify_and_insert(writes_a).unwrap();
+    let writes_b = universe.verify_and_insert(writes_b).unwrap();
+
+    let batches = extract_batches(&universe, HashSet::new(), 2, u64::MAX);
+
+    assert_eq!(
+        batches.len(),
+        2,
+        "two disjoint writers over two free workers must yield two batches"
+    );
+    let ids_per_batch: Vec<HashSet<_>> = batches
+        .iter()
+        .map(|batch| batch.txs.iter().map(|tx| tx.id()).collect())
+        .collect();
+    let all_ids: HashSet<_> = ids_per_batch.iter().flatten().copied().collect();
+    assert_eq!(all_ids, HashSet::from([writes_a.id(), writes_b.id()]));
+    assert_ne!(
+        batches[0].batch_id, batches[1].batch_id,
+        "each batch carries its own scheduler-assigned id"
+    );
+    assert!(batches.iter().all(|batch| batch.batch_id.is_some()));
+    // Conflict-free by construction: no contract appears in both batches.
+    let contracts_a: HashSet<_> = batches[0].contracts.iter().copied().collect();
+    let contracts_b: HashSet<_> = batches[1].contracts.iter().copied().collect();
+    assert!(contracts_a.is_disjoint(&contracts_b));
+    universe.assert_pool_integrity(&[]);
+}
+
+#[test]
+fn lane_scheduler__cumulative_total_gas_caps_extraction_across_batches() {
+    // The block's remaining `total_gas` bounds the CUMULATIVE extraction across
+    // all batches of one ask, even when each per-worker budget alone would
+    // admit more.
+    let mut universe = TestPoolUniverse::default().config(lane_config());
+    universe.build_pool();
+
+    let contract_a = ContractId::from([1u8; 32]);
+    let contract_b = ContractId::from([2u8; 32]);
+    {
+        let db = universe.database();
+        let mut data = db.data.lock().unwrap();
+        data.contracts.insert(contract_a, Contract::default());
+        data.contracts.insert(contract_b, Contract::default());
+    }
+
+    let writes_a = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_a,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_b = universe.build_script_transaction(
+        Some(vec![create_contract_input(
+            Default::default(),
+            0,
+            contract_b,
+        )]),
+        Some(vec![Output::contract(
+            0,
+            Default::default(),
+            Default::default(),
+        )]),
+        10,
+    );
+    let writes_a = universe.verify_and_insert(writes_a).unwrap();
+    let writes_b = universe.verify_and_insert(writes_b).unwrap();
+    // Both txs have the same declared gas; a budget of exactly one tx's gas
+    // admits the first and must stop before the second.
+    let single_tx_gas = writes_a.max_gas();
+
+    let batches = extract_batches(&universe, HashSet::new(), 2, single_tx_gas);
+
+    let extracted: Vec<_> = batches
+        .iter()
+        .flat_map(|batch| batch.txs.iter().map(|tx| tx.id()))
+        .collect();
+    assert_eq!(
+        extracted.len(),
+        1,
+        "cumulative total_gas admits exactly one of the two transactions"
+    );
+
+    // The withheld transaction stays pooled and is answered on the next ask.
+    let remaining = if extracted[0] == writes_a.id() {
+        writes_b.clone()
+    } else {
+        writes_a.clone()
+    };
+    universe.assert_pool_integrity(std::slice::from_ref(&remaining));
+    let batches = extract_batches(&universe, HashSet::new(), 2, u64::MAX);
+    let extracted: Vec<_> = batches
+        .iter()
+        .flat_map(|batch| batch.txs.iter().map(|tx| tx.id()))
+        .collect();
+    assert_eq!(extracted, vec![remaining.id()]);
+    universe.assert_pool_integrity(&[]);
 }
 
 // NOTE (finding): reader-sharing is NOT reachable through a valid fuel

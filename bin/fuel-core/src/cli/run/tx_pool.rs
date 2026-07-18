@@ -90,11 +90,20 @@ pub struct TxPoolArgs {
     #[clap(long = "tx-pending-pool-size-percentage", default_value = "50", env)]
     pub tx_pending_pool_size_percentage: u16,
 
-    /// Enable the experimental event-driven lane scheduler (`rw-lanes-fast`) for
-    /// block transaction selection. When disabled (the default) the classic
-    /// `ratio_tip_gas` selection runs unchanged.
-    #[clap(long = "lane-scheduler", default_value = "false", env)]
-    pub lane_scheduler: bool,
+    /// Enable the event-driven lane scheduler (`rw-lanes-fast`) for block
+    /// transaction selection. When unset it follows the executor mode: ON with
+    /// `--executor-mode parallel` (the lane scheduler is the parallel
+    /// executor's selection path), OFF otherwise (the classic `ratio_tip_gas`
+    /// selection runs unchanged). Pass `--lane-scheduler false` to force the
+    /// classic selection even with the parallel executor.
+    #[clap(
+        long = "lane-scheduler",
+        env,
+        num_args = 0..=1,
+        default_missing_value = "true",
+        action = clap::ArgAction::Set
+    )]
+    pub lane_scheduler: Option<bool>,
 }
 
 #[cfg(test)]

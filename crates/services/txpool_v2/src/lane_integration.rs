@@ -238,26 +238,40 @@ impl LaneSchedulerState {
         self.pending_feedback.push(feedback);
     }
 
-    /// Answer a single-worker batch request built from the executor
-    /// constraints, draining any buffered feedback onto it. Returns the ordered
-    /// proposal (tx ids) for the one worker slot, if any.
+    /// Answer one executor "ask" covering ALL the executor's currently-free
+    /// workers, draining any buffered feedback onto the request. Returns up to
+    /// one ordered [`BatchProposal`] per worker slot — the scheduler's complete
+    /// worker assignment for this dispatch round (this is the batching the
+    /// executor executes as-is, without re-packing).
     ///
-    /// The pool maps one executor "ask" to one worker budget: the current
-    /// executor asks once per idle worker, so a single [`WorkerBudget`] per call
-    /// matches the live protocol. `size` / `tx_count` bound the proposal too.
-    pub fn next_single_batch(
+    /// * `worker_count` — number of free worker slots (one [`WorkerBudget`]
+    ///   each).
+    /// * `gas_per_worker` — the executor-computed per-worker DECLARED-gas
+    ///   budget (ground truth for each slot).
+    /// * `total_gas` — the block's total remaining DECLARED-gas budget across
+    ///   all workers; basis for the scheduler's admission cap. The CALLER
+    ///   additionally enforces it cumulatively at extraction time (the
+    ///   scheduler's per-worker budgets alone may sum above it).
+    /// * `max_txs` / `max_block_size` — remaining block-level tx-count/byte
+    ///   budgets; per-worker bounds here, enforced cumulatively by the caller.
+    pub fn next_batches(
         &mut self,
-        max_gas: u64,
+        worker_count: usize,
+        gas_per_worker: u64,
+        total_gas: u64,
         max_txs: u64,
         max_block_size: u64,
         excluded: &HashSet<ContractId>,
-    ) -> Option<BatchProposal<TxId>> {
+    ) -> Vec<BatchProposal<TxId>> {
         let request = BatchRequest {
-            workers: vec![WorkerBudget {
-                gas: max_gas,
-                size: max_block_size,
-                tx_count: max_txs,
-            }],
+            workers: vec![
+                WorkerBudget {
+                    gas: gas_per_worker,
+                    size: max_block_size,
+                    tx_count: max_txs,
+                };
+                worker_count
+            ],
             executing_contracts: executing_contracts_from_excluded(excluded),
             feedback: std::mem::take(&mut self.pending_feedback),
             // Always `Some` to force the exact windowed path (the fast path is a
@@ -266,13 +280,13 @@ impl LaneSchedulerState {
             // `block_gas_remaining` also selects the exact path.
             window: Some(WindowContext {
                 now: 0,
-                block_gas_remaining: max_gas,
-                window_fit_gas: max_gas,
+                block_gas_remaining: total_gas,
+                window_fit_gas: gas_per_worker,
                 deadline: None,
                 block_start: 0,
             }),
         };
-        self.scheduler.next_batches(&request).into_iter().next()
+        self.scheduler.next_batches(&request)
     }
 
     #[cfg(test)]

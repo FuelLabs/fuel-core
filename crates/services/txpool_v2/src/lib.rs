@@ -67,7 +67,10 @@ use fuel_core_types::fuel_asm::Word;
 /// The lane-scheduler batch identifier, surfaced so the executor can round-trip
 /// batch-completion feedback (see [`SharedState::report_lane_scheduler_feedback`]).
 pub use lane_integration::BatchId;
-pub use pool::TxPoolStats;
+pub use pool::{
+    ExtractedBatch,
+    TxPoolStats,
+};
 pub use selection_algorithms::Constraints;
 pub use service::{
     Service,

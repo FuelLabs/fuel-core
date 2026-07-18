@@ -5,11 +5,9 @@ use crate::{
         Error,
         InsertionErrorType,
     },
-    lane_integration::{
-        BatchFeedback,
-        BatchId,
-    },
+    lane_integration::BatchFeedback,
     pending_pool::PendingPool,
+    pool::ExtractedBatch,
     ports::{
         TxPoolPersistentStorage,
         TxStatusManager as TxStatusManagerTrait,
@@ -62,7 +60,15 @@ use tokio::{
 };
 
 const MAX_PENDING_READ_POOL_REQUESTS: usize = 10_000;
-const MAX_PENDING_INSERT_POOL_REQUESTS: usize = 1_000;
+/// Upper bound on how many queued inserts one worker-loop iteration drains.
+/// Deliberately small: the `tokio::select!` below is `biased` with extraction
+/// polled before inserts, so a block-production extraction waits for AT MOST
+/// one in-flight insert drain. With the previous bound of 1_000 a single drain
+/// could hold the worker for tens of milliseconds under sustained insert load,
+/// and that queueing (not compute) was a measured ~30% of extraction latency.
+/// 128 keeps insert throughput (the channel buffers the rest) while bounding
+/// the extraction's worst-case wait.
+const MAX_PENDING_INSERT_POOL_REQUESTS: usize = 128;
 const MAX_PENDING_REMOVE_POOL_REQUESTS: usize = 1_000;
 
 const SIZE_EXTRACT_BLOCK_TRANSACTIONS_CHANNEL: usize = 100_000;
@@ -214,12 +220,7 @@ pub(super) enum PoolInsertRequest {
 pub(super) enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
-        transactions: oneshot::Sender<(
-            Vec<ArcPoolTx>,
-            HashSet<ContractId>,
-            Vec<ContractId>,
-            Option<BatchId>,
-        )>,
+        transactions: oneshot::Sender<(Vec<ExtractedBatch>, HashSet<ContractId>)>,
     },
 }
 
@@ -524,17 +525,14 @@ where
     fn extract_block_transactions(
         &mut self,
         constraints: Constraints,
-        blocks: oneshot::Sender<(
-            Vec<ArcPoolTx>,
-            HashSet<ContractId>,
-            Vec<ContractId>,
-            Option<BatchId>,
-        )>,
+        blocks: oneshot::Sender<(Vec<ExtractedBatch>, HashSet<ContractId>)>,
     ) {
         tracing::warn!(
             max_gas = constraints.max_gas,
+            total_gas = constraints.total_gas,
             max_txs = constraints.maximum_txs,
             max_block_size = constraints.maximum_block_size,
+            workers = constraints.execution_worker_count,
             excluded_contracts = constraints.excluded_contracts.len(),
             tx_count = self.pool.tx_count(),
             executable_count = self
@@ -543,21 +541,16 @@ where
                 .number_of_executable_transactions(),
             "txpool_v2 extract_block_transactions start"
         );
-        let (txs, selected_anchors, batch_id) = self
+        let batches = self
             .pool
             .extract_transactions_for_block_with_anchors(&constraints);
         tracing::warn!(
-            result_size = txs.len(),
-            selected_anchor_count = selected_anchors.len(),
+            batch_count = batches.len(),
+            result_size = batches.iter().map(|b| b.txs.len()).sum::<usize>(),
             "txpool_v2 extract_block_transactions result"
         );
         if blocks
-            .send((
-                txs,
-                constraints.excluded_contracts,
-                selected_anchors,
-                batch_id,
-            ))
+            .send((batches, constraints.excluded_contracts))
             .is_err()
         {
             tracing::error!("Failed to send block transactions");

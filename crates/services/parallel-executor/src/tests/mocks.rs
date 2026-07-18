@@ -180,9 +180,11 @@ impl TransactionsSource for MockTransactionsSource {
     async fn get_executable_transactions(
         &self,
         gas_limit: u64,
+        _total_gas_limit: u64,
         tx_count_limit: u32,
         _block_transaction_size_limit: u64,
         selection_worker_count: usize,
+        _free_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
         let mut response_queue = self.response_queue.lock().expect("Mutex poisoned");
@@ -225,20 +227,31 @@ impl TransactionsSource for MockTransactionsSource {
                 }
                 _ => None,
             };
+            // The mock mirrors the CLASSIC txpool path: one batch per ask (an
+            // empty response is zero batches) and `answered_all_workers:
+            // false`, so the scheduler keeps the historical one-ask-per-worker
+            // cadence the tests are written against.
+            let batches = if response.transactions.is_empty() {
+                vec![]
+            } else {
+                vec![crate::ports::ExecutableBatch {
+                    transactions: response.transactions,
+                    anchor_contract_ids: vec![],
+                    feedback_handle,
+                }]
+            };
             Ok(TransactionSourceExecutableTransactions {
-                transactions: response.transactions,
-                anchor_contract_ids: vec![],
+                batches,
                 filtered: response.filtered,
                 filter: response.filter.unwrap_or(filter),
-                feedback_handle,
+                answered_all_workers: false,
             })
         } else {
             Ok(TransactionSourceExecutableTransactions {
-                transactions: vec![],
-                anchor_contract_ids: vec![],
+                batches: vec![],
                 filtered: TransactionFiltered::NotFiltered,
                 filter,
-                feedback_handle: None,
+                answered_all_workers: false,
             })
         }
     }
