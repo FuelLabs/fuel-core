@@ -628,7 +628,8 @@ fn print_executor_metrics() {
                 && line.starts_with("parallel_executor_")
                 && (line.contains("non_empty_batches")
                     || line.contains("total_gas_used")
-                    || line.contains("batch_total_ms"))
+                    || line.contains("batch_total_ms")
+                    || line.contains("pool_ask"))
         }) {
             if !any {
                 println!("\nparallel-executor metrics (cumulative):");

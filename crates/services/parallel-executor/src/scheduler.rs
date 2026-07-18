@@ -1052,6 +1052,9 @@ where
                 .time_accounting
                 .pool_ask
                 .saturating_add(pool_ask_start.elapsed());
+            let returned_txs = executable_transactions.transactions.len();
+            let returned_batches = usize::from(returned_txs > 0);
+            parallel_executor_metrics::record_pool_ask(returned_batches, returned_txs);
         }
         self.current_executing_contracts =
             executable_transactions.filter.excluded_contract_ids;
