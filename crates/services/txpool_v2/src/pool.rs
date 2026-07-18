@@ -942,6 +942,9 @@ where
             )
         };
         let scheduler_elapsed = ask_start.elapsed();
+        // Fine-grained per-tx timers only when metrics are on: two clock reads
+        // per extracted tx are measurable at thousands of txs per ask.
+        let fine_timing = self.config.metrics;
         let mut removal_elapsed = std::time::Duration::ZERO;
         let mut caches_elapsed = std::time::Duration::ZERO;
 
@@ -982,12 +985,14 @@ where
                     budget_exhausted = true;
                     break;
                 }
-                let removal_start = Instant::now();
+                let removal_start = fine_timing.then(Instant::now);
                 let Some(storage_entry) = self.storage.remove_transaction(storage_id)
                 else {
                     continue;
                 };
-                removal_elapsed += removal_start.elapsed();
+                if let Some(start) = removal_start {
+                    removal_elapsed += start.elapsed();
+                }
                 gas_left = gas_left.saturating_sub(tx_gas);
                 size_left = size_left.saturating_sub(tx_size);
                 txs_left = txs_left.saturating_sub(1);
@@ -1000,7 +1005,7 @@ where
                         contracts_used.push(contract);
                     }
                 }
-                let caches_start = Instant::now();
+                let caches_start = fine_timing.then(Instant::now);
                 self.extracted_outputs
                     .new_extracted_transaction(&storage_entry.transaction);
                 self.spent_inputs.maybe_spend_inputs(
@@ -1008,7 +1013,9 @@ where
                     storage_entry.transaction.inputs(),
                 );
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
-                caches_elapsed += caches_start.elapsed();
+                if let Some(start) = caches_start {
+                    caches_elapsed += start.elapsed();
+                }
                 taken.push(tx_id);
                 txs.push(storage_entry.transaction);
             }
@@ -1026,24 +1033,25 @@ where
         }
 
         self.update_stats();
-        let total_elapsed = ask_start.elapsed();
-        let extracted: usize = batches.iter().map(|b| b.txs.len()).sum();
-        // Ask-cost breakdown (Green): scheduler = lane next_batches compute;
-        // removal = storage graph removal; caches = extracted-outputs/
-        // spent-inputs/components bookkeeping; other = loop residue +
-        // update_stats. Executor-side pool_ask minus `total_us` = channel +
-        // pool-worker queueing.
-        tracing::info!(
-            target: "txpool_v2::ask_summary",
-            pool_depth,
-            extracted,
-            batch_count = batches.len(),
-            total_us = total_elapsed.as_micros() as u64,
-            scheduler_us = scheduler_elapsed.as_micros() as u64,
-            removal_us = removal_elapsed.as_micros() as u64,
-            caches_us = caches_elapsed.as_micros() as u64,
-            "lane ask breakdown",
-        );
+        // Ask-cost breakdown: in-memory atomic counters only (a per-ask log
+        // line at thousands of asks/block measurably loads the pool worker's
+        // hot path). Scrape the txpool_lane_ask_* counters and diff across a
+        // run; executor-side pool_ask minus total = channel + queueing.
+        let _ = pool_depth;
+        if self.config.metrics {
+            let m = fuel_core_metrics::txpool_metrics::txpool_metrics();
+            let extracted: usize = batches.iter().map(|b| b.txs.len()).sum();
+            m.lane_ask_count.inc();
+            m.lane_ask_total_us
+                .inc_by(ask_start.elapsed().as_micros() as u64);
+            m.lane_ask_scheduler_us
+                .inc_by(scheduler_elapsed.as_micros() as u64);
+            m.lane_ask_removal_us
+                .inc_by(removal_elapsed.as_micros() as u64);
+            m.lane_ask_caches_us
+                .inc_by(caches_elapsed.as_micros() as u64);
+            m.lane_ask_extracted.inc_by(extracted as u64);
+        }
         batches
     }
 
