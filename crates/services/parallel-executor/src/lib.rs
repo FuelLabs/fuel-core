@@ -7,6 +7,7 @@ pub mod executor;
 pub(crate) mod in_memory_transaction_with_contracts;
 pub(crate) mod l1_execution_data;
 pub mod ports;
+pub mod validation_source;
 
 mod memory;
 mod once_transaction_source;

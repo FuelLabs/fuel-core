@@ -4754,6 +4754,7 @@ dependencies = [
  "fuel-core-types 0.48.0",
  "futures",
  "fxhash",
+ "lane-scheduler",
  "parking_lot",
  "rand 0.8.5",
  "tokio",

@@ -6,16 +6,20 @@ use crate::{
         Scheduler,
         SchedulerError,
         SchedulerExecutionResult,
+        fold_changes_in_canonical_order,
     },
     tx_waiter::NoWaitTxs,
+    validation_source::ValidationTransactionsSource,
 };
 use fuel_core_executor::{
     executor::{
         BlockExecutor,
         ExecutionData,
         ExecutionOptions,
+        TransparentPreconfirmationSender,
     },
     ports::{
+        MaybeCheckedTransaction,
         PreconfirmationSenderPort,
         RelayerPort,
     },
@@ -38,9 +42,12 @@ use fuel_core_storage::{
     },
 };
 use fuel_core_types::{
-    blockchain::block::{
-        Block,
-        PartialFuelBlock,
+    blockchain::{
+        block::{
+            Block,
+            PartialFuelBlock,
+        },
+        header::PartialBlockHeader,
     },
     fuel_merkle::binary::root_calculator::MerkleRootCalculator,
     fuel_tx::{
@@ -48,23 +55,48 @@ use fuel_core_types::{
         ConsensusParameters,
         ContractId,
         Transaction,
+        UniqueIdentifier,
+        field::{
+            InputContract,
+            MintGasPrice,
+        },
     },
     fuel_vm::interpreter::MemoryInstance,
     services::{
         Uncommitted,
         block_producer::Components,
         executor::{
+            Error as ExecutorError,
             ExecutionResult,
             Result as ExecutorResult,
+            TransactionExecutionResult,
             TransactionExecutionStatus,
             ValidationResult,
         },
     },
 };
+use std::{
+    collections::HashMap,
+    time::Duration,
+};
 use tokio::{
     runtime::Runtime,
     time::Instant,
 };
+
+/// The wall-clock budget for one parallel block validation. Deliberately
+/// generous: the scheduler's validation mode exits as soon as the block's
+/// transactions are executed (see `Scheduler::with_validation_budget`), so the
+/// deadline only bounds pathological stalls.
+const VALIDATION_DEADLINE: Duration = Duration::from_secs(60);
+
+/// Map a [`SchedulerError`] onto the executor error the validation API returns.
+fn scheduler_error_to_executor_error(error: SchedulerError) -> ExecutorError {
+    match error {
+        SchedulerError::ExecutionError(error) => error,
+        other => ExecutorError::Other(other.to_string()),
+    }
+}
 
 pub struct Executor<S, R, P> {
     config: Config,
@@ -490,11 +522,280 @@ where
         Ok((execution_data, storage_changes, partial_block))
     }
 
-    pub fn validate(
-        &self,
-        _block: &Block,
+    /// Validate a RECEIVED block by re-executing its L2 transactions in
+    /// PARALLEL (conflict-free batches planned by a local lane scheduler) and
+    /// comparing the result against the received block, mirroring the
+    /// sequential executor's `validate_without_commit` semantics: every
+    /// transaction re-executes at its exact block position (unchecked, full
+    /// checks at execution time), the mint executes last on top of the merged
+    /// block state, and the re-generated block must match the received one
+    /// (`check_block_matches`).
+    ///
+    /// # v1 limitations
+    ///
+    /// The following blocks are rejected with a descriptive
+    /// [`ExecutorError::Other`] so the caller can fall back to sequential
+    /// validation:
+    /// * blocks containing any non-`Script` transaction other than the final
+    ///   `Mint` (`Create`/`Upgrade`/`Upload`/`Blob` are unsupported in v1);
+    /// * blocks that advance the DA height (relayer events / forced
+    ///   transactions are unsupported in v1);
+    /// * the genesis block.
+    ///
+    /// # Known v1 gap
+    ///
+    /// `ValidationResult::events` are returned in execution (batch-merge)
+    /// order, which is causally consistent (a coin's creation always precedes
+    /// its consumption) but not necessarily the received block's exact
+    /// transaction order. Per-transaction statuses, receipts and message ids
+    /// ARE in block order.
+    pub async fn validate(
+        &mut self,
+        block: &Block,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
-        unimplemented!("Parallel validation not implemented yet");
+        let view = self.storage.latest_view()?;
+        let structured_storage = StructuredStorage::new(view);
+        let consensus_parameters = structured_storage
+            .storage::<ConsensusParametersVersions>()
+            .get(&block.header().consensus_parameters_version())?
+            .ok_or(ExecutorError::ConsensusParametersNotFound(
+                block.header().consensus_parameters_version(),
+            ))?
+            .into_owned();
+
+        // --- Guard rails (v1) -------------------------------------------------
+        let transactions = block.transactions();
+        // Coinbase info comes from the mint, exactly like the sequential
+        // validator's `get_coinbase_info_from_mint_tx`.
+        let (gas_price, coinbase_contract_id) = match transactions.last() {
+            Some(Transaction::Mint(mint)) => {
+                (*mint.gas_price(), mint.input_contract().contract_id)
+            }
+            _ => return Err(ExecutorError::MintMissing),
+        };
+        let l2_txs = transactions
+            .get(..transactions.len().saturating_sub(1))
+            .unwrap_or(&[]);
+        if let Some(non_script) = l2_txs.iter().find(|tx| !tx.is_script()) {
+            let chain_id = consensus_parameters.chain_id();
+            return Err(ExecutorError::Other(format!(
+                "parallel validation v1 supports only Script transactions \
+                 before the final Mint; transaction {} is not a Script",
+                non_script.id(&chain_id)
+            )));
+        }
+        let block_height = *block.header().height();
+        let prev_height = block_height
+            .pred()
+            .ok_or(ExecutorError::ExecutingGenesisBlock)?;
+        let prev_da_height = structured_storage
+            .storage::<FuelBlocks>()
+            .get(&prev_height)?
+            .ok_or(ExecutorError::PreviousBlockIsNotFound)?
+            .header()
+            .da_height();
+        if prev_da_height != block.header().da_height() {
+            return Err(ExecutorError::Other(format!(
+                "parallel validation v1 does not support blocks advancing the \
+                 DA height (relayer events); previous {} vs block {}",
+                prev_da_height,
+                block.header().da_height()
+            )));
+        }
+        let l2_count = u32::try_from(l2_txs.len())
+            .map_err(|_| ExecutorError::TooManyTransactions)?;
+
+        // --- Parallel re-execution of the L2 transactions ---------------------
+        let transactions_source =
+            ValidationTransactionsSource::new(l2_txs, 0, &consensus_parameters)?;
+        let components = Components {
+            header_to_produce: PartialBlockHeader::from(block.header()),
+            transactions_source,
+            coinbase_recipient: coinbase_contract_id,
+            gas_price,
+        };
+
+        // Same option mapping as production; the preconfirmation sender is the
+        // no-op one — validation must not emit preconfirmations.
+        let executor = BlockExecutor::new(
+            self.relayer.clone(),
+            ExecutionOptions {
+                forbid_unauthorized_inputs: self.config.utxo_validation,
+                forbid_fake_utxo: false,
+                allow_syscall: false,
+            },
+            consensus_parameters.clone(),
+            NoWaitTxs,
+            TransparentPreconfirmationSender,
+            false, // not dry run
+        )?;
+
+        let runtime = self.runtime.as_ref().expect(
+            "Scheduler runtime \
+                is only removed on `drop`",
+        );
+        let deadline =
+            Instant::now()
+                .checked_add(VALIDATION_DEADLINE)
+                .ok_or_else(|| {
+                    ExecutorError::Other("validation deadline overflowed".to_string())
+                })?;
+        let scheduler = Scheduler::new(
+            &components,
+            self.config.clone(),
+            self.storage.clone(),
+            executor.clone(),
+            runtime,
+            self.memory_pool.clone(),
+            consensus_parameters.clone(),
+            deadline,
+        )
+        .map_err(scheduler_error_to_executor_error)?
+        .with_validation_budget(l2_count);
+
+        let scheduler_result = scheduler
+            .run(
+                &components.transactions_source,
+                Changes::default(),
+                ExecutionData::new().into(),
+            )
+            .await
+            .map_err(scheduler_error_to_executor_error)?;
+
+        let SchedulerExecutionResult {
+            header,
+            transactions: executed_transactions,
+            events,
+            // Rebuilt below in block order from the per-transaction receipts
+            // (the scheduler's list is in batch-merge order, and the message
+            // outbox root depends on the order).
+            message_ids: _,
+            skipped_txs,
+            transactions_status,
+            changes,
+            used_gas,
+            used_size,
+            coinbase,
+        } = scheduler_result;
+
+        if !skipped_txs.is_empty() {
+            let skipped = skipped_txs
+                .iter()
+                .map(|(tx_id, error)| format!("{tx_id}: {error}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            return Err(ExecutorError::Other(format!(
+                "parallel validation skipped {} transaction(s): {skipped}",
+                skipped_txs.len()
+            )));
+        }
+        if executed_transactions.len() != transactions_status.len() {
+            return Err(ExecutorError::Other(
+                "parallel validation produced misaligned transaction/status \
+                 lists"
+                    .to_string(),
+            ));
+        }
+
+        // --- Reassemble the batch-merge-ordered results into BLOCK order ------
+        let chain_id = consensus_parameters.chain_id();
+        let mut position_by_id = HashMap::with_capacity(l2_txs.len());
+        for (index, tx) in l2_txs.iter().enumerate() {
+            position_by_id.insert(tx.id(&chain_id), index);
+        }
+        let mut ordered: Vec<Option<(Transaction, TransactionExecutionStatus)>> =
+            Vec::new();
+        ordered.resize_with(l2_txs.len(), || None);
+        for (tx, status) in executed_transactions.into_iter().zip(transactions_status) {
+            let index = *position_by_id.get(&status.id).ok_or_else(|| {
+                ExecutorError::Other(format!(
+                    "parallel validation executed transaction {} which is not \
+                     part of the block",
+                    status.id
+                ))
+            })?;
+            let slot = ordered.get_mut(index).expect("index < len; qed");
+            if slot.is_some() {
+                return Err(ExecutorError::Other(format!(
+                    "parallel validation executed transaction {} twice",
+                    status.id
+                )));
+            }
+            *slot = Some((tx, status));
+        }
+        let mut sorted_transactions = Vec::with_capacity(l2_txs.len());
+        let mut tx_status = Vec::with_capacity(l2_txs.len());
+        for (index, slot) in ordered.into_iter().enumerate() {
+            let Some((tx, status)) = slot else {
+                return Err(ExecutorError::Other(format!(
+                    "parallel validation never executed the block transaction \
+                     at index {index}"
+                )));
+            };
+            sorted_transactions.push(tx);
+            tx_status.push(status);
+        }
+
+        // Message ids in block order, re-derived from the per-transaction
+        // receipts with the executor's own rule (successful transactions only).
+        let mut message_ids = Vec::new();
+        for status in tx_status.iter() {
+            if let TransactionExecutionResult::Success { receipts, .. } = &status.result {
+                message_ids.extend(receipts.iter().filter_map(|r| r.message_id()));
+            }
+        }
+
+        // --- Execute the received MINT on top of the merged block state -------
+        let merged = match changes {
+            StorageChanges::Changes(changes) => changes,
+            StorageChanges::ChangesList(list) => fold_changes_in_canonical_order(list)
+                .map_err(scheduler_error_to_executor_error)?,
+        };
+        let mint_view = self.storage.latest_view()?;
+        let mut block_storage_tx =
+            StorageTransaction::transaction(mint_view, ConflictPolicy::Overwrite, merged);
+
+        let mut partial_block = PartialFuelBlock {
+            header,
+            transactions: sorted_transactions,
+        };
+        let mut execution_data = ExecutionData {
+            coinbase,
+            used_gas,
+            used_size,
+            tx_count: l2_count,
+            found_mint: false,
+            message_ids,
+            tx_status,
+            events,
+            changes: Default::default(),
+            skipped_transactions: vec![],
+            // No DA processing happened (guarded above), matching the produce
+            // path's "no DA changes" root.
+            event_inbox_root: MerkleRootCalculator::new().root().into(),
+        };
+        let mint_tx = transactions.last().expect("Checked above; qed").clone();
+        executor.execute_transaction_and_commit(
+            &mut partial_block,
+            &mut block_storage_tx,
+            &mut execution_data,
+            MaybeCheckedTransaction::Transaction(mint_tx),
+            gas_price,
+            coinbase_contract_id,
+            &mut MemoryInstance::new(),
+        )?;
+
+        // --- The sequential validator's final comparison -----------------------
+        executor.check_block_matches(partial_block, block, &execution_data)?;
+
+        let changes = block_storage_tx.into_changes();
+        Ok(Uncommitted::new(
+            ValidationResult {
+                tx_status: execution_data.tx_status,
+                events: execution_data.events,
+            },
+            changes,
+        ))
     }
 
     pub fn dry_run(

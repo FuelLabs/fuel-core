@@ -2471,3 +2471,181 @@ async fn oracle__random_workload_seed_2() {
 async fn oracle__random_workload_seed_3() {
     run_random_seed(42).await;
 }
+
+// ---------------------------------------------------------------------------
+// Parallel block VALIDATION (`Executor::validate`): produce a block with the
+// parallel producer, then re-validate it in parallel from the same starting
+// view. The validator must accept the block, return per-tx statuses in BLOCK
+// order (including the mint), and produce the exact same final state changes
+// the producer computed.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn validate__accepts_parallel_produced_block_and_matches_changes() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(9182);
+    let mut storage = Storage::default();
+    let contracts = setup_contracts(&mut rng, &mut storage, 4).await;
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    // Two conflict-free batches over distinct contracts plus plain coin txs.
+    let b0 = vec![
+        contract_call_tx(&mut rng, &mut storage, &[contracts[0], contracts[1]]),
+        contract_call_tx(&mut rng, &mut storage, &[contracts[0]]),
+        basic_tx(&mut rng, &mut storage),
+    ];
+    let b1 = vec![
+        contract_call_tx(&mut rng, &mut storage, &[contracts[2], contracts[3]]),
+        contract_call_tx(&mut rng, &mut storage, &[contracts[3]]),
+        basic_tx(&mut rng, &mut storage),
+    ];
+
+    let config = Config {
+        worker_count: std::num::NonZeroUsize::new(2).unwrap(),
+        worker_count_policy: WorkerCountPolicy::StaticMax,
+        metrics: false,
+        utxo_validation: true,
+    };
+
+    // ---- produce ----
+    let mut producer: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            config.clone(),
+        )
+        .unwrap();
+    let (source, pool) = MockTransactionsSource::new();
+    for batch in [&b0, &b1] {
+        let refs: Vec<&Transaction> = batch.iter().collect();
+        pool.push_response(MockTxPoolResponse::new(
+            &refs,
+            TransactionFiltered::NotFiltered,
+        ));
+    }
+    let (produce_result, produce_changes) = producer
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: header_at_height_1(),
+                transactions_source: source,
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+        )
+        .await
+        .unwrap()
+        .into();
+    assert!(produce_result.skipped_transactions.is_empty());
+    let block = produce_result.block;
+    // All 6 user txs + mint committed.
+    assert_eq!(block.transactions().len(), 7);
+
+    // ---- validate (fresh executor, same starting view) ----
+    let mut validator: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            config,
+        )
+        .unwrap();
+    let (validation_result, validation_changes) =
+        validator.validate(&block).await.unwrap().into();
+
+    // (1) identical final state.
+    let produce_changes = match produce_changes {
+        StorageChanges::Changes(changes) => changes,
+        StorageChanges::ChangesList(_) => {
+            panic!("producer must emit a single coalesced Changes")
+        }
+    };
+    assert_eq!(
+        strip_empty_columns(produce_changes),
+        strip_empty_columns(validation_changes),
+        "validation changes must equal production changes",
+    );
+
+    // (2) statuses in BLOCK order, mint included.
+    let block_ids = tx_ids(block.transactions());
+    let status_ids: Vec<Bytes32> = validation_result
+        .tx_status
+        .iter()
+        .map(|status| status.id)
+        .collect();
+    assert_eq!(status_ids, block_ids, "statuses must be in block order");
+
+    // (3) same statuses/receipts/gas/fees as production.
+    assert_eq!(
+        sorted_summaries(&produce_result.tx_status),
+        sorted_summaries(&validation_result.tx_status),
+    );
+}
+
+#[tokio::test]
+async fn validate__rejects_block_with_tampered_transaction_order() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(777);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    let txs = vec![
+        basic_tx(&mut rng, &mut storage),
+        basic_tx(&mut rng, &mut storage),
+    ];
+
+    let config = Config {
+        worker_count: std::num::NonZeroUsize::new(2).unwrap(),
+        worker_count_policy: WorkerCountPolicy::StaticMax,
+        metrics: false,
+        utxo_validation: true,
+    };
+
+    let mut producer: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            config.clone(),
+        )
+        .unwrap();
+    let (source, pool) = MockTransactionsSource::new();
+    let refs: Vec<&Transaction> = txs.iter().collect();
+    pool.push_response(MockTxPoolResponse::new(
+        &refs,
+        TransactionFiltered::NotFiltered,
+    ));
+    let (produce_result, _) = producer
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: header_at_height_1(),
+                transactions_source: source,
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+        )
+        .await
+        .unwrap()
+        .into();
+    let mut block = produce_result.block;
+    // Tamper: swap the two user transactions. Their TxPointers no longer match
+    // their positions, so the re-executed transactions differ from the received
+    // ones and validation must reject the block.
+    block.transactions_mut().swap(0, 1);
+
+    let mut validator: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            config,
+        )
+        .unwrap();
+    let result = validator.validate(&block).await;
+    assert!(
+        result.is_err(),
+        "validation must reject a block with a tampered transaction order",
+    );
+}
