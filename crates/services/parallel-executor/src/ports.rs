@@ -80,29 +80,58 @@ impl core::fmt::Debug for BatchFeedbackHandle {
     }
 }
 
-pub struct TransactionSourceExecutableTransactions {
-    /// The transactions that can be executed
+/// One ready-to-execute batch answered by the transaction source. Batches are
+/// executed EXACTLY as received — with the txpool lane scheduler enabled they
+/// are conflict-free by construction and each one maps to one executor worker.
+pub struct ExecutableBatch {
+    /// The batch's transactions, in execution order.
     pub transactions: Vec<MaybeCheckedTransaction>,
     /// Anchor contracts selected by the tx pool while building this batch
     pub anchor_contract_ids: Vec<ContractId>,
-    /// Indicates whether some transactions were filtered out based on the filter
-    pub filtered: TransactionFiltered,
-    /// The filter used to fetch these transactions
-    pub filter: Filter,
     /// Opaque handle to report this batch's completion/timings back to the
     /// producer. `None` when the producer wants no feedback (e.g. the txpool
     /// lane scheduler is disabled) — the default, zero-overhead path.
     pub feedback_handle: Option<BatchFeedbackHandle>,
 }
 
+pub struct TransactionSourceExecutableTransactions {
+    /// The executable batches: up to one per requested worker. The classic
+    /// (non-lane) txpool path always answers with at most ONE batch.
+    pub batches: Vec<ExecutableBatch>,
+    /// Indicates whether some transactions were filtered out based on the filter
+    pub filtered: TransactionFiltered,
+    /// The filter used to fetch these transactions
+    pub filter: Filter,
+    /// `true` when this response is the source's COMPLETE answer for all
+    /// `selection_worker_count` requested workers (the lane-scheduler path):
+    /// fewer batches than requested workers then means "nothing more is
+    /// schedulable right now", and the caller should wait for a state change
+    /// (batch completion / new transactions) instead of immediately re-asking.
+    /// `false` (the classic single-batch path) keeps the historical behavior:
+    /// the caller may ask again for its remaining workers straight away.
+    pub answered_all_workers: bool,
+}
+
 pub trait TransactionsSource {
-    /// Returns the a batch of transactions to satisfy the given parameters
+    /// Returns the next executable batches to satisfy the given parameters:
+    /// up to one batch per FREE worker (`free_worker_count`), each within the
+    /// per-worker `gas_limit`, and cumulatively within `total_gas_limit` /
+    /// `tx_count_limit` / `block_transaction_size_limit`.
+    ///
+    /// `selection_worker_count` is the legacy worker-count HINT the classic
+    /// (single-batch) selection uses for its internal sizing heuristic — kept
+    /// separate so the classic path's behavior is untouched by the multi-batch
+    /// protocol. `free_worker_count` is the hard cap on returned batches: each
+    /// returned batch is dispatched to its own worker immediately.
+    #[allow(clippy::too_many_arguments)]
     fn get_executable_transactions(
         &self,
         gas_limit: u64,
+        total_gas_limit: u64,
         tx_count_limit: u32,
         block_transaction_size_limit: u64,
         selection_worker_count: usize,
+        free_worker_count: usize,
         filter: Filter,
     ) -> impl Future<Output = anyhow::Result<TransactionSourceExecutableTransactions>>;
 

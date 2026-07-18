@@ -80,6 +80,26 @@ pub struct TxPoolStats {
     pub total_gas: u64,
 }
 
+/// One extracted, ready-to-execute batch answered for a block-extraction ask.
+///
+/// The classic (`ratio_tip_gas`) path always answers with at most ONE batch
+/// (`batch_id: None`). With the lane scheduler enabled one ask covers all the
+/// executor's free workers and is answered with up to one batch PER WORKER;
+/// each carries the scheduler-assigned [`BatchId`] so the executor can
+/// round-trip completion feedback for exactly that batch. Batches are
+/// conflict-free by construction and must be executed as-is (no re-packing).
+#[derive(Debug)]
+pub struct ExtractedBatch {
+    /// The selected transactions in the scheduler's proposed (parent-first)
+    /// order.
+    pub txs: Vec<ArcPoolTx>,
+    /// The contract ids the batch's transactions touch (classic path: the
+    /// selection's anchor contracts).
+    pub contracts: Vec<fuel_core_types::fuel_tx::ContractId>,
+    /// The lane scheduler's id for this batch (`None` on the classic path).
+    pub batch_id: Option<BatchId>,
+}
+
 /// The pool is the main component of the txpool service. It is responsible for storing transactions
 /// and allowing the selection of transactions for inclusion in a block.
 pub struct Pool<S, SI, CM, SA, TxStatusManager> {
@@ -411,19 +431,16 @@ where
     }
 
     /// Extract transactions for a block.
-    /// Returns a list of transactions that were selected for the block
-    /// based on the constraints given in the configuration and the selection algorithm used.
+    /// Returns the batches of transactions selected for the block based on the
+    /// given constraints and the selection algorithm used: at most one batch on
+    /// the classic path, up to one batch per free executor worker with the lane
+    /// scheduler enabled (see [`ExtractedBatch`]).
     pub fn extract_transactions_for_block_with_anchors(
         &mut self,
         constraints: &Constraints,
-    ) -> (
-        Vec<ArcPoolTx>,
-        Vec<fuel_core_types::fuel_tx::ContractId>,
-        Option<BatchId>,
-    ) {
+    ) -> Vec<ExtractedBatch> {
         // When the lane scheduler is enabled it answers extraction instead of
-        // the classic `ratio_tip_gas` selection. Off (default) → unchanged, and
-        // there is no batch id to carry (`None`).
+        // the classic `ratio_tip_gas` selection. Off (default) → unchanged.
         if self.lane_scheduler.is_some() {
             return self.extract_transactions_for_block_lane(constraints);
         }
@@ -481,21 +498,32 @@ where
             "txpool_v2 selection summary"
         );
 
-        // Classic path assigns no lane-scheduler batch id.
-        (txs, selected_anchors, None)
+        // Classic path: a single batch with no lane-scheduler batch id (an
+        // empty selection answers with no batch at all).
+        if txs.is_empty() {
+            Vec::new()
+        } else {
+            vec![ExtractedBatch {
+                txs,
+                contracts: selected_anchors,
+                batch_id: None,
+            }]
+        }
     }
 
     /// Extract transactions for a block, returning only the selected
-    /// transactions (dropping the anchor/contract ids and batch id). Thin
-    /// wrapper over [`Self::extract_transactions_for_block_with_anchors`], used
-    /// only by the crate's own tests.
+    /// transactions (flattening the batches in order). Thin wrapper over
+    /// [`Self::extract_transactions_for_block_with_anchors`], used only by the
+    /// crate's own tests.
     #[cfg(test)]
     pub fn extract_transactions_for_block(
         &mut self,
         constraints: &Constraints,
     ) -> Vec<ArcPoolTx> {
         self.extract_transactions_for_block_with_anchors(constraints)
-            .0
+            .into_iter()
+            .flat_map(|batch| batch.txs)
+            .collect()
     }
 
     pub fn get(&self, tx_id: &TxId) -> Option<&StorageData> {
@@ -867,83 +895,129 @@ where
     }
 
     /// Answer a block-extraction request from the lane scheduler instead of the
-    /// classic `ratio_tip_gas` selection. Returns the selected transactions in
-    /// the scheduler's proposed order, the anchor/contract ids touched, and the
-    /// scheduler-assigned [`BatchId`] so the executor can round-trip completion
-    /// feedback for this batch.
+    /// classic `ratio_tip_gas` selection. One ask covers ALL the executor's
+    /// free workers (`Constraints::execution_worker_count`): the scheduler
+    /// answers with up to one proposal per worker and the pool extracts exactly
+    /// those transactions — the complete worker assignment for this dispatch
+    /// round.
     ///
     /// Only the proposed transactions that are currently dependency-free in the
     /// pool graph are actually extracted (a defensive invariant: we never remove
     /// a graph node that still has parents). The subset actually taken is
-    /// reported back via `on_dispatched`.
+    /// reported back via `on_dispatched` per batch.
+    ///
+    /// The block-level budgets (`total_gas`, `maximum_txs`,
+    /// `maximum_block_size`) are enforced CUMULATIVELY across the returned
+    /// batches: the scheduler's per-worker budgets alone could sum above them.
+    /// On the first transaction that would overflow a budget the whole
+    /// extraction stops (tail truncation — proposals are parent-ordered, so
+    /// stopping keeps parents-before-children; everything untaken simply stays
+    /// pooled and schedulable).
     fn extract_transactions_for_block_lane(
         &mut self,
         constraints: &Constraints,
-    ) -> (
-        Vec<ArcPoolTx>,
-        Vec<fuel_core_types::fuel_tx::ContractId>,
-        Option<BatchId>,
-    ) {
+    ) -> Vec<ExtractedBatch> {
+        let worker_count = constraints.free_worker_count.max(1);
         let maximum_txs = constraints.maximum_txs as u64;
-        let proposal = {
+        let per_worker_gas = constraints.max_gas;
+        // Admission/extraction gas cap for the whole ask: never more than the
+        // block's remaining budget, never more than the workers can hold.
+        let total_gas_cap = constraints
+            .total_gas
+            .min(per_worker_gas.saturating_mul(worker_count as u64));
+        let proposals = {
             let lane = self
                 .lane_scheduler
                 .as_mut()
                 .expect("lane scheduler is enabled; qed");
-            lane.next_single_batch(
-                constraints.max_gas,
+            lane.next_batches(
+                worker_count,
+                per_worker_gas,
+                total_gas_cap,
                 maximum_txs,
                 constraints.maximum_block_size,
                 &constraints.excluded_contracts,
             )
         };
 
-        let Some(proposal) = proposal else {
-            return (Vec::new(), Vec::new(), None);
-        };
-
-        let batch_id = proposal.batch_id;
-        let mut taken = Vec::with_capacity(proposal.txs.len());
-        let mut txs = Vec::with_capacity(proposal.txs.len());
-        let mut contracts_used = Vec::new();
-        for tx_id in proposal.txs {
-            let Some(storage_id) = self.tx_id_to_storage_id.get(&tx_id).copied() else {
-                continue;
-            };
-            // Defensive: only extract graph-ready txs. A proposed child whose
-            // parent is earlier in this same proposal becomes ready once the
-            // parent is removed below (proposals are parent-ordered by the
-            // scheduler's coin promotion).
-            if self.storage.has_dependencies(&storage_id) {
-                continue;
+        let mut gas_left = total_gas_cap;
+        let mut txs_left = maximum_txs;
+        let mut size_left = constraints.maximum_block_size;
+        let mut budget_exhausted = false;
+        let mut batches = Vec::with_capacity(proposals.len());
+        for proposal in proposals {
+            if budget_exhausted {
+                // Untaken proposals are never `on_dispatched`: their txs stay
+                // indexed in the scheduler and remain proposable next ask.
+                break;
             }
-            let Some(storage_entry) = self.storage.remove_transaction(storage_id) else {
-                continue;
-            };
-            for (contract, _access) in crate::lane_integration::derive_contract_accesses(
-                &storage_entry.transaction,
-            ) {
-                if !contracts_used.contains(&contract) {
-                    contracts_used.push(contract);
+            let batch_id = proposal.batch_id;
+            let mut taken = Vec::with_capacity(proposal.txs.len());
+            let mut txs = Vec::with_capacity(proposal.txs.len());
+            let mut contracts_used = Vec::new();
+            for tx_id in proposal.txs {
+                let Some(storage_id) = self.tx_id_to_storage_id.get(&tx_id).copied()
+                else {
+                    continue;
+                };
+                // Defensive: only extract graph-ready txs. A proposed child whose
+                // parent is earlier in this same proposal becomes ready once the
+                // parent is removed below (proposals are parent-ordered by the
+                // scheduler's coin promotion).
+                if self.storage.has_dependencies(&storage_id) {
+                    continue;
                 }
+                // Cumulative block-budget guard, checked BEFORE removal.
+                let Some(entry) = Storage::get(&self.storage, &storage_id) else {
+                    continue;
+                };
+                let tx_gas = entry.transaction.max_gas();
+                let tx_size = entry.transaction.metered_bytes_size() as u64;
+                if txs_left == 0 || tx_gas > gas_left || tx_size > size_left {
+                    budget_exhausted = true;
+                    break;
+                }
+                let Some(storage_entry) = self.storage.remove_transaction(storage_id)
+                else {
+                    continue;
+                };
+                gas_left = gas_left.saturating_sub(tx_gas);
+                size_left = size_left.saturating_sub(tx_size);
+                txs_left = txs_left.saturating_sub(1);
+                for (contract, _access) in
+                    crate::lane_integration::derive_contract_accesses(
+                        &storage_entry.transaction,
+                    )
+                {
+                    if !contracts_used.contains(&contract) {
+                        contracts_used.push(contract);
+                    }
+                }
+                self.extracted_outputs
+                    .new_extracted_transaction(&storage_entry.transaction);
+                self.spent_inputs.maybe_spend_inputs(
+                    storage_entry.transaction.id(),
+                    storage_entry.transaction.inputs(),
+                );
+                self.update_components_and_caches_on_removal(iter::once(&storage_entry));
+                taken.push(tx_id);
+                txs.push(storage_entry.transaction);
             }
-            self.extracted_outputs
-                .new_extracted_transaction(&storage_entry.transaction);
-            self.spent_inputs.maybe_spend_inputs(
-                storage_entry.transaction.id(),
-                storage_entry.transaction.inputs(),
-            );
-            self.update_components_and_caches_on_removal(iter::once(&storage_entry));
-            taken.push(tx_id);
-            txs.push(storage_entry.transaction);
-        }
 
-        if let Some(lane) = self.lane_scheduler.as_mut() {
-            lane.on_dispatched(batch_id, &taken);
+            if !taken.is_empty() {
+                if let Some(lane) = self.lane_scheduler.as_mut() {
+                    lane.on_dispatched(batch_id, &taken);
+                }
+                batches.push(ExtractedBatch {
+                    txs,
+                    contracts: contracts_used,
+                    batch_id: Some(batch_id),
+                });
+            }
         }
 
         self.update_stats();
-        (txs, contracts_used, Some(batch_id))
+        batches
     }
 
     #[cfg(test)]

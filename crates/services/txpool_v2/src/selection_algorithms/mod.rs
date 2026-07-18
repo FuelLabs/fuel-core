@@ -15,7 +15,15 @@ pub struct Constraints {
     /// Minimum gas price that all transaction must support.
     pub minimal_gas_price: u64,
     /// Maximum limit of gas that all selected transaction shouldn't exceed.
+    ///
+    /// With the lane scheduler enabled this is the PER-WORKER gas budget (the
+    /// classic single-batch path uses it as the whole ask's budget, unchanged).
     pub max_gas: u64,
+    /// Total remaining DECLARED-gas budget of the block across ALL workers.
+    /// The cumulative gas of every batch returned for one ask must not exceed
+    /// it. Only meaningful on the lane-scheduler multi-batch path; the classic
+    /// path (bounded by `max_gas` alone) ignores it.
+    pub total_gas: u64,
     /// Maximum number of transactions that can be selected.
     #[cfg(feature = "u32-tx-count")]
     pub maximum_txs: u32,
@@ -25,8 +33,14 @@ pub struct Constraints {
     pub maximum_block_size: u64,
     /// List of excluded contracts.
     pub excluded_contracts: HashSet<ContractId>,
-    /// Number of execution workers available for the block.
+    /// Number of execution workers available for the block. Only a sizing HINT
+    /// for the classic (`ratio_tip_gas`) selection heuristic.
     pub execution_worker_count: usize,
+    /// Number of currently-FREE executor workers this ask covers: the hard cap
+    /// on the number of batches the lane-scheduler path may answer with (each
+    /// returned batch is dispatched to its own worker immediately). Ignored by
+    /// the classic path.
+    pub free_worker_count: usize,
 }
 
 /// The selection algorithm is responsible for selecting the best transactions to include in a block.

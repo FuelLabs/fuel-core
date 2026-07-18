@@ -10,7 +10,10 @@ use crate::{
         BatchFeedback,
         BatchId,
     },
-    pool::TxPoolStats,
+    pool::{
+        ExtractedBatch,
+        TxPoolStats,
+    },
     pool_worker::{
         self,
         PoolReadRequest,
@@ -102,8 +105,8 @@ impl SharedState {
         loop {
             let result = select_transactions_receiver.try_recv();
             match result {
-                Ok((txs, _, _, _)) => {
-                    return Ok(txs);
+                Ok((batches, _)) => {
+                    return Ok(batches.into_iter().flat_map(|batch| batch.txs).collect());
                 }
                 Err(TryRecvError::Empty) => continue,
                 Err(TryRecvError::Closed) => {
@@ -113,18 +116,14 @@ impl SharedState {
         }
     }
 
+    /// Ask the pool for the next executable batches: up to one batch per free
+    /// executor worker with the lane scheduler enabled, at most one batch on
+    /// the classic path. Also returns the excluded-contract set echoed back
+    /// from the request's constraints.
     pub async fn extract_transactions_for_block_async(
         &self,
         constraints: Constraints,
-    ) -> Result<
-        (
-            Vec<ArcPoolTx>,
-            HashSet<ContractId>,
-            Vec<ContractId>,
-            Option<BatchId>,
-        ),
-        Error,
-    > {
+    ) -> Result<(Vec<ExtractedBatch>, HashSet<ContractId>), Error> {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
