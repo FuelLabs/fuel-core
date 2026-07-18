@@ -294,7 +294,12 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
                         worker_count,
                         worker_count_policy:
                             fuel_core::parallel_executor::config::WorkerCountPolicy::StaticMax,
-                        metrics: false,
+                        // Emit the per-block `block_summary` time-spend
+                        // decomposition (window / worker busy / ask / merge /
+                        // idle) — the whole point of this benchmark is stage
+                        // attribution. Visible with
+                        // RUST_LOG=parallel_executor::block_summary=info.
+                        metrics: true,
                         utxo_validation: command.utxo_validation,
                     },
                 )
