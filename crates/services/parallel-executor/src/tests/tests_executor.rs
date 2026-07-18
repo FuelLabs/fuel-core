@@ -2832,3 +2832,150 @@ async fn produce__coin_input_pointers_filled_and_block_passes_sequential_validat
         validation.err(),
     );
 }
+
+/// Regression for the block-5030 validation failure: a block containing an
+/// IN-BLOCK coin chain with a fan-in tail (creator -> mid spends creator's
+/// output; tail spends outputs of BOTH creator and mid) seeds the validation
+/// source's lane scheduler with a multi-path promotion shape. Before the
+/// lane-scheduler fix the tail was proposed twice ("lane scheduler proposed
+/// unknown or already-dispatched transaction") and parallel validation of a
+/// perfectly valid block failed.
+#[tokio::test]
+async fn validate__accepts_block_with_in_block_coin_chain() {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(5030);
+    let mut storage = Storage::default();
+    storage = add_consensus_parameters(storage, &ConsensusParameters::default());
+    add_previous_block(&mut storage);
+
+    let mid_secret = SecretKey::random(&mut rng);
+    let mid_owner = Input::owner(&mid_secret.public_key());
+    let tail_secret = SecretKey::random(&mut rng);
+    let tail_owner = Input::owner(&tail_secret.public_key());
+
+    // creator: funded from the db, creates coins for mid and tail.
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_stored_coin_input(&mut rng, &mut storage, 2000);
+    builder.add_output(Output::coin(mid_owner, 600, Default::default()));
+    builder.add_output(Output::coin(tail_owner, 600, Default::default()));
+    let creator_tx = builder.finalize_as_transaction();
+    let creator_id = creator_tx.id(&ChainId::default());
+
+    // mid: spends creator#0, creates another coin for tail.
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_unsigned_coin_input(
+        mid_secret,
+        UtxoId::new(creator_id, 0),
+        600,
+        Default::default(),
+        Default::default(),
+    );
+    builder.add_output(Output::coin(tail_owner, 300, Default::default()));
+    let mid_tx = builder.finalize_as_transaction();
+    let mid_id = mid_tx.id(&ChainId::default());
+
+    // tail: fan-in — spends outputs of BOTH creator and mid (its in-block
+    // parents are [creator, mid], and mid is itself creator's child).
+    let mut builder = TransactionBuilder::script(vec![], vec![]);
+    builder.add_unsigned_coin_input(
+        tail_secret,
+        UtxoId::new(creator_id, 1),
+        600,
+        Default::default(),
+        Default::default(),
+    );
+    builder.add_unsigned_coin_input(
+        tail_secret,
+        UtxoId::new(mid_id, 0),
+        300,
+        Default::default(),
+        Default::default(),
+    );
+    let tail_tx = builder.finalize_as_transaction();
+
+    // Independent filler txs alongside the chain: they raise the validation
+    // lane scheduler's ready gas enough that its analytic soft slice promotes
+    // the whole chain into the creator's batch — the exact multi-path
+    // promotion shape block 5030 hit (without them the chain trickles out
+    // one-tx-per-ask and promotion never runs). Built BEFORE the executors so
+    // their funding coins are part of the captured storage view.
+    let mut batch = vec![creator_tx, mid_tx, tail_tx];
+    for _ in 0..10 {
+        batch.push(basic_tx(&mut rng, &mut storage));
+    }
+
+    let config = Config {
+        worker_count: std::num::NonZeroUsize::new(2).unwrap(),
+        worker_count_policy: WorkerCountPolicy::StaticMax,
+        metrics: false,
+        utxo_validation: true,
+    };
+
+    // ---- produce the block (single batch keeps the chain in order) ----
+    let mut producer: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            config.clone(),
+        )
+        .unwrap();
+    let (source, pool) = MockTransactionsSource::new();
+    let refs: Vec<&Transaction> = batch.iter().collect();
+    pool.push_response(MockTxPoolResponse::new(
+        &refs,
+        TransactionFiltered::NotFiltered,
+    ));
+    let (result, produce_changes) = producer
+        .produce_without_commit_with_source(
+            Components {
+                header_to_produce: header_at_height_1(),
+                transactions_source: source,
+                coinbase_recipient: Default::default(),
+                gas_price: 0,
+            },
+            Instant::now() + Duration::from_millis(ORACLE_DEADLINE_MS),
+        )
+        .await
+        .unwrap()
+        .into();
+    assert!(result.skipped_transactions.is_empty());
+    let block = result.block;
+    assert_eq!(
+        block.transactions().len(),
+        14,
+        "3 chained txs + 10 fillers + mint"
+    );
+
+    // ---- parallel validation must accept the chain block ----
+    let mut validator: Executor<Storage, MockRelayer, MockPreconfirmationSender> =
+        Executor::new(
+            storage.clone(),
+            MockRelayer,
+            MockPreconfirmationSender,
+            config,
+        )
+        .unwrap();
+    let (validation_result, validation_changes) = validator
+        .validate(&block)
+        .await
+        .expect("parallel validation of an in-block coin chain must succeed")
+        .into();
+
+    let produce_changes = match produce_changes {
+        StorageChanges::Changes(changes) => changes,
+        StorageChanges::ChangesList(_) => {
+            panic!("producer must emit a single coalesced Changes")
+        }
+    };
+    assert_eq!(
+        strip_empty_columns(produce_changes),
+        strip_empty_columns(validation_changes),
+        "validation changes must equal production changes",
+    );
+    let status_ids: Vec<Bytes32> = validation_result
+        .tx_status
+        .iter()
+        .map(|status| status.id)
+        .collect();
+    assert_eq!(status_ids, tx_ids(block.transactions()));
+}
