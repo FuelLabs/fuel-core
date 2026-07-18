@@ -606,8 +606,10 @@ where
             .map_err(|_| ExecutorError::TooManyTransactions)?;
 
         // --- Parallel re-execution of the L2 transactions ---------------------
+        let phase_start = Instant::now();
         let transactions_source =
             ValidationTransactionsSource::new(l2_txs, 0, &consensus_parameters)?;
+        let seed_time = phase_start.elapsed();
         let components = Components {
             header_to_produce: PartialBlockHeader::from(block.header()),
             transactions_source,
@@ -653,6 +655,7 @@ where
         .map_err(scheduler_error_to_executor_error)?
         .with_validation_budget(l2_count);
 
+        let run_start = Instant::now();
         let scheduler_result = scheduler
             .run(
                 &components.transactions_source,
@@ -661,6 +664,8 @@ where
             )
             .await
             .map_err(scheduler_error_to_executor_error)?;
+        let run_time = run_start.elapsed();
+        let reassemble_start = Instant::now();
 
         let SchedulerExecutionResult {
             header,
@@ -745,7 +750,10 @@ where
             }
         }
 
+        let reassemble_time = reassemble_start.elapsed();
+
         // --- Execute the received MINT on top of the merged block state -------
+        let fold_start = Instant::now();
         let merged = match changes {
             StorageChanges::Changes(changes) => changes,
             StorageChanges::ChangesList(list) => fold_changes_in_canonical_order(list)
@@ -774,6 +782,8 @@ where
             // path's "no DA changes" root.
             event_inbox_root: MerkleRootCalculator::new().root().into(),
         };
+        let fold_time = fold_start.elapsed();
+        let mint_start = Instant::now();
         let mint_tx = transactions.last().expect("Checked above; qed").clone();
         executor.execute_transaction_and_commit(
             &mut partial_block,
@@ -785,8 +795,29 @@ where
             &mut MemoryInstance::new(),
         )?;
 
+        let mint_time = mint_start.elapsed();
+
         // --- The sequential validator's final comparison -----------------------
+        let check_start = Instant::now();
         executor.check_block_matches(partial_block, block, &execution_data)?;
+        let check_time = check_start.elapsed();
+
+        // Phase attribution for the validation benchmark (the scheduler window
+        // has its own block_summary decomposition; this covers everything
+        // OUTSIDE it). Metrics-gated, one line per block.
+        if self.config.metrics {
+            tracing::info!(
+                target: "parallel_executor::validation_summary",
+                height = u32::from(block_height),
+                seed_us = seed_time.as_micros() as u64,
+                scheduler_run_ms = run_time.as_millis() as u64,
+                reassemble_us = reassemble_time.as_micros() as u64,
+                fold_changes_us = fold_time.as_micros() as u64,
+                mint_us = mint_time.as_micros() as u64,
+                check_block_us = check_time.as_micros() as u64,
+                "validation time-spend outside the scheduler window",
+            );
+        }
 
         let changes = block_storage_tx.into_changes();
         Ok(Uncommitted::new(
