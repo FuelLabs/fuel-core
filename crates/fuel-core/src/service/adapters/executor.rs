@@ -106,10 +106,10 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
         {
             let m =
                 fuel_core_metrics::parallel_executor_metrics::parallel_executor_metrics();
-            m.pool_ask_queue_us.inc_by(ask_timings.queue_us);
-            m.pool_ask_in_pool_us.inc_by(ask_timings.in_pool_us);
+            m.pool_ask_queue_us.observe(ask_timings.queue_us as f64);
+            m.pool_ask_in_pool_us.observe(ask_timings.in_pool_us as f64);
             m.pool_ask_return_us
-                .inc_by(ask_timings.responded_at.elapsed().as_micros() as u64);
+                .observe(ask_timings.responded_at.elapsed().as_micros() as f64);
         }
         // The lane scheduler answers one ask with the COMPLETE worker
         // assignment (up to one batch per free worker), each carrying its

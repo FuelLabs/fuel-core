@@ -83,15 +83,16 @@ pub struct ParallelExecutorMetrics {
     pub pool_asks: Counter,
     pub pool_ask_batches: Counter,
     pub pool_ask_txs: Counter,
-    // Per-ask lifecycle checkpoints (cumulative microseconds; divide by
-    // `pool_asks` for means): queue = executor send -> pool worker starts;
-    // in_pool = pool-side processing (scheduler + extraction; the finer split
-    // lives in the txpool_lane_ask_* counters); return = pool response sent ->
-    // executor resumes. The executor-side "ready for workers" stage is the
-    // existing prepare phase metrics.
-    pub pool_ask_queue_us: Counter,
-    pub pool_ask_in_pool_us: Counter,
-    pub pool_ask_return_us: Counter,
+    // Per-ask lifecycle checkpoints, microseconds histograms (production
+    // statistic: p50/p90/p99 per segment; `_sum`/`_count` give means):
+    // queue = executor send -> pool worker starts; in_pool = pool-side
+    // processing (scheduler + extraction; the finer split lives in the
+    // txpool_lane_ask_* counters); return = pool response sent -> executor
+    // resumes. The executor-side "ready for workers" stage is the existing
+    // prepare phase metrics.
+    pub pool_ask_queue_us: Histogram,
+    pub pool_ask_in_pool_us: Histogram,
+    pub pool_ask_return_us: Histogram,
     // Decomposition of the scheduler's wall-clock production window into serial
     // phases (they sum to ~window); `execute_seconds` is the parallel
     // worker-busy time shown alongside for context, NOT part of the serial sum.
@@ -251,9 +252,9 @@ impl Default for ParallelExecutorMetrics {
             time_to_first_dispatch_seconds: Gauge::default(),
             pool_ask_seconds: Gauge::default(),
             pool_asks: Counter::default(),
-            pool_ask_queue_us: Counter::default(),
-            pool_ask_in_pool_us: Counter::default(),
-            pool_ask_return_us: Counter::default(),
+            pool_ask_queue_us: Histogram::new(buckets(Buckets::SelectTransactionsTime)),
+            pool_ask_in_pool_us: Histogram::new(buckets(Buckets::SelectTransactionsTime)),
+            pool_ask_return_us: Histogram::new(buckets(Buckets::SelectTransactionsTime)),
             pool_ask_batches: Counter::default(),
             pool_ask_txs: Counter::default(),
             phase_prepare_seconds: Gauge::default(),
@@ -468,17 +469,17 @@ impl Default for ParallelExecutorMetrics {
         );
         registry.register(
             "parallel_executor_pool_ask_queue_us",
-            "Cumulative time from executor ask sent to pool worker starting it (microseconds)",
+            "Ask lifecycle: executor send -> pool worker start, microseconds (histogram)",
             metrics.pool_ask_queue_us.clone(),
         );
         registry.register(
             "parallel_executor_pool_ask_in_pool_us",
-            "Cumulative pool-side ask processing time (microseconds)",
+            "Ask lifecycle: pool-side processing time, microseconds (histogram)",
             metrics.pool_ask_in_pool_us.clone(),
         );
         registry.register(
             "parallel_executor_pool_ask_return_us",
-            "Cumulative time from pool response sent to executor resuming (microseconds)",
+            "Ask lifecycle: pool response sent -> executor resumes, microseconds (histogram)",
             metrics.pool_ask_return_us.clone(),
         );
         registry.register(
