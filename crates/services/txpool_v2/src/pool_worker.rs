@@ -357,6 +357,7 @@ where
                     return TaskNextAction::Stop;
                 }
                 for update in update_buffer {
+                    self.serve_pending_extractions();
                     match update {
                         PoolUpdateRequest::ProcessBlock { block_result } => {
                             self.process_block(block_result);
@@ -377,6 +378,7 @@ where
                     return TaskNextAction::Stop;
                 }
                 for read in read_buffer {
+                    self.serve_pending_extractions();
                     match read {
                         PoolReadRequest::TxIds { max_txs, response_channel } => {
                             self.get_tx_ids(max_txs, response_channel);
@@ -398,6 +400,7 @@ where
                     return TaskNextAction::Stop;
                 }
                 for insert in insert_buffer {
+                    self.serve_pending_extractions();
                     let PoolInsertRequest::Insert {
                         tx,
                         source,
@@ -538,6 +541,26 @@ where
                     tracing::error!("Failed to send error insertion notification: {}", e);
                 }
             }
+        }
+    }
+
+    /// Serve any executor asks that arrived while the worker is draining a
+    /// buffered arm (inserts, reads, updates). The `biased` select only
+    /// prioritizes extraction BETWEEN drains; without this, an ask landing
+    /// mid-drain waits for the whole buffer (up to 128 inserts / 10k reads —
+    /// multi-millisecond queue tail). Serving between items is sound: the
+    /// pool is in a consistent state after every item, and an ask served
+    /// mid-drain simply doesn't see the not-yet-processed remainder, exactly
+    /// as if it had arrived before those requests. `try_recv` on an empty
+    /// channel is a single atomic load, so the no-ask cost is negligible.
+    fn serve_pending_extractions(&mut self) {
+        while let Ok(extract) = self.extract_block_transactions_receiver.try_recv() {
+            let PoolExtractBlockTransactions::ExtractBlockTransactions {
+                constraints,
+                sent_at,
+                transactions,
+            } = extract;
+            self.extract_block_transactions(constraints, sent_at, transactions);
         }
     }
 
