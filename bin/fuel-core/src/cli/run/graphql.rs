@@ -57,11 +57,7 @@ pub struct GraphQLArgs {
     /// needs headroom well above the expected in-flight transaction count;
     /// 1024 (the old default) silently queued intake before any other node
     /// limit was reached.
-    #[clap(
-        long = "graphql-max-concurrent-queries",
-        default_value = "16384",
-        env
-    )]
+    #[clap(long = "graphql-max-concurrent-queries", default_value = "16384", env)]
     pub graphql_max_concurrent_queries: usize,
 
     /// The max body limit of the GraphQL query.

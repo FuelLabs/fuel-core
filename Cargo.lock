@@ -4367,6 +4367,8 @@ dependencies = [
  "fuel-core",
  "fuel-core-block-aggregator-api",
  "fuel-core-chain-config",
+ "fuel-core-executor",
+ "fuel-core-importer",
  "fuel-core-metrics",
  "fuel-core-poa",
  "fuel-core-shared-sequencer",
