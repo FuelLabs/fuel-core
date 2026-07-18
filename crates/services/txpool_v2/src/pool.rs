@@ -917,6 +917,8 @@ where
         &mut self,
         constraints: &Constraints,
     ) -> Vec<ExtractedBatch> {
+        let ask_start = Instant::now();
+        let pool_depth = self.tx_count();
         let worker_count = constraints.free_worker_count.max(1);
         let maximum_txs = constraints.maximum_txs as u64;
         let per_worker_gas = constraints.max_gas;
@@ -939,6 +941,9 @@ where
                 &constraints.excluded_contracts,
             )
         };
+        let scheduler_elapsed = ask_start.elapsed();
+        let mut removal_elapsed = std::time::Duration::ZERO;
+        let mut caches_elapsed = std::time::Duration::ZERO;
 
         let mut gas_left = total_gas_cap;
         let mut txs_left = maximum_txs;
@@ -977,10 +982,12 @@ where
                     budget_exhausted = true;
                     break;
                 }
+                let removal_start = Instant::now();
                 let Some(storage_entry) = self.storage.remove_transaction(storage_id)
                 else {
                     continue;
                 };
+                removal_elapsed += removal_start.elapsed();
                 gas_left = gas_left.saturating_sub(tx_gas);
                 size_left = size_left.saturating_sub(tx_size);
                 txs_left = txs_left.saturating_sub(1);
@@ -993,6 +1000,7 @@ where
                         contracts_used.push(contract);
                     }
                 }
+                let caches_start = Instant::now();
                 self.extracted_outputs
                     .new_extracted_transaction(&storage_entry.transaction);
                 self.spent_inputs.maybe_spend_inputs(
@@ -1000,6 +1008,7 @@ where
                     storage_entry.transaction.inputs(),
                 );
                 self.update_components_and_caches_on_removal(iter::once(&storage_entry));
+                caches_elapsed += caches_start.elapsed();
                 taken.push(tx_id);
                 txs.push(storage_entry.transaction);
             }
@@ -1017,6 +1026,24 @@ where
         }
 
         self.update_stats();
+        let total_elapsed = ask_start.elapsed();
+        let extracted: usize = batches.iter().map(|b| b.txs.len()).sum();
+        // Ask-cost breakdown (Green): scheduler = lane next_batches compute;
+        // removal = storage graph removal; caches = extracted-outputs/
+        // spent-inputs/components bookkeeping; other = loop residue +
+        // update_stats. Executor-side pool_ask minus `total_us` = channel +
+        // pool-worker queueing.
+        tracing::info!(
+            target: "txpool_v2::ask_summary",
+            pool_depth,
+            extracted,
+            batch_count = batches.len(),
+            total_us = total_elapsed.as_micros() as u64,
+            scheduler_us = scheduler_elapsed.as_micros() as u64,
+            removal_us = removal_elapsed.as_micros() as u64,
+            caches_us = caches_elapsed.as_micros() as u64,
+            "lane ask breakdown",
+        );
         batches
     }
 
