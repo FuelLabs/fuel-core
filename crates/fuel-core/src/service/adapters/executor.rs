@@ -149,6 +149,9 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
                     transactions,
                     anchor_contract_ids: batch.contracts,
                     feedback_handle,
+                    // Production: contiguous indices from the scheduler's
+                    // running counter (explicit indices are validation-only).
+                    execution_indices: None,
                 }
             })
             .collect();

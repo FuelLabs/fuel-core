@@ -238,6 +238,7 @@ impl TransactionsSource for MockTransactionsSource {
                     transactions: response.transactions,
                     anchor_contract_ids: vec![],
                     feedback_handle,
+                    execution_indices: None,
                 }]
             };
             Ok(TransactionSourceExecutableTransactions {

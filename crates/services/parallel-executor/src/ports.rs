@@ -92,6 +92,13 @@ pub struct ExecutableBatch {
     /// producer. `None` when the producer wants no feedback (e.g. the txpool
     /// lane scheduler is disabled) — the default, zero-overhead path.
     pub feedback_handle: Option<BatchFeedbackHandle>,
+    /// Explicit block-relative index of each transaction in `transactions`
+    /// (same order), used by block VALIDATION: each transaction must execute at
+    /// its position in the RECEIVED block (its `TxPointer` is
+    /// consensus-relevant), and a validation batch's positions are
+    /// non-contiguous. `None` (production) keeps the historical contiguous
+    /// indexing derived from the scheduler's running transaction counter.
+    pub execution_indices: Option<Vec<u32>>,
 }
 
 pub struct TransactionSourceExecutableTransactions {

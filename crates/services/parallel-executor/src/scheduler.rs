@@ -32,6 +32,7 @@ use fuel_core_executor::{
     executor::{
         BlockExecutor,
         ExecutionData,
+        TxIndices,
     },
     ports::{
         MaybeCheckedTransaction,
@@ -188,6 +189,14 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     deadline: Instant,
     /// Gas used by blob transactions
     blob_gas: u64,
+    /// `true` when this scheduler run validates a RECEIVED block (see
+    /// [`Self::with_validation_budget`]): the run loop exits as soon as the
+    /// transaction budget is exhausted and all in-flight batches completed
+    /// (instead of sleeping to the deadline), and the sequential fallback —
+    /// which drops skipped transactions and would silently corrupt the
+    /// received block's transaction indices — becomes a hard error (a skipped
+    /// transaction during validation means the block is invalid anyway).
+    validation_mode: bool,
     /// Counters for tracking worker concurrency when metrics are enabled
     worker_counters: Option<WorkerCounters>,
     /// Per-block time-spend accumulators (only meaningful when metrics are on;
@@ -406,6 +415,11 @@ pub(crate) struct PreparedBatch {
     pub coins_used: Vec<CoinInBatch>,
     pub message_nonces_used: Vec<Nonce>,
     pub number_of_transactions: u32,
+    /// Explicit block-relative execution indices for `transactions` (same
+    /// order), carried through from
+    /// [`crate::ports::ExecutableBatch::execution_indices`]. `None` in
+    /// production (contiguous indexing).
+    pub execution_indices: Option<Vec<u32>>,
 }
 
 /// A source batch prepared for dispatch: the checked/derived [`PreparedBatch`]
@@ -512,7 +526,22 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             dispatched_start_idx: FxHashMap::default(),
             worker_counters,
             time_accounting: TimeAccounting::default(),
+            validation_mode: false,
         })
+    }
+
+    /// Switch this scheduler into block-VALIDATION mode with an exact
+    /// transaction budget (the received block's L2 transaction count).
+    ///
+    /// With the budget set exactly, `tx_left` reaches `0` precisely when every
+    /// block transaction has been dispatched, which (together with an empty
+    /// in-flight set) is the run loop's early-exit condition — validation must
+    /// not sleep until the production deadline. See the `validation_mode` field
+    /// for the sequential-fallback behavior change.
+    pub fn with_validation_budget(mut self, tx_budget: u32) -> Self {
+        self.tx_left = tx_budget;
+        self.validation_mode = true;
+        self
     }
 }
 
@@ -712,6 +741,29 @@ where
                     self.state = SchedulerState::NoTransactionsForPickup;
                 }
             } else if self.current_execution_tasks.is_empty() {
+                // Early exit: the block's transaction budget is exhausted and no
+                // batch is in flight — nothing can ever be dispatched again, so
+                // waiting for the deadline (or for new transactions) is pure
+                // idle time. This is the normal end-of-block path for
+                // VALIDATION (the budget is set exactly to the received block's
+                // transaction count, see `with_validation_budget`). In
+                // production `tx_left` starts at `u32::MAX` and effectively
+                // never reaches 0; if it ever does the block is full and
+                // sealing early is correct there too.
+                if self.tx_left == 0 {
+                    if !execution_time_recorded {
+                        parallel_executor_metrics::record_execution_time(
+                            instant.elapsed(),
+                        );
+                        execution_time_recorded = true;
+                    }
+                    tracing::debug!(
+                        "transaction budget exhausted and no in-flight batches; \
+                         ending block early at {:?}",
+                        instant.elapsed()
+                    );
+                    break 'outer;
+                }
                 let waiting = Instant::now();
                 tokio::select! {
                     _ = tx_notifier => {
@@ -1129,6 +1181,7 @@ where
             let prepared_batch = prepare_transactions_batch(
                 &self.consensus_parameters,
                 source_batch.transactions,
+                source_batch.execution_indices,
             )?;
             self.update_constraints(
                 prepared_batch.number_of_transactions,
@@ -1276,6 +1329,13 @@ where
         let gas_price = self.gas_price;
         let header_to_produce = self.header_to_produce;
         let mut memory = self.memory_pool.take_raw();
+        // Production batches execute at contiguous indices from the scheduler's
+        // running counter; validation batches carry the explicit positions of
+        // their transactions in the received block (TxPointer correctness).
+        let tx_indices = match batch.execution_indices.take() {
+            Some(indices) => TxIndices::Explicit(indices),
+            None => TxIndices::Contiguous(start_idx_txs),
+        };
 
         let future = {
             let instant = Instant::now();
@@ -1306,7 +1366,7 @@ where
                             gas_price,
                         },
                         &mut storage_tx,
-                        start_idx_txs,
+                        tx_indices,
                         memory.as_mut(),
                     )
                     .await?;
@@ -1690,7 +1750,7 @@ where
                     gas_price: self.gas_price,
                 },
                 &mut storage,
-                start_idx_txs,
+                TxIndices::Contiguous(start_idx_txs),
                 memory_instance.as_mut(),
             )
             .await?;
@@ -1746,6 +1806,20 @@ where
         execution_duration: Duration,
         storage_with_da: Arc<StorageTransaction<View>>,
     ) -> Result<u32, SchedulerError> {
+        // VALIDATION: the fallback drops the skipped transactions and replays
+        // the affected range at shifted indices — that silently corrupts the
+        // received block's transaction positions (`TxPointer`s) instead of
+        // rejecting the block. A transaction skipped while re-executing a
+        // received block means the block is invalid (or the validator's state
+        // diverged), so fail loudly and let the caller report a validation
+        // error.
+        if self.validation_mode {
+            return Err(SchedulerError::InternalError(
+                "a transaction was skipped during parallel block validation; \
+                 the sequential fallback is not available in validation mode"
+                    .to_string(),
+            ));
+        }
         let fallback_start = Instant::now();
         let block_height = *self.header_to_produce.height();
         // This batch's parallel results are discarded and re-executed
@@ -1908,7 +1982,7 @@ where
                     gas_price: self.gas_price,
                 },
                 &mut storage_tx,
-                start_idx_txs,
+                TxIndices::Contiguous(start_idx_txs),
                 memory_instance.as_mut(),
             )
             .await?;
@@ -2082,8 +2156,33 @@ fn duration_as_u64_nanos(duration: Duration) -> u64 {
 fn prepare_transactions_batch(
     consensus_params: &ConsensusParameters,
     batch: Vec<MaybeCheckedTransaction>,
+    execution_indices: Option<Vec<u32>>,
 ) -> Result<PreparedBatch, SchedulerError> {
     let mut prepared_batch = PreparedBatch::default();
+
+    // Explicit indices (validation) map 1:1 onto the batch's transactions.
+    // Blob transactions are split out below and executed at a different block
+    // position, which would silently misalign the mapping — validation batches
+    // never contain blobs (guarded in `Executor::validate`), so fail loudly if
+    // that invariant is ever broken.
+    if let Some(indices) = execution_indices.as_ref() {
+        if indices.len() != batch.len() {
+            return Err(SchedulerError::InternalError(format!(
+                "execution indices count ({}) does not match batch transaction \
+                 count ({})",
+                indices.len(),
+                batch.len()
+            )));
+        }
+        if batch.iter().any(|tx| tx.is_blob()) {
+            return Err(SchedulerError::InternalError(
+                "explicit execution indices are not supported for batches \
+                 containing blob transactions"
+                    .to_string(),
+            ));
+        }
+    }
+    prepared_batch.execution_indices = execution_indices;
 
     for (idx, tx) in batch.into_iter().enumerate() {
         let tx_id = tx.id(&consensus_params.chain_id());
