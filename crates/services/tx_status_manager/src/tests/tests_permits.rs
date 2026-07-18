@@ -109,6 +109,7 @@ fn test_try_subscribe_inner(senders: HashMap<Bytes32, Vec<Sender<(), MockSendSta
         senders: Arc::new(Mutex::new(box_senders(senders))),
         permits: Arc::new(permits),
         ttl: Duration::from_secs(100),
+        sweep_ops: Default::default(),
     };
 
     // Test the try_subscribe function on the UpdateSender

@@ -138,6 +138,7 @@ fn test_send_inner(
         senders: Arc::new(Mutex::new(box_senders(senders))),
         permits: Arc::new(()),
         ttl: Duration::from_secs(5),
+        sweep_ops: Default::default(),
     };
     let message = msg.message.clone();
     let tx_id = msg.tx_id;
