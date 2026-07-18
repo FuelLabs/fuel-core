@@ -115,6 +115,10 @@ pub struct Pool<S, SI, CM, SA, TxStatusManager> {
     pub(crate) tx_id_to_storage_id: HashMap<TxId, SI>,
     /// All sent outputs when transactions are extracted. Clear when processing a block.
     pub(crate) extracted_outputs: ExtractedOutputs,
+    /// Scheduler share (µs) of the most recent extraction, for the worker's
+    /// per-ask checkpoint response (single-threaded worker: read right after
+    /// the extraction call).
+    pub(crate) last_lane_ask_scheduler_us: u64,
     /// The spent inputs cache.
     pub(crate) spent_inputs: SpentInputs,
     /// Current pool gas stored.
@@ -157,6 +161,7 @@ impl<S, SI, CM, SA, TxStatusManager> Pool<S, SI, CM, SA, TxStatusManager> {
             config,
             tx_id_to_storage_id: HashMap::new(),
             extracted_outputs: ExtractedOutputs::new(),
+            last_lane_ask_scheduler_us: 0,
             spent_inputs,
             current_gas: 0,
             current_bytes_size: 0,
@@ -456,6 +461,7 @@ where
             .gather_best_txs(constraints, &mut self.storage);
         let selected_anchors = self.selection_algorithm.last_selection_anchors().to_vec();
         let select_elapsed = select_start.elapsed();
+        self.last_lane_ask_scheduler_us = select_elapsed.as_micros() as u64;
 
         if let Some(start) = maybe_start {
             Self::record_select_transaction_time(start)
@@ -942,6 +948,7 @@ where
             )
         };
         let scheduler_elapsed = ask_start.elapsed();
+        self.last_lane_ask_scheduler_us = scheduler_elapsed.as_micros() as u64;
         // Fine-grained per-tx timers only when metrics are on: two clock reads
         // per extracted tx are measurable at thousands of txs per ask.
         let fine_timing = self.config.metrics;

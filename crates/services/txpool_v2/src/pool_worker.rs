@@ -12,7 +12,6 @@ use crate::{
         TxPoolPersistentStorage,
         TxStatusManager as TxStatusManagerTrait,
     },
-    selection_algorithms::SelectionAlgorithm,
     service::{
         TxInfo,
         TxPool,
@@ -217,10 +216,30 @@ pub(super) enum PoolInsertRequest {
     },
 }
 
+/// Per-ask lifecycle checkpoints measured pool-side, returned with every
+/// extraction answer so the executor can attribute the full round-trip:
+/// `sent -> worker start` (queue), `worker start -> response sent` (in-pool,
+/// with the scheduler share split out), and — via `responded_at` — the return
+/// hop measured at the receiver.
+#[derive(Clone, Copy, Debug)]
+pub struct AskTimings {
+    /// Executor send -> pool worker began processing (channel + queueing).
+    pub queue_us: u64,
+    /// Pool worker processing wall time (scheduler + extraction + response prep).
+    pub in_pool_us: u64,
+    /// Lane-scheduler `next_batches` share of `in_pool_us`.
+    pub scheduler_us: u64,
+    /// Taken right before the response is sent; `responded_at.elapsed()` at the
+    /// receiver is the return hop.
+    pub responded_at: std::time::Instant,
+}
+
 pub(super) enum PoolExtractBlockTransactions {
     ExtractBlockTransactions {
         constraints: Constraints,
-        transactions: oneshot::Sender<(Vec<ExtractedBatch>, HashSet<ContractId>)>,
+        sent_at: std::time::Instant,
+        transactions:
+            oneshot::Sender<(Vec<ExtractedBatch>, HashSet<ContractId>, AskTimings)>,
     },
 }
 
@@ -317,8 +336,8 @@ where
             }
             extract = self.extract_block_transactions_receiver.recv() => {
                 match extract {
-                    Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, transactions }) => {
-                        self.extract_block_transactions(constraints, transactions);
+                    Some(PoolExtractBlockTransactions::ExtractBlockTransactions { constraints, sent_at, transactions }) => {
+                        self.extract_block_transactions(constraints, sent_at, transactions);
                     }
                     None => {
                         return TaskNextAction::Stop
@@ -525,32 +544,24 @@ where
     fn extract_block_transactions(
         &mut self,
         constraints: Constraints,
-        blocks: oneshot::Sender<(Vec<ExtractedBatch>, HashSet<ContractId>)>,
+        sent_at: std::time::Instant,
+        blocks: oneshot::Sender<(Vec<ExtractedBatch>, HashSet<ContractId>, AskTimings)>,
     ) {
-        tracing::warn!(
-            max_gas = constraints.max_gas,
-            total_gas = constraints.total_gas,
-            max_txs = constraints.maximum_txs,
-            max_block_size = constraints.maximum_block_size,
-            workers = constraints.execution_worker_count,
-            excluded_contracts = constraints.excluded_contracts.len(),
-            tx_count = self.pool.tx_count(),
-            executable_count = self
-                .pool
-                .selection_algorithm
-                .number_of_executable_transactions(),
-            "txpool_v2 extract_block_transactions start"
-        );
+        // Checkpointed, log-free (per-ask logs at thousands of asks/block load
+        // this hot loop; see AskTimings + txpool_lane_ask_* counters instead).
+        let started = std::time::Instant::now();
+        let queue_us = started.duration_since(sent_at).as_micros() as u64;
         let batches = self
             .pool
             .extract_transactions_for_block_with_anchors(&constraints);
-        tracing::warn!(
-            batch_count = batches.len(),
-            result_size = batches.iter().map(|b| b.txs.len()).sum::<usize>(),
-            "txpool_v2 extract_block_transactions result"
-        );
+        let timings = AskTimings {
+            queue_us,
+            in_pool_us: started.elapsed().as_micros() as u64,
+            scheduler_us: self.pool.last_lane_ask_scheduler_us,
+            responded_at: std::time::Instant::now(),
+        };
         if blocks
-            .send((batches, constraints.excluded_contracts))
+            .send((batches, constraints.excluded_contracts, timings))
             .is_err()
         {
             tracing::error!("Failed to send block transactions");

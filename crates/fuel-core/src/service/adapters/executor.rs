@@ -85,7 +85,7 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
         free_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
-        let (extracted_batches, excluded_contract_ids) = self
+        let (extracted_batches, excluded_contract_ids, ask_timings) = self
             .tx_pool
             .extract_transactions_for_block_async(Constraints {
                 minimal_gas_price: self.minimum_gas_price,
@@ -99,6 +99,18 @@ impl fuel_core_parallel_executor::ports::TransactionsSource for TransactionsSour
             })
             .await
             .map_err(|e| anyhow::anyhow!("{e}"))?;
+        // Per-ask lifecycle checkpoints (in-memory counters; means = value /
+        // parallel_executor_pool_asks): send->worker-start, in-pool, and the
+        // return hop observed here. The executor-side "ready for workers"
+        // stage is the existing prepare phase metric.
+        {
+            let m =
+                fuel_core_metrics::parallel_executor_metrics::parallel_executor_metrics();
+            m.pool_ask_queue_us.inc_by(ask_timings.queue_us);
+            m.pool_ask_in_pool_us.inc_by(ask_timings.in_pool_us);
+            m.pool_ask_return_us
+                .inc_by(ask_timings.responded_at.elapsed().as_micros() as u64);
+        }
         // The lane scheduler answers one ask with the COMPLETE worker
         // assignment (up to one batch per free worker), each carrying its
         // `BatchId`; the classic path answers with at most one id-less batch.

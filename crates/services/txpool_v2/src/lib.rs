@@ -71,6 +71,7 @@ pub use pool::{
     ExtractedBatch,
     TxPoolStats,
 };
+pub use pool_worker::AskTimings;
 pub use selection_algorithms::Constraints;
 pub use service::{
     Service,

@@ -97,6 +97,7 @@ impl SharedState {
             .try_send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
                     constraints,
+                    sent_at: std::time::Instant::now(),
                     transactions: select_transactions_sender,
                 },
             )
@@ -105,7 +106,7 @@ impl SharedState {
         loop {
             let result = select_transactions_receiver.try_recv();
             match result {
-                Ok((batches, _)) => {
+                Ok((batches, _, _)) => {
                     return Ok(batches.into_iter().flat_map(|batch| batch.txs).collect());
                 }
                 Err(TryRecvError::Empty) => continue,
@@ -123,13 +124,21 @@ impl SharedState {
     pub async fn extract_transactions_for_block_async(
         &self,
         constraints: Constraints,
-    ) -> Result<(Vec<ExtractedBatch>, HashSet<ContractId>), Error> {
+    ) -> Result<
+        (
+            Vec<ExtractedBatch>,
+            HashSet<ContractId>,
+            pool_worker::AskTimings,
+        ),
+        Error,
+    > {
         let (select_transactions_sender, select_transactions_receiver) =
             oneshot::channel();
         self.select_transactions_requests_sender
             .try_send(
                 pool_worker::PoolExtractBlockTransactions::ExtractBlockTransactions {
                     constraints,
+                    sent_at: std::time::Instant::now(),
                     transactions: select_transactions_sender,
                 },
             )
