@@ -45,6 +45,7 @@ pub use self::parallel_executor_metrics::{
     record_contract_handoff_merge,
     record_contract_handoff_split,
     record_execution_time,
+    record_pool_ask,
     record_scheduler_run_time,
     record_sequential_fallback,
     set_batch_anchor_contracts,

@@ -9,6 +9,7 @@ use fuel_core_types::fuel_tx::ContractId;
 use prometheus_client::{
     encoding::EncodeLabelSet,
     metrics::{
+        counter::Counter,
         family::Family,
         gauge::Gauge,
         histogram::Histogram,
@@ -74,6 +75,14 @@ pub struct ParallelExecutorMetrics {
     // Time the scheduler spent blocked asking the txpool for transactions
     // (`get_executable_transactions`), summed over the block.
     pub pool_ask_seconds: Gauge<f64, AtomicU64>,
+    // Ask-protocol shape counters (cumulative): how many times the scheduler
+    // asked the txpool for transactions, how many batches those asks returned,
+    // and how many transactions they yielded in total. `asks / blocks` and
+    // `txs / asks` are the yield-efficiency signals of the executor<->pool
+    // protocol.
+    pub pool_asks: Counter,
+    pub pool_ask_batches: Counter,
+    pub pool_ask_txs: Counter,
     // Decomposition of the scheduler's wall-clock production window into serial
     // phases (they sum to ~window); `execute_seconds` is the parallel
     // worker-busy time shown alongside for context, NOT part of the serial sum.
@@ -232,6 +241,9 @@ impl Default for ParallelExecutorMetrics {
             worker_available_seconds: Gauge::default(),
             time_to_first_dispatch_seconds: Gauge::default(),
             pool_ask_seconds: Gauge::default(),
+            pool_asks: Counter::default(),
+            pool_ask_batches: Counter::default(),
+            pool_ask_txs: Counter::default(),
             phase_prepare_seconds: Gauge::default(),
             phase_execute_seconds: Gauge::default(),
             phase_handoff_seconds: Gauge::default(),
@@ -426,6 +438,21 @@ impl Default for ParallelExecutorMetrics {
             "parallel_executor_pool_ask_seconds",
             "Time the scheduler spent blocked asking the txpool for transactions, summed over the block",
             metrics.pool_ask_seconds.clone(),
+        );
+        registry.register(
+            "parallel_executor_pool_asks",
+            "Number of transaction asks the scheduler sent to the txpool (cumulative)",
+            metrics.pool_asks.clone(),
+        );
+        registry.register(
+            "parallel_executor_pool_ask_batches",
+            "Number of batches returned across all txpool asks (cumulative)",
+            metrics.pool_ask_batches.clone(),
+        );
+        registry.register(
+            "parallel_executor_pool_ask_txs",
+            "Number of transactions returned across all txpool asks (cumulative)",
+            metrics.pool_ask_txs.clone(),
         );
         registry.register(
             "parallel_executor_phase_prepare_seconds",
@@ -630,6 +657,15 @@ fn record_batch_time(
     if gas_in_kgas > 0.0 {
         per_gas.observe(duration_ns(duration) / gas_in_kgas);
     }
+}
+
+/// Record one executor->txpool transaction ask: how many batches it returned
+/// and how many transactions those batches carried in total.
+pub fn record_pool_ask(batches: usize, txs: usize) {
+    let metrics = parallel_executor_metrics();
+    metrics.pool_asks.inc();
+    metrics.pool_ask_batches.inc_by(batches as u64);
+    metrics.pool_ask_txs.inc_by(txs as u64);
 }
 
 pub fn record_batch_prepare(duration: Duration, tx_count: u32, gas: u64) {
