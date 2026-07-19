@@ -242,6 +242,17 @@ struct TimeAccounting {
     /// Worker-seconds actually spent executing batch inner work (sum over
     /// completed and discarded batches).
     worker_busy: Duration,
+    /// Worker-phase split of `worker_busy` (answers "where does the worker's
+    /// time go INSIDE a batch"): storage-view/setup, VM execution, and
+    /// output/changes extraction. Sums over all completed batches.
+    worker_setup: Duration,
+    worker_vm: Duration,
+    worker_extract: Duration,
+    /// Dispatch-to-start latency summed over batches: the batch existed but
+    /// its worker task had not started running yet (tokio scheduling). The
+    /// remainder of (window*workers - busy - spawn_gap) is STARVATION: no
+    /// schedulable batch existed for that worker-time (lanes locked/empty).
+    worker_spawn_gap: Duration,
 }
 
 struct WorkSessionExecutionResult {
@@ -285,6 +296,12 @@ struct WorkSessionExecutionResult {
     coinbase: u64,
     /// Execution time for this batch
     execution_duration: Duration,
+    /// Dispatch-to-start latency (task creation to first poll).
+    spawn_gap: Duration,
+    /// Phase split of `execution_duration` (setup / vm / extract).
+    setup_duration: Duration,
+    vm_duration: Duration,
+    extract_duration: Duration,
 }
 
 #[derive(Clone, Copy)]
@@ -1130,6 +1147,10 @@ where
                 prepare_ms = prepare.as_millis() as u64,
                 pool_ask_ms = self.time_accounting.pool_ask.as_millis() as u64,
                 execute_worker_ms = self.time_accounting.worker_busy.as_millis() as u64,
+                worker_setup_ms = self.time_accounting.worker_setup.as_millis() as u64,
+                worker_vm_ms = self.time_accounting.worker_vm.as_millis() as u64,
+                worker_extract_ms = self.time_accounting.worker_extract.as_millis() as u64,
+                worker_spawn_gap_ms = self.time_accounting.worker_spawn_gap.as_millis() as u64,
                 handoff_ms = self.time_accounting.handoff.as_millis() as u64,
                 merge_ms = merge_elapsed.as_millis() as u64,
                 fallback_ms = self.time_accounting.fallback.as_millis() as u64,
@@ -1430,6 +1451,8 @@ where
             let instant = Instant::now();
             let storage_with_da = storage_with_da.clone();
             async move {
+                let started = Instant::now();
+                let spawn_gap = started.duration_since(instant);
                 let _worker_guard = worker_counters.as_ref().map(|counters| {
                     counters.record_started();
                     WorkerCountGuard {
@@ -1443,7 +1466,9 @@ where
                     changes_per_contract,
                 );
                 let mut storage_tx = StructuredStorage::new(memory_tx);
+                let setup_duration = started.elapsed();
 
+                let vm_start = Instant::now();
                 let (transactions, execution_data) = executor
                     .execute_l2_transactions(
                         Components {
@@ -1459,6 +1484,8 @@ where
                         memory.as_mut(),
                     )
                     .await?;
+                let vm_duration = vm_start.elapsed();
+                let extract_start = Instant::now();
                 let returned_tx_ids = transactions
                     .iter()
                     .map(|tx| tx.id(&chain_id))
@@ -1512,6 +1539,7 @@ where
 
                 let (changes, changes_per_contract) =
                     storage_tx.into_storage().into_changes();
+                let extract_duration = extract_start.elapsed();
 
                 let batch_duration = instant.elapsed();
                 tracing::trace!(
@@ -1539,6 +1567,10 @@ where
                     used_size: execution_data.used_size,
                     coinbase: execution_data.coinbase,
                     execution_duration: batch_duration,
+                    spawn_gap,
+                    setup_duration,
+                    vm_duration,
+                    extract_duration,
                 })
             }
         };
@@ -1621,6 +1653,22 @@ where
                 .time_accounting
                 .worker_busy
                 .saturating_add(res.execution_duration);
+            self.time_accounting.worker_setup = self
+                .time_accounting
+                .worker_setup
+                .saturating_add(res.setup_duration);
+            self.time_accounting.worker_vm = self
+                .time_accounting
+                .worker_vm
+                .saturating_add(res.vm_duration);
+            self.time_accounting.worker_extract = self
+                .time_accounting
+                .worker_extract
+                .saturating_add(res.extract_duration);
+            self.time_accounting.worker_spawn_gap = self
+                .time_accounting
+                .worker_spawn_gap
+                .saturating_add(res.spawn_gap);
         }
         if let Some(pending) = self.batch_feedback.get_mut(&res.batch_id) {
             pending.overhead = pending.overhead.saturating_add(merge_handoff_duration);
