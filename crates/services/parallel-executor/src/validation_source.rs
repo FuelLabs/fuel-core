@@ -53,6 +53,7 @@ use lane_scheduler::{
     BatchRequest,
     ExecutingContracts,
     LaneScheduler,
+    PriorityOrder,
     ScheduledTransaction,
     SchedulerConfig,
     WindowContext,
@@ -78,6 +79,9 @@ struct ValidationScheduledTx {
     size: u64,
     /// Pre-derived contract accesses (see [`derive_contract_accesses_from_io`]).
     accesses: Vec<(ContractId, Access)>,
+    /// This transaction's BLOCK position, as a scheduler rank — see
+    /// [`ScheduledTransaction::rank`].
+    block_order_rank: u64,
 }
 
 impl ScheduledTransaction for ValidationScheduledTx {
@@ -93,9 +97,21 @@ impl ScheduledTransaction for ValidationScheduledTx {
     }
 
     fn tip(&self) -> u64 {
-        // Priority is meaningless during validation: every block transaction is
-        // admitted (order falls back to admission order, then id).
+        // Not consulted: this scheduler runs under `PriorityOrder::Rank`, where
+        // ordering comes from `rank` below. Priority is meaningless during
+        // validation anyway — the block already fixed the set AND its order.
         0
+    }
+
+    fn rank(&self) -> u64 {
+        // The transaction's position in the block, counted so that EARLIER runs
+        // first (the scheduler ranks higher first).
+        //
+        // Validation must replay a contract's accesses in block order: each
+        // transaction takes the contract's latest UTXO id and pointer as its
+        // contract input, so running them out of order reconstructs different
+        // transactions and the block comparison fails.
+        self.block_order_rank
     }
 
     fn size(&self) -> u64 {
@@ -197,6 +213,9 @@ impl ValidationTransactionsSource {
             // this only seeds analytic slice sizing.
             workers: 1,
             block_gas_limit: Some(consensus_parameters.block_gas_limit()),
+            // Replay the block's order rather than re-deriving a fee order that
+            // has no meaning for an already-fixed transaction set.
+            priority: PriorityOrder::Rank,
             ..SchedulerConfig::default()
         });
         let mut pending = HashMap::with_capacity(transactions.len());
@@ -237,6 +256,11 @@ impl ValidationTransactionsSource {
             // PRODUCTION keeps its coin-parent gating (see the txpool source):
             // there the block order is being CHOSEN rather than replayed, and a
             // child whose parent is skipped must not be included.
+            // Higher rank = scheduled earlier, so count DOWN from the block's
+            // length: transaction 0 gets the highest rank.
+            let block_order_rank =
+                u64::try_from(transactions.len().saturating_sub(index))
+                    .unwrap_or(u64::MAX);
             let max_gas = tx.max_gas(consensus_parameters)?;
             let size = tx.size() as u64;
             let block_index = first_block_index
@@ -252,6 +276,7 @@ impl ValidationTransactionsSource {
                 max_gas,
                 size,
                 accesses,
+                block_order_rank,
             }));
             pending.insert(
                 id,

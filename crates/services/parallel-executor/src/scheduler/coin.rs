@@ -283,9 +283,10 @@ impl CoinDependencyChainVerifier {
     /// first — and then the creator's insert lands last and the coin would
     /// survive into the final state and the state root.
     ///
-    /// Only those inverted pairs need a trailing remove. Emitting one for every
-    /// created-and-spent coin would instead double-remove the common case,
-    /// which the conflict-checked fold rejects outright.
+    /// The merge cancels both writes of such a pair — see the net-out in
+    /// `verify_coherency_and_merge_results`. Only INVERTED pairs are returned:
+    /// an in-order pair's natural insert-then-remove is already correct, and
+    /// touching it would corrupt the common case.
     pub fn coins_needing_net_out(&self) -> Vec<UtxoId> {
         let mut inverted: Vec<UtxoId> = self
             .spender_batch
@@ -544,8 +545,8 @@ mod tests {
 
     // ONLY an inverted pair — creator batch merging AFTER the spender batch —
     // needs the merge net-out. The in-order case already ends up absent because
-    // the creating insert is applied before the spending remove, and emitting a
-    // second remove for it would be rejected by the conflict-checked fold.
+    // the creating insert is applied before the spending remove; cancelling its
+    // writes too would wrongly resurrect a coin the block really spent.
     #[test]
     fn only_inverted_create_spend_pairs_need_net_out() {
         let inverted = UtxoId::new([15u8; 32].into(), 0);

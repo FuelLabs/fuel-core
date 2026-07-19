@@ -1969,40 +1969,59 @@ where
                     })?;
             }
         }
-        let contract_changes = core::mem::take(&mut self.contracts_changes);
-        storage_changes.extend(contract_changes.into_values());
-
-        // NET-OUT: a coin both created and spent inside this block must be
-        // ABSENT from the final state. Sequential execution gets that for free
-        // — the creating insert is applied before the spending remove. The
-        // parallel merge applies whole batches in batch-id order, and a coin
-        // child may now be dispatched into an EARLIER batch than its parent, so
-        // the spending remove can be applied BEFORE the creating insert and the
-        // coin would survive into the final state (and the state root).
+        // NET-OUT: cancel the create/spend pair of every coin whose creating
+        // batch merges AFTER its spending batch.
         //
-        // Re-applying the remove last is order-independent and idempotent: the
-        // coin is provably created and provably spent within this block (both
-        // facts are what put it in this set), so "absent" is the sequential
-        // outcome no matter how the batches fell.
+        // A coin created and spent inside the block must be ABSENT from the
+        // final state. Sequentially that is automatic — the creating insert is
+        // applied before the spending remove. The merge applies whole batches
+        // in batch-id order, and validation no longer gates a coin child on its
+        // parent, so the spending remove can land FIRST. That order is not
+        // merely wrong-looking, it is rejected outright: the conflict-checked
+        // fold refuses `Remove` followed by `Insert`.
+        //
+        // Dropping BOTH writes is the exact net: such a coin's `UtxoId` is
+        // derived from the creating transaction, so it cannot pre-exist in the
+        // base state, and "no entry at all" therefore means the same absent
+        // state that sequential execution reaches. Reordering the batches
+        // instead is not an option — two batches can each create a coin the
+        // other spends, so no merge order satisfies every pair.
+        //
+        // Only INVERTED pairs are cancelled; an in-order pair keeps its natural
+        // insert-then-remove and is untouched.
         let netted_coins = compiled_created_coins.coins_needing_net_out();
         if !netted_coins.is_empty() {
-            let mut netting = StorageTransaction::transaction(
+            // Derive the affected storage keys through the table's own codec
+            // rather than re-implementing the encoding here.
+            let mut probe = StorageTransaction::transaction(
                 &block_transaction,
                 ConflictPolicy::Overwrite,
                 Changes::default(),
             );
-            for utxo_id in netted_coins {
-                netting
+            for utxo_id in &netted_coins {
+                probe
                     .storage_as_mut::<Coins>()
-                    .remove(&utxo_id)
+                    .remove(utxo_id)
                     .map_err(|e| {
                         SchedulerError::InternalError(format!(
-                            "failed to net out in-block coin {utxo_id}: {e}"
+                            "failed to derive the storage key of in-block coin \
+                         {utxo_id}: {e}"
                         ))
                     })?;
             }
-            storage_changes.push(netting.into_changes());
+            for (column, keys) in probe.into_changes() {
+                for key in keys.into_keys() {
+                    for changes in storage_changes.iter_mut() {
+                        if let Some(column_changes) = changes.get_mut(&column) {
+                            column_changes.remove(&key);
+                        }
+                    }
+                }
+            }
         }
+
+        let contract_changes = core::mem::take(&mut self.contracts_changes);
+        storage_changes.extend(contract_changes.into_values());
         exec_result.changes = StorageChanges::ChangesList(storage_changes);
         Ok((
             exec_result,
