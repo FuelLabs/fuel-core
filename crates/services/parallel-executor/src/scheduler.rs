@@ -1650,6 +1650,20 @@ where
     }
 
     fn register_execution_result(&mut self, res: WorkSessionExecutionResult) {
+        // Per-batch executor timing at microsecond precision, so the real
+        // per-batch OVERHEAD (everything that is not VM work: dispatch gap +
+        // storage-view setup + result extraction) can be measured and fed to
+        // the validation scheduler as its `batch_overhead`. Millisecond
+        // rounding in the block summary hides setup/extract entirely.
+        tracing::debug!(
+            target: "parallel_executor::batch_timing",
+            n = res.txs.len(),
+            used_gas = res.used_gas,
+            spawn_gap_us = res.spawn_gap.as_micros() as u64,
+            setup_us = res.setup_duration.as_micros() as u64,
+            vm_us = res.vm_duration.as_micros() as u64,
+            extract_us = res.extract_duration.as_micros() as u64,
+        );
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
         }
