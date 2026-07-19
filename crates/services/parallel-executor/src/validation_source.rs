@@ -15,8 +15,12 @@
 //!   ([`crate::ports::ExecutableBatch::execution_indices`]) so their
 //!   `TxPointer`s land at the received block's indices.
 //! * Batch-completion feedback is applied directly to the local lane scheduler
-//!   (releasing in-block children whose parents completed) and pings the
-//!   new-transactions notifier so the scheduler's run loop re-asks.
+//!   and pings the new-transactions notifier so the scheduler's run loop
+//!   re-asks.
+//! * NO in-block coin parents are declared: a coin child does not need its
+//!   parent to have executed (see `new` below). Coin ordering is enforced by
+//!   block index in `CoinDependencyChainVerifier` and, within a batch, by
+//!   handing transactions over in block order.
 
 use crate::ports::{
     BatchFeedbackHandle,
@@ -74,9 +78,6 @@ struct ValidationScheduledTx {
     size: u64,
     /// Pre-derived contract accesses (see [`derive_contract_accesses_from_io`]).
     accesses: Vec<(ContractId, Access)>,
-    /// In-block coin parents: ids of EARLIER transactions in the same block
-    /// whose outputs this transaction spends.
-    parents: Vec<TxId>,
 }
 
 impl ScheduledTransaction for ValidationScheduledTx {
@@ -106,7 +107,8 @@ impl ScheduledTransaction for ValidationScheduledTx {
     }
 
     fn parents(&self) -> impl Iterator<Item = TxId> + '_ {
-        self.parents.iter().copied()
+        // Deliberately none — see the module docs and `new`.
+        core::iter::empty()
     }
 }
 
@@ -189,14 +191,6 @@ impl ValidationTransactionsSource {
     ) -> ExecutorResult<Self> {
         let chain_id = consensus_parameters.chain_id();
 
-        // First pass: block position of every transaction id, for the in-block
-        // coin-parent derivation below.
-        let mut position_by_id: HashMap<TxId, usize> =
-            HashMap::with_capacity(transactions.len());
-        for (index, tx) in transactions.iter().enumerate() {
-            position_by_id.insert(tx.id(&chain_id), index);
-        }
-
         let mut lane = LaneScheduler::new(SchedulerConfig {
             // Mirrors the txpool's lane integration: the per-request
             // `BatchRequest::workers` is the ground truth for the answer shape;
@@ -213,25 +207,36 @@ impl ValidationTransactionsSource {
             let outputs = tx.outputs();
             let accesses = derive_contract_accesses_from_io(&inputs, &outputs);
 
-            // In-block coin dependencies: inputs spending a UtxoId whose tx_id
-            // belongs to an EARLIER transaction of this same block. A spend of
-            // a LATER transaction's output is not a schedulable dependency —
-            // the block is invalid, and executing the spender first surfaces
-            // that as a validation failure (matching sequential).
-            let mut parents = Vec::new();
-            for input in inputs.iter() {
-                if let Some(utxo_id) = input.utxo_id() {
-                    if let Some(parent_index) = position_by_id.get(utxo_id.tx_id()) {
-                        if *parent_index < index {
-                            let parent_id = *utxo_id.tx_id();
-                            if !parents.contains(&parent_id) {
-                                parents.push(parent_id);
-                            }
-                        }
-                    }
-                }
-            }
-
+            // NO in-block coin dependencies are declared to the scheduler.
+            //
+            // A coin child does not need its parent to have executed: Fuel's
+            // `Input::CoinSigned`/`CoinPredicate` DECLARE the coin's `owner`,
+            // `amount` and `asset_id`, and the executor builds the coin from
+            // those input fields (`get_coin_or_default`). The parallel path
+            // already runs with `forbid_fake_utxo: false` precisely so batches
+            // may execute against pre-block views where same-block coins do not
+            // exist yet, with existence and equality checked afterwards by
+            // `CoinDependencyChainVerifier` — a child spending a coin its
+            // parent never really produced is caught there, and the parent's
+            // own transaction fails its output comparison besides.
+            //
+            // What the block DOES require is that a coin only funds a LATER
+            // transaction. That is an ordering fact fixed by the block, so the
+            // verifier decides it from BLOCK INDICES rather than from the order
+            // the scheduler happened to dispatch batches in. Declaring it as a
+            // scheduling edge as well only made the child unschedulable until
+            // its parent's batch completed — measured as the dominant cost of
+            // parallel validation (real block 5026: 4.79/8 average worker
+            // concurrency with the edges, 7.49/8 without, and all structural
+            // starvation — including the cross-book lock concentration caused
+            // by promoting such children — falling to zero).
+            //
+            // Contract ordering is unaffected: same-contract transactions are
+            // still serialized, in block order, by the lane FIFO.
+            //
+            // PRODUCTION keeps its coin-parent gating (see the txpool source):
+            // there the block order is being CHOSEN rather than replayed, and a
+            // child whose parent is skipped must not be included.
             let max_gas = tx.max_gas(consensus_parameters)?;
             let size = tx.size() as u64;
             let block_index = first_block_index
@@ -247,7 +252,6 @@ impl ValidationTransactionsSource {
                 max_gas,
                 size,
                 accesses,
-                parents,
             }));
             pending.insert(
                 id,
@@ -312,8 +316,7 @@ impl ValidationTransactionsSource {
         for proposal in proposals {
             inner.lane.on_dispatched(proposal.batch_id, &proposal.txs);
 
-            let mut transactions = Vec::with_capacity(proposal.txs.len());
-            let mut execution_indices = Vec::with_capacity(proposal.txs.len());
+            let mut picked = Vec::with_capacity(proposal.txs.len());
             for tx_id in &proposal.txs {
                 let pending = inner.pending.remove(tx_id).ok_or_else(|| {
                     anyhow::anyhow!(
@@ -321,6 +324,29 @@ impl ValidationTransactionsSource {
                          transaction {tx_id}"
                     )
                 })?;
+                picked.push(pending);
+            }
+
+            // A batch's transactions execute SEQUENTIALLY inside its worker, in
+            // the order handed over, so that order must be BLOCK order.
+            //
+            // The scheduler is free to return them in any order — and since
+            // validation no longer declares in-block coin parents, nothing else
+            // constrains a coin child to follow its parent within one batch.
+            // Executing the child first would spend a coin the parent has not
+            // created yet: the input's declared fields still make the child's
+            // own execution come out right, but the batch's writes then land in
+            // the wrong order (create-after-spend) and its state diverges from
+            // sequential. Sorting here restores exactly the sequential
+            // semantics WITHIN a batch, while different batches remain free to
+            // run in any order (their coin ordering is checked by block index
+            // in `CoinDependencyChainVerifier` and repaired, where the merge
+            // inverts a create/spend pair, by the net-out).
+            picked.sort_unstable_by_key(|pending| pending.block_index);
+
+            let mut transactions = Vec::with_capacity(picked.len());
+            let mut execution_indices = Vec::with_capacity(picked.len());
+            for pending in picked {
                 execution_indices.push(pending.block_index);
                 // Validation executes UNCHECKED transactions (full checks at
                 // execution time), exactly like the sequential validator.
@@ -503,8 +529,14 @@ mod tests {
         }
     }
 
+    // A coin child is NOT gated on its parent during validation: both are
+    // released in the SAME ask. The child's input declares the coin's owner,
+    // amount and asset id, so it executes correctly whether or not its parent
+    // has run; ordering is enforced where it actually matters — by block index
+    // in `CoinDependencyChainVerifier`, and by block order WITHIN a batch (see
+    // below). Gating them cost roughly a third of validation's worker time.
     #[test]
-    fn in_block_coin_child_waits_for_its_parent_batch() {
+    fn in_block_coin_child_is_not_gated_on_its_parent() {
         let params = params();
         let parent = coin_tx(1, None);
         let parent_id = parent.id(&params.chain_id());
@@ -513,27 +545,55 @@ mod tests {
         let txs = vec![parent, child];
         let source = ValidationTransactionsSource::new(&txs, 0, &params).expect("source");
 
-        // First ask: only the parent is ready.
         let answer = ask(&source, 2);
         let dispatched: Vec<TxId> = answer
             .batches
             .iter()
             .flat_map(|b| b.transactions.iter().map(|tx| tx.id(&params.chain_id())))
             .collect();
-        assert!(dispatched.contains(&parent_id));
-        assert!(!dispatched.contains(&child_id), "child released too early");
+        assert!(
+            dispatched.contains(&parent_id) && dispatched.contains(&child_id),
+            "parent and child must both be schedulable immediately",
+        );
         for batch in answer.batches {
             complete(batch);
         }
+        assert_eq!(source.pending_count(), 0);
+    }
 
-        // After the parent's completion feedback, the child becomes ready.
-        let answer = ask(&source, 2);
-        let dispatched: Vec<TxId> = answer
-            .batches
-            .iter()
-            .flat_map(|b| b.transactions.iter().map(|tx| tx.id(&params.chain_id())))
-            .collect();
-        assert!(dispatched.contains(&child_id));
+    // Whatever order the scheduler proposes them in, a batch hands its
+    // transactions over in BLOCK order — they execute sequentially inside the
+    // worker, so any other order would apply their writes out of sequence (a
+    // coin child spending before its parent creates, for instance) and diverge
+    // from sequential execution.
+    #[test]
+    fn batches_are_handed_over_in_block_order() {
+        let params = params();
+        let txs: Vec<Transaction> = (1..=6u8).map(|i| coin_tx(i, None)).collect();
+        let source = ValidationTransactionsSource::new(&txs, 0, &params).expect("source");
+
+        let mut batches_seen = 0;
+        loop {
+            let answer = ask(&source, 4);
+            if answer.batches.is_empty() {
+                break;
+            }
+            for batch in answer.batches {
+                let indices = batch
+                    .execution_indices
+                    .clone()
+                    .expect("validation batches carry explicit indices");
+                let mut sorted = indices.clone();
+                sorted.sort_unstable();
+                assert_eq!(
+                    indices, sorted,
+                    "a batch must be handed over in block order",
+                );
+                batches_seen += 1;
+                complete(batch);
+            }
+        }
+        assert!(batches_seen > 0);
         assert_eq!(source.pending_count(), 0);
     }
 }

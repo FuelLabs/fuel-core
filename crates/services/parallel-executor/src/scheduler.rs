@@ -42,6 +42,7 @@ use fuel_core_executor::{
 };
 use fuel_core_storage::{
     Error as StorageError,
+    StorageAsMut,
     StorageAsRef,
     column::Column,
     kv_store::{
@@ -1535,6 +1536,29 @@ where
                             }
                         });
                     }
+                    // Re-key the survivors onto the COMMITTED transaction list.
+                    // `coins_used` carries the index each coin had in the batch
+                    // as DISPATCHED, but `coins_created` is enumerated over the
+                    // committed transactions and the merge assigns block indices
+                    // to those — so after a skip the two bases disagree and a
+                    // coin's index can even run past the batch's committed
+                    // length. Drop any survivor whose transaction did not
+                    // commit (defensive: `retain` above should have removed it).
+                    let committed_position: FxHashMap<TxId, usize> = execution_data
+                        .tx_status
+                        .iter()
+                        .enumerate()
+                        .map(|(position, status)| (status.id, position))
+                        .collect();
+                    batch.coins_used.retain_mut(|coin| {
+                        match committed_position.get(coin.tx_id()) {
+                            Some(position) => {
+                                coin.set_idx(*position);
+                                true
+                            }
+                            None => false,
+                        }
+                    });
                 }
 
                 let (changes, changes_per_contract) =
@@ -1834,12 +1858,73 @@ where
         // Final block index of every merged transaction, in merge order.
         let mut final_tx_indices: Vec<u32> = Vec::new();
         let mut next_contiguous_index = l1_tx_count;
+
+        // PRE-PASS: take every batch's results and assign its transactions'
+        // final BLOCK indices, then register every coin the block creates —
+        // all of it before the first use is verified.
+        //
+        // A coin child may now be dispatched into an EARLIER batch than its
+        // parent (validation drops the coin-parent scheduling edge), so
+        // "was this coin created in the block?" can no longer be answered from
+        // the batches merged so far, and "is the creation ordered before the
+        // use?" can no longer be decided from batch ids. Both are answered
+        // from the block indices, which the block fixes upfront.
+        let mut batches: Vec<WorkSessionSavedData> = Vec::with_capacity(nb_batch);
+        let mut block_indices_per_batch: Vec<Vec<u32>> = Vec::with_capacity(nb_batch);
         for batch_id in 0..nb_batch {
-            if let Some(changes) = self.execution_results.remove(&batch_id) {
-                compiled_created_coins
-                    .register_coins_created(batch_id, changes.coins_created);
+            let changes = self.execution_results.remove(&batch_id).ok_or_else(|| {
+                SchedulerError::InternalError(format!(
+                    "Batch {batch_id} not found in the execution results"
+                ))
+            })?;
+            let batch_tx_count = changes.txs.len();
+            // Explicit (validation) or the running execution counter
+            // (production — batches merge in batch-id order, which IS dispatch
+            // order, so the counter reproduces each tx's `start_idx_txs`-based
+            // execution index, including after a fallback collapse).
+            let indices = if let Some(explicit) =
+                self.dispatched_explicit_indices.remove(&batch_id)
+            {
+                if explicit.len() != batch_tx_count {
+                    return Err(SchedulerError::InternalError(format!(
+                        "batch {batch_id} committed {batch_tx_count} \
+                         transaction(s) but carried {} explicit indices",
+                        explicit.len()
+                    )));
+                }
+                explicit
+            } else {
+                let mut indices = Vec::with_capacity(batch_tx_count);
+                for _ in 0..batch_tx_count {
+                    indices.push(next_contiguous_index);
+                    next_contiguous_index =
+                        next_contiguous_index.checked_add(1).ok_or_else(|| {
+                            SchedulerError::InternalError(
+                                "Transaction count overflow".to_string(),
+                            )
+                        })?;
+                }
+                indices
+            };
+            batches.push(changes);
+            block_indices_per_batch.push(indices);
+        }
+        for (batch_id, (batch, block_indices)) in
+            batches.iter_mut().zip(&block_indices_per_batch).enumerate()
+        {
+            compiled_created_coins.register_coins_created(
+                batch_id,
+                block_indices,
+                core::mem::take(&mut batch.coins_created),
+            )?;
+        }
+
+        for (batch_id, changes) in batches.into_iter().enumerate() {
+            {
+                let block_indices = &block_indices_per_batch[batch_id];
                 compiled_created_coins.verify_coins_used(
                     batch_id,
+                    block_indices,
                     changes.coins_used.iter(),
                     &block_transaction,
                 )?;
@@ -1855,33 +1940,8 @@ where
                 exec_result.message_ids.extend(changes.message_ids);
                 exec_result.skipped_txs.extend(changes.skipped_tx);
                 exec_result.transactions_status.extend(changes.tx_statuses);
-                // Reconstruct this batch's final block indices: explicit
-                // (validation) or the running execution counter (production —
-                // batches merge in batch-id order, which IS dispatch order, so
-                // the counter reproduces each tx's `start_idx_txs`-based
-                // execution index, including after a fallback collapse).
-                let batch_tx_count = changes.txs.len();
-                if let Some(explicit) = self.dispatched_explicit_indices.remove(&batch_id)
-                {
-                    if explicit.len() != batch_tx_count {
-                        return Err(SchedulerError::InternalError(format!(
-                            "batch {batch_id} committed {batch_tx_count} \
-                             transaction(s) but carried {} explicit indices",
-                            explicit.len()
-                        )));
-                    }
-                    final_tx_indices.extend(explicit);
-                } else {
-                    for _ in 0..batch_tx_count {
-                        final_tx_indices.push(next_contiguous_index);
-                        next_contiguous_index =
-                            next_contiguous_index.checked_add(1).ok_or_else(|| {
-                                SchedulerError::InternalError(
-                                    "Transaction count overflow".to_string(),
-                                )
-                            })?;
-                    }
-                }
+                // Block indices for this batch were assigned in the pre-pass.
+                final_tx_indices.extend_from_slice(block_indices);
                 exec_result.transactions.extend(changes.txs);
                 exec_result.used_gas = exec_result
                     .used_gas
@@ -1907,14 +1967,42 @@ where
                             "coinbase has overflowed u64".to_string(),
                         )
                     })?;
-            } else {
-                return Err(SchedulerError::InternalError(format!(
-                    "Batch {batch_id} not found in the execution results"
-                )));
             }
         }
         let contract_changes = core::mem::take(&mut self.contracts_changes);
         storage_changes.extend(contract_changes.into_values());
+
+        // NET-OUT: a coin both created and spent inside this block must be
+        // ABSENT from the final state. Sequential execution gets that for free
+        // — the creating insert is applied before the spending remove. The
+        // parallel merge applies whole batches in batch-id order, and a coin
+        // child may now be dispatched into an EARLIER batch than its parent, so
+        // the spending remove can be applied BEFORE the creating insert and the
+        // coin would survive into the final state (and the state root).
+        //
+        // Re-applying the remove last is order-independent and idempotent: the
+        // coin is provably created and provably spent within this block (both
+        // facts are what put it in this set), so "absent" is the sequential
+        // outcome no matter how the batches fell.
+        let netted_coins = compiled_created_coins.coins_needing_net_out();
+        if !netted_coins.is_empty() {
+            let mut netting = StorageTransaction::transaction(
+                &block_transaction,
+                ConflictPolicy::Overwrite,
+                Changes::default(),
+            );
+            for utxo_id in netted_coins {
+                netting
+                    .storage_as_mut::<Coins>()
+                    .remove(&utxo_id)
+                    .map_err(|e| {
+                        SchedulerError::InternalError(format!(
+                            "failed to net out in-block coin {utxo_id}: {e}"
+                        ))
+                    })?;
+            }
+            storage_changes.push(netting.into_changes());
+        }
         exec_result.changes = StorageChanges::ChangesList(storage_changes);
         Ok((
             exec_result,
