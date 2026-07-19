@@ -9,7 +9,10 @@ use crate::{
         fold_changes_in_canonical_order,
     },
     tx_waiter::NoWaitTxs,
-    validation_source::ValidationTransactionsSource,
+    validation_source::{
+        ValidationOverheadEstimate,
+        ValidationTransactionsSource,
+    },
 };
 use fuel_core_executor::{
     executor::{
@@ -77,6 +80,7 @@ use fuel_core_types::{
 };
 use std::{
     collections::HashMap,
+    sync::Arc,
     time::Duration,
 };
 use tokio::{
@@ -105,6 +109,11 @@ pub struct Executor<S, R, P> {
     preconfirmation_sender: P,
     memory_pool: MemoryPool,
     runtime: Option<Runtime>,
+    /// The per-batch overhead validation has measured so far, in gas. The
+    /// validation scheduler plans a whole block before its first batch runs,
+    /// so it cannot learn this during the block it is sizing — the estimate
+    /// carries across blocks. See [`ValidationOverheadEstimate`].
+    validation_overhead: Arc<ValidationOverheadEstimate>,
 }
 
 impl<S, R, P> Drop for Executor<S, R, P> {
@@ -136,6 +145,7 @@ impl<S, R, P> Executor<S, R, P> {
             relayer,
             storage: storage_view_provider,
             preconfirmation_sender,
+            validation_overhead: Arc::new(ValidationOverheadEstimate::default()),
         })
     }
 }
@@ -607,8 +617,13 @@ where
 
         // --- Parallel re-execution of the L2 transactions ---------------------
         let phase_start = Instant::now();
-        let transactions_source =
-            ValidationTransactionsSource::new(l2_txs, 0, &consensus_parameters)?;
+        let transactions_source = ValidationTransactionsSource::new(
+            l2_txs,
+            0,
+            &consensus_parameters,
+            self.config.worker_count.get(),
+            Arc::clone(&self.validation_overhead),
+        )?;
         let seed_time = phase_start.elapsed();
         let components = Components {
             header_to_produce: PartialBlockHeader::from(block.header()),

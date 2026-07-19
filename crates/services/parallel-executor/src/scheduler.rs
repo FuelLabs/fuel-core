@@ -1980,15 +1980,20 @@ where
         // merely wrong-looking, it is rejected outright: the conflict-checked
         // fold refuses `Remove` followed by `Insert`.
         //
-        // Dropping BOTH writes is the exact net: such a coin's `UtxoId` is
-        // derived from the creating transaction, so it cannot pre-exist in the
-        // base state, and "no entry at all" therefore means the same absent
-        // state that sequential execution reaches. Reordering the batches
-        // instead is not an option — two batches can each create a coin the
-        // other spends, so no merge order satisfies every pair.
+        // The fix drops the creating INSERT and keeps the spending REMOVE.
+        // That is what sequential execution leaves behind: it inserts the coin
+        // and then removes it, and the fold collapses that pair to `Remove`.
+        // Dropping both writes instead reaches the same STATE — such a coin's
+        // `UtxoId` is derived from the creating transaction, so it cannot
+        // pre-exist and "absent" is right — but it emits a different change
+        // set than the sequential executor, and the block's changes are
+        // compared, not just its resulting state.
         //
-        // Only INVERTED pairs are cancelled; an in-order pair keeps its natural
-        // insert-then-remove and is untouched.
+        // Reordering the batches is not an option: two batches can each create
+        // a coin the other spends, so no merge order satisfies every pair.
+        //
+        // Only INVERTED pairs are touched; an in-order pair keeps its natural
+        // insert-then-remove.
         let netted_coins = compiled_created_coins.coins_needing_net_out();
         if !netted_coins.is_empty() {
             // Derive the affected storage keys through the table's own codec
@@ -2013,7 +2018,14 @@ where
                 for key in keys.into_keys() {
                     for changes in storage_changes.iter_mut() {
                         if let Some(column_changes) = changes.get_mut(&column) {
-                            column_changes.remove(&key);
+                            // Only the creating insert goes; the spending
+                            // remove is what sequential execution leaves.
+                            if matches!(
+                                column_changes.get(&key),
+                                Some(WriteOperation::Insert(_))
+                            ) {
+                                column_changes.remove(&key);
+                            }
                         }
                     }
                 }

@@ -1,26 +1,37 @@
 //! A [`TransactionsSource`] over a RECEIVED block, used for parallel block
 //! VALIDATION.
 //!
-//! The source seeds a local [`lane_scheduler::LaneScheduler`] with the block's
-//! L2 transactions (in block order) and answers the scheduler's asks with
-//! conflict-free batches, exactly like the txpool's lane integration does for
-//! block production (see `fuel-core-txpool`'s `lane_integration` module, the
-//! source of truth for the access-derivation rule mirrored here).
+//! Validation is a different scheduling problem from production, and this
+//! source uses a different algorithm for it: [`lane_scheduler::ValidationScheduler`].
 //!
-//! Differences from the production pool source:
-//! * The transaction set is CLOSED (the block): every transaction is admitted
-//!   with `tip = 0` — priority is meaningless during validation, everything is
-//!   executed eventually.
-//! * Each batch carries the EXPLICIT block positions of its transactions
-//!   ([`crate::ports::ExecutableBatch::execution_indices`]) so their
-//!   `TxPointer`s land at the received block's indices.
-//! * Batch-completion feedback is applied directly to the local lane scheduler
-//!   and pings the new-transactions notifier so the scheduler's run loop
-//!   re-asks.
-//! * NO in-block coin parents are declared: a coin child does not need its
-//!   parent to have executed (see `new` below). Coin ordering is enforced by
-//!   block index in `CoinDependencyChainVerifier` and, within a batch, by
-//!   handing transactions over in block order.
+//! Production CHOOSES a block's contents and order, so it ranks by fee rate and
+//! whatever order the workers happen to finish in BECOMES the block's order.
+//! Validation REPLAYS a block that already fixed both, and every transaction
+//! must observe exactly the contract state its position implies — the executor
+//! derives `TxPointer`s from that position, and a contract input carries the
+//! latest utxo id and pointer of the contract it touches.
+//!
+//! Ordering by rank was not enough for that. A rank only orders what is
+//! ELIGIBLE at ask time, so an earlier transaction blocked on one contract
+//! loses its place to a later one that happens to be free — measured on real
+//! block 5026 as a contract READER observing a writer that the block places
+//! after it. The validation scheduler instead builds the block's dependency
+//! graph once (write-after-write, read-after-write AND write-after-read) and
+//! hands out batches that cannot violate it, so "the state its position
+//! implies" holds by construction rather than by hope.
+//!
+//! Properties this source relies on:
+//! * A batch's positions come out in ASCENDING block order, and a batch
+//!   executes sequentially inside its worker, so a batch reproduces sequential
+//!   semantics for the transactions it holds.
+//! * Positions need not be contiguous: a worker may be handed 1, 3, 5 and 10
+//!   because they form one contract's chain. The executor supports that through
+//!   [`crate::ports::ExecutableBatch::execution_indices`].
+//! * Concurrent READERS of a contract stay concurrent — the reason accesses are
+//!   modelled as Read/Write rather than all-Write.
+//! * NO in-block coin parents are edges: a coin child does not need its parent
+//!   to have executed (see `new`). Coin ordering is enforced by block index in
+//!   `CoinDependencyChainVerifier` and, within a batch, by ascending positions.
 
 use crate::ports::{
     BatchFeedbackHandle,
@@ -39,7 +50,6 @@ use fuel_core_types::{
         Input,
         Output,
         Transaction,
-        TxId,
         UniqueIdentifier,
     },
     services::executor::{
@@ -49,84 +59,24 @@ use fuel_core_types::{
 };
 use lane_scheduler::{
     Access,
-    BatchFeedback,
-    BatchRequest,
-    ExecutingContracts,
-    LaneScheduler,
-    PriorityOrder,
-    ScheduledTransaction,
-    SchedulerConfig,
-    WindowContext,
-    WorkerBudget,
+    PlanBudget,
+    ValidationCost,
+    ValidationRequest,
+    ValidationScheduler,
+    ValidationTx,
 };
 use std::{
-    collections::{
-        HashMap,
-        HashSet,
-    },
+    collections::HashSet,
     sync::{
         Arc,
         Mutex,
+        atomic::{
+            AtomicU64,
+            Ordering,
+        },
     },
 };
 use tokio::sync::watch;
-
-/// The received block's transaction as seen by the local lane scheduler.
-#[derive(Debug)]
-struct ValidationScheduledTx {
-    id: TxId,
-    max_gas: u64,
-    size: u64,
-    /// Pre-derived contract accesses (see [`derive_contract_accesses_from_io`]).
-    accesses: Vec<(ContractId, Access)>,
-    /// This transaction's BLOCK position, as a scheduler rank — see
-    /// [`ScheduledTransaction::rank`].
-    block_order_rank: u64,
-}
-
-impl ScheduledTransaction for ValidationScheduledTx {
-    type Id = TxId;
-    type ContractId = ContractId;
-
-    fn id(&self) -> TxId {
-        self.id
-    }
-
-    fn max_gas(&self) -> u64 {
-        self.max_gas
-    }
-
-    fn tip(&self) -> u64 {
-        // Not consulted: this scheduler runs under `PriorityOrder::Rank`, where
-        // ordering comes from `rank` below. Priority is meaningless during
-        // validation anyway — the block already fixed the set AND its order.
-        0
-    }
-
-    fn rank(&self) -> u64 {
-        // The transaction's position in the block, counted so that EARLIER runs
-        // first (the scheduler ranks higher first).
-        //
-        // Validation must replay a contract's accesses in block order: each
-        // transaction takes the contract's latest UTXO id and pointer as its
-        // contract input, so running them out of order reconstructs different
-        // transactions and the block comparison fails.
-        self.block_order_rank
-    }
-
-    fn size(&self) -> u64 {
-        self.size
-    }
-
-    fn contract_accesses(&self) -> impl Iterator<Item = (ContractId, Access)> + '_ {
-        self.accesses.iter().copied()
-    }
-
-    fn parents(&self) -> impl Iterator<Item = TxId> + '_ {
-        // Deliberately none — see the module docs and `new`.
-        core::iter::empty()
-    }
-}
 
 /// Apply the fuel-core Read/Write derivation rule to a transaction's I/O.
 ///
@@ -170,63 +120,88 @@ fn derive_contract_accesses_from_io(
     accesses
 }
 
-/// A block transaction awaiting dispatch.
-struct PendingTx {
-    tx: Transaction,
-    /// Position of the transaction in the RECEIVED block (counted from after
-    /// any L1-processed prefix; the mint is not part of the source).
-    block_index: u32,
+/// The executor's measured per-batch overhead, expressed in GAS so it can be
+/// compared against transaction gas, and carried ACROSS blocks.
+///
+/// The validation scheduler plans the whole block before the first batch runs,
+/// so unlike the production scheduler it cannot learn the overhead during the
+/// block it is sizing — it needs a figure up front. Each completed batch
+/// reports its overhead and execution time in nanoseconds, and the batch's own
+/// declared gas converts one into the other:
+///
+/// ```text
+/// overhead_gas = overhead_ns * batch_gas / execution_ns
+/// ```
+///
+/// The running mean of that lands here and seeds the NEXT block. Zero (the
+/// starting value, before any batch has ever been measured) makes the
+/// scheduler plan one transaction per batch, which is the correct answer when
+/// batching genuinely saves nothing.
+#[derive(Debug, Default)]
+pub struct ValidationOverheadEstimate {
+    gas: AtomicU64,
+}
+
+impl ValidationOverheadEstimate {
+    /// The current estimate, for seeding a block's plan.
+    pub fn get(&self) -> u64 {
+        self.gas.load(Ordering::Relaxed)
+    }
+
+    fn set(&self, gas: u64) {
+        self.gas.store(gas, Ordering::Relaxed);
+    }
 }
 
 struct Inner {
-    lane: LaneScheduler<ValidationScheduledTx>,
-    /// Not-yet-dispatched transactions keyed by id. Emptied as batches are
-    /// handed out; every transaction is dispatched exactly once.
-    pending: HashMap<TxId, PendingTx>,
+    scheduler: ValidationScheduler,
+    /// Block transactions by position offset from `first_block_index`, taken
+    /// as they are dispatched. Every transaction is dispatched exactly once.
+    pending: Vec<Option<Transaction>>,
+    /// Declared gas per transaction, same indexing — used to convert a batch's
+    /// measured overhead into gas.
+    declared_gas: Vec<u64>,
 }
 
 /// See the module docs.
 pub struct ValidationTransactionsSource {
     inner: Arc<Mutex<Inner>>,
-    /// Pinged on every batch-completion feedback so the scheduler's run loop
-    /// re-asks once a lane frees. Kept alive for the whole validation run (the
-    /// run loop's early exit is driven by its exhausted transaction budget, not
-    /// by this channel closing).
+    /// Block position of `transactions[0]`.
+    first_block_index: u32,
+    /// Pinged on every batch completion so the scheduler's run loop re-asks
+    /// once a worker frees.
     notify: Arc<watch::Sender<()>>,
+    /// Shared across blocks; see [`ValidationOverheadEstimate`].
+    overhead: Arc<ValidationOverheadEstimate>,
 }
 
 impl ValidationTransactionsSource {
     /// Build the source from the received block's L2 transactions in BLOCK
     /// order. `first_block_index` is the block position of `transactions[0]`
     /// (the number of L1-processed transactions preceding it; `0` when the
-    /// block has no L1 prefix).
+    /// block has no L1 prefix). `worker_count` is the machine's width, which
+    /// anchors the scheduler's makespan bound and load-balance target.
     pub fn new(
         transactions: &[Transaction],
         first_block_index: u32,
         consensus_parameters: &ConsensusParameters,
+        worker_count: usize,
+        overhead: Arc<ValidationOverheadEstimate>,
     ) -> ExecutorResult<Self> {
         let chain_id = consensus_parameters.chain_id();
-
-        let mut lane = LaneScheduler::new(SchedulerConfig {
-            // Mirrors the txpool's lane integration: the per-request
-            // `BatchRequest::workers` is the ground truth for the answer shape;
-            // this only seeds analytic slice sizing.
-            workers: 1,
-            block_gas_limit: Some(consensus_parameters.block_gas_limit()),
-            // Replay the block's order rather than re-deriving a fee order that
-            // has no meaning for an already-fixed transaction set.
-            priority: PriorityOrder::Rank,
-            ..SchedulerConfig::default()
-        });
-        let mut pending = HashMap::with_capacity(transactions.len());
+        let mut planned: Vec<ValidationTx<ContractId>> =
+            Vec::with_capacity(transactions.len());
+        let mut pending: Vec<Option<Transaction>> =
+            Vec::with_capacity(transactions.len());
+        let mut declared_gas: Vec<u64> = Vec::with_capacity(transactions.len());
 
         for (index, tx) in transactions.iter().enumerate() {
-            let id = tx.id(&chain_id);
+            let _ = tx.id(&chain_id);
             let inputs = tx.inputs();
             let outputs = tx.outputs();
             let accesses = derive_contract_accesses_from_io(&inputs, &outputs);
 
-            // NO in-block coin dependencies are declared to the scheduler.
+            // NO in-block coin dependencies become graph edges.
             //
             // A coin child does not need its parent to have executed: Fuel's
             // `Input::CoinSigned`/`CoinPredicate` DECLARE the coin's `owner`,
@@ -235,35 +210,26 @@ impl ValidationTransactionsSource {
             // already runs with `forbid_fake_utxo: false` precisely so batches
             // may execute against pre-block views where same-block coins do not
             // exist yet, with existence and equality checked afterwards by
-            // `CoinDependencyChainVerifier` — a child spending a coin its
-            // parent never really produced is caught there, and the parent's
-            // own transaction fails its output comparison besides.
+            // `CoinDependencyChainVerifier`.
             //
             // What the block DOES require is that a coin only funds a LATER
-            // transaction. That is an ordering fact fixed by the block, so the
-            // verifier decides it from BLOCK INDICES rather than from the order
-            // the scheduler happened to dispatch batches in. Declaring it as a
-            // scheduling edge as well only made the child unschedulable until
-            // its parent's batch completed — measured as the dominant cost of
-            // parallel validation (real block 5026: 4.79/8 average worker
-            // concurrency with the edges, 7.49/8 without, and all structural
-            // starvation — including the cross-book lock concentration caused
-            // by promoting such children — falling to zero).
-            //
-            // Contract ordering is unaffected: same-contract transactions are
-            // still serialized, in block order, by the lane FIFO.
+            // transaction — an ordering fact fixed by the block, decided from
+            // BLOCK INDICES by the verifier rather than from the order batches
+            // happened to run in. Making it a scheduling edge as well only made
+            // the child unschedulable until its parent's batch completed:
+            // measured on real block 5026 as 4.79/8 average worker concurrency
+            // with the edges versus 7.49/8 without.
             //
             // PRODUCTION keeps its coin-parent gating (see the txpool source):
             // there the block order is being CHOSEN rather than replayed, and a
             // child whose parent is skipped must not be included.
-            // Higher rank = scheduled earlier, so count DOWN from the block's
-            // length: transaction 0 gets the highest rank.
-            let block_order_rank =
-                u64::try_from(transactions.len().saturating_sub(index))
-                    .unwrap_or(u64::MAX);
-            let max_gas = tx.max_gas(consensus_parameters)?;
-            let size = tx.size() as u64;
-            let block_index = first_block_index
+            //
+            // Declared gas, not gas used: validation replays a block whose
+            // receipts it has not computed yet, so the limit is the only figure
+            // available. It is an upper bound, so batches come out no larger
+            // than intended.
+            let gas = tx.max_gas(consensus_parameters)?;
+            let position = first_block_index
                 .checked_add(u32::try_from(index).map_err(|_| {
                     ExecutorError::Other("too many transactions in block".to_string())
                 })?)
@@ -271,129 +237,112 @@ impl ValidationTransactionsSource {
                     ExecutorError::Other("block index overflow".to_string())
                 })?;
 
-            lane.on_transaction(Arc::new(ValidationScheduledTx {
-                id,
-                max_gas,
-                size,
+            planned.push(ValidationTx {
+                position,
+                gas,
                 accesses,
-                block_order_rank,
-            }));
-            pending.insert(
-                id,
-                PendingTx {
-                    tx: tx.clone(),
-                    block_index,
-                },
-            );
+            });
+            declared_gas.push(gas);
+            pending.push(Some(tx.clone()));
         }
+
+        // Plan the whole block up front. The budget is NONE: refinement is a
+        // local search that costs oracle simulations, and across the scenario
+        // matrix it changes nothing at the overheads a real executor exhibits
+        // while the portfolio alone already matches or beats what production
+        // achieved building the block.
+        let scheduler = ValidationScheduler::with_budget(
+            &planned,
+            ValidationCost {
+                batch_overhead: overhead.get(),
+                per_tx_overhead: 0,
+            },
+            worker_count,
+            PlanBudget::NONE,
+        );
 
         let (notify, _initial_rx) = watch::channel(());
         Ok(Self {
-            inner: Arc::new(Mutex::new(Inner { lane, pending })),
+            inner: Arc::new(Mutex::new(Inner {
+                scheduler,
+                pending,
+                declared_gas,
+            })),
+            first_block_index,
             notify: Arc::new(notify),
+            overhead,
         })
     }
 
-    /// One synchronous ask against the local lane scheduler (the async trait
-    /// method delegates here; no awaits, so the returned future stays `Send`).
+    /// One synchronous ask against the plan (the async trait method delegates
+    /// here; no awaits, so the returned future stays `Send`).
     fn next_batches(
         &self,
-        gas_limit: u64,
-        total_gas_limit: u64,
-        tx_count_limit: u32,
-        block_transaction_size_limit: u64,
         free_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
         let mut inner = self.inner.lock().expect("Mutex poisoned");
-
-        // Mirror `lane_integration::next_batches`: one WorkerBudget per free
-        // worker, in-flight locks from the excluded set (conservatively Write),
-        // window `Some` with no deadline and the block's remaining gas.
-        let mut executing_contracts = ExecutingContracts::new();
-        for contract in filter.excluded_contract_ids.iter() {
-            executing_contracts.lock(*contract, Access::Write);
-        }
-        let request = BatchRequest {
-            workers: vec![
-                WorkerBudget {
-                    gas: gas_limit,
-                    size: block_transaction_size_limit,
-                    tx_count: u64::from(tx_count_limit),
-                };
-                free_worker_count
-            ],
-            executing_contracts,
-            // Feedback is applied directly via `on_batch_feedback` in the
-            // batch's feedback handle, not piggybacked on requests.
-            feedback: Vec::new(),
-            window: Some(WindowContext {
-                now: 0,
-                block_gas_remaining: total_gas_limit,
-                window_fit_gas: gas_limit,
-                deadline: None,
-                block_start: 0,
-            }),
-        };
-        let proposals = inner.lane.next_batches(&request);
+        let proposals = inner.scheduler.next_batches(&ValidationRequest {
+            workers: free_worker_count,
+        });
 
         let mut batches = Vec::with_capacity(proposals.len());
         for proposal in proposals {
-            inner.lane.on_dispatched(proposal.batch_id, &proposal.txs);
-
-            let mut picked = Vec::with_capacity(proposal.txs.len());
-            for tx_id in &proposal.txs {
-                let pending = inner.pending.remove(tx_id).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "lane scheduler proposed unknown or already-dispatched \
-                         transaction {tx_id}"
-                    )
-                })?;
-                picked.push(pending);
-            }
-
-            // A batch's transactions execute SEQUENTIALLY inside its worker, in
-            // the order handed over, so that order must be BLOCK order.
-            //
-            // The scheduler is free to return them in any order — and since
-            // validation no longer declares in-block coin parents, nothing else
-            // constrains a coin child to follow its parent within one batch.
-            // Executing the child first would spend a coin the parent has not
-            // created yet: the input's declared fields still make the child's
-            // own execution come out right, but the batch's writes then land in
-            // the wrong order (create-after-spend) and its state diverges from
-            // sequential. Sorting here restores exactly the sequential
-            // semantics WITHIN a batch, while different batches remain free to
-            // run in any order (their coin ordering is checked by block index
-            // in `CoinDependencyChainVerifier` and repaired, where the merge
-            // inverts a create/spend pair, by the net-out).
-            picked.sort_unstable_by_key(|pending| pending.block_index);
-
-            let mut transactions = Vec::with_capacity(picked.len());
-            let mut execution_indices = Vec::with_capacity(picked.len());
-            for pending in picked {
-                execution_indices.push(pending.block_index);
+            let mut transactions = Vec::with_capacity(proposal.positions.len());
+            let mut execution_indices = Vec::with_capacity(proposal.positions.len());
+            let mut batch_gas: u64 = 0;
+            for position in &proposal.positions {
+                let offset =
+                    usize::try_from(position.saturating_sub(self.first_block_index))
+                        .map_err(|_| {
+                            anyhow::anyhow!("block position {position} out of range")
+                        })?;
+                let tx = inner
+                    .pending
+                    .get_mut(offset)
+                    .and_then(Option::take)
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "validation scheduler proposed unknown or \
+                             already-dispatched position {position}"
+                        )
+                    })?;
+                batch_gas = batch_gas
+                    .saturating_add(inner.declared_gas.get(offset).copied().unwrap_or(0));
+                // Positions arrive ascending, which is what makes a batch's
+                // sequential execution reproduce the block's own order.
+                execution_indices.push(*position);
                 // Validation executes UNCHECKED transactions (full checks at
                 // execution time), exactly like the sequential validator.
-                transactions.push(MaybeCheckedTransaction::Transaction(pending.tx));
+                transactions.push(MaybeCheckedTransaction::Transaction(tx));
             }
 
             let batch_id = proposal.batch_id;
             let inner_for_feedback = Arc::clone(&self.inner);
             let notify = Arc::clone(&self.notify);
+            let overhead = Arc::clone(&self.overhead);
             let feedback_handle = BatchFeedbackHandle::new(move |report| {
                 {
                     let mut inner = inner_for_feedback.lock().expect("Mutex poisoned");
-                    inner.lane.on_batch_feedback(BatchFeedback {
-                        batch_id,
-                        overhead_time: report.overhead_time,
-                        execution_time: report.execution_time,
-                        completed: report.completed,
-                    });
+                    // Convert this batch's measured overhead into gas via its
+                    // own declared gas and execution time, and fold it into the
+                    // running mean for the next block.
+                    if report.execution_time > 0 && batch_gas > 0 {
+                        let overhead_gas = u128::from(report.overhead_time)
+                            .saturating_mul(u128::from(batch_gas))
+                            .checked_div(u128::from(report.execution_time))
+                            .unwrap_or(0);
+                        inner.scheduler.on_batch_feedback(
+                            u64::try_from(overhead_gas).unwrap_or(u64::MAX),
+                        );
+                        overhead.set(inner.scheduler.measured_batch_overhead());
+                    }
+                    // Release whatever this batch was blocking. Done even for a
+                    // batch reported as not completed: validation fails as a
+                    // whole in that case, and holding the plan back would stall
+                    // the run loop instead of surfacing the error.
+                    inner.scheduler.on_batch_complete(batch_id);
                 }
-                // A completed batch may have released in-block children — wake
-                // the run loop so it re-asks. Ignore a closed channel (the run
-                // loop already exited).
                 let _ = notify.send(());
             });
 
@@ -408,12 +357,9 @@ impl ValidationTransactionsSource {
         Ok(TransactionSourceExecutableTransactions {
             batches,
             filtered: TransactionFiltered::NotFiltered,
-            // Echo the in-flight lock set back: the scheduler re-derives it per
-            // ask from its own dispatched-batch bookkeeping.
             filter,
-            // The lane scheduler answers the WHOLE ask at once — fewer batches
-            // than requested workers means nothing more is schedulable until a
-            // batch completes.
+            // The plan answers the whole ask at once — fewer batches than free
+            // workers means nothing more is dispatchable until one completes.
             answered_all_workers: true,
         })
     }
@@ -421,29 +367,32 @@ impl ValidationTransactionsSource {
     /// Number of transactions not yet handed out.
     #[cfg(test)]
     fn pending_count(&self) -> usize {
-        self.inner.lock().expect("Mutex poisoned").pending.len()
+        self.inner
+            .lock()
+            .expect("Mutex poisoned")
+            .pending
+            .iter()
+            .filter(|slot| slot.is_some())
+            .count()
     }
 }
 
 impl TransactionsSource for ValidationTransactionsSource {
     async fn get_executable_transactions(
         &self,
-        gas_limit: u64,
-        total_gas_limit: u64,
-        tx_count_limit: u32,
-        block_transaction_size_limit: u64,
+        _gas_limit: u64,
+        _total_gas_limit: u64,
+        _tx_count_limit: u32,
+        _block_transaction_size_limit: u64,
         _selection_worker_count: usize,
         free_worker_count: usize,
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
-        self.next_batches(
-            gas_limit,
-            total_gas_limit,
-            tx_count_limit,
-            block_transaction_size_limit,
-            free_worker_count,
-            filter,
-        )
+        // The per-worker budgets are SELECTION limits: production uses them to
+        // decide what to include. Validation's set is already fixed and every
+        // transaction must run, so the plan is sized by the block's own
+        // structure and these are ignored.
+        self.next_batches(free_worker_count, filter)
     }
 
     fn get_new_transactions_notifier(&self) -> watch::Receiver<()> {
@@ -461,9 +410,11 @@ mod tests {
             Address,
             AssetId,
             TransactionBuilder,
+            TxId,
             UtxoId,
         },
     };
+    use std::collections::HashMap;
 
     fn params() -> ConsensusParameters {
         ConsensusParameters::default()
@@ -496,14 +447,7 @@ mod tests {
         workers: usize,
     ) -> TransactionSourceExecutableTransactions {
         source
-            .next_batches(
-                u64::MAX / 4,
-                u64::MAX / 4,
-                u32::MAX,
-                u64::MAX / 4,
-                workers,
-                Filter::new(HashSet::new()),
-            )
+            .next_batches(workers, Filter::new(HashSet::new()))
             .expect("ask must succeed")
     }
 
@@ -522,7 +466,14 @@ mod tests {
     fn dispatches_every_transaction_exactly_once_with_block_indices() {
         let params = params();
         let txs: Vec<Transaction> = (1..=4u8).map(|i| coin_tx(i, None)).collect();
-        let source = ValidationTransactionsSource::new(&txs, 0, &params).expect("source");
+        let source = ValidationTransactionsSource::new(
+            &txs,
+            0,
+            &params,
+            4,
+            Arc::new(ValidationOverheadEstimate::default()),
+        )
+        .expect("source");
 
         let mut seen = HashMap::new();
         let mut rounds = 0usize;
@@ -568,7 +519,14 @@ mod tests {
         let child = coin_tx(2, Some((parent_id, 0)));
         let child_id = child.id(&params.chain_id());
         let txs = vec![parent, child];
-        let source = ValidationTransactionsSource::new(&txs, 0, &params).expect("source");
+        let source = ValidationTransactionsSource::new(
+            &txs,
+            0,
+            &params,
+            4,
+            Arc::new(ValidationOverheadEstimate::default()),
+        )
+        .expect("source");
 
         let answer = ask(&source, 2);
         let dispatched: Vec<TxId> = answer
@@ -595,7 +553,14 @@ mod tests {
     fn batches_are_handed_over_in_block_order() {
         let params = params();
         let txs: Vec<Transaction> = (1..=6u8).map(|i| coin_tx(i, None)).collect();
-        let source = ValidationTransactionsSource::new(&txs, 0, &params).expect("source");
+        let source = ValidationTransactionsSource::new(
+            &txs,
+            0,
+            &params,
+            4,
+            Arc::new(ValidationOverheadEstimate::default()),
+        )
+        .expect("source");
 
         let mut batches_seen = 0;
         loop {
