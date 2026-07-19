@@ -260,6 +260,19 @@ impl ValidationTransactionsSource {
                     ExecutorError::Other("block index overflow".to_string())
                 })?;
 
+            if std::env::var("DUMP_BLOCK").is_ok() {
+                let acc: Vec<String> = accesses
+                    .iter()
+                    .map(|(c, a)| {
+                        format!(
+                            "{c}:{}",
+                            if matches!(a, Access::Read) { "R" } else { "W" }
+                        )
+                    })
+                    .collect();
+                let id = tx.id(&chain_id);
+                eprintln!("DUMPACC pos={position} id={id:x} acc={}", acc.join(","));
+            }
             planned.push(ValidationTx {
                 position,
                 gas,

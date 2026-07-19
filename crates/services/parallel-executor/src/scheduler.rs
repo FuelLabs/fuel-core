@@ -1486,6 +1486,14 @@ where
                     )
                     .await?;
                 let vm_duration = vm_start.elapsed();
+                if std::env::var("DUMP_BLOCK").is_ok() {
+                    let h = u32::from(*header_to_produce.height());
+                    for status in execution_data.tx_status.iter() {
+                        let id = status.id;
+                        let gas = status.result.total_gas();
+                        eprintln!("DUMPGAS h={h} id={id:x} gas={gas}");
+                    }
+                }
                 let extract_start = Instant::now();
                 let returned_tx_ids = transactions
                     .iter()
