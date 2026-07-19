@@ -261,6 +261,33 @@ impl ValidationTransactionsSource {
             PlanBudget::NONE,
         );
 
+        // THE BLOCK'S OWN CEILING, logged so a measured concurrency can be read
+        // against what this block actually admits. `dag_max` is the best any
+        // scheduler could reach with unlimited workers; if it is below the
+        // worker count, the block — not the scheduler — is the limit.
+        // `longest_contract_chain` separates the two ways that happens: a
+        // single hot contract everything queues behind, versus a graph that is
+        // long because paths HOP between contracts (an account's consecutive
+        // orders landing on different orderbooks), which no single contract
+        // explains.
+        let stats = scheduler.stats;
+        let dag_max = if stats.critical_path > 0 {
+            stats.total_work as f64 / stats.critical_path as f64
+        } else {
+            0.0
+        };
+        tracing::info!(
+            target: "parallel_executor::validation_graph",
+            txs = planned.len(),
+            batches = scheduler.planned_len(),
+            total_work = stats.total_work,
+            critical_path = stats.critical_path,
+            longest_contract_chain = stats.longest_contract_chain,
+            dag_max_concurrency = dag_max,
+            planned_with_overhead_gas = overhead.get(),
+            "validation dependency graph: the block's own parallelism ceiling",
+        );
+
         let (notify, _initial_rx) = watch::channel(());
         Ok(Self {
             inner: Arc::new(Mutex::new(Inner {
