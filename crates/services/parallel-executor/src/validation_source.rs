@@ -153,8 +153,31 @@ impl ValidationOverheadEstimate {
     }
 }
 
+/// Per-block ask accounting, to tell the two causes of an idle worker apart.
+///
+/// A worker idles either because the PLAN has nothing dispatchable for it (the
+/// dependency wavefront is narrow — structural, and the plan's own makespan
+/// already accounts for it), or because it was dispatchable and the worker did
+/// not get it promptly (ask cadence / latency — invisible to the plan). The
+/// source can only ever hand back `min(free workers, startable batches)`, so
+/// `served < requested` is exactly the structural case and everything else is
+/// latency.
+#[derive(Debug, Default)]
+struct AskStats {
+    asks: u64,
+    requested: u64,
+    served: u64,
+    /// Ask slots we could not fill because the plan had nothing startable.
+    starved: u64,
+    /// Asks that returned nothing at all.
+    empty_asks: u64,
+    /// Largest startable set seen at ask time — how much slack the plan had.
+    max_startable: usize,
+}
+
 struct Inner {
     scheduler: ValidationScheduler,
+    asks: AskStats,
     /// Block transactions by position offset from `first_block_index`, taken
     /// as they are dispatched. Every transaction is dispatched exactly once.
     pending: Vec<Option<Transaction>>,
@@ -271,6 +294,9 @@ impl ValidationTransactionsSource {
         // orders landing on different orderbooks), which no single contract
         // explains.
         let stats = scheduler.stats;
+        let bound = stats
+            .critical_path
+            .max(stats.total_work / (worker_count.max(1) as u64));
         let dag_max = if stats.critical_path > 0 {
             stats.total_work as f64 / stats.critical_path as f64
         } else {
@@ -285,6 +311,18 @@ impl ValidationTransactionsSource {
             longest_contract_chain = stats.longest_contract_chain,
             dag_max_concurrency = dag_max,
             planned_with_overhead_gas = overhead.get(),
+            // What the plan itself predicts, against what no schedule can
+            // beat. plan_vs_bound near 1.0 means the PLAN is essentially
+            // optimal and any shortfall is reality diverging from the cost
+            // model; well above 1.0 means the scheduler is leaving time on
+            // the table and the algorithm is what to improve.
+            bound = bound,
+            plan_span = stats.refined_span,
+            plan_vs_bound = if bound > 0 {
+                stats.refined_span as f64 / bound as f64
+            } else {
+                0.0
+            },
             "validation dependency graph: the block's own parallelism ceiling",
         );
 
@@ -292,6 +330,7 @@ impl ValidationTransactionsSource {
         Ok(Self {
             inner: Arc::new(Mutex::new(Inner {
                 scheduler,
+                asks: AskStats::default(),
                 pending,
                 declared_gas,
             })),
@@ -309,9 +348,42 @@ impl ValidationTransactionsSource {
         filter: Filter,
     ) -> anyhow::Result<TransactionSourceExecutableTransactions> {
         let mut inner = self.inner.lock().expect("Mutex poisoned");
+        let startable = inner.scheduler.ready_len();
         let proposals = inner.scheduler.next_batches(&ValidationRequest {
             workers: free_worker_count,
         });
+        {
+            let served = proposals.len() as u64;
+            let stats = &mut inner.asks;
+            stats.asks = stats.asks.saturating_add(1);
+            stats.requested = stats.requested.saturating_add(free_worker_count as u64);
+            stats.served = stats.served.saturating_add(served);
+            stats.starved = stats
+                .starved
+                .saturating_add((free_worker_count as u64).saturating_sub(served));
+            if served == 0 {
+                stats.empty_asks = stats.empty_asks.saturating_add(1);
+            }
+            stats.max_startable = stats.max_startable.max(startable);
+        }
+        {
+            let drained = inner.scheduler.is_drained();
+            let stats = &inner.asks;
+            if drained {
+                tracing::info!(
+                    target: "parallel_executor::validation_asks",
+                    asks = stats.asks,
+                    requested = stats.requested,
+                    served = stats.served,
+                    starved = stats.starved,
+                    starved_pct = 100.0 * stats.starved as f64
+                        / (stats.requested.max(1)) as f64,
+                    empty_asks = stats.empty_asks,
+                    max_startable = stats.max_startable,
+                    "validation ask accounting: structural starvation vs dispatch cadence",
+                );
+            }
+        }
 
         let mut batches = Vec::with_capacity(proposals.len());
         for proposal in proposals {
@@ -344,6 +416,7 @@ impl ValidationTransactionsSource {
                 transactions.push(MaybeCheckedTransaction::Transaction(tx));
             }
 
+            let batch_size = proposal.positions.len();
             let batch_id = proposal.batch_id;
             let inner_for_feedback = Arc::clone(&self.inner);
             let notify = Arc::clone(&self.notify);
@@ -354,6 +427,18 @@ impl ValidationTransactionsSource {
                     // Convert this batch's measured overhead into gas via its
                     // own declared gas and execution time, and fold it into the
                     // running mean for the next block.
+                    // Does real batch cost follow the plan's model? The plan
+                    // charges a batch its members' DECLARED gas, which is a
+                    // constant per transaction, so it predicts cost strictly
+                    // proportional to batch size. Logging size against the
+                    // measured time exposes any FIXED per-batch component the
+                    // model is blind to.
+                    tracing::debug!(
+                        target: "parallel_executor::validation_batch",
+                        n = batch_size,
+                        execution_ns = report.execution_time,
+                        overhead_ns = report.overhead_time,
+                    );
                     if report.execution_time > 0 && batch_gas > 0 {
                         let overhead_gas = u128::from(report.overhead_time)
                             .saturating_mul(u128::from(batch_gas))
