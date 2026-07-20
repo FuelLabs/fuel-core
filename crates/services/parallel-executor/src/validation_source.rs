@@ -271,7 +271,10 @@ impl ValidationTransactionsSource {
                     })
                     .collect();
                 let id = tx.id(&chain_id);
-                eprintln!("DUMPACC pos={position} id={id:x} acc={}", acc.join(","));
+                eprintln!(
+                    "DUMPACC pos={position} id={id:x} declared={gas} acc={}",
+                    acc.join(",")
+                );
             }
             planned.push(ValidationTx {
                 position,
@@ -368,6 +371,17 @@ impl ValidationTransactionsSource {
         let proposals = inner.scheduler.next_batches(&ValidationRequest {
             workers: free_worker_count,
         });
+        // One line per ask (pairs 1:1, in order, with the run loop's
+        // `ask_timing` sample): how much startable work the PLAN had at this
+        // moment. `startable > served` never happens (served =
+        // min(free, startable)); `startable == 0` with free workers is the
+        // structural case — the dependency wavefront, not dispatch latency.
+        tracing::debug!(
+            target: "parallel_executor::validation_ask",
+            startable = startable,
+            free = free_worker_count,
+            served = proposals.len(),
+        );
         {
             let served = proposals.len() as u64;
             let stats = &mut inner.asks;
@@ -401,6 +415,18 @@ impl ValidationTransactionsSource {
             }
         }
 
+        // Offline-analysis hook (same spirit as `DUMP_BLOCK`): emit every
+        // served batch's exact positions so the plan's batch-level dependency
+        // DAG can be rebuilt outside the node and replayed against MEASURED
+        // batch durations. `batch_id` joins with the `batch_timing` log.
+        if std::env::var("DUMP_PLAN").is_ok() {
+            for proposal in &proposals {
+                eprintln!(
+                    "DUMPBATCH id={} pos={:?}",
+                    proposal.batch_id, proposal.positions
+                );
+            }
+        }
         let mut batches = Vec::with_capacity(proposals.len());
         for proposal in proposals {
             let mut transactions = Vec::with_capacity(proposal.positions.len());

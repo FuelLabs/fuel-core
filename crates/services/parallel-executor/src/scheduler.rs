@@ -222,6 +222,11 @@ pub struct Scheduler<'a, R, S, PreconfirmationSender> {
     /// the adds are cheap and happen at the existing timing sites). Emitted once
     /// as the block-summary decomposition at the end of [`Self::run`].
     time_accounting: TimeAccounting,
+    /// The run loop's start instant, shared with every worker task so that all
+    /// per-batch timestamps (`batch_timing`) land on ONE clock and a worker
+    /// busy/idle timeline can be reconstructed offline. Set at the top of
+    /// [`Self::run`]; `None` only before the run starts.
+    run_epoch: Option<Instant>,
 }
 
 /// Cheap per-block accumulators feeding the time-spend block summary. Each field
@@ -303,6 +308,13 @@ struct WorkSessionExecutionResult {
     setup_duration: Duration,
     vm_duration: Duration,
     extract_duration: Duration,
+    /// Worker-task first poll / last instruction, on the run loop's clock
+    /// ([`Scheduler::run_epoch`]) — the batch's busy interval for offline
+    /// timeline reconstruction. The gap from `end_since_epoch` to the
+    /// `batch_timing` log's `t_report_us` is the RETURN-PATH latency (result
+    /// queued behind the run loop), which no other counter observes.
+    start_since_epoch: Duration,
+    end_since_epoch: Duration,
 }
 
 #[derive(Clone, Copy)]
@@ -563,6 +575,7 @@ impl<'a, R, S, PreconfirmationSender> Scheduler<'a, R, S, PreconfirmationSender>
             dispatched_start_idx: FxHashMap::default(),
             worker_counters,
             time_accounting: TimeAccounting::default(),
+            run_epoch: None,
             validation_mode: false,
         })
     }
@@ -599,6 +612,7 @@ where
         TxSource: TransactionsSource,
     {
         let instant = Instant::now();
+        self.run_epoch = Some(instant);
         let view = self.storage.latest_view()?;
         let storage_with_da = Arc::new(view.into_transaction().with_changes(da_changes));
         self.update_constraints(
@@ -654,6 +668,7 @@ where
                 // historical ask cadence.
                 let selection_worker_count = self.selection_worker_count();
                 let free_worker_count = self.worker_pool.available_workers();
+                let ask_started = instant.elapsed();
                 let ready_batches = self
                     .ask_new_transaction_batches(
                         tx_source,
@@ -663,6 +678,23 @@ where
                         free_worker_count,
                     )
                     .await?;
+                // One sample per ask, on the run loop's own clock: how many
+                // workers were free and how many batches came back. Together
+                // with `batch_timing`'s per-batch start/end/report timestamps
+                // this reconstructs the whole worker busy/idle timeline —
+                // idle-while-work-was-ready (dispatch latency) versus
+                // idle-with-nothing-startable (structural) — offline.
+                tracing::debug!(
+                    target: "parallel_executor::ask_timing",
+                    t_us = ask_started.as_micros() as u64,
+                    ask_us = instant.elapsed().saturating_sub(ask_started).as_micros()
+                        as u64,
+                    free = free_worker_count,
+                    served = ready_batches
+                        .as_ref()
+                        .map(|ready| ready.batches.len())
+                        .unwrap_or(0),
+                );
 
                 let Some(ready_batches) = ready_batches else {
                     self.state = SchedulerState::NoTransactionsForPickup;
@@ -1450,10 +1482,12 @@ where
 
         let future = {
             let instant = Instant::now();
+            let epoch = self.run_epoch.unwrap_or(instant);
             let storage_with_da = storage_with_da.clone();
             async move {
                 let started = Instant::now();
                 let spawn_gap = started.duration_since(instant);
+                let start_since_epoch = started.duration_since(epoch);
                 let _worker_guard = worker_counters.as_ref().map(|counters| {
                     counters.record_started();
                     WorkerCountGuard {
@@ -1603,6 +1637,8 @@ where
                     setup_duration,
                     vm_duration,
                     extract_duration,
+                    start_since_epoch,
+                    end_since_epoch: Instant::now().duration_since(epoch),
                 })
             }
         };
@@ -1665,12 +1701,23 @@ where
         // rounding in the block summary hides setup/extract entirely.
         tracing::debug!(
             target: "parallel_executor::batch_timing",
+            batch_id = res.batch_id,
             n = res.txs.len(),
             used_gas = res.used_gas,
             spawn_gap_us = res.spawn_gap.as_micros() as u64,
             setup_us = res.setup_duration.as_micros() as u64,
             vm_us = res.vm_duration.as_micros() as u64,
             extract_us = res.extract_duration.as_micros() as u64,
+            // Busy interval on the run loop's clock, plus the moment this
+            // result got PROCESSED — (t_report_us - t_end_us) is the return
+            // path: the finished result waiting for the run loop's attention
+            // before its dependents could be released and re-dispatched.
+            t_start_us = res.start_since_epoch.as_micros() as u64,
+            t_end_us = res.end_since_epoch.as_micros() as u64,
+            t_report_us = self
+                .run_epoch
+                .map(|epoch| epoch.elapsed().as_micros() as u64)
+                .unwrap_or(0),
         );
         for contract in res.contracts_used.iter() {
             self.current_executing_contracts.remove(contract);
