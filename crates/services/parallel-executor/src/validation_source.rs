@@ -148,7 +148,7 @@ impl ValidationOverheadEstimate {
         self.gas.load(Ordering::Relaxed)
     }
 
-    fn set(&self, gas: u64) {
+    pub(crate) fn set(&self, gas: u64) {
         self.gas.store(gas, Ordering::Relaxed);
     }
 }

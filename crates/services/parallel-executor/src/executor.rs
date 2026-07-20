@@ -564,6 +564,34 @@ where
         &mut self,
         block: &Block,
     ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
+        self.validate_with_gas(block, None).await
+    }
+
+    /// The carried-across-blocks batch-overhead estimate (in gas). Exposed so
+    /// tooling that validates a block more than once (e.g. the benchmark's
+    /// throwaway pass to obtain actual gas) can snapshot it and restore it
+    /// afterwards, keeping the measured pass's plan identical to a clean
+    /// single-pass validation.
+    pub fn validation_overhead(&self) -> u64 {
+        self.validation_overhead.get()
+    }
+
+    /// Restore the batch-overhead estimate (see [`Self::validation_overhead`]).
+    pub fn set_validation_overhead(&self, gas: u64) {
+        self.validation_overhead.set(gas);
+    }
+
+    /// [`Self::validate`], but with the per-transaction actual gas supplied
+    /// directly (indexed by block position) instead of read from the
+    /// `TransactionsGasUsage` table. `None` falls back to the table (then to
+    /// declared `max_gas`). Used by tooling — e.g. the validation benchmark —
+    /// that already holds the gas and wants to feed it to the planner without a
+    /// database round-trip; production calls [`Self::validate`].
+    pub async fn validate_with_gas(
+        &mut self,
+        block: &Block,
+        gas_override: Option<&[u64]>,
+    ) -> ExecutorResult<Uncommitted<ValidationResult, Changes>> {
         let view = self.storage.latest_view()?;
         let structured_storage = StructuredStorage::new(view);
         let consensus_parameters = structured_storage
@@ -616,16 +644,20 @@ where
         let l2_count = u32::try_from(l2_txs.len())
             .map_err(|_| ExecutorError::TooManyTransactions)?;
 
-        // Per-transaction ACTUAL gas used for this block, if a previous
-        // committer (this node earlier, or a peer that propagated it) recorded
-        // it. It lets the scheduler plan on real gas instead of the heavily
+        // Per-transaction ACTUAL gas used for this block: taken from the caller
+        // when supplied, otherwise from the `TransactionsGasUsage` table (a
+        // previous committer — this node earlier, or a peer that propagated
+        // it). It lets the scheduler plan on real gas instead of the heavily
         // over-declared `max_gas`. A NON-CONSENSUS hint: absent (first-time
         // validation before propagation) or wrong, the source falls back to
         // `max_gas` and validation is still correct, only less parallel.
-        let actual_gas_used = structured_storage
-            .storage::<TransactionsGasUsage>()
-            .get(&block_height)?
-            .map(|gas| gas.into_owned());
+        let actual_gas_used = match gas_override {
+            Some(gas) => Some(gas.to_vec()),
+            None => structured_storage
+                .storage::<TransactionsGasUsage>()
+                .get(&block_height)?
+                .map(|gas| gas.into_owned()),
+        };
 
         // --- Parallel re-execution of the L2 transactions ---------------------
         let phase_start = Instant::now();

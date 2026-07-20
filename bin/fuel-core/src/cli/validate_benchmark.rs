@@ -39,14 +39,12 @@ use fuel_core_importer::ports::{
     ImporterDatabase as _,
 };
 use fuel_core_storage::{
-    StorageAsMut,
     StorageAsRef,
     tables::{
         ConsensusParametersVersions,
         FuelBlocks,
         SealedBlockConsensus,
         Transactions,
-        TransactionsGasUsage,
     },
     transactional::{
         AtomicView,
@@ -131,16 +129,16 @@ pub struct Command {
     #[clap(long = "utxo-validation", default_value = "false")]
     pub utxo_validation: bool,
 
-    /// Optional path to a database that already holds the per-transaction
-    /// actual-gas hints (`TransactionsGasUsage`) — typically a state database
-    /// left behind by a prior `validate-benchmark` run (every run writes the
-    /// hints as it commits). When set, each block's gas row is copied from
-    /// this database into the state database BEFORE the block is validated, so
-    /// the parallel validator plans on ACTUAL gas instead of declared
-    /// `max_gas`. This stands in for the eventual peer-propagated hint. With
-    /// the flag absent the validator falls back to `max_gas` (the baseline).
-    #[clap(long = "gas-hints-db")]
-    pub gas_hints_db: Option<PathBuf>,
+    /// `--mode parallel` only: plan on ACTUAL per-transaction gas instead of
+    /// declared `max_gas`. The actual gas is obtained by a throwaway
+    /// validation pass (execution is deterministic, so it yields the real
+    /// gas), then fed to the measured pass via the planner. The executor's
+    /// carried batch-overhead estimate is snapshotted and restored around the
+    /// throwaway pass, so the measured pass plans exactly as a clean
+    /// single-pass validation would. Roughly doubles the parallel work per
+    /// block. Run once with and once without this flag to compare.
+    #[clap(long = "use-actual-gas", default_value = "false")]
+    pub use_actual_gas: bool,
 }
 
 fn open_database(path: &PathBuf) -> anyhow::Result<CombinedDatabase> {
@@ -206,19 +204,14 @@ fn chain_id_for_block(
     Ok(params.chain_id())
 }
 
-/// Commit a validated block plus any `TransactionsGasUsage` rows in ONE atomic
-/// commit. The gas rows must ride inside this height-advancing commit: the
-/// historical database rejects a standalone commit that does not advance the
-/// block height (`NewHeightIsNotSet`), so gas hints cannot be written on their
-/// own. `gas_rows` carries this block's own actual gas (so later runs can use
-/// it as a hint) and, when preloading from a hints database, the NEXT block's
-/// hint (so it is present in the state view before that block is validated).
+/// Commit a validated block into the state database exactly like the importer
+/// does: the validation changes plus the block/seal/transactions records, as
+/// one atomic commit (with the database height update).
 fn commit_validated_block(
     on_chain: &mut fuel_core::database::Database,
     chain_id: &ChainId,
     sealed_block: &SealedBlock,
     changes: fuel_core_storage::transactional::Changes,
-    gas_rows: &[(BlockHeight, Vec<u64>)],
 ) -> anyhow::Result<()> {
     let view = on_chain.latest_view()?;
     let mut db_tx =
@@ -226,12 +219,6 @@ fn commit_validated_block(
     db_tx
         .store_new_block(chain_id, sealed_block)
         .map_err(|e| anyhow!("store validated block: {e}"))?;
-    for (height, gas) in gas_rows {
-        db_tx
-            .storage_as_mut::<TransactionsGasUsage>()
-            .insert(height, gas)
-            .map_err(|e| anyhow!("store gas usage for {height}: {e}"))?;
-    }
     let changes = db_tx.into_changes();
     on_chain
         .commit_changes(StorageChanges::Changes(changes))
@@ -239,22 +226,9 @@ fn commit_validated_block(
     Ok(())
 }
 
-/// Read block `height`'s gas hint from a database (the state db, to report
-/// whether the validator had a hint; or the hints db, to preload it).
-fn read_gas_hint(
-    db: &CombinedDatabase,
-    height: &BlockHeight,
-) -> anyhow::Result<Option<Vec<u64>>> {
-    let view = db.on_chain().latest_view()?;
-    Ok(view
-        .storage::<TransactionsGasUsage>()
-        .get(height)?
-        .map(|gas| gas.into_owned()))
-}
-
 /// The block's per-transaction actual gas used, indexed by each transaction's
-/// position in the block (mirrors the importer's `transactions_gas_used`), so
-/// it can be written as the `TransactionsGasUsage` hint.
+/// position in the block (mirrors the importer's `transactions_gas_used`), to
+/// feed the planner as the actual-gas hint.
 fn gas_used_in_block_order(
     chain_id: &ChainId,
     sealed_block: &SealedBlock,
@@ -293,11 +267,6 @@ fn used_gas_of(result: &ValidationResult) -> u64 {
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     let state_db = open_database(&command.database_path)?;
     let blocks_db = open_database(&command.blocks_database_path)?;
-    let gas_hints_db = command
-        .gas_hints_db
-        .as_ref()
-        .map(open_database)
-        .transpose()?;
     // Clones share the same underlying RocksDB; this handle receives commits.
     let mut state_on_chain = state_db.on_chain().clone();
 
@@ -395,24 +364,19 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         let chain_id = chain_id_for_block(&state_db, &sealed_block.entity)?;
         let tx_count = sealed_block.entity.transactions().len();
 
-        // Whether the validator will find an actual-gas hint for THIS block in
-        // the state view. When preloading from a hints database, the hint was
-        // written into the state db as part of the PREVIOUS block's commit (a
-        // gas row can only be committed alongside a height-advancing block
-        // commit), so it is already present here.
-        let hinted = read_gas_hint(&state_db, &height)?.map(|gas| gas.len());
-
-        let started = Instant::now();
-        let (result, changes) = match command.mode {
+        let (result, changes, wall_ms, used_hint) = match command.mode {
             Mode::Sequential => {
                 let executor = sequential_executor
                     .as_ref()
                     .expect("built for sequential mode; qed");
-                executor
+                let started = Instant::now();
+                let (result, changes) = executor
                     .validate(&sealed_block.entity)
                     .map_err(|e| anyhow!("sequential validation failed: {e}"))
                     .with_context(|| format!("block {height}"))?
-                    .into()
+                    .into();
+                let wall_ms = started.elapsed().as_secs_f64() * 1000.0;
+                (result, changes, wall_ms, false)
             }
             Mode::Parallel => {
                 #[cfg(feature = "parallel-executor")]
@@ -420,63 +384,65 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
                     let executor = parallel_executor
                         .as_mut()
                         .expect("built for parallel mode; qed");
-                    executor
-                        .validate(&sealed_block.entity)
-                        .await
-                        .map_err(|e| anyhow!("parallel validation failed: {e}"))
-                        .with_context(|| format!("block {height}"))?
-                        .into()
+                    if command.use_actual_gas {
+                        // Throwaway pass to obtain the block's ACTUAL gas
+                        // (execution is deterministic). Snapshot and restore
+                        // the carried batch-overhead estimate around it so the
+                        // measured pass below plans exactly as a clean
+                        // single-pass validation would.
+                        let saved_overhead = executor.validation_overhead();
+                        let (probe, _changes) = executor
+                            .validate(&sealed_block.entity)
+                            .await
+                            .map_err(|e| anyhow!("gas-probe validation failed: {e}"))
+                            .with_context(|| format!("block {height}"))?
+                            .into();
+                        executor.set_validation_overhead(saved_overhead);
+                        let actual_gas =
+                            gas_used_in_block_order(&chain_id, &sealed_block, &probe);
+                        // Measured pass: feed the planner the actual gas.
+                        let started = Instant::now();
+                        let (result, changes) = executor
+                            .validate_with_gas(&sealed_block.entity, Some(&actual_gas))
+                            .await
+                            .map_err(|e| anyhow!("actual-gas validation failed: {e}"))
+                            .with_context(|| format!("block {height}"))?
+                            .into();
+                        let wall_ms = started.elapsed().as_secs_f64() * 1000.0;
+                        (result, changes, wall_ms, true)
+                    } else {
+                        let started = Instant::now();
+                        let (result, changes) = executor
+                            .validate(&sealed_block.entity)
+                            .await
+                            .map_err(|e| anyhow!("parallel validation failed: {e}"))
+                            .with_context(|| format!("block {height}"))?
+                            .into();
+                        let wall_ms = started.elapsed().as_secs_f64() * 1000.0;
+                        (result, changes, wall_ms, false)
+                    }
                 }
                 #[cfg(not(feature = "parallel-executor"))]
                 unreachable!("rejected above")
             }
         };
-        let wall_ms = started.elapsed().as_secs_f64() * 1000.0;
-
-        // Gas rows to write inside this block's (height-advancing) commit:
-        //  * this block's OWN actual gas — so a later run can use it as a hint;
-        //  * the NEXT block's hint preloaded from the hints db — so it is in
-        //    the state view before the next block is validated (a gas row
-        //    cannot be committed on its own; it must ride a block commit).
-        let mut gas_rows = vec![(
-            height,
-            gas_used_in_block_order(&chain_id, &sealed_block, &result),
-        )];
-        if let Some(hints_db) = &gas_hints_db {
-            let next = u32::from(height).saturating_add(1);
-            if next <= to {
-                let next_height = BlockHeight::from(next);
-                if let Some(next_hint) = read_gas_hint(hints_db, &next_height)? {
-                    gas_rows.push((next_height, next_hint));
-                }
-            }
-        }
 
         let commit_started = Instant::now();
-        commit_validated_block(
-            &mut state_on_chain,
-            &chain_id,
-            &sealed_block,
-            changes,
-            &gas_rows,
-        )
-        .with_context(|| format!("commit block {height}"))?;
+        commit_validated_block(&mut state_on_chain, &chain_id, &sealed_block, changes)
+            .with_context(|| format!("commit block {height}"))?;
         let commit_ms = commit_started.elapsed().as_secs_f64() * 1000.0;
 
         let gas_used = used_gas_of(&result);
         println!(
             "[validate] mode={} height={} txs={} wall_ms={:.3} commit_ms={:.3} \
-             gas_used={} gas_hint={}",
+             gas_used={} gas_plan={}",
             command.mode,
             u32::from(height),
             tx_count,
             wall_ms,
             commit_ms,
             gas_used,
-            match hinted {
-                Some(n) => format!("{n}tx"),
-                None => "none".to_string(),
-            },
+            if used_hint { "actual" } else { "max_gas" },
         );
 
         total_wall_ms += wall_ms;
@@ -492,9 +458,20 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         0.0
     };
     println!(
-        "[validate-summary] mode={} blocks={} total_ms={:.3} avg_ms={:.3} \
-         max_ms={:.3} total_txs={} tps={:.1}",
-        command.mode, blocks, total_wall_ms, avg_ms, max_wall_ms, total_txs, tps,
+        "[validate-summary] mode={} gas_plan={} blocks={} total_ms={:.3} \
+         avg_ms={:.3} max_ms={:.3} total_txs={} tps={:.1}",
+        command.mode,
+        if command.use_actual_gas {
+            "actual"
+        } else {
+            "max_gas"
+        },
+        blocks,
+        total_wall_ms,
+        avg_ms,
+        max_wall_ms,
+        total_txs,
+        tps,
     );
 
     Ok(())
