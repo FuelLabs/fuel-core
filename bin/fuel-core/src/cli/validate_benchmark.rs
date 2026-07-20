@@ -39,12 +39,14 @@ use fuel_core_importer::ports::{
     ImporterDatabase as _,
 };
 use fuel_core_storage::{
+    StorageAsMut,
     StorageAsRef,
     tables::{
         ConsensusParametersVersions,
         FuelBlocks,
         SealedBlockConsensus,
         Transactions,
+        TransactionsGasUsage,
     },
     transactional::{
         AtomicView,
@@ -58,6 +60,7 @@ use fuel_core_types::{
         SealedBlock,
         block::Block,
     },
+    fuel_tx::UniqueIdentifier,
     fuel_types::{
         BlockHeight,
         ChainId,
@@ -68,6 +71,7 @@ use fuel_core_types::{
     },
 };
 use std::{
+    collections::HashMap,
     path::PathBuf,
     time::Instant,
 };
@@ -126,6 +130,17 @@ pub struct Command {
     /// `--utxo-validation`.
     #[clap(long = "utxo-validation", default_value = "false")]
     pub utxo_validation: bool,
+
+    /// Optional path to a database that already holds the per-transaction
+    /// actual-gas hints (`TransactionsGasUsage`) — typically a state database
+    /// left behind by a prior `validate-benchmark` run (every run writes the
+    /// hints as it commits). When set, each block's gas row is copied from
+    /// this database into the state database BEFORE the block is validated, so
+    /// the parallel validator plans on ACTUAL gas instead of declared
+    /// `max_gas`. This stands in for the eventual peer-propagated hint. With
+    /// the flag absent the validator falls back to `max_gas` (the baseline).
+    #[clap(long = "gas-hints-db")]
+    pub gas_hints_db: Option<PathBuf>,
 }
 
 fn open_database(path: &PathBuf) -> anyhow::Result<CombinedDatabase> {
@@ -191,18 +206,19 @@ fn chain_id_for_block(
     Ok(params.chain_id())
 }
 
-/// Commit a validated block into the state database exactly like the importer
-/// does: the validation changes plus the block/seal/transactions records, as
-/// one atomic commit (with the database height update).
-///
-/// `on_chain` is a clone of the state database's on-chain `Database` (clones
-/// share the same underlying RocksDB, so commits are visible to every view
-/// taken afterwards).
+/// Commit a validated block plus any `TransactionsGasUsage` rows in ONE atomic
+/// commit. The gas rows must ride inside this height-advancing commit: the
+/// historical database rejects a standalone commit that does not advance the
+/// block height (`NewHeightIsNotSet`), so gas hints cannot be written on their
+/// own. `gas_rows` carries this block's own actual gas (so later runs can use
+/// it as a hint) and, when preloading from a hints database, the NEXT block's
+/// hint (so it is present in the state view before that block is validated).
 fn commit_validated_block(
     on_chain: &mut fuel_core::database::Database,
     chain_id: &ChainId,
     sealed_block: &SealedBlock,
     changes: fuel_core_storage::transactional::Changes,
+    gas_rows: &[(BlockHeight, Vec<u64>)],
 ) -> anyhow::Result<()> {
     let view = on_chain.latest_view()?;
     let mut db_tx =
@@ -210,11 +226,57 @@ fn commit_validated_block(
     db_tx
         .store_new_block(chain_id, sealed_block)
         .map_err(|e| anyhow!("store validated block: {e}"))?;
+    for (height, gas) in gas_rows {
+        db_tx
+            .storage_as_mut::<TransactionsGasUsage>()
+            .insert(height, gas)
+            .map_err(|e| anyhow!("store gas usage for {height}: {e}"))?;
+    }
     let changes = db_tx.into_changes();
     on_chain
         .commit_changes(StorageChanges::Changes(changes))
         .map_err(|e| anyhow!("commit validated block changes: {e}"))?;
     Ok(())
+}
+
+/// Read block `height`'s gas hint from a database (the state db, to report
+/// whether the validator had a hint; or the hints db, to preload it).
+fn read_gas_hint(
+    db: &CombinedDatabase,
+    height: &BlockHeight,
+) -> anyhow::Result<Option<Vec<u64>>> {
+    let view = db.on_chain().latest_view()?;
+    Ok(view
+        .storage::<TransactionsGasUsage>()
+        .get(height)?
+        .map(|gas| gas.into_owned()))
+}
+
+/// The block's per-transaction actual gas used, indexed by each transaction's
+/// position in the block (mirrors the importer's `transactions_gas_used`), so
+/// it can be written as the `TransactionsGasUsage` hint.
+fn gas_used_in_block_order(
+    chain_id: &ChainId,
+    sealed_block: &SealedBlock,
+    result: &ValidationResult,
+) -> Vec<u64> {
+    let by_id: HashMap<_, u64> = result
+        .tx_status
+        .iter()
+        .map(|status| {
+            let gas = match &status.result {
+                TransactionExecutionResult::Success { total_gas, .. }
+                | TransactionExecutionResult::Failed { total_gas, .. } => *total_gas,
+            };
+            (status.id, gas)
+        })
+        .collect();
+    sealed_block
+        .entity
+        .transactions()
+        .iter()
+        .map(|tx| by_id.get(&tx.id(chain_id)).copied().unwrap_or(0))
+        .collect()
 }
 
 fn used_gas_of(result: &ValidationResult) -> u64 {
@@ -231,6 +293,11 @@ fn used_gas_of(result: &ValidationResult) -> u64 {
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     let state_db = open_database(&command.database_path)?;
     let blocks_db = open_database(&command.blocks_database_path)?;
+    let gas_hints_db = command
+        .gas_hints_db
+        .as_ref()
+        .map(open_database)
+        .transpose()?;
     // Clones share the same underlying RocksDB; this handle receives commits.
     let mut state_on_chain = state_db.on_chain().clone();
 
@@ -328,6 +395,13 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         let chain_id = chain_id_for_block(&state_db, &sealed_block.entity)?;
         let tx_count = sealed_block.entity.transactions().len();
 
+        // Whether the validator will find an actual-gas hint for THIS block in
+        // the state view. When preloading from a hints database, the hint was
+        // written into the state db as part of the PREVIOUS block's commit (a
+        // gas row can only be committed alongside a height-advancing block
+        // commit), so it is already present here.
+        let hinted = read_gas_hint(&state_db, &height)?.map(|gas| gas.len());
+
         let started = Instant::now();
         let (result, changes) = match command.mode {
             Mode::Sequential => {
@@ -359,21 +433,50 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         };
         let wall_ms = started.elapsed().as_secs_f64() * 1000.0;
 
+        // Gas rows to write inside this block's (height-advancing) commit:
+        //  * this block's OWN actual gas — so a later run can use it as a hint;
+        //  * the NEXT block's hint preloaded from the hints db — so it is in
+        //    the state view before the next block is validated (a gas row
+        //    cannot be committed on its own; it must ride a block commit).
+        let mut gas_rows = vec![(
+            height,
+            gas_used_in_block_order(&chain_id, &sealed_block, &result),
+        )];
+        if let Some(hints_db) = &gas_hints_db {
+            let next = u32::from(height).saturating_add(1);
+            if next <= to {
+                let next_height = BlockHeight::from(next);
+                if let Some(next_hint) = read_gas_hint(hints_db, &next_height)? {
+                    gas_rows.push((next_height, next_hint));
+                }
+            }
+        }
+
         let commit_started = Instant::now();
-        commit_validated_block(&mut state_on_chain, &chain_id, &sealed_block, changes)
-            .with_context(|| format!("commit block {height}"))?;
+        commit_validated_block(
+            &mut state_on_chain,
+            &chain_id,
+            &sealed_block,
+            changes,
+            &gas_rows,
+        )
+        .with_context(|| format!("commit block {height}"))?;
         let commit_ms = commit_started.elapsed().as_secs_f64() * 1000.0;
 
         let gas_used = used_gas_of(&result);
         println!(
             "[validate] mode={} height={} txs={} wall_ms={:.3} commit_ms={:.3} \
-             gas_used={}",
+             gas_used={} gas_hint={}",
             command.mode,
             u32::from(height),
             tx_count,
             wall_ms,
             commit_ms,
             gas_used,
+            match hinted {
+                Some(n) => format!("{n}tx"),
+                None => "none".to_string(),
+            },
         );
 
         total_wall_ms += wall_ms;

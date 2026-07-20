@@ -204,12 +204,20 @@ impl ValidationTransactionsSource {
     /// (the number of L1-processed transactions preceding it; `0` when the
     /// block has no L1 prefix). `worker_count` is the machine's width, which
     /// anchors the scheduler's makespan bound and load-balance target.
+    ///
+    /// `actual_gas` is the per-transaction ACTUAL gas used, indexed by block
+    /// position (from the `TransactionsGasUsage` hint). When present and
+    /// non-zero for a position it is used for planning in place of the
+    /// transaction's declared `max_gas`; otherwise `max_gas` is the fallback.
+    /// This is a scheduling hint only — a wrong or missing value changes the
+    /// batch plan, never the validation result.
     pub fn new(
         transactions: &[Transaction],
         first_block_index: u32,
         consensus_parameters: &ConsensusParameters,
         worker_count: usize,
         overhead: Arc<ValidationOverheadEstimate>,
+        actual_gas: Option<&[u64]>,
     ) -> ExecutorResult<Self> {
         let chain_id = consensus_parameters.chain_id();
         let mut planned: Vec<ValidationTx<ContractId>> =
@@ -247,11 +255,6 @@ impl ValidationTransactionsSource {
             // there the block order is being CHOSEN rather than replayed, and a
             // child whose parent is skipped must not be included.
             //
-            // Declared gas, not gas used: validation replays a block whose
-            // receipts it has not computed yet, so the limit is the only figure
-            // available. It is an upper bound, so batches come out no larger
-            // than intended.
-            let gas = tx.max_gas(consensus_parameters)?;
             let position = first_block_index
                 .checked_add(u32::try_from(index).map_err(|_| {
                     ExecutorError::Other("too many transactions in block".to_string())
@@ -259,6 +262,19 @@ impl ValidationTransactionsSource {
                 .ok_or_else(|| {
                     ExecutorError::Other("block index overflow".to_string())
                 })?;
+
+            // Prefer the ACTUAL gas hint for this position; fall back to the
+            // declared `max_gas` when no hint is available (first-time
+            // validation before propagation) or the hint is zero (a position
+            // with no recorded status). Declared gas over-declares heavily
+            // (o2 orders declare ~32x their use), so the hint gives the
+            // scheduler a far tighter plan; it is an upper bound either way, so
+            // batches never come out larger than intended.
+            let declared = tx.max_gas(consensus_parameters)?;
+            let gas = actual_gas
+                .and_then(|gas| gas.get(position as usize).copied())
+                .filter(|gas| *gas > 0)
+                .unwrap_or(declared);
 
             if std::env::var("DUMP_BLOCK").is_ok() {
                 let acc: Vec<String> = accesses
@@ -272,7 +288,7 @@ impl ValidationTransactionsSource {
                     .collect();
                 let id = tx.id(&chain_id);
                 eprintln!(
-                    "DUMPACC pos={position} id={id:x} declared={gas} acc={}",
+                    "DUMPACC pos={position} id={id:x} declared={declared} gas={gas} acc={}",
                     acc.join(",")
                 );
             }
@@ -281,6 +297,9 @@ impl ValidationTransactionsSource {
                 gas,
                 accesses,
             });
+            // The basis the batch-overhead feedback converts against must match
+            // the basis we planned on, so store the CHOSEN gas (hint or
+            // declared), not always the declared value.
             declared_gas.push(gas);
             pending.push(Some(tx.clone()));
         }
@@ -626,6 +645,7 @@ mod tests {
             &params,
             4,
             Arc::new(ValidationOverheadEstimate::default()),
+            None,
         )
         .expect("source");
 
@@ -679,6 +699,7 @@ mod tests {
             &params,
             4,
             Arc::new(ValidationOverheadEstimate::default()),
+            None,
         )
         .expect("source");
 
@@ -713,6 +734,7 @@ mod tests {
             &params,
             4,
             Arc::new(ValidationOverheadEstimate::default()),
+            None,
         )
         .expect("source");
 
@@ -739,5 +761,54 @@ mod tests {
         }
         assert!(batches_seen > 0);
         assert_eq!(source.pending_count(), 0);
+    }
+
+    // The actual-gas hint is an optional planning input: when supplied it must
+    // be consumed without disturbing correctness — every transaction still
+    // dispatches exactly once, at its block position. A shorter-than-block or
+    // zero-valued hint must not panic (positions past the hint, or zero
+    // entries, fall back to declared gas).
+    #[test]
+    fn actual_gas_hint_is_accepted_and_every_tx_still_dispatches_once() {
+        let params = params();
+        let txs: Vec<Transaction> = (1..=5u8).map(|i| coin_tx(i, None)).collect();
+        // Deliberately imperfect: a zero at position 1 (falls back to declared)
+        // and only four entries for five transactions (position 4 falls back).
+        let actual_gas = vec![1_000u64, 0, 3_000, 4_000];
+        let source = ValidationTransactionsSource::new(
+            &txs,
+            0,
+            &params,
+            4,
+            Arc::new(ValidationOverheadEstimate::default()),
+            Some(&actual_gas),
+        )
+        .expect("source");
+
+        let mut seen = HashMap::new();
+        let mut rounds = 0usize;
+        while source.pending_count() > 0 {
+            rounds = rounds.saturating_add(1);
+            assert!(rounds < 100, "source failed to drain");
+            for batch in ask(&source, 4).batches {
+                let indices = batch
+                    .execution_indices
+                    .clone()
+                    .expect("validation batches carry explicit indices");
+                for (tx, index) in batch.transactions.iter().zip(&indices) {
+                    let id = tx.id(&params.chain_id());
+                    assert!(
+                        seen.insert(id, *index).is_none(),
+                        "transaction dispatched twice",
+                    );
+                }
+                complete(batch);
+            }
+        }
+
+        assert_eq!(seen.len(), txs.len());
+        for (index, tx) in txs.iter().enumerate() {
+            assert_eq!(seen[&tx.id(&params.chain_id())], index as u32);
+        }
     }
 }

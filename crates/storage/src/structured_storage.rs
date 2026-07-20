@@ -79,6 +79,7 @@ pub mod messages;
 pub mod sealed_block;
 pub mod state;
 pub mod transactions;
+pub mod transactions_gas_usage;
 pub mod upgrades;
 
 /// The table can implement this trait to indicate that it has a blueprint.

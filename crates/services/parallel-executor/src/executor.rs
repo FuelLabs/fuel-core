@@ -35,6 +35,7 @@ use fuel_core_storage::{
     tables::{
         ConsensusParametersVersions,
         FuelBlocks,
+        TransactionsGasUsage,
     },
     transactional::{
         AtomicView,
@@ -615,6 +616,17 @@ where
         let l2_count = u32::try_from(l2_txs.len())
             .map_err(|_| ExecutorError::TooManyTransactions)?;
 
+        // Per-transaction ACTUAL gas used for this block, if a previous
+        // committer (this node earlier, or a peer that propagated it) recorded
+        // it. It lets the scheduler plan on real gas instead of the heavily
+        // over-declared `max_gas`. A NON-CONSENSUS hint: absent (first-time
+        // validation before propagation) or wrong, the source falls back to
+        // `max_gas` and validation is still correct, only less parallel.
+        let actual_gas_used = structured_storage
+            .storage::<TransactionsGasUsage>()
+            .get(&block_height)?
+            .map(|gas| gas.into_owned());
+
         // --- Parallel re-execution of the L2 transactions ---------------------
         let phase_start = Instant::now();
         let transactions_source = ValidationTransactionsSource::new(
@@ -623,6 +635,7 @@ where
             &consensus_parameters,
             self.config.worker_count.get(),
             Arc::clone(&self.validation_overhead),
+            actual_gas_used.as_deref(),
         )?;
         let seed_time = phase_start.elapsed();
         let components = Components {
