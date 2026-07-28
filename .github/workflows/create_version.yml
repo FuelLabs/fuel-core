@@ -21,9 +21,11 @@ jobs:
 
       - name: Get the version number in the PR description
         id: get_version
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           # Extract the version number from the PR description
-          version=$(echo "${{ github.event.pull_request.body }}" | grep -oP '## Version \K[0-9]+\.[0-9]+\.[0-9]+')
+          version=$(echo "$PR_BODY" | grep -oP '## Version \K[0-9]+\.[0-9]+\.[0-9]+')
           echo "NEW_VERSION=${version}" >> $GITHUB_OUTPUT
 
       - name: Gather all changes
